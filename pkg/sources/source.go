@@ -60,12 +60,15 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var writersMap = make(map[string][]isb.BufferWriter)
-
+	natsClientPool, err := jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(2))
+	if err != nil {
+		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+	}
+	defer natsClientPool.CloseAll()
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToBuffers())
 	var sourcePublisherStores = store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	var err error
 
 	switch sp.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -92,12 +95,12 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, sp.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
 			return err
 		}
 
-		sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance)
+		sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
 			return err
 		}
@@ -116,7 +119,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			// create a writer for each partition.
 			for partitionIdx, partition := range partitionedBuffers {
 				streamName := isbsvc.JetStreamName(partition)
-				jetStreamClient := jsclient.NewInClusterJetStreamClient()
+				jetStreamClient := natsClientPool.NextAvailableClient()
 				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, partition, streamName, streamName, int32(partitionIdx), writeOpts...)
 				if err != nil {
 					return err
@@ -137,7 +140,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
 		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
-			s := shuffle.NewShuffle(sp.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitionCount())
+			s := shuffle.NewShuffle(edge.To, edge.GetToVertexPartitionCount())
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 		toVertexPartitionMap[edge.To] = edge.GetToVertexPartitionCount()

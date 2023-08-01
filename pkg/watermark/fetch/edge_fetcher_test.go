@@ -40,7 +40,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
+func TestBuffer_ComputeWatermarkWithOnePartition(t *testing.T) {
 	var ctx = context.Background()
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
@@ -48,11 +48,11 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 	hbWatcher := noop.NewKVOpWatch()
 	otWatcher := noop.NewKVOpWatch()
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 1)
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 1)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, 1)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 1)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 1)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, 1)
 		pod0Timeline = []wmb.WMB{
 			{Watermark: 11, Offset: 9, Partition: 0},
 			{Watermark: 12, Offset: 20, Partition: 0},
@@ -159,8 +159,8 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 				log:              zaptest.NewLogger(t).Sugar(),
 				lastProcessedWm:  lastProcessed,
 			}
-			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+			if got := b.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 17 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
@@ -169,7 +169,7 @@ func TestBuffer_GetWatermarkWithOnePartition(t *testing.T) {
 	}
 }
 
-func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
+func TestBuffer_ComputeGetWatermarkWithMultiplePartition(t *testing.T) {
 	var ctx = context.Background()
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
@@ -178,11 +178,11 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 	otWatcher := noop.NewKVOpWatch()
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	partitionCount := int32(3)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
 		pod0Timeline = []wmb.WMB{
 			{Watermark: 11, Offset: 9, Partition: 0},
 			{Watermark: 12, Offset: 20, Partition: 1},
@@ -323,8 +323,8 @@ func TestBuffer_GetWatermarkWithMultiplePartition(t *testing.T) {
 				log:              zaptest.NewLogger(t).Sugar(),
 				lastProcessedWm:  tt.lastProcessedWm,
 			}
-			if got := b.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-				t.Errorf("GetWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+			if got := b.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
 			// GetHeadWatermark is only used in UI and test
@@ -341,8 +341,8 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 		hbWatcher         = noop.NewKVOpWatch()
 		otWatcher         = noop.NewKVOpWatch()
 		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
-		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
+		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
 	)
 
 	getHeadWMTest1(ctx, processorManager1)
@@ -381,9 +381,9 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 func getHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(2)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      true,
@@ -445,9 +445,9 @@ func getHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorM
 func getHeadWMTest2(ctx context.Context, processorManager2 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(2)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      false,
@@ -514,10 +514,10 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 		hbWatcher         = noop.NewKVOpWatch()
 		otWatcher         = noop.NewKVOpWatch()
 		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
-		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
-		processorManager3 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
-		processorManager4 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
+		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+		processorManager3 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+		processorManager4 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
 	)
 
 	getHeadWMBTest1(ctx, processorManager1)
@@ -552,7 +552,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 		},
 		{
 			name:             "all pods empty timeline",
-			processorManager: processorManager3,
+			processorManager: processorManager4,
 			want:             wmb.WMB{},
 		},
 	}
@@ -578,9 +578,9 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 func getHeadWMBTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      true,
@@ -660,9 +660,9 @@ func getHeadWMBTest1(ctx context.Context, processorManager1 *processor.Processor
 func getHeadWMBTest2(ctx context.Context, processorManager2 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      false,
@@ -742,9 +742,9 @@ func getHeadWMBTest2(ctx context.Context, processorManager2 *processor.Processor
 func getHeadWMBTest3(ctx context.Context, processorManager3 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      false,
@@ -824,9 +824,9 @@ func getHeadWMBTest3(ctx context.Context, processorManager3 *processor.Processor
 func getHeadWMBTest4(ctx context.Context, processorManager4 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
 	)
 	processorManager4.AddProcessor("testPod0", testPod0)
 	processorManager4.AddProcessor("testPod1", testPod1)
@@ -873,7 +873,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	var processorManager = processor.NewProcessorManager(ctx, storeWatcher, 1)
+	var processorManager = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 1)
 	var fetcher = NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 1)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
@@ -948,14 +948,14 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 		}
 	}
 
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -989,7 +989,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	}
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
@@ -1056,12 +1056,11 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	defer cancel()
 
 	// connect to NATS
-	nc, err := natstest.JetStreamClient(t, s).Connect(context.TODO())
-	assert.NoError(t, err)
+	nc := natstest.JetStreamClient(t, s)
 	defer nc.Close()
 
 	// create JetStream Context
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
+	js, err := nc.JetStreamContext(nats.PublishAsyncMaxPending(256))
 	assert.NoError(t, err)
 
 	// create heartbeat bucket
@@ -1112,7 +1111,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 1)
 	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 1)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
@@ -1202,14 +1201,14 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -1234,7 +1233,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
@@ -1348,12 +1347,11 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	defer cancel()
 
 	// connect to NATS
-	nc, err := natstest.JetStreamClient(t, s).Connect(context.TODO())
-	assert.NoError(t, err)
+	nc := natstest.JetStreamClient(t, s)
 	defer nc.Close()
 
 	// create JetStream Context
-	js, err := nc.JetStream(nats.PublishAsyncMaxPending(256))
+	js, err := nc.JetStreamContext(nats.PublishAsyncMaxPending(256))
 	assert.NoError(t, err)
 
 	// create heartbeat bucket
@@ -1404,7 +1402,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 3)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 3)
 	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 3)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
@@ -1522,9 +1520,9 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 1)
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 2)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 1)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 2)
 
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
@@ -1532,7 +1530,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
 	allProcessors = processorManager.GetAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -1557,7 +1555,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
-	_ = fetcher.GetWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
+	_ = fetcher.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
 	p1 := processorManager.GetProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())

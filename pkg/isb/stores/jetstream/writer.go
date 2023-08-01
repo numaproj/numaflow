@@ -38,15 +38,15 @@ type jetStreamWriter struct {
 	partitionIdx int32
 	stream       string
 	subject      string
-	conn         *jsclient.NatsConn
-	js           *jsclient.JetStreamContext
+	client       *jsclient.NATSClient
+	js           nats.JetStreamContext
 	opts         *writeOptions
 	isFull       *atomic.Bool
 	log          *zap.SugaredLogger
 }
 
 // NewJetStreamBufferWriter is used to provide a new instance of JetStreamBufferWriter
-func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClient, name, stream, subject string, partitionIdx int32, opts ...WriteOption) (isb.BufferWriter, error) {
+func NewJetStreamBufferWriter(ctx context.Context, client *jsclient.NATSClient, name, stream, subject string, partitionIdx int32, opts ...WriteOption) (isb.BufferWriter, error) {
 	o := defaultWriteOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -55,14 +55,10 @@ func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClie
 			}
 		}
 	}
-	conn, err := client.Connect(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get nats connection, %w", err)
-	}
 
-	js, err := conn.JetStream(nats.PublishAsyncMaxPending(1024))
+	js, err := client.JetStreamContext(nats.PublishAsyncMaxPending(1024))
+
 	if err != nil {
-		conn.Close()
 		return nil, fmt.Errorf("failed to get JetStream context for writer")
 	}
 
@@ -71,11 +67,11 @@ func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClie
 		partitionIdx: partitionIdx,
 		stream:       stream,
 		subject:      subject,
-		conn:         conn,
+		client:       client,
 		js:           js,
 		opts:         o,
 		isFull:       atomic.NewBool(true),
-		log:          logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject),
+		log:          logging.FromContext(ctx).With("bufferWriter", name).With("stream", stream).With("subject", subject).With("partitionIdx", partitionIdx),
 	}
 
 	go result.runStatusChecker(ctx)
@@ -85,7 +81,7 @@ func NewJetStreamBufferWriter(ctx context.Context, client jsclient.JetStreamClie
 func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 	labels := map[string]string{"buffer": jw.GetName()}
 	// Use a separated JetStream context for status checker
-	js, err := jw.conn.JetStream()
+	js, err := jw.client.JetStreamContext()
 	if err != nil {
 		// Let it exit if it fails to start the status checker
 		jw.log.Fatal("Failed to get Jet Stream context, %w", err)
@@ -150,10 +146,8 @@ func (jw *jetStreamWriter) GetPartitionIdx() int32 {
 	return jw.partitionIdx
 }
 
+// Close doesn't have to do anything for JetStreamBufferWriter, client will be closed by the caller.
 func (jw *jetStreamWriter) Close() error {
-	if jw.conn != nil && !jw.conn.IsClosed() {
-		jw.conn.Close()
-	}
 	return nil
 }
 
@@ -271,7 +265,7 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 			} else {
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
 				errs[idx] = nil
-				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
+				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain))
 			}
 		}(msg, index)
 	}

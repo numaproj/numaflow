@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 
 	"go.uber.org/zap"
 
@@ -44,11 +45,18 @@ type MapUDFProcessor struct {
 
 func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	fromBuffer := u.VertexInstance.Vertex.OwnedBuffers()
 	finalWg := sync.WaitGroup{}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	natsClientPool, err := jsclient.NewClientPool(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+	}
+	defer natsClientPool.CloseAll()
+
+	fromBuffer := u.VertexInstance.Vertex.OwnedBuffers()
 	log = log.With("protocol", "uds-grpc-map-udf")
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
 	c, err := clientsdk.New(clientsdk.WithMaxMessageSize(maxMessageSize))
@@ -86,11 +94,11 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		// build watermark progressors
 		// multiple go routines can share the same set of writers since nats conn is thread safe
 		// https://github.com/nats-io/nats.go/issues/241
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance)
+		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
 			return err
 		}
-		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance)
+		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
 		if err != nil {
 			return err
 		}
@@ -103,7 +111,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
 			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
-				s := shuffle.NewShuffle(u.VertexInstance.Vertex.GetName(), edge.GetToVertexPartitionCount())
+				s := shuffle.NewShuffle(edge.To, edge.GetToVertexPartitionCount())
 				shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 			}
 		}

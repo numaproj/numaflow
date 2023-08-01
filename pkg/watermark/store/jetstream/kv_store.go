@@ -21,9 +21,7 @@ package jetstream
 
 import (
 	"context"
-	"fmt"
 	"sync"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
@@ -36,63 +34,31 @@ import (
 // jetStreamStore implements the watermark's KV store backed up by Jetstream.
 type jetStreamStore struct {
 	pipelineName string
-	conn         *jsclient.NatsConn
+	client       *jsclient.NATSClient
 	kv           nats.KeyValue
 	kvLock       sync.RWMutex
-	js           *jsclient.JetStreamContext
 	log          *zap.SugaredLogger
 }
 
 var _ store.WatermarkKVStorer = (*jetStreamStore)(nil)
 
 // NewKVJetStreamKVStore returns KVJetStreamStore.
-func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client jsclient.JetStreamClient, opts ...JSKVStoreOption) (store.WatermarkKVStorer, error) {
+func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (store.WatermarkKVStorer, error) {
 	var err error
-	var jsStore *jetStreamStore
-	conn, err := client.Connect(ctx, jsclient.ReconnectHandler(func(_ *jsclient.NatsConn) {
-		if jsStore != nil && jsStore.js != nil {
-			// re-bind to an existing KeyValue store
-			kv, err := jsStore.js.KeyValue(bucketName)
-			// keep looping because the watermark won't work without the store
-			for err != nil {
-				jsStore.log.Errorw("Failed to rebind to the JetStream KeyValue store ", zap.Error(err))
-				kv, err = jsStore.js.KeyValue(bucketName)
-				time.Sleep(100 * time.Millisecond)
-			}
-			jsStore.log.Infow("Succeeded to rebind to JetStream KeyValue store")
-			jsStore.kvLock.Lock()
-			defer jsStore.kvLock.Unlock()
-			jsStore.kv = kv
-		}
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get nats connection, %w", err)
-	}
-
-	// do we need to specify any opts? if yes, send it via options.
-	js, err := conn.JetStream(nats.PublishAsyncMaxPending(256))
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to get JetStream context for writer")
-	}
-
-	jsStore = &jetStreamStore{
+	var jsStore = &jetStreamStore{
 		pipelineName: pipelineName,
-		conn:         conn,
-		js:           js,
+		client:       client,
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 
 	// for JetStream KeyValue store, the bucket should have been created in advance
-	jsStore.kv, err = jsStore.js.KeyValue(bucketName)
+	jsStore.kv, err = jsStore.client.BindKVStore(bucketName)
 	if err != nil {
-		jsStore.Close()
 		return nil, err
 	}
 	// options if any
 	for _, o := range opts {
 		if err := o(jsStore); err != nil {
-			jsStore.Close()
 			return nil, err
 		}
 	}
@@ -150,11 +116,6 @@ func (jss *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
 	return err
 }
 
-// Close closes the JetStream connection.
+// Close we don't need to close the JetStream connection. It will be closed by the caller.
 func (jss *jetStreamStore) Close() {
-	jss.kvLock.RLock()
-	defer jss.kvLock.RUnlock()
-	if !jss.conn.IsClosed() {
-		jss.conn.Close()
-	}
 }

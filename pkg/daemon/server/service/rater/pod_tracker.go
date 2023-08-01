@@ -84,6 +84,7 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
+				pt.log.Infof("Context is cancelled. Stopping tracking active pods for pipeline %s...", pt.pipeline.Name)
 				return
 			case <-ticker.C:
 				for _, v := range pt.pipeline.Spec.Vertices {
@@ -113,13 +114,29 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 	return nil
 }
 
+// LeastRecentlyUsed returns the least recently used pod from the active pod list.
+// if there is no active pods, it returns an empty string.
+func (pt *PodTracker) LeastRecentlyUsed() string {
+	if e := pt.activePods.Front(); e != "" {
+		pt.activePods.MoveToBack(e)
+		return e
+	}
+	return ""
+}
+
+// IsActive returns true if the pod is active, false otherwise.
+func (pt *PodTracker) IsActive(podKey string) bool {
+	return pt.activePods.Contains(podKey)
+}
+
+// GetActivePodsCount returns the number of active pods.
+func (pt *PodTracker) GetActivePodsCount() int {
+	return pt.activePods.Length()
+}
+
 func (pt *PodTracker) getPodKey(index int, vertexName string, vertexType string) string {
 	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
 	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index), vertexType}, PodInfoSeparator)
-}
-
-func (pt *PodTracker) GetActivePods() *UniqueStringList {
-	return pt.activePods
 }
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {
@@ -132,7 +149,7 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 		// it truly means the pod doesn't exist.
 		// in reality, we can imagine that a pod can be active but the Head request times out for some reason and returns an incorrect false,
 		// if we ever observe such case, we can think about adding retry here.
-		pt.log.Debugf("Failed to check if pod %s is active: %v", podName, err)
+		pt.log.Debugf("Sending HEAD request to pod %s is unsuccessful: %v, treating the pod as inactive", podName, err)
 		return false
 	}
 	_ = resp.Body.Close()

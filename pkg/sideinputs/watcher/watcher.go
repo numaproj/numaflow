@@ -52,12 +52,16 @@ func (siw *sideInputsWatcher) Start(ctx context.Context) error {
 	defer cancel()
 
 	var isbSvcClient isbsvc.ISBService
-	var err error
 	switch siw.isbSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		return fmt.Errorf("unsupported isbsvc type %q", siw.isbSvcType)
 	case dfv1.ISBSvcTypeJetStream:
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(siw.pipelineName, isbsvc.WithJetStreamClient(jsclient.NewInClusterJetStreamClient()))
+		natsClient, err := jsclient.NewNATSClient(ctx)
+		if err != nil {
+			log.Errorw("Failed to get a NATS client.", zap.Error(err))
+			return err
+		}
+		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(siw.pipelineName, isbsvc.WithJetStreamClient(natsClient))
 		if err != nil {
 			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 			return err

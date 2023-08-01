@@ -29,8 +29,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 type trackerMockHttpClient struct {
@@ -94,7 +96,7 @@ func TestPodTracker_Start(t *testing.T) {
 		}
 	}()
 
-	for tracker.activePods.Length() != 10 {
+	for tracker.GetActivePodsCount() != 10 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("incorrect active pods %v", ctx.Err())
@@ -105,7 +107,7 @@ func TestPodTracker_Start(t *testing.T) {
 
 	tracker.httpClient.(*trackerMockHttpClient).setPodsCount(5)
 
-	for tracker.activePods.Length() != 5 {
+	for tracker.GetActivePodsCount() != 5 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("incorrect active pods %v", ctx.Err())
@@ -115,4 +117,9 @@ func TestPodTracker_Start(t *testing.T) {
 	}
 	cancel()
 	wg.Wait()
+
+	assert.Equal(t, "p*v*0*other", tracker.LeastRecentlyUsed())
+	assert.Equal(t, "p*v*1*other", tracker.LeastRecentlyUsed())
+	assert.Equal(t, true, tracker.IsActive("p*v*4*other"))
+	assert.Equal(t, false, tracker.IsActive("p*v*5*other"))
 }
