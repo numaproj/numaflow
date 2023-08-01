@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 
-import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
-import Graph from "../../pipeline/graph/Graph";
-import { notifyError } from "../../../utils/error";
 import CircularProgress from "@mui/material/CircularProgress";
+import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
+import Graph from "./partials/Graph";
+import { notifyError } from "../../../utils/error";
 
 import "./style.css";
 
