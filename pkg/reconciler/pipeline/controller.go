@@ -104,8 +104,9 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetDeleteGracePeriodSeconds()) * time.Second)) {
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
-					log.Errorw("Failed to check if it's safe to delete the pipeline", zap.Error(err))
-					r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to check if it's safe to delete the pipeline: %v", err.Error())
+					logMsg := fmt.Sprintf("Failed to check if it's safe to delete the pipeline: %v", err.Error())
+					log.Error(logMsg)
+					r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", logMsg)
 					return ctrl.Result{}, err
 				}
 
@@ -117,8 +118,9 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			}
 			// Finalizer logic should be added here.
 			if err := r.cleanUpBuffers(ctx, pl, log); err != nil {
-				log.Errorw("Failed to create buffer clean up job", zap.Error(err))
-				r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to create buffer clean up job: %v", err.Error())
+				logMsg := fmt.Sprintf("Failed to create buffer clean up job: %v", err.Error())
+				log.Error(logMsg)
+				r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", logMsg)
 				return ctrl.Result{}, err
 
 			}
@@ -139,8 +141,9 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	if oldPhase := pl.Status.Phase; oldPhase != pl.Spec.Lifecycle.GetDesiredPhase() {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
-			log.Errorw("Updated desired pipeline phase failed", zap.Error(err))
-			r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Updated desired pipeline phase failed: %v", zap.Error(err))
+			logMsg := fmt.Sprintf("Updated desired pipeline phase failed: %v", zap.Error(err))
+			log.Error(logMsg)
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", logMsg)
 			return ctrl.Result{}, err
 		}
 		if pl.Status.Phase != oldPhase {
