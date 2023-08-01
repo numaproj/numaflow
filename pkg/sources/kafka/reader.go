@@ -28,8 +28,6 @@ import (
 	"github.com/Shopify/sarama"
 	"go.uber.org/zap"
 
-	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
@@ -37,6 +35,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -226,6 +225,7 @@ func (r *KafkaSource) Start() <-chan struct{} {
 	go r.startConsumer()
 	// wait for the consumer to setup.
 	<-r.handler.ready
+	r.logger.Info("Consumer ready. Starting kafka reader...")
 
 	return r.forwarder.Start()
 }
@@ -351,6 +351,8 @@ func NewKafkaSource(
 			config.Net.SASL = *sasl
 		}
 	}
+	// return errors from the underlying kafka client using the Errors channel
+	config.Consumer.Return.Errors = true
 	kafkasource.config = config
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -408,6 +410,20 @@ func (r *KafkaSource) startConsumer() {
 		r.logger.Panicw("Problem initializing sarama client", zap.Error(err))
 	}
 	wg := new(sync.WaitGroup)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-r.lifecyclectx.Done():
+				return
+			case cErr := <-client.Errors():
+				r.logger.Errorw("Kafka consumer error", zap.Error(cErr))
+			}
+		}
+	}()
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -415,9 +431,9 @@ func (r *KafkaSource) startConsumer() {
 			// `Consume` should be called inside an infinite loop, when a
 			// server-side rebalance happens, the consumer session will need to be
 			// recreated to get the new claims
-			if err := client.Consume(r.lifecyclectx, []string{r.topic}, r.handler); err != nil {
+			if conErr := client.Consume(r.lifecyclectx, []string{r.topic}, r.handler); conErr != nil {
 				// Panic on errors to let it crash and restart the process
-				r.logger.Panicw("Consumer failed with error: ", zap.Error(err))
+				r.logger.Panicw("Kafka consumer failed with error: ", zap.Error(conErr))
 			}
 			// check if context was cancelled, signaling that the consumer should stop
 			if r.lifecyclectx.Err() != nil {
