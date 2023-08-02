@@ -23,8 +23,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sideinputs/store"
+	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 	"go.uber.org/zap"
 	"path"
+	"sync"
 )
 
 type sideInputsSyncronizer struct {
@@ -70,6 +74,17 @@ func (siw *sideInputsSyncronizer) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", siw.isbSvcType)
 	}
 
+	bucketName := isbsvc.JetStreamSideInputsStoreBucket(siw.sideInputsStore)
+	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, siw.pipelineName, bucketName, natsClient)
+	if err != nil {
+		return err
+	}
+
+	//_ := fetchSideInputMap(siw.sideInputs)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go startSideInputSyncronizer(ctx, sideInputWatcher, log, dfv1.PathSideInputsMount, &wg)
+	wg.Wait()
 	// TODO(SI): do something
 	// Watch the side inputs store for changes, and write to disk
 	fmt.Printf("ISB Svc Client nil: %v\n", isbSvcClient == nil)
@@ -80,4 +95,45 @@ func (siw *sideInputsSyncronizer) Start(ctx context.Context) error {
 
 	<-ctx.Done()
 	return nil
+}
+
+func fetchSideInputMap(sideInputs []string) map[string][]byte {
+	m := make(map[string][]byte)
+	for _, sideInput := range sideInputs {
+		p := path.Join(dfv1.PathSideInputsMount, sideInput)
+		// read from give file
+		b, err := utils.FetchSideInputStore(p)
+		if err != nil {
+
+		}
+		m[sideInput] = b
+	}
+	return m
+}
+
+func startSideInputSyncronizer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, mountPath string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	watchCh, stopped := watch.Watch(ctx)
+	for {
+		select {
+		case <-stopped:
+			fmt.Println("Stopped value received ")
+			return
+		case value := <-watchCh:
+			if value == nil {
+				log.Warnw("nil value received from SideInput watcher")
+				continue
+			}
+			log.Debug("SideInput value received ",
+				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+			fmt.Println("GOT VALUE", value.Key(), value.Value())
+			p := path.Join(mountPath, value.Key())
+			err := utils.UpdateSideInputStore(p, value.Value())
+			if err != nil {
+				fmt.Println("UPDATE ERROR", err)
+				//TODO : Handle error
+			}
+			continue
+		}
+	}
 }

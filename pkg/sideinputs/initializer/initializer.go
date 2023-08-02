@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/numaproj/numaflow/pkg/sideinputs/store"
 	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 	"path"
 	"sync"
 
@@ -84,9 +85,9 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	go startSideInputWatcher(ctx, sideInputWatcher, &wg, retCh, log, m)
 	wg.Wait()
 	close(retCh)
-
+	outputMap := make(map[string][]byte)
 	for val := range retCh {
-		fmt.Println(val)
+		outputMap = val
 	}
 	// TODO(SI): do something
 	// Wait for the data is ready in the side input store, and then copy the data to the disk
@@ -94,8 +95,12 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	for _, sideInput := range sii.sideInputs {
 		p := path.Join(dfv1.PathSideInputsMount, sideInput)
 		fmt.Printf("Initializing side input data for %q\n", p)
+		err = utils.UpdateSideInputStore(p, outputMap[sideInput])
+		if err != nil {
+			// TODO: Handle Error
+			return err
+		}
 	}
-
 	return nil
 }
 

@@ -1,0 +1,52 @@
+package utils
+
+import (
+	"fmt"
+	"os"
+)
+
+func CheckFileExists(fileName string) bool {
+	_, err := os.Stat(fileName)
+	// check if err is "file not exists"
+	if os.IsNotExist(err) {
+		return false
+	} else {
+		return true
+	}
+}
+
+func UpdateSideInputStore(filePath string, value []byte) error {
+	if CheckFileExists(filePath) == false {
+		f, err := os.Create(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to create side-input-%s : %w", filePath, err)
+		}
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+	}
+	f, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create side-input file: %w", err)
+	}
+	defer func(f *os.File) {
+		var err = f.Close()
+		if err != nil {
+
+		}
+	}(f)
+	_, err = f.Write(value)
+	if err != nil {
+		return fmt.Errorf("failed to write side-input-%s : %w", filePath, err)
+	}
+	return nil
+}
+
+func FetchSideInputStore(filePath string) ([]byte, error) {
+	b, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Side-Input %s file: %w", filePath, err)
+	}
+	return b, nil
+}
