@@ -1,8 +1,9 @@
 .Graph {
     flex-grow: 1;
     position: relative;
-    height: 100%;
     cursor: move;
+    height: 30rem;
+    border: 0.125rem solid whitesmoke;
 }
 
 .Graph .controls {

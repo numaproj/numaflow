@@ -19,7 +19,10 @@ package kafka
 import (
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/Shopify/sarama"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // consumerHandler struct
@@ -29,6 +32,7 @@ type consumerHandler struct {
 	readycloser  sync.Once
 	messages     chan *sarama.ConsumerMessage
 	sess         sarama.ConsumerGroupSession
+	logger       *zap.SugaredLogger
 }
 
 // new handler initializes the channel for passing messages
@@ -36,6 +40,7 @@ func newConsumerHandler(readChanSize int) *consumerHandler {
 	return &consumerHandler{
 		ready:    make(chan bool),
 		messages: make(chan *sarama.ConsumerMessage, readChanSize),
+		logger:   logging.NewLogger(),
 	}
 }
 
@@ -60,9 +65,17 @@ func (consumer *consumerHandler) Cleanup(sess sarama.ConsumerGroupSession) error
 func (consumer *consumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	// The `ConsumeClaim` itself is called within a goroutine, see:
 	// https://github.com/Shopify/sarama/blob/main/consumer_group.go#L27-L29
-	for message := range claim.Messages() {
-		consumer.messages <- message
-	}
+	for {
+		select {
+		case msg, ok := <-claim.Messages():
+			if !ok {
+				return nil
+			}
+			consumer.messages <- msg
+		case <-session.Context().Done():
+			consumer.logger.Info("context was canceled, stopping consumer claim")
+			return nil
+		}
 
-	return nil
+	}
 }
