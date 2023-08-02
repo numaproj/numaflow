@@ -1,6 +1,7 @@
 import { FC, memo } from "react";
 import { Tooltip } from "@mui/material";
 import { EdgeProps, EdgeLabelRenderer, getSmoothStepPath } from "reactflow";
+import { duration } from "moment";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -59,40 +60,35 @@ const CustomEdge: FC<EdgeProps> = ({
   };
 
   const getDelay = () => {
-    const str = "Delay - ";
+    const str = " behind now";
     const fetchWMTime = data?.edgeWatermark?.WMFetchTime;
     const minWM = getMinWM();
-    let difference =
-      (fetchWMTime ? fetchWMTime : Date.now()) - (minWM == -1 ? 0 : minWM);
+    const startTime = minWM === -1 ? 0 : minWM;
+    const endTime = fetchWMTime || Date.now();
+    const diff = duration(endTime - startTime);
 
-    const years = Math.floor(difference / (1000 * 60 * 60 * 24 * 365));
-    difference -= years * (1000 * 60 * 60 * 24 * 365);
-    const months = Math.floor(difference / (1000 * 60 * 60 * 24 * 30));
-    difference -= months * (1000 * 60 * 60 * 24 * 30);
-    const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-    difference -= days * (1000 * 60 * 60 * 24);
-    const hours = Math.floor(difference / (1000 * 60 * 60));
-    difference -= hours * (1000 * 60 * 60);
-    const minutes = Math.floor(difference / (1000 * 60));
-    difference -= minutes * (1000 * 60);
-    const seconds = Math.floor(difference / 1000);
-    difference -= seconds * 1000;
-    const milliseconds = difference;
+    const years = diff.years();
+    const months = diff.months();
+    const days = diff.days();
+    const hours = diff.hours();
+    const minutes = diff.minutes();
+    const seconds = diff.seconds();
+    const milliseconds = diff.milliseconds();
 
     if (years > 0) {
-      return str + `${years}yr ${months}mo`;
+      return `${years}yr ${months}mo` + str;
     } else if (months > 0) {
-      return str + `${months}mo ${days}d`;
+      return `${months}mo ${days}d` + str;
     } else if (days > 0) {
-      return str + `${days}d ${hours}hr`;
+      return `${days}d ${hours}hr` + str;
     } else if (hours > 0) {
-      return str + `${hours}hr ${minutes}min`;
+      return `${hours}hr ${minutes}min` + str;
     } else if (minutes > 0) {
-      return str + `${minutes}min ${seconds}sec`;
+      return `${minutes}min ${seconds}sec` + str;
     } else if (seconds > 0) {
-      return str + `${seconds}sec ${milliseconds}ms`;
+      return `${seconds}sec ${milliseconds}ms` + str;
     } else {
-      return str + `${milliseconds}ms`;
+      return `${milliseconds}ms` + str;
     }
   };
 

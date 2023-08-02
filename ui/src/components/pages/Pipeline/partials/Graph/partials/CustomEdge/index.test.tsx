@@ -46,7 +46,7 @@ describe("Graph screen test", () => {
             backpressureLabel: "0",
             edgeWatermark: {
               isWaterMarkEnabled: true,
-              watermarks: [Date.now() - 2592000000],
+              watermarks: [Date.now() - 2678400000],
             },
           }}
           source={"first"}
