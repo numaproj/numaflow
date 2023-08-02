@@ -1,4 +1,4 @@
-package syncronizer
+package synchronizer
 
 import (
 	"context"
@@ -25,7 +25,7 @@ func TestSideInputsTimeout(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	log := logging.FromContext(ctx)
@@ -57,7 +57,7 @@ func TestSideInputsTimeout(t *testing.T) {
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go startSideInputSyncronizer(ctx, sideInputWatcher, log, mountPath, &wg)
+	go startSideInputSynchronizer(ctx, sideInputWatcher, log, mountPath, &wg)
 	wg.Wait()
 	assert.Equal(t, context.DeadlineExceeded, ctx.Err())
 }
@@ -112,7 +112,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go startSideInputSyncronizer(ctx, sideInputWatcher, log, mountPath, &wg)
+	go startSideInputSynchronizer(ctx, sideInputWatcher, log, mountPath, &wg)
 	for x := range sideInputs {
 		_, err = kv.Put(sideInputs[x], []byte(dataTest[x]))
 		if err != nil {

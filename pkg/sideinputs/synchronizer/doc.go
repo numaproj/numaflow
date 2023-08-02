@@ -15,4 +15,4 @@ limitations under the License.
 */
 
 // Package watcher is used for the service in the sidecar container of a vertex pod for watching Side Inputs data changes.
-package syncronizer
+package synchronizer

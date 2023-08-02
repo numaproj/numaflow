@@ -19,18 +19,16 @@ package initializer
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/sideinputs/store"
-	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
-	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
-	"path"
-	"sync"
-
-	"go.uber.org/zap"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sideinputs/store"
+	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
+	"go.uber.org/zap"
+	"path"
+	"sync"
 )
 
 type sideInputsInitializer struct {
@@ -61,6 +59,7 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 		return fmt.Errorf("unsupported isbsvc type %q", sii.isbSvcType)
 	case dfv1.ISBSvcTypeJetStream:
 		natsClient, err = jsclient.NewNATSClient(ctx)
+		defer natsClient.Close()
 		if err != nil {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err

@@ -25,7 +25,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sideinputs/syncronizer"
+	"github.com/numaproj/numaflow/pkg/sideinputs/synchronizer"
 )
 
 func NewSideInputsWatcherCommand() *cobra.Command {
@@ -50,7 +50,7 @@ func NewSideInputsWatcherCommand() *cobra.Command {
 			}
 
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
-			sideInputsWatcher := syncronizer.NewSideInputsSyncronizer(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInputs)
+			sideInputsWatcher := synchronizer.NewSideInputsSynchronizer(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInputs)
 			return sideInputsWatcher.Start(ctx)
 		},
 	}

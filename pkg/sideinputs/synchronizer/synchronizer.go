@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package syncronizer
+package synchronizer
 
 import (
 	"context"
@@ -31,15 +31,15 @@ import (
 	"sync"
 )
 
-type sideInputsSyncronizer struct {
+type sideInputsSynchronizer struct {
 	isbSvcType      dfv1.ISBSvcType
 	pipelineName    string
 	sideInputsStore string
 	sideInputs      []string
 }
 
-func NewSideInputsSyncronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsStore string, sideInputs []string) *sideInputsSyncronizer {
-	return &sideInputsSyncronizer{
+func NewSideInputsSynchronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsStore string, sideInputs []string) *sideInputsSynchronizer {
+	return &sideInputsSynchronizer{
 		isbSvcType:      isbSvcType,
 		sideInputsStore: sideInputsStore,
 		pipelineName:    pipelineName,
@@ -47,7 +47,7 @@ func NewSideInputsSyncronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInpu
 	}
 }
 
-func (siw *sideInputsSyncronizer) Start(ctx context.Context) error {
+func (siw *sideInputsSynchronizer) Start(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	log.Infow("Starting Side Inputs Watcher", zap.Strings("sideInputs", siw.sideInputs))
 	ctx, cancel := context.WithCancel(ctx)
@@ -61,6 +61,7 @@ func (siw *sideInputsSyncronizer) Start(ctx context.Context) error {
 		return fmt.Errorf("unsupported isbsvc type %q", siw.isbSvcType)
 	case dfv1.ISBSvcTypeJetStream:
 		natsClient, err = jsclient.NewNATSClient(ctx)
+		defer natsClient.Close()
 		if err != nil {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err
@@ -83,7 +84,7 @@ func (siw *sideInputsSyncronizer) Start(ctx context.Context) error {
 	//_ := fetchSideInputMap(siw.sideInputs)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go startSideInputSyncronizer(ctx, sideInputWatcher, log, dfv1.PathSideInputsMount, &wg)
+	go startSideInputSynchronizer(ctx, sideInputWatcher, log, dfv1.PathSideInputsMount, &wg)
 	wg.Wait()
 	// TODO(SI): do something
 	// Watch the side inputs store for changes, and write to disk
@@ -111,7 +112,7 @@ func fetchSideInputMap(sideInputs []string) map[string][]byte {
 	return m
 }
 
-func startSideInputSyncronizer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, mountPath string, wg *sync.WaitGroup) {
+func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, mountPath string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	watchCh, stopped := watch.Watch(ctx)
 	for {
