@@ -306,14 +306,6 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "pipeline has no sink")
 	})
 
-	t.Run("same from and to", func(t *testing.T) {
-		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "p1", To: "p1"})
-		err := ValidatePipeline(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "same from and to")
-	})
-
 	// TODO(Join): we can test for certain types of invalid cycles here instead
 
 	t.Run("or conditional forwarding", func(t *testing.T) {

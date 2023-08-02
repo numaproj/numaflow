@@ -1,0 +1,36 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: cycle
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: retry
+      udf:
+        container:
+          # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/retry
+          image: quay.io/numaio/numaflow-go/map-retry:latest
+    - name: out
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+  edges:
+    - from: in
+      to: retry
+    - from: retry
+      to: retry
+      conditions:
+        tags:
+          values:
+            - retry
+    - from: retry
+      to: out
+      conditions:
+        tags:
+          operator: not
+          values:
+            - retry

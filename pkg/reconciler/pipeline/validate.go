@@ -133,9 +133,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		if e.From == "" || e.To == "" {
 			return fmt.Errorf("invalid edge: both from and to need to be specified")
 		}
-		if e.From == e.To {
-			return fmt.Errorf("invalid edge: same from and to")
-		}
 		if !names[e.From] {
 			return fmt.Errorf("invalid edge: no vertex named %q", e.From)
 		}

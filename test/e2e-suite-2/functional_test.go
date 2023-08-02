@@ -19,6 +19,7 @@ limitations under the License.
 package e2e
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -90,6 +91,26 @@ func (s *FunctionalSuite) TestJoinSinkVertex() {
 
 	w.Expect().SinkContains("out", "888888")
 	w.Expect().SinkContains("out", "888889")
+}
+
+func (s *FunctionalSuite) TestCycle() {
+	w := s.Given().Pipeline("@testdata/cycle.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "cycle"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	msgs := [10]string{}
+	for i := 0; i < 10; i++ {
+		msgs[i] = fmt.Sprintf("msg-%d", i)
+		w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(msgs[i])))
+	}
+	for i := 0; i < 10; i++ {
+		w.Expect().SinkContains("out", msgs[i])
+	}
 }
 
 func TestFunctionalSuite(t *testing.T) {
