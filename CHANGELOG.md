@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.9.0 (2023-08-02)
+
+ * [8e4b6ca1](https://github.com/numaproj/numaflow/commit/8e4b6ca1337ff444b348be597e036728fca9d757) Update manifests to v0.9.0
+ * [7424ae50](https://github.com/numaproj/numaflow/commit/7424ae50910c399227dfc4b1eae2d31c295513cc) feat: emit k8s events for controller messages. Fixes #856 (#901)
+ * [d0bfac6d](https://github.com/numaproj/numaflow/commit/d0bfac6d5e130e6f9e1f97c873ad3ca404c3c2fd) fix: avoid potential deadlocks when operating UniqueStringList (#905)
+ * [75c7f975](https://github.com/numaproj/numaflow/commit/75c7f975b13505ad1b9abe674a736db23d2021d5) fix: stabilize nats connection (#889)
+ * [0db1238d](https://github.com/numaproj/numaflow/commit/0db1238db3f33684604fea3fa5b367e5d4f3a3c3) fix: Reduce idle WM unit test fix (#897)
+ * [5073f1c8](https://github.com/numaproj/numaflow/commit/5073f1c81946d58a3757e4c658299ccdc9534d77) fix TestBuiltinEventTimeExtractor (#885)
+ * [33b7d1d0](https://github.com/numaproj/numaflow/commit/33b7d1d08387903f59bcce2cf182879a4de54c79) fix: remove retry when the processor is not found. (#868)
+ * [89b2d1c4](https://github.com/numaproj/numaflow/commit/89b2d1c4d0cd0e996469b5e8acb389845b626f53) fix: highlight edge when buffer is full (#869)
+ * [8d49c0f6](https://github.com/numaproj/numaflow/commit/8d49c0f67a2cf905a48748525bb02dd50ab1bedc) fix: minor ui bugs (#861)
+ * [9478e302](https://github.com/numaproj/numaflow/commit/9478e3026c71c2108166b2f94070819e7e232bba) fix: release script for validating webhook (#860)
+
+### Contributors
+
+ * Derek Wang
+ * Dillen Padhiar
+ * Juanlu Yu
+ * Keran Yang
+ * Vedant Gupta
+ * Yashash H L
+
 ## v0.9.0-rc2 (2023-07-13)
 
  * [d0df669a](https://github.com/numaproj/numaflow/commit/d0df669a8bb9f07fffe1d5add792444ebfb33835) Update manifests to v0.9.0-rc2
