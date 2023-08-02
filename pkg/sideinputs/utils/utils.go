@@ -16,7 +16,7 @@ func CheckFileExists(fileName string) bool {
 }
 
 func UpdateSideInputStore(filePath string, value []byte) error {
-	if CheckFileExists(filePath) == false {
+	if !CheckFileExists(filePath) {
 		f, err := os.Create(filePath)
 		if err != nil {
 			return fmt.Errorf("failed to create side-input-%s : %w", filePath, err)
@@ -30,12 +30,7 @@ func UpdateSideInputStore(filePath string, value []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to create side-input file: %w", err)
 	}
-	defer func(f *os.File) {
-		var err = f.Close()
-		if err != nil {
-
-		}
-	}(f)
+	defer f.Close()
 	_, err = f.Write(value)
 	if err != nil {
 		return fmt.Errorf("failed to write side-input-%s : %w", filePath, err)

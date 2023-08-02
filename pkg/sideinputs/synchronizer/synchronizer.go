@@ -74,6 +74,7 @@ func (siw *sideInputsSynchronizer) Start(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", siw.isbSvcType)
 	}
+	fmt.Printf("ISB Svc Client nil: %v\n", isbSvcClient == nil)
 
 	bucketName := isbsvc.JetStreamSideInputsStoreBucket(siw.sideInputsStore)
 	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, siw.pipelineName, bucketName, natsClient)
@@ -81,37 +82,16 @@ func (siw *sideInputsSynchronizer) Start(ctx context.Context) error {
 		return err
 	}
 
-	//_ := fetchSideInputMap(siw.sideInputs)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go startSideInputSynchronizer(ctx, sideInputWatcher, log, dfv1.PathSideInputsMount, &wg)
 	wg.Wait()
-	// TODO(SI): do something
-	// Watch the side inputs store for changes, and write to disk
-	fmt.Printf("ISB Svc Client nil: %v\n", isbSvcClient == nil)
-	for _, sideInput := range siw.sideInputs {
-		p := path.Join(dfv1.PathSideInputsMount, sideInput)
-		fmt.Printf("Initializing side input data for %q\n", p)
-	}
 
 	<-ctx.Done()
 	return nil
 }
 
-func fetchSideInputMap(sideInputs []string) map[string][]byte {
-	m := make(map[string][]byte)
-	for _, sideInput := range sideInputs {
-		p := path.Join(dfv1.PathSideInputsMount, sideInput)
-		// read from give file
-		b, err := utils.FetchSideInputStore(p)
-		if err != nil {
-
-		}
-		m[sideInput] = b
-	}
-	return m
-}
-
+// Watch the side inputs store for changes
 func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, mountPath string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	watchCh, stopped := watch.Watch(ctx)
@@ -129,9 +109,10 @@ func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatche
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 			fmt.Println("GOT VALUE", value.Key(), value.Value())
 			p := path.Join(mountPath, value.Key())
+			// Write value changes to disk
 			err := utils.UpdateSideInputStore(p, value.Value())
 			if err != nil {
-				fmt.Println("UPDATE ERROR", err)
+				fmt.Printf("Failed to update Side-input value %s\n", err.Error())
 				//TODO : Handle error
 			}
 			continue
