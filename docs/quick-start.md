@@ -2,7 +2,7 @@
 
 In this page, we will guide you through the steps to:  
 1. Install Numaflow.  
-2. Create and run a simple pipeline.
+2. Create and run a simple pipeline.  
 3. Create and run an advanced pipeline.
 
 ## Before you begin: prerequisites
@@ -123,7 +123,7 @@ isbsvc-default-js-1                3/3     Running   0          10m
 isbsvc-default-js-2                3/3     Running   0          10m
 ```
 
-Next, port-forward the HTTP endpoint, and make a `POST` request using `curl`
+Next, port-forward the HTTP endpoint, and make a `POST` request using `curl`. Remember to replace `xxxxx` with the appropriate pod names both here and in the next step.
 ```shell
 kubectl port-forward even-odd-in-0-xxxx 8444:8443
 
@@ -134,7 +134,7 @@ curl -kq -X POST -d "103" https://localhost:8444/vertices/in
 curl -kq -X POST -d "104" https://localhost:8444/vertices/in
 ```
 
-Now you can watch the log for the `even` and `odd` vertices by running the command below. Remember to replace `xxxxx` with the appropriate pod names.
+Now you can watch the log for the `even` and `odd` vertices by running the commands below. 
 
 ```shell
 # Watch the log for the even vertex
@@ -148,11 +148,11 @@ kubectl logs -f even-odd-odd-sink-0-xxxxx
 2022/09/07 22:30:19 (odd-sink) 103
 ```
 
-View the UI for the advanced pipeline at https://localhost:8443/
+View the UI for the advanced pipeline at https://localhost:8443/.
 
 ![Numaflow UI](assets/numaflow-ui-advanced-pipeline.png)
 
-The source code of the `even-odd` [User Defined Function](user-guide/user-defined-functions/map/map.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd). You also can replace the [Log](./user-guide/sinks/log.md) Sink with some other sinks like [Kafka](./user-guide/sinks/kafka.md) to forward the data to Kafka topics.
+The source code of the `even-odd` [User Defined Function](user-guide/user-defined-functions/user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd). You also can replace the [Log](./user-guide/sinks/log.md) Sink with some other sinks like [Kafka](./user-guide/sinks/kafka.md) to forward the data to Kafka topics.
 
 The pipeline can be deleted by
 
@@ -162,7 +162,7 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/main/examp
 
 ## A pipeline with reduce (aggregation)
 
-[Reduce Examples](user-guide/user-defined-functions/reduce/examples.md)
+To view an example pipeline with the [Reduce UDF](user-guide/user-defined-functions/reduce/reduce.md), see [Reduce Examples](user-guide/user-defined-functions/reduce/examples.md).
 
 ## What's Next
 
