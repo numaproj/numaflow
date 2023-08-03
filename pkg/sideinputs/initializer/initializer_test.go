@@ -132,6 +132,6 @@ func TestSideInputsTimeout(t *testing.T) {
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
 	m := createSideInputMap(sideInputs)
-	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath)
+	_ = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath)
 	assert.Equal(t, context.DeadlineExceeded, ctx.Err())
 }
