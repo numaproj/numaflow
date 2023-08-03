@@ -28,7 +28,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 	"go.uber.org/zap"
 	"path"
-	"sync"
 )
 
 // struct to store required pipeline and store info for initializer
@@ -74,6 +73,7 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sii.isbSvcType)
 	}
+	log.Info("ISB Svc Client nil: %v\n", isbSvcClient == nil)
 	// Load the required KV bucket and create a sideInputWatcher for it
 	bucketName := isbsvc.JetStreamSideInputsStoreBucket(sii.sideInputsStore)
 	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, sii.pipelineName, bucketName, natsClient)
@@ -81,45 +81,25 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 		return err
 	}
 
-	retCh := make(chan map[string][]byte, 1)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	m := createSideInputMap(sii.sideInputs)
-	go startSideInputWatcher(ctx, sideInputWatcher, &wg, retCh, log, m)
-	wg.Wait()
-	close(retCh)
-	outputMap := make(map[string][]byte)
-	for val := range retCh {
-		outputMap = val
+	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, dfv1.PathSideInputsMount)
+	if err != nil {
+		return err
 	}
 
-	// Wait for the data is ready in the side input store, and then copy the data to the disk
-	fmt.Printf("ISB Svc Client nil: %v\n", isbSvcClient == nil)
-	for _, sideInput := range sii.sideInputs {
-		p := path.Join(dfv1.PathSideInputsMount, sideInput)
-		fmt.Printf("Initializing side input data for %q\n", p)
-		err = utils.UpdateSideInputStore(p, outputMap[sideInput])
-		if err != nil {
-			// TODO: Handle Error
-			return err
-		}
-	}
 	return nil
 }
 
-// Watch the KV store for changes and write to disk
+// startSideInputInitializer watches the KV store for changes and writes to disk
 // once the initial value of all the side-inputs is read
-// return once completed
-func startSideInputWatcher(ctx context.Context, watch store.SideInputWatcher,
-	wg *sync.WaitGroup, c chan<- map[string][]byte, log *zap.SugaredLogger, m map[string][]byte) {
-	defer wg.Done()
+func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, m map[string][]byte, mountPath string) error {
 	watchCh, stopped := watch.Watch(ctx)
 	for {
 		select {
 		case <-stopped:
-			c <- nil
-			fmt.Println("Stopped value received ")
-			return
+			log.Info("Stopped value received ")
+			fmt.Println("topped value received ")
+			return nil
 		case value := <-watchCh:
 			if value == nil {
 				log.Warnw("nil value received from SideInput watcher")
@@ -128,9 +108,18 @@ func startSideInputWatcher(ctx context.Context, watch store.SideInputWatcher,
 			log.Debug("SideInput value received ",
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 			m[value.Key()] = value.Value()
+			// Wait for the data is ready in the side input store, and then copy the data to the disk
 			if gotAllSideInputVals(m) {
-				c <- m
-				return
+				for sideInput := range m {
+					p := path.Join(mountPath, sideInput)
+					log.Info("Initializing side input data for %q\n", p)
+					err := utils.UpdateSideInputStore(p, m[sideInput])
+					if err != nil {
+						log.Fatal("Failed to update side-input value ", zap.Error(err))
+						return err
+					}
+				}
+				return nil
 			} else {
 				continue
 			}

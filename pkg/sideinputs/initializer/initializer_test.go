@@ -7,20 +7,34 @@ import (
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 	"github.com/stretchr/testify/assert"
-	"sync"
+	"os"
+	"path"
 	"testing"
 	"time"
 )
 
 func TestSideInputsInitializer_Success(t *testing.T) {
 	var (
-		keyspace     = "sideInputTestWatch"
-		wg           sync.WaitGroup
+		keyspace = "sideInputTestWatch"
+		//wg           sync.WaitGroup
 		pipelineName = "testPipeline"
 		sideInputs   = []string{"TEST", "TEST2"}
 		dataTest     = []string{"HELLO", "HELLO2"}
+		mountPath    = "/tmp/side-input/"
 	)
+	// Remove any existing side-input files
+	for _, sideInput := range sideInputs {
+		p := path.Join(mountPath, sideInput)
+		os.Remove(p)
+	}
+
+	if utils.CheckFileExists(mountPath) == false {
+		err := os.Mkdir(mountPath, 0777)
+		assert.NoError(t, err)
+	}
+
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
@@ -54,31 +68,35 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
-	retCh := make(chan map[string][]byte, 1)
 	m := createSideInputMap(sideInputs)
-	wg.Add(1)
-	go startSideInputWatcher(ctx, sideInputWatcher, &wg, retCh, log, m)
-	expectedOut := make(map[string][]byte)
 	for x := range sideInputs {
 		_, err = kv.Put(sideInputs[x], []byte(dataTest[x]))
 		if err != nil {
-			fmt.Println("ERROR ", err)
+			fmt.Println("Error in writing to bucket ", err)
 		}
-		expectedOut[sideInputs[x]] = []byte(dataTest[x])
 	}
-	wg.Wait()
-	close(retCh)
-	for x := range retCh {
-		assert.Equal(t, x, expectedOut)
+	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath)
+	assert.NoError(t, err)
+
+	time.Sleep(1 * time.Second)
+	for x, sideInput := range sideInputs {
+		p := path.Join(mountPath, sideInput)
+		fileData, err := utils.FetchSideInputStore(p)
+		assert.NoError(t, err)
+		assert.Equal(t, dataTest[x], string(fileData))
 	}
 }
 
+// The startSideInputInitializer should wait until all the values are
+// read from the KV bucket, thus this test should time out as we do not
+// write any values to the store
 func TestSideInputsTimeout(t *testing.T) {
 	var (
-		keyspace     = "sideInputTestWatch"
-		wg           sync.WaitGroup
+		keyspace = "sideInputTestWatch"
+		//wg           sync.WaitGroup
 		pipelineName = "testPipeline"
 		sideInputs   = []string{"TEST", "TEST2"}
+		mountPath    = "/tmp/side-input/"
 	)
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
@@ -96,10 +114,10 @@ func TestSideInputsTimeout(t *testing.T) {
 	js, err := nc.JetStreamContext(nats.PublishAsyncMaxPending(256))
 	assert.NoError(t, err)
 
-	// create heartbeat bucket
+	// create side-input bucket
 	_, err = js.CreateKeyValue(&nats.KeyValueConfig{
 		Bucket:       keyspace,
-		Description:  fmt.Sprintf("[%s] heartbeat bucket", keyspace),
+		Description:  fmt.Sprintf("[%s] side-input bucket", keyspace),
 		MaxValueSize: 0,
 		History:      0,
 		TTL:          0,
@@ -113,11 +131,7 @@ func TestSideInputsTimeout(t *testing.T) {
 
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
-	retCh := make(chan map[string][]byte, 1)
 	m := createSideInputMap(sideInputs)
-	wg.Add(1)
-	go startSideInputWatcher(ctx, sideInputWatcher, &wg, retCh, log, m)
-	wg.Wait()
-	close(retCh)
+	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath)
 	assert.Equal(t, context.DeadlineExceeded, ctx.Err())
 }
