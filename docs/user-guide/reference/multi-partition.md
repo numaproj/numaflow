@@ -1,6 +1,6 @@
 # Multi-partitioned Edges
 
-To achieve higher throughput(> 10K but < 25K), users can create multi-partitioned edges.
+To achieve higher throughput(> 10K but < 30K tps), users can create multi-partitioned edges.
 Multi-partitioned edges are only supported for pipelines with JetStream as ISB. Please ensure
 that the JetStream is provisioned with more nodes to support higher throughput.
 
