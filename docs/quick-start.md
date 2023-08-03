@@ -137,16 +137,11 @@ curl -kq -X POST -d "104" https://localhost:8444/vertices/in
 Now you can watch the log for the `even` and `odd` vertices by running the commands below. 
 
 ```shell
-# Watch the log for the even vertex.
-kubectl logs -f even-odd-even-sink-0-xxxxx
-```shell
 # Watch the log for the even vertex
 kubectl logs -f even-odd-even-sink-0-xxxxx
 2022/09/07 22:29:40 (even-sink) 102
 2022/09/07 22:29:40 (even-sink) 104
 
-# Watch the log for the odd vertex.
-kubectl logs -f even-odd-odd-sink-0-xxxxx
 # Watch the log for the odd vertex
 kubectl logs -f even-odd-odd-sink-0-xxxxx
 2022/09/07 22:30:19 (odd-sink) 101
