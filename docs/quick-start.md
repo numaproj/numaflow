@@ -23,7 +23,7 @@ kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exam
 
 ## Creating a simple pipeline
 
-As an example, we will create a `simple pipelin` that contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages. 
+As an example, we will create a `simple pipeline` that contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages. 
 
 Run the command below to create a simple pipeline.
 
