@@ -17,6 +17,7 @@ limitations under the License.
 package pipeline
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -599,3 +600,91 @@ func Test_validateSideInputs(t *testing.T) {
 	err = validateSideInputs(*testObj)
 	assert.NoError(t, err)
 }
+
+func Test_getCycles(t *testing.T) {
+	tests := []struct {
+		name                  string
+		edges                 []*dfv1.Edge
+		startVertex           string
+		expectedCycleVertices map[string]struct{}
+	}{
+		{
+			name: "NoCycle",
+			edges: []*dfv1.Edge{
+				{From: "A", To: "B"},
+				{From: "B", To: "C"},
+				{From: "B", To: "D"},
+			},
+			startVertex:           "A",
+			expectedCycleVertices: map[string]struct{}{},
+		},
+		{
+			name: "CycleToSelf",
+			edges: []*dfv1.Edge{
+				{From: "A", To: "B"},
+				{From: "B", To: "B"},
+				{From: "B", To: "C"},
+			},
+			startVertex:           "A",
+			expectedCycleVertices: map[string]struct{}{"B": {}},
+		},
+		{
+			name: "CycleBackward",
+			edges: []*dfv1.Edge{
+				{From: "A", To: "B"},
+				{From: "B", To: "A"},
+				{From: "B", To: "C"},
+			},
+			startVertex:           "A",
+			expectedCycleVertices: map[string]struct{}{"A": {}},
+		},
+		{
+			name: "Complicated",
+			edges: []*dfv1.Edge{
+				{From: "A", To: "B"},
+				{From: "B", To: "C"},
+				{From: "B", To: "E"},
+				{From: "A", To: "D"},
+				{From: "D", To: "E"},
+				{From: "E", To: "A"}, // this cycles
+				{From: "E", To: "F"},
+			},
+			startVertex:           "A",
+			expectedCycleVertices: map[string]struct{}{"A": {}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fmt.Printf("running test: %q\n", tt.name)
+			mappedEdges := edgesMappedByFrom(tt.edges)
+			fmt.Printf("deletethis: mappedEdges=%+v\n", mappedEdges)
+			cyclesFound := getCyclesFromVertex(tt.startVertex, make(map[string]struct{}), mappedEdges)
+			//assert.True(t, compareStringSlice(cyclesFound, tt.expectedCycleVertices))
+			assert.Equal(t, len(tt.expectedCycleVertices), len(cyclesFound))
+			for cycleFound, _ := range cyclesFound {
+				assert.Contains(t, tt.expectedCycleVertices, cycleFound)
+			}
+		})
+	}
+
+}
+
+/*
+func compareStringSlice(s1 []string, s2 []string) bool {
+	if len(s1) != len(s2) {
+		return false
+	}
+	// verify everything in s1 is in s2
+	s2Map := make(map[string]struct{})
+	for _, s := range s2 {
+		s2Map[s] = struct{}{}
+	}
+	for _, s := range s1 {
+		_, found := s2Map[s]
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+*/

@@ -310,11 +310,10 @@ func isReservedContainerName(name string) bool {
 }
 
 // an invalid cycle has a Reduce Vertex at or to the right of the cycle
-/*func invalidCycle(pipelineSpec *dfv1.PipelineSpec) {
+func invalidCycle(pipelineSpec *dfv1.PipelineSpec) {
 	// construct a Graph of all of our Edges, where each Graph Vertex is a pointer to the Numaflow Vertex
 
-
-}*/
+}
 
 // look for Cycles within the Pipeline: after finding a Cycle don't need to go further downstream of that Cycle
 // or if there is more than one Source return the first Cycle stemming from each Source
@@ -358,25 +357,38 @@ func createGraph(pipelineSpec *dfv1.PipelineSpec) *graph.Graph[string, string] {
 }
 */
 
+// get vertices where there's a Cycle
+// eg. if A->B->A, then return A
+// Since there are multiple Sources, and since each Source produces a Tree, then we can return multiple Cycles
+func getCycles(pipelineSpec *dfv1.PipelineSpec) []string {
+
+}
+
 // return the cycles detected if any
-func getCycles(vertexName string, visited map[string]struct{}, allEdges map[string][]*dfv1.Edge) []string { //todo: could consider returning a map since the same Vertex involved in a Cycle could be found twice but we can use the append this way with slice
+func getCyclesFromVertex(vertexName string, visited map[string]struct{}, allEdges map[string][]*dfv1.Edge) map[string]struct{} {
+
+	fmt.Printf("deletethis: getCycles(): vertexName=%q, visited=%+v\n", vertexName, visited)
+
 	// base case: no Edges stem from this Vertex
 	fromEdges, found := allEdges[vertexName]
 	if !found {
-		return []string{}
+		return map[string]struct{}{}
 	}
 
 	// check for cycle
 	_, alreadyVisited := visited[vertexName]
 	if alreadyVisited {
-		return []string{vertexName}
+		fmt.Printf("deletethis: found cycle: %q\n", vertexName)
+		return map[string]struct{}{vertexName: {}}
 	}
 	visited[vertexName] = struct{}{}
 
-	cyclesFound := make([]string, 0)
+	cyclesFound := make(map[string]struct{})
 	for _, edge := range fromEdges {
-
-		cyclesFound = append(cyclesFound, getCycles(edge.To, visited, allEdges)...)
+		newCycles := getCyclesFromVertex(edge.To, visited, allEdges)
+		for cycleVertex, _ := range newCycles {
+			cyclesFound[cycleVertex] = struct{}{}
+		}
 	}
 
 	delete(visited, vertexName)
@@ -385,5 +397,13 @@ func getCycles(vertexName string, visited map[string]struct{}, allEdges map[stri
 }
 
 func edgesMappedByFrom(edges []*dfv1.Edge) map[string][]*dfv1.Edge {
-
+	mappedEdges := make(map[string][]*dfv1.Edge)
+	for _, edge := range edges {
+		_, found := mappedEdges[edge.From]
+		if !found {
+			mappedEdges[edge.From] = make([]*dfv1.Edge, 0)
+		}
+		mappedEdges[edge.From] = append(mappedEdges[edge.From], edge)
+	}
+	return mappedEdges
 }
