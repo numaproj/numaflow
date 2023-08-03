@@ -17,7 +17,9 @@ describe("Graph screen test", () => {
           targetPosition={Position.Left}
           data={{
             backpressureLabel: "0",
-            edgeWatermark: null,
+            edgeWatermark: {
+              isWaterMarkEnabled: true,
+            },
           }}
           source={"first"}
           target={"second"}
@@ -28,7 +30,7 @@ describe("Graph screen test", () => {
       expect(screen.getByTestId(`first-second`)).toBeInTheDocument()
     );
   });
-  it("Straight edge but full", async () => {
+  it("Straight edge but full with delay in mo", async () => {
     render(
       <ReactFlowProvider>
         <CustomEdge
@@ -44,7 +46,7 @@ describe("Graph screen test", () => {
             backpressureLabel: "0",
             edgeWatermark: {
               isWaterMarkEnabled: true,
-              watermarks: [1690792996319],
+              watermarks: [Date.now() - 2678400000],
             },
           }}
           source={"first"}
@@ -56,7 +58,7 @@ describe("Graph screen test", () => {
       expect(screen.getByTestId(`first-second`)).toBeInTheDocument()
     );
   });
-  it("Edge branches into two", async () => {
+  it("Edge branches with delays in ms, sec, min, hr, d", async () => {
     render(
       <ReactFlowProvider>
         <CustomEdge
@@ -70,7 +72,10 @@ describe("Graph screen test", () => {
           data={{
             isFull: "false",
             backpressureLabel: "0",
-            edgeWatermark: null,
+            edgeWatermark: {
+              isWaterMarkEnabled: true,
+              watermarks: [Date.now() - 1],
+            },
           }}
           source={"first"}
           target={"second"}
@@ -80,16 +85,76 @@ describe("Graph screen test", () => {
           sourceX={240}
           sourceY={36}
           targetX={334}
+          targetY={38}
+          sourcePosition={Position.Right}
+          targetPosition={Position.Left}
+          data={{
+            isFull: "false",
+            backpressureLabel: "0",
+            edgeWatermark: {
+              isWaterMarkEnabled: true,
+              watermarks: [Date.now() - 1000],
+            },
+          }}
+          source={"first"}
+          target={"third"}
+        />
+        <CustomEdge
+          id={"first-fourth"}
+          sourceX={240}
+          sourceY={36}
+          targetX={334}
+          targetY={36}
+          sourcePosition={Position.Right}
+          targetPosition={Position.Left}
+          data={{
+            isFull: "false",
+            backpressureLabel: "0",
+            edgeWatermark: {
+              isWaterMarkEnabled: true,
+              watermarks: [Date.now() - 60000],
+            },
+          }}
+          source={"first"}
+          target={"fourth"}
+        />
+        <CustomEdge
+          id={"first-fifth"}
+          sourceX={240}
+          sourceY={36}
+          targetX={334}
+          targetY={34}
+          sourcePosition={Position.Right}
+          targetPosition={Position.Left}
+          data={{
+            isFull: "false",
+            backpressureLabel: "0",
+            edgeWatermark: {
+              isWaterMarkEnabled: true,
+              watermarks: [Date.now() - 3600000],
+            },
+          }}
+          source={"first"}
+          target={"fifth"}
+        />
+        <CustomEdge
+          id={"first-sixth"}
+          sourceX={240}
+          sourceY={36}
+          targetX={334}
           targetY={32}
           sourcePosition={Position.Right}
           targetPosition={Position.Left}
           data={{
             isFull: "false",
             backpressureLabel: "0",
-            edgeWatermark: null,
+            edgeWatermark: {
+              isWaterMarkEnabled: true,
+              watermarks: [Date.now() - 86400000],
+            },
           }}
           source={"first"}
-          target={"third"}
+          target={"sixth"}
         />
       </ReactFlowProvider>
     );
@@ -98,6 +163,15 @@ describe("Graph screen test", () => {
     );
     await waitFor(() =>
       expect(screen.getByTestId(`first-third`)).toBeInTheDocument()
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId(`first-fourth`)).toBeInTheDocument()
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId(`first-fifth`)).toBeInTheDocument()
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId(`first-sixth`)).toBeInTheDocument()
     );
   });
 });

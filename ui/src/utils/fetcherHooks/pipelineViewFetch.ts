@@ -268,6 +268,7 @@ export const usePipelineViewFetch = (
                 const edgeWatermark = {} as EdgeWatermark;
                 edgeWatermark.isWaterMarkEnabled = edge["isWatermarkEnabled"];
                 edgeWatermark.watermarks = edge["watermarks"];
+                edgeWatermark.WMFetchTime = Date.now();
                 edgeToWatermarkMap.set(edge.edge, edgeWatermark);
               });
             }),
