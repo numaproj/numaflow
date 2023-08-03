@@ -153,6 +153,9 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 
 	// TODO(Join): prevent pipelines with Cycles in the case that there is a Reduce Vertex at the point of the cycle or to the right of it
+	/*if invalidCycle(pl.Spec) {
+
+	}*/
 
 	for _, v := range pl.Spec.Vertices {
 		if err := validateVertex(v); err != nil {
@@ -304,4 +307,83 @@ func isReservedContainerName(name string) bool {
 		name == dfv1.CtrUdSideInput ||
 		name == dfv1.CtrInitSideInputs ||
 		name == dfv1.CtrSideInputsWatcher
+}
+
+// an invalid cycle has a Reduce Vertex at or to the right of the cycle
+/*func invalidCycle(pipelineSpec *dfv1.PipelineSpec) {
+	// construct a Graph of all of our Edges, where each Graph Vertex is a pointer to the Numaflow Vertex
+
+
+}*/
+
+// look for Cycles within the Pipeline: after finding a Cycle don't need to go further downstream of that Cycle
+// or if there is more than one Source return the first Cycle stemming from each Source
+/*
+func getFirstCycles(pipelineSpec *dfv1.PipelineSpec, sources map[string]dfv1.AbstractVertex) *dfv1.Vertex {
+	g := createGraph(pipelineSpec)
+
+	cycleVertices := make(map[string]struct{}) // essentially a Set
+
+	// TODO: do all of this as DFS actually
+	for source, _ := range sources {
+		visited := make(map[string]struct{}) // essentially a Set of visited Vertices
+		graph.BFS(*g, source, func(value string) bool {
+			_, alreadyVisited := visited[source]
+			if alreadyVisited {
+				cycleVertices[source] = struct{}{}
+				return false // don't need to continue downstream of this
+			} else {
+				visited[source] = struct{}{}
+			}
+			return true
+		})
+	}
+
+}
+
+func createGraph(pipelineSpec *dfv1.PipelineSpec) *graph.Graph[string, string] {
+	g := graph.New(graph.StringHash)
+
+	// add Vertices
+	for _, v := range pipelineSpec.Vertices {
+		g.AddVertex(v.Name)
+	}
+
+	// add Edges
+	for _, e := range pipelineSpec.Edges {
+		g.AddEdge(e.From, e.To)
+	}
+
+	return &g
+}
+*/
+
+// return the cycles detected if any
+func getCycles(vertexName string, visited map[string]struct{}, allEdges map[string][]*dfv1.Edge) []string { //todo: could consider returning a map since the same Vertex involved in a Cycle could be found twice but we can use the append this way with slice
+	// base case: no Edges stem from this Vertex
+	fromEdges, found := allEdges[vertexName]
+	if !found {
+		return []string{}
+	}
+
+	// check for cycle
+	_, alreadyVisited := visited[vertexName]
+	if alreadyVisited {
+		return []string{vertexName}
+	}
+	visited[vertexName] = struct{}{}
+
+	cyclesFound := make([]string, 0)
+	for _, edge := range fromEdges {
+
+		cyclesFound = append(cyclesFound, getCycles(edge.To, visited, allEdges)...)
+	}
+
+	delete(visited, vertexName)
+
+	return cyclesFound
+}
+
+func edgesMappedByFrom(edges []*dfv1.Edge) map[string][]*dfv1.Edge {
+
 }
