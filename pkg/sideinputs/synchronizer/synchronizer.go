@@ -48,7 +48,7 @@ func NewSideInputsSynchronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInp
 	}
 }
 
-func (siw *sideInputsSynchronizer) Start(ctx context.Context) error {
+func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	var (
 		isbSvcClient isbsvc.ISBService
 		natsClient   *jsclient.NATSClient
@@ -56,13 +56,13 @@ func (siw *sideInputsSynchronizer) Start(ctx context.Context) error {
 	)
 
 	log := logging.FromContext(ctx)
-	log.Infow("Starting Side Inputs Watcher", zap.Strings("sideInputs", siw.sideInputs))
+	log.Infow("Starting Side Inputs Watcher", zap.Strings("sideInputs", sis.sideInputs))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	switch siw.isbSvcType {
+	switch sis.isbSvcType {
 	case dfv1.ISBSvcTypeRedis:
-		return fmt.Errorf("unsupported isbsvc type %q", siw.isbSvcType)
+		return fmt.Errorf("unsupported isbsvc type %q", sis.isbSvcType)
 	case dfv1.ISBSvcTypeJetStream:
 		natsClient, err = jsclient.NewNATSClient(ctx)
 		defer natsClient.Close()
@@ -70,18 +70,18 @@ func (siw *sideInputsSynchronizer) Start(ctx context.Context) error {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err
 		}
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(siw.pipelineName, isbsvc.WithJetStreamClient(natsClient))
+		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(sis.pipelineName, isbsvc.WithJetStreamClient(natsClient))
 		if err != nil {
 			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 			return err
 		}
 	default:
-		return fmt.Errorf("unrecognized isbsvc type %q", siw.isbSvcType)
+		return fmt.Errorf("unrecognized isbsvc type %q", sis.isbSvcType)
 	}
 	log.Infof("ISB Svc Client nil: %v\n", isbSvcClient == nil)
 
-	bucketName := isbsvc.JetStreamSideInputsStoreBucket(siw.sideInputsStore)
-	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, siw.pipelineName, bucketName, natsClient)
+	bucketName := isbsvc.JetStreamSideInputsStoreBucket(sis.sideInputsStore)
+	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, sis.pipelineName, bucketName, natsClient)
 	if err != nil {
 		return err
 	}

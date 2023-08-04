@@ -97,6 +97,7 @@ func TestSideInputsTimeout(t *testing.T) {
 		pipelineName = "testPipeline"
 		sideInputs   = []string{"TEST", "TEST2"}
 		mountPath    = "/tmp/side-input/"
+		m            = make(map[string][]byte)
 	)
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
@@ -131,7 +132,7 @@ func TestSideInputsTimeout(t *testing.T) {
 
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
-	m := make(map[string][]byte)
+
 	_ = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath, sideInputs)
 	assert.Equal(t, context.DeadlineExceeded, ctx.Err())
 }

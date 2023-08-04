@@ -57,6 +57,7 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 		isbSvcClient isbsvc.ISBService
 		natsClient   *jsclient.NATSClient
 		err          error
+		m            = make(map[string][]byte)
 	)
 
 	log := logging.FromContext(ctx)
@@ -88,7 +89,6 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 		return err
 	}
 
-	m := make(map[string][]byte)
 	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, dfv1.PathSideInputsMount, sii.sideInputs)
 	if err != nil {
 		return err
