@@ -652,6 +652,20 @@ func Test_getCyclesFromVertex(t *testing.T) {
 			startVertex:           "A",
 			expectedCycleVertices: map[string]struct{}{"A": {}},
 		},
+		/*{
+			name: "Complicated-2",
+			edges: []dfv1.Edge{
+				{From: "A", To: "B"},
+				{From: "B", To: "B"}, // cycle to self
+				{From: "B", To: "C"},
+				{From: "A", To: "D"},
+				{From: "D", To: "E"},
+				{From: "F", To: "G"},
+				{From: "G", To: "D"},
+			},
+			startVertex:           "A",
+			expectedCycleVertices: map[string]struct{}{"B": {}},
+		},*/
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -678,14 +692,146 @@ func constructVerticesByName(edges []dfv1.Edge) map[string]*dfv1.AbstractVertex 
 	return mappedVertices
 }
 
-/*
 func Test_validateCycles(t *testing.T) {
 	tests := []struct {
-		name           string
-		edges          []dfv1.Edge
-		pipelineSpec   *dfv1.PipelineSpec
-		sourceVertices map[string]dfv1.AbstractVertex
-		success        bool
-	}{}
+		name         string
+		pipelineSpec *dfv1.PipelineSpec
+		success      bool
+	}{
+		{
+			name: "NoCycle",
+			pipelineSpec: &dfv1.PipelineSpec{
+				Vertices: []dfv1.AbstractVertex{
+					{Name: "A", Source: &dfv1.Source{}}, //todo: consider adding more members for source, sink, map
+					{Name: "B"},
+					{Name: "C"},
+					{Name: "D"},
+					{Name: "E"},
+					{Name: "F", Source: &dfv1.Source{}},
+					{Name: "G"},
+				},
+				Edges: []dfv1.Edge{
+					{From: "A", To: "B"},
+					{From: "B", To: "C"},
+					{From: "A", To: "D"},
+					{From: "D", To: "E"},
+					{From: "E", To: "B"},
+					{From: "F", To: "G"},
+					{From: "G", To: "D"},
+				},
+			},
+			success: true,
+		},
+		{
+			name: "CycleToSelf-NoReduce",
+			pipelineSpec: &dfv1.PipelineSpec{
+				Vertices: []dfv1.AbstractVertex{
+					{Name: "A", Source: &dfv1.Source{}},
+					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex, todo: add Window?
+					{Name: "C"},
+					{Name: "D"},
+					{Name: "E"},
+					{Name: "F", Source: &dfv1.Source{}},
+					{Name: "G"},
+				},
+				Edges: []dfv1.Edge{
+					{From: "A", To: "B"},
+					{From: "B", To: "C"},
+					{From: "C", To: "C"}, // cycle to self
+					{From: "C", To: "E"},
+					{From: "A", To: "D"},
+					{From: "D", To: "E"},
+					{From: "F", To: "G"},
+					{From: "G", To: "D"},
+				},
+			},
+			success: true,
+		},
+		{
+			name: "CycleToSelf-CycleIsReduce",
+			pipelineSpec: &dfv1.PipelineSpec{
+				Vertices: []dfv1.AbstractVertex{
+					{Name: "A", Source: &dfv1.Source{}},
+					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex, todo: add Window?
+					{Name: "C"},
+					{Name: "D"},
+					{Name: "E"},
+					{Name: "F", Source: &dfv1.Source{}},
+					{Name: "G"},
+				},
+				Edges: []dfv1.Edge{
+					{From: "A", To: "B"},
+					{From: "B", To: "B"}, // cycle to self
+					{From: "B", To: "C"},
+					{From: "A", To: "D"},
+					{From: "D", To: "E"},
+					{From: "F", To: "G"},
+					{From: "G", To: "D"},
+				},
+			},
+			success: false,
+		},
+		{
+			name: "CycleToSelf-ReduceAhead",
+			pipelineSpec: &dfv1.PipelineSpec{
+				Vertices: []dfv1.AbstractVertex{
+					{Name: "A", Source: &dfv1.Source{}},
+					{Name: "B"},
+					{Name: "C", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
+					{Name: "D"},
+					{Name: "E"},
+					{Name: "F", Source: &dfv1.Source{}},
+					{Name: "G"},
+				},
+				Edges: []dfv1.Edge{
+					{From: "A", To: "B"},
+					{From: "B", To: "B"}, // cycle to self
+					{From: "B", To: "C"},
+					{From: "A", To: "D"},
+					{From: "D", To: "E"},
+					{From: "F", To: "G"},
+					{From: "G", To: "D"},
+				},
+			},
+			success: false,
+		},
+		{
+			name: "CycleBackward-ReduceAhead",
+			pipelineSpec: &dfv1.PipelineSpec{
+				Vertices: []dfv1.AbstractVertex{
+					{Name: "A", Source: &dfv1.Source{}},
+					{Name: "B"}, //Reduce vertex, todo: add Window?
+					{Name: "C"},
+					{Name: "D"},
+					{Name: "E", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
+					{Name: "F", Source: &dfv1.Source{}},
+					{Name: "G"},
+					{Name: "H"},
+				},
+				Edges: []dfv1.Edge{
+					{From: "A", To: "B"},
+					{From: "B", To: "C"},
+					{From: "A", To: "D"},
+					{From: "D", To: "E"},
+					{From: "F", To: "G"},
+					{From: "G", To: "D"},
+					{From: "D", To: "G"}, // cycle backward
+					{From: "E", To: "H"},
+				},
+			},
+			success: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fmt.Printf("running test: %q\n", tt.name)
+			err := validateCycles(tt.pipelineSpec)
+			if tt.success {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
 }
-*/

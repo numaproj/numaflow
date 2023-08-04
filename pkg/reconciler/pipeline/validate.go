@@ -382,6 +382,7 @@ func validateCycles(pipelineSpec *dfv1.PipelineSpec) error {
 // Since there are multiple Sources, and since each Source produces a Tree, then we can return multiple Cycles
 func getCycles(pipelineSpec *dfv1.PipelineSpec) map[string]struct{} {
 	edges := toVerticesMappedByFrom(pipelineSpec.Edges, pipelineSpec.GetVerticesByName())
+	//fmt.Printf("edges: %+v\n", edges)
 	sources := pipelineSpec.GetSources()
 	cycles := map[string]struct{}{} // essentially a Set of cycle Vertex names
 
@@ -392,6 +393,7 @@ func getCycles(pipelineSpec *dfv1.PipelineSpec) map[string]struct{} {
 			cycles[cycleVertex] = struct{}{}
 		}
 	}
+	fmt.Printf("deletethis: getCycles(): %+v\n", cycles)
 	return cycles
 }
 

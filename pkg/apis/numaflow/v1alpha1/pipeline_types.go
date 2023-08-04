@@ -450,9 +450,10 @@ type PipelineSpec struct {
 
 func (pipeline PipelineSpec) GetMatchingVertices(f func(AbstractVertex) bool) map[string]*AbstractVertex {
 	mappedVertices := make(map[string]*AbstractVertex)
-	for _, v := range pipeline.Vertices {
-		if f(v) {
-			mappedVertices[v.Name] = &v
+	for i := range pipeline.Vertices {
+		v := &pipeline.Vertices[i]
+		if f(*v) {
+			mappedVertices[v.Name] = v
 		}
 	}
 	return mappedVertices
