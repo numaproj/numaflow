@@ -19,6 +19,10 @@ package initializer
 import (
 	"context"
 	"fmt"
+	"path"
+
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -26,11 +30,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/sideinputs/store"
 	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
-	"go.uber.org/zap"
-	"path"
 )
 
-// struct to store required pipeline and store info for initializer
+// sideInputsInitializer contains the pipeline
+// and side-input information required for monitoring a
+// KV store for side-input values
 type sideInputsInitializer struct {
 	isbSvcType      dfv1.ISBSvcType
 	pipelineName    string
@@ -38,7 +42,7 @@ type sideInputsInitializer struct {
 	sideInputs      []string
 }
 
-// NewSideInputsInitializer Create a new initializer with given values
+// NewSideInputsInitializer creates a new initializer with given values
 func NewSideInputsInitializer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsStore string, sideInputs []string) *sideInputsInitializer {
 	return &sideInputsInitializer{
 		isbSvcType:      isbSvcType,
@@ -49,12 +53,15 @@ func NewSideInputsInitializer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInpu
 }
 
 func (sii *sideInputsInitializer) Run(ctx context.Context) error {
+	var (
+		isbSvcClient isbsvc.ISBService
+		natsClient   *jsclient.NATSClient
+		err          error
+	)
+
 	log := logging.FromContext(ctx)
 	log.Infow("Starting Side Inputs Initializer", zap.Strings("sideInputs", sii.sideInputs))
 
-	var isbSvcClient isbsvc.ISBService
-	var natsClient *jsclient.NATSClient
-	var err error
 	switch sii.isbSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		return fmt.Errorf("unsupported isbsvc type %q", sii.isbSvcType)
@@ -81,8 +88,8 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 		return err
 	}
 
-	m := createSideInputMap(sii.sideInputs)
-	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, dfv1.PathSideInputsMount)
+	m := make(map[string][]byte)
+	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, dfv1.PathSideInputsMount, sii.sideInputs)
 	if err != nil {
 		return err
 	}
@@ -90,15 +97,15 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	return nil
 }
 
-// startSideInputInitializer watches the KV store for changes and writes to disk
-// once the initial value of all the side-inputs is read
-func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, m map[string][]byte, mountPath string) error {
+// startSideInputInitializer watches the side inputs KV store to get side inputs
+// and writes to disk once the initial value of all the side-inputs is ready
+func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger,
+	m map[string][]byte, mountPath string, sideInputs []string) error {
 	watchCh, stopped := watch.Watch(ctx)
 	for {
 		select {
 		case <-stopped:
 			log.Info("Stopped value received ")
-			fmt.Println("topped value received ")
 			return nil
 		case value := <-watchCh:
 			if value == nil {
@@ -109,14 +116,13 @@ func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 			m[value.Key()] = value.Value()
 			// Wait for the data is ready in the side input store, and then copy the data to the disk
-			if gotAllSideInputVals(m) {
+			if gotAllSideInputVals(sideInputs, m) {
 				for sideInput := range m {
 					p := path.Join(mountPath, sideInput)
 					log.Info("Initializing side input data for %q\n", p)
 					err := utils.UpdateSideInputStore(p, m[sideInput])
 					if err != nil {
 						log.Fatal("Failed to update side-input value ", zap.Error(err))
-						return err
 					}
 				}
 				return nil
@@ -127,19 +133,14 @@ func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher
 	}
 }
 
-// create a map for storing the values of each side-input
-func createSideInputMap(sideInputs []string) map[string][]byte {
-	m := make(map[string][]byte)
-	for _, input := range sideInputs {
-		m[input] = nil
+// gotAllSideInputVals checks if values for all side-inputs
+// have been received from the KV bucket
+func gotAllSideInputVals(sideInputs []string, m map[string][]byte) bool {
+	if len(sideInputs) != len(m) {
+		return false
 	}
-	return m
-}
-
-// utility to check if values for all side-inputs have been received from the bucket
-func gotAllSideInputVals(m map[string][]byte) bool {
-	for key := range m {
-		if m[key] == nil {
+	for _, sideInput := range sideInputs {
+		if _, ok := m[sideInput]; !ok {
 			return false
 		}
 	}

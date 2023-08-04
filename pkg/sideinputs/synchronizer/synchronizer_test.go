@@ -3,16 +3,18 @@ package synchronizer
 import (
 	"context"
 	"fmt"
-	"github.com/nats-io/nats.go"
-	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
-	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path"
 	"testing"
 	"time"
+
+	"github.com/nats-io/nats.go"
+	"github.com/stretchr/testify/assert"
+
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
 func TestSideInputsValueUpdates(t *testing.T) {

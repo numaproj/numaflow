@@ -3,22 +3,23 @@ package initializer
 import (
 	"context"
 	"fmt"
-	"github.com/nats-io/nats.go"
-	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
-	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path"
 	"testing"
 	"time"
+
+	"github.com/nats-io/nats.go"
+	"github.com/stretchr/testify/assert"
+
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
 func TestSideInputsInitializer_Success(t *testing.T) {
 	var (
-		keyspace = "sideInputTestWatch"
-		//wg           sync.WaitGroup
+		keyspace     = "sideInputTestWatch"
 		pipelineName = "testPipeline"
 		sideInputs   = []string{"TEST", "TEST2"}
 		dataTest     = []string{"HELLO", "HELLO2"}
@@ -68,14 +69,14 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
-	m := createSideInputMap(sideInputs)
+	m := make(map[string][]byte)
 	for x := range sideInputs {
 		_, err = kv.Put(sideInputs[x], []byte(dataTest[x]))
 		if err != nil {
 			fmt.Println("Error in writing to bucket ", err)
 		}
 	}
-	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath)
+	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath, sideInputs)
 	assert.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
@@ -92,8 +93,7 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 // write any values to the store
 func TestSideInputsTimeout(t *testing.T) {
 	var (
-		keyspace = "sideInputTestWatch"
-		//wg           sync.WaitGroup
+		keyspace     = "sideInputTestWatch"
 		pipelineName = "testPipeline"
 		sideInputs   = []string{"TEST", "TEST2"}
 		mountPath    = "/tmp/side-input/"
@@ -131,7 +131,7 @@ func TestSideInputsTimeout(t *testing.T) {
 
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
-	m := createSideInputMap(sideInputs)
-	_ = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath)
+	m := make(map[string][]byte)
+	_ = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath, sideInputs)
 	assert.Equal(t, context.DeadlineExceeded, ctx.Err())
 }

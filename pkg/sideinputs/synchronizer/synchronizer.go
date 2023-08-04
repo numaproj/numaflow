@@ -19,6 +19,10 @@ package synchronizer
 import (
 	"context"
 	"fmt"
+	"path"
+
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -26,8 +30,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/sideinputs/store"
 	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
-	"go.uber.org/zap"
-	"path"
 )
 
 type sideInputsSynchronizer struct {
@@ -47,14 +49,17 @@ func NewSideInputsSynchronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInp
 }
 
 func (siw *sideInputsSynchronizer) Start(ctx context.Context) error {
+	var (
+		isbSvcClient isbsvc.ISBService
+		natsClient   *jsclient.NATSClient
+		err          error
+	)
+
 	log := logging.FromContext(ctx)
 	log.Infow("Starting Side Inputs Watcher", zap.Strings("sideInputs", siw.sideInputs))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var isbSvcClient isbsvc.ISBService
-	var natsClient *jsclient.NATSClient
-	var err error
 	switch siw.isbSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		return fmt.Errorf("unsupported isbsvc type %q", siw.isbSvcType)
@@ -73,7 +78,7 @@ func (siw *sideInputsSynchronizer) Start(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", siw.isbSvcType)
 	}
-	log.Infow("ISB Svc Client nil: %v\n", isbSvcClient == nil)
+	log.Infof("ISB Svc Client nil: %v\n", isbSvcClient == nil)
 
 	bucketName := isbsvc.JetStreamSideInputsStoreBucket(siw.sideInputsStore)
 	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, siw.pipelineName, bucketName, natsClient)
@@ -85,13 +90,14 @@ func (siw *sideInputsSynchronizer) Start(ctx context.Context) error {
 	return nil
 }
 
-// Watch the side inputs store for changes
+// startSideInputSynchronizer watches the side-input KV store for any changes
+// and writes the updated value to the mount volume.
 func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, mountPath string) {
 	watchCh, stopped := watch.Watch(ctx)
 	for {
 		select {
 		case <-stopped:
-			log.Info("Stopped value received ")
+			log.Info("Stopped value received")
 			return
 		case value := <-watchCh:
 			if value == nil {
@@ -101,7 +107,7 @@ func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatche
 			log.Debug("SideInput value received ",
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 			p := path.Join(mountPath, value.Key())
-			// Write value changes to disk
+			// Write changes to disk
 			err := utils.UpdateSideInputStore(p, value.Value())
 			if err != nil {
 				log.Error("Failed to update Side-input value %s\n", zap.Error(err))

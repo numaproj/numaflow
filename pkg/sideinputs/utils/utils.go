@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// CheckFileExists checks if a file with the given fileName exists in the file system.
 func CheckFileExists(fileName string) bool {
 	_, err := os.Stat(fileName)
 	// check if err is "file not exists"
@@ -15,7 +16,9 @@ func CheckFileExists(fileName string) bool {
 	}
 }
 
+// UpdateSideInputStore writes the given value to the side-input file specified.
 func UpdateSideInputStore(filePath string, value []byte) error {
+	// If the file does not exist, create a new file
 	if !CheckFileExists(filePath) {
 		f, err := os.Create(filePath)
 		if err != nil {
@@ -38,6 +41,8 @@ func UpdateSideInputStore(filePath string, value []byte) error {
 	return nil
 }
 
+// FetchSideInputStore reads a given file and returns the value in bytes
+// Used as utility for unit tests
 func FetchSideInputStore(filePath string) ([]byte, error) {
 	b, err := os.ReadFile(filePath)
 	if err != nil {
