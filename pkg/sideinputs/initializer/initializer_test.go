@@ -69,14 +69,13 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
-	m := make(map[string][]byte)
 	for x := range sideInputs {
 		_, err = kv.Put(sideInputs[x], []byte(dataTest[x]))
 		if err != nil {
 			fmt.Println("Error in writing to bucket ", err)
 		}
 	}
-	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath, sideInputs)
+	err = startSideInputInitializer(ctx, sideInputWatcher, log, mountPath, sideInputs)
 	assert.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
@@ -97,7 +96,6 @@ func TestSideInputsTimeout(t *testing.T) {
 		pipelineName = "testPipeline"
 		sideInputs   = []string{"TEST", "TEST2"}
 		mountPath    = "/tmp/side-input/"
-		m            = make(map[string][]byte)
 	)
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
@@ -133,6 +131,6 @@ func TestSideInputsTimeout(t *testing.T) {
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
 
-	_ = startSideInputInitializer(ctx, sideInputWatcher, log, m, mountPath, sideInputs)
+	_ = startSideInputInitializer(ctx, sideInputWatcher, log, mountPath, sideInputs)
 	assert.Equal(t, context.DeadlineExceeded, ctx.Err())
 }

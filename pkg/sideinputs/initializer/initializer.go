@@ -57,7 +57,6 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 		isbSvcClient isbsvc.ISBService
 		natsClient   *jsclient.NATSClient
 		err          error
-		m            = make(map[string][]byte)
 	)
 
 	log := logging.FromContext(ctx)
@@ -89,7 +88,7 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 		return err
 	}
 
-	err = startSideInputInitializer(ctx, sideInputWatcher, log, m, dfv1.PathSideInputsMount, sii.sideInputs)
+	err = startSideInputInitializer(ctx, sideInputWatcher, log, dfv1.PathSideInputsMount, sii.sideInputs)
 	if err != nil {
 		return err
 	}
@@ -99,8 +98,8 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 
 // startSideInputInitializer watches the side inputs KV store to get side inputs
 // and writes to disk once the initial value of all the side-inputs is ready
-func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger,
-	m map[string][]byte, mountPath string, sideInputs []string) error {
+func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, mountPath string, sideInputs []string) error {
+	m := make(map[string][]byte)
 	watchCh, stopped := watch.Watch(ctx)
 	for {
 		select {
