@@ -656,7 +656,7 @@ func Test_getCyclesFromVertex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fmt.Printf("running test: %q\n", tt.name)
-			mappedEdges := edgesMappedByFrom(tt.edges)
+			mappedEdges := toVerticesMappedByFrom(tt.edges, constructVerticesByName(tt.edges))
 			fmt.Printf("deletethis: mappedEdges=%+v\n", mappedEdges)
 			cyclesFound := mappedEdges.getCyclesFromVertex(tt.startVertex, make(map[string]struct{}))
 			//assert.True(t, compareStringSlice(cyclesFound, tt.expectedCycleVertices))
@@ -669,22 +669,23 @@ func Test_getCyclesFromVertex(t *testing.T) {
 
 }
 
+func constructVerticesByName(edges []dfv1.Edge) map[string]*dfv1.AbstractVertex {
+	mappedVertices := make(map[string]*dfv1.AbstractVertex)
+	for _, edge := range edges {
+		mappedVertices[edge.From] = &dfv1.AbstractVertex{Name: edge.From} // fine if we see the same one twice and overwrite
+		mappedVertices[edge.To] = &dfv1.AbstractVertex{Name: edge.To}
+	}
+	return mappedVertices
+}
+
 /*
-func compareStringSlice(s1 []string, s2 []string) bool {
-	if len(s1) != len(s2) {
-		return false
-	}
-	// verify everything in s1 is in s2
-	s2Map := make(map[string]struct{})
-	for _, s := range s2 {
-		s2Map[s] = struct{}{}
-	}
-	for _, s := range s1 {
-		_, found := s2Map[s]
-		if !found {
-			return false
-		}
-	}
-	return true
+func Test_validateCycles(t *testing.T) {
+	tests := []struct {
+		name           string
+		edges          []dfv1.Edge
+		pipelineSpec   *dfv1.PipelineSpec
+		sourceVertices map[string]dfv1.AbstractVertex
+		success        bool
+	}{}
 }
 */

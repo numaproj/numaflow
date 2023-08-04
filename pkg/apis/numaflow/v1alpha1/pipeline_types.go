@@ -448,6 +448,34 @@ type PipelineSpec struct {
 	SideInputs []SideInput `json:"sideInputs,omitempty" protobuf:"bytes,8,rep,name=sideInputs"`
 }
 
+func (pipeline PipelineSpec) GetMatchingVertices(f func(AbstractVertex) bool) map[string]*AbstractVertex {
+	mappedVertices := make(map[string]*AbstractVertex)
+	for _, v := range pipeline.Vertices {
+		if f(v) {
+			mappedVertices[v.Name] = &v
+		}
+	}
+	return mappedVertices
+}
+
+func (pipeline PipelineSpec) GetVerticesByName() map[string]*AbstractVertex {
+	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
+		return true
+	})
+}
+
+func (pipeline PipelineSpec) GetSources() map[string]*AbstractVertex {
+	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
+		return v.IsASource()
+	})
+}
+
+func (pipeline PipelineSpec) GetSinks() map[string]*AbstractVertex {
+	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
+		return v.IsASink()
+	})
+}
+
 type Watermark struct {
 	// Disabled toggles the watermark propagation, defaults to false.
 	// +kubebuilder:default=false
