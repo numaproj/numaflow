@@ -360,50 +360,92 @@ func createGraph(pipelineSpec *dfv1.PipelineSpec) *graph.Graph[string, string] {
 // get vertices where there's a Cycle
 // eg. if A->B->A, then return A
 // Since there are multiple Sources, and since each Source produces a Tree, then we can return multiple Cycles
-func getCycles(pipelineSpec *dfv1.PipelineSpec) []string {
-
+func getCycles(pipelineSpec *dfv1.PipelineSpec, sources map[string]dfv1.AbstractVertex) map[string]struct{} {
+	edges := edgesMappedByFrom(pipelineSpec.Edges)
+	cycles := map[string]struct{}{}
+	for source, _ := range sources {
+		cyclesFromSource := edges.getCyclesFromVertex(source, map[string]struct{}{})
+		for cycleVertex, _ := range cyclesFromSource {
+			cycles[cycleVertex] = struct{}{}
+		}
+	}
+	return cycles
 }
 
-// return the cycles detected if any
-func getCyclesFromVertex(vertexName string, visited map[string]struct{}, allEdges map[string][]*dfv1.Edge) map[string]struct{} {
+type edgesByFrom map[string][]string
 
-	fmt.Printf("deletethis: getCycles(): vertexName=%q, visited=%+v\n", vertexName, visited)
+// getCyclesFromVertex returns the cycles detected if any, starting from startVertex
+func (edges edgesByFrom) getCyclesFromVertex(startVertex string, visited map[string]struct{}) map[string]struct{} {
+
+	fmt.Printf("deletethis: getCycles(): vertexName=%q, visited=%+v\n", startVertex, visited)
 
 	// base case: no Edges stem from this Vertex
-	fromEdges, found := allEdges[vertexName]
+	fromEdges, found := edges[startVertex]
 	if !found {
 		return map[string]struct{}{}
 	}
 
 	// check for cycle
-	_, alreadyVisited := visited[vertexName]
+	_, alreadyVisited := visited[startVertex]
 	if alreadyVisited {
-		fmt.Printf("deletethis: found cycle: %q\n", vertexName)
-		return map[string]struct{}{vertexName: {}}
+		fmt.Printf("deletethis: found cycle: %q\n", startVertex)
+		return map[string]struct{}{startVertex: {}}
 	}
-	visited[vertexName] = struct{}{}
+	visited[startVertex] = struct{}{}
 
 	cyclesFound := make(map[string]struct{})
-	for _, edge := range fromEdges {
-		newCycles := getCyclesFromVertex(edge.To, visited, allEdges)
+	for _, toVertex := range fromEdges {
+		newCycles := edges.getCyclesFromVertex(toVertex, visited)
 		for cycleVertex, _ := range newCycles {
 			cyclesFound[cycleVertex] = struct{}{}
 		}
 	}
 
-	delete(visited, vertexName)
+	delete(visited, startVertex)
 
 	return cyclesFound
 }
 
-func edgesMappedByFrom(edges []*dfv1.Edge) map[string][]*dfv1.Edge {
-	mappedEdges := make(map[string][]*dfv1.Edge)
+// findVertex determines if any Vertex starting from this one meets some condition
+func (edges edgesByFrom) findVertex(startVertex string, visited map[string]struct{}, f func(string) bool) bool {
+
+	// first try the condition on this vertex
+	if f(startVertex) {
+		return true
+	}
+
+	// base case: no Edges stem from this Vertex
+	fromEdges, found := edges[startVertex]
+	if !found {
+		return false
+	}
+	// if we've arrived at a cycle, then stop
+	_, alreadyVisited := visited[startVertex]
+	if alreadyVisited {
+		fmt.Printf("deletethis: found cycle: %q\n", startVertex)
+		return false
+	}
+	visited[startVertex] = struct{}{}
+
+	for _, toVertex := range fromEdges {
+		if edges.findVertex(toVertex, visited, f) {
+			return true
+		}
+	}
+
+	delete(visited, startVertex)
+
+	return false
+}
+
+func edgesMappedByFrom(edges []dfv1.Edge) edgesByFrom {
+	mappedEdges := make(map[string][]string)
 	for _, edge := range edges {
 		_, found := mappedEdges[edge.From]
 		if !found {
-			mappedEdges[edge.From] = make([]*dfv1.Edge, 0)
+			mappedEdges[edge.From] = make([]string, 0)
 		}
-		mappedEdges[edge.From] = append(mappedEdges[edge.From], edge)
+		mappedEdges[edge.From] = append(mappedEdges[edge.From], edge.To)
 	}
 	return mappedEdges
 }

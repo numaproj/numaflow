@@ -601,16 +601,16 @@ func Test_validateSideInputs(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func Test_getCycles(t *testing.T) {
+func Test_getCyclesFromVertex(t *testing.T) {
 	tests := []struct {
 		name                  string
-		edges                 []*dfv1.Edge
+		edges                 []dfv1.Edge
 		startVertex           string
 		expectedCycleVertices map[string]struct{}
 	}{
 		{
 			name: "NoCycle",
-			edges: []*dfv1.Edge{
+			edges: []dfv1.Edge{
 				{From: "A", To: "B"},
 				{From: "B", To: "C"},
 				{From: "B", To: "D"},
@@ -620,7 +620,7 @@ func Test_getCycles(t *testing.T) {
 		},
 		{
 			name: "CycleToSelf",
-			edges: []*dfv1.Edge{
+			edges: []dfv1.Edge{
 				{From: "A", To: "B"},
 				{From: "B", To: "B"},
 				{From: "B", To: "C"},
@@ -630,7 +630,7 @@ func Test_getCycles(t *testing.T) {
 		},
 		{
 			name: "CycleBackward",
-			edges: []*dfv1.Edge{
+			edges: []dfv1.Edge{
 				{From: "A", To: "B"},
 				{From: "B", To: "A"},
 				{From: "B", To: "C"},
@@ -640,7 +640,7 @@ func Test_getCycles(t *testing.T) {
 		},
 		{
 			name: "Complicated",
-			edges: []*dfv1.Edge{
+			edges: []dfv1.Edge{
 				{From: "A", To: "B"},
 				{From: "B", To: "C"},
 				{From: "B", To: "E"},
@@ -658,7 +658,7 @@ func Test_getCycles(t *testing.T) {
 			fmt.Printf("running test: %q\n", tt.name)
 			mappedEdges := edgesMappedByFrom(tt.edges)
 			fmt.Printf("deletethis: mappedEdges=%+v\n", mappedEdges)
-			cyclesFound := getCyclesFromVertex(tt.startVertex, make(map[string]struct{}), mappedEdges)
+			cyclesFound := mappedEdges.getCyclesFromVertex(tt.startVertex, make(map[string]struct{}))
 			//assert.True(t, compareStringSlice(cyclesFound, tt.expectedCycleVertices))
 			assert.Equal(t, len(tt.expectedCycleVertices), len(cyclesFound))
 			for cycleFound, _ := range cyclesFound {
