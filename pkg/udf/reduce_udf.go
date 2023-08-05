@@ -245,6 +245,20 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}()
 
 	<-ctx.Done()
+
+	// Close the watermark fetcher and publisher
+	err = fetchWatermark.Close()
+	if err != nil {
+		log.Info("Failed to close the watermark fetcher")
+	}
+
+	for _, publisher := range publishWatermark {
+		err = publisher.Close()
+		if err != nil {
+			log.Info("Failed to close the watermark publisher")
+		}
+	}
+
 	log.Info("SIGTERM, exiting...")
 	wg.Wait()
 	log.Info("Exited...")

@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -41,8 +42,8 @@ import (
 // It has the mapping of all the processors which in turn has all the information about each processor timelines.
 type ProcessorManager struct {
 	ctx       context.Context
-	hbWatcher store.WatermarkKVWatcher
-	otWatcher store.WatermarkKVWatcher
+	hbWatcher kvs.KVWatcher
+	otWatcher kvs.KVWatcher
 	// heartbeat just tracks the heartbeat of each processing unit. we use it to mark a processing unit's status (e.g, inactive)
 	heartbeat *ProcessorHeartbeat
 	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
@@ -53,6 +54,8 @@ type ProcessorManager struct {
 	// fromBufferPartitionCount is the number of partitions in the fromBuffer
 	fromBufferPartitionCount int32
 	lock                     sync.RWMutex
+	wg                       sync.WaitGroup
+	doneCh                   chan struct{}
 	log                      *zap.SugaredLogger
 
 	// opts
@@ -80,11 +83,15 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 		bucket:                   bucket,
 		fromBufferPartitionCount: fromBufferPartitionCount,
 		log:                      logging.FromContext(ctx).With("bucket", bucket),
+		wg:                       sync.WaitGroup{},
+		doneCh:                   make(chan struct{}),
 		opts:                     opts,
 	}
 	if v.opts.isReduce || v.opts.isSource {
 		v.fromBufferPartitionCount = 1
 	}
+
+	v.wg.Add(3)
 	go v.startRefreshingProcessors()
 	go v.startHeatBeatWatcher()
 	go v.startTimeLineWatcher()
@@ -128,6 +135,7 @@ func (v *ProcessorManager) GetAllProcessors() map[string]*ProcessorToFetch {
 }
 
 func (v *ProcessorManager) startRefreshingProcessors() {
+	defer v.wg.Done()
 	ticker := time.NewTicker(time.Duration(v.opts.refreshingProcessorsRate) * time.Second)
 	defer ticker.Stop()
 	v.log.Infow("Refreshing ActiveProcessors ticker started")
@@ -137,6 +145,8 @@ func (v *ProcessorManager) startRefreshingProcessors() {
 			return
 		case <-ticker.C:
 			v.refreshingProcessors()
+		case <-v.doneCh:
+			return
 		}
 	}
 }
@@ -176,6 +186,7 @@ func (v *ProcessorManager) refreshingProcessors() {
 // startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
 func (v *ProcessorManager) startHeatBeatWatcher() {
+	defer v.wg.Done()
 	watchCh, stopped := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {
@@ -187,7 +198,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 				continue
 			}
 			switch value.Operation() {
-			case store.KVPut:
+			case kvs.KVPut:
 				v.log.Debug("Processor heartbeat watcher received a put", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
@@ -213,7 +224,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					// insert the last seen timestamp. we use this to figure whether this processor entity is inactive.
 					v.heartbeat.Put(value.Key(), int64(intValue))
 				}
-			case store.KVDelete:
+			case kvs.KVDelete:
 				p := v.GetProcessor(value.Key())
 				if p == nil {
 					v.log.Infow("Nil pointer for the processor, perhaps already deleted", zap.String("key", value.Key()))
@@ -224,7 +235,7 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 					p.setStatus(_deleted)
 					v.heartbeat.Delete(value.Key())
 				}
-			case store.KVPurge:
+			case kvs.KVPurge:
 				v.log.Warnw("Received nats.KeyValuePurge", zap.String("bucket", v.hbWatcher.GetKVName()))
 			}
 			v.log.Debugw("processorHeartbeatWatcher - Updates:", zap.String("Operation", value.Operation().String()),
@@ -234,7 +245,9 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 	}
 }
 
+// startTimeLineWatcher starts the processor Timeline Watcher to listen to offset timeline bucket and update the processor's timeline.
 func (v *ProcessorManager) startTimeLineWatcher() {
+	defer v.wg.Done()
 	watchCh, stopped := v.otWatcher.Watch(v.ctx)
 
 	for {
@@ -246,7 +259,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 				continue
 			}
 			switch value.Operation() {
-			case store.KVPut:
+			case kvs.KVPut:
 				v.log.Debug("Processor timeline watcher received a put", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 				// a new processor's OT might take up to 5 secs to be reflected because we are not waiting for it to be added.
 				// This should not be a problem because the processor will send heartbeat as soon as it boots up.
@@ -284,12 +297,23 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					}
 					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 				}
-			case store.KVDelete:
+			case kvs.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
 				// naturally trim the KV store.
-			case store.KVPurge:
+			case kvs.KVPurge:
 				// skip
 			}
 		}
 	}
+}
+
+func (v *ProcessorManager) GetBucket() string {
+	return v.bucket
+}
+
+// Stop stops the watchers, and waits for the goroutines to exit.
+func (v *ProcessorManager) Stop() {
+	v.hbWatcher.Close()
+	v.otWatcher.Close()
+	v.wg.Wait()
 }

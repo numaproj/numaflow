@@ -157,7 +157,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
-	publishWMStores store.WatermarkStorer,
+	publishWMStores store.WatermarkStore,
 	opts ...Option) (*memgen, error) {
 
 	// minimal CRDs don't have defaults
@@ -231,7 +231,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	return gensrc, nil
 }
 
-func (mg *memgen) buildSourceWatermarkPublisher(publishWMStores store.WatermarkStorer) publish.Publisher {
+func (mg *memgen) buildSourceWatermarkPublisher(publishWMStores store.WatermarkStore) publish.Publisher {
 	// for tickgen, it can be the name of the replica
 	entityName := fmt.Sprintf("%s-%d", mg.vertexInstance.Vertex.Name, mg.vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
@@ -290,9 +290,6 @@ func (mg *memgen) Ack(_ context.Context, offsets []isb.Offset) []error {
 func (mg *memgen) NoAck(_ context.Context, _ []isb.Offset) {}
 
 func (mg *memgen) Close() error {
-	if err := mg.sourcePublishWM.Close(); err != nil {
-		mg.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
-	}
 	return nil
 }
 

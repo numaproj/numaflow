@@ -25,11 +25,11 @@ import (
 
 	"github.com/nats-io/nats.go"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -340,7 +340,7 @@ func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName 
 		} else {
 			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount))
 		}
-		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, fromBufferPartitionCount)
+		watermarkFetcher := fetch.NewEdgeFetcher(ctx, pm, fromBufferPartitionCount)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}
 	return watermarkFetchers, nil

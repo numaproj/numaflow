@@ -22,11 +22,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
 
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 

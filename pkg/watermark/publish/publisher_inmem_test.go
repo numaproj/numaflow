@@ -23,14 +23,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {

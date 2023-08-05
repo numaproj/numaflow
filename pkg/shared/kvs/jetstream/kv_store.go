@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Package jetstream package implements the watermark progression using Jetstream as the KV store.
+Package jetstream package implements the kv store and watcher using Jetstream.
 */
 package jetstream
 
@@ -24,14 +24,14 @@ import (
 	"sync"
 
 	"github.com/nats-io/nats.go"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
 
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// jetStreamStore implements the watermark's KV store backed up by Jetstream.
+// jetStreamStore implements the KV store backed up by Jetstream.
 type jetStreamStore struct {
 	pipelineName string
 	client       *jsclient.NATSClient
@@ -40,10 +40,10 @@ type jetStreamStore struct {
 	log          *zap.SugaredLogger
 }
 
-var _ store.WatermarkKVStorer = (*jetStreamStore)(nil)
+var _ kvs.KVStore = (*jetStreamStore)(nil)
 
 // NewKVJetStreamKVStore returns KVJetStreamStore.
-func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (store.WatermarkKVStorer, error) {
+func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (kvs.KVStore, error) {
 	var err error
 	var jsStore = &jetStreamStore{
 		pipelineName: pipelineName,

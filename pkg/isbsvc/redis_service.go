@@ -21,9 +21,9 @@ import (
 	"fmt"
 
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
@@ -41,7 +41,7 @@ func NewISBRedisSvc(client *redisclient.RedisClient) ISBService {
 	return &isbsRedisSvc{client: client}
 }
 
-// CreateBuffers is used to create the inter-step redis buffers.
+// CreateBuffersAndBuckets  is used to create the inter-step redis buffers.
 func (r *isbsRedisSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, opts ...CreateOption) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
@@ -69,7 +69,7 @@ func (r *isbsRedisSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buc
 	return nil
 }
 
-// DeleteBuffers is used to delete the inter-step redis buffers.
+// DeleteBuffersAndBuckets is used to delete the inter-step redis buffers.
 func (r *isbsRedisSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
@@ -105,7 +105,7 @@ func (r *isbsRedisSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buc
 	return nil
 }
 
-// ValidateBuffers is used to validate inter-step redis buffers to see if the stream/stream group exist
+// ValidateBuffersAndBuckets is used to validate inter-step redis buffers to see if the stream/stream group exist
 func (r *isbsRedisSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
@@ -139,6 +139,7 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 	return bufferInfo, nil
 }
 
+// CreateWatermarkFetcher is used to create watermark fetcher for the given bucket
 func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.Fetcher, error) {
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	var watermarkFetchers []fetch.Fetcher
@@ -156,7 +157,7 @@ func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName st
 		} else {
 			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount))
 		}
-		watermarkFetcher := fetch.NewEdgeFetcher(ctx, bucketName, storeWatcher, pm, fromBufferPartitionCount)
+		watermarkFetcher := fetch.NewEdgeFetcher(ctx, pm, fromBufferPartitionCount)
 		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
 	}
 

@@ -213,6 +213,19 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	}
 	// wait for all the forwarders to exit
 	finalWg.Wait()
+
+	// Close the watermark fetcher and publisher
+	err = fetchWatermark.Close()
+	if err != nil {
+		log.Info("Failed to close the watermark fetcher")
+	}
+
+	for _, publisher := range publishWatermark {
+		err = publisher.Close()
+		if err != nil {
+			log.Info("Failed to close the watermark publisher")
+		}
+	}
 	log.Info("All udf data processors exited...")
 	return nil
 }

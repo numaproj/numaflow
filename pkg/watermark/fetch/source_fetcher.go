@@ -29,7 +29,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
@@ -37,20 +36,18 @@ import (
 type sourceFetcher struct {
 	ctx              context.Context
 	sourceBufferName string
-	storeWatcher     store.WatermarkStoreWatcher
 	processorManager *processor.ProcessorManager
 	log              *zap.SugaredLogger
 }
 
 // NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
 // buckets of the source buffer.
-func NewSourceFetcher(ctx context.Context, sourceBufferName string, storeWatcher store.WatermarkStoreWatcher, manager *processor.ProcessorManager) Fetcher {
-	log := logging.FromContext(ctx).With("sourceBufferName", sourceBufferName)
+func NewSourceFetcher(ctx context.Context, manager *processor.ProcessorManager) Fetcher {
+	log := logging.FromContext(ctx).With("sourceBufferName", manager.GetBucket())
 	log.Info("Creating a new source watermark fetcher")
 	return &sourceFetcher{
 		ctx:              ctx,
-		sourceBufferName: sourceBufferName,
-		storeWatcher:     storeWatcher,
+		sourceBufferName: manager.GetBucket(),
 		processorManager: manager,
 		log:              log,
 	}
@@ -115,9 +112,6 @@ func (e *sourceFetcher) GetHeadWMB(int32) wmb.WMB {
 // Close function closes the watchers.
 func (e *sourceFetcher) Close() error {
 	e.log.Infof("Closing source watermark fetcher")
-	if e.storeWatcher != nil {
-		e.storeWatcher.HeartbeatWatcher().Close()
-		e.storeWatcher.OffsetTimelineWatcher().Close()
-	}
+	e.processorManager.Stop()
 	return nil
 }

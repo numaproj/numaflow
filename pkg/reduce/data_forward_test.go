@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -41,7 +43,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
@@ -1243,14 +1244,14 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 		// wait until the test processor has been added to the processor list
 		time.Sleep(time.Millisecond * 100)
 	}
-	edgeFetcher := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm, 1)
+	edgeFetcher := fetch.NewEdgeFetcher(ctx, pm, 1)
 	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, map[string]fetch.Fetcher{"fromVertex": edgeFetcher})
 	return edgeFetcherSet, sourcePublisher
 }
 
-func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
+func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]kvs.KVStore) {
 	publishers := make(map[string]publish.Publisher)
-	otStores := make(map[string]wmstore.WatermarkKVStorer)
+	otStores := make(map[string]kvs.KVStore)
 
 	// create publisher for to Buffers
 	index := int32(0)
