@@ -652,28 +652,15 @@ func Test_getCyclesFromVertex(t *testing.T) {
 			startVertex:           "A",
 			expectedCycleVertices: map[string]struct{}{"A": {}},
 		},
-		/*{
-			name: "Complicated-2",
-			edges: []dfv1.Edge{
-				{From: "A", To: "B"},
-				{From: "B", To: "B"}, // cycle to self
-				{From: "B", To: "C"},
-				{From: "A", To: "D"},
-				{From: "D", To: "E"},
-				{From: "F", To: "G"},
-				{From: "G", To: "D"},
-			},
-			startVertex:           "A",
-			expectedCycleVertices: map[string]struct{}{"B": {}},
-		},*/
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fmt.Printf("running test: %q\n", tt.name)
-			mappedEdges := toVerticesMappedByFrom(tt.edges, constructVerticesByName(tt.edges))
-			fmt.Printf("deletethis: mappedEdges=%+v\n", mappedEdges)
-			cyclesFound := mappedEdges.getCyclesFromVertex(tt.startVertex, make(map[string]struct{}))
-			//assert.True(t, compareStringSlice(cyclesFound, tt.expectedCycleVertices))
+			mappedEdges, err := toVerticesMappedByFrom(tt.edges, constructVerticesByName(tt.edges))
+			assert.NoError(t, err)
+
+			cyclesFound := mappedEdges.getCyclesFromVertex(&dfv1.AbstractVertex{Name: tt.startVertex}, make(map[string]struct{}))
+
 			assert.Equal(t, len(tt.expectedCycleVertices), len(cyclesFound))
 			for cycleFound, _ := range cyclesFound {
 				assert.Contains(t, tt.expectedCycleVertices, cycleFound)

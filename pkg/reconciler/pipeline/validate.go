@@ -152,10 +152,12 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("not all the vertex names are defined in edges")
 	}
 
-	// TODO(Join): prevent pipelines with Cycles in the case that there is a Reduce Vertex at the point of the cycle or to the right of it
-	/*if invalidCycle(pl.Spec) {
-
-	}*/
+	// Prevent pipelines with Cycles in the case that there is a Reduce Vertex at the point of the cycle or to the right of it.
+	// Whenever there's a cycle, there will inherently be "late data", and we don't want late data for a Reduce Vertex, which may
+	// have already "closed the book" on the data's time window.
+	if err := validateCycles(&pl.Spec); err != nil {
+		return err
+	}
 
 	for _, v := range pl.Spec.Vertices {
 		if err := validateVertex(v); err != nil {
@@ -309,57 +311,22 @@ func isReservedContainerName(name string) bool {
 		name == dfv1.CtrSideInputsWatcher
 }
 
-// look for Cycles within the Pipeline: after finding a Cycle don't need to go further downstream of that Cycle
-// or if there is more than one Source return the first Cycle stemming from each Source
-/*
-func getFirstCycles(pipelineSpec *dfv1.PipelineSpec, sources map[string]dfv1.AbstractVertex) *dfv1.Vertex {
-	g := createGraph(pipelineSpec)
-
-	cycleVertices := make(map[string]struct{}) // essentially a Set
-
-	// TODO: do all of this as DFS actually
-	for source, _ := range sources {
-		visited := make(map[string]struct{}) // essentially a Set of visited Vertices
-		graph.BFS(*g, source, func(value string) bool {
-			_, alreadyVisited := visited[source]
-			if alreadyVisited {
-				cycleVertices[source] = struct{}{}
-				return false // don't need to continue downstream of this
-			} else {
-				visited[source] = struct{}{}
-			}
-			return true
-		})
-	}
-
-}
-
-func createGraph(pipelineSpec *dfv1.PipelineSpec) *graph.Graph[string, string] {
-	g := graph.New(graph.StringHash)
-
-	// add Vertices
-	for _, v := range pipelineSpec.Vertices {
-		g.AddVertex(v.Name)
-	}
-
-	// add Edges
-	for _, e := range pipelineSpec.Edges {
-		g.AddEdge(e.From, e.To)
-	}
-
-	return &g
-}
-*/
-
-// todo: should any of this be PipelineSpec methods?
-
-// an invalid cycle has a Reduce Vertex at or to the right of the cycle
+// validateCycles verifies that there are no invalid cycles in the pipeline.
+// An invalid cycle has a Reduce Vertex at or to the right of the cycle. Whenever there's a cycle,
+// there will inherently be "late data", and we don't want late data for a Reduce Vertex, which may
+// have already "closed the book" on the data's time window.
 func validateCycles(pipelineSpec *dfv1.PipelineSpec) error {
 	verticesByName := pipelineSpec.GetVerticesByName()
-	edges := toVerticesMappedByFrom(pipelineSpec.Edges, verticesByName)
+	edges, err := toVerticesMappedByFrom(pipelineSpec.Edges, verticesByName)
+	if err != nil {
+		return err
+	}
 
-	// first find the cycles
-	cycles := getCycles(pipelineSpec)
+	// first find the cycles, if any
+	cycles, err := getCycles(pipelineSpec)
+	if err != nil {
+		return err
+	}
 	// need to make sure none of the cycles have a Reduce Vertex at or to the right of the cycle
 	for cycleVertexName, _ := range cycles {
 		cycleVertex, found := verticesByName[cycleVertexName]
@@ -377,56 +344,57 @@ func validateCycles(pipelineSpec *dfv1.PipelineSpec) error {
 	return nil
 }
 
-// get vertices where there's a Cycle
+// getCycles locates the vertices where there's a Cycle, if any
 // eg. if A->B->A, then return A
 // Since there are multiple Sources, and since each Source produces a Tree, then we can return multiple Cycles
-func getCycles(pipelineSpec *dfv1.PipelineSpec) map[string]struct{} {
-	edges := toVerticesMappedByFrom(pipelineSpec.Edges, pipelineSpec.GetVerticesByName())
-	//fmt.Printf("edges: %+v\n", edges)
+func getCycles(pipelineSpec *dfv1.PipelineSpec) (map[string]struct{}, error) {
+	edges, err := toVerticesMappedByFrom(pipelineSpec.Edges, pipelineSpec.GetVerticesByName())
+	if err != nil {
+		return nil, err
+	}
+
 	sources := pipelineSpec.GetSources()
 	cycles := map[string]struct{}{} // essentially a Set of cycle Vertex names
 
 	// consolidate the Cycles from all Sources
-	for source, _ := range sources {
-		cyclesFromSource := edges.getCyclesFromVertex(source, map[string]struct{}{})
+	for _, sourceVertex := range sources {
+		cyclesFromSource := edges.getCyclesFromVertex(sourceVertex, map[string]struct{}{})
 		for cycleVertex, _ := range cyclesFromSource {
 			cycles[cycleVertex] = struct{}{}
 		}
 	}
-	fmt.Printf("deletethis: getCycles(): %+v\n", cycles)
-	return cycles
+
+	return cycles, nil
 }
 
 // getCyclesFromVertex returns the cycles detected if any, starting from startVertex
 // This is a recursive function. Each iteration we keep track of the visited Vertices in order to detect a cycle.
-// todo: for parity maybe this should have a similar signature to the other method?
-func (edges verticesByFrom) getCyclesFromVertex(startVertex string, visited map[string]struct{}) map[string]struct{} {
+func (edges verticesByFrom) getCyclesFromVertex(startVertex *dfv1.AbstractVertex, visited map[string]struct{}) map[string]struct{} {
 
-	fmt.Printf("deletethis: getCycles(): vertexName=%q, visited=%+v\n", startVertex, visited)
-
+	toVertices, found := edges[startVertex.Name]
 	// base case: no Edges stem from this Vertex
-	toVertices, found := edges[startVertex]
 	if !found {
 		return map[string]struct{}{}
 	}
 
 	// check for cycle
-	_, alreadyVisited := visited[startVertex]
+	_, alreadyVisited := visited[startVertex.Name]
 	if alreadyVisited {
-		fmt.Printf("deletethis: found cycle: %q\n", startVertex)
-		return map[string]struct{}{startVertex: {}}
+		return map[string]struct{}{startVertex.Name: {}}
 	}
-	visited[startVertex] = struct{}{}
+	// add this Vertex to our Set
+	visited[startVertex.Name] = struct{}{}
 
+	// recurse the Edges of this Vertex, looking for cycles
 	cyclesFound := make(map[string]struct{})
 	for _, toVertex := range toVertices {
-		newCycles := edges.getCyclesFromVertex(toVertex.Name, visited)
+		newCycles := edges.getCyclesFromVertex(toVertex, visited)
 		for cycleVertex, _ := range newCycles {
 			cyclesFound[cycleVertex] = struct{}{}
 		}
 	}
 
-	delete(visited, startVertex)
+	delete(visited, startVertex.Name) // pop
 
 	return cyclesFound
 }
@@ -440,26 +408,28 @@ func (edges verticesByFrom) findVertex(startVertex *dfv1.AbstractVertex, visited
 		return true
 	}
 
-	// base case: no Edges stem from this Vertex
 	toVertices, found := edges[startVertex.Name]
+	// base case: no Edges stem from this Vertex
 	if !found {
 		return false
 	}
+
 	// if we've arrived at a cycle, then stop
 	_, alreadyVisited := visited[startVertex.Name]
 	if alreadyVisited {
-		fmt.Printf("deletethis: found cycle: %q\n", startVertex)
 		return false
 	}
+	// keep track of visited vertices so we don't get into an infinite loop
 	visited[startVertex.Name] = struct{}{}
 
+	// recurse
 	for _, toVertex := range toVertices {
 		if edges.findVertex(toVertex, visited, f) {
 			return true
 		}
 	}
 
-	delete(visited, startVertex.Name)
+	delete(visited, startVertex.Name) // pop
 
 	return false
 }
@@ -467,15 +437,18 @@ func (edges verticesByFrom) findVertex(startVertex *dfv1.AbstractVertex, visited
 type verticesByFrom map[string][]*dfv1.AbstractVertex
 
 // toVerticesMappedByFrom is a helper function to create a map of "To Vertices" from their "From Vertex"
-func toVerticesMappedByFrom(edges []dfv1.Edge, verticesByName map[string]*dfv1.AbstractVertex) verticesByFrom {
+func toVerticesMappedByFrom(edges []dfv1.Edge, verticesByName map[string]*dfv1.AbstractVertex) (verticesByFrom, error) {
 	mappedEdges := make(verticesByFrom)
 	for _, edge := range edges {
 		_, found := mappedEdges[edge.From]
 		if !found {
 			mappedEdges[edge.From] = make([]*dfv1.AbstractVertex, 0)
 		}
-		toVertex := verticesByName[edge.To] // todo: make this safe?
+		toVertex, found := verticesByName[edge.To]
+		if !found {
+			return nil, fmt.Errorf("no vertex found of name %q", edge.To)
+		}
 		mappedEdges[edge.From] = append(mappedEdges[edge.From], toVertex)
 	}
-	return mappedEdges
+	return mappedEdges, nil
 }

@@ -8,6 +8,7 @@ spec:
       source:
         http: {}
     - name: retry
+      replicas: 1
       udf:
         container:
           # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/retry
