@@ -465,13 +465,13 @@ func (pipeline PipelineSpec) GetVerticesByName() map[string]*AbstractVertex {
 	})
 }
 
-func (pipeline PipelineSpec) GetSources() map[string]*AbstractVertex {
+func (pipeline PipelineSpec) GetSourcesByName() map[string]*AbstractVertex {
 	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
 		return v.IsASource()
 	})
 }
 
-func (pipeline PipelineSpec) GetSinks() map[string]*AbstractVertex {
+func (pipeline PipelineSpec) GetSinksByName() map[string]*AbstractVertex {
 	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
 		return v.IsASink()
 	})

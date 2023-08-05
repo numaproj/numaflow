@@ -353,7 +353,7 @@ func getCycles(pipelineSpec *dfv1.PipelineSpec) (map[string]struct{}, error) {
 		return nil, err
 	}
 
-	sources := pipelineSpec.GetSources()
+	sources := pipelineSpec.GetSourcesByName()
 	cycles := map[string]struct{}{} // essentially a Set of cycle Vertex names
 
 	// consolidate the Cycles from all Sources
