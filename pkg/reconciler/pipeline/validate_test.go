@@ -660,7 +660,7 @@ func Test_getCyclesFromVertex(t *testing.T) {
 			cyclesFound := mappedEdges.getCyclesFromVertex(&dfv1.AbstractVertex{Name: tt.startVertex}, make(map[string]struct{}))
 
 			assert.Equal(t, len(tt.expectedCycleVertices), len(cyclesFound))
-			for cycleFound, _ := range cyclesFound {
+			for cycleFound := range cyclesFound {
 				assert.Contains(t, tt.expectedCycleVertices, cycleFound)
 			}
 		})

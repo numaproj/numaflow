@@ -328,7 +328,7 @@ func validateCycles(pipelineSpec *dfv1.PipelineSpec) error {
 		return err
 	}
 	// need to make sure none of the cycles have a Reduce Vertex at or to the right of the cycle
-	for cycleVertexName, _ := range cycles {
+	for cycleVertexName := range cycles {
 		cycleVertex, found := verticesByName[cycleVertexName]
 		if !found {
 			return fmt.Errorf("something went wrong: no Vertex found with name %q", cycleVertexName)
@@ -359,7 +359,7 @@ func getCycles(pipelineSpec *dfv1.PipelineSpec) (map[string]struct{}, error) {
 	// consolidate the Cycles from all Sources
 	for _, sourceVertex := range sources {
 		cyclesFromSource := edges.getCyclesFromVertex(sourceVertex, map[string]struct{}{})
-		for cycleVertex, _ := range cyclesFromSource {
+		for cycleVertex := range cyclesFromSource {
 			cycles[cycleVertex] = struct{}{}
 		}
 	}
@@ -389,7 +389,7 @@ func (edges verticesByFrom) getCyclesFromVertex(startVertex *dfv1.AbstractVertex
 	cyclesFound := make(map[string]struct{})
 	for _, toVertex := range toVertices {
 		newCycles := edges.getCyclesFromVertex(toVertex, visited)
-		for cycleVertex, _ := range newCycles {
+		for cycleVertex := range newCycles {
 			cyclesFound[cycleVertex] = struct{}{}
 		}
 	}
