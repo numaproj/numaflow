@@ -307,8 +307,6 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "pipeline has no sink")
 	})
 
-	// TODO(Join): we can test for certain types of invalid cycles here instead
-
 	t.Run("or conditional forwarding", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		operatorOr := dfv1.LogicOperatorOr
