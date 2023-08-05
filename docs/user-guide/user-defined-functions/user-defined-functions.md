@@ -10,4 +10,4 @@ container (user code) is through gRPC over Unix Domain Socket.
 There are two kinds of processing users can run
 
   - [Map](./map/map.md)
-  - [Reduce](./reduce/reduce.md) (Work in progress)
+  - [Reduce](./reduce/reduce.md)

@@ -1,5 +1,5 @@
 import Spec from "./index";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 
 describe("Spec", () => {

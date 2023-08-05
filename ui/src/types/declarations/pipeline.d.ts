@@ -11,6 +11,7 @@ export interface VertexMetrics {
 export interface EdgeWatermark {
   watermarks: any[];
   isWaterMarkEnabled: boolean;
+  WMFetchTime: number;
 }
 
 export interface BufferInfo {
