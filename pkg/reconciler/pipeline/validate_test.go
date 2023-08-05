@@ -687,13 +687,13 @@ func Test_validateCycles(t *testing.T) {
 			name: "NoCycle",
 			pipelineSpec: &dfv1.PipelineSpec{
 				Vertices: []dfv1.AbstractVertex{
-					{Name: "A", Source: &dfv1.Source{}}, //todo: consider adding more members for source, sink, map
-					{Name: "B"},
-					{Name: "C"},
-					{Name: "D"},
-					{Name: "E"},
+					{Name: "A", Source: &dfv1.Source{}},
+					{Name: "B", UDF: &dfv1.UDF{}},
+					{Name: "C", UDF: &dfv1.UDF{}},
+					{Name: "D", UDF: &dfv1.UDF{}},
+					{Name: "E", UDF: &dfv1.UDF{}},
 					{Name: "F", Source: &dfv1.Source{}},
-					{Name: "G"},
+					{Name: "G", UDF: &dfv1.UDF{}},
 				},
 				Edges: []dfv1.Edge{
 					{From: "A", To: "B"},
@@ -712,12 +712,12 @@ func Test_validateCycles(t *testing.T) {
 			pipelineSpec: &dfv1.PipelineSpec{
 				Vertices: []dfv1.AbstractVertex{
 					{Name: "A", Source: &dfv1.Source{}},
-					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex, todo: add Window?
-					{Name: "C"},
-					{Name: "D"},
-					{Name: "E"},
+					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
+					{Name: "C", UDF: &dfv1.UDF{}},
+					{Name: "D", UDF: &dfv1.UDF{}},
+					{Name: "E", UDF: &dfv1.UDF{}},
 					{Name: "F", Source: &dfv1.Source{}},
-					{Name: "G"},
+					{Name: "G", UDF: &dfv1.UDF{}},
 				},
 				Edges: []dfv1.Edge{
 					{From: "A", To: "B"},
@@ -737,12 +737,12 @@ func Test_validateCycles(t *testing.T) {
 			pipelineSpec: &dfv1.PipelineSpec{
 				Vertices: []dfv1.AbstractVertex{
 					{Name: "A", Source: &dfv1.Source{}},
-					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex, todo: add Window?
-					{Name: "C"},
-					{Name: "D"},
-					{Name: "E"},
+					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
+					{Name: "C", UDF: &dfv1.UDF{}},
+					{Name: "D", UDF: &dfv1.UDF{}},
+					{Name: "E", UDF: &dfv1.UDF{}},
 					{Name: "F", Source: &dfv1.Source{}},
-					{Name: "G"},
+					{Name: "G", UDF: &dfv1.UDF{}},
 				},
 				Edges: []dfv1.Edge{
 					{From: "A", To: "B"},
@@ -761,12 +761,12 @@ func Test_validateCycles(t *testing.T) {
 			pipelineSpec: &dfv1.PipelineSpec{
 				Vertices: []dfv1.AbstractVertex{
 					{Name: "A", Source: &dfv1.Source{}},
-					{Name: "B"},
+					{Name: "B", UDF: &dfv1.UDF{}},
 					{Name: "C", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
-					{Name: "D"},
-					{Name: "E"},
+					{Name: "D", UDF: &dfv1.UDF{}},
+					{Name: "E", UDF: &dfv1.UDF{}},
 					{Name: "F", Source: &dfv1.Source{}},
-					{Name: "G"},
+					{Name: "G", UDF: &dfv1.UDF{}},
 				},
 				Edges: []dfv1.Edge{
 					{From: "A", To: "B"},
@@ -785,13 +785,13 @@ func Test_validateCycles(t *testing.T) {
 			pipelineSpec: &dfv1.PipelineSpec{
 				Vertices: []dfv1.AbstractVertex{
 					{Name: "A", Source: &dfv1.Source{}},
-					{Name: "B"}, //Reduce vertex, todo: add Window?
-					{Name: "C"},
-					{Name: "D"},
+					{Name: "B", UDF: &dfv1.UDF{}}, //Reduce vertex
+					{Name: "C", UDF: &dfv1.UDF{}},
+					{Name: "D", UDF: &dfv1.UDF{}},
 					{Name: "E", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
 					{Name: "F", Source: &dfv1.Source{}},
-					{Name: "G"},
-					{Name: "H"},
+					{Name: "G", UDF: &dfv1.UDF{}},
+					{Name: "H", UDF: &dfv1.UDF{}},
 				},
 				Edges: []dfv1.Edge{
 					{From: "A", To: "B"},
