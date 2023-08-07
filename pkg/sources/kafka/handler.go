@@ -21,7 +21,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -64,7 +64,7 @@ func (consumer *consumerHandler) Cleanup(sess sarama.ConsumerGroupSession) error
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
 func (consumer *consumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	// The `ConsumeClaim` itself is called within a goroutine, see:
-	// https://github.com/Shopify/sarama/blob/main/consumer_group.go#L27-L29
+	// https://github.com/IBM/sarama/blob/main/consumer_group.go#L27-L29
 	for {
 		select {
 		case msg, ok := <-claim.Messages():
