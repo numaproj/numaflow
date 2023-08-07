@@ -340,7 +340,7 @@ func (v *ProcessorManager) Stop() {
 	// close the watchers
 	v.hbWatcher.Close()
 	v.otWatcher.Close()
-	
+
 	// wait for the goroutines to exit
 	<-v.waitCh
 }

@@ -29,8 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -63,7 +61,7 @@ func NewEdgeFetcher(ctx context.Context, manager *processor.ProcessorManager, fr
 		bucketName:       manager.GetBucket(),
 		processorManager: manager,
 		lastProcessedWm:  lastProcessedWm,
-		log:              log.With("bucket", manager.GetBucket()),
+		log:              log,
 	}
 }
 
