@@ -103,8 +103,6 @@ func (s *FunctionalSuite) TestCycleToSelf() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	time.Sleep(time.Second * 10) //todo: needed?
-
 	msgs := [10]string{}
 	for i := 0; i < 10; i++ {
 		msgs[i] = fmt.Sprintf("msg-%d", i)
@@ -130,8 +128,6 @@ func (s *FunctionalSuite) TestCycleBackward() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-
-	time.Sleep(time.Second * 10) //todo: needed?
 
 	msgs := [10]string{}
 	for i := 0; i < 10; i++ {
