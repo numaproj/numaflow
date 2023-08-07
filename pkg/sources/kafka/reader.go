@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -351,6 +353,9 @@ func NewKafkaSource(
 			config.Net.SASL = *sasl
 		}
 	}
+	
+	sarama.Logger = log.New(os.Stdout, "[kafka-source] ", log.LstdFlags)
+
 	// return errors from the underlying kafka client using the Errors channel
 	config.Consumer.Return.Errors = true
 	kafkasource.config = config
