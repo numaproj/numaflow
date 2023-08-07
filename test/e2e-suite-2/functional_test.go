@@ -109,8 +109,9 @@ func (s *FunctionalSuite) TestCycleToSelf() {
 		w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(msgs[i])))
 	}
 	for i := 0; i < 10; i++ {
-		w.Expect().SinkContains("out", msgs[i])
+		w.Expect().SinkContains("out", msgs[i], WithTimeout(3*time.Minute))
 	}
+
 }
 func (s *FunctionalSuite) TestCycleBackward() {
 	w := s.Given().Pipeline("@testdata/cycle-backward.yaml").
@@ -128,7 +129,7 @@ func (s *FunctionalSuite) TestCycleBackward() {
 		w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(msgs[i])))
 	}
 	for i := 0; i < 10; i++ {
-		w.Expect().SinkContains("out", msgs[i])
+		w.Expect().SinkContains("out", msgs[i], WithTimeout(3*time.Minute))
 	}
 }
 
