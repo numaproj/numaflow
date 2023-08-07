@@ -404,7 +404,7 @@ func configFromOpts(yamlconfig string) (*sarama.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.BalanceStrategyRange}
+	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRange()}
 	return config, nil
 }
 
