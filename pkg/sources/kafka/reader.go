@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -353,7 +353,7 @@ func NewKafkaSource(
 			config.Net.SASL = *sasl
 		}
 	}
-	
+
 	sarama.Logger = log.New(os.Stdout, "[kafka-source] ", log.LstdFlags)
 
 	// return errors from the underlying kafka client using the Errors channel
@@ -404,7 +404,7 @@ func configFromOpts(yamlconfig string) (*sarama.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
+	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.BalanceStrategyRange}
 	return config, nil
 }
 
