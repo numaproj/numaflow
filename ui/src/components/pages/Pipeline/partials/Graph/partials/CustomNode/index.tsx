@@ -1,36 +1,56 @@
-import {memo, useState} from "react";
-import { Handle, NodeProps, Position } from "reactflow";
+import { FC, memo, useState } from "react";
 import { Tooltip } from "@mui/material";
-import "./Node.css";
-import { GetNodeInfoValueComponent } from "./NodeUtil"
+import { Handle, NodeProps, Position } from "reactflow";
+import { GetNodeInfoValueComponent } from "./partials/NodeLabelInfo";
 
-const SourceNode = ({
+import "reactflow/dist/style.css";
+import "./style.css";
+
+const getColor = (nodeType) => {
+  return nodeType === "source"
+    ? "#34BFFF"
+    : nodeType === "udf"
+    ? "#82DBE4"
+    : "#82A9C9";
+};
+
+const getBorderColor = (nodeType) => {
+  return nodeType === "source"
+    ? "#2382ad"
+    : nodeType === "udf"
+    ? "#59959c"
+    : "#5e7a91";
+};
+
+const CustomNode: FC<NodeProps> = ({
   data,
   isConnectable,
   sourcePosition = Position.Bottom,
+  targetPosition = Position.Top,
 }: NodeProps) => {
-
-  const [ bgColor, setBgColor] = useState("#34BFFF");
-  const [ isOpen, setIsOpen ] = useState(false);
+  const [bgColor, setBgColor] = useState(() => getColor(data?.type));
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleNodeEnter = () => {
     if (data?.vertexMetrics?.error) {
       setBgColor("gray");
       setIsOpen(true);
     }
-  }
+  };
 
   const handleNodeLeave = () => {
     if (data?.vertexMetrics?.error) {
-      setBgColor("#34BFFF");
+      setBgColor(() => getColor(data?.type));
       setIsOpen(false);
     }
-  }
+  };
 
   return (
-    <div>
+    <div data-testid={data?.name}>
       <Tooltip
-        title={<div className={"node-tooltip"}> 1 or more pods are not running </div>}
+        title={
+          <div className={"node-tooltip"}> 1 or more pods are not running </div>
+        }
         placement={"top"}
         open={isOpen}
         arrow
@@ -41,7 +61,7 @@ const SourceNode = ({
             background: `${bgColor}`,
             boxShadow: "1",
             color: "#333",
-            border: "1px solid #2382ad",
+            border: `0.0625rem solid ${getBorderColor(data?.type)}`,
             cursor: "pointer",
             fontFamily: "IBM Plex Sans",
             fontWeight: 400,
@@ -66,14 +86,23 @@ const SourceNode = ({
             </div>
           </Tooltip>
           {GetNodeInfoValueComponent(data)}
-          <Handle
-            type="source"
-            position={sourcePosition}
-            isConnectable={isConnectable}
-          />
+          {(data?.type === "udf" || data?.type === "sink") && (
+            <Handle
+              type="target"
+              position={targetPosition}
+              isConnectable={isConnectable}
+            />
+          )}
+          {(data?.type === "source" || data?.type === "udf") && (
+            <Handle
+              type="source"
+              position={sourcePosition}
+              isConnectable={isConnectable}
+            />
+          )}
         </div>
       </Tooltip>
     </div>
   );
 };
-export default memo(SourceNode);
+export default memo(CustomNode);

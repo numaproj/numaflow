@@ -1,4 +1,4 @@
-import Spec from "./Spec";
+import Spec from "./index";
 import { render, screen } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 
@@ -202,6 +202,7 @@ describe("Spec", () => {
         bufferMaxLength: 10000,
         bufferUsageLimit: 80,
       },
+      watermark: null,
     },
     status: {
       conditions: [

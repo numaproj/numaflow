@@ -84,6 +84,7 @@ nav:
           - user-guide/reference/pipeline-tuning.md
           - user-guide/reference/autoscaling.md
           - user-guide/reference/conditional-forwarding.md
+          - user-guide/reference/multi-partition.md
           - Configuration:              
             - user-guide/reference/configuration/container-resources.md
             - user-guide/reference/configuration/volumes.md
