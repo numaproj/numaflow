@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
@@ -25,7 +24,7 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 		dataTest     = []string{"HELLO", "HELLO2"}
 		mountPath    = "/tmp/side-input/"
 	)
-	// Remove any existing side-input files
+	// Remove any existing Side Input files
 	for _, sideInput := range sideInputs {
 		p := path.Join(mountPath, sideInput)
 		os.Remove(p)
@@ -42,8 +41,6 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	log := logging.FromContext(ctx)
-
 	// connect to NATS
 	nc := natstest.JetStreamClient(t, s)
 	defer nc.Close()
@@ -52,10 +49,10 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 	js, err := nc.JetStreamContext(nats.PublishAsyncMaxPending(256))
 	assert.NoError(t, err)
 
-	// create heartbeat bucket
+	// create side input bucket
 	kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
 		Bucket:       keyspace,
-		Description:  fmt.Sprintf("[%s] heartbeat bucket", keyspace),
+		Description:  fmt.Sprintf("[%s] side input bucket", keyspace),
 		MaxValueSize: 0,
 		History:      0,
 		TTL:          0,
@@ -75,13 +72,13 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 			fmt.Println("Error in writing to bucket ", err)
 		}
 	}
-	err = startSideInputInitializer(ctx, sideInputWatcher, log, mountPath, sideInputs)
+	err = startSideInputInitializer(ctx, sideInputWatcher, mountPath, sideInputs)
 	assert.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
 	for x, sideInput := range sideInputs {
 		p := path.Join(mountPath, sideInput)
-		fileData, err := utils.FetchSideInputStore(p)
+		fileData, err := utils.FetchSideInputFile(p)
 		assert.NoError(t, err)
 		assert.Equal(t, dataTest[x], string(fileData))
 	}
@@ -103,8 +100,6 @@ func TestSideInputsTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	log := logging.FromContext(ctx)
-
 	// connect to NATS
 	nc := natstest.JetStreamClient(t, s)
 	defer nc.Close()
@@ -113,10 +108,10 @@ func TestSideInputsTimeout(t *testing.T) {
 	js, err := nc.JetStreamContext(nats.PublishAsyncMaxPending(256))
 	assert.NoError(t, err)
 
-	// create side-input bucket
+	// create Side Input bucket
 	_, err = js.CreateKeyValue(&nats.KeyValueConfig{
 		Bucket:       keyspace,
-		Description:  fmt.Sprintf("[%s] side-input bucket", keyspace),
+		Description:  fmt.Sprintf("[%s] Side Input bucket", keyspace),
 		MaxValueSize: 0,
 		History:      0,
 		TTL:          0,
@@ -131,6 +126,6 @@ func TestSideInputsTimeout(t *testing.T) {
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
 
-	_ = startSideInputInitializer(ctx, sideInputWatcher, log, mountPath, sideInputs)
+	_ = startSideInputInitializer(ctx, sideInputWatcher, mountPath, sideInputs)
 	assert.Equal(t, context.DeadlineExceeded, ctx.Err())
 }

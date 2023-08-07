@@ -9,20 +9,16 @@ import (
 func CheckFileExists(fileName string) bool {
 	_, err := os.Stat(fileName)
 	// check if err is "file not exists"
-	if os.IsNotExist(err) {
-		return false
-	} else {
-		return true
-	}
+	return !os.IsNotExist(err)
 }
 
-// UpdateSideInputStore writes the given value to the side-input file specified.
-func UpdateSideInputStore(filePath string, value []byte) error {
+// UpdateSideInputFile writes the given value to the Side input file specified.
+func UpdateSideInputFile(filePath string, value []byte) error {
 	// If the file does not exist, create a new file
 	if !CheckFileExists(filePath) {
 		f, err := os.Create(filePath)
 		if err != nil {
-			return fmt.Errorf("failed to create side-input-%s : %w", filePath, err)
+			return fmt.Errorf("failed to create Side Input file%s : %w", filePath, err)
 		}
 		err = f.Close()
 		if err != nil {
@@ -31,22 +27,22 @@ func UpdateSideInputStore(filePath string, value []byte) error {
 	}
 	f, err := os.Create(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to create side-input file: %w", err)
+		return fmt.Errorf("failed to create Side input file: %w", err)
 	}
 	defer f.Close()
 	_, err = f.Write(value)
 	if err != nil {
-		return fmt.Errorf("failed to write side-input-%s : %w", filePath, err)
+		return fmt.Errorf("failed to write Side Input file %s : %w", filePath, err)
 	}
 	return nil
 }
 
-// FetchSideInputStore reads a given file and returns the value in bytes
+// FetchSideInputFile reads a given file and returns the value in bytes
 // Used as utility for unit tests
-func FetchSideInputStore(filePath string) ([]byte, error) {
+func FetchSideInputFile(filePath string) ([]byte, error) {
 	b, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read Side-Input %s file: %w", filePath, err)
+		return nil, fmt.Errorf("failed to read Side Input %s file: %w", filePath, err)
 	}
 	return b, nil
 }

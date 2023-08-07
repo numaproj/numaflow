@@ -33,8 +33,8 @@ import (
 )
 
 // sideInputsInitializer contains the pipeline
-// and side-input information required for monitoring a
-// KV store for side-input values
+// and Side Input information required for monitoring a
+// KV store for Side Input values
 type sideInputsInitializer struct {
 	isbSvcType      dfv1.ISBSvcType
 	pipelineName    string
@@ -54,9 +54,8 @@ func NewSideInputsInitializer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInpu
 
 func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	var (
-		isbSvcClient isbsvc.ISBService
-		natsClient   *jsclient.NATSClient
-		err          error
+		natsClient *jsclient.NATSClient
+		err        error
 	)
 
 	log := logging.FromContext(ctx)
@@ -67,67 +66,59 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 		return fmt.Errorf("unsupported isbsvc type %q", sii.isbSvcType)
 	case dfv1.ISBSvcTypeJetStream:
 		natsClient, err = jsclient.NewNATSClient(ctx)
-		defer natsClient.Close()
 		if err != nil {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err
 		}
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(sii.pipelineName, isbsvc.WithJetStreamClient(natsClient))
-		if err != nil {
-			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
-			return err
-		}
+		defer natsClient.Close()
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sii.isbSvcType)
 	}
-	log.Info("ISB Svc Client nil: %v\n", isbSvcClient == nil)
 	// Load the required KV bucket and create a sideInputWatcher for it
 	bucketName := isbsvc.JetStreamSideInputsStoreBucket(sii.sideInputsStore)
 	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, sii.pipelineName, bucketName, natsClient)
 	if err != nil {
 		return err
 	}
-
-	err = startSideInputInitializer(ctx, sideInputWatcher, log, dfv1.PathSideInputsMount, sii.sideInputs)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return startSideInputInitializer(ctx, sideInputWatcher, dfv1.PathSideInputsMount, sii.sideInputs)
 }
 
 // startSideInputInitializer watches the side inputs KV store to get side inputs
 // and writes to disk once the initial value of all the side-inputs is ready
-func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, mountPath string, sideInputs []string) error {
+func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher, mountPath string, sideInputs []string) error {
+	log := logging.FromContext(ctx)
 	m := make(map[string][]byte)
 	watchCh, stopped := watch.Watch(ctx)
 	for {
 		select {
 		case <-stopped:
-			log.Info("Stopped value received ")
+			log.Info("Side Input watcher stopped")
 			return nil
 		case value := <-watchCh:
 			if value == nil {
-				log.Warnw("nil value received from SideInput watcher")
+				log.Warnw("Nil value received from Side Input watcher")
 				continue
 			}
-			log.Debug("SideInput value received ",
+			log.Debug("Side Input value received ",
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 			m[value.Key()] = value.Value()
-			// Wait for the data is ready in the side input store, and then copy the data to the disk
+			// Wait for the data to be ready in the side input store, and then copy it to the disk
 			if gotAllSideInputVals(sideInputs, m) {
 				for sideInput := range m {
 					p := path.Join(mountPath, sideInput)
-					log.Info("Initializing side input data for %q\n", p)
-					err := utils.UpdateSideInputStore(p, m[sideInput])
+					log.Info("Initializing Side Input data for %q\n", p)
+					err := utils.UpdateSideInputFile(p, m[sideInput])
 					if err != nil {
-						log.Fatal("Failed to update side-input value ", zap.Error(err))
+						log.Error("failed to update Side Input value ", zap.Error(err))
 					}
 				}
 				return nil
 			} else {
 				continue
 			}
+		case <-ctx.Done():
+			log.Info("Context done received, stopping watcher")
+			return nil
 		}
 	}
 }

@@ -50,9 +50,8 @@ func NewSideInputsSynchronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInp
 
 func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	var (
-		isbSvcClient isbsvc.ISBService
-		natsClient   *jsclient.NATSClient
-		err          error
+		natsClient *jsclient.NATSClient
+		err        error
 	)
 
 	log := logging.FromContext(ctx)
@@ -70,50 +69,49 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err
 		}
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(sis.pipelineName, isbsvc.WithJetStreamClient(natsClient))
-		if err != nil {
-			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
-			return err
-		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sis.isbSvcType)
 	}
-	log.Infof("ISB Svc Client nil: %v\n", isbSvcClient == nil)
 
 	bucketName := isbsvc.JetStreamSideInputsStoreBucket(sis.sideInputsStore)
 	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, sis.pipelineName, bucketName, natsClient)
 	if err != nil {
 		return err
 	}
-	go startSideInputSynchronizer(ctx, sideInputWatcher, log, dfv1.PathSideInputsMount)
+	go startSideInputSynchronizer(ctx, sideInputWatcher, dfv1.PathSideInputsMount)
 	<-ctx.Done()
 	return nil
 }
 
-// startSideInputSynchronizer watches the side-input KV store for any changes
+// startSideInputSynchronizer watches the Side Input KV store for any changes
 // and writes the updated value to the mount volume.
-func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatcher, log *zap.SugaredLogger, mountPath string) {
+func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatcher, mountPath string) {
+	log := logging.FromContext(ctx)
 	watchCh, stopped := watch.Watch(ctx)
 	for {
 		select {
 		case <-stopped:
-			log.Info("Stopped value received")
+			log.Info("Side Input watcher stopped")
 			return
 		case value := <-watchCh:
 			if value == nil {
-				log.Warnw("nil value received from SideInput watcher")
+				log.Warnw("nil value received from Side Input watcher")
 				continue
 			}
-			log.Debug("SideInput value received ",
+			log.Debug("Side Input value received ",
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 			p := path.Join(mountPath, value.Key())
 			// Write changes to disk
-			err := utils.UpdateSideInputStore(p, value.Value())
+			err := utils.UpdateSideInputFile(p, value.Value())
 			if err != nil {
-				log.Error("Failed to update Side-input value %s\n", zap.Error(err))
-
+				log.Error("Failed to update Side Input value %s", zap.Error(err))
 			}
 			continue
+		case <-ctx.Done():
+			log.Info("Context done received, stopping watcher")
+			return
+
 		}
+
 	}
 }

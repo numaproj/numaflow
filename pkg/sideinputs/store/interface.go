@@ -12,7 +12,7 @@ type SideInputKVEntry interface {
 	Value() []byte
 }
 
-// SideInputWatcher watches the KV bucket for SideInput data updates.
+// SideInputWatcher watches the KV bucket for Side Input data updates.
 type SideInputWatcher interface {
 	// Watch starts the watermark kv watcher and returns a kv updates channel and a watcher stopped channel.
 	Watch(context.Context) (<-chan SideInputKVEntry, <-chan struct{})

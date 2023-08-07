@@ -52,7 +52,7 @@ func (j *jetStreamWatch) Watch(ctx context.Context) (<-chan store.SideInputKVEnt
 		for {
 			select {
 			case <-ctx.Done():
-				j.log.Infow("stopping WatchAll", zap.String("watcher", j.GetKVName()))
+				j.log.Infow("Stopping KV watcher", zap.String("watcher", j.GetKVName()))
 				// call JetStream watcher stop
 				err = kvWatcher.Stop()
 				if err != nil {
@@ -87,7 +87,7 @@ func (j *jetStreamWatch) Watch(ctx context.Context) (<-chan store.SideInputKVEnt
 					continue
 				}
 				if value == nil {
-					j.log.Infow("watcher initialization and subscription got nil value")
+					j.log.Infow("Watcher initialization and subscription got nil value")
 					continue
 				}
 				j.previousFetchTime = value.Created()
@@ -126,13 +126,14 @@ func (j *jetStreamWatch) Watch(ctx context.Context) (<-chan store.SideInputKVEnt
 
 func (j *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
 	kvWatcher, err := j.client.CreateKVWatcher(j.kvBucketName, nats.Context(ctx))
+	log := logging.FromContext(ctx)
 	// keep looping because the side-inputs won't work without a watcher
 	for err != nil {
 		j.log.Errorw("Creating watcher failed", zap.String("watcher", j.GetKVName()), zap.Error(err))
-		kvWatcher, err = j.client.CreateKVWatcher(j.kvBucketName)
 		time.Sleep(100 * time.Millisecond)
+		kvWatcher, err = j.client.CreateKVWatcher(j.kvBucketName)
 	}
-	fmt.Println("Creating watcher success", kvWatcher.Context())
+	log.Info("Successfully created watcher on %s", zap.String("bucket", j.kvBucketName))
 	return kvWatcher
 }
 
@@ -149,8 +150,8 @@ func (jsw *jetStreamWatch) lastUpdateKVTime() time.Time {
 		value, err := jsw.kvStore.Get(key)
 		for err != nil {
 			jsw.log.Errorw("Failed to get value", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
-			value, err = jsw.kvStore.Get(key)
 			time.Sleep(100 * time.Millisecond)
+			value, err = jsw.kvStore.Get(key)
 		}
 		if value.Created().After(lastUpdate) {
 			lastUpdate = value.Created()
@@ -160,13 +161,11 @@ func (jsw *jetStreamWatch) lastUpdateKVTime() time.Time {
 }
 
 func (j *jetStreamWatch) GetKVName() string {
-	//TODO implement me
 	return j.kvBucketName
 }
 
 func (j *jetStreamWatch) Close() {
-	//TODO implement me
-	panic("implement me")
+	// noop
 }
 
 // NewKVJetStreamKVWatch returns KVJetStreamWatch specific to JetStream which implements the WatermarkKVWatcher interface.

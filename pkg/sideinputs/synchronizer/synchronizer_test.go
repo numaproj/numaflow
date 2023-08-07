@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
@@ -26,7 +25,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 		mountPath    = "/tmp/side-input/"
 	)
 
-	// Remove any existing side-input files
+	// Remove any existing Side Input files
 	for _, sideInput := range sideInputs {
 		p := path.Join(mountPath, sideInput)
 		os.Remove(p)
@@ -37,8 +36,6 @@ func TestSideInputsValueUpdates(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-
-	log := logging.FromContext(ctx)
 
 	// connect to NATS
 	nc := natstest.JetStreamClient(t, s)
@@ -51,7 +48,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 	// create side-input bucket
 	kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
 		Bucket:       keyspace,
-		Description:  fmt.Sprintf("[%s] side-input bucket", keyspace),
+		Description:  fmt.Sprintf("[%s] Side Input bucket", keyspace),
 		MaxValueSize: 0,
 		History:      0,
 		TTL:          0,
@@ -69,7 +66,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 
 	bucketName := keyspace
 	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
-	go startSideInputSynchronizer(ctx, sideInputWatcher, log, mountPath)
+	go startSideInputSynchronizer(ctx, sideInputWatcher, mountPath)
 	for x := range sideInputs {
 		_, err = kv.Put(sideInputs[x], []byte(dataTest[x]))
 		if err != nil {
@@ -79,7 +76,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	for x, sideInput := range sideInputs {
 		p := path.Join(mountPath, sideInput)
-		fileData, err := utils.FetchSideInputStore(p)
+		fileData, err := utils.FetchSideInputFile(p)
 		assert.NoError(t, err)
 		assert.Equal(t, dataTest[x], string(fileData))
 	}
