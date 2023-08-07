@@ -1249,9 +1249,9 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	return edgeFetcherSet, sourcePublisher
 }
 
-func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]kvs.KVStore) {
+func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
 	publishers := make(map[string]publish.Publisher)
-	otStores := make(map[string]kvs.KVStore)
+	otStores := make(map[string]kvs.KVStorer)
 
 	// create publisher for to Buffers
 	index := int32(0)

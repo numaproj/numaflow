@@ -232,7 +232,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 		id         partition.ID
 		buffers    []*simplebuffer.InMemoryBuffer
 		pf         processAndForward
-		otStores   map[string]kvs.KVStore
+		otStores   map[string]kvs.KVStorer
 		expected   []bool
 		wmExpected map[string]wmb.WMB
 	}{
@@ -389,7 +389,7 @@ func TestWriteToBuffer(t *testing.T) {
 	}
 }
 
-func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter) (processAndForward, map[string]kvs.KVStore) {
+func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter) (processAndForward, map[string]kvs.KVStorer) {
 
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
@@ -449,11 +449,11 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer
-func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStore) {
+func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
 	var ctx = context.Background()
 	processorEntity := processor.NewProcessorEntity("publisherTestPod")
 	publishers := make(map[string]publish.Publisher)
-	otStores := make(map[string]kvs.KVStore)
+	otStores := make(map[string]kvs.KVStorer)
 	for key, partitionedBuffers := range toBuffers {
 		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
 		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))

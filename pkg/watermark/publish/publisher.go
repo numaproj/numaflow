@@ -54,9 +54,9 @@ type publish struct {
 	ctx    context.Context
 	entity processor.ProcessorEntitier
 	// osStore uses millisecond as the time unit for the value
-	otStore kvs.KVStore
+	otStore kvs.KVStorer
 	// heartbeatStore uses second as the time unit for the value
-	heartbeatStore         kvs.KVStore
+	heartbeatStore         kvs.KVStorer
 	log                    *zap.SugaredLogger
 	headWatermarks         []wmb.Watermark
 	headWMLock             sync.RWMutex

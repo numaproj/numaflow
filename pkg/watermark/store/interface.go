@@ -20,8 +20,8 @@ import "github.com/numaproj/numaflow/pkg/shared/kvs"
 
 // WatermarkStore defines a pair of heartbeat KV store and offset timeline KV store
 type WatermarkStore interface {
-	HeartbeatStore() kvs.KVStore
-	OffsetTimelineStore() kvs.KVStore
+	HeartbeatStore() kvs.KVStorer
+	OffsetTimelineStore() kvs.KVStorer
 }
 
 // WatermarkStoreWatcher defines a pair of heartbeat KV watcher and offset timeline KV watcher

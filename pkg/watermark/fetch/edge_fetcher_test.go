@@ -1703,7 +1703,7 @@ func (h *heartBeatManager) resume() {
 	h.heartBeatCh <- 2
 }
 
-func manageHeartbeat(ctx context.Context, entityName string, hbStore kvs.KVStore, wg *sync.WaitGroup) *heartBeatManager {
+func manageHeartbeat(ctx context.Context, entityName string, hbStore kvs.KVStorer, wg *sync.WaitGroup) *heartBeatManager {
 	hbManager := &heartBeatManager{
 		heartBeatCh: make(chan int),
 	}

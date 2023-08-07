@@ -63,10 +63,10 @@ type inMemStore struct {
 	log          *zap.SugaredLogger
 }
 
-var _ kvs.KVStore = (*inMemStore)(nil)
+var _ kvs.KVStorer = (*inMemStore)(nil)
 
 // NewKVInMemKVStore returns inMemStore.
-func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName string) (kvs.KVStore, chan kvs.KVEntry, error) {
+func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName string) (kvs.KVStorer, chan kvs.KVEntry, error) {
 	s := &inMemStore{
 		pipelineName: pipelineName,
 		bucketName:   bucketName,

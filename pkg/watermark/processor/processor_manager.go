@@ -54,8 +54,8 @@ type ProcessorManager struct {
 	// fromBufferPartitionCount is the number of partitions in the fromBuffer
 	fromBufferPartitionCount int32
 	lock                     sync.RWMutex
-	wg                       sync.WaitGroup
 	doneCh                   chan struct{}
+	waitCh                   chan struct{}
 	log                      *zap.SugaredLogger
 
 	// opts
@@ -83,19 +83,43 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 		bucket:                   bucket,
 		fromBufferPartitionCount: fromBufferPartitionCount,
 		log:                      logging.FromContext(ctx).With("bucket", bucket),
-		wg:                       sync.WaitGroup{},
 		doneCh:                   make(chan struct{}),
+		waitCh:                   make(chan struct{}),
 		opts:                     opts,
 	}
 	if v.opts.isReduce || v.opts.isSource {
 		v.fromBufferPartitionCount = 1
 	}
-
-	v.wg.Add(3)
-	go v.startRefreshingProcessors()
-	go v.startHeatBeatWatcher()
-	go v.startTimeLineWatcher()
+	// start the go routines to watch the heartbeat and offset timeline changes of the processors
+	go v.init()
 	return v
+}
+
+func (v *ProcessorManager) init() {
+	var wg = sync.WaitGroup{}
+	// start refreshing processors goroutine
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		v.startRefreshingProcessors()
+	}()
+
+	// start heartbeat watcher goroutine
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		v.startHeatBeatWatcher()
+	}()
+
+	// start offset timeline watcher goroutine
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		v.startTimeLineWatcher()
+	}()
+
+	wg.Wait()
+	close(v.waitCh)
 }
 
 // AddProcessor adds a new processor. If the given processor already exists, the value will be updated.
@@ -135,7 +159,6 @@ func (v *ProcessorManager) GetAllProcessors() map[string]*ProcessorToFetch {
 }
 
 func (v *ProcessorManager) startRefreshingProcessors() {
-	defer v.wg.Done()
 	ticker := time.NewTicker(time.Duration(v.opts.refreshingProcessorsRate) * time.Second)
 	defer ticker.Stop()
 	v.log.Infow("Refreshing ActiveProcessors ticker started")
@@ -186,7 +209,6 @@ func (v *ProcessorManager) refreshingProcessors() {
 // startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
 func (v *ProcessorManager) startHeatBeatWatcher() {
-	defer v.wg.Done()
 	watchCh, stopped := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {
@@ -247,7 +269,6 @@ func (v *ProcessorManager) startHeatBeatWatcher() {
 
 // startTimeLineWatcher starts the processor Timeline Watcher to listen to offset timeline bucket and update the processor's timeline.
 func (v *ProcessorManager) startTimeLineWatcher() {
-	defer v.wg.Done()
 	watchCh, stopped := v.otWatcher.Watch(v.ctx)
 
 	for {
@@ -313,7 +334,13 @@ func (v *ProcessorManager) GetBucket() string {
 
 // Stop stops the watchers, and waits for the goroutines to exit.
 func (v *ProcessorManager) Stop() {
+	// send a signal to the goroutines to exit
+	close(v.doneCh)
+
+	// close the watchers
 	v.hbWatcher.Close()
 	v.otWatcher.Close()
-	v.wg.Wait()
+	
+	// wait for the goroutines to exit
+	<-v.waitCh
 }

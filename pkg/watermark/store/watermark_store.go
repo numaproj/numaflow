@@ -21,24 +21,24 @@ import "github.com/numaproj/numaflow/pkg/shared/kvs"
 // watermarkStore wraps a pair of heartbeatStore and offsetTimelineStore,
 // it implements interface WatermarkStore.
 type watermarkStore struct {
-	heartbeatStore      kvs.KVStore
-	offsetTimelineStore kvs.KVStore
+	heartbeatStore      kvs.KVStorer
+	offsetTimelineStore kvs.KVStorer
 }
 
 var _ WatermarkStore = (*watermarkStore)(nil)
 
 // BuildWatermarkStore returns a WatermarkStore instance
-func BuildWatermarkStore(hbStore, otStore kvs.KVStore) WatermarkStore {
+func BuildWatermarkStore(hbStore, otStore kvs.KVStorer) WatermarkStore {
 	return &watermarkStore{
 		heartbeatStore:      hbStore,
 		offsetTimelineStore: otStore,
 	}
 }
 
-func (ws *watermarkStore) HeartbeatStore() kvs.KVStore {
+func (ws *watermarkStore) HeartbeatStore() kvs.KVStorer {
 	return ws.heartbeatStore
 }
 
-func (ws *watermarkStore) OffsetTimelineStore() kvs.KVStore {
+func (ws *watermarkStore) OffsetTimelineStore() kvs.KVStorer {
 	return ws.offsetTimelineStore
 }

@@ -20,8 +20,8 @@ import (
 	"context"
 )
 
-// KVStore defines the storage for publishing the watermark and sideinput
-type KVStore interface {
+// KVStorer defines the storage for publishing the watermark and sideinput
+type KVStorer interface {
 	// GetAllKeys the keys from KV store.
 	GetAllKeys(context.Context) ([]string, error)
 	// DeleteKey deletes the key from KV store.

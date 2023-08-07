@@ -28,10 +28,10 @@ import (
 type noOpStore struct {
 }
 
-var _ kvs.KVStore = (*noOpStore)(nil)
+var _ kvs.KVStorer = (*noOpStore)(nil)
 
-// NewKVNoOpStore returns a no-op KVStore.
-func NewKVNoOpStore() kvs.KVStore {
+// NewKVNoOpStore returns a no-op KVStorer.
+func NewKVNoOpStore() kvs.KVStorer {
 	return &noOpStore{}
 }
 

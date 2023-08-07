@@ -1579,11 +1579,11 @@ func metricsReset() {
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer
-func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStore) {
+func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
 	var ctx = context.Background()
 	processorEntity := processor.NewProcessorEntity("publisherTestPod")
 	publishers := make(map[string]publish.Publisher)
-	otStores := make(map[string]kvs.KVStore)
+	otStores := make(map[string]kvs.KVStorer)
 	for key, partitionedBuffers := range toBuffers {
 		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
 		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))

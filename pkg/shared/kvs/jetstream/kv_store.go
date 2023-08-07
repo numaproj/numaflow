@@ -40,10 +40,10 @@ type jetStreamStore struct {
 	log          *zap.SugaredLogger
 }
 
-var _ kvs.KVStore = (*jetStreamStore)(nil)
+var _ kvs.KVStorer = (*jetStreamStore)(nil)
 
 // NewKVJetStreamKVStore returns KVJetStreamStore.
-func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (kvs.KVStore, error) {
+func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (kvs.KVStorer, error) {
 	var err error
 	var jsStore = &jetStreamStore{
 		pipelineName: pipelineName,
