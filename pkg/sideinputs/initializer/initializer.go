@@ -109,8 +109,7 @@ func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher
 					log.Info("Initializing Side Input data for %q", p)
 					err := utils.UpdateSideInputFile(p, m[sideInput])
 					if err != nil {
-						log.Error("failed to update Side Input value ", zap.Error(err))
-						return err
+						return fmt.Errorf("failed to update Side Input value, %w", err)
 					}
 				}
 				return nil
