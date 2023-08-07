@@ -22,15 +22,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Shopify/sarama"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/IBM/sarama"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
