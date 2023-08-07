@@ -29,7 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 
-	mock "github.com/Shopify/sarama/mocks"
+	mock "github.com/IBM/sarama/mocks"
 	"github.com/stretchr/testify/assert"
 )
 
