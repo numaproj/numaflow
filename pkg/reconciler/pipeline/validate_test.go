@@ -17,7 +17,6 @@ limitations under the License.
 package pipeline
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -653,7 +652,7 @@ func Test_getCyclesFromVertex(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fmt.Printf("running test: %q\n", tt.name)
+			t.Logf("running test: %q\n", tt.name)
 			mappedEdges, err := toVerticesMappedByFrom(tt.edges, constructVerticesByName(tt.edges))
 			assert.NoError(t, err)
 
@@ -810,7 +809,7 @@ func Test_validateCycles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fmt.Printf("running test: %q\n", tt.name)
+			t.Logf("running test: %q\n", tt.name)
 			err := validateCycles(tt.pipelineSpec)
 			if tt.success {
 				assert.NoError(t, err)

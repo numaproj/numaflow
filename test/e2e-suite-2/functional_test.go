@@ -108,6 +108,12 @@ func (s *FunctionalSuite) TestCycleToSelf() {
 		msgs[i] = fmt.Sprintf("msg-%d", i)
 		w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(msgs[i])))
 	}
+	for iteration := 1; iteration <= 3; iteration++ {
+		for i := 0; i < 10; i++ {
+			expectedString := fmt.Sprintf("count for \"msg-%d\"=%d", i, iteration)
+			w.Expect().VertexPodLogContains("retry", expectedString, PodLogCheckOptionWithTimeout(3*time.Minute), PodLogCheckOptionWithContainer("udf"))
+		}
+	}
 	for i := 0; i < 10; i++ {
 		w.Expect().SinkContains("out", msgs[i], WithTimeout(3*time.Minute))
 	}
@@ -127,6 +133,12 @@ func (s *FunctionalSuite) TestCycleBackward() {
 	for i := 0; i < 10; i++ {
 		msgs[i] = fmt.Sprintf("msg-%d", i)
 		w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(msgs[i])))
+	}
+	for iteration := 1; iteration <= 3; iteration++ {
+		for i := 0; i < 10; i++ {
+			expectedString := fmt.Sprintf("count for \"msg-%d\"=%d", i, iteration)
+			w.Expect().VertexPodLogContains("retry", expectedString, PodLogCheckOptionWithTimeout(3*time.Minute), PodLogCheckOptionWithContainer("udf"))
+		}
 	}
 	for i := 0; i < 10; i++ {
 		w.Expect().SinkContains("out", msgs[i], WithTimeout(3*time.Minute))
