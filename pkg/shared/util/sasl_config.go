@@ -18,9 +18,10 @@ package util
 
 import (
 	"fmt"
-	"github.com/Shopify/sarama"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"os"
+
+	"github.com/IBM/sarama"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 // GetSASLConfig A utility function to get sarama.Config.Net.SASL
