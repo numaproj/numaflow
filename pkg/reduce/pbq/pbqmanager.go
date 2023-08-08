@@ -233,21 +233,23 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 // deregister is intended to be used by PBQ to deregister itself after GC is called.
 // it will also delete the store using the store provider
 func (m *Manager) deregister(partitionID partition.ID) error {
+
+	m.Lock()
 	ww := &RegisteredWindow{
 		AlignedKeyedWindower: m.pbqMap[partitionID.String()].kw,
 		count:                atomic.NewInt32(0),
 	}
+	delete(m.pbqMap, partitionID.String())
+	m.Unlock()
 
+	// update yetToBeClosed list
 	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
 	ww.count.Sub(1)
 
+	// if count is 0, delete from yetToBeClosed list
 	if ww.count.Load() == 0 {
 		m.yetToBeClosed.DeleteWindow(ww)
 	}
-
-	m.Lock()
-	delete(m.pbqMap, partitionID.String())
-	defer m.Unlock()
 
 	activePartitionCount.With(map[string]string{
 		metrics.LabelVertex:             m.vertexName,
