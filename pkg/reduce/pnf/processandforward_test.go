@@ -448,7 +448,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	return pf, otStore
 }
 
-// buildPublisherMap builds OTStore and publisher for each toBuffer
+// buildPublisherMapAndOTStore builds OTStore and publisher for each toBuffer
 func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
 	var ctx = context.Background()
 	processorEntity := processor.NewProcessorEntity("publisherTestPod")
