@@ -231,6 +231,14 @@ func TestNewInterStepDataForward(t *testing.T) {
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 
+			// close the fetcher and publishers
+			defer func() {
+				_ = fetchWatermark.Close()
+				for _, p := range publishWatermark {
+					_ = p.Close()
+				}
+			}()
+
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -377,6 +385,15 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+
+			// close the fetcher and publishers
+			defer func() {
+				_ = fetchWatermark.Close()
+				for _, p := range publishWatermark {
+					_ = p.Close()
+				}
+			}()
+
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -535,6 +552,15 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+
+			// close the fetcher and publishers
+			defer func() {
+				_ = fetchWatermark.Close()
+				for _, p := range publishWatermark {
+					_ = p.Close()
+				}
+			}()
+
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -860,6 +886,15 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = fetchWatermark.Close()
+		for _, p := range publishWatermark {
+			_ = p.Close()
+		}
+	}()
+
 	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
@@ -1012,6 +1047,15 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
 	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = fetchWatermark.Close()
+		for _, p := range publishWatermark {
+			_ = p.Close()
+		}
+	}()
+	
 	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())

@@ -291,6 +291,13 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		toVertexName: wmpublisher,
 	}
 
+	// close publishers
+	defer func() {
+		for _, p := range publisher {
+			_ = p.Close()
+		}
+	}()
+
 	// create new fixed window of (windowTime)
 	window := fixed.NewFixed(windowTime)
 
@@ -379,6 +386,14 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), offsets[0], 0)
 
 	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffers, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publisherMap {
+			_ = p.Close()
+		}
+	}()
 
 	// create a fixed window of 5s
 	window := fixed.NewFixed(5 * time.Second)
@@ -579,6 +594,14 @@ func TestReduceDataForward_Count(t *testing.T) {
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publisherMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 60s
 	window := fixed.NewFixed(60 * time.Second)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
@@ -652,6 +675,14 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publisherMap {
+			_ = p.Close()
+		}
+	}()
 
 	// create a fixed window of 10s
 	window := fixed.NewFixed(5 * time.Second)
@@ -730,6 +761,15 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 2 minutes
 	window := fixed.NewFixed(2 * time.Minute)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
@@ -805,6 +845,14 @@ func TestReduceDataForward_Max(t *testing.T) {
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
@@ -879,6 +927,15 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
@@ -975,6 +1032,14 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
@@ -1057,6 +1122,14 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(cctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(cctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
@@ -1144,6 +1217,15 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
