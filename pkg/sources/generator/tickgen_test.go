@@ -26,9 +26,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -225,7 +225,7 @@ func TestWatermark(t *testing.T) {
 	}
 
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, nil, nil, publishWMStore)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, nil, nil, publishWMStore, nil)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

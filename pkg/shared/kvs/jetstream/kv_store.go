@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Package jetstream package implements the watermark progression using Jetstream as the KV store.
+Package jetstream package implements the kv store and watcher using Jetstream.
 */
 package jetstream
 
@@ -24,31 +24,29 @@ import (
 	"sync"
 
 	"github.com/nats-io/nats.go"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
 
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// jetStreamStore implements the watermark's KV store backed up by Jetstream.
+// jetStreamStore implements the KV store backed up by Jetstream.
 type jetStreamStore struct {
-	pipelineName string
-	client       *jsclient.NATSClient
-	kv           nats.KeyValue
-	kvLock       sync.RWMutex
-	log          *zap.SugaredLogger
+	client *jsclient.NATSClient
+	kv     nats.KeyValue
+	kvLock sync.RWMutex
+	log    *zap.SugaredLogger
 }
 
-var _ store.WatermarkKVStorer = (*jetStreamStore)(nil)
+var _ kvs.KVStorer = (*jetStreamStore)(nil)
 
 // NewKVJetStreamKVStore returns KVJetStreamStore.
-func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (store.WatermarkKVStorer, error) {
+func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (kvs.KVStorer, error) {
 	var err error
 	var jsStore = &jetStreamStore{
-		pipelineName: pipelineName,
-		client:       client,
-		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
+		client: client,
+		log:    logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 
 	// for JetStream KeyValue store, the bucket should have been created in advance

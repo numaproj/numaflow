@@ -16,24 +16,26 @@ limitations under the License.
 
 package store
 
+import "github.com/numaproj/numaflow/pkg/shared/kvs"
+
 // watermarkStoreWatcher defines a pair of heartbeatStoreWatcher and offsetTimelineStoreWatcher,
 // it implements interface WatermarkStoreWatcher
 type watermarkStoreWatcher struct {
-	heartbeatStoreWatcher      WatermarkKVWatcher
-	offsetTimelineStoreWatcher WatermarkKVWatcher
+	heartbeatStoreWatcher      kvs.KVWatcher
+	offsetTimelineStoreWatcher kvs.KVWatcher
 }
 
 var _ WatermarkStoreWatcher = (*watermarkStoreWatcher)(nil)
 
-func (w *watermarkStoreWatcher) HeartbeatWatcher() WatermarkKVWatcher {
+func (w *watermarkStoreWatcher) HeartbeatWatcher() kvs.KVWatcher {
 	return w.heartbeatStoreWatcher
 }
-func (w *watermarkStoreWatcher) OffsetTimelineWatcher() WatermarkKVWatcher {
+func (w *watermarkStoreWatcher) OffsetTimelineWatcher() kvs.KVWatcher {
 	return w.offsetTimelineStoreWatcher
 }
 
 // BuildWatermarkStoreWatcher returns a WatermarkStoreWatcher instance
-func BuildWatermarkStoreWatcher(hbStoreWatcher, otStoreWatcher WatermarkKVWatcher) WatermarkStoreWatcher {
+func BuildWatermarkStoreWatcher(hbStoreWatcher, otStoreWatcher kvs.KVWatcher) WatermarkStoreWatcher {
 	return &watermarkStoreWatcher{
 		heartbeatStoreWatcher:      hbStoreWatcher,
 		offsetTimelineStoreWatcher: otStoreWatcher,

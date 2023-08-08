@@ -171,17 +171,6 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 			}
 		}
 
-		// stop watermark fetcher
-		if err := isdf.wmFetcher.Close(); err != nil {
-			log.Errorw("Failed to close watermark fetcher", zap.Error(err))
-		}
-
-		// stop watermark publisher
-		for _, publisher := range isdf.wmPublishers {
-			if err := publisher.Close(); err != nil {
-				log.Errorw("Failed to close watermark publisher", zap.Error(err))
-			}
-		}
 		close(stopped)
 	}()
 

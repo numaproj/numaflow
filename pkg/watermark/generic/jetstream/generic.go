@@ -22,6 +22,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -31,8 +33,6 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
 
 // BuildWatermarkProgressors is used to populate fetchWatermark, and a map of publishWatermark with edge name as the key.
@@ -124,11 +124,11 @@ func buildFetcherForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexI
 
 	// create a fetcher that fetches watermark.
 	if vertexInstance.Vertex.IsASource() {
-		fetchWatermark = fetch.NewSourceFetcher(ctx, fromBucket, store.BuildWatermarkStoreWatcher(hbWatch, otWatch), processManager)
+		fetchWatermark = fetch.NewSourceFetcher(ctx, processManager)
 	} else if vertexInstance.Vertex.IsReduceUDF() {
-		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, storeWatcher, processManager, 1)
+		fetchWatermark = fetch.NewEdgeFetcher(ctx, processManager, 1)
 	} else {
-		fetchWatermark = fetch.NewEdgeFetcher(ctx, fromBucket, storeWatcher, processManager, vertexInstance.Vertex.Spec.GetPartitionCount())
+		fetchWatermark = fetch.NewEdgeFetcher(ctx, processManager, vertexInstance.Vertex.Spec.GetPartitionCount())
 	}
 
 	return fetchWatermark, nil
@@ -177,7 +177,7 @@ func buildPublishers(ctx context.Context, pipelineName string, vertexInstance *v
 }
 
 // BuildSourcePublisherStores builds the watermark stores for source publisher.
-func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (store.WatermarkStorer, error) {
+func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (store.WatermarkStore, error) {
 	if !vertexInstance.Vertex.IsASource() {
 		return nil, fmt.Errorf("not a source vertex")
 	}
