@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -52,10 +53,10 @@ type Publisher interface {
 type publish struct {
 	ctx    context.Context
 	entity processor.ProcessorEntitier
-	// heartbeatStore uses second as the time unit for the value
-	heartbeatStore store.WatermarkKVStorer
 	// osStore uses millisecond as the time unit for the value
-	otStore                store.WatermarkKVStorer
+	otStore kvs.KVStorer
+	// heartbeatStore uses second as the time unit for the value
+	heartbeatStore         kvs.KVStorer
 	log                    *zap.SugaredLogger
 	headWatermarks         []wmb.Watermark
 	headWMLock             sync.RWMutex
@@ -64,7 +65,7 @@ type publish struct {
 }
 
 // NewPublish returns `Publish`.
-func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, watermarkStores store.WatermarkStorer, toVertexPartitionCount int32, inputOpts ...PublishOption) Publisher {
+func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, watermarkStores store.WatermarkStore, toVertexPartitionCount int32, inputOpts ...PublishOption) Publisher {
 	log := logging.FromContext(ctx).With("entityID", processorEntity.GetName()).
 		With("otStore", watermarkStores.OffsetTimelineStore().GetStoreName()).
 		With("hbStore", watermarkStores.HeartbeatStore().GetStoreName())

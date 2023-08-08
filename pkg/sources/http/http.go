@@ -93,7 +93,7 @@ func New(
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
-	publishWMStores store.WatermarkStorer,
+	publishWMStores store.WatermarkStore,
 	opts ...Option) (*httpSource, error) {
 
 	h := &httpSource{
@@ -268,9 +268,6 @@ func (h *httpSource) Close() error {
 	close(h.messages)
 	if err := h.shutdown(context.Background()); err != nil {
 		return err
-	}
-	if err := h.sourcePublishWM.Close(); err != nil {
-		h.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
 	}
 	h.logger.Info("HTTP source server shutdown")
 	return nil

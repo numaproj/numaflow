@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -47,7 +48,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
 
 type SourceProcessor struct {
@@ -188,11 +188,22 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	} else {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
-
 	<-ctx.Done()
 	log.Info("SIGTERM, exiting...")
 	sourcer.Stop()
 	wg.Wait()
+
+	// Close watermark fetcher and publisher
+	if err := fetchWatermark.Close(); err != nil {
+		log.Error("Failed to close watermark fetcher", zap.Error(err))
+	}
+
+	for _, p := range publishWatermark {
+		if err := p.Close(); err != nil {
+			log.Error("Failed to close watermark publisher", zap.Error(err))
+		}
+	}
+
 	log.Info("Exited...")
 	return nil
 }
@@ -203,7 +214,7 @@ func (sp *SourceProcessor) getSourcer(writers map[string][]isb.BufferWriter,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
-	publishWMStores store.WatermarkStorer,
+	publishWMStores store.WatermarkStore,
 	logger *zap.SugaredLogger) (Sourcer, error) {
 
 	src := sp.VertexInstance.Vertex.Spec.Source

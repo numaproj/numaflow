@@ -23,6 +23,7 @@ import (
 	"time"
 
 	natslib "github.com/nats-io/nats.go"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -33,7 +34,6 @@ import (
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 )
 
 type myForwardToAllTest struct {
@@ -83,7 +83,8 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 }
 
 func Test_Single(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// default read timeout is 1 sec, and smaller values seems to be flaky
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	server := natstest.RunNatsServer(t)
 	defer server.Shutdown()
@@ -121,7 +122,7 @@ loop:
 			if readMessagesCount == 3 {
 				break loop
 			}
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -170,6 +171,7 @@ func Test_Multiple(t *testing.T) {
 			if read == 5 {
 				return
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }

@@ -82,7 +82,7 @@ func New(
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
-	publishWMStores store.WatermarkStorer,
+	publishWMStores store.WatermarkStore,
 	opts ...Option) (*redisStreamsSource, error) {
 
 	// create RedisClient to connect to Redis
@@ -304,9 +304,6 @@ func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMess
 func (rsSource *redisStreamsSource) Close() error {
 	rsSource.Log.Info("Shutting down redis source server...")
 	rsSource.cancelfn()
-	if err := rsSource.sourcePublishWM.Close(); err != nil {
-		rsSource.Log.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
-	}
 	rsSource.Log.Info("Redis source server shutdown")
 	return nil
 }

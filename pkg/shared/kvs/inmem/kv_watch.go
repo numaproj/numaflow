@@ -20,44 +20,44 @@ import (
 	"context"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 // inMemWatch implements the watermark's KV store backed up by in memory store.
 type inMemWatch struct {
 	pipelineName string
 	bucketName   string
-	kvEntryCh    <-chan store.WatermarkKVEntry
-	kvHistory    []store.WatermarkKVEntry
-	updatesChMap map[string]chan store.WatermarkKVEntry
+	kvEntryCh    <-chan kvs.KVEntry
+	kvHistory    []kvs.KVEntry
+	updatesChMap map[string]chan kvs.KVEntry
 	lock         sync.Mutex // the lock for kvHistory and updatesChMap
 	log          *zap.SugaredLogger
 }
 
-var _ store.WatermarkKVWatcher = (*inMemWatch)(nil)
+var _ kvs.KVWatcher = (*inMemWatch)(nil)
 
-// NewInMemWatch returns inMemWatch which implements the WatermarkKVWatcher interface.
-func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, kvEntryCh <-chan store.WatermarkKVEntry) (store.WatermarkKVWatcher, error) {
+// NewInMemWatch returns inMemWatch which implements the KVWatcher interface.
+func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, kvEntryCh <-chan kvs.KVEntry) (kvs.KVWatcher, error) {
 	k := &inMemWatch{
 		pipelineName: pipelineName,
 		bucketName:   bucketName,
 		kvEntryCh:    kvEntryCh,
-		kvHistory:    []store.WatermarkKVEntry{},
-		updatesChMap: make(map[string]chan store.WatermarkKVEntry),
+		kvHistory:    []kvs.KVEntry{},
+		updatesChMap: make(map[string]chan kvs.KVEntry),
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 	return k, nil
 }
 
 // Watch watches the key-value store.
-func (k *inMemWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
+func (k *inMemWatch) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan struct{}) {
 	// create a new updates channel and fill in the history
 	var id = util.RandomString(10)
-	var updates = make(chan store.WatermarkKVEntry)
+	var updates = make(chan kvs.KVEntry)
 	var stopped = make(chan struct{})
 
 	// for new updates channel initialization
@@ -83,7 +83,11 @@ func (k *inMemWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, 
 				k.lock.Unlock()
 				close(stopped)
 				return
-			case value := <-k.kvEntryCh:
+			case value, ok := <-k.kvEntryCh:
+				// if the channel is closed or if we get a nil value, continue
+				if !ok || value == nil {
+					continue
+				}
 				k.log.Debug(value.Key(), value.Value(), value.Operation())
 				k.lock.Lock()
 				k.kvHistory = append(k.kvHistory, value)

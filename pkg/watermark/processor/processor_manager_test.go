@@ -22,11 +22,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
 
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
@@ -147,9 +147,10 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	assert.NoError(t, err)
 	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
 	assert.NoError(t, err)
+
+	defer cancel()
 	defer hbStore.Close()
 	defer otStore.Close()
-	defer cancel()
 
 	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
 	assert.NoError(t, err)
