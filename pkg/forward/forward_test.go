@@ -1055,7 +1055,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 			_ = p.Close()
 		}
 	}()
-	
+
 	f, err := NewInterStepDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(2), WithVertexType(dfv1.VertexTypeMapUDF))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
