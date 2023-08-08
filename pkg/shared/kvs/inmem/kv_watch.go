@@ -83,7 +83,11 @@ func (k *inMemWatch) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan stru
 				k.lock.Unlock()
 				close(stopped)
 				return
-			case value := <-k.kvEntryCh:
+			case value, ok := <-k.kvEntryCh:
+				// if the channel is closed or if we get a nil value, continue
+				if !ok || value == nil {
+					continue
+				}
 				k.log.Debug(value.Key(), value.Value(), value.Operation())
 				k.lock.Lock()
 				k.kvHistory = append(k.kvHistory, value)

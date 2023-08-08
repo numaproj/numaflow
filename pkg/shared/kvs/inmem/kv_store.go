@@ -60,6 +60,7 @@ type inMemStore struct {
 	kv           map[string][]byte
 	kvLock       sync.RWMutex
 	kvEntryCh    chan kvs.KVEntry
+	isClosed     bool
 	log          *zap.SugaredLogger
 }
 
@@ -128,6 +129,9 @@ func (kv *inMemStore) DeleteKey(_ context.Context, k string) error {
 func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 	kv.kvLock.Lock()
 	defer kv.kvLock.Unlock()
+	if kv.isClosed {
+		return fmt.Errorf("kv store is closed")
+	}
 	var val = make([]byte, len(v))
 	copy(val, v)
 	kv.kv[k] = val
@@ -143,5 +147,6 @@ func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 func (kv *inMemStore) Close() {
 	kv.kvLock.Lock()
 	defer kv.kvLock.Unlock()
+	kv.isClosed = true
 	close(kv.kvEntryCh)
 }

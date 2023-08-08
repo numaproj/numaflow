@@ -147,9 +147,10 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	assert.NoError(t, err)
 	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
 	assert.NoError(t, err)
+
+	defer cancel()
 	defer hbStore.Close()
 	defer otStore.Close()
-	defer cancel()
 
 	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
 	assert.NoError(t, err)
