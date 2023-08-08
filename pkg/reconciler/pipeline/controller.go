@@ -548,6 +548,16 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			dfv1.KeyPipelineName: pl.Name,
 			dfv1.KeyVertexName:   v.Name,
 		}
+		if pl.Spec.Templates != nil && pl.Spec.Templates.VertexTemplate != nil {
+			apt := pl.Spec.Templates.VertexTemplate.AbstractPodTemplate
+			if apt.Metadata != nil && len(apt.Metadata.Labels) > 0 {
+				for k, v := range apt.Metadata.Labels {
+					if _, ok := matchLabels[k]; !ok {
+						matchLabels[k] = v
+					}
+				}
+			}
+		}
 		fromEdges := copyEdges(pl, pl.GetFromEdges(v.Name))
 		toEdges := copyEdges(pl, pl.GetToEdges(v.Name))
 		vCopy := v.DeepCopy()
