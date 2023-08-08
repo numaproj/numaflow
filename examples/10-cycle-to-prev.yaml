@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: cycle-backward
+  name: cycle-to-prev
 spec:
   vertices:
     - name: in
