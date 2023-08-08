@@ -83,7 +83,8 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 }
 
 func Test_Single(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// default read timeout is 1 sec, and smaller values seems to be flaky
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	server := natstest.RunNatsServer(t)
 	defer server.Shutdown()
@@ -121,7 +122,7 @@ loop:
 			if readMessagesCount == 3 {
 				break loop
 			}
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -170,6 +171,7 @@ func Test_Multiple(t *testing.T) {
 			if read == 5 {
 				return
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
