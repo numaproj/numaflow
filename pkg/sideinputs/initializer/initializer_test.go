@@ -16,6 +16,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
+// Delete mountPath directory if it exists
+func cleanup(mountPath string) {
+	if utils.CheckFileExists(mountPath) {
+		_ = os.RemoveAll(mountPath)
+	}
+}
+
 func TestSideInputsInitializer_Success(t *testing.T) {
 	var (
 		keyspace     = "sideInputTestWatch"
@@ -24,13 +31,16 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 		dataTest     = []string{"HELLO", "HELLO2"}
 		mountPath    = "/tmp/side-input/"
 	)
-	// Remove any existing Side Input files
-	for _, sideInput := range sideInputs {
-		p := path.Join(mountPath, sideInput)
-		os.Remove(p)
+	// Clean up
+	defer cleanup(mountPath)
+
+	// Delete mountPath directory if it exists
+	if utils.CheckFileExists(mountPath) {
+		err := os.RemoveAll(mountPath)
+		assert.NoError(t, err)
 	}
 
-	if utils.CheckFileExists(mountPath) == false {
+	if !utils.CheckFileExists(mountPath) {
 		err := os.Mkdir(mountPath, 0777)
 		assert.NoError(t, err)
 	}
@@ -94,6 +104,10 @@ func TestSideInputsTimeout(t *testing.T) {
 		sideInputs   = []string{"TEST", "TEST2"}
 		mountPath    = "/tmp/side-input/"
 	)
+	// Clean up
+	defer cleanup(mountPath)
+
+	// Create a new NATS server
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 

@@ -16,6 +16,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
+// Delete mountPath directory if it exists
+func cleanup(mountPath string) {
+	if utils.CheckFileExists(mountPath) {
+		_ = os.RemoveAll(mountPath)
+	}
+}
 func TestSideInputsValueUpdates(t *testing.T) {
 	var (
 		keyspace     = "sideInputTestWatch"
@@ -24,6 +30,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 		dataTest     = []string{"HELLO", "HELLO2"}
 		mountPath    = "/tmp/side-input/"
 	)
+	defer cleanup(mountPath)
 
 	// Remove any existing Side Input files
 	for _, sideInput := range sideInputs {
@@ -70,7 +77,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 	for x := range sideInputs {
 		_, err = kv.Put(sideInputs[x], []byte(dataTest[x]))
 		if err != nil {
-			fmt.Println("ERROR ", err)
+			assert.NoError(t, err)
 		}
 	}
 	time.Sleep(1 * time.Second)

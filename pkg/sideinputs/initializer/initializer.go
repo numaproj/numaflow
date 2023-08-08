@@ -78,7 +78,7 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	bucketName := isbsvc.JetStreamSideInputsStoreBucket(sii.sideInputsStore)
 	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, sii.pipelineName, bucketName, natsClient)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create a sideInputWatcher, %w", err)
 	}
 	return startSideInputInitializer(ctx, sideInputWatcher, dfv1.PathSideInputsMount, sii.sideInputs)
 }
@@ -107,7 +107,7 @@ func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher
 				for sideInput := range m {
 					p := path.Join(mountPath, sideInput)
 					log.Info("Initializing Side Input data for %q", p)
-					err := utils.UpdateSideInputFile(p, m[sideInput])
+					err := utils.UpdateSideInputFile(ctx, p, m[sideInput])
 					if err != nil {
 						return fmt.Errorf("failed to update Side Input value, %w", err)
 					}

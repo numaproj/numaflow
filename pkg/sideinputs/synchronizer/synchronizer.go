@@ -72,11 +72,11 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sis.isbSvcType)
 	}
-
+	// Create a new watcher for the side input KV store
 	bucketName := isbsvc.JetStreamSideInputsStoreBucket(sis.sideInputsStore)
 	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, sis.pipelineName, bucketName, natsClient)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create a sideInputWatcher, %w", err)
 	}
 	go startSideInputSynchronizer(ctx, sideInputWatcher, dfv1.PathSideInputsMount)
 	<-ctx.Done()
@@ -102,7 +102,7 @@ func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatche
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 			p := path.Join(mountPath, value.Key())
 			// Write changes to disk
-			err := utils.UpdateSideInputFile(p, value.Value())
+			err := utils.UpdateSideInputFile(ctx, p, value.Value())
 			if err != nil {
 				log.Error("Failed to update Side Input value %s", zap.Error(err))
 			}
