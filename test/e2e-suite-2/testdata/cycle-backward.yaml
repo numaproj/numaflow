@@ -12,7 +12,8 @@ spec:
         builtin:
           name: cat
     - name: retry
-      replicas: 1
+      scale:
+        disabled: true # don't scale this beyond one Pod since it doesn't make sense for this container
       udf:
         container:
           # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/retry
