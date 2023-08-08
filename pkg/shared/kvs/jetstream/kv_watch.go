@@ -32,7 +32,6 @@ import (
 // jetStreamWatch implements the KV store watcher backed up by Jetstream.
 type jetStreamWatch struct {
 	ctx               context.Context
-	pipelineName      string
 	kvBucketName      string
 	client            *jsclient.NATSClient
 	kvStore           nats.KeyValue
@@ -61,7 +60,6 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 
 	jsw := &jetStreamWatch{
 		ctx:          ctx,
-		pipelineName: pipelineName,
 		kvBucketName: kvBucketName,
 		client:       client,
 		kvStore:      kvStore,
@@ -180,7 +178,7 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 				jsw.kvwTimer.Reset(jsw.opts.watcherCreationThreshold)
 
 			case <-jsw.doneCh:
-				jsw.log.Infow("stopping WatchAll", zap.String("watcher", jsw.GetKVName()))
+				jsw.log.Infow("Stopping WatchAll", zap.String("watcher", jsw.GetKVName()))
 				close(updates)
 				close(stopped)
 			}

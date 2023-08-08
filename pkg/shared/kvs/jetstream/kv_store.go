@@ -33,11 +33,10 @@ import (
 
 // jetStreamStore implements the KV store backed up by Jetstream.
 type jetStreamStore struct {
-	pipelineName string
-	client       *jsclient.NATSClient
-	kv           nats.KeyValue
-	kvLock       sync.RWMutex
-	log          *zap.SugaredLogger
+	client *jsclient.NATSClient
+	kv     nats.KeyValue
+	kvLock sync.RWMutex
+	log    *zap.SugaredLogger
 }
 
 var _ kvs.KVStorer = (*jetStreamStore)(nil)
@@ -46,9 +45,8 @@ var _ kvs.KVStorer = (*jetStreamStore)(nil)
 func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (kvs.KVStorer, error) {
 	var err error
 	var jsStore = &jetStreamStore{
-		pipelineName: pipelineName,
-		client:       client,
-		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
+		client: client,
+		log:    logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 
 	// for JetStream KeyValue store, the bucket should have been created in advance

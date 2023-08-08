@@ -195,12 +195,12 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	// Close watermark fetcher and publisher
 	if err := fetchWatermark.Close(); err != nil {
-		log.Warnw("Failed to close watermark fetcher", zap.Error(err))
+		log.Error("Failed to close watermark fetcher", zap.Error(err))
 	}
 
 	for _, p := range publishWatermark {
 		if err := p.Close(); err != nil {
-			log.Warnw("Failed to close watermark publisher", zap.Error(err))
+			log.Error("Failed to close watermark publisher", zap.Error(err))
 		}
 	}
 

@@ -249,13 +249,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	// Close the watermark fetcher and publisher
 	err = fetchWatermark.Close()
 	if err != nil {
-		log.Info("Failed to close the watermark fetcher")
+		log.Error("Failed to close the watermark fetcher", zap.Error(err))
 	}
 
 	for _, publisher := range publishWatermark {
 		err = publisher.Close()
 		if err != nil {
-			log.Info("Failed to close the watermark publisher")
+			log.Error("Failed to close the watermark publisher", zap.Error(err))
 		}
 	}
 

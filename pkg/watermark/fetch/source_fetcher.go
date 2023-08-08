@@ -111,7 +111,7 @@ func (e *sourceFetcher) GetHeadWMB(int32) wmb.WMB {
 
 // Close function closes the watchers.
 func (e *sourceFetcher) Close() error {
-	e.log.Infof("Closing source watermark fetcher")
+	e.log.Info("Closing source watermark fetcher")
 	e.processorManager.Stop()
 	return nil
 }
