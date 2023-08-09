@@ -33,6 +33,7 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 		dataTest     = []string{"HELLO", "HELLO2"}
 	)
 	mountPath, err := os.MkdirTemp("", "side-input")
+	assert.NoError(t, err)
 	defer cleanup(mountPath)
 
 	s := natstest.RunJetStreamServer(t)
@@ -101,6 +102,7 @@ func TestSideInputsTimeout(t *testing.T) {
 		sideInputs   = []string{"TEST", "TEST2"}
 	)
 	mountPath, err := os.MkdirTemp("", "side-input")
+	assert.NoError(t, err)
 	defer cleanup(mountPath)
 
 	// Create a new NATS server

@@ -33,6 +33,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 		dataTest     = []string{"HELLO", "HELLO2"}
 	)
 	mountPath, err := os.MkdirTemp("/tmp", "side-input")
+	assert.NoError(t, err)
 	// Clean up
 	defer cleanup(mountPath)
 

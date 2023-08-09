@@ -24,10 +24,12 @@ func TestSymLinkUpdate(t *testing.T) {
 		byteArray = make([]byte, size)
 	)
 	mountPath, err := os.MkdirTemp("", "side-input")
+	assert.NoError(t, err)
 	// Clean up
 	defer cleanup(mountPath)
 
 	fileName, err := os.CreateTemp(mountPath, "unit-test")
+	assert.NoError(t, err)
 	filePath := fileName.Name()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -62,10 +64,12 @@ func TestSymLinkFileDelete(t *testing.T) {
 		byteArray = make([]byte, size)
 	)
 	mountPath, err := os.MkdirTemp("", "side-input")
+	assert.NoError(t, err)
 	// Clean up
 	defer cleanup(mountPath)
 
 	filePath, err := os.CreateTemp(mountPath, "unit-test")
+	assert.NoError(t, err)
 	fileName := filePath.Name()
 
 	// Write data to the link
