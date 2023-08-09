@@ -52,7 +52,7 @@ func UpdateSideInputFile(ctx context.Context, fileSymLink string, value []byte) 
 	if CheckFileExists(oldFilePath) {
 		err = os.Remove(oldFilePath)
 		if err != nil {
-			log.Info("Failed to remove old Side Input file %s : %w", oldFilePath, err)
+			log.Errorw("Failed to remove old Side Input file %s : %w", oldFilePath, err)
 		}
 	}
 	return nil

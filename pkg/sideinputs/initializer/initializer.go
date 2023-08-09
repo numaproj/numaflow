@@ -26,9 +26,9 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sideinputs/store"
-	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
@@ -61,6 +61,8 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	log.Infow("Starting Side Inputs Initializer", zap.Strings("sideInputs", sii.sideInputs))
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	switch sii.isbSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		return fmt.Errorf("unsupported isbsvc type %q", sii.isbSvcType)
@@ -85,7 +87,7 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 
 // startSideInputInitializer watches the side inputs KV store to get side inputs
 // and writes to disk once the initial value of all the side-inputs is ready
-func startSideInputInitializer(ctx context.Context, watch store.SideInputWatcher, mountPath string, sideInputs []string) error {
+func startSideInputInitializer(ctx context.Context, watch kvs.KVWatcher, mountPath string, sideInputs []string) error {
 	log := logging.FromContext(ctx)
 	m := make(map[string][]byte)
 	watchCh, stopped := watch.Watch(ctx)

@@ -26,9 +26,9 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sideinputs/store"
-	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
@@ -85,7 +85,7 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 
 // startSideInputSynchronizer watches the Side Input KV store for any changes
 // and writes the updated value to the mount volume.
-func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatcher, mountPath string) {
+func startSideInputSynchronizer(ctx context.Context, watch kvs.KVWatcher, mountPath string) {
 	log := logging.FromContext(ctx)
 	watchCh, stopped := watch.Watch(ctx)
 	for {
@@ -104,7 +104,7 @@ func startSideInputSynchronizer(ctx context.Context, watch store.SideInputWatche
 			// Write changes to disk
 			err := utils.UpdateSideInputFile(ctx, p, value.Value())
 			if err != nil {
-				log.Error("Failed to update Side Input value %s", zap.Error(err))
+				log.Errorw("Failed to update Side Input value %s", zap.Error(err))
 			}
 			continue
 		case <-ctx.Done():

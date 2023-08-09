@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/sideinputs/store/jetstream"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
