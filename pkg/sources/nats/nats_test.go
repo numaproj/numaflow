@@ -90,8 +90,8 @@ func Test_Single(t *testing.T) {
 	defer server.Shutdown()
 
 	url := "127.0.0.1"
-	testSubject := "test"
-	testQueue := "test-queue"
+	testSubject := "test-single"
+	testQueue := "test-queue-single"
 	vi := testVertex(t, url, testSubject, testQueue, "test-host", 0)
 	ns, err := newInstance(t, vi)
 	assert.NoError(t, err)
@@ -102,13 +102,15 @@ func Test_Single(t *testing.T) {
 	nc, err := natslib.Connect(url)
 	assert.NoError(t, err)
 	defer nc.Close()
-	_ = nc.Publish(testSubject, []byte("1"))
-	_ = nc.Publish(testSubject, []byte("2"))
-	_ = nc.Publish(testSubject, []byte("3"))
 
-	msgs, err := ns.Read(context.Background(), 5)
-	readMessagesCount := len(msgs)
-	assert.NoError(t, err)
+	for i := 0; i < 3; i++ {
+		err = nc.Publish(testSubject, []byte(fmt.Sprintf("%d", i)))
+		assert.NoError(t, err)
+	}
+
+	var msgs []*isb.ReadMessage
+	var readMessagesCount int
+
 loop:
 	for {
 		select {
@@ -116,7 +118,7 @@ loop:
 			t.Fatal("timeout waiting for messages")
 			return
 		default:
-			msgs, err = ns.Read(context.Background(), 5)
+			msgs, err = ns.Read(ctx, 5)
 			assert.NoError(t, err)
 			readMessagesCount += len(msgs)
 			if readMessagesCount == 3 {
@@ -132,8 +134,8 @@ func Test_Multiple(t *testing.T) {
 	defer server.Shutdown()
 
 	url := "127.0.0.1"
-	testSubject := "test"
-	testQueue := "test-queue"
+	testSubject := "test-multiple"
+	testQueue := "test-queue-multiple"
 	v1 := testVertex(t, url, testSubject, testQueue, "test-host1", 0)
 	ns1, err := newInstance(t, v1)
 	assert.NoError(t, err)
@@ -150,7 +152,7 @@ func Test_Multiple(t *testing.T) {
 	assert.NoError(t, err)
 	defer nc.Close()
 	for i := 0; i < 5; i++ {
-		err := nc.Publish(testSubject, []byte(fmt.Sprint(i)))
+		err = nc.Publish(testSubject, []byte(fmt.Sprint(i)))
 		assert.NoError(t, err)
 	}
 

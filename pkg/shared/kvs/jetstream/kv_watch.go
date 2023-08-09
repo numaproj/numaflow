@@ -207,7 +207,13 @@ func (jsw *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
 
 // lastUpdateKVTime returns the last update time of the kv store
 func (jsw *jetStreamWatch) lastUpdateKVTime() time.Time {
-	keys, err := jsw.kvStore.Keys()
+	var (
+		keys       []string
+		err        error
+		lastUpdate time.Time
+		value      nats.KeyValueEntry
+	)
+
 retryLoop:
 	for {
 		select {
@@ -230,9 +236,8 @@ retryLoop:
 
 	}
 
-	var lastUpdate = time.Time{}
 	for _, key := range keys {
-		value, err := jsw.kvStore.Get(key)
+		value, err = jsw.kvStore.Get(key)
 		for err != nil {
 			select {
 			case <-jsw.ctx.Done():
