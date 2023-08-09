@@ -161,9 +161,11 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 			case <-jsw.kvwTimer.C:
 				// if the timer expired, it means that the watcher is not receiving any updates
 				kvLastUpdatedTime := jsw.lastUpdateKVTime()
+
+				// if the last update time is zero, it means that there are no key-value pairs in the store yet or ctx was canceled both the cases we should not recreate the watcher
 				// if the last update time is before the previous fetch time, it means that the store is not getting any updates
 				// therefore, we don't have to recreate the watcher
-				if kvLastUpdatedTime.Before(jsw.previousFetchTime) {
+				if kvLastUpdatedTime.IsZero() || kvLastUpdatedTime.Before(jsw.previousFetchTime) {
 					jsw.log.Debug("The watcher is not receiving any updates, but the store is not getting any updates either", zap.String("watcher", jsw.GetKVName()), zap.Time("lastUpdateKVTime", kvLastUpdatedTime), zap.Time("previousFetchTime", jsw.previousFetchTime))
 				} else {
 					// if the last update time is after the previous fetch time, it means that the store is getting updates but the watcher is not receiving any
@@ -206,11 +208,28 @@ func (jsw *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
 // lastUpdateKVTime returns the last update time of the kv store
 func (jsw *jetStreamWatch) lastUpdateKVTime() time.Time {
 	keys, err := jsw.kvStore.Keys()
-	for err != nil {
-		jsw.log.Errorw("Failed to get keys", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
-		keys, err = jsw.kvStore.Keys()
-		time.Sleep(100 * time.Millisecond)
+retryLoop:
+	for {
+		select {
+		case <-jsw.ctx.Done():
+			return time.Time{}
+		default:
+			keys, err = jsw.kvStore.Keys()
+			if err == nil {
+				break retryLoop
+			} else {
+				// if there are no keys in the store, return zero time because there are no updates
+				// upstream will handle it
+				if err == nats.ErrNoKeysFound {
+					return time.Time{}
+				}
+				jsw.log.Errorw("Failed to get keys", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+
 	}
+
 	var lastUpdate = time.Time{}
 	for _, key := range keys {
 		value, err := jsw.kvStore.Get(key)
