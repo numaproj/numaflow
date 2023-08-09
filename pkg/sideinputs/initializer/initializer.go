@@ -52,6 +52,8 @@ func NewSideInputsInitializer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInpu
 	}
 }
 
+// Run starts the side inputs initializer processing, which would create a new sideInputWatcher
+// and update the values on the disk. This would exit once all the side inputs are initialized.
 func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	var (
 		natsClient *jsclient.NATSClient
@@ -86,7 +88,8 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 }
 
 // startSideInputInitializer watches the side inputs KV store to get side inputs
-// and writes to disk once the initial value of all the side-inputs is ready
+// and writes to disk once the initial value of all the side-inputs is ready.
+// This is a blocking call.
 func startSideInputInitializer(ctx context.Context, watch kvs.KVWatcher, mountPath string, sideInputs []string) error {
 	log := logging.FromContext(ctx)
 	m := make(map[string][]byte)

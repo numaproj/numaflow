@@ -32,6 +32,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
+// sideInputsSynchronizer contains the pipeline and
+// Side Input information required for monitoring a KV store
+// for Side Input values
 type sideInputsSynchronizer struct {
 	isbSvcType      dfv1.ISBSvcType
 	pipelineName    string
@@ -39,6 +42,7 @@ type sideInputsSynchronizer struct {
 	sideInputs      []string
 }
 
+// NewSideInputsSynchronizer creates a new synchronizer with given values
 func NewSideInputsSynchronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInputsStore string, sideInputs []string) *sideInputsSynchronizer {
 	return &sideInputsSynchronizer{
 		isbSvcType:      isbSvcType,
@@ -48,6 +52,8 @@ func NewSideInputsSynchronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInp
 	}
 }
 
+// Start starts the side inputs synchronizer processing, which would create a new sideInputWatcher
+// and keeps on watching for updates for all the side inputs while writing the new values to the disk.
 func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	var (
 		natsClient *jsclient.NATSClient

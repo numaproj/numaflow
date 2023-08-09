@@ -22,6 +22,9 @@ func cleanup(mountPath string) {
 		_ = os.RemoveAll(mountPath)
 	}
 }
+
+// TestSideInputsInitializer_Success tests the side input synchronizer, which should update the
+// side input store path with updated values from the side input bucket.
 func TestSideInputsValueUpdates(t *testing.T) {
 	var (
 		keyspace     = "sideInputTestWatch"
@@ -80,11 +83,19 @@ func TestSideInputsValueUpdates(t *testing.T) {
 			assert.NoError(t, err)
 		}
 	}
-	time.Sleep(1 * time.Second)
+
 	for x, sideInput := range sideInputs {
 		p := path.Join(mountPath, sideInput)
 		fileData, err := utils.FetchSideInputFile(p)
-		assert.NoError(t, err)
+		for err != nil {
+			select {
+			case <-ctx.Done():
+				t.Fatalf("Context timeout")
+			default:
+				time.Sleep(10 * time.Millisecond)
+				fileData, err = utils.FetchSideInputFile(p)
+			}
+		}
 		assert.Equal(t, dataTest[x], string(fileData))
 	}
 }
