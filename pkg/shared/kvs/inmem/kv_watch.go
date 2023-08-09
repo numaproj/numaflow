@@ -34,6 +34,7 @@ type inMemWatch struct {
 	kvEntryCh    <-chan kvs.KVEntry
 	kvHistory    []kvs.KVEntry
 	updatesChMap map[string]chan kvs.KVEntry
+	doneCh       chan struct{}
 	lock         sync.Mutex // the lock for kvHistory and updatesChMap
 	log          *zap.SugaredLogger
 }
@@ -48,6 +49,7 @@ func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, 
 		kvEntryCh:    kvEntryCh,
 		kvHistory:    []kvs.KVEntry{},
 		updatesChMap: make(map[string]chan kvs.KVEntry),
+		doneCh:       make(chan struct{}),
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 	return k, nil
@@ -95,6 +97,10 @@ func (k *inMemWatch) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan stru
 					ch <- value
 				}
 				k.lock.Unlock()
+			case <-k.doneCh:
+				close(updates)
+				close(stopped)
+				return
 			}
 		}
 	}()
@@ -108,4 +114,5 @@ func (k *inMemWatch) GetKVName() string {
 
 // Close does nothing here because the updates channel has already been closed when exiting the Watch.
 func (k *inMemWatch) Close() {
+	close(k.doneCh)
 }

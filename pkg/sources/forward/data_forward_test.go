@@ -225,6 +225,12 @@ func TestNewDataForward(t *testing.T) {
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 
+			defer func() {
+				for _, p := range publishWatermark {
+					_ = p.Close()
+				}
+			}()
+
 			f, err := NewDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
@@ -371,6 +377,13 @@ func TestNewDataForward(t *testing.T) {
 
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+
+			defer func() {
+				for _, p := range publishWatermark {
+					_ = p.Close()
+				}
+			}()
+
 			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
@@ -529,6 +542,13 @@ func TestNewDataForward(t *testing.T) {
 
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+
+			defer func() {
+				for _, p := range publishWatermark {
+					_ = p.Close()
+				}
+			}()
+
 			f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
