@@ -205,7 +205,7 @@ func (jsw *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
 	return kvWatcher
 }
 
-// lastUpdateKVTime returns the last update time of the kv store
+// lastUpdateKVTime returns the last update time of the kv store. if the key is missing, it will return time.Zero.
 func (jsw *jetStreamWatch) lastUpdateKVTime() time.Time {
 	var (
 		keys       []string
