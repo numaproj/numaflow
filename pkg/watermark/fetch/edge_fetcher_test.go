@@ -25,14 +25,15 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
-	"github.com/numaproj/numaflow/pkg/watermark/store/jetstream"
 
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -369,7 +370,6 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 			e := &edgeFetcher{
 				ctx:              ctx,
 				bucketName:       bucketName,
-				storeWatcher:     storeWatcher,
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
@@ -565,7 +565,6 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 			e := &edgeFetcher{
 				ctx:              ctx,
 				bucketName:       bucketName,
-				storeWatcher:     storeWatcher,
 				processorManager: tt.processorManager,
 				lastProcessedWm:  lastProcessedWm,
 				log:              zaptest.NewLogger(t).Sugar(),
@@ -874,7 +873,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	var processorManager = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 1)
-	var fetcher = NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 1)
+	var fetcher = NewEdgeFetcher(ctx, processorManager, 1)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
 	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore, &wg)
@@ -1112,7 +1111,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 1)
-	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 1)
+	fetcher := NewEdgeFetcher(ctx, processorManager, 1)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
 	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore, &wg)
@@ -1403,7 +1402,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 3)
-	fetcher := NewEdgeFetcher(ctx, "testBuffer", storeWatcher, processorManager, 3)
+	fetcher := NewEdgeFetcher(ctx, processorManager, 3)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
 	heartBeatManagerMap["p1"] = manageHeartbeat(ctx, "p1", hbStore, &wg)
@@ -1704,7 +1703,7 @@ func (h *heartBeatManager) resume() {
 	h.heartBeatCh <- 2
 }
 
-func manageHeartbeat(ctx context.Context, entityName string, hbStore store.WatermarkKVStorer, wg *sync.WaitGroup) *heartBeatManager {
+func manageHeartbeat(ctx context.Context, entityName string, hbStore kvs.KVStorer, wg *sync.WaitGroup) *heartBeatManager {
 	hbManager := &heartBeatManager{
 		heartBeatCh: make(chan int),
 	}

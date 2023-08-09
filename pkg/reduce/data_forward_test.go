@@ -28,20 +28,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/reduce/pnf"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pnf"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
@@ -291,6 +291,13 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		toVertexName: wmpublisher,
 	}
 
+	// close publishers
+	defer func() {
+		for _, p := range publisher {
+			_ = p.Close()
+		}
+	}()
+
 	// create new fixed window of (windowTime)
 	window := fixed.NewFixed(windowTime)
 
@@ -379,6 +386,14 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), offsets[0], 0)
 
 	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffers, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publisherMap {
+			_ = p.Close()
+		}
+	}()
 
 	// create a fixed window of 5s
 	window := fixed.NewFixed(5 * time.Second)
@@ -579,6 +594,14 @@ func TestReduceDataForward_Count(t *testing.T) {
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publisherMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 60s
 	window := fixed.NewFixed(60 * time.Second)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
@@ -652,6 +675,14 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publisherMap {
+			_ = p.Close()
+		}
+	}()
 
 	// create a fixed window of 10s
 	window := fixed.NewFixed(5 * time.Second)
@@ -730,6 +761,15 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 2 minutes
 	window := fixed.NewFixed(2 * time.Minute)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
@@ -805,6 +845,14 @@ func TestReduceDataForward_Max(t *testing.T) {
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
@@ -879,6 +927,15 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
@@ -975,6 +1032,14 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
 
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
@@ -1057,6 +1122,14 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(cctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(cctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
 
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
@@ -1144,6 +1217,15 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
 	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+
+	// close the fetcher and publishers
+	defer func() {
+		_ = f.Close()
+		for _, p := range publishersMap {
+			_ = p.Close()
+		}
+	}()
+
 	// create a fixed window of 5 minutes
 	window := fixed.NewFixed(5 * time.Minute)
 
@@ -1243,14 +1325,14 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 		// wait until the test processor has been added to the processor list
 		time.Sleep(time.Millisecond * 100)
 	}
-	edgeFetcher := fetch.NewEdgeFetcher(ctx, fromBuffer.GetName(), storeWatcher, pm, 1)
+	edgeFetcher := fetch.NewEdgeFetcher(ctx, pm, 1)
 	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, map[string]fetch.Fetcher{"fromVertex": edgeFetcher})
 	return edgeFetcherSet, sourcePublisher
 }
 
-func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]wmstore.WatermarkKVStorer) {
+func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
 	publishers := make(map[string]publish.Publisher)
-	otStores := make(map[string]wmstore.WatermarkKVStorer)
+	otStores := make(map[string]kvs.KVStorer)
 
 	// create publisher for to Buffers
 	index := int32(0)

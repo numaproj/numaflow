@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -39,7 +40,7 @@ import (
 // RegisteredWindow to track the number of windows for a start and end time.
 type RegisteredWindow struct {
 	window.AlignedKeyedWindower
-	count int
+	count *atomic.Int32
 }
 
 // Manager helps in managing the lifecycle of PBQ instances
@@ -209,10 +210,11 @@ func (m *Manager) ShutDown(ctx context.Context) {
 func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 	ww := &RegisteredWindow{
 		AlignedKeyedWindower: p.kw,
+		count:                atomic.NewInt32(0),
 	}
 
 	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
-	ww.count += 1
+	ww.count.Add(1)
 
 	m.Lock()
 	defer m.Unlock()
@@ -231,26 +233,30 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 // deregister is intended to be used by PBQ to deregister itself after GC is called.
 // it will also delete the store using the store provider
 func (m *Manager) deregister(partitionID partition.ID) error {
-	m.Lock()
-	defer m.Unlock()
 
+	m.Lock()
 	ww := &RegisteredWindow{
 		AlignedKeyedWindower: m.pbqMap[partitionID.String()].kw,
+		count:                atomic.NewInt32(0),
 	}
+	delete(m.pbqMap, partitionID.String())
+	m.Unlock()
 
+	// update yetToBeClosed list
 	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
-	ww.count -= 1
+	ww.count.Sub(1)
 
-	if ww.count == 0 {
+	// if count is 0, delete from yetToBeClosed list
+	if ww.count.Load() == 0 {
 		m.yetToBeClosed.DeleteWindow(ww)
 	}
 
-	delete(m.pbqMap, partitionID.String())
 	activePartitionCount.With(map[string]string{
 		metrics.LabelVertex:             m.vertexName,
 		metrics.LabelPipeline:           m.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(m.vertexReplica)),
 	}).Dec()
+
 	return m.storeProvider.DeleteStore(partitionID)
 }
 

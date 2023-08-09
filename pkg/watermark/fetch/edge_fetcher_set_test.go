@@ -23,12 +23,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/store/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
