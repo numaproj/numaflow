@@ -21,17 +21,17 @@ package noop
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 )
 
 // noOpStore is a no-op store which does not do any operation but can be safely invoked.
 type noOpStore struct {
 }
 
-var _ store.WatermarkKVStorer = (*noOpStore)(nil)
+var _ kvs.KVStorer = (*noOpStore)(nil)
 
-// NewKVNoOpStore returns a no-op WatermarkKVStorer.
-func NewKVNoOpStore() store.WatermarkKVStorer {
+// NewKVNoOpStore returns a no-op KVStorer.
+func NewKVNoOpStore() kvs.KVStorer {
 	return &noOpStore{}
 }
 

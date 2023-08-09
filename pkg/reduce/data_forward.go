@@ -577,18 +577,6 @@ func (df *DataForward) ShutDown(ctx context.Context) {
 
 	// flush pending messages to persistent storage
 	df.pbqManager.ShutDown(ctx)
-
-	// stop watermark fetcher
-	if err := df.wmFetcher.Close(); err != nil {
-		df.log.Errorw("Failed to close watermark fetcher", zap.Error(err))
-	}
-
-	// stop watermark publisher
-	for _, publisher := range df.wmPublishers {
-		if err := publisher.Close(); err != nil {
-			df.log.Errorw("Failed to close watermark publisher", zap.Error(err))
-		}
-	}
 }
 
 // upsertWindowsAndKeys will create or assigns (if already present) a window to the message. It is an upsert operation

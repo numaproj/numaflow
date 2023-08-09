@@ -81,7 +81,7 @@ type KafkaSource struct {
 	// max delay duration of watermark
 	watermarkMaxDelay time.Duration
 	// source watermark publisher stores
-	srcPublishWMStores store.WatermarkStorer
+	srcPublishWMStores store.WatermarkStore
 	lock               *sync.RWMutex
 }
 
@@ -254,11 +254,6 @@ func (r *KafkaSource) Close() error {
 		}
 	}
 	<-r.stopch
-	for _, p := range r.sourcePublishWMs {
-		if err := p.Close(); err != nil {
-			r.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
-		}
-	}
 	r.logger.Info("Kafka reader closed")
 	return nil
 }
@@ -306,7 +301,7 @@ func NewKafkaSource(
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
-	publishWMStores store.WatermarkStorer,
+	publishWMStores store.WatermarkStore,
 	opts ...Option) (*KafkaSource, error) {
 
 	source := vertexInstance.Vertex.Spec.Source.Kafka

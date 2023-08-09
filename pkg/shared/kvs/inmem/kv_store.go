@@ -25,17 +25,17 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 // kvEntry is each key-value entry in the store and the operation associated with the kv pair.
 type kvEntry struct {
 	key   string
 	value []byte
-	op    store.KVWatchOp
+	op    kvs.KVWatchOp
 }
 
 // Key returns the key
@@ -49,7 +49,7 @@ func (k kvEntry) Value() []byte {
 }
 
 // Operation returns the operation on that key-value pair.
-func (k kvEntry) Operation() store.KVWatchOp {
+func (k kvEntry) Operation() kvs.KVWatchOp {
 	return k.op
 }
 
@@ -59,19 +59,20 @@ type inMemStore struct {
 	bucketName   string
 	kv           map[string][]byte
 	kvLock       sync.RWMutex
-	kvEntryCh    chan store.WatermarkKVEntry
+	kvEntryCh    chan kvs.KVEntry
+	isClosed     bool
 	log          *zap.SugaredLogger
 }
 
-var _ store.WatermarkKVStorer = (*inMemStore)(nil)
+var _ kvs.KVStorer = (*inMemStore)(nil)
 
 // NewKVInMemKVStore returns inMemStore.
-func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName string) (store.WatermarkKVStorer, chan store.WatermarkKVEntry, error) {
+func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName string) (kvs.KVStorer, chan kvs.KVEntry, error) {
 	s := &inMemStore{
 		pipelineName: pipelineName,
 		bucketName:   bucketName,
 		kv:           make(map[string][]byte),
-		kvEntryCh:    make(chan store.WatermarkKVEntry, 10),
+		kvEntryCh:    make(chan kvs.KVEntry, 10),
 		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
 	}
 	return s, s.kvEntryCh, nil
@@ -116,7 +117,7 @@ func (kv *inMemStore) DeleteKey(_ context.Context, k string) error {
 		kv.kvEntryCh <- kvEntry{
 			key:   k,
 			value: val,
-			op:    store.KVDelete,
+			op:    kvs.KVDelete,
 		}
 		return nil
 	} else {
@@ -128,13 +129,16 @@ func (kv *inMemStore) DeleteKey(_ context.Context, k string) error {
 func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 	kv.kvLock.Lock()
 	defer kv.kvLock.Unlock()
+	if kv.isClosed {
+		return fmt.Errorf("kv store is closed")
+	}
 	var val = make([]byte, len(v))
 	copy(val, v)
 	kv.kv[k] = val
 	kv.kvEntryCh <- kvEntry{
 		key:   k,
 		value: val,
-		op:    store.KVPut,
+		op:    kvs.KVPut,
 	}
 	return nil
 }
@@ -143,5 +147,6 @@ func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 func (kv *inMemStore) Close() {
 	kv.kvLock.Lock()
 	defer kv.kvLock.Unlock()
+	kv.isClosed = true
 	close(kv.kvEntryCh)
 }
