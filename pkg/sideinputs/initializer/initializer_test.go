@@ -31,26 +31,14 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 		pipelineName = "testPipeline"
 		sideInputs   = []string{"TEST", "TEST2"}
 		dataTest     = []string{"HELLO", "HELLO2"}
-		mountPath    = "/tmp/side-input/"
 	)
-	// Clean up
+	mountPath, err := os.MkdirTemp("", "side-input")
 	defer cleanup(mountPath)
-
-	// Delete mountPath directory if it exists
-	if utils.CheckFileExists(mountPath) {
-		err := os.RemoveAll(mountPath)
-		assert.NoError(t, err)
-	}
-
-	if !utils.CheckFileExists(mountPath) {
-		err := os.Mkdir(mountPath, 0777)
-		assert.NoError(t, err)
-	}
 
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// connect to NATS
@@ -111,16 +99,15 @@ func TestSideInputsTimeout(t *testing.T) {
 		keyspace     = "sideInputTestWatch"
 		pipelineName = "testPipeline"
 		sideInputs   = []string{"TEST", "TEST2"}
-		mountPath    = "/tmp/side-input/"
 	)
-	// Clean up
+	mountPath, err := os.MkdirTemp("", "side-input")
 	defer cleanup(mountPath)
 
 	// Create a new NATS server
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	// connect to NATS

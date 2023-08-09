@@ -20,12 +20,15 @@ func cleanup(mountPath string) {
 // whenever data is written to the symlink.
 func TestSymLinkUpdate(t *testing.T) {
 	var (
-		mountPath = "/tmp/side-input/"
-		filePath  = "/tmp/side-input/unit-test"
 		size      = int64(10 * 1024 * 1024) // 100 MB
 		byteArray = make([]byte, size)
 	)
+	mountPath, err := os.MkdirTemp("", "side-input")
+	// Clean up
 	defer cleanup(mountPath)
+
+	fileName, err := os.CreateTemp(mountPath, "unit-test")
+	filePath := fileName.Name()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -34,12 +37,11 @@ func TestSymLinkUpdate(t *testing.T) {
 		assert.NoError(t, err)
 	}
 	// Write data to the link
-	err := UpdateSideInputFile(ctx, filePath, byteArray)
+	err = UpdateSideInputFile(ctx, filePath, byteArray)
 	assert.NoError(t, err)
 	// Get the target file from the symlink
 	file1, err := os.Readlink(filePath)
 	assert.NoError(t, err)
-	time.Sleep(2 * time.Second)
 	// Write data to the link again
 	err = UpdateSideInputFile(ctx, filePath, byteArray)
 	assert.NoError(t, err)
@@ -56,26 +58,24 @@ func TestSymLinkFileDelete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	var (
-		mountPath = "/tmp/side-input/"
-		filePath  = "/tmp/side-input/unit-test"
 		size      = int64(10 * 1024 * 1024) // 100 MB
 		byteArray = make([]byte, size)
 	)
+	mountPath, err := os.MkdirTemp("", "side-input")
+	// Clean up
 	defer cleanup(mountPath)
-	if !CheckFileExists(mountPath) {
-		err := os.Mkdir(mountPath, 0777)
-		assert.NoError(t, err)
-	}
+
+	filePath, err := os.CreateTemp(mountPath, "unit-test")
+	fileName := filePath.Name()
 
 	// Write data to the link
-	err := UpdateSideInputFile(ctx, filePath, byteArray)
+	err = UpdateSideInputFile(ctx, fileName, byteArray)
 	assert.NoError(t, err)
 	// Get the target file from the symlink
-	file1, err := os.Readlink(filePath)
+	file1, err := os.Readlink(fileName)
 	assert.NoError(t, err)
-	time.Sleep(2 * time.Second)
 	// Write data to the link again
-	err = UpdateSideInputFile(ctx, filePath, byteArray)
+	err = UpdateSideInputFile(ctx, fileName, byteArray)
 	assert.NoError(t, err)
 	// The older file should have been deleted
 	assert.False(t, CheckFileExists(file1))

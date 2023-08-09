@@ -21,7 +21,7 @@ func CheckFileExists(fileName string) bool {
 func UpdateSideInputFile(ctx context.Context, fileSymLink string, value []byte) error {
 	log := logging.FromContext(ctx)
 	// Generate a new file name using timestamp
-	timestamp := time.Now().Unix()
+	timestamp := time.Now().UnixNano()
 	newFileName := fmt.Sprintf("%s_%d", fileSymLink, timestamp)
 
 	// Write the side input value to the new file

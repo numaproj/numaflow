@@ -31,8 +31,9 @@ func TestSideInputsValueUpdates(t *testing.T) {
 		pipelineName = "testPipeline"
 		sideInputs   = []string{"TEST", "TEST2"}
 		dataTest     = []string{"HELLO", "HELLO2"}
-		mountPath    = "/tmp/side-input/"
 	)
+	mountPath, err := os.MkdirTemp("/tmp", "side-input")
+	// Clean up
 	defer cleanup(mountPath)
 
 	// Remove any existing Side Input files
