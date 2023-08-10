@@ -504,6 +504,49 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 2, len(pods.Items[0].Spec.Containers))
 	})
 
+	t.Run("test reconcile vertex with pipeline VertexTemplate set", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		testPl := testPipeline.DeepCopy()
+		testPl.Spec.Templates = &dfv1.Templates{
+			VertexTemplate: &dfv1.VertexTemplate{
+				AbstractPodTemplate: dfv1.AbstractPodTemplate{
+					Metadata: &dfv1.Metadata{
+						Labels: map[string]string{
+							"numaflow.numaproj.io/prometheus": "test",
+						},
+					},
+				},
+			},
+		}
+		err = cl.Create(ctx, testPl)
+		assert.Nil(t, err)
+		r := &vertexReconciler{
+			client: cl,
+			scheme: scheme.Scheme,
+			config: fakeConfig,
+			image:  testFlowImage,
+			scaler: scaling.NewScaler(cl),
+			logger: zaptest.NewLogger(t).Sugar(),
+		}
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.Sink = &dfv1.Sink{}
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		pods := &corev1.PodList{}
+		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testPipelineName + "," + dfv1.KeyVertexName + "=" + testVertexSpecName + "," + "numaflow.numaproj.io/prometheus=test")
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(pods.Items))
+		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
+		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
+	})
+
 	t.Run("test reconcile udf with side inputs", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
