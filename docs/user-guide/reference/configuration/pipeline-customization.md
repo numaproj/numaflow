@@ -130,7 +130,7 @@ metadata:
   name: my-pipeline
 spec:
   templates:
-    vertx:
+    vertex:
       # Pod metadata
       metadata:
         labels:
