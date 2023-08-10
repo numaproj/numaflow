@@ -37,7 +37,6 @@ full-featured stream processing platforms.
 
 ## Roadmap
 
-- Multi-partitioned edges for higher throughput (v0.9)
 - JOIN Vertex and Side Inputs feature (v0.10)
 - User-defined Source (v0.11)
 

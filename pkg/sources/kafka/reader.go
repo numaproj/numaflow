@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -81,7 +81,7 @@ type KafkaSource struct {
 	// max delay duration of watermark
 	watermarkMaxDelay time.Duration
 	// source watermark publisher stores
-	srcPublishWMStores store.WatermarkStorer
+	srcPublishWMStores store.WatermarkStore
 	lock               *sync.RWMutex
 }
 
@@ -254,11 +254,6 @@ func (r *KafkaSource) Close() error {
 		}
 	}
 	<-r.stopch
-	for _, p := range r.sourcePublishWMs {
-		if err := p.Close(); err != nil {
-			r.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
-		}
-	}
 	r.logger.Info("Kafka reader closed")
 	return nil
 }
@@ -306,7 +301,7 @@ func NewKafkaSource(
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
-	publishWMStores store.WatermarkStorer,
+	publishWMStores store.WatermarkStore,
 	opts ...Option) (*KafkaSource, error) {
 
 	source := vertexInstance.Vertex.Spec.Source.Kafka
@@ -351,6 +346,9 @@ func NewKafkaSource(
 			config.Net.SASL = *sasl
 		}
 	}
+
+	sarama.Logger = zap.NewStdLog(kafkasource.logger.Desugar())
+
 	// return errors from the underlying kafka client using the Errors channel
 	config.Consumer.Return.Errors = true
 	kafkasource.config = config
@@ -399,7 +397,7 @@ func configFromOpts(yamlconfig string) (*sarama.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
+	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRange()}
 	return config, nil
 }
 

@@ -66,7 +66,7 @@ func New(
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
 	publishWM map[string]publish.Publisher,
-	publishWMStores store.WatermarkStorer,
+	publishWMStores store.WatermarkStore,
 	opts ...Option) (*natsSource, error) {
 
 	n := &natsSource{
@@ -263,9 +263,6 @@ func (ns *natsSource) NoAck(_ context.Context, _ []isb.Offset) {}
 func (ns *natsSource) Close() error {
 	ns.logger.Info("Shutting down nats source server...")
 	ns.cancelfn()
-	if err := ns.sourcePublishWM.Close(); err != nil {
-		ns.logger.Errorw("Failed to close source vertex watermark publisher", zap.Error(err))
-	}
 	if err := ns.sub.Unsubscribe(); err != nil {
 		ns.logger.Errorw("Failed to unsubscribe nats subscription", zap.Error(err))
 	}

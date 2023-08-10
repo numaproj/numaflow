@@ -16,20 +16,14 @@ limitations under the License.
 
 // Package nats provides interface and two implementations to connect Nats JetStream.
 //
-// Function NewDefaultJetStreamClient(url string, opts ...nats.Option) returns a client with
-// default implementation, which relies on the input url and other nats connection options.
+// Function NewTestClient(t *testing.T, url string) returns a client with
+// default implementation, which relies on the input url and will be only used for testing.
 //
-// Function NewInClusterJetStreamClient() assumes the invoker is in a Kubernetes cluster, and
+// Function NewNATSClient(ctx context.Context, natsOptions ...nats.Option) assumes the invoker is in a Kubernetes cluster, and
 // there are several environment variables are available, which are used to connect to the Nats
 // JetStream server. Those environment variables include:
 //
 // NUMAFLOW_ISBSVC_JETSTREAM_URL, NUMAFLOW_ISBSVC_JETSTREAM_USER, NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD, NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED (optional)
 //
-// When using InClusterJetStreamClient, it has ability to auto reconnect if corresponding
-// parameter is enabled in function Connect().
-//
-// For example:
-//
-// client.Connect(ctx, AutoReconnect())
 
 package nats

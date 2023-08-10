@@ -19,21 +19,21 @@ package noop
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 )
 
 type noOpWatch struct {
 }
 
-var _ store.WatermarkKVWatcher = (*noOpWatch)(nil)
+var _ kvs.KVWatcher = (*noOpWatch)(nil)
 
-func NewKVOpWatch() store.WatermarkKVWatcher {
+func NewKVOpWatch() kvs.KVWatcher {
 	return &noOpWatch{}
 }
 
 // Watch returns a blocking channel.
-func (no noOpWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
-	retChan := make(chan store.WatermarkKVEntry)
+func (no noOpWatch) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan struct{}) {
+	retChan := make(chan kvs.KVEntry)
 	stopped := make(chan struct{})
 	go func() {
 		<-ctx.Done()

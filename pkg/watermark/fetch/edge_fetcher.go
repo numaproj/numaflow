@@ -31,11 +31,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
-
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
@@ -43,7 +41,6 @@ import (
 type edgeFetcher struct {
 	ctx              context.Context
 	bucketName       string
-	storeWatcher     store.WatermarkStoreWatcher
 	processorManager *processor.ProcessorManager
 	lastProcessedWm  []int64
 	log              *zap.SugaredLogger
@@ -51,8 +48,8 @@ type edgeFetcher struct {
 }
 
 // NewEdgeFetcher returns a new edge fetcher.
-func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.WatermarkStoreWatcher, manager *processor.ProcessorManager, fromBufferPartitionCount int) Fetcher {
-	log := logging.FromContext(ctx).With("bucketName", bucketName)
+func NewEdgeFetcher(ctx context.Context, manager *processor.ProcessorManager, fromBufferPartitionCount int) Fetcher {
+	log := logging.FromContext(ctx).With("bucketName", manager.GetBucket())
 	log.Info("Creating a new edge watermark fetcher")
 	var lastProcessedWm []int64
 
@@ -63,11 +60,10 @@ func NewEdgeFetcher(ctx context.Context, bucketName string, storeWatcher store.W
 
 	return &edgeFetcher{
 		ctx:              ctx,
-		bucketName:       bucketName,
-		storeWatcher:     storeWatcher,
+		bucketName:       manager.GetBucket(),
 		processorManager: manager,
 		lastProcessedWm:  lastProcessedWm,
-		log:              log.With("bucket", bucketName),
+		log:              log,
 	}
 }
 
@@ -227,13 +223,9 @@ func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 	return headWMB
 }
 
-// Close function closes the watchers.
+// Close function stops the processor manager.
 func (e *edgeFetcher) Close() error {
-	e.log.Infof("Closing edge watermark fetcher")
-	if e.storeWatcher != nil {
-		e.storeWatcher.HeartbeatWatcher().Close()
-		e.storeWatcher.OffsetTimelineWatcher().Close()
-	}
+	e.processorManager.Stop()
 	return nil
 }
 
