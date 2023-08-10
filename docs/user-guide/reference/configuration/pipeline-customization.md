@@ -116,3 +116,67 @@ spec:
           limits:
             memory: 500Mi
 ```
+
+## Vertices
+
+The following example shows how to configure the all the vertex pods owned by a pipeline with all currently supported fields. Be aware these configurations applied to all vertex pods can be overridden by the vertex configuration.
+
+The `.spec.templates.vertex` field and all fields directly under it are optional.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  templates:
+    vertx:
+      # Pod metadata
+      metadata:
+        labels:
+          my-label-name: my-label-value
+        annotations:
+          my-annotation-name: my-annotation-value
+      # Pod spec
+      nodeSelector:
+        my-node-label-name: my-node-label-value
+      tolerations:
+        - key: "my-example-key"
+          operator: "Exists"
+          effect: "NoSchedule"
+      securityContext: {}
+      imagePullSecrets:
+        - name: regcred
+      priorityClassName: my-priority-class-name
+      priority: 50
+      serviceAccountName: my-service-account
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - daemon
+                  - key: numaflow.numaproj.io/pipeline-name
+                    operator: In
+                    values:
+                      - my-pipeline
+              topologyKey: kubernetes.io/hostname
+      # Containers
+      containerTemplate:
+        env:
+          - name: MY_ENV_NAME
+            value: my-env-value
+        resources:
+          limits:
+            memory: 500Mi
+      initContainerTemplate:
+        env:
+          - name: MY_ENV_NAME
+            value: my-env-value
+        resources:
+          limits:
+            memory: 500Mi
+```
