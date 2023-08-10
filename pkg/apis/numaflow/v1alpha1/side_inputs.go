@@ -38,12 +38,12 @@ type SideInput struct {
 }
 
 type SideInputTrigger struct {
+	// The schedule to trigger the retrievement of the side input data.
+	// It supports cron format, for example, "0 30 * * * *".
+	// Or interval based format, such as "@hourly", "@every 1h30m", etc.
+	Schedule string `json:"schedule" protobuf:"bytes,1,opt,name=schedule"`
 	// +optional
-	Schedule *string `json:"schedule" protobuf:"bytes,1,opt,name=schedule"`
-	// +optional
-	Interval *metav1.Duration `json:"interval" protobuf:"bytes,2,opt,name=interval"`
-	// +optional
-	Timezone *string `json:"timezone" protobuf:"bytes,3,opt,name=timezone"`
+	Timezone *string `json:"timezone" protobuf:"bytes,2,opt,name=timezone"`
 }
 
 func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputDeploymentReq) (*appv1.Deployment, error) {
