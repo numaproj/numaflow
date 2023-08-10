@@ -89,7 +89,6 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
     )
       .then((response) => {
         if (response && response.body) {
-          console.log(response.body);
           const r = response.body
             .pipeThrough(new TextDecoderStream())
             .getReader();

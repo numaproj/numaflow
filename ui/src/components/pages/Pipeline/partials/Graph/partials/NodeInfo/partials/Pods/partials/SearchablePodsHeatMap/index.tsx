@@ -9,6 +9,7 @@ import {
   Pod,
   SearchablePodsHeatMapProps,
 } from "../../../../../../../../../../../types/declarations/pods";
+import CircularProgress from "@mui/material/CircularProgress";
 
 export const SearchablePodsHeatMap = ({
   pods,
@@ -17,6 +18,14 @@ export const SearchablePodsHeatMap = ({
   selectedPod,
   setSelectedPod,
 }: SearchablePodsHeatMapProps) => {
+  if (!pods || !podsDetailsMap) {
+    return (
+      <Box sx={{ mb: 2 }}>
+        Loading pod heatmaps...
+        <CircularProgress size={16} sx={{ mx: 2 }} />
+      </Box>
+    );
+  }
   const [search, setSearch] = useState<string>("");
   const [filteredPods, setFilteredPods] = useState<Pod[]>(pods);
 
@@ -53,7 +62,7 @@ export const SearchablePodsHeatMap = ({
   return (
     <Box
       data-testid={"searchable-pods"}
-      sx={{ display: "flex", flexDirection: "column" }}
+      sx={{ display: "flex", flexDirection: "column", mb: 2 }}
     >
       <Box
         sx={{

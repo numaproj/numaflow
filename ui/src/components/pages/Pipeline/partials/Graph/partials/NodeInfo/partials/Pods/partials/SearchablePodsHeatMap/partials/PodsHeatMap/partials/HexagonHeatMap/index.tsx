@@ -4,12 +4,12 @@ import { Group } from "@visx/group";
 import { Tooltip, useTooltip } from "@visx/tooltip";
 import { localPoint } from "@visx/event";
 import { EventType } from "@visx/event/lib/types";
-
-import "./style.css";
 import {
   HexagonHeatMapProps,
   HexagonPoints,
 } from "../../../../../../../../../../../../../../../types/declarations/pods";
+
+import "./style.css";
 
 export const MAXIMUM_RADIUS = 15;
 export const MAXIMUM_WIDTH = 400;
