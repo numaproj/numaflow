@@ -28,7 +28,7 @@ type ISBService interface {
 	DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error
 	ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error
 	GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error)
-	CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.Fetcher, error)
+	CreateWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.UXFetcher, error)
 }
 
 // createOptions describes the options for creating buffers and buckets

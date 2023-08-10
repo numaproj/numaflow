@@ -24,19 +24,34 @@ import (
 
 	"go.uber.org/zap"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // a set of EdgeFetchers, incoming to a Vertex
 // (In the case of a Join Vertex, there are multiple incoming Edges)
 type edgeFetcherSet struct {
-	edgeFetchers map[string]edgeFetcher // key = name of From Vertex
+	edgeFetchers map[string]*edgeFetcher // key = name of From Vertex
 	log          *zap.SugaredLogger
 }
 
-func NewEdgeFetcherSet(ctx context.Context, edgeFetchers map[string]edgeFetcher) Fetcher {
+func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance, processorManagers map[string]*processor.ProcessorManager) Fetcher {
+	var edgeFetchers map[string]*edgeFetcher
+	for key, processorManager := range processorManagers {
+		var fetchWatermark *edgeFetcher
+		// create a fetcher that fetches watermark.
+		if vertexInstance.Vertex.IsASource() {
+			// fetchWatermark = NewSourceFetcher(ctx, processorManager)
+		} else if vertexInstance.Vertex.IsReduceUDF() {
+			fetchWatermark = NewEdgeFetcher(ctx, processorManager, 1)
+		} else {
+			fetchWatermark = NewEdgeFetcher(ctx, processorManager, vertexInstance.Vertex.Spec.GetPartitionCount())
+		}
+		edgeFetchers[key] = fetchWatermark
+	}
 	return &edgeFetcherSet{
 		edgeFetchers,
 		logging.FromContext(ctx),

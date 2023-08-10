@@ -34,6 +34,7 @@ type Fetcher interface {
 
 // UXFetcher computes the watermark for Vn.
 type UXFetcher interface {
+	io.Closer
 	// ComputeHeadWatermark computes a valid head watermark for the given partition
 	ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark
 }

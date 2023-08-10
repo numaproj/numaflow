@@ -24,14 +24,15 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
 )
 
 type jetStreamSvc struct {
@@ -140,7 +141,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}
 			log.Infow("Succeeded to create a consumer for a stream", zap.String("stream", streamName), zap.String("consumer", streamName))
 		}
-		//TODO: remove sleep and use a better way to wait for the stream to be ready
+		// TODO: remove sleep and use a better way to wait for the stream to be ready
 		time.Sleep(3 * time.Second)
 	}
 
@@ -315,8 +316,8 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.Fetcher, error) {
-	var watermarkFetchers []fetch.Fetcher
+func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.UXFetcher, error) {
+	var watermarkFetchers []fetch.UXFetcher
 	fetchers := 1
 	if isReduce {
 		fetchers = fromBufferPartitionCount

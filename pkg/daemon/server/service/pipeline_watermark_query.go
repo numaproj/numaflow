@@ -30,8 +30,8 @@ import (
 
 // GetEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
-func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]fetch.Fetcher, error) {
-	var wmFetchers = make(map[v1alpha1.Edge][]fetch.Fetcher)
+func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]fetch.UXFetcher, error) {
+	var wmFetchers = make(map[v1alpha1.Edge][]fetch.UXFetcher)
 	if pipeline.Spec.Watermark.Disabled {
 		return wmFetchers, nil
 	}
