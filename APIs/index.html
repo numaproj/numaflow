@@ -6079,17 +6079,11 @@ Description
 <code>schedule</code></br> <em> string </em>
 </td>
 <td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
-<code>interval</code></br> <em>
-<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
-Kubernetes meta/v1.Duration </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
+<p>
+The schedule to trigger the retrievement of the side input data. It
+supports cron format, for example, “0 30 \* \* \* \*”. Or interval based
+format, such as “@hourly&rdquo;, “@every 1h30m”, etc.
+</p>
 </td>
 </tr>
 <tr>
