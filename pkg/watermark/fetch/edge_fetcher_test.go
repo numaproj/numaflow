@@ -570,7 +570,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 				lastProcessedWm:  lastProcessedWm,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
-			assert.Equalf(t, tt.want, e.ComputeHeadIdleWMB(0), "ComputeHeadIdleWMB()")
+			assert.Equalf(t, tt.want, e.updateHeadIdleWMB(0), "updateHeadIdleWMB()")
 		})
 	}
 }
