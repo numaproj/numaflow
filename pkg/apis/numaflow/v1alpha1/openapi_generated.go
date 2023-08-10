@@ -3578,13 +3578,10 @@ func schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref common.ReferenceCall
 				Properties: map[string]spec.Schema{
 					"schedule": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"interval": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Description: "The schedule to trigger the retrievement of the side input data. It supports cron format, for example, \"0 30 * * * *\". Or interval based format, such as \"@hourly\", \"@every 1h30m\", etc.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"timezone": {
@@ -3594,10 +3591,9 @@ func schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref common.ReferenceCall
 						},
 					},
 				},
+				Required: []string{"schedule"},
 			},
 		},
-		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 

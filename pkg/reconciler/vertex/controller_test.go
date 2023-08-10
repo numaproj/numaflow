@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -563,7 +562,7 @@ func Test_reconcile(t *testing.T) {
 					Image: "test",
 				},
 				Trigger: &dfv1.SideInputTrigger{
-					Schedule: pointer.String("1 * * * *"),
+					Schedule: "1 * * * *",
 				},
 			},
 		}

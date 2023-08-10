@@ -339,12 +339,12 @@ spec:
                       type: string
                     trigger:
                       properties:
-                        interval:
-                          type: string
                         schedule:
                           type: string
                         timezone:
                           type: string
+                      required:
+                      - schedule
                       type: object
                     volumes:
                       items:
