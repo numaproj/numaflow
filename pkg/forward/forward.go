@@ -211,7 +211,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// We also publish a control message if this is the first time we get this idle situation.
 		// we use the HeadWMB as the watermark for the idle
 		// we get the HeadWMB for the partition from which we read the messages
-		var processorWMB = isdf.wmFetcher.GetHeadWMB(isdf.fromBufferPartition.GetPartitionIdx())
+		var processorWMB = isdf.wmFetcher.ComputeHeadIdleWMB(isdf.fromBufferPartition.GetPartitionIdx())
 		if !isdf.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
 			isdf.opts.logger.Debugw("skip publishing idle watermark",

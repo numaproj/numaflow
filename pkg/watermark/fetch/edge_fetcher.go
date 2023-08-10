@@ -137,7 +137,7 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 //   - We don't use this function in the regular pods in the vertex.
 //   - UX only uses GetHeadWatermark, so the `p.IsDeleted()` check in updateWatermark() never happens.
 //     Meaning, in the UX (daemon service) we never delete any processor.
-func (e *edgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
+func (e *edgeFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var debugString strings.Builder
 	var headWatermark int64 = math.MaxInt64
 	var allProcessors = e.processorManager.GetAllProcessors()
@@ -156,7 +156,7 @@ func (e *edgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 			}
 		}
 	}
-	e.log.Debugf("GetHeadWatermark: %s", debugString.String())
+	e.log.Debugf("ComputeHeadWatermark: %s", debugString.String())
 	if headWatermark == math.MaxInt64 {
 		// Use -1 as default watermark value to indicate there is no valid watermark yet.
 		return wmb.InitialWatermark
@@ -167,7 +167,7 @@ func (e *edgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 // GetHeadWMB returns the latest idle WMB with the smallest watermark among all processors from all partitions for the given partition.
 // We first calculate the watermark for the given partition and update the lastProcessedWatermark of the given partition using this watermark.
 // Then, we compare this watermark with all the lastProcessedWatermark of other partitions and return the idle watermark as the edge watermark only if it's the minimum among all of the lastProcessedWatermark.
-func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
+func (e *edgeFetcher) ComputeHeadIdleWMB(fromPartitionIdx int32) wmb.WMB {
 	var debugString strings.Builder
 
 	var headWMB = wmb.WMB{
@@ -186,7 +186,7 @@ func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 		// we only consider the latest wmb in the offset timeline for the given partition
 		var curHeadWMB = p.GetOffsetTimelines()[fromPartitionIdx].GetHeadWMB()
 		if !curHeadWMB.Idle {
-			e.log.Debugf("[%s] GetHeadWMB finds an active head wmb for offset, return early", e.bucketName)
+			e.log.Debugf("[%s] ComputeHeadIdleWMB finds an active head wmb for offset, return early", e.bucketName)
 			return wmb.WMB{}
 		}
 		if curHeadWMB.Watermark != -1 {
@@ -208,18 +208,18 @@ func (e *edgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 	e.lastProcessedWm[fromPartitionIdx] = headWMB.Watermark
 	e.Unlock()
 
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// TODO(join): the check below is temporarily remaining here instead of in EdgeFetcherSet::GetHeadWMB() so that this method
+	// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// TODO(join): the check below is temporarily remaining here instead of in EdgeFetcherSet::ComputeHeadIdleWMB() so that this method
 	// can maintain its existing contract.
-	// Note that this means this method will return wmb.WMB{} some of the time which will cause EdgeFetcherSet::GetHeadWMB() to do the same
+	// Note that this means this method will return wmb.WMB{} some of the time which will cause EdgeFetcherSet::ComputeHeadIdleWMB() to do the same
 	// even in cases where the overall Idle WMB < overall last processed watermark.
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// we only consider idle watermark if it is smaller than or equal to min of all the last processed watermarks.
 	if headWMB.Watermark > e.getWatermark().UnixMilli() {
 		return wmb.WMB{}
 	}
 
-	e.log.Debugf("GetHeadWMB: %s[%s] get idle head wmb for offset", debugString.String(), e.bucketName)
+	e.log.Debugf("ComputeHeadIdleWMB: %s[%s] get idle head wmb for offset", debugString.String(), e.bucketName)
 	return headWMB
 }
 

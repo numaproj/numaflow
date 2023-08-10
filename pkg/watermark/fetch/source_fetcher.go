@@ -85,7 +85,7 @@ func (e *sourceFetcher) getWatermark() wmb.Watermark {
 }
 
 // GetHeadWatermark returns the latest watermark of all the processors for the given partition.
-func (e *sourceFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
+func (e *sourceFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var epoch int64 = math.MinInt64
 	for _, p := range e.processorManager.GetAllProcessors() {
 		if !p.IsActive() {
@@ -104,7 +104,7 @@ func (e *sourceFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 }
 
 // GetHeadWMB returns the latest idle WMB among all processors
-func (e *sourceFetcher) GetHeadWMB(int32) wmb.WMB {
+func (e *sourceFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	// TODO: what would this be...
 	return wmb.WMB{}
 }

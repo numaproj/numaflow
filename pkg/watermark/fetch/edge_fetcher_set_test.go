@@ -23,15 +23,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 )
 
 func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
@@ -112,11 +114,11 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 		{
 			// test case where we end up using one of the lastProcessedWms since it's smallest
 			// for first EdgeFetcher:
-			//// offset 23 on partition 0 will produce WM 8
-			//// if lastProcessedWm on other partitions is 7, we take 7 since 7<8
+			// // offset 23 on partition 0 will produce WM 8
+			// // if lastProcessedWm on other partitions is 7, we take 7 since 7<8
 			// for second EdgeFetcher:
-			//// offset 23 on partition 0 will produce WM 10
-			//// if lastProcessedWm on other partitions is 9, we take 9 since 9<10
+			// // offset 23 on partition 0 will produce WM 10
+			// // if lastProcessedWm on other partitions is 9, we take 9 since 9<10
 			// then we compare EdgeFetchers 1 and 2 and get 7 since 7<9
 			name:         "useLastProcessedWm",
 			offset:       23,
@@ -130,11 +132,11 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 		{
 			// test case where we end up using the newly calculated watermark for one of the EdgeFetchers since it's smallest
 			// for first EdgeFetcher:
-			//// offset 23 on partition 0 will produce WM 8
-			//// if lastProcessedWm on other partitions is 9, we take 8 since 8<9
+			// // offset 23 on partition 0 will produce WM 8
+			// // if lastProcessedWm on other partitions is 9, we take 8 since 8<9
 			// for second EdgeFetcher:
-			//// offset 23 on partition 0 will produce WM 10
-			//// if lastProcessedWm on other partitions is 9, we take 9 since 9<10
+			// // offset 23 on partition 0 will produce WM 10
+			// // if lastProcessedWm on other partitions is 9, we take 9 since 9<10
 			// then we compare EdgeFetchers 1 and 2 and get 8 since 8<9
 			name:         "useLastProcessedWm",
 			offset:       23,
@@ -208,14 +210,14 @@ func (t *TestEdgeFetcher) ComputeWatermark(inputOffset isb.Offset, fromPartition
 func (t *TestEdgeFetcher) getWatermark() wmb.Watermark {
 	return t.currentWatermark
 }
-func (t *TestEdgeFetcher) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
+func (t *TestEdgeFetcher) ComputeHeadIdleWMB(fromPartitionIdx int32) wmb.WMB {
 	if t.allProcessorsIdle {
-		return wmb.WMB{Watermark: t.GetHeadWatermark(fromPartitionIdx).UnixMilli()}
+		return wmb.WMB{Watermark: t.ComputeHeadWatermark(fromPartitionIdx).UnixMilli()}
 	} else {
 		return wmb.WMB{}
 	}
 }
-func (t *TestEdgeFetcher) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
+func (t *TestEdgeFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	return t.currentHeadWatermark
 }
 func (t *TestEdgeFetcher) Close() error {
@@ -330,7 +332,7 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 				edgeFetchers: tt.edgeFetchers,
 				log:          zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel)).Sugar(),
 			}
-			headWMB := efs.GetHeadWMB(1)
+			headWMB := efs.ComputeHeadIdleWMB(1)
 			assert.Equal(t, tt.expectedWMB, headWMB)
 		})
 	}

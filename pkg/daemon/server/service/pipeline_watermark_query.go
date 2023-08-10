@@ -84,11 +84,11 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		var latestWatermarks []int64
 		for _, fetcher := range edgeFetchers {
 			if ps.pipeline.GetVertex(k.To).IsReduceUDF() {
-				watermark := fetcher.GetHeadWatermark(0).UnixMilli()
+				watermark := fetcher.ComputeHeadWatermark(0).UnixMilli()
 				latestWatermarks = append(latestWatermarks, watermark)
 			} else {
 				for idx := 0; idx < ps.pipeline.GetVertex(k.To).GetPartitionCount(); idx++ {
-					watermark := fetcher.GetHeadWatermark(int32(idx)).UnixMilli()
+					watermark := fetcher.ComputeHeadWatermark(int32(idx)).UnixMilli()
 					latestWatermarks = append(latestWatermarks, watermark)
 				}
 			}

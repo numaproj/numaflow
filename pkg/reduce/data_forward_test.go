@@ -107,11 +107,11 @@ func (e *EventTypeWMProgressor) getWatermark() wmb.Watermark {
 	return e.watermarks[e.lastOffset.String()]
 }
 
-func (e *EventTypeWMProgressor) GetHeadWatermark(int32) wmb.Watermark {
+func (e *EventTypeWMProgressor) ComputeHeadWatermark(int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 
-func (e *EventTypeWMProgressor) GetHeadWMB(int32) wmb.WMB {
+func (e *EventTypeWMProgressor) ComputeHeadIdleWMB(int32) wmb.WMB {
 	return wmb.WMB{}
 }
 
@@ -348,7 +348,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 // ReadMessage size = 0
 func TestReduceDataForward_IdleWM(t *testing.T) {
-	//FIXME: fix this test
+	// FIXME: fix this test
 	t.SkipNow()
 	var (
 		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)

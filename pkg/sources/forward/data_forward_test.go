@@ -24,9 +24,10 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
-	"go.uber.org/goleak"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -80,12 +81,12 @@ func (t *testForwardFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
 }
 
-func (t *testForwardFetcher) GetHeadWatermark(int32) wmb.Watermark {
+func (t *testForwardFetcher) ComputeHeadWatermark(int32) wmb.Watermark {
 	// won't be used
 	return wmb.Watermark{}
 }
 
-func (t *testForwardFetcher) GetHeadWMB(int32) wmb.WMB {
+func (t *testForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	// won't be used
 	return wmb.WMB{}
 }

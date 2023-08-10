@@ -22,10 +22,11 @@ import (
 	"math"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"go.uber.org/zap"
 )
 
 // a set of EdgeFetchers, incoming to a Vertex
@@ -57,32 +58,12 @@ func (efs *edgeFetcherSet) ComputeWatermark(inputOffset isb.Offset, fromPartitio
 	return overallWatermark
 }
 
-// GetHeadWatermark returns the latest watermark among all processors for the given partition.
-// This can be used in showing the watermark
-// progression for a vertex when not consuming the messages directly (eg. UX, tests)
-func (efs *edgeFetcherSet) GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
-	// get the most conservative time (minimum watermark) across all Edges
-	var wm wmb.Watermark
-	overallWatermark := wmb.Watermark(time.UnixMilli(math.MaxInt64))
-	for fromVertex, fetcher := range efs.edgeFetchers {
-		wm = fetcher.GetHeadWatermark(fromPartitionIdx)
-		if wm == wmb.InitialWatermark { // unset
-			continue
-		}
-		efs.log.Debugf("Got Edge Head Watermark from vertex=%q while processing partition %d: %v", fromVertex, fromPartitionIdx, wm.UnixMilli())
-		if wm.BeforeWatermark(overallWatermark) {
-			overallWatermark = wm
-		}
-	}
-	return overallWatermark
-}
-
-// GetHeadWMB returns the latest idle WMB with the smallest watermark for the given partition
+// ComputeHeadIdleWMB returns the latest idle WMB with the smallest watermark for the given partition
 // Only returns one if all Publishers are idle and if it's the smallest one of any partitions
-func (efs *edgeFetcherSet) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
+func (efs *edgeFetcherSet) ComputeHeadIdleWMB(fromPartitionIdx int32) wmb.WMB {
 	// if we get back one that's empty it means that there could be one that's not Idle, so we need to return empty
 
-	// call GetHeadWMB() for all Edges and get the smallest one
+	// call ComputeHeadIdleWMB() for all Edges and get the smallest one
 	var watermarkBuffer, unsetWMB wmb.WMB
 	var overallHeadWMB = wmb.WMB{
 		// we find the head WMB based on watermark
@@ -91,7 +72,7 @@ func (efs *edgeFetcherSet) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 	}
 
 	for fromVertex, fetcher := range efs.edgeFetchers {
-		watermarkBuffer = fetcher.GetHeadWMB(fromPartitionIdx)
+		watermarkBuffer = fetcher.ComputeHeadIdleWMB(fromPartitionIdx)
 		if watermarkBuffer == unsetWMB { // unset
 			return wmb.WMB{}
 		}
@@ -106,16 +87,16 @@ func (efs *edgeFetcherSet) GetHeadWMB(fromPartitionIdx int32) wmb.WMB {
 		}
 	}
 
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// TODO(join): the check below has been temporarily moved from here to EdgeFetcher::GetHeadWMB() so that EdgeFetcher::GetHeadWMB()
+	// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// TODO(join): the check below has been temporarily moved from here to EdgeFetcher::ComputeHeadIdleWMB() so that EdgeFetcher::ComputeHeadIdleWMB()
 	// can maintain its existing contract.
 	// Note that this means that method will return wmb.WMB{} some of the time which will cause this to do the same
 	// even in cases where the overall Idle WMB < overall last processed watermark.
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// we only consider idle watermark if it is smaller than or equal to min of all the last processed watermarks.
-	//if overallHeadWMB.Watermark > efs.GetWatermark().UnixMilli() {
+	// if overallHeadWMB.Watermark > efs.GetWatermark().UnixMilli() {
 	//	return wmb.WMB{}
-	//}
+	// }
 	return overallHeadWMB
 
 }

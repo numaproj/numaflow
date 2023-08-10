@@ -25,12 +25,13 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
+
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap/zaptest"
 
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 
@@ -164,8 +165,8 @@ func TestBuffer_ComputeWatermarkWithOnePartition(t *testing.T) {
 				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 17 because the timeline has been populated ahead of time
-			// GetHeadWatermark is only used in UI and test
-			assert.Equal(t, time.Time(b.GetHeadWatermark(0)).In(location), time.UnixMilli(17).In(location))
+			// ComputeHeadWatermark is only used in UI and test
+			assert.Equal(t, time.Time(b.ComputeHeadWatermark(0)).In(location), time.UnixMilli(17).In(location))
 		})
 	}
 }
@@ -328,8 +329,8 @@ func TestBuffer_ComputeGetWatermarkWithMultiplePartition(t *testing.T) {
 				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
 			}
 			// this will always be 27 because the timeline has been populated ahead of time
-			// GetHeadWatermark is only used in UI and test
-			assert.Equal(t, time.Time(b.GetHeadWatermark(0)).In(location), time.UnixMilli(26).In(location))
+			// ComputeHeadWatermark is only used in UI and test
+			assert.Equal(t, time.Time(b.ComputeHeadWatermark(0)).In(location), time.UnixMilli(26).In(location))
 		})
 	}
 }
@@ -373,7 +374,7 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
-			assert.Equalf(t, tt.want, e.GetHeadWatermark(0).UnixMilli(), "GetHeadWatermark()")
+			assert.Equalf(t, tt.want, e.ComputeHeadWatermark(0).UnixMilli(), "ComputeHeadWatermark()")
 		})
 	}
 }
@@ -569,7 +570,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 				lastProcessedWm:  lastProcessedWm,
 				log:              zaptest.NewLogger(t).Sugar(),
 			}
-			assert.Equalf(t, tt.want, e.GetHeadWMB(0), "GetHeadWMB()")
+			assert.Equalf(t, tt.want, e.ComputeHeadIdleWMB(0), "ComputeHeadIdleWMB()")
 		})
 	}
 }
