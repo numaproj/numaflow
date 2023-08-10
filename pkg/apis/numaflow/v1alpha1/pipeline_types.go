@@ -506,6 +506,9 @@ type Templates struct {
 	// SideInputsManagerTemplate is used to customize the Side Inputs Manager.
 	// +optional
 	SideInputsManagerTemplate *SideInputsManagerTemplate `json:"sideInputsManager,omitempty" protobuf:"bytes,3,opt,name=sideInputsManager"`
+	// VertexTemplate is used to customize the vertices of the pipeline.
+	// +optional
+	VertexTemplate *VertexTemplate `json:"vertex,omitempty" protobuf:"bytes,4,opt,name=vertex"`
 }
 
 type PipelineLimits struct {
