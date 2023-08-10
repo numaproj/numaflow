@@ -191,16 +191,12 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 				apt.ApplyToPodSpec(podSpec)
 				if len(apt.Metadata.Labels) > 0 {
 					for k, v := range apt.Metadata.Labels {
-						if _, ok := labels[k]; !ok {
-							labels[k] = v
-						}
+						labels[k] = v
 					}
 				}
 				if len(apt.Metadata.Annotations) > 0 {
 					for k, v := range apt.Metadata.Annotations {
-						if _, ok := annotations[k]; !ok {
-							annotations[k] = v
-						}
+						annotations[k] = v
 					}
 				}
 			}
