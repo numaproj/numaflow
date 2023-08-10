@@ -94,11 +94,14 @@ func (k kvEntry) Operation() store.KVWatchOp {
 // Watch watches the key-value store (aka bucket).
 func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan store.WatermarkKVEntry, <-chan struct{}) {
 	var err error
+	// create a new watcher, it will keep retrying until the context is done
+	// returns nil if the context is done
 	kvWatcher := jsw.newWatcher(ctx)
 	var updates = make(chan store.WatermarkKVEntry)
 	var stopped = make(chan struct{})
 	go func() {
-		for {
+		// if kvWatcher is nil, it means the context is done
+		for kvWatcher != nil {
 			select {
 			case <-ctx.Done():
 				jsw.log.Infow("stopping WatchAll", zap.String("watcher", jsw.GetKVName()))
