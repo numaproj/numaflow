@@ -4465,12 +4465,6 @@ RedisStreamsSource </a> </em>
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.SourceType">
-SourceType (<code>string</code> alias)
-</p>
-</h3>
-<p>
-</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.Status">
 Status
 </h3>

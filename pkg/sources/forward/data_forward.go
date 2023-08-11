@@ -65,7 +65,6 @@ type DataForward struct {
 	opts           options
 	vertexName     string
 	pipelineName   string
-	sourceType     dfv1.SourceType
 	// idleManager manages the idle watermark status.
 	idleManager *wmb.IdleManager
 	Shutdown
@@ -318,7 +317,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 				return
 			}
 		}
-		sourcePartitions = append(sourcePartitions, getPartitionFromOffset(m.readMessage.ReadOffset, isdf.sourceType))
+		sourcePartitions = append(sourcePartitions, m.readMessage.ReadOffset.PartitionIdx())
 	}
 
 	// forward the message to the edge buffer (could be multiple edges)
@@ -626,7 +625,7 @@ func errorArrayToMap(errs []error) map[string]int64 {
 }
 
 // returns the partition from the offset
-func getPartitionFromOffset(offset isb.Offset, sourceType dfv1.SourceType) int32 {
+func getPartitionFromOffset(offset isb.Offset) int32 {
 	// TODO: use the sourceType to determine the partition
 	parts := strings.Split(offset.String(), ":")
 	if len(parts) < 2 {
