@@ -316,7 +316,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-func (jss *jetStreamSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.UXFetcher, error) {
+func (jss *jetStreamSvc) CreateUXWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.UXFetcher, error) {
 	var watermarkFetchers []fetch.UXFetcher
 	fetchers := 1
 	if isReduce {

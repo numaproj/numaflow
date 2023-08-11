@@ -141,7 +141,7 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 }
 
 // CreateWatermarkFetcher is used to create watermark fetcher for the given bucket
-func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.UXFetcher, error) {
+func (r *isbsRedisSvc) CreateUXWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.UXFetcher, error) {
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	var watermarkFetchers []fetch.UXFetcher
 	fetchers := 1
