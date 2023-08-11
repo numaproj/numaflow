@@ -34,6 +34,17 @@ describe("PodDetail screen", () => {
     expect(screen.getByTestId("podDetail")).toBeInTheDocument();
     expect(screen.getByTestId("podDetail")).toBeVisible();
   });
+  it("loading pod details", () => {
+    render(
+      <PodDetail
+        namespaceId={namespaceId}
+        pod={undefined}
+        podDetails={undefined}
+        containerName={undefined}
+      />
+    );
+    expect(screen.getByText("Loading pod details...")).toBeInTheDocument();
+  });
   it("returns nothing when pod search is null", () => {
     const { container } = render(
       <PodDetail

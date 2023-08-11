@@ -46,6 +46,7 @@ describe("PodsHeatMap", () => {
         podsDetailsMap={podDetailMap}
         onPodClick={onPodClick}
         setSelectedPod={jest.fn() as Dispatch<SetStateAction<Pod | undefined>>}
+        setHeatMapLoader={jest.fn() as Dispatch<SetStateAction<boolean>>}
       />
     );
     expect(screen.getByTestId("searchable-pods")).toBeVisible();
@@ -68,6 +69,7 @@ describe("PodsHeatMap", () => {
         podsDetailsMap={podDetailMap}
         onPodClick={onPodClick}
         setSelectedPod={jest.fn() as Dispatch<SetStateAction<Pod | undefined>>}
+        setHeatMapLoader={jest.fn() as Dispatch<SetStateAction<boolean>>}
       />
     );
     expect(screen.getByTestId("searchable-pods")).toBeVisible();
@@ -90,6 +92,7 @@ describe("PodsHeatMap", () => {
         podsDetailsMap={podDetailMap}
         onPodClick={onPodClick}
         setSelectedPod={jest.fn() as Dispatch<SetStateAction<Pod | undefined>>}
+        setHeatMapLoader={jest.fn() as Dispatch<SetStateAction<boolean>>}
       />
     );
     expect(screen.getByText("Loading pod heatmaps...")).toBeVisible();

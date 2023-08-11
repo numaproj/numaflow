@@ -38,6 +38,7 @@ export interface SearchablePodsHeatMapProps {
   onPodClick: (e: Element | EventType, pod: Pod) => void;
   selectedPod: Pod | undefined;
   setSelectedPod: Dispatch<SetStateAction<Pod>>;
+  setHeatMapLoader: Dispatch<SetStateAction<boolean>>;
 }
 
 export interface PodsHeatMapProps {

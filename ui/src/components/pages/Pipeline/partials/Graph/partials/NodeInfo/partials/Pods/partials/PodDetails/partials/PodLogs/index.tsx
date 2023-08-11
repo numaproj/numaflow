@@ -27,19 +27,19 @@ const parsePodLogs = (value: string): string[] => {
         msg = `${msg}${obj.level.toUpperCase()} `;
       }
       if (obj?.ts) {
-        const date = new Date(obj.ts);
+        const date = obj.ts.split(/[-T:.Z]/);
         const ds =
-          date.getFullYear() +
+          date[0] +
           "/" +
-          ("0" + (date.getMonth() + 1)).slice(-2) +
+          date[1] +
           "/" +
-          ("0" + date.getDate()).slice(-2) +
+          date[2] +
           " " +
-          ("0" + date.getHours()).slice(-2) +
+          date[3] +
           ":" +
-          ("0" + date.getMinutes()).slice(-2) +
+          date[4] +
           ":" +
-          ("0" + date.getSeconds()).slice(-2);
+          date[5];
         msg = `${msg}${ds} `;
       }
       msg = `${msg}${raw}`;

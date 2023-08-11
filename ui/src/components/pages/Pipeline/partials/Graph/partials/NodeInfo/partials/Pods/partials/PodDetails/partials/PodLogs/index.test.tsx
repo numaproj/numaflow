@@ -3,7 +3,7 @@ import { PodLogs } from "./index";
 
 describe("PodLogs", () => {
   it("Load PodLogs screen", async () => {
-    const { debug, container } = render(
+    const { container } = render(
       <PodLogs
         namespaceId={"numaflow-system"}
         containerName={"numa"}

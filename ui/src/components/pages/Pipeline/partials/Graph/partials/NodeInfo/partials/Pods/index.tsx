@@ -29,6 +29,7 @@ export function Pods(props: PodsProps) {
   const [selectedContainer, setSelectedContainer] = useState<
     string | undefined
   >(undefined);
+  const [heatMapLoader, setHeatMapLoader] = useState<boolean>(false);
 
   const { pods, podsDetails, podsErr, podsDetailsErr, loading } =
     usePodsViewFetch(
@@ -113,10 +114,11 @@ export function Pods(props: PodsProps) {
           onPodClick={handlePodClick}
           selectedPod={selectedPod}
           setSelectedPod={setSelectedPod}
+          setHeatMapLoader={setHeatMapLoader}
         />
       </Box>
-      {containerSelector}
-      {podDetail}
+      {heatMapLoader && containerSelector}
+      {heatMapLoader && podDetail}
     </Box>
   );
 }
