@@ -504,7 +504,7 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 					Image: "test",
 				},
 				Trigger: &dfv1.SideInputTrigger{
-					Schedule: pointer.String("1 * * * *"),
+					Schedule: "1 * * * *",
 				},
 			},
 		}
@@ -526,7 +526,7 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 					Image: "test",
 				},
 				Trigger: &dfv1.SideInputTrigger{
-					Schedule: pointer.String("1 * * * *"),
+					Schedule: "1 * * * *",
 				},
 			},
 			{
@@ -535,7 +535,7 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 					Image: "test",
 				},
 				Trigger: &dfv1.SideInputTrigger{
-					Schedule: pointer.String("1 * * * *"),
+					Schedule: "1 * * * *",
 				},
 			},
 		}
@@ -558,7 +558,7 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 					Image: "test",
 				},
 				Trigger: &dfv1.SideInputTrigger{
-					Schedule: pointer.String("1 * * * *"),
+					Schedule: "1 * * * *",
 				},
 			},
 		}

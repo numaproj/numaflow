@@ -19,11 +19,8 @@ package manager
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
@@ -33,7 +30,7 @@ func Test_resolveCron(t *testing.T) {
 
 	t.Run("valid cron schedule", func(t *testing.T) {
 		trigger := &dfv1.SideInputTrigger{
-			Schedule: pointer.String("*/5 * * * *"),
+			Schedule: "*/5 * * * *",
 		}
 		c, err := resolveCron(trigger, f)
 		assert.NoError(t, err)
@@ -43,7 +40,7 @@ func Test_resolveCron(t *testing.T) {
 
 	t.Run("invalid cron schedule", func(t *testing.T) {
 		trigger := &dfv1.SideInputTrigger{
-			Schedule: pointer.String("*/ab * * * *"),
+			Schedule: "*/ab * * * *",
 		}
 		c, err := resolveCron(trigger, f)
 		assert.Error(t, err)
@@ -52,7 +49,7 @@ func Test_resolveCron(t *testing.T) {
 
 	t.Run("valid interval", func(t *testing.T) {
 		trigger := &dfv1.SideInputTrigger{
-			Interval: &metav1.Duration{Duration: time.Second * 20},
+			Schedule: "@every 20s",
 		}
 		c, err := resolveCron(trigger, f)
 		assert.NoError(t, err)

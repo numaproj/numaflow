@@ -1,4 +1,4 @@
-import { Pod, PodDetail, ResourceUsage } from "./models/pods";
+import { Pod, PodDetail, ResourceUsage } from "../types/declarations/pods";
 
 export function getBaseHref(): string {
   if (window.__RUNTIME_CONFIG__?.BASE_HREF) {
@@ -113,11 +113,11 @@ export function quantityToScalar(quantity: string): number | bigint {
 
 export function getPodContainerUsePercentages(
   pod: Pod,
-  podDetail: PodDetail,
+  podDetails: PodDetail,
   containerName: string
 ): ResourceUsage {
   const usedCPUParsed: number | undefined =
-    podDetail.containerMap.get(containerName)?.cpuParsed;
+    podDetails?.containerMap?.get(containerName)?.cpuParsed;
   const specCPUParsed: number | undefined =
     pod.containerSpecMap.get(containerName)?.cpuParsed;
   let cpuPercent: number | undefined;
@@ -125,7 +125,7 @@ export function getPodContainerUsePercentages(
     cpuPercent = (usedCPUParsed / specCPUParsed) * 100;
   }
   const usedMemParsed: number | undefined =
-    podDetail.containerMap.get(containerName)?.memoryParsed;
+    podDetails?.containerMap?.get(containerName)?.memoryParsed;
   const specMemParsed: number | undefined =
     pod.containerSpecMap.get(containerName)?.memoryParsed;
   let memoryPercent: number | undefined;

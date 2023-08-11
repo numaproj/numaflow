@@ -557,22 +557,16 @@ func Test_validateSideInputs(t *testing.T) {
 	testObj.Spec.SideInputs[0].Trigger = &dfv1.SideInputTrigger{}
 	err = validateSideInputs(*testObj)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), `either schedule or interval is required`)
+	assert.Contains(t, err.Error(), `schedule is required`)
 
-	testObj.Spec.SideInputs[0].Trigger.Interval = &metav1.Duration{Duration: time.Duration(200 * time.Second)}
-	testObj.Spec.SideInputs[0].Trigger.Schedule = pointer.String("0 2 * * *")
-	err = validateSideInputs(*testObj)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), `schedule and interval cannot be used together`)
-	testObj.Spec.SideInputs[0].Trigger.Schedule = nil
-
+	testObj.Spec.SideInputs[0].Trigger.Schedule = "@every 200s"
 	testObj.Spec.SideInputs = append(testObj.Spec.SideInputs, dfv1.SideInput{
 		Name: "s1",
 		Container: &dfv1.Container{
 			Image: "my-image:latest",
 		},
 		Trigger: &dfv1.SideInputTrigger{
-			Interval: &metav1.Duration{Duration: time.Duration(200 * time.Second)},
+			Schedule: "@every 200s",
 		},
 	})
 	err = validateSideInputs(*testObj)

@@ -19125,11 +19125,12 @@
     },
     "io.numaproj.numaflow.v1alpha1.SideInputTrigger": {
       "type": "object",
+      "required": [
+        "schedule"
+      ],
       "properties": {
-        "interval": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
-        },
         "schedule": {
+          "description": "The schedule to trigger the retrievement of the side input data. It supports cron format, for example, \"0 30 * * * *\". Or interval based format, such as \"@hourly\", \"@every 1h30m\", etc.",
           "type": "string"
         },
         "timezone": {
