@@ -95,11 +95,10 @@ func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, 
 		}
 	}
 
-	return fetch.NewEdgeFetcherSet(ctx, nil, processorManagers), nil
+	return fetch.NewEdgeFetcherSet(ctx, vertexInstance, processorManagers), nil
 }
 
-// buildProcessorManagerForBucket creates a Fetcher (implemented by EdgeFetcher) which is used to fetch the Watermarks for a single incoming Edge
-// to a Vertex (a single Edge has a single Bucket)
+// buildProcessorManagerForBucket creates a processor manager for the given bucket.
 func buildProcessorManagerForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBucket string, client *jsclient.NATSClient) (*processor.ProcessorManager, error) {
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 	hbBucketName := isbsvc.JetStreamProcessorBucket(fromBucket)
