@@ -90,7 +90,7 @@ func NewDataForward(
 	}
 
 	var toVertexWMPublishers = make(map[string]map[int32]publish.Publisher)
-	for k, _ := range toVertexWmStores {
+	for k := range toVertexWmStores {
 		toVertexWMPublishers[k] = make(map[int32]publish.Publisher)
 	}
 
@@ -605,7 +605,7 @@ func (isdf *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToSt
 // loadSourceWatermarkPublisher does a lazy load on the watermark publisher
 func (isdf *DataForward) loadSourceWatermarkPublisher(toVertexName string, partition int32) publish.Publisher {
 
-	wmStore, _ := isdf.toVertexWMStores[toVertexName]
+	wmStore := isdf.toVertexWMStores[toVertexName]
 	entityName := fmt.Sprintf("%s-%s-%d", isdf.pipelineName, isdf.vertexName, partition)
 	processorEntity := processor.NewProcessorEntity(entityName)
 

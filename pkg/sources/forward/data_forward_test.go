@@ -1230,7 +1230,7 @@ func metricsReset() {
 func buildToVertexWatermarkStores(toBuffers map[string][]isb.BufferWriter) map[string]wmstore.WatermarkStore {
 	var ctx = context.Background()
 	otStores := make(map[string]wmstore.WatermarkStore)
-	for key, _ := range toBuffers {
+	for key := range toBuffers {
 		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
 		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
 		otStores[key] = wmstore.BuildWatermarkStore(heartbeatKV, otKV)
