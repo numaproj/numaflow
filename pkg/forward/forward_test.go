@@ -80,11 +80,6 @@ func (t *testForwardFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
 }
 
-func (t *testForwardFetcher) ComputeHeadWatermark(int32) wmb.Watermark {
-	// won't be used
-	return wmb.Watermark{}
-}
-
 func (t *testForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	// won't be used
 	return wmb.WMB{}
