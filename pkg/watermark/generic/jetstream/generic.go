@@ -83,8 +83,6 @@ func buildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, 
 		if err != nil {
 			return nil, err
 		}
-		// For source vertex, we use the vertex name as the from buffer name
-		processorManagers[vertex.Spec.Name] = processorManager
 		return fetch.NewSourceFetcher(ctx, processorManager), nil
 	} else {
 		for _, e := range vertex.Spec.FromEdges {
