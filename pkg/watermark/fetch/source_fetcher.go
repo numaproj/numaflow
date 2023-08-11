@@ -84,7 +84,7 @@ func (e *sourceFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetHeadWatermark returns the latest watermark of all the processors for the given partition.
+// ComputeHeadWatermark returns the latest watermark of all the processors for the given partition.
 func (e *sourceFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var epoch int64 = math.MinInt64
 	for _, p := range e.processorManager.GetAllProcessors() {

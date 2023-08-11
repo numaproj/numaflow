@@ -31,7 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-// a set of EdgeFetchers, incoming to a Vertex
+// edgeFetcherSet is a set of edgeFetchers, incoming to a Vertex
 // (In the case of a Join Vertex, there are multiple incoming Edges)
 type edgeFetcherSet struct {
 	edgeFetchers map[string]*edgeFetcher // key = name of From Vertex
