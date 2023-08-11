@@ -39,7 +39,7 @@ type edgeFetcherSet struct {
 }
 
 func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance, processorManagers map[string]*processor.ProcessorManager) Fetcher {
-	var edgeFetchers map[string]*edgeFetcher
+	var edgeFetchers = make(map[string]*edgeFetcher)
 	for key, processorManager := range processorManagers {
 		var fetchWatermark *edgeFetcher
 		// create a fetcher that fetches watermark.

@@ -1325,7 +1325,17 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 		// wait until the test processor has been added to the processor list
 		time.Sleep(time.Millisecond * 100)
 	}
-	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, nil, map[string]*processor.ProcessorManager{"fromVertex": pm})
+	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, &dfv1.VertexInstance{
+		Vertex: &dfv1.Vertex{
+			Spec: dfv1.VertexSpec{
+				AbstractVertex: dfv1.AbstractVertex{
+					UDF: &dfv1.UDF{
+						GroupBy: &dfv1.GroupBy{},
+					},
+				},
+			},
+		},
+	}, map[string]*processor.ProcessorManager{"fromVertex": pm})
 	return edgeFetcherSet, sourcePublisher
 }
 
