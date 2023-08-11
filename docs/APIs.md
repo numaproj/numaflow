@@ -24,7 +24,8 @@ AbstractPodTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate">VertexTemplate</a>)
 </p>
 <p>
 <p>
@@ -829,7 +830,8 @@ ContainerTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">JetStreamBufferService</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate">VertexTemplate</a>)
 </p>
 <p>
 <p>
@@ -4197,17 +4199,11 @@ Description
 <code>schedule</code></br> <em> string </em>
 </td>
 <td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
-<code>interval</code></br> <em>
-<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
-Kubernetes meta/v1.Duration </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
+<p>
+The schedule to trigger the retrievement of the side input data. It
+supports cron format, for example, “0 30 \* \* \* \*”. Or interval based
+format, such as “@hourly&rdquo;, “@every 1h30m”, etc.
+</p>
 </td>
 </tr>
 <tr>
@@ -4683,6 +4679,19 @@ SideInputsManagerTemplate </a> </em>
 <em>(Optional)</em>
 <p>
 SideInputsManagerTemplate is used to customize the Side Inputs Manager.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>vertex</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate"> VertexTemplate
+</a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+VertexTemplate is used to customize the vertices of the pipeline.
 </p>
 </td>
 </tr>
@@ -5268,6 +5277,69 @@ Description
 Kubernetes meta/v1.Time </a> </em>
 </td>
 <td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.VertexTemplate">
+VertexTemplate
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Templates">Templates</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
+</td>
+<td>
+<p>
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
+</p>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Template for the vertex numa container
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>initContainerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Template for the vertex init container
+</p>
 </td>
 </tr>
 </tbody>

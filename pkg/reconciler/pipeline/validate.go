@@ -278,11 +278,8 @@ func validateSideInputs(pl dfv1.Pipeline) error {
 		if si.Trigger == nil {
 			return fmt.Errorf("side input %q: trigger is missing", si.Name)
 		}
-		if si.Trigger.Schedule == nil && si.Trigger.Interval == nil {
-			return fmt.Errorf("side input %q: either schedule or interval is required", si.Name)
-		}
-		if si.Trigger.Schedule != nil && si.Trigger.Interval != nil {
-			return fmt.Errorf("side input %q: schedule and interval cannot be used together", si.Name)
+		if len(si.Trigger.Schedule) == 0 {
+			return fmt.Errorf("side input %q: schedule is required", si.Name)
 		}
 	}
 	for _, v := range pl.Spec.Vertices {

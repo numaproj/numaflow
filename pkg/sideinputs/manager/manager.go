@@ -113,15 +113,8 @@ func resolveCron(trigger *dfv1.SideInputTrigger, cmd func()) (*cronlib.Cron, err
 		opts = append(opts, cronlib.WithLocation(location))
 	}
 	cron := cronlib.New(opts...)
-	if trigger.Schedule != nil {
-		if _, err := cron.AddFunc(*trigger.Schedule, cmd); err != nil {
-			return nil, fmt.Errorf("failed to add cron schedule %q, error: %w", *trigger.Schedule, err)
-		}
-	} else {
-		duration := trigger.Interval.Duration.String()
-		if _, err := cron.AddFunc(fmt.Sprintf("@every %s", duration), cmd); err != nil {
-			return nil, fmt.Errorf("failed to add interval based cron job %q, error: %w", duration, err)
-		}
+	if _, err := cron.AddFunc(trigger.Schedule, cmd); err != nil {
+		return nil, fmt.Errorf("failed to add parse schedule %q, error: %w", trigger.Schedule, err)
 	}
 	return cron, nil
 }

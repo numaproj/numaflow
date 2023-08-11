@@ -713,3 +713,14 @@ func GenerateSourceBucketName(namespace, pipeline, vertex string) string {
 func GenerateSinkBucketName(namespace, pipelineName, vertex string) string {
 	return fmt.Sprintf("%s-%s-%s_SINK", namespace, pipelineName, vertex)
 }
+
+type VertexTemplate struct {
+	// +optional
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,1,opt,name=abstractPodTemplate"`
+	// Template for the vertex numa container
+	// +optional
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,2,opt,name=containerTemplate"`
+	// Template for the vertex init container
+	// +optional
+	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,3,opt,name=initContainerTemplate"`
+}
