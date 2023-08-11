@@ -21,8 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -317,6 +315,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 				return
 			}
 		}
+		// get the list of source partitions for which we have read messages, we will use this to publish watermarks to toVertices
 		sourcePartitions = append(sourcePartitions, m.readMessage.ReadOffset.PartitionIdx())
 	}
 
@@ -340,10 +339,12 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		if vertexPublishers, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
 				if len(offsets) > 0 {
+					// publish watermark to all the source partitions
+					// create a publisher if it doesn't exist, we don't want to publish to all the partitions
 					for _, sp := range sourcePartitions {
 						var publisher, ok = vertexPublishers[sp]
 						if !ok {
-							publisher = isdf.loadSourceWatermarkPublisher(toVertexName, sp)
+							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
 
@@ -369,7 +370,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 					for _, sp := range sourcePartitions {
 						var publisher, ok = vertexPublishers[sp]
 						if !ok {
-							publisher = isdf.loadSourceWatermarkPublisher(toVertexName, sp)
+							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
 						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[toVertexName][index], publisher, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeSource, processorWM)
@@ -601,8 +602,8 @@ func (isdf *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToSt
 	return nil
 }
 
-// loadSourceWatermarkPublisher does a lazy load on the watermark publisher
-func (isdf *DataForward) loadSourceWatermarkPublisher(toVertexName string, partition int32) publish.Publisher {
+// createToVertexWatermarkPublisher creates a watermark publisher for the given toVertexName and partition
+func (isdf *DataForward) createToVertexWatermarkPublisher(toVertexName string, partition int32) publish.Publisher {
 
 	wmStore := isdf.toVertexWMStores[toVertexName]
 	entityName := fmt.Sprintf("%s-%s-%d", isdf.pipelineName, isdf.vertexName, partition)
@@ -622,18 +623,4 @@ func errorArrayToMap(errs []error) map[string]int64 {
 		}
 	}
 	return result
-}
-
-// returns the partition from the offset
-func getPartitionFromOffset(offset isb.Offset) int32 {
-	// TODO: use the sourceType to determine the partition
-	parts := strings.Split(offset.String(), ":")
-	if len(parts) < 2 {
-		return -1
-	}
-	partition, err := strconv.ParseInt(parts[1], 10, 32)
-	if err != nil {
-		return -1
-	}
-	return int32(partition)
 }

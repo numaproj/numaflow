@@ -27,6 +27,8 @@ import (
 	"io"
 	"math"
 	"strconv"
+
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 const PendingNotAvailable = int64(math.MinInt64)
@@ -119,7 +121,7 @@ func (so SimpleStringOffset) NoAck() error {
 }
 
 func (so SimpleStringOffset) PartitionIdx() int32 {
-	return 0
+	return v1alpha1.DefaultPartitionIdx
 }
 
 // SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
@@ -142,5 +144,5 @@ func (si SimpleIntOffset) NoAck() error {
 }
 
 func (si SimpleIntOffset) PartitionIdx() int32 {
-	return 0
+	return v1alpha1.DefaultPartitionIdx
 }
