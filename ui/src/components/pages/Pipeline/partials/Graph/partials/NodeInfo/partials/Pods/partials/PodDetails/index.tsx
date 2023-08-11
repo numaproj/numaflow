@@ -15,14 +15,14 @@ export function PodDetail({
   pod,
   podDetails,
 }: PodDetailProps) {
-  if (!pod || !containerName || !podDetails) {
+  if (!pod && !containerName && !podDetails) {
     return (
       <Box sx={{ mb: 2 }}>
         Loading pod details...
         <CircularProgress size={16} sx={{ mx: 2 }} />
       </Box>
     );
-  }
+  } else if (!pod) return;
 
   return (
     <Box

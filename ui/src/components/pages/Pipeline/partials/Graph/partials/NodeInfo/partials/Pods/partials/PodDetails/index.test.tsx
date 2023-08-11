@@ -34,4 +34,15 @@ describe("PodDetail screen", () => {
     expect(screen.getByTestId("podDetail")).toBeInTheDocument();
     expect(screen.getByTestId("podDetail")).toBeVisible();
   });
+  it("returns nothing when pod search is null", () => {
+    const { container } = render(
+      <PodDetail
+        namespaceId={namespaceId}
+        pod={undefined}
+        podDetails={podDetails}
+        containerName={containerName}
+      />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
 });

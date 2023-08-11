@@ -7,14 +7,14 @@ import { ContainerProps } from "../../../../../../../../../../../types/declarati
 export function Containers(props: ContainerProps) {
   const { pod, containerName: container, handleContainerClick } = props;
 
-  if (!pod) {
+  if (!pod && !container) {
     return (
       <Box sx={{ mb: 2 }}>
         Loading containers...
         <CircularProgress size={16} sx={{ mx: 2 }} />
       </Box>
     );
-  }
+  } else if (!pod) return;
 
   return (
     <Box sx={{ mb: 2 }}>

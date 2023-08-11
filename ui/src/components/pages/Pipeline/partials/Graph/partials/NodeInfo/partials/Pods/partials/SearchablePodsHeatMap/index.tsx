@@ -4,12 +4,12 @@ import Paper from "@mui/material/Paper";
 import IconButton from "@mui/material/IconButton";
 import ClearIcon from "@mui/icons-material/Clear";
 import InputBase from "@mui/material/InputBase";
+import CircularProgress from "@mui/material/CircularProgress";
 import { PodsHeatMap } from "./partials/PodsHeatMap";
 import {
   Pod,
   SearchablePodsHeatMapProps,
 } from "../../../../../../../../../../../types/declarations/pods";
-import CircularProgress from "@mui/material/CircularProgress";
 
 export const SearchablePodsHeatMap = ({
   pods,
@@ -32,6 +32,7 @@ export const SearchablePodsHeatMap = ({
   useEffect(() => {
     if (!search) {
       setFilteredPods(pods);
+      setSelectedPod(pods[0]);
       return;
     }
 
@@ -44,6 +45,7 @@ export const SearchablePodsHeatMap = ({
     });
 
     if (filteredPods.length > 0) setSelectedPod(filteredPods[0]);
+    else setSelectedPod(undefined);
 
     setFilteredPods(filteredPods);
   }, [pods, search]);
@@ -95,12 +97,25 @@ export const SearchablePodsHeatMap = ({
           </IconButton>
         </Paper>
       </Box>
-      <PodsHeatMap
-        pods={filteredPods}
-        podsDetailsMap={podsDetailsMap}
-        onPodClick={onPodClick}
-        selectedPod={selectedPod}
-      />
+      {filteredPods.length > 0 && (
+        <PodsHeatMap
+          pods={filteredPods}
+          podsDetailsMap={podsDetailsMap}
+          onPodClick={onPodClick}
+          selectedPod={selectedPod}
+        />
+      )}
+      {filteredPods.length === 0 && (
+        <Box
+          sx={{
+            textAlign: "center",
+            color: "text.secondary",
+            mb: "1rem",
+          }}
+        >
+          No pods matching search
+        </Box>
+      )}
     </Box>
   );
 };

@@ -7,14 +7,19 @@ import {
   PodDetail,
 } from "../../../../../../../../../../../../../types/declarations/pods";
 
-const podContainerSpec: PodContainerSpec = {
+const NumaContainerSpec: PodContainerSpec = {
   name: "numa",
   cpuParsed: 100,
+  memoryParsed: 0,
+};
+const UDFContainerSpec: PodContainerSpec = {
+  name: "numa",
+  cpuParsed: 0,
   memoryParsed: 100,
 };
 const containerSpecMap = new Map<string, PodContainerSpec>([
-  ["numa", podContainerSpec],
-  ["udf", podContainerSpec],
+  ["numa", NumaContainerSpec],
+  ["udf", UDFContainerSpec],
 ]);
 
 const pod = {
@@ -54,13 +59,25 @@ describe("PodsHeatMap", () => {
     fireEvent.mouseMove(container.getElementsByClassName("visx-polygon")[0]);
     fireEvent.mouseLeave(container.getElementsByClassName("visx-polygon")[0]);
   });
-  it("loads screen", async () => {
+  it("no heatmap returned", async () => {
     mockedFill.mockReturnValue("test");
     render(
       <PodsHeatMap
         pods={undefined}
         selectedPod={pod}
         podsDetailsMap={undefined}
+        onPodClick={onPodClick}
+      />
+    );
+    expect(screen.getByTestId("podHeatMap")).toBeVisible();
+  });
+  it("returns heatmap without hexagon", async () => {
+    mockedFill.mockReturnValue("test");
+    render(
+      <PodsHeatMap
+        pods={pods}
+        selectedPod={pod}
+        podsDetailsMap={new Map()}
         onPodClick={onPodClick}
       />
     );

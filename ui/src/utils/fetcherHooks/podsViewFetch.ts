@@ -29,7 +29,7 @@ export const usePodsViewFetch = (
     const fetchPods = async () => {
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods`
+          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods?refreshKey=${requestKey}`
         );
         if (response.ok) {
           const data = await response.json();
@@ -90,7 +90,7 @@ export const usePodsViewFetch = (
     };
 
     fetchPods();
-  }, [vertexId]);
+  }, [vertexId, requestKey]);
 
   useEffect(() => {
     if (pods?.length) {
