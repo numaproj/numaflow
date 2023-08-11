@@ -34,26 +34,22 @@ import (
 
 // sourceFetcher is a fetcher on source buffers.
 type sourceFetcher struct {
-	ctx              context.Context
-	sourceBufferName string
 	processorManager *processor.ProcessorManager
 	log              *zap.SugaredLogger
 }
 
 // NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
 // buckets of the source buffer.
-func NewSourceFetcher(ctx context.Context, manager *processor.ProcessorManager) UXFetcher {
+func NewSourceFetcher(ctx context.Context, manager *processor.ProcessorManager) Fetcher {
 	log := logging.FromContext(ctx).With("sourceBufferName", manager.GetBucket())
 	log.Info("Creating a new source watermark fetcher")
 	return &sourceFetcher{
-		ctx:              ctx,
-		sourceBufferName: manager.GetBucket(),
 		processorManager: manager,
 		log:              log,
 	}
 }
 
-func (e *sourceFetcher) ComputeWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
+func (e *sourceFetcher) ComputeWatermark(_ isb.Offset, _ int32) wmb.Watermark {
 	return e.getWatermark()
 }
 
@@ -103,7 +99,7 @@ func (e *sourceFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Waterma
 	return wmb.Watermark(time.UnixMilli(epoch))
 }
 
-// GetHeadWMB returns the latest idle WMB among all processors
+// ComputeHeadIdleWMB returns the latest idle WMB among all processors
 func (e *sourceFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	// TODO: what would this be...
 	return wmb.WMB{}
