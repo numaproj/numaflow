@@ -65,7 +65,7 @@ func New(
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
-	publishWM map[string]publish.Publisher,
+	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	opts ...Option) (*natsSource, error) {
 
@@ -92,7 +92,7 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, publishWM, n, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, n, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -162,20 +162,20 @@ func New(
 		n.natsConn = conn
 	}
 	if sub, err := n.natsConn.QueueSubscribe(source.Subject, source.Queue, func(msg *natslib.Msg) {
-		id := uuid.New().String()
+		readOffset := sharedutil.NewSimpleStringPartitionOffset(uuid.New().String(), vertexInstance.Replica)
 		m := &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					// TODO: Be able to specify event time.
 					MessageInfo: isb.MessageInfo{EventTime: time.Now()},
-					ID:          id,
+					ID:          readOffset.String(),
 				},
 				Body: isb.Body{
 					Payload: msg.Data,
 				},
 			},
 			// TODO: Be able to specify an ID for dedup?
-			ReadOffset: isb.SimpleStringOffset(func() string { return id }),
+			ReadOffset: readOffset,
 		}
 		n.messages <- m
 	}); err != nil {

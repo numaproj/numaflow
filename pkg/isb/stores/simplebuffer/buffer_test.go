@@ -52,7 +52,7 @@ func TestNewSimpleBuffer(t *testing.T) {
 	readMessages, err := sb.Read(ctx, 2)
 	assert.NoError(t, err)
 	assert.Len(t, readMessages, int(readBatchSize))
-	assert.Equal(t, []string{"0", "1"}, []string{readMessages[0].ReadOffset.String(), readMessages[1].ReadOffset.String()})
+	assert.Equal(t, []string{"0-0", "1-0"}, []string{readMessages[0].ReadOffset.String(), readMessages[1].ReadOffset.String()})
 	// still full as we did not ack
 	assert.Equal(t, true, sb.IsFull())
 
@@ -75,7 +75,7 @@ func TestNewSimpleBuffer(t *testing.T) {
 	readMessages, err = sb.Read(ctx, 2)
 	assert.NoError(t, err)
 	assert.Len(t, readMessages, int(readBatchSize))
-	assert.Equal(t, []string{"2", "3"}, []string{readMessages[0].ReadOffset.String(), readMessages[1].ReadOffset.String()})
+	assert.Equal(t, []string{"2-0", "3-0"}, []string{readMessages[0].ReadOffset.String(), readMessages[1].ReadOffset.String()})
 	// still full as we did not ack
 	assert.Equal(t, true, sb.IsFull())
 }

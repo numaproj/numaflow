@@ -216,7 +216,7 @@ func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message,
 			defer wg.Done()
 			select {
 			case pubAck := <-fu.Ok():
-				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
+				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}
 				errs[idx] = nil
 				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
 			case err := <-fu.Err():
@@ -263,7 +263,7 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 				errs[idx] = err
 				isbWriteErrors.With(metricsLabels).Inc()
 			} else {
-				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence}
+				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}
 				errs[idx] = nil
 				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain))
 			}
@@ -275,7 +275,8 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 
 // writeOffset is the offset of the location in the JS stream we wrote to.
 type writeOffset struct {
-	seq uint64
+	seq          uint64
+	partitionIdx int32
 }
 
 func (w *writeOffset) String() string {
@@ -292,4 +293,8 @@ func (w *writeOffset) AckIt() error {
 
 func (w *writeOffset) NoAck() error {
 	return fmt.Errorf("not supported")
+}
+
+func (w *writeOffset) PartitionIdx() int32 {
+	return w.partitionIdx
 }

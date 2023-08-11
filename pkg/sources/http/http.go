@@ -92,7 +92,7 @@ func New(
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
-	publishWM map[string]publish.Publisher,
+	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	opts ...Option) (*httpSource, error) {
 
@@ -169,7 +169,7 @@ func New(
 					Payload: msg,
 				},
 			},
-			ReadOffset: isb.SimpleStringOffset(func() string { return id }),
+			ReadOffset: sharedutil.NewSimpleStringPartitionOffset(id, vertexInstance.Replica),
 		}
 		h.messages <- m
 		w.WriteHeader(http.StatusNoContent)
@@ -199,7 +199,7 @@ func New(
 		}
 	}
 
-	h.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, h, writers, fsd, mapApplier, fetchWM, publishWM, h, forwardOpts...)
+	h.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, h, writers, fsd, mapApplier, fetchWM, h, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

@@ -95,6 +95,8 @@ type Offset interface {
 	// It is used when error occur, and we want to reprocess the batch to indicate acknowledgement no
 	// longer needed.
 	NoAck() error
+	// PartitionIdx returns the partition index to which the offset belongs to.
+	PartitionIdx() int32
 }
 
 // SimpleStringOffset is an Offset convenient function for implementations without needing AckIt() when offset is a string.
@@ -116,6 +118,10 @@ func (so SimpleStringOffset) NoAck() error {
 	return nil
 }
 
+func (so SimpleStringOffset) PartitionIdx() int32 {
+	return 0
+}
+
 // SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
 type SimpleIntOffset func() int64
 
@@ -133,4 +139,8 @@ func (si SimpleIntOffset) AckIt() error {
 
 func (si SimpleIntOffset) NoAck() error {
 	return nil
+}
+
+func (si SimpleIntOffset) PartitionIdx() int32 {
+	return 0
 }

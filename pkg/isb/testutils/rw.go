@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -70,7 +71,7 @@ func BuildTestReadMessages(count int64, startTime time.Time) []isb.ReadMessage {
 	for idx, writeMessage := range writeMessages {
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
-			ReadOffset: isb.SimpleStringOffset(func() string { return fmt.Sprintf("read_%s", writeMessage.Header.ID) }),
+			ReadOffset: util.NewSimpleStringPartitionOffset(fmt.Sprintf("read_%s", writeMessage.Header.ID), 0),
 		}
 	}
 
@@ -86,10 +87,8 @@ func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.Read
 		splitStr := strings.Split(writeMessage.Header.ID, "-")
 		offset, _ := strconv.Atoi(splitStr[0])
 		readMessages[idx] = isb.ReadMessage{
-			Message: writeMessage,
-			ReadOffset: isb.SimpleIntOffset(func() int64 {
-				return int64(offset)
-			}),
+			Message:    writeMessage,
+			ReadOffset: util.NewSimpleIntPartitionOffset(int64(offset), 0),
 		}
 	}
 

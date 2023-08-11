@@ -25,11 +25,13 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // InMemoryBuffer implements ISB interface.
@@ -145,9 +147,7 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			errs[idx] = nil
 			b.buffer[currentIdx].dirty = true
 			b.writeIdx = (currentIdx + 1) % b.size
-			writeOffsets[idx] = isb.SimpleIntOffset(func() int64 {
-				return currentIdx
-			})
+			writeOffsets[idx] = util.NewSimpleIntPartitionOffset(currentIdx, b.partitionIdx)
 			// access buffer via lock
 			b.rwlock.Unlock()
 		} else {
@@ -219,7 +219,7 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 			}
 		}
 
-		readMessage := isb.ReadMessage{Message: msg, ReadOffset: isb.SimpleIntOffset(func() int64 { return currentIdx })}
+		readMessage := isb.ReadMessage{Message: msg, ReadOffset: util.NewSimpleIntPartitionOffset(currentIdx, b.partitionIdx)}
 
 		readMessages = append(readMessages, &readMessage)
 	}
@@ -244,7 +244,7 @@ func buildMessage(header []byte, body []byte) (msg isb.Message, err error) {
 func (b *InMemoryBuffer) Ack(_ context.Context, offsets []isb.Offset) []error {
 	errs := make([]error, len(offsets))
 	for index, offset := range offsets {
-		intOffset, err := strconv.Atoi(offset.String())
+		intOffset, err := strconv.Atoi(strings.Split(offset.String(), "-")[0])
 		if err != nil {
 			errs[index] = isb.MessageAckErr{Name: b.name, Message: err.Error(), Offset: isb.Offset(offset)}
 			continue

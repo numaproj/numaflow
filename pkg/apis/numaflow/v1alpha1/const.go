@@ -178,3 +178,13 @@ var (
 		},
 	}
 )
+
+type SourceType string
+
+const (
+	Kafka       SourceType = "kafka"
+	Nats        SourceType = "nats"
+	Http        SourceType = "http"
+	Tickgen     SourceType = "tickgen"
+	RedisStream SourceType = "redis-stream"
+)

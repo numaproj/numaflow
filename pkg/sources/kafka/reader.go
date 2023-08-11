@@ -85,6 +85,40 @@ type KafkaSource struct {
 	lock               *sync.RWMutex
 }
 
+type kafkaOffset struct {
+	offset       int64
+	partitionIdx int32
+	topic        string
+}
+
+// REVISIT: Do we need to have topic as part of the offset?
+// maybe yes when we have multiple topics in the same pipeline
+func (k *kafkaOffset) String() string {
+	return fmt.Sprintf("%s:%d:%d", k.topic, k.partitionIdx, k.offset)
+}
+
+func (k *kafkaOffset) Sequence() (int64, error) {
+	return k.offset, nil
+}
+
+// AckIt acking is taken care by the consumer group
+func (k *kafkaOffset) AckIt() error {
+	// NOOP
+	return nil
+}
+
+func (k *kafkaOffset) NoAck() error {
+	return nil
+}
+
+func (k *kafkaOffset) PartitionIdx() int32 {
+	return k.partitionIdx
+}
+
+func (k *kafkaOffset) Topic() string {
+	return k.topic
+}
+
 type Option func(*KafkaSource) error
 
 // WithLogger is used to return logger information
@@ -300,7 +334,7 @@ func NewKafkaSource(
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
-	publishWM map[string]publish.Publisher,
+	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	opts ...Option) (*KafkaSource, error) {
 
@@ -368,7 +402,7 @@ func NewKafkaSource(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, publishWM, kafkasource, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, kafkasource, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -445,25 +479,24 @@ func (r *KafkaSource) startConsumer() {
 }
 
 func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
-	offset := toOffset(m.Topic, m.Partition, m.Offset)
+	readOffset := &kafkaOffset{
+		offset:       m.Offset,
+		partitionIdx: m.Partition,
+		topic:        m.Topic,
+	}
 	msg := isb.Message{
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{EventTime: m.Timestamp},
-			ID:          offset,
+			ID:          readOffset.String(),
 			Keys:        []string{string(m.Key)},
 		},
 		Body: isb.Body{Payload: m.Value},
 	}
 
 	return &isb.ReadMessage{
-		ReadOffset: isb.SimpleStringOffset(func() string { return offset }),
+		ReadOffset: readOffset,
 		Message:    msg,
 	}
-}
-
-func toOffset(topic string, partition int32, offset int64) string {
-	// TODO handle this elegantly
-	return fmt.Sprintf("%s:%v:%v", topic, partition, offset)
 }
 
 func offsetFrom(offset string) (string, int32, int64, error) {

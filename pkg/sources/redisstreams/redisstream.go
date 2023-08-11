@@ -81,7 +81,7 @@ func New(
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
-	publishWM map[string]publish.Publisher,
+	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	opts ...Option) (*redisStreamsSource, error) {
 
@@ -145,7 +145,7 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, redisStreamsSource, writers, fsd, mapApplier, fetchWM, publishWM, redisStreamsSource, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, redisStreamsSource, writers, fsd, mapApplier, fetchWM, redisStreamsSource, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		redisStreamsSource.Log.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -177,7 +177,7 @@ func New(
 				var outMsg *isb.ReadMessage
 				var err error
 				if len(message.Values) >= 1 {
-					outMsg, err = produceMsg(message)
+					outMsg, err = produceMsg(message, vertexInstance.Replica)
 					if err != nil {
 						return nil, err
 					}
@@ -222,8 +222,8 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 	return redisclient.NewRedisClient(opts), nil
 }
 
-func produceMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
-	var readOffset = inMsg.ID
+func produceMsg(inMsg redis.XMessage, replica int32) (*isb.ReadMessage, error) {
+	var readOffset = sharedutil.NewSimpleStringPartitionOffset(inMsg.ID, replica)
 
 	jsonSerialized, err := json.Marshal(inMsg.Values)
 	if err != nil {
@@ -241,14 +241,14 @@ func produceMsg(inMsg redis.XMessage) (*isb.ReadMessage, error) {
 	isbMsg := isb.Message{
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{EventTime: msgTime},
-			ID:          readOffset,
+			ID:          readOffset.String(),
 			Keys:        keys,
 		},
 		Body: isb.Body{Payload: []byte(jsonSerialized)},
 	}
 
 	return &isb.ReadMessage{
-		ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
+		ReadOffset: readOffset,
 		Message:    isbMsg,
 	}, nil
 }
