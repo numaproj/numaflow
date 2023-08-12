@@ -84,14 +84,14 @@ type KafkaSource struct {
 	lock               *sync.RWMutex
 }
 
+// kafkaOffset implements isb.Offset
+// we need topic information to ack the message
 type kafkaOffset struct {
 	offset       int64
 	partitionIdx int32
 	topic        string
 }
 
-// REVISIT: Do we need to have topic as part of the offset?
-// maybe yes when we have multiple topics in the same pipeline
 func (k *kafkaOffset) String() string {
 	return fmt.Sprintf("%s:%d:%d", k.topic, k.partitionIdx, k.offset)
 }
