@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -140,10 +141,12 @@ func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error
 	dedupOffsets := make(map[string]struct{}) // essentially a Set
 	strOffsets := []string{}
 	for _, o := range offsets {
-		_, found := dedupOffsets[o.String()]
+		// for redis, we don't consider partition id to ack
+		ofs := strings.Split(o.String(), "-")[0]
+		_, found := dedupOffsets[ofs]
 		if !found {
-			dedupOffsets[o.String()] = struct{}{}
-			strOffsets = append(strOffsets, o.String())
+			dedupOffsets[ofs] = struct{}{}
+			strOffsets = append(strOffsets, ofs)
 		}
 	}
 	if err := br.Client.XAck(RedisContext, br.Stream, br.Group, strOffsets...).Err(); err != nil {

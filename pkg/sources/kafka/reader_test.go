@@ -174,11 +174,9 @@ func TestBufferSizeOverrides(t *testing.T) {
 
 }
 
-func TestOffsetFrom(t *testing.T) {
+func TestExtractTopic(t *testing.T) {
 	offstr := "t1:32:64"
-	topic, partition, offset, err := offsetFrom(offstr)
+	topic, err := extractTopicFromOffset(offstr)
 	assert.Nil(t, err)
 	assert.Equal(t, "t1", topic)
-	assert.Equal(t, int32(32), partition)
-	assert.Equal(t, int64(64), offset)
 }

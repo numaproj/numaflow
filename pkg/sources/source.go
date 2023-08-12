@@ -65,8 +65,9 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	}
 	defer natsClientPool.CloseAll()
 	// watermark variables no-op initialization
-	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
+	// create a no op fetcher
 	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToBuffers())
+	// create a no op publisher stores
 	var sourcePublisherStores = store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
 
 	var toVertexWatermarkStores = make(map[string]store.WatermarkStore)

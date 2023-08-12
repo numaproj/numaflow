@@ -241,7 +241,7 @@ func produceMsg(inMsg redis.XMessage, replica int32) (*isb.ReadMessage, error) {
 	isbMsg := isb.Message{
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{EventTime: msgTime},
-			ID:          readOffset.String(),
+			ID:          inMsg.ID,
 			Keys:        keys,
 		},
 		Body: isb.Body{Payload: []byte(jsonSerialized)},

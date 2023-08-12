@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -186,9 +185,8 @@ func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	oldestTimestamps := make(map[int32]time.Time)
 	for _, m := range msgs {
 		// Get latest timestamps for different partitions
-		_, partition, _, _ := offsetFrom(m.ReadOffset.String())
-		if t, ok := oldestTimestamps[partition]; !ok || m.EventTime.Before(t) {
-			oldestTimestamps[partition] = m.EventTime
+		if t, ok := oldestTimestamps[m.ReadOffset.PartitionIdx()]; !ok || m.EventTime.Before(t) {
+			oldestTimestamps[m.ReadOffset.PartitionIdx()] = m.EventTime
 		}
 	}
 	for p, t := range oldestTimestamps {
@@ -220,7 +218,7 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	defer close(r.handler.inflightacks)
 
 	for _, offset := range offsets {
-		topic, partition, poffset, err := offsetFrom(offset.String())
+		topic, err := extractTopicFromOffset(offset.String())
 		if err != nil {
 			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
 			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("suppliedoffset", offset.String()), zap.Error(err))
@@ -228,7 +226,13 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 		}
 
 		// we need to mark the offset of the next message to read
-		r.handler.sess.MarkOffset(topic, partition, poffset+1, "")
+		pOffset, err := offset.Sequence()
+		if err != nil {
+			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
+			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("suppliedoffset", offset.String()), zap.Error(err))
+			continue
+		}
+		r.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset, "")
 		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
 
 	}
@@ -359,6 +363,8 @@ func NewKafkaSource(
 			return nil, operr
 		}
 	}
+
+	sarama.NewConfig()
 
 	config, err := configFromOpts(source.Config)
 	if err != nil {
@@ -499,16 +505,11 @@ func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
 	}
 }
 
-func offsetFrom(offset string) (string, int32, int64, error) {
+func extractTopicFromOffset(offset string) (string, error) {
 	tokens := strings.Split(offset, ":")
 	if len(tokens) < 3 {
-		return "", 0, 0, errors.New("malformed offset")
+		return "", errors.New("malformed offset")
 	}
-	var poffset, partition int64
-	var err error
-	poffset, err = strconv.ParseInt(tokens[2], 10, 64)
-	if err == nil {
-		partition, err = strconv.ParseInt(tokens[1], 10, 32)
-	}
-	return tokens[0], int32(partition), poffset, err
+
+	return tokens[0], nil
 }

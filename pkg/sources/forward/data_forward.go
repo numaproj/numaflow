@@ -294,7 +294,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	var sourcePartitions = make([]int32, 0)
+	var sourcePartitionsIndices = make([]int32, 0)
 	// let's figure out which vertex to send the results to.
 	// update the toBuffer(s) with writeMessages.
 	for _, m := range transformerResults {
@@ -316,7 +316,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 			}
 		}
 		// get the list of source partitions for which we have read messages, we will use this to publish watermarks to toVertices
-		sourcePartitions = append(sourcePartitions, m.readMessage.ReadOffset.PartitionIdx())
+		sourcePartitionsIndices = append(sourcePartitionsIndices, m.readMessage.ReadOffset.PartitionIdx())
 	}
 
 	// forward the message to the edge buffer (could be multiple edges)
@@ -341,7 +341,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 				if len(offsets) > 0 {
 					// publish watermark to all the source partitions
 					// create a publisher if it doesn't exist, we don't want to publish to all the partitions
-					for _, sp := range sourcePartitions {
+					for _, sp := range sourcePartitionsIndices {
 						var publisher, ok = vertexPublishers[sp]
 						if !ok {
 							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
@@ -367,7 +367,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 				// use the watermark of the current read batch for the idle watermark
 				// same as read len==0 because there's no event published to the buffer
 				if vertexPublishers, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
-					for _, sp := range sourcePartitions {
+					for _, sp := range sourcePartitionsIndices {
 						var publisher, ok = vertexPublishers[sp]
 						if !ok {
 							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
@@ -567,7 +567,6 @@ func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.
 		} else {
 			// if we do not get a time from Transformer, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
-				// add partition to the ID, this is to make sure that the ID is unique across partitions
 				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
 				if m.EventTime.IsZero() {
 					m.EventTime = readMessage.EventTime
