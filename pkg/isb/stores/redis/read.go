@@ -29,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // BufferRead is the read queue implementation powered by RedisClient.
@@ -105,7 +106,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 					}
 					readMessage := isb.ReadMessage{
 						Message:    msg,
-						ReadOffset: isb.SimpleStringOffset(func() string { return readOffset }),
+						ReadOffset: util.NewSimpleStringPartitionOffset(readOffset, rqr.PartitionIdx),
 					}
 					messages = append(messages, &readMessage)
 				}
