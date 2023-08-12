@@ -1,0 +1,37 @@
+.heatmap-graph {
+    display: flex;
+    justify-content: space-evenly;
+}
+
+.heatmap-graph-wrapper {
+    display: flex;
+    text-align: center;
+    flex-direction: column;
+}
+
+.hexagon-tooltip {
+    transform: translate(10%, -75%);
+}
+
+.hexagon-tooltip-table {
+    border-spacing: 0;
+    border: 0.0625rem solid #dcdddc;
+    border-radius: 0.3125rem;
+    width: 100%;
+    margin-bottom: 0.25rem;
+}
+
+.hexagon-table-tbody tr:nth-child(2n + 1) td {
+    background: white;
+}
+
+.hexagon-table-th,
+.hexagon-table-td {
+    padding: 0.6rem;
+}
+
+.hexagon-table-span {
+    padding: 0.3125rem;
+    display: block;
+    text-align: left;
+}

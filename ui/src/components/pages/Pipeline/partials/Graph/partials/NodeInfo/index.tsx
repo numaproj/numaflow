@@ -15,7 +15,7 @@ import {
 import ReactJson from "react-json-view";
 import TabPanel from "../../../../../../common/Tab-Panel";
 import { a11yProps, handleCopy } from "../../../../../../../utils";
-import { Pods } from "../../../../../../pods/Pods";
+import { Pods } from "./partials/Pods";
 import { NodeInfoProps } from "../../../../../../../types/declarations/graph";
 
 export default function NodeInfo(props: NodeInfoProps) {
