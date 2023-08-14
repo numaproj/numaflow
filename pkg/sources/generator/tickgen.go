@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/util"
 	"go.uber.org/zap"
 
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
@@ -389,7 +388,7 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 }
 
 func (mg *memgen) newReadMessage(key string, payload []byte, offset int64) *isb.ReadMessage {
-	readOffset := util.NewSimpleIntPartitionOffset(offset, mg.vertexInstance.Replica)
+	readOffset := isb.NewSimpleIntPartitionOffset(offset, mg.vertexInstance.Replica)
 	msg := isb.Message{
 		Header: isb.Header{
 			// TODO: insert the right time based on the generator

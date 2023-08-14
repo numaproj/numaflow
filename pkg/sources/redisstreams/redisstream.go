@@ -223,7 +223,7 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 }
 
 func produceMsg(inMsg redis.XMessage, replica int32) (*isb.ReadMessage, error) {
-	var readOffset = sharedutil.NewSimpleStringPartitionOffset(inMsg.ID, replica)
+	var readOffset = isb.NewSimpleStringPartitionOffset(inMsg.ID, replica)
 
 	jsonSerialized, err := json.Marshal(inMsg.Values)
 	if err != nil {

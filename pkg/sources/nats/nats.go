@@ -162,7 +162,7 @@ func New(
 		n.natsConn = conn
 	}
 	if sub, err := n.natsConn.QueueSubscribe(source.Subject, source.Queue, func(msg *natslib.Msg) {
-		readOffset := sharedutil.NewSimpleStringPartitionOffset(uuid.New().String(), vertexInstance.Replica)
+		readOffset := isb.NewSimpleStringPartitionOffset(uuid.New().String(), vertexInstance.Replica)
 		m := &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{

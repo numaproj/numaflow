@@ -169,7 +169,7 @@ func New(
 					Payload: msg,
 				},
 			},
-			ReadOffset: sharedutil.NewSimpleStringPartitionOffset(id, vertexInstance.Replica),
+			ReadOffset: isb.NewSimpleStringPartitionOffset(id, vertexInstance.Replica),
 		}
 		h.messages <- m
 		w.WriteHeader(http.StatusNoContent)

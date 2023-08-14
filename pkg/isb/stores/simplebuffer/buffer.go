@@ -31,7 +31,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // InMemoryBuffer implements ISB interface.
@@ -147,7 +146,7 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			errs[idx] = nil
 			b.buffer[currentIdx].dirty = true
 			b.writeIdx = (currentIdx + 1) % b.size
-			writeOffsets[idx] = util.NewSimpleIntPartitionOffset(currentIdx, b.partitionIdx)
+			writeOffsets[idx] = isb.NewSimpleIntPartitionOffset(currentIdx, b.partitionIdx)
 			// access buffer via lock
 			b.rwlock.Unlock()
 		} else {
@@ -219,7 +218,7 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 			}
 		}
 
-		readMessage := isb.ReadMessage{Message: msg, ReadOffset: util.NewSimpleIntPartitionOffset(currentIdx, b.partitionIdx)}
+		readMessage := isb.ReadMessage{Message: msg, ReadOffset: isb.NewSimpleIntPartitionOffset(currentIdx, b.partitionIdx)}
 
 		readMessages = append(readMessages, &readMessage)
 	}

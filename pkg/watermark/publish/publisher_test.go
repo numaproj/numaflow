@@ -23,12 +23,12 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"

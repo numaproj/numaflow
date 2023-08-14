@@ -26,9 +26,6 @@ import (
 	"context"
 	"io"
 	"math"
-	"strconv"
-
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 const PendingNotAvailable = int64(math.MinInt64)
@@ -99,50 +96,4 @@ type Offset interface {
 	NoAck() error
 	// PartitionIdx returns the partition index to which the offset belongs to.
 	PartitionIdx() int32
-}
-
-// SimpleStringOffset is an Offset convenient function for implementations without needing AckIt() when offset is a string.
-type SimpleStringOffset func() string
-
-func (so SimpleStringOffset) String() string {
-	return so()
-}
-
-func (so SimpleStringOffset) Sequence() (int64, error) {
-	return strconv.ParseInt(so(), 10, 64)
-}
-
-func (so SimpleStringOffset) AckIt() error {
-	return nil
-}
-
-func (so SimpleStringOffset) NoAck() error {
-	return nil
-}
-
-func (so SimpleStringOffset) PartitionIdx() int32 {
-	return v1alpha1.DefaultPartitionIdx
-}
-
-// SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
-type SimpleIntOffset func() int64
-
-func (si SimpleIntOffset) String() string {
-	return strconv.FormatInt(si(), 10)
-}
-
-func (si SimpleIntOffset) Sequence() (int64, error) {
-	return si(), nil
-}
-
-func (si SimpleIntOffset) AckIt() error {
-	return nil
-}
-
-func (si SimpleIntOffset) NoAck() error {
-	return nil
-}
-
-func (si SimpleIntOffset) PartitionIdx() int32 {
-	return v1alpha1.DefaultPartitionIdx
 }

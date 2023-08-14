@@ -1,10 +1,10 @@
-package util
+package isb
 
 import (
 	"fmt"
 	"strconv"
 
-	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 // simpleIntPartitionOffset is a simple implementation of Offset interface which contains a sequence number in the form of integer and a partition index.
@@ -13,7 +13,7 @@ type simpleIntPartitionOffset struct {
 	partitionIdx int32
 }
 
-func NewSimpleIntPartitionOffset(seq int64, partitionIdx int32) isb.Offset {
+func NewSimpleIntPartitionOffset(seq int64, partitionIdx int32) Offset {
 	return &simpleIntPartitionOffset{
 		seq:          seq,
 		partitionIdx: partitionIdx,
@@ -46,7 +46,7 @@ type simpleStringPartitionOffset struct {
 	partitionIdx int32
 }
 
-func NewSimpleStringPartitionOffset(seq string, partitionIdx int32) isb.Offset {
+func NewSimpleStringPartitionOffset(seq string, partitionIdx int32) Offset {
 	return &simpleStringPartitionOffset{
 		seq:          seq,
 		partitionIdx: partitionIdx,
@@ -71,4 +71,50 @@ func (s *simpleStringPartitionOffset) NoAck() error {
 
 func (s *simpleStringPartitionOffset) PartitionIdx() int32 {
 	return s.partitionIdx
+}
+
+// SimpleStringOffset is an Offset convenient function for implementations without needing AckIt() when offset is a string.
+type SimpleStringOffset func() string
+
+func (so SimpleStringOffset) String() string {
+	return so()
+}
+
+func (so SimpleStringOffset) Sequence() (int64, error) {
+	return strconv.ParseInt(so(), 10, 64)
+}
+
+func (so SimpleStringOffset) AckIt() error {
+	return nil
+}
+
+func (so SimpleStringOffset) NoAck() error {
+	return nil
+}
+
+func (so SimpleStringOffset) PartitionIdx() int32 {
+	return v1alpha1.DefaultPartitionIdx
+}
+
+// SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
+type SimpleIntOffset func() int64
+
+func (si SimpleIntOffset) String() string {
+	return strconv.FormatInt(si(), 10)
+}
+
+func (si SimpleIntOffset) Sequence() (int64, error) {
+	return si(), nil
+}
+
+func (si SimpleIntOffset) AckIt() error {
+	return nil
+}
+
+func (si SimpleIntOffset) NoAck() error {
+	return nil
+}
+
+func (si SimpleIntOffset) PartitionIdx() int32 {
+	return v1alpha1.DefaultPartitionIdx
 }

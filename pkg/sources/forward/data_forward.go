@@ -294,7 +294,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	var sourcePartitionsIndices = make([]int32, 0)
+	var sourcePartitionsIndices = make(map[int32]bool)
 	// let's figure out which vertex to send the results to.
 	// update the toBuffer(s) with writeMessages.
 	for _, m := range transformerResults {
@@ -316,7 +316,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 			}
 		}
 		// get the list of source partitions for which we have read messages, we will use this to publish watermarks to toVertices
-		sourcePartitionsIndices = append(sourcePartitionsIndices, m.readMessage.ReadOffset.PartitionIdx())
+		sourcePartitionsIndices[m.readMessage.ReadOffset.PartitionIdx()] = true
 	}
 
 	// forward the message to the edge buffer (could be multiple edges)
@@ -341,7 +341,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 				if len(offsets) > 0 {
 					// publish watermark to all the source partitions
 					// create a publisher if it doesn't exist, we don't want to publish to all the partitions
-					for _, sp := range sourcePartitionsIndices {
+					for sp := range sourcePartitionsIndices {
 						var publisher, ok = vertexPublishers[sp]
 						if !ok {
 							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
@@ -367,7 +367,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 				// use the watermark of the current read batch for the idle watermark
 				// same as read len==0 because there's no event published to the buffer
 				if vertexPublishers, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
-					for _, sp := range sourcePartitionsIndices {
+					for sp := range sourcePartitionsIndices {
 						var publisher, ok = vertexPublishers[sp]
 						if !ok {
 							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
