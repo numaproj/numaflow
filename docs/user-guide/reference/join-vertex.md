@@ -17,5 +17,5 @@ A special case of a "Join" is a **Cycle** (a Vertex which can send either to its
 Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a cycle inevitably produces late data, which would get dropped by the Reduce Vertex.)
 
 The following examples are of Cycles:
-- [Cycle to Self](https://github.com/numaproj/numaflow/blob/main/examples/cycle-to-self.yaml)
-- [Cycle to Previous](https://github.com/numaproj/numaflow/blob/main/examples/cycle-to-prev.yaml)
+- [Cycle to Self](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-self.yaml)
+- [Cycle to Previous](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-prev.yaml)
