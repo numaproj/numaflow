@@ -204,13 +204,12 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
 	// reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
-		// When the read length is zero, the write length is definitely zero too
+		// When the read length is zero, the write length is definitely zero too,
 		// meaning there's no data to be published to the next vertex, and we consider this
 		// situation as idling.
 		// In order to continue propagating watermark, we will set watermark idle=true and publish it.
 		// We also publish a control message if this is the first time we get this idle situation.
-		// we use the HeadWMB as the watermark for the idle
-		// we get the HeadWMB for the partition from which we read the messages
+		// We compute the HeadIdleWMB using the given partition as the idle watermark
 		var processorWMB = isdf.wmFetcher.ComputeHeadIdleWMB(isdf.fromBufferPartition.GetPartitionIdx())
 		if !isdf.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
