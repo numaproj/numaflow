@@ -27,7 +27,10 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	udsideinput "github.com/numaproj/numaflow/pkg/sideinputs/udsideinput"
 )
 
 type sideInputsManager struct {
@@ -52,31 +55,42 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var isbSvcClient isbsvc.ISBService
+	var natsClient *jsclient.NATSClient
 	var err error
 	switch sim.isbSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		return fmt.Errorf("unsupported isbsvc type %q", sim.isbSvcType)
 	case dfv1.ISBSvcTypeJetStream:
-		natsClient, err := jsclient.NewNATSClient(ctx)
+		natsClient, err = jsclient.NewNATSClient(ctx)
 		if err != nil {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
-			return err
-		}
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(sim.pipelineName, isbsvc.WithJetStreamClient(natsClient))
-		if err != nil {
-			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 			return err
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sim.isbSvcType)
 	}
 
-	// TODO(SI): remove it.
-	fmt.Printf("ISB Svc Client nil: %v\n", isbSvcClient == nil)
+	sideInputClient, err := udsideinput.NewUDSgRPCBasedUDSideinput()
+	if err != nil {
+		return fmt.Errorf("failed to create a new gRPC client: %w", err)
+	}
+	// Readiness check
+	if err = sideInputClient.WaitUntilReady(ctx); err != nil {
+		return fmt.Errorf("failed on UDSideInput readiness check, %w", err)
+	}
+	// close the connection when the function exits
+	defer func() {
+		err = sideInputClient.CloseConn(ctx)
+		if err != nil {
+			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+		}
+	}()
+
+	sideInputBucketName := isbsvc.JetStreamProcessorBucket(sim.sideInputsStore)
+	siStore, err := jetstream.NewKVJetStreamKVStore(ctx, sim.pipelineName, sideInputBucketName, natsClient)
 
 	f := func() {
-		if err := sim.execute(ctx); err != nil {
+		if err := sim.execute(ctx, sideInputClient, siStore); err != nil {
 			log.Errorw("Failed to execute the call to fetch Side Inputs.", zap.Error(err))
 		}
 	}
@@ -96,10 +110,17 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	return nil
 }
 
-func (sim *sideInputsManager) execute(ctx context.Context) error {
+func (sim *sideInputsManager) execute(ctx context.Context, sideInputClient *udsideinput.UDSgRPCBasedUDSideinput, siStore kvs.KVStorer) error {
 	log := logging.FromContext(ctx)
-	// TODO(SI): call ud container to fetch data and write to store.
 	log.Info("Executing ...")
+	resp, err := sideInputClient.Apply(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve side input: %w", err)
+	}
+	err = siStore.PutKV(ctx, sim.sideInput.String(), resp.Value)
+	if err != nil {
+		return fmt.Errorf("failed to write side input %q to store: %w", sim.sideInput.Name, err)
+	}
 	return nil
 }
 
