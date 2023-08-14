@@ -1,6 +1,6 @@
 # Joins and Cycles
 
-As of Numaflow v0.10, Pipeline Edges can be defined so that multiple Vertices send to 1. This includes:
+As of Numaflow v0.10, Pipeline Edges can be defined such that multiple Vertices send to a single vertex. This includes:
 - UDF Map Vertices
 - UDF Reduce Vertices
 - Sink Vertices
@@ -14,7 +14,7 @@ Please see the following examples:
 
 A special case of a "Join" is a **Cycle** (a Vertex which can send either to itself or to a previous Vertex.) An example use of this is a Map UDF which does some sort of reprocessing of data under certain conditions such as a transient error.
 
-Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a cycle inevitably produces late data, which would get dropped by the Reduce Vertex.)
+Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a cycle inevitably produces late data, which would get dropped by the Reduce Vertex. For this reason, cycles should be used sparingly.)
 
 The following examples are of Cycles:
 - [Cycle to Self](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-self.yaml)
