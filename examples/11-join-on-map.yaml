@@ -4,16 +4,18 @@ metadata:
   name: join-on-map
 spec:
   vertices:
-    - name: in-0
-      scale:
-        min: 1
+    - name: http-in
       source:
         http: {}
-    - name: in-1
-      scale:
-        min: 1
+    - name: kafka-in
       source:
-        http: {}
+        kafka:
+          brokers:
+            - my-broker1:19700
+            - my-broker2:19700
+          topic: my-topic
+          consumerGroup: my-consumer-group
+    # Both of the incoming Vertices join on this Map Vertex
     - name: cat
       udf:
         builtin:
@@ -23,9 +25,9 @@ spec:
         # A simple log printing sink
         log: {}
   edges:
-    - from: in-0
+    - from: http-in
       to: cat
-    - from: in-1
+    - from: kafka-in
       to: cat
     - from: cat
       to: out

@@ -4,30 +4,18 @@ metadata:
   name: join-on-reduce
 spec:
   vertices:
-    - name: in-0
-      scale:
-        min: 1
+    - name: http-in
       source:
         http: {}
-    - name: in-1
-      scale:
-        min: 1
+    - name: kafka-in
       source:
-        http: {}
-    - name: atoi-0
-      scale:
-        min: 1
-      udf:
-        container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd
-    - name: atoi-1
-      scale:
-        min: 1
-      udf:
-        container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd
+        kafka:
+          brokers:
+            - my-broker1:19700
+            - my-broker2:19700
+          topic: my-topic
+          consumerGroup: my-consumer-group
+    # Both of the incoming Vertices join on this Reduce Vertex
     - name: compute-sum
       udf:
         container:
@@ -37,7 +25,7 @@ spec:
           window:
             fixed:
               length: 10s
-          keyed: true
+          keyed: false
           storage:
             persistentVolumeClaim:
               volumeSize: 10Gi
@@ -51,13 +39,9 @@ spec:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
             image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
-    - from: in-0
-      to: atoi-0
-    - from: in-1
-      to: atoi-1
-    - from: atoi-0
+    - from: http-in
       to: compute-sum
-    - from: atoi-1
+    - from: kafka-in
       to: compute-sum
     - from: compute-sum
       to: sink
