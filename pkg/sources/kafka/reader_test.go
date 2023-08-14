@@ -20,9 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
@@ -172,15 +173,4 @@ func TestBufferSizeOverrides(t *testing.T) {
 
 	assert.Equal(t, 110, ks.handlerbuffer)
 
-}
-
-func TestExtractTopic(t *testing.T) {
-	offstr := &kafkaOffset{
-		offset:       123,
-		partitionIdx: 0,
-		topic:        "test:topic",
-	}
-	topic, err := extractTopicFromOffset(offstr)
-	assert.Nil(t, err)
-	assert.Equal(t, "test:topic", topic)
 }

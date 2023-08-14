@@ -18,9 +18,7 @@ package kafka
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -498,12 +496,4 @@ func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
 		ReadOffset: readOffset,
 		Message:    msg,
 	}
-}
-
-func extractTopicFromOffset(offset isb.Offset) (string, error) {
-	seq, err := offset.Sequence()
-	if err != nil {
-		return "", errors.New("malformed offset")
-	}
-	return strings.TrimSuffix(offset.String(), fmt.Sprintf(":%d:%d", seq, offset.PartitionIdx())), nil
 }
