@@ -3,9 +3,10 @@ package isb
 import (
 	"fmt"
 	"strconv"
-
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
+
+// DefaultPartitionIdx Default partition index
+var DefaultPartitionIdx = int32(0)
 
 // simpleIntPartitionOffset is a simple implementation of Offset interface which contains a sequence number in the form of integer and a partition index.
 type simpleIntPartitionOffset struct {
@@ -93,7 +94,7 @@ func (so SimpleStringOffset) NoAck() error {
 }
 
 func (so SimpleStringOffset) PartitionIdx() int32 {
-	return v1alpha1.DefaultPartitionIdx
+	return DefaultPartitionIdx
 }
 
 // SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
@@ -116,5 +117,5 @@ func (si SimpleIntOffset) NoAck() error {
 }
 
 func (si SimpleIntOffset) PartitionIdx() int32 {
-	return v1alpha1.DefaultPartitionIdx
+	return DefaultPartitionIdx
 }

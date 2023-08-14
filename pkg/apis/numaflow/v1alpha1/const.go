@@ -164,9 +164,6 @@ const (
 
 	// UDF map streaming
 	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
-
-	// DefaultPartitionIdx Default partition index
-	DefaultPartitionIdx = 0
 )
 
 var (

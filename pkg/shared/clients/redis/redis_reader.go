@@ -142,7 +142,7 @@ func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error
 	strOffsets := []string{}
 	for _, o := range offsets {
 		// for redis, we don't consider partition id to ack
-		ofs := strings.Split(o.String(), "-")[0]
+		ofs := strings.TrimSuffix(o.String(), fmt.Sprintf("-%d", br.PartitionIdx))
 		_, found := dedupOffsets[ofs]
 		if !found {
 			dedupOffsets[ofs] = struct{}{}
