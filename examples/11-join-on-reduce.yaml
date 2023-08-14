@@ -31,13 +31,9 @@ spec:
               volumeSize: 10Gi
               accessMode: ReadWriteOnce
     - name: sink
-      scale:
-        min: 1
       sink:
-        udsink:
-          container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+        # A simple log printing sink
+        log: {}
   edges:
     - from: http-in
       to: compute-sum
