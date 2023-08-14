@@ -1,5 +1,3 @@
-# A somewhat silly example of how to Join on a Sink Vertex.
-# Data is conditionally forwarded to either even-cat or odd-cat, and then all data is re-joined on the Sink Vertex.
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
@@ -24,8 +22,10 @@ spec:
           name: cat
     - name: out
       sink:
-        # A simple log printing sink
-        log: {}
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
     
   edges:
     - from: in
