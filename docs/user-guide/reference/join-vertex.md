@@ -6,9 +6,9 @@ As of Numaflow v0.10, Pipeline Edges can be defined so that multiple Vertices se
 - Sink Vertices
 
 Please see the following examples:
-- [Join on Map Vertex](https://raw.githubusercontent.com/numaproj/numaflow/main/examples/11-join-on-map.yaml)
-- [Join on Reduce Vertex](https://raw.githubusercontent.com/numaproj/numaflow/main/examples/11-join-on-reduce.yaml)
-- [Join on Sink Vertex](https://raw.githubusercontent.com/numaproj/numaflow/main/examples/11-join-on-sink.yaml)
+- [Join on Map Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-map.yaml)
+- [Join on Reduce Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-reduce.yaml)
+- [Join on Sink Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-sink.yaml)
 
 ## Cycles
 
@@ -17,5 +17,5 @@ A special case of a "Join" is a **Cycle** (a Vertex which can send either to its
 Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a cycle inevitably produces late data, which would get dropped by the Reduce Vertex.)
 
 The following examples are of Cycles:
-- [Cycle to Self](https://raw.githubusercontent.com/numaproj/numaflow/main/examples/cycle-to-self.yaml)
-- [Cycle to Previous](https://raw.githubusercontent.com/numaproj/numaflow/main/examples/cycle-to-prev.yaml)
+- [Cycle to Self](https://github.com/numaproj/numaflow/blob/main/examples/cycle-to-self.yaml)
+- [Cycle to Previous](https://github.com/numaproj/numaflow/blob/main/examples/cycle-to-prev.yaml)
