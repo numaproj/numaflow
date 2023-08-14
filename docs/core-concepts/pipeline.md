@@ -3,7 +3,7 @@
 The `Pipeline` is the most important concept in Numaflow, it represents a data processing job, it defines:
 
 1. A list of [vertices](vertex.md), which define the data processing tasks;
-1. A list of `edges`, which are used to describe the relationship between the vertices.
+1. A list of `edges`, which are used to describe the relationship between the vertices. Note an edge may go from 1 vertex to multiple vertices, and as of v0.10, an edge may also go from multiple vertices to 1.
 
 The `Pipeline` is abstracted as a [Kubernetes Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). A `Pipeline` spec looks like below.
 

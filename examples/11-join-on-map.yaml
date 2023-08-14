@@ -1,0 +1,31 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: join-on-map
+spec:
+  vertices:
+    - name: in-0
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: in-1
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: cat
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
+    - name: out
+      sink:
+        # A simple log printing sink
+        log: {}
+  edges:
+    - from: in-0
+      to: cat
+    - from: in-1
+      to: cat
+    - from: cat
+      to: out
