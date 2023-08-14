@@ -218,12 +218,7 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	defer close(r.handler.inflightacks)
 
 	for _, offset := range offsets {
-		topic, err := extractTopicFromOffset(offset)
-		if err != nil {
-			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
-			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("suppliedoffset", offset.String()), zap.Error(err))
-			continue
-		}
+		topic := offset.(*kafkaOffset).Topic()
 
 		// we need to mark the offset of the next message to read
 		pOffset, err := offset.Sequence()
