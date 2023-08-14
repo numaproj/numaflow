@@ -19,6 +19,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -43,6 +44,40 @@ type BufferReadInfo struct {
 	isEmpty           bool
 	lag               *atomic.Duration
 	refreshEmptyError *atomic.Uint32
+}
+
+type redisOffset struct {
+	id           string
+	partitionIdx int32
+}
+
+func NewRedisOffset(id string, partitionIdx int32) isb.Offset {
+	return &redisOffset{
+		id:           id,
+		partitionIdx: partitionIdx,
+	}
+}
+
+// for redis we use message id for acknowledgement
+func (r *redisOffset) String() string {
+	return r.id
+}
+
+func (r *redisOffset) Sequence() (int64, error) {
+	return strconv.ParseInt(r.id, 10, 64)
+}
+
+func (r *redisOffset) AckIt() error {
+	// NOOP
+	return nil
+}
+
+func (r *redisOffset) NoAck() error {
+	return nil
+}
+
+func (r *redisOffset) PartitionIdx() int32 {
+	return r.partitionIdx
 }
 
 var _ isb.BufferReader = (*BufferRead)(nil)
@@ -104,8 +139,11 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 						return messages, fmt.Errorf("%w", err)
 					}
 					readMessage := isb.ReadMessage{
-						Message:    msg,
-						ReadOffset: isb.NewSimpleStringPartitionOffset(readOffset, rqr.PartitionIdx),
+						Message: msg,
+						ReadOffset: &redisOffset{
+							id:           readOffset,
+							partitionIdx: rqr.PartitionIdx,
+						},
 					}
 					messages = append(messages, &readMessage)
 				}

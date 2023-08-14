@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
@@ -223,7 +224,7 @@ func newRedisClient(sourceSpec *dfv1.RedisStreamsSource) (*redisclient.RedisClie
 }
 
 func produceMsg(inMsg redis.XMessage, replica int32) (*isb.ReadMessage, error) {
-	var readOffset = isb.NewSimpleStringPartitionOffset(inMsg.ID, replica)
+	var readOffset = redis2.NewRedisOffset(inMsg.ID, replica)
 
 	jsonSerialized, err := json.Marshal(inMsg.Values)
 	if err != nil {

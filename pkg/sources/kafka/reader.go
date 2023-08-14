@@ -93,7 +93,7 @@ type kafkaOffset struct {
 }
 
 func (k *kafkaOffset) String() string {
-	return fmt.Sprintf("%s:%d:%d", k.topic, k.partitionIdx, k.offset)
+	return fmt.Sprintf("%s:%d:%d", k.topic, k.offset, k.partitionIdx)
 }
 
 func (k *kafkaOffset) Sequence() (int64, error) {
@@ -218,7 +218,7 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	defer close(r.handler.inflightacks)
 
 	for _, offset := range offsets {
-		topic, err := extractTopicFromOffset(offset.String())
+		topic, err := extractTopicFromOffset(offset)
 		if err != nil {
 			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
 			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("suppliedoffset", offset.String()), zap.Error(err))
@@ -505,11 +505,10 @@ func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
 	}
 }
 
-func extractTopicFromOffset(offset string) (string, error) {
-	tokens := strings.Split(offset, ":")
-	if len(tokens) < 3 {
+func extractTopicFromOffset(offset isb.Offset) (string, error) {
+	seq, err := offset.Sequence()
+	if err != nil {
 		return "", errors.New("malformed offset")
 	}
-
-	return tokens[0], nil
+	return strings.TrimSuffix(offset.String(), fmt.Sprintf(":%d:%d", seq, offset.PartitionIdx())), nil
 }

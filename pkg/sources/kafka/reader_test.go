@@ -175,8 +175,12 @@ func TestBufferSizeOverrides(t *testing.T) {
 }
 
 func TestExtractTopic(t *testing.T) {
-	offstr := "t1:32:64"
+	offstr := &kafkaOffset{
+		offset:       123,
+		partitionIdx: 0,
+		topic:        "test:topic",
+	}
 	topic, err := extractTopicFromOffset(offstr)
 	assert.Nil(t, err)
-	assert.Equal(t, "t1", topic)
+	assert.Equal(t, "test:topic", topic)
 }

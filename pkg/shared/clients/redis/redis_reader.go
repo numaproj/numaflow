@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -142,7 +141,7 @@ func (br *RedisStreamsRead) Ack(_ context.Context, offsets []isb.Offset) []error
 	strOffsets := []string{}
 	for _, o := range offsets {
 		// for redis, we don't consider partition id to ack
-		ofs := strings.TrimSuffix(o.String(), fmt.Sprintf("-%d", br.PartitionIdx))
+		ofs := o.String()
 		_, found := dedupOffsets[ofs]
 		if !found {
 			dedupOffsets[ofs] = struct{}{}
