@@ -28,10 +28,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"

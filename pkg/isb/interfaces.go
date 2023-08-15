@@ -26,7 +26,6 @@ import (
 	"context"
 	"io"
 	"math"
-	"strconv"
 )
 
 const PendingNotAvailable = int64(math.MinInt64)
@@ -95,42 +94,6 @@ type Offset interface {
 	// It is used when error occur, and we want to reprocess the batch to indicate acknowledgement no
 	// longer needed.
 	NoAck() error
-}
-
-// SimpleStringOffset is an Offset convenient function for implementations without needing AckIt() when offset is a string.
-type SimpleStringOffset func() string
-
-func (so SimpleStringOffset) String() string {
-	return so()
-}
-
-func (so SimpleStringOffset) Sequence() (int64, error) {
-	return strconv.ParseInt(so(), 10, 64)
-}
-
-func (so SimpleStringOffset) AckIt() error {
-	return nil
-}
-
-func (so SimpleStringOffset) NoAck() error {
-	return nil
-}
-
-// SimpleIntOffset is an Offset convenient function for implementations without needing AckIt() when offset is a int64.
-type SimpleIntOffset func() int64
-
-func (si SimpleIntOffset) String() string {
-	return strconv.FormatInt(si(), 10)
-}
-
-func (si SimpleIntOffset) Sequence() (int64, error) {
-	return si(), nil
-}
-
-func (si SimpleIntOffset) AckIt() error {
-	return nil
-}
-
-func (si SimpleIntOffset) NoAck() error {
-	return nil
+	// PartitionIdx returns the partition index to which the offset belongs to.
+	PartitionIdx() int32
 }

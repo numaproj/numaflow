@@ -72,8 +72,11 @@ func TestRead(t *testing.T) {
 		"writer": {dest},
 	}
 
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
+	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
+	toVertexWmStores := map[string]store.WatermarkStore{
+		"writer": publishWMStore,
+	}
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -128,8 +131,11 @@ func TestStop(t *testing.T) {
 		"writer": {dest},
 	}
 
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore)
+	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
+	toVertexWmStores := map[string]store.WatermarkStore{
+		"writer": publishWMStore,
+	}
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

@@ -23,7 +23,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"go.uber.org/zap"
@@ -156,7 +155,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
-	publishWM map[string]publish.Publisher,
+	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	opts ...Option) (*memgen, error) {
 
@@ -222,7 +221,7 @@ func NewMemGen(vertexInstance *dfv1.VertexInstance,
 	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, publishWM, gensrc, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, gensrc, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -389,18 +388,19 @@ func (mg *memgen) generator(ctx context.Context, rate int, timeunit time.Duratio
 }
 
 func (mg *memgen) newReadMessage(key string, payload []byte, offset int64) *isb.ReadMessage {
+	readOffset := isb.NewSimpleIntPartitionOffset(offset, mg.vertexInstance.Replica)
 	msg := isb.Message{
 		Header: isb.Header{
 			// TODO: insert the right time based on the generator
 			MessageInfo: isb.MessageInfo{EventTime: timeFromNanos(parseTime(payload))},
-			ID:          strconv.FormatInt(offset, 10) + "-" + strconv.FormatInt(int64(mg.vertexInstance.Replica), 10),
+			ID:          readOffset.String(),
 			Keys:        []string{key},
 		},
 		Body: isb.Body{Payload: payload},
 	}
 
 	return &isb.ReadMessage{
-		ReadOffset: isb.SimpleIntOffset(func() int64 { return offset }),
+		ReadOffset: readOffset,
 		Message:    msg,
 	}
 }
