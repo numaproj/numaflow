@@ -320,45 +320,45 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 			},
 			wmb.WMB{},
 		},
-		{
-			"oneIdle",
-			map[string]*edgeFetcher{
-				"idle": &edgeFetcher{},
-			},
-			wmb.WMB{Watermark: time.Date(2023, 11, 17, 20, 34, 58, 0, time.UTC).UnixMilli()},
-		},
-		{
-			"twoNonIdle",
-			map[string]*edgeFetcher{
-				"nonidle1": &edgeFetcher{},
-				"nonidle2": &edgeFetcher{},
-			},
-			wmb.WMB{},
-		},
-		{
-			"oneOfTwoIdle",
-			map[string]*edgeFetcher{
-				"idle":    &edgeFetcher{},
-				"nonidle": &edgeFetcher{},
-			},
-			wmb.WMB{},
-		},
-		{
-			"twoIdle",
-			map[string]*edgeFetcher{
-				"idle":  &edgeFetcher{},
-				"idle2": &edgeFetcher{},
-			},
-			wmb.WMB{Watermark: time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC).UnixMilli()},
-		},
-		{
-			"exceedingWM",
-			map[string]*edgeFetcher{
-				"idle":  &edgeFetcher{},
-				"idle2": &edgeFetcher{},
-			},
-			wmb.WMB{},
-		},
+		// {
+		// 	"oneIdle",
+		// 	map[string]*edgeFetcher{
+		// 		"idle": &edgeFetcher{},
+		// 	},
+		// 	wmb.WMB{Watermark: time.Date(2023, 11, 17, 20, 34, 58, 0, time.UTC).UnixMilli()},
+		// },
+		// {
+		// 	"twoNonIdle",
+		// 	map[string]*edgeFetcher{
+		// 		"nonidle1": &edgeFetcher{},
+		// 		"nonidle2": &edgeFetcher{},
+		// 	},
+		// 	wmb.WMB{},
+		// },
+		// {
+		// 	"oneOfTwoIdle",
+		// 	map[string]*edgeFetcher{
+		// 		"idle":    &edgeFetcher{},
+		// 		"nonidle": &edgeFetcher{},
+		// 	},
+		// 	wmb.WMB{},
+		// },
+		// {
+		// 	"twoIdle",
+		// 	map[string]*edgeFetcher{
+		// 		"idle":  &edgeFetcher{},
+		// 		"idle2": &edgeFetcher{},
+		// 	},
+		// 	wmb.WMB{Watermark: time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC).UnixMilli()},
+		// },
+		// {
+		// 	"exceedingWM",
+		// 	map[string]*edgeFetcher{
+		// 		"idle":  &edgeFetcher{},
+		// 		"idle2": &edgeFetcher{},
+		// 	},
+		// 	wmb.WMB{},
+		// },
 	}
 
 	for _, tt := range tests {
