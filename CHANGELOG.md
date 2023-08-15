@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.9.1 (2023-08-11)
+
+ * [4cbd729c](https://github.com/numaproj/numaflow/commit/4cbd729c91e0387781d00d97bfd8e0b61d0fd8c7) Update manifests to v0.9.1
+ * [aa5e8ae3](https://github.com/numaproj/numaflow/commit/aa5e8ae3ef064fa7140480347c40c74c73b01f25) fix: npe when the ctx is canceled inside kv watcher (#942)
+ * [e5a5cd6c](https://github.com/numaproj/numaflow/commit/e5a5cd6c0859c25cdf1110d4804ec4f88b0b068c) feat: watermark delay in tooltip (#910)
+
+### Contributors
+
+ * Derek Wang
+ * Vedant Gupta
+ * Yashash H L
+
 ## v0.9.0 (2023-08-02)
 
  * [8e4b6ca1](https://github.com/numaproj/numaflow/commit/8e4b6ca1337ff444b348be597e036728fca9d757) Update manifests to v0.9.0

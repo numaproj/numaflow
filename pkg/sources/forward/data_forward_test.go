@@ -26,19 +26,16 @@ import (
 
 	"go.uber.org/goleak"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
@@ -142,8 +139,9 @@ func TestNewDataForward(t *testing.T) {
 
 			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
+			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			noOpStores := buildNoOpToVertexStores(toSteps)
+			f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, noOpStores, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -224,15 +222,9 @@ func TestNewDataForward(t *testing.T) {
 				},
 			}}
 			fetchWatermark := &testForwardFetcher{}
-			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			toVertexStores := buildToVertexWatermarkStores(toSteps)
 
-			defer func() {
-				for _, p := range publishWatermark {
-					_ = p.Close()
-				}
-			}()
-
-			f, err := NewDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -283,7 +275,7 @@ func TestNewDataForward(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+				otKeys1, _ := toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
 			loop:
 				for {
 					select {
@@ -292,13 +284,13 @@ func TestNewDataForward(t *testing.T) {
 						break loop
 					default:
 						if len(otKeys1) == 0 {
-							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+							otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
 							time.Sleep(time.Millisecond * 10)
 						} else {
 							// NOTE: in this test we only have one processor to publish
 							// so len(otKeys) should always be 1
-							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-							otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+							otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
+							otValue1, _ := toVertexStores["to1"].OffsetTimelineStore().GetValue(ctx, otKeys1[0])
 							otDecode1, _ := wmb.DecodeToWMB(otValue1)
 							if tt.batchSize > 1 && !otDecode1.Idle {
 								break loop
@@ -316,7 +308,7 @@ func TestNewDataForward(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
+				otKeys2, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
 			loop:
 				for {
 					select {
@@ -325,13 +317,13 @@ func TestNewDataForward(t *testing.T) {
 						break loop
 					default:
 						if len(otKeys2) == 0 {
-							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
 							time.Sleep(time.Millisecond * 10)
 						} else {
 							// NOTE: in this test we only have one processor to publish
 							// so len(otKeys) should always be 1
-							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
-							otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
+							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+							otValue2, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys2[0])
 							otDecode1, _ := wmb.DecodeToWMB(otValue2)
 							// if the batch size is 1, then the watermark should be idle because
 							// one of partitions will be idle
@@ -377,15 +369,9 @@ func TestNewDataForward(t *testing.T) {
 			}}
 
 			fetchWatermark := &testForwardFetcher{}
-			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			toVertexStores := buildToVertexWatermarkStores(toSteps)
 
-			defer func() {
-				for _, p := range publishWatermark {
-					_ = p.Close()
-				}
-			}()
-
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -404,7 +390,7 @@ func TestNewDataForward(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				otKeys1, _ := otStores["to2"].GetAllKeys(ctx)
+				otKeys1, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
 			loop:
 				for {
 					select {
@@ -413,13 +399,13 @@ func TestNewDataForward(t *testing.T) {
 						break loop
 					default:
 						if len(otKeys1) == 0 {
-							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+							otKeys1, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
 							time.Sleep(time.Millisecond * 10)
 						} else {
 							// NOTE: in this test we only have one processor to publish
 							// so len(otKeys) should always be 1
-							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-							otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+							otKeys1, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+							otValue1, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys1[0])
 							otDecode1, _ := wmb.DecodeToWMB(otValue1)
 							// if the batch size is 1, then the watermark should be idle because
 							// one of partitions will be idle
@@ -437,7 +423,7 @@ func TestNewDataForward(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
+				otKeys2, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
 			loop:
 				for {
 					select {
@@ -446,13 +432,13 @@ func TestNewDataForward(t *testing.T) {
 						break loop
 					default:
 						if len(otKeys2) == 0 {
-							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
 							time.Sleep(time.Millisecond * 10)
 						} else {
 							// NOTE: in this test we only have one processor to publish
 							// so len(otKeys) should always be 1
-							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
-							otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
+							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+							otValue2, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys2[0])
 							otDecode2, _ := wmb.DecodeToWMB(otValue2)
 							// if the batch size is 1, then the watermark should be idle because
 							// one of partitions will be idle
@@ -542,15 +528,9 @@ func TestNewDataForward(t *testing.T) {
 			}}
 
 			fetchWatermark := &testForwardFetcher{}
-			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			toVertexStores := buildToVertexWatermarkStores(toSteps)
 
-			defer func() {
-				for _, p := range publishWatermark {
-					_ = p.Close()
-				}
-			}()
-
-			f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -588,7 +568,7 @@ func TestNewDataForward(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				otKeys1, _ := otStores["to1"].GetAllKeys(ctx)
+				otKeys1, _ := toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
 			loop:
 				for {
 					select {
@@ -597,13 +577,13 @@ func TestNewDataForward(t *testing.T) {
 						break loop
 					default:
 						if len(otKeys1) == 0 {
-							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
+							otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
 							time.Sleep(time.Millisecond * 10)
 						} else {
 							// NOTE: in this test we only have one processor to publish
 							// so len(otKeys) should always be 1
-							otKeys1, _ = otStores["to1"].GetAllKeys(ctx)
-							otValue1, _ := otStores["to1"].GetValue(ctx, otKeys1[0])
+							otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
+							otValue1, _ := toVertexStores["to1"].OffsetTimelineStore().GetValue(ctx, otKeys1[0])
 							otDecode1, _ := wmb.DecodeToWMB(otValue1)
 							if tt.batchSize > 1 && !otDecode1.Idle {
 								break loop
@@ -621,7 +601,7 @@ func TestNewDataForward(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				otKeys2, _ := otStores["to2"].GetAllKeys(ctx)
+				otKeys2, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
 			loop:
 				for {
 					select {
@@ -630,13 +610,13 @@ func TestNewDataForward(t *testing.T) {
 						break loop
 					default:
 						if len(otKeys2) == 0 {
-							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
+							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
 							time.Sleep(time.Millisecond * 10)
 						} else {
 							// NOTE: in this test we only have one processor to publish
 							// so len(otKeys) should always be 1
-							otKeys2, _ = otStores["to2"].GetAllKeys(ctx)
-							otValue2, _ := otStores["to2"].GetValue(ctx, otKeys2[0])
+							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+							otValue2, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys2[0])
 							otDecode2, _ := wmb.DecodeToWMB(otValue2)
 							// if the batch size is 1, then the watermark should be idle because
 							// one of partitions will be idle
@@ -678,8 +658,9 @@ func TestNewDataForward(t *testing.T) {
 
 			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyTransformerErrTest{}, myForwardApplyTransformerErrTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
+			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			toVertexStores := buildNoOpToVertexStores(toSteps)
+			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyTransformerErrTest{}, myForwardApplyTransformerErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -716,8 +697,9 @@ func TestNewDataForward(t *testing.T) {
 				},
 			}}
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
+			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			toVertexStores := buildNoOpToVertexStores(toSteps)
+			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.True(t, to1.IsEmpty())
@@ -752,8 +734,9 @@ func TestNewDataForward(t *testing.T) {
 				},
 			}}
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(batchSize))
+			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			toVertexStores := buildNoOpToVertexStores(toSteps)
+			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -886,9 +869,9 @@ func TestDataForwardSinglePartition(t *testing.T) {
 
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 	fetchWatermark := &testForwardFetcher{}
-	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	toVertexStores := buildNoOpToVertexStores(toSteps)
 
-	f, err := NewDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(5))
+	f, err := NewDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -904,7 +887,7 @@ func TestDataForwardSinglePartition(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, int(count))
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{"0-receivingVertex-0-0", "1-receivingVertex-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{"0-0-receivingVertex-0", "1-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
 		assert.Equal(t, testSourceNewEventTime, m.EventTime)
@@ -936,9 +919,9 @@ func TestDataForwardMultiplePartition(t *testing.T) {
 
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 	fetchWatermark := &testForwardFetcher{}
-	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+	toVertexStores := buildNoOpToVertexStores(toSteps)
 
-	f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(5))
+	f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to11.IsFull())
 	assert.False(t, to12.IsFull())
@@ -958,7 +941,7 @@ func TestDataForwardMultiplePartition(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[2].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{"0-receivingVertex-0-0", "2-receivingVertex-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{"0-0-receivingVertex-0", "2-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
 		assert.Equal(t, testSourceNewEventTime, m.EventTime)
@@ -972,7 +955,7 @@ func TestDataForwardMultiplePartition(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[1].Header.Keys, writeMessages[3].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-	assert.Equal(t, []interface{}{"1-receivingVertex-0-0", "3-receivingVertex-0-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{"1-0-receivingVertex-0", "3-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
 	for _, m := range readMessages {
 		// verify new event time gets assigned to messages.
 		assert.Equal(t, testSourceNewEventTime, m.EventTime)
@@ -1039,8 +1022,9 @@ func TestWriteToBuffer(t *testing.T) {
 				},
 			}}
 
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, TestSourceWatermarkPublisher{}, WithReadBatchSize(value.batchSize))
+			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			toVertexStores := buildNoOpToVertexStores(toSteps)
+			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(value.batchSize))
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
 			assert.True(t, buffer.IsEmpty())
@@ -1243,17 +1227,22 @@ func metricsReset() {
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer
-func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
+func buildToVertexWatermarkStores(toBuffers map[string][]isb.BufferWriter) map[string]wmstore.WatermarkStore {
 	var ctx = context.Background()
-	processorEntity := processor.NewProcessorEntity("publisherTestPod")
-	publishers := make(map[string]publish.Publisher)
-	otStores := make(map[string]kvs.KVStorer)
-	for key, partitionedBuffers := range toBuffers {
+	otStores := make(map[string]wmstore.WatermarkStore)
+	for key := range toBuffers {
 		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
 		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
-		otStores[key] = otKV
-		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
-		publishers[key] = p
+		otStores[key] = wmstore.BuildWatermarkStore(heartbeatKV, otKV)
 	}
-	return publishers, otStores
+	return otStores
+}
+
+func buildNoOpToVertexStores(toBuffers map[string][]isb.BufferWriter) map[string]wmstore.WatermarkStore {
+	toVertexStores := make(map[string]wmstore.WatermarkStore)
+	for key := range toBuffers {
+		store := wmstore.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+		toVertexStores[key] = store
+	}
+	return toVertexStores
 }

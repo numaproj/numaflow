@@ -35,7 +35,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
@@ -53,8 +55,9 @@ type DataForward struct {
 	toWhichStepDecider forward.ToWhichStepDecider
 	transformer        applier.MapApplier
 	wmFetcher          fetch.Fetcher
+	toVertexWMStores   map[string]store.WatermarkStore
 	// toVertexWMPublishers stores the toVertex to publisher mapping.
-	toVertexWMPublishers map[string]publish.Publisher
+	toVertexWMPublishers map[string]map[int32]publish.Publisher
 	// srcWMPublisher is used to publish source watermark.
 	srcWMPublisher isb.SourceWatermarkPublisher
 	opts           options
@@ -73,8 +76,8 @@ func NewDataForward(
 	toWhichStepDecider forward.ToWhichStepDecider,
 	transformer applier.MapApplier,
 	fetchWatermark fetch.Fetcher,
-	toVertexWMPublishers map[string]publish.Publisher,
 	srcWMPublisher isb.SourceWatermarkPublisher,
+	toVertexWmStores map[string]store.WatermarkStore,
 	opts ...Option) (*DataForward, error) {
 	options := DefaultOptions()
 	for _, o := range opts {
@@ -82,6 +85,12 @@ func NewDataForward(
 			return nil, err
 		}
 	}
+
+	var toVertexWMPublishers = make(map[string]map[int32]publish.Publisher)
+	for k := range toVertexWmStores {
+		toVertexWMPublishers[k] = make(map[int32]publish.Publisher)
+	}
+
 	// creating a context here which is managed by the forwarder's lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 	var isdf = DataForward{
@@ -92,6 +101,7 @@ func NewDataForward(
 		toWhichStepDecider:   toWhichStepDecider,
 		transformer:          transformer,
 		wmFetcher:            fetchWatermark,
+		toVertexWMStores:     toVertexWmStores,
 		toVertexWMPublishers: toVertexWMPublishers,
 		srcWMPublisher:       srcWMPublisher,
 		vertexName:           vertex.Spec.Name,
@@ -155,6 +165,21 @@ func (isdf *DataForward) Start() <-chan struct{} {
 				}
 			}
 		}
+
+		// Close the fetcher and all the publishers.
+		err := isdf.wmFetcher.Close()
+		if err != nil {
+			log.Error("Failed to close watermark fetcher, shutdown anyways...", zap.Error(err))
+		}
+
+		for _, toVertexPublishers := range isdf.toVertexWMPublishers {
+			for _, pub := range toVertexPublishers {
+				if err := pub.Close(); err != nil {
+					log.Errorw("Failed to close publisher, shutdown anyways...", zap.Error(err))
+				}
+			}
+		}
+
 		close(stopped)
 	}()
 	return stopped
@@ -269,6 +294,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
+	var sourcePartitionsIndices = make(map[int32]bool)
 	// let's figure out which vertex to send the results to.
 	// update the toBuffer(s) with writeMessages.
 	for _, m := range transformerResults {
@@ -289,6 +315,8 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 				return
 			}
 		}
+		// get the list of source partitions for which we have read messages, we will use this to publish watermarks to toVertices
+		sourcePartitionsIndices[m.readMessage.ReadOffset.PartitionIdx()] = true
 	}
 
 	// forward the message to the edge buffer (could be multiple edges)
@@ -308,13 +336,23 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// TODO: sort and get the highest value
 	for toVertexName, toVertexBufferOffsets := range writeOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
-		if publisher, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
+		if vertexPublishers, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
 				if len(offsets) > 0 {
-					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
-					activeWatermarkBuffers[toVertexName][index] = true
-					// reset because the toBuffer partition is no longer idling
-					isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
+					// publish watermark to all the source partitions
+					// create a publisher if it doesn't exist, we don't want to publish to all the partitions
+					for sp := range sourcePartitionsIndices {
+						var publisher, ok = vertexPublishers[sp]
+						if !ok {
+							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
+							vertexPublishers[sp] = publisher
+						}
+
+						publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
+						activeWatermarkBuffers[toVertexName][index] = true
+						// reset because the toBuffer partition is no longer idling
+						isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
+					}
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 			}
@@ -323,13 +361,20 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 
 	// condition "len(activeWatermarkBuffers) < len(isdf.toVertexWMPublishers)" :
 	// send idle watermark only if we have idle out buffers
-	for bufferName := range isdf.toVertexWMPublishers {
-		for index, activePartition := range activeWatermarkBuffers[bufferName] {
+	for toVertexName := range isdf.toVertexWMPublishers {
+		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
 			if !activePartition {
 				// use the watermark of the current read batch for the idle watermark
 				// same as read len==0 because there's no event published to the buffer
-				if p, ok := isdf.toVertexWMPublishers[bufferName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName][index], p, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeSource, processorWM)
+				if vertexPublishers, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
+					for sp := range sourcePartitionsIndices {
+						var publisher, ok = vertexPublishers[sp]
+						if !ok {
+							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
+							vertexPublishers[sp] = publisher
+						}
+						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[toVertexName][index], publisher, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeSource, processorWM)
+					}
 				}
 			}
 		}
@@ -522,8 +567,7 @@ func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.
 		} else {
 			// if we do not get a time from Transformer, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
-				// add partition to the ID, this is to make sure that the ID is unique across partitions
-				m.ID = fmt.Sprintf("%s-%s-%d-%d", readMessage.ReadOffset.String(), isdf.vertexName, isdf.reader.GetPartitionIdx(), index)
+				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
 				if m.EventTime.IsZero() {
 					m.EventTime = readMessage.EventTime
 				}
@@ -555,6 +599,18 @@ func (isdf *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToSt
 		messageToStep[t.ToVertexName][t.ToVertexPartitionIdx] = append(messageToStep[t.ToVertexName][t.ToVertexPartitionIdx], writeMessage.Message)
 	}
 	return nil
+}
+
+// createToVertexWatermarkPublisher creates a watermark publisher for the given toVertexName and partition
+func (isdf *DataForward) createToVertexWatermarkPublisher(toVertexName string, partition int32) publish.Publisher {
+
+	wmStore := isdf.toVertexWMStores[toVertexName]
+	entityName := fmt.Sprintf("%s-%s-%d", isdf.pipelineName, isdf.vertexName, partition)
+	processorEntity := processor.NewProcessorEntity(entityName)
+
+	publisher := publish.NewPublish(isdf.ctx, processorEntity, wmStore, int32(len(isdf.toBuffers[toVertexName])))
+	isdf.toVertexWMPublishers[toVertexName][partition] = publisher
+	return publisher
 }
 
 // errorArrayToMap summarizes an error array to map
