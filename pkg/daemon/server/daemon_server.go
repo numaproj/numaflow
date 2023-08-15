@@ -86,7 +86,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
 	}
-	wmFetchers, err := service.GetEdgeWatermarkFetchers(ctx, ds.pipeline, isbSvcClient)
+	wmFetchers, err := service.GetUXEdgeWatermarkFetchers(ctx, ds.pipeline, isbSvcClient)
 	if err != nil {
 		return fmt.Errorf("failed to get watermark fetchers, %w", err)
 	}
