@@ -1282,6 +1282,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../../user-guide/reference/join-vertex/" class="md-nav__link">
+        Joins and Cycles
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../user-guide/reference/multi-partition/" class="md-nav__link">
         Multi-partitioned Edges
       </a>
@@ -1299,18 +1313,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_5_5" type="checkbox" id="__nav_3_5_5" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_5_6" type="checkbox" id="__nav_3_5_6" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_5_5">
+        <label class="md-nav__link" for="__nav_3_5_6">
           Configuration
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Configuration" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_5_5">
+        <label class="md-nav__title" for="__nav_3_5_6">
           <span class="md-nav__icon md-icon"></span>
           Configuration
         </label>
@@ -1889,7 +1903,7 @@
 <p>The <code>Pipeline</code> is the most important concept in Numaflow, it represents a data processing job, it defines:</p>
 <ol>
 <li>A list of <a href="../vertex/">vertices</a>, which define the data processing tasks;</li>
-<li>A list of <code>edges</code>, which are used to describe the relationship between the vertices.</li>
+<li>A list of <code>edges</code>, which are used to describe the relationship between the vertices. Note an edge may go from a vertex to multiple vertices, and as of v0.10, an edge may also go from multiple vertices to a vertex. This many-to-one relationship is possible via <a href="../../user-guide/reference/join-vertex/">Join and Cycles</a></li>
 </ol>
 <p>The <code>Pipeline</code> is abstracted as a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Kubernetes Custom Resource</a>. A <code>Pipeline</code> spec looks like below.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
