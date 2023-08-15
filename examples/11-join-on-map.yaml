@@ -1,0 +1,33 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: join-on-map
+spec:
+  vertices:
+    - name: http-in
+      source:
+        http: {}
+    - name: kafka-in
+      source:
+        kafka:
+          brokers:
+            - my-broker1:19700
+            - my-broker2:19700
+          topic: my-topic
+          consumerGroup: my-consumer-group
+    # Both of the incoming Vertices join on this Map Vertex
+    - name: cat
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
+    - name: out
+      sink:
+        # A simple log printing sink
+        log: {}
+  edges:
+    - from: http-in
+      to: cat
+    - from: kafka-in
+      to: cat
+    - from: cat
+      to: out
