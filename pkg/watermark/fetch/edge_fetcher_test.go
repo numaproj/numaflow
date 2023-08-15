@@ -169,168 +169,169 @@ func TestBuffer_ComputeWatermarkWithOnePartition(t *testing.T) {
 	}
 }
 
-// func TestBuffer_ComputeGetWatermarkWithMultiplePartition(t *testing.T) {
-// 	var ctx = context.Background()
-//
-// 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
-// 	// so use no op watcher for testing
-// 	hbWatcher := noop.NewKVOpWatch()
-// 	otWatcher := noop.NewKVOpWatch()
-// 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-// 	partitionCount := int32(3)
-// 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
-// 	var (
-// 		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
-// 		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
-// 		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
-// 		pod0Timeline = []wmb.WMB{
-// 			{Watermark: 11, Offset: 9, Partition: 0},
-// 			{Watermark: 12, Offset: 20, Partition: 1},
-// 			{Watermark: 13, Offset: 21, Partition: 2},
-// 			{Watermark: 14, Offset: 22, Partition: 0},
-// 			{Watermark: 17, Offset: 28, Partition: 1},
-// 			{Watermark: 25, Offset: 30, Partition: 2},
-// 			{Watermark: 26, Offset: 31, Partition: 0},
-// 			{Watermark: 27, Offset: 32, Partition: 1},
-// 		}
-// 		pod1Timeline = []wmb.WMB{
-// 			{Watermark: 8, Offset: 13, Partition: 0},
-// 			{Watermark: 9, Offset: 16, Partition: 1},
-// 			{Watermark: 10, Offset: 18, Partition: 2},
-// 			{Watermark: 17, Offset: 26, Partition: 0},
-// 			{Watermark: 27, Offset: 29, Partition: 1},
-// 			{Watermark: 28, Offset: 33, Partition: 2},
-// 			{Watermark: 29, Offset: 34, Partition: 0},
-// 		}
-// 		pod2Timeline = []wmb.WMB{
-// 			{Watermark: 10, Offset: 14, Partition: 0},
-// 			{Watermark: 12, Offset: 17, Partition: 1},
-// 			{Watermark: 14, Offset: 19, Partition: 2},
-// 			{Watermark: 17, Offset: 24, Partition: 0},
-// 			{Watermark: 25, Offset: 35, Partition: 1},
-// 			{Watermark: 26, Offset: 36, Partition: 2},
-// 			{Watermark: 27, Offset: 37, Partition: 0},
-// 		}
-// 	)
-//
-// 	for _, watermark := range pod0Timeline {
-// 		testPod0.GetOffsetTimelines()[watermark.Partition].Put(watermark)
-// 	}
-// 	for _, watermark := range pod1Timeline {
-// 		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
-// 	}
-// 	for _, watermark := range pod2Timeline {
-// 		testPod2.GetOffsetTimelines()[watermark.Partition].Put(watermark)
-// 	}
-// 	processorManager.AddProcessor("testPod0", testPod0)
-// 	processorManager.AddProcessor("testPod1", testPod1)
-// 	processorManager.AddProcessor("testPod2", testPod2)
-//
-// 	type args struct {
-// 		offset int64
-// 	}
-// 	tests := []struct {
-// 		name             string
-// 		processorManager *processor.ProcessorManager
-// 		args             args
-// 		want             int64
-// 		partitionIdx     int32
-// 		lastProcessedWm  []int64
-// 	}{
-// 		{
-// 			name:             "offset_9",
-// 			processorManager: processorManager,
-// 			args:             args{9},
-// 			want:             -1,
-// 			partitionIdx:     0,
-// 			lastProcessedWm:  []int64{-1, -1, -1},
-// 		},
-// 		{
-// 			name:             "offset_15",
-// 			processorManager: processorManager,
-// 			args:             args{15},
-// 			want:             -1,
-// 			partitionIdx:     1,
-// 			lastProcessedWm:  []int64{-1, -1, -1},
-// 		},
-// 		{
-// 			name:             "offset_18",
-// 			processorManager: processorManager,
-// 			args:             args{18},
-// 			partitionIdx:     0,
-// 			lastProcessedWm:  []int64{6, 8, 8},
-// 			want:             8,
-// 		},
-// 		{
-// 			name:             "offset_22",
-// 			processorManager: processorManager,
-// 			args:             args{22},
-// 			partitionIdx:     2,
-// 			lastProcessedWm:  []int64{6, 5, 6},
-// 			want:             5,
-// 		},
-// 		{
-// 			name:             "offset_23",
-// 			processorManager: processorManager,
-// 			args:             args{23},
-// 			partitionIdx:     0,
-// 			lastProcessedWm:  []int64{7, 8, 7},
-// 			want:             7,
-// 		},
-// 		{
-// 			name:             "offset_28",
-// 			processorManager: processorManager,
-// 			args:             args{28},
-// 			partitionIdx:     1,
-// 			lastProcessedWm:  []int64{8, 9, 8},
-// 			want:             8,
-// 		},
-// 		{
-// 			name:             "offset_29",
-// 			processorManager: processorManager,
-// 			args:             args{29},
-// 			partitionIdx:     2,
-// 			lastProcessedWm:  []int64{10, 10, 9},
-// 			want:             10,
-// 		},
-// 		{
-// 			name:             "offset_31",
-// 			processorManager: processorManager,
-// 			args:             args{31},
-// 			partitionIdx:     0,
-// 			lastProcessedWm:  []int64{13, 14, 14},
-// 			want:             14,
-// 		},
-// 		{
-// 			name:             "offset_35",
-// 			processorManager: processorManager,
-// 			args:             args{40},
-// 			partitionIdx:     1,
-// 			lastProcessedWm:  []int64{25, 26, 27},
-// 			want:             25,
-// 		},
-// 	}
-// 	location, _ := time.LoadLocation("UTC")
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			lastProcessed := make([]int64, 3)
-// 			for i := 0; i < 3; i++ {
-// 				lastProcessed[i] = wmb.InitialWatermark.UnixMilli()
-// 			}
-// 			b := &edgeFetcher{
-// 				processorManager: tt.processorManager,
-// 				log:              zaptest.NewLogger(t).Sugar(),
-// 				lastProcessedWm:  tt.lastProcessedWm,
-// 			}
-// 			if got := b.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
-// 				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
-// 			}
-// 			// this will always be 27 because the timeline has been populated ahead of time
-// 			// ComputeHeadWatermark is only used in UI and test
-// 			assert.Equal(t, time.Time(b.ComputeHeadWatermark(0)).In(location), time.UnixMilli(26).In(location))
-// 		})
-// 	}
-// }
+func TestBuffer_ComputeGetWatermarkWithMultiplePartition(t *testing.T) {
+	var ctx = context.Background()
+
+	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
+	// so use no op watcher for testing
+	hbWatcher := noop.NewKVOpWatch()
+	otWatcher := noop.NewKVOpWatch()
+	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	partitionCount := int32(3)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+	var (
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
+		pod0Timeline = []wmb.WMB{
+			{Watermark: 11, Offset: 9, Partition: 0},
+			{Watermark: 12, Offset: 20, Partition: 1},
+			{Watermark: 13, Offset: 21, Partition: 2},
+			{Watermark: 14, Offset: 22, Partition: 0},
+			{Watermark: 17, Offset: 28, Partition: 1},
+			{Watermark: 25, Offset: 30, Partition: 2},
+			{Watermark: 26, Offset: 31, Partition: 0},
+			{Watermark: 27, Offset: 32, Partition: 1},
+		}
+		pod1Timeline = []wmb.WMB{
+			{Watermark: 8, Offset: 13, Partition: 0},
+			{Watermark: 9, Offset: 16, Partition: 1},
+			{Watermark: 10, Offset: 18, Partition: 2},
+			{Watermark: 17, Offset: 26, Partition: 0},
+			{Watermark: 27, Offset: 29, Partition: 1},
+			{Watermark: 28, Offset: 33, Partition: 2},
+			{Watermark: 29, Offset: 34, Partition: 0},
+		}
+		pod2Timeline = []wmb.WMB{
+			{Watermark: 10, Offset: 14, Partition: 0},
+			{Watermark: 12, Offset: 17, Partition: 1},
+			{Watermark: 14, Offset: 19, Partition: 2},
+			{Watermark: 17, Offset: 24, Partition: 0},
+			{Watermark: 25, Offset: 35, Partition: 1},
+			{Watermark: 26, Offset: 36, Partition: 2},
+			{Watermark: 27, Offset: 37, Partition: 0},
+		}
+	)
+
+	for _, watermark := range pod0Timeline {
+		testPod0.GetOffsetTimelines()[watermark.Partition].Put(watermark)
+	}
+	for _, watermark := range pod1Timeline {
+		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
+	}
+	for _, watermark := range pod2Timeline {
+		testPod2.GetOffsetTimelines()[watermark.Partition].Put(watermark)
+	}
+	processorManager.AddProcessor("testPod0", testPod0)
+	processorManager.AddProcessor("testPod1", testPod1)
+	processorManager.AddProcessor("testPod2", testPod2)
+
+	type args struct {
+		offset int64
+	}
+	tests := []struct {
+		name             string
+		processorManager *processor.ProcessorManager
+		args             args
+		want             int64
+		partitionIdx     int32
+		lastProcessedWm  []int64
+	}{
+		{
+			name:             "offset_9",
+			processorManager: processorManager,
+			args:             args{9},
+			want:             -1,
+			partitionIdx:     0,
+			lastProcessedWm:  []int64{-1, -1, -1},
+		},
+		{
+			name:             "offset_15",
+			processorManager: processorManager,
+			args:             args{15},
+			want:             -1,
+			partitionIdx:     1,
+			lastProcessedWm:  []int64{-1, -1, -1},
+		},
+		{
+			name:             "offset_18",
+			processorManager: processorManager,
+			args:             args{18},
+			partitionIdx:     0,
+			lastProcessedWm:  []int64{6, 8, 8},
+			want:             8,
+		},
+		{
+			name:             "offset_22",
+			processorManager: processorManager,
+			args:             args{22},
+			partitionIdx:     2,
+			lastProcessedWm:  []int64{6, 5, 6},
+			want:             5,
+		},
+		{
+			name:             "offset_23",
+			processorManager: processorManager,
+			args:             args{23},
+			partitionIdx:     0,
+			lastProcessedWm:  []int64{7, 8, 7},
+			want:             7,
+		},
+		{
+			name:             "offset_28",
+			processorManager: processorManager,
+			args:             args{28},
+			partitionIdx:     1,
+			lastProcessedWm:  []int64{8, 9, 8},
+			want:             8,
+		},
+		{
+			name:             "offset_29",
+			processorManager: processorManager,
+			args:             args{29},
+			partitionIdx:     2,
+			lastProcessedWm:  []int64{10, 10, 9},
+			want:             10,
+		},
+		{
+			name:             "offset_31",
+			processorManager: processorManager,
+			args:             args{31},
+			partitionIdx:     0,
+			lastProcessedWm:  []int64{13, 14, 14},
+			want:             14,
+		},
+		{
+			name:             "offset_35",
+			processorManager: processorManager,
+			args:             args{40},
+			partitionIdx:     1,
+			lastProcessedWm:  []int64{25, 26, 27},
+			want:             25,
+		},
+	}
+	location, _ := time.LoadLocation("UTC")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lastProcessed := make([]int64, 3)
+			for i := 0; i < 3; i++ {
+				lastProcessed[i] = wmb.InitialWatermark.UnixMilli()
+			}
+			b := &edgeFetcher{
+				processorManager: tt.processorManager,
+				log:              zaptest.NewLogger(t).Sugar(),
+				lastProcessedWm:  tt.lastProcessedWm,
+			}
+			_ = b.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx)
+			if got := b.getWatermark(); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
+				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
+			}
+			// this will always be 27 because the timeline has been populated ahead of time
+			// ComputeHeadWatermark is only used in UI and test
+			assert.Equal(t, time.Time(b.ComputeHeadWatermark(0)).In(location), time.UnixMilli(26).In(location))
+		})
+	}
+}
 
 func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 	var (
