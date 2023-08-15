@@ -42,7 +42,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-func TestBuffer_ComputeWatermarkWithOnePartition(t *testing.T) {
+func TestBuffer_updateWatermarkWithOnePartition(t *testing.T) {
 	var ctx = context.Background()
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
@@ -169,7 +169,7 @@ func TestBuffer_ComputeWatermarkWithOnePartition(t *testing.T) {
 	}
 }
 
-func TestBuffer_ComputeGetWatermarkWithMultiplePartition(t *testing.T) {
+func TestBuffer_updateWatermarkWithMultiplePartition(t *testing.T) {
 	var ctx = context.Background()
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
@@ -333,7 +333,7 @@ func TestBuffer_ComputeGetWatermarkWithMultiplePartition(t *testing.T) {
 	}
 }
 
-func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
+func Test_edgeFetcher_ComputeHeadWatermark(t *testing.T) {
 	var (
 		partitionCount    = int32(2)
 		ctx               = context.Background()
@@ -344,8 +344,8 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
 	)
 
-	getHeadWMTest1(ctx, processorManager1)
-	getHeadWMTest2(ctx, processorManager2)
+	computeHeadWMTest1(ctx, processorManager1)
+	computeHeadWMTest2(ctx, processorManager2)
 
 	tests := []struct {
 		name             string
@@ -374,7 +374,7 @@ func Test_edgeFetcher_GetHeadWatermark(t *testing.T) {
 	}
 }
 
-func getHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
+func computeHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(2)
 		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
@@ -438,7 +438,7 @@ func getHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorM
 	processorManager1.AddProcessor("testPod2", testPod2)
 }
 
-func getHeadWMTest2(ctx context.Context, processorManager2 *processor.ProcessorManager) {
+func computeHeadWMTest2(ctx context.Context, processorManager2 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(2)
 		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
@@ -502,7 +502,7 @@ func getHeadWMTest2(ctx context.Context, processorManager2 *processor.ProcessorM
 	processorManager2.AddProcessor("testPod2", testPod2)
 }
 
-func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
+func Test_edgeFetcher_updateHeadIdleWMB(t *testing.T) {
 	var (
 		partitionCount    = int32(3)
 		ctx               = context.Background()
@@ -515,10 +515,10 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 		processorManager4 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
 	)
 
-	getHeadWMBTest1(ctx, processorManager1)
-	getHeadWMBTest2(ctx, processorManager2)
-	getHeadWMBTest3(ctx, processorManager3)
-	getHeadWMBTest4(ctx, processorManager4)
+	updateHeadIdleWMBTest1(ctx, processorManager1)
+	updateHeadIdleWMBTest2(ctx, processorManager2)
+	updateHeadIdleWMBTest3(ctx, processorManager3)
+	updateHeadIdleWMBTest4(ctx, processorManager4)
 
 	tests := []struct {
 		name             string
@@ -567,7 +567,7 @@ func Test_edgeFetcher_GetHeadWMB(t *testing.T) {
 	}
 }
 
-func getHeadWMBTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
+func updateHeadIdleWMBTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
 		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
@@ -649,7 +649,7 @@ func getHeadWMBTest1(ctx context.Context, processorManager1 *processor.Processor
 	processorManager1.AddProcessor("testPod2", testPod2)
 }
 
-func getHeadWMBTest2(ctx context.Context, processorManager2 *processor.ProcessorManager) {
+func updateHeadIdleWMBTest2(ctx context.Context, processorManager2 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
 		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
@@ -731,7 +731,7 @@ func getHeadWMBTest2(ctx context.Context, processorManager2 *processor.Processor
 	processorManager2.AddProcessor("testPod2", testPod2)
 }
 
-func getHeadWMBTest3(ctx context.Context, processorManager3 *processor.ProcessorManager) {
+func updateHeadIdleWMBTest3(ctx context.Context, processorManager3 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
 		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
@@ -813,7 +813,7 @@ func getHeadWMBTest3(ctx context.Context, processorManager3 *processor.Processor
 	processorManager3.AddProcessor("testPod2", testPod2)
 }
 
-func getHeadWMBTest4(ctx context.Context, processorManager4 *processor.ProcessorManager) {
+func updateHeadIdleWMBTest4(ctx context.Context, processorManager4 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
 		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
