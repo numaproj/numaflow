@@ -38,13 +38,14 @@ type edgeFetcherSet struct {
 	log          *zap.SugaredLogger
 }
 
+// NewEdgeFetcherSet creates a new edgeFetcherSet object which implements the Fetcher interface.
 func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance, processorManagers map[string]*processor.ProcessorManager) Fetcher {
 	var edgeFetchers = make(map[string]*edgeFetcher)
 	for key, processorManager := range processorManagers {
 		var fetchWatermark *edgeFetcher
 		// create a fetcher that fetches watermark.
 		if vertexInstance.Vertex.IsASource() {
-			// source vertex is handled via source fetcher
+			// skip: source vertex is handled using new source fetcher
 		} else if vertexInstance.Vertex.IsReduceUDF() {
 			fetchWatermark = NewEdgeFetcher(ctx, processorManager, 1)
 		} else {
@@ -66,6 +67,9 @@ func (efs *edgeFetcherSet) ComputeWatermark(inputOffset isb.Offset, fromPartitio
 		overallWatermark = wmb.Watermark(time.UnixMilli(math.MaxInt64))
 	)
 	for fromVertex, fetcher := range efs.edgeFetchers {
+		// we don't need to use the returned updated watermark here
+		// because we do getWatermark afterwards to get
+		// the overall watermark from all partitions
 		_ = fetcher.updateWatermark(inputOffset, fromPartitionIdx)
 		wm = fetcher.getWatermark()
 		efs.log.Debugf("Got Edge watermark from vertex=%q: %v", fromVertex, wm.UnixMilli())
