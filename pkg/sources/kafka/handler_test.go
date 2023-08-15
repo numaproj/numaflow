@@ -77,8 +77,11 @@ func TestMessageHandling(t *testing.T) {
 		Replica:  0,
 	}
 	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, publishWMStore, WithLogger(logging.NewLogger()),
+	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
+	toVertexWmStores := map[string]store.WatermarkStore{
+		"test": publishWMStore,
+	}
+	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, WithLogger(logging.NewLogger()),
 		WithBufferSize(100), WithReadTimeOut(100*time.Millisecond))
 
 	msg := &sarama.ConsumerMessage{

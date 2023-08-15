@@ -61,7 +61,7 @@ func TestProduceMsg(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testCase, func(t *testing.T) {
-			outMsg, err := produceMsg(tt.inMsg)
+			outMsg, err := produceMsg(tt.inMsg, 0)
 			assert.NotNil(t, outMsg)
 			assert.Nil(t, err)
 			assert.Equal(t, tt.expectedBody, string(outMsg.Payload))
