@@ -193,8 +193,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	// idle watermark
 	if len(readMessages) == 0 {
-		// we use the HeadWMB as the watermark for the idle
-		// we get the HeadWMB for the partition from which we read the messages
+		// we get the Head idle wmb for the partition which we read the messages from and
+		// use it as the idle watermark
 		var processorWMB = df.wmFetcher.ComputeHeadIdleWMB(df.fromBufferPartition.GetPartitionIdx())
 		if !df.wmbChecker.ValidateHeadWMB(processorWMB) {
 			// validation failed, skip publishing
