@@ -193,7 +193,7 @@ func createProcessorManager(ctx context.Context, partitionCount int32) *processo
 	return processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
 }
 
-func pm1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
+func edge1Idle(ctx context.Context, processorManager *processor.ProcessorManager) {
 	var (
 		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 2)
 		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 2)
@@ -233,23 +233,23 @@ func pm1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	for _, watermark := range pod1Timeline {
 		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager1.AddProcessor("testPod0", testPod0)
-	processorManager1.AddProcessor("testPod1", testPod1)
+	processorManager.AddProcessor("testPod0", testPod0)
+	processorManager.AddProcessor("testPod1", testPod1)
 }
 
-func pm2(ctx context.Context, processorManager1 *processor.ProcessorManager) {
+func edge1NonIdle(ctx context.Context, processorManager *processor.ProcessorManager) {
 	var (
 		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 2)
 		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 2)
 		pod0Timeline = []wmb.WMB{
 			{
-				Idle:      true,
+				Idle:      false,
 				Offset:    28,
 				Watermark: 17,
 				Partition: 0,
 			},
 			{
-				Idle:      true,
+				Idle:      false,
 				Offset:    27,
 				Watermark: 16,
 				Partition: 1,
@@ -257,13 +257,13 @@ func pm2(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 		}
 		pod1Timeline = []wmb.WMB{
 			{
-				Idle:      true,
+				Idle:      false,
 				Offset:    25,
 				Watermark: 17,
 				Partition: 0,
 			},
 			{
-				Idle:      true,
+				Idle:      false,
 				Offset:    24,
 				Watermark: 16,
 				Partition: 1,
@@ -277,11 +277,55 @@ func pm2(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	for _, watermark := range pod1Timeline {
 		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager1.AddProcessor("testPod0", testPod0)
-	processorManager1.AddProcessor("testPod1", testPod1)
+	processorManager.AddProcessor("testPod0", testPod0)
+	processorManager.AddProcessor("testPod1", testPod1)
 }
 
-func pm3(ctx context.Context, processorManager1 *processor.ProcessorManager) {
+func edge2Idle(ctx context.Context, processorManager *processor.ProcessorManager) {
+	var (
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 2)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 2)
+		pod0Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    26,
+				Watermark: 18,
+				Partition: 0,
+			},
+			{
+				Idle:      true,
+				Offset:    16,
+				Watermark: 15,
+				Partition: 1,
+			},
+		}
+		pod1Timeline = []wmb.WMB{
+			{
+				Idle:      true,
+				Offset:    26,
+				Watermark: 19,
+				Partition: 0,
+			},
+			{
+				Idle:      true,
+				Offset:    24,
+				Watermark: 22,
+				Partition: 1,
+			},
+		}
+	)
+
+	for _, watermark := range pod0Timeline {
+		testPod0.GetOffsetTimelines()[watermark.Partition].Put(watermark)
+	}
+	for _, watermark := range pod1Timeline {
+		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
+	}
+	processorManager.AddProcessor("testPod0", testPod0)
+	processorManager.AddProcessor("testPod1", testPod1)
+}
+
+func edge2NonIdle(ctx context.Context, processorManager *processor.ProcessorManager) {
 	var (
 		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 2)
 		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 2)
@@ -321,8 +365,8 @@ func pm3(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	for _, watermark := range pod1Timeline {
 		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager1.AddProcessor("testPod0", testPod0)
-	processorManager1.AddProcessor("testPod1", testPod1)
+	processorManager.AddProcessor("testPod0", testPod0)
+	processorManager.AddProcessor("testPod1", testPod1)
 }
 
 func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
@@ -339,20 +383,18 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 		otWatcher    = noop.NewKVOpWatch()
 		storeWatcher = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 
-		edge1ProcessorManagerIdle1   = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
-		edge1ProcessorManagerIdle2   = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
+		edge1ProcessorManagerIdle    = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
 		edge1ProcessorManagerNonIdle = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
 
-		edge2ProcessorManagerIdle1 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
-		edge2ProcessorManagerIdle2 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
+		edge2ProcessorManagerIdle    = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
+		edge2ProcessorManagerNonIdle = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
 	)
 
-	pm1(ctx, edge1ProcessorManagerIdle1)
-	pm2(ctx, edge1ProcessorManagerIdle2)
-	pm3(ctx, edge1ProcessorManagerNonIdle)
+	edge1Idle(ctx, edge1ProcessorManagerIdle)
+	edge1NonIdle(ctx, edge1ProcessorManagerNonIdle)
 
-	pm1(ctx, edge2ProcessorManagerIdle1)
-	pm1(ctx, edge2ProcessorManagerIdle2)
+	edge2Idle(ctx, edge2ProcessorManagerIdle)
+	edge2NonIdle(ctx, edge2ProcessorManagerNonIdle)
 
 	tests := []struct {
 		name         string
@@ -360,10 +402,21 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 		expectedWMB  wmb.WMB
 	}{
 		{
+			"1_edge_non_idle",
+			map[string]*edgeFetcher{
+				"non_idle": {
+					processorManager: edge1ProcessorManagerNonIdle,
+					lastProcessedWm:  []int64{16, 18},
+					log:              zaptest.NewLogger(t).Sugar(),
+				},
+			},
+			wmb.WMB{},
+		},
+		{
 			"1_edge_idle",
 			map[string]*edgeFetcher{
 				"idle": {
-					processorManager: edge1ProcessorManagerIdle1,
+					processorManager: edge1ProcessorManagerIdle,
 					lastProcessedWm:  []int64{16, 18},
 					log:              zaptest.NewLogger(t).Sugar(),
 				},
@@ -376,48 +429,74 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 			},
 		},
 		{
-			"1_edge_non_idle",
+			"2_edges_non_idle",
 			map[string]*edgeFetcher{
-				"non_idle": {
+				"edge1_non_idle": {
 					processorManager: edge1ProcessorManagerNonIdle,
 					lastProcessedWm:  []int64{16, 18},
+					log:              zaptest.NewLogger(t).Sugar(),
+				},
+				"edge2_non_idle": {
+					processorManager: edge2ProcessorManagerNonIdle,
+					lastProcessedWm:  []int64{17, 17},
 					log:              zaptest.NewLogger(t).Sugar(),
 				},
 			},
 			wmb.WMB{},
 		},
-		// {
-		// 	"twoNonIdle",
-		// 	map[string]*edgeFetcher{
-		// 		"nonidle1": &edgeFetcher{},
-		// 		"nonidle2": &edgeFetcher{},
-		// 	},
-		// 	wmb.WMB{},
-		// },
-		// {
-		// 	"oneOfTwoIdle",
-		// 	map[string]*edgeFetcher{
-		// 		"idle":    &edgeFetcher{},
-		// 		"nonidle": &edgeFetcher{},
-		// 	},
-		// 	wmb.WMB{},
-		// },
-		// {
-		// 	"twoIdle",
-		// 	map[string]*edgeFetcher{
-		// 		"idle":  &edgeFetcher{},
-		// 		"idle2": &edgeFetcher{},
-		// 	},
-		// 	wmb.WMB{Watermark: time.Date(2023, 11, 17, 20, 34, 59, 0, time.UTC).UnixMilli()},
-		// },
-		// {
-		// 	"exceedingWM",
-		// 	map[string]*edgeFetcher{
-		// 		"idle":  &edgeFetcher{},
-		// 		"idle2": &edgeFetcher{},
-		// 	},
-		// 	wmb.WMB{},
-		// },
+		{
+			"2_edges_mixed",
+			map[string]*edgeFetcher{
+				"edge1_idle": {
+					processorManager: edge1ProcessorManagerIdle,
+					lastProcessedWm:  []int64{16, 18},
+					log:              zaptest.NewLogger(t).Sugar(),
+				},
+				"edge2_non_idle": {
+					processorManager: edge2ProcessorManagerNonIdle,
+					lastProcessedWm:  []int64{17, 17},
+					log:              zaptest.NewLogger(t).Sugar(),
+				},
+			},
+			wmb.WMB{},
+		},
+		{
+			"2_edges_idle",
+			map[string]*edgeFetcher{
+				"edge1_idle": {
+					processorManager: edge1ProcessorManagerIdle,
+					lastProcessedWm:  []int64{19, 18},
+					log:              zaptest.NewLogger(t).Sugar(),
+				},
+				"edge2_idle": {
+					processorManager: edge2ProcessorManagerIdle,
+					lastProcessedWm:  []int64{15, 18},
+					log:              zaptest.NewLogger(t).Sugar(),
+				},
+			},
+			wmb.WMB{
+				Idle:      true,
+				Offset:    16,
+				Watermark: 15,
+				Partition: 1,
+			},
+		},
+		{
+			"2_edges_idle_larger_than_last_processed_watermark",
+			map[string]*edgeFetcher{
+				"edge1_idle": {
+					processorManager: edge1ProcessorManagerIdle,
+					lastProcessedWm:  []int64{13, 15},
+					log:              zaptest.NewLogger(t).Sugar(),
+				},
+				"edge2_idle": {
+					processorManager: edge2ProcessorManagerIdle,
+					lastProcessedWm:  []int64{14, 12},
+					log:              zaptest.NewLogger(t).Sugar(),
+				},
+			},
+			wmb.WMB{},
+		},
 	}
 
 	for _, tt := range tests {
