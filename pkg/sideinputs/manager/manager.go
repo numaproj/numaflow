@@ -86,8 +86,11 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 		}
 	}()
 
-	sideInputBucketName := isbsvc.JetStreamProcessorBucket(sim.sideInputsStore)
+	sideInputBucketName := isbsvc.JetStreamSideInputsStoreBucket(sim.sideInputsStore)
 	siStore, err := jetstream.NewKVJetStreamKVStore(ctx, sim.pipelineName, sideInputBucketName, natsClient)
+	if err != nil {
+		return fmt.Errorf("failed to create a new KVStore: %w", err)
+	}
 
 	f := func() {
 		if err := sim.execute(ctx, sideInputClient, siStore); err != nil {
@@ -112,12 +115,12 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 
 func (sim *sideInputsManager) execute(ctx context.Context, sideInputClient *udsideinput.UDSgRPCBasedUDSideinput, siStore kvs.KVStorer) error {
 	log := logging.FromContext(ctx)
-	log.Info("Executing ...")
+	log.Info("Executing Side Input manager cron ...")
 	resp, err := sideInputClient.Apply(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve side input: %w", err)
 	}
-	err = siStore.PutKV(ctx, sim.sideInput.String(), resp.Value)
+	err = siStore.PutKV(ctx, sim.sideInput.Name, resp.Value)
 	if err != nil {
 		return fmt.Errorf("failed to write side input %q to store: %w", sim.sideInput.Name, err)
 	}

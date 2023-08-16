@@ -17,6 +17,7 @@ limitations under the License.
 package synchronizer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path"
@@ -94,6 +95,7 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 func startSideInputSynchronizer(ctx context.Context, watch kvs.KVWatcher, mountPath string) {
 	log := logging.FromContext(ctx)
 	watchCh, stopped := watch.Watch(ctx)
+	var prevValue []byte
 	for {
 		select {
 		case <-stopped:
@@ -104,13 +106,17 @@ func startSideInputSynchronizer(ctx context.Context, watch kvs.KVWatcher, mountP
 				log.Warnw("nil value received from Side Input watcher")
 				continue
 			}
-			log.Debug("Side Input value received ",
+			log.Infow("Side Input value received ",
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 			p := path.Join(mountPath, value.Key())
-			// Write changes to disk
-			err := utils.UpdateSideInputFile(ctx, p, value.Value())
-			if err != nil {
-				log.Errorw("Failed to update Side Input value %s", zap.Error(err))
+			// Check if the value has changed from the last update
+			if prevValue == nil || bytes.Equal(prevValue, value.Value()) == false {
+				// Write changes to disk
+				err := utils.UpdateSideInputFile(ctx, p, value.Value())
+				if err != nil {
+					log.Errorw("Failed to update Side Input value %s", zap.Error(err))
+				}
+				prevValue = value.Value()
 			}
 			continue
 		case <-ctx.Done():
