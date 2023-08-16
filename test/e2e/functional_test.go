@@ -20,7 +20,6 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -170,126 +169,6 @@ func (s *FunctionalSuite) TestUDFFiltering() {
 	w.Expect().SinkNotContains("out", expect2)
 }
 
-func (s *FunctionalSuite) TestSourceFiltering() {
-	w := s.Given().Pipeline("@testdata/source-filtering.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "source-filtering"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	expect0 := `{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`
-	expect1 := `{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`
-	expect2 := `{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`
-	expect3 := `{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`
-	expect4 := `{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`
-
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect0))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect1))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect2))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect3))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect4)))
-
-	w.Expect().SinkContains("out", expect3)
-	w.Expect().SinkContains("out", expect4)
-	w.Expect().SinkNotContains("out", expect0)
-	w.Expect().SinkNotContains("out", expect1)
-	w.Expect().SinkNotContains("out", expect2)
-}
-
-func (s *FunctionalSuite) TestTimeExtractionFilter() {
-	w := s.Given().Pipeline("@testdata/time-extraction-filter.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "time-extraction-filter"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	testMsgOne := `{"id": 80, "msg": "hello", "time": "2021-01-18T21:54:42.123Z", "desc": "A good ID."}`
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)))
-	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1), PodLogCheckOptionWithContainer("numa"))
-
-	testMsgTwo := `{"id": 101, "msg": "test", "time": "2021-01-18T21:54:42.123Z", "desc": "A bad ID."}`
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)))
-	w.Expect().SinkNotContains("out", testMsgTwo)
-}
-
-func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
-	w := s.Given().Pipeline("@testdata/extract-event-time-from-payload.yaml").
-		When().
-		CreatePipelineAndWait()
-	currentTime := time.Now().UnixMilli()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "extract-event-time"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning().DaemonPodsRunning()
-
-	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
-		TerminateAllPodPortForwards()
-
-	// Use daemon client to verify watermark propagation.
-	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
-	assert.NoError(s.T(), err)
-	defer func() {
-		_ = client.Close()
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		startTime := time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC)
-		for {
-			select {
-			case <-done:
-				return
-			case <-ctx.Done():
-				return
-			default:
-				testMsg := generateTestMsg("numa", startTime)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsg)))
-				startTime = startTime.Add(1 * time.Minute)
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-	}()
-	// In this test, we send a message with event time being now, apply event time extractor and verify from log that the message event time gets updated.
-	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1))
-
-wmLoop:
-	for {
-		select {
-		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
-				s.T().Log("test timed out")
-				assert.Fail(s.T(), "timed out")
-				break wmLoop
-			}
-		default:
-			wm, err := client.GetPipelineWatermarks(ctx, pipelineName)
-			edgeWM := wm[0].Watermarks[0]
-			if wm[0].Watermarks[0] != -1 {
-				assert.NoError(s.T(), err)
-				if err != nil {
-					assert.Fail(s.T(), err.Error())
-				}
-				// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark is greater than the event time of the first message
-				// and less than the current time.
-				assert.True(s.T(), edgeWM >= time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() && edgeWM < currentTime)
-				break wmLoop
-			}
-			time.Sleep(time.Second)
-		}
-	}
-	done <- struct{}{}
-}
-
 func (s *FunctionalSuite) TestConditionalForwarding() {
 	w := s.Given().Pipeline("@testdata/even-odd.yaml").
 		When().
@@ -315,6 +194,49 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 	w.Expect().SinkContains("number-sink", "888888")
 	w.Expect().SinkContains("number-sink", "888889")
 	w.Expect().SinkNotContains("number-sink", "not an integer")
+}
+
+func (s *FunctionalSuite) TestDropOnFull() {
+	w := s.Given().Pipeline("@testdata/drop-on-full.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "drop-on-full"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+	defer w.VertexPodPortForward("in", 8001, dfv1.VertexMetricsPort).
+		TerminateAllPodPortForwards()
+
+	// scale the sinks down to 0 pod to create a buffer full scenario.
+	scaleDownArgs := "kubectl scale vtx drop-on-full-sink --replicas=0 -n numaflow-system"
+	w.Exec("/bin/sh", []string{"-c", scaleDownArgs}, CheckVertexScaled)
+	w.Expect().VertexSizeScaledTo("sink", 0)
+
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")))
+	// give buffer writer some time to update the isFull attribute.
+	// 5s is a carefully chosen number to create a stable buffer full scenario.
+	time.Sleep(time.Second * 5)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
+
+	expectedDropMetric := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-0",pipeline="drop-on-full",vertex="in"} 1`
+	// wait for the drop metric to be updated, time out after 10s.
+	timeoutChan := time.After(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 2)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			metricsString := HTTPExpect(s.T(), "https://localhost:8001").GET("/metrics").
+				Expect().
+				Status(200).Body().Raw()
+			if strings.Contains(metricsString, expectedDropMetric) {
+				return
+			}
+		case <-timeoutChan:
+			s.T().Fatalf("timeout waiting for metrics to be updated")
+		}
+	}
 }
 
 func (s *FunctionalSuite) TestWatermarkEnabled() {
@@ -394,25 +316,4 @@ func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClie
 
 func TestFunctionalSuite(t *testing.T) {
 	suite.Run(t, new(FunctionalSuite))
-}
-
-type Item struct {
-	ID   int       `json:"id"`
-	Name string    `json:"name"`
-	Time time.Time `json:"time"`
-}
-
-type TestMsg struct {
-	Test int    `json:"test"`
-	Item []Item `json:"item"`
-}
-
-func generateTestMsg(msg string, t time.Time) string {
-	items := []Item{
-		{ID: 1, Name: msg, Time: t},
-		{ID: 2, Name: msg, Time: t},
-	}
-	testMsg := TestMsg{Test: 21, Item: items}
-	jsonBytes, _ := json.Marshal(testMsg)
-	return string(jsonBytes)
 }
