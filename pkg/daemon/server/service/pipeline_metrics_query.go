@@ -24,17 +24,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
-	server "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
-
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
+	server "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
@@ -50,7 +49,7 @@ type pipelineMetadataQuery struct {
 	isbSvcClient      isbsvc.ISBService
 	pipeline          *v1alpha1.Pipeline
 	httpClient        metricsHttpClient
-	watermarkFetchers map[v1alpha1.Edge][]fetch.Fetcher
+	watermarkFetchers map[v1alpha1.Edge][]fetch.UXFetcher
 	rater             server.Ratable
 }
 
@@ -64,7 +63,7 @@ const (
 func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
-	wmFetchers map[v1alpha1.Edge][]fetch.Fetcher,
+	wmFetchers map[v1alpha1.Edge][]fetch.UXFetcher,
 	rater server.Ratable) (*pipelineMetadataQuery, error) {
 	var err error
 	ps := pipelineMetadataQuery{

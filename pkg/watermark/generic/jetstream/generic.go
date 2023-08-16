@@ -74,35 +74,32 @@ func BuildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, 
 	}
 
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
-	edgeFetchers := make(map[string]fetch.Fetcher)
+	processorManagers := make(map[string]*processor.ProcessorManager)
 
 	vertex := vertexInstance.Vertex
 	if vertex.IsASource() {
 		fromBucket := v1alpha1.GenerateSourceBucketName(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name)
-		edgeFetcher, err := buildFetcherForBucket(ctx, vertexInstance, fromBucket, client)
+		processorManager, err := buildProcessorManagerForBucket(ctx, vertexInstance, fromBucket, client)
 		if err != nil {
 			return nil, err
 		}
-		// For source vertex, we use the vertex name as the from buffer name
-		edgeFetchers[vertex.Spec.Name] = edgeFetcher
+		return fetch.NewSourceFetcher(ctx, processorManager), nil
 	} else {
 		for _, e := range vertex.Spec.FromEdges {
 			fromBucket := v1alpha1.GenerateEdgeBucketName(vertexInstance.Vertex.Namespace, pipelineName, e.From, e.To)
-			edgeFetcher, err := buildFetcherForBucket(ctx, vertexInstance, fromBucket, client)
+			processorManager, err := buildProcessorManagerForBucket(ctx, vertexInstance, fromBucket, client)
 			if err != nil {
 				return nil, err
 			}
-			edgeFetchers[e.From] = edgeFetcher
+			processorManagers[e.From] = processorManager
 		}
 	}
 
-	return fetch.NewEdgeFetcherSet(ctx, edgeFetchers), nil
+	return fetch.NewEdgeFetcherSet(ctx, vertexInstance, processorManagers), nil
 }
 
-// buildFetcherForBucket creates a Fetcher (implemented by EdgeFetcher) which is used to fetch the Watermarks for a single incoming Edge
-// to a Vertex (a single Edge has a single Bucket)
-func buildFetcherForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBucket string, client *jsclient.NATSClient) (fetch.Fetcher, error) {
-	var fetchWatermark fetch.Fetcher
+// buildProcessorManagerForBucket creates a processor manager for the given bucket.
+func buildProcessorManagerForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBucket string, client *jsclient.NATSClient) (*processor.ProcessorManager, error) {
 	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 	hbBucketName := isbsvc.JetStreamProcessorBucket(fromBucket)
 	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbBucketName, client)
@@ -122,16 +119,7 @@ func buildFetcherForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexI
 	processManager := processor.NewProcessorManager(ctx, storeWatcher, fromBucket, int32(len(vertexInstance.Vertex.OwnedBuffers())),
 		processor.WithVertexReplica(vertexInstance.Replica), processor.WithIsReduce(vertexInstance.Vertex.IsReduceUDF()), processor.WithIsSource(vertexInstance.Vertex.IsASource()))
 
-	// create a fetcher that fetches watermark.
-	if vertexInstance.Vertex.IsASource() {
-		fetchWatermark = fetch.NewSourceFetcher(ctx, processManager)
-	} else if vertexInstance.Vertex.IsReduceUDF() {
-		fetchWatermark = fetch.NewEdgeFetcher(ctx, processManager, 1)
-	} else {
-		fetchWatermark = fetch.NewEdgeFetcher(ctx, processManager, vertexInstance.Vertex.Spec.GetPartitionCount())
-	}
-
-	return fetchWatermark, nil
+	return processManager, nil
 }
 
 // buildPublishers creates the Watermark Publishers for a given Vertex, one per Edge
