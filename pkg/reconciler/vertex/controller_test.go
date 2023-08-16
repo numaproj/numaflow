@@ -21,9 +21,6 @@ import (
 	"strings"
 	"testing"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/reconciler"
-	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
@@ -35,6 +32,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
+	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
 )
 
 const (
@@ -189,7 +190,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
-		envNames := []string{}
+		var envNames []string
 		for _, e := range spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
@@ -207,7 +208,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, argStr, strings.Join(testObj.GetToBuckets(), ","))
 	})
 
-	t.Run("test source user defined transformer", func(t *testing.T) {
+	t.Run("test source with transformer", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		r := &vertexReconciler{
 			client: cl,
@@ -231,6 +232,34 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Equal(t, 2, len(spec.Containers))
 	})
 
+	t.Run("test user-defined source with transformer", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := &vertexReconciler{
+			client: cl,
+			scheme: scheme.Scheme,
+			config: fakeConfig,
+			image:  testFlowImage,
+			logger: zaptest.NewLogger(t).Sugar(),
+		}
+		testObj := testSrcVertex.DeepCopy()
+		testObj.Spec.Source = &dfv1.Source{
+			UDSource: &dfv1.UDSource{
+				Container: &dfv1.Container{
+					Image: "image",
+				},
+			},
+			UDTransformer: &dfv1.UDTransformer{
+				Container: &dfv1.Container{
+					Image: "my-image",
+				},
+			},
+		}
+		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 2)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(spec.InitContainers))
+		assert.Equal(t, 3, len(spec.Containers))
+	})
+
 	t.Run("test sink", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		r := &vertexReconciler{
@@ -250,7 +279,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
 		assert.Equal(t, 1, len(spec.Containers))
-		envNames := []string{}
+		var envNames []string
 		for _, e := range spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
@@ -321,7 +350,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.InitContainers))
 		assert.Equal(t, 2, len(spec.Containers))
-		envNames := []string{}
+		var envNames []string
 		for _, e := range spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
@@ -427,7 +456,7 @@ func Test_reconcile(t *testing.T) {
 		err = r.client.List(ctx, svcs, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(svcs.Items))
-		svcNames := []string{}
+		var svcNames []string
 		for _, s := range svcs.Items {
 			svcNames = append(svcNames, s.Name)
 		}

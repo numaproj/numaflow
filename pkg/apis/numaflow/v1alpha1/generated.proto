@@ -1134,6 +1134,9 @@ message Source {
 
   // +optional
   optional UDTransformer transformer = 6;
+
+  // +optional
+  optional UDSource udSource = 7;
 }
 
 // Status is a common structure which can be used for Status field.
@@ -1214,6 +1217,10 @@ message UDF {
 }
 
 message UDSink {
+  optional Container container = 1;
+}
+
+message UDSource {
   optional Container container = 1;
 }
 

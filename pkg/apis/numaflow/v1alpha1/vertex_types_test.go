@@ -32,7 +32,7 @@ const (
 	testVertexSpecName = "vtx"
 	testPipelineName   = "test-pl"
 	testVertexName     = testPipelineName + "-" + testVertexSpecName
-	testFlowImage      = "test-d-iamge"
+	testFlowImage      = "test-f-image"
 )
 
 var (
@@ -236,7 +236,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
-		envNames := []string{}
+		var envNames []string
 		for _, e := range s.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
@@ -270,7 +270,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.NotNil(t, s.Containers[0].LivenessProbe.HTTPGet)
 		assert.Equal(t, corev1.URISchemeHTTPS, s.Containers[0].LivenessProbe.HTTPGet.Scheme)
 		assert.Equal(t, VertexMetricsPort, s.Containers[0].LivenessProbe.HTTPGet.Port.IntValue())
-		envNames := []string{}
+		var envNames []string
 		for _, e := range s.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
@@ -306,7 +306,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, "cmd", s.Containers[1].Command[0])
 		assert.Equal(t, 1, len(s.Containers[1].Args))
 		assert.Equal(t, "arg0", s.Containers[1].Args[0])
-		sidecarEnvNames := []string{}
+		var sidecarEnvNames []string
 		for _, env := range s.Containers[1].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
 		}
@@ -314,6 +314,45 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, sidecarEnvNames, EnvMemoryLimit)
 		assert.Contains(t, sidecarEnvNames, EnvCPURequest)
 		assert.Contains(t, sidecarEnvNames, EnvMemoryRequest)
+	})
+
+	t.Run("test user defined source, with a source transformer", func(t *testing.T) {
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.Source = &Source{
+			UDSource: &UDSource{
+				Container: &Container{
+					Image:   "image",
+					Command: []string{"cmd"},
+					Args:    []string{"arg0"},
+				},
+			},
+			UDTransformer: &UDTransformer{
+				Container: &Container{
+					Image:   "image",
+					Command: []string{"cmd"},
+					Args:    []string{"arg0"},
+				},
+			},
+		}
+		s, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(s.Containers))
+
+		for i := 1; i < len(s.Containers); i++ {
+			assert.Equal(t, "image", s.Containers[i].Image)
+			assert.Equal(t, 1, len(s.Containers[i].Command))
+			assert.Equal(t, "cmd", s.Containers[i].Command[0])
+			assert.Equal(t, 1, len(s.Containers[i].Args))
+			assert.Equal(t, "arg0", s.Containers[i].Args[0])
+			var sidecarEnvNames []string
+			for _, env := range s.Containers[i].Env {
+				sidecarEnvNames = append(sidecarEnvNames, env.Name)
+			}
+			assert.Contains(t, sidecarEnvNames, EnvCPULimit)
+			assert.Contains(t, sidecarEnvNames, EnvMemoryLimit)
+			assert.Contains(t, sidecarEnvNames, EnvCPURequest)
+			assert.Contains(t, sidecarEnvNames, EnvMemoryRequest)
+		}
 	})
 
 	t.Run("test udf", func(t *testing.T) {
@@ -330,7 +369,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, CtrUdf, s.Containers[1].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
-		envNames := []string{}
+		var envNames []string
 		for _, e := range s.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
@@ -345,7 +384,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeMapUDF))
 		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
-		sidecarEnvNames := []string{}
+		var sidecarEnvNames []string
 		for _, env := range s.Containers[1].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
 		}
@@ -424,6 +463,17 @@ func Test_VertexIsSource(t *testing.T) {
 	o := testVertex.DeepCopy()
 	o.Spec.Source = &Source{}
 	assert.True(t, o.IsASource())
+	assert.False(t, o.IsUDSource())
+	o.Spec.Source.UDSource = &UDSource{}
+	assert.True(t, o.IsUDSource())
+}
+
+func Test_VertexHasTransformer(t *testing.T) {
+	o := testVertex.DeepCopy()
+	o.Spec.Source = &Source{
+		UDTransformer: &UDTransformer{},
+	}
+	assert.True(t, o.HasUDTransformer())
 }
 
 func Test_VertexIsSink(t *testing.T) {
@@ -457,7 +507,7 @@ func Test_VertexGetInitContainers(t *testing.T) {
 	assert.Equal(t, "my-test-init", s[1].Name)
 	assert.Equal(t, "my-test-init-image", s[1].Image)
 	assert.Equal(t, s[1].Resources, corev1.ResourceRequirements{})
-	a := []string{}
+	var a []string
 	for _, env := range s[0].Env {
 		a = append(a, env.Name)
 	}

@@ -19264,6 +19264,9 @@
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
+        },
+        "udSource": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSource"
         }
       }
     },
@@ -19380,6 +19383,17 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.UDSink": {
+      "type": "object",
+      "required": [
+        "container"
+      ],
+      "properties": {
+        "container": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.UDSource": {
       "type": "object",
       "required": [
         "container"

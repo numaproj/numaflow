@@ -232,6 +232,31 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "can not specify both builtin transformer, and a customized image")
 	})
 
+	t.Run("udsource no image specified", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source.UDSource = &dfv1.UDSource{}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "a customized image is required")
+		testObj.Spec.Vertices[0].Source.UDSource = &dfv1.UDSource{
+			Container: &dfv1.Container{
+				Image: "",
+			},
+		}
+		err = ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "a customized image is required")
+	})
+
+	t.Run("source vertex having both udsource and built-in source specified ", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Source.UDSource = &dfv1.UDSource{Container: &dfv1.Container{Image: "xxxx"}}
+		testObj.Spec.Vertices[0].Source.Generator = &dfv1.GeneratorSource{}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "only one of")
+	})
+
 	t.Run("udf no image and builtin specified", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[1].UDF.Builtin = nil

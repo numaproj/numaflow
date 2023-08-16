@@ -39,7 +39,11 @@ type Source struct {
 	RedisStreams *RedisStreamsSource `json:"redisStreams,omitempty" protobuf:"bytes,5,opt,name=redisStreams"`
 	// +optional
 	UDTransformer *UDTransformer `json:"transformer,omitempty" protobuf:"bytes,6,opt,name=transformer"`
+	// +optional
+	UDSource *UDSource `json:"udSource,omitempty" protobuf:"bytes,7,opt,name=udSource"`
 }
+
+// TODO - UDSource can't be specified with other sources
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
 	containers := []corev1.Container{
@@ -47,6 +51,9 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
 	}
 	if s.UDTransformer != nil {
 		containers = append(containers, s.getUDTransformerContainer(req))
+	}
+	if s.UDSource != nil {
+		containers = append(containers, s.getUDSourceContainer(req))
 	}
 	return containers, nil
 }
@@ -88,6 +95,42 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 		c = c.image(mainContainerReq.image).args(args...) // Use the same image as the main container
 	}
 	if x := s.UDTransformer.Container; x != nil {
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+		if x.ImagePullPolicy != nil {
+			c = c.imagePullPolicy(*x.ImagePullPolicy)
+		}
+	}
+	container := c.build()
+	container.LivenessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/sidecar-livez",
+				Port:   intstr.FromInt(VertexMetricsPort),
+				Scheme: corev1.URISchemeHTTPS,
+			},
+		},
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       60,
+		TimeoutSeconds:      30,
+	}
+	return container
+}
+
+func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Container {
+	c := containerBuilder{}.
+		name(CtrUdsource).
+		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
+		appendVolumeMounts(mainContainerReq.volumeMounts...)
+	if x := s.UDSource.Container; x != nil && x.Image != "" { // customized image
+		c = c.image(x.Image)
+		if len(x.Command) > 0 {
+			c = c.command(x.Command...)
+		}
+		if len(x.Args) > 0 {
+			c = c.args(x.Args...)
+		}
+	}
+	if x := s.UDSource.Container; x != nil {
 		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
 		if x.ImagePullPolicy != nil {
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
