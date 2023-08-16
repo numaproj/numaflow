@@ -43,8 +43,6 @@ type Source struct {
 	UDSource *UDSource `json:"udSource,omitempty" protobuf:"bytes,7,opt,name=udSource"`
 }
 
-// TODO - UDSource can't be specified with other sources
-
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
 	containers := []corev1.Container{
 		s.getMainContainer(req),
