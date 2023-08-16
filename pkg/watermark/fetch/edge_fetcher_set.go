@@ -46,7 +46,7 @@ func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance,
 		// create a fetcher that fetches watermark.
 		if vertexInstance.Vertex.IsASource() {
 			// panic: source vertex is handled using new source fetcher
-			panic("NewEdgeFetcherSet can't be created for a source vertex.")
+			panic("NewEdgeFetcherSet can't create a new edge fetcher set for a source vertex.")
 		} else if vertexInstance.Vertex.IsReduceUDF() {
 			fetchWatermark = NewEdgeFetcher(ctx, processorManager, 1)
 		} else {
