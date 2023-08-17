@@ -2,7 +2,7 @@
 
 Inter-Step Buffer Service is the service to provide [Inter-Step Buffers](inter-step-buffer.md).
 
-An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), it is required to be existing in a namespace before Pipeline objects are created. A sample `InterStepBufferService` with JetStream implementation looks like below.
+An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). It is required to be existing in a namespace before Pipeline objects are created. A sample `InterStepBufferService` with JetStream implementation looks like below.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -14,7 +14,7 @@ spec:
     version: latest # Do NOT use "latest" but a specific version in your real deployment
 ```
 
-`InterStepBufferService` is a namespaced object, it can be used by all the Pipelines in the same namespace. By default, Pipeline objects look for an `InterStepBufferService` named `default`, so a common practice is to create an `InterStepBufferService` with the name `default`. If you give the `InterStepBufferService` a name other than `default`, then you need to give the same name in the Pipeline spec.
+`InterStepBufferService` is a namespaced object. It can be used by all the Pipelines in the same namespace. By default, Pipeline objects look for an `InterStepBufferService` named `default`, so a common practice is to create an `InterStepBufferService` with the name `default`. If you give the `InterStepBufferService` a name other than `default`, then you need to give the same name in the Pipeline spec.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -42,7 +42,7 @@ Property `spec.jetstream.version` is required for a JetStream `InterStepBufferSe
 
 **Note**
 
-The version `latest` in the ConfigMap should only be used for testing purpose, it's recommended to always use a fixed version in your real workload.
+The version `latest` in the ConfigMap should only be used for testing purpose. It's recommended that you always use a fixed version in your real workload.
 
 ### Replicas
 
@@ -189,7 +189,7 @@ An optional property `spec.redis.native.replicas` (defaults to 3) can be specifi
 
 ### Persistence
 
-Following example shows an `native` Redis `InterStepBufferService` with persistence.
+The following example shows an `native` Redis `InterStepBufferService` with persistence.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
