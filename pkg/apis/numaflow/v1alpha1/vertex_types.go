@@ -77,6 +77,10 @@ func (v Vertex) HasUDTransformer() bool {
 	return v.Spec.HasUDTransformer()
 }
 
+func (v Vertex) IsUDSource() bool {
+	return v.Spec.IsUDSource()
+}
+
 func (v Vertex) HasSideInputs() bool {
 	return len(v.Spec.SideInputs) > 0
 }
@@ -257,7 +261,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		TimeoutSeconds:      30,
 	}
 
-	if len(containers) > 1 { // udf, udsink or source vertex specifies a udtransformer
+	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
 		for i := 1; i < len(containers); i++ {
 			containers[i].Env = append(containers[i].Env, v.commonEnvs()...)
 			containers[i].Env = append(containers[i].Env, v.sidecarEnvs()...)
@@ -508,6 +512,10 @@ func (av AbstractVertex) IsASource() bool {
 
 func (av AbstractVertex) HasUDTransformer() bool {
 	return av.Source != nil && av.Source.UDTransformer != nil
+}
+
+func (av AbstractVertex) IsUDSource() bool {
+	return av.IsASource() && av.Source.UDSource != nil
 }
 
 func (av AbstractVertex) IsASink() bool {

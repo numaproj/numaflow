@@ -67,6 +67,7 @@ const (
 	CtrMain              = "numa"
 	CtrUdf               = "udf"
 	CtrUdsink            = "udsink"
+	CtrUdsource          = "udsource"
 	CtrUdtransformer     = "transformer"
 	CtrUdSideInput       = "udsi"
 	CtrInitSideInputs    = "init-side-inputs"
