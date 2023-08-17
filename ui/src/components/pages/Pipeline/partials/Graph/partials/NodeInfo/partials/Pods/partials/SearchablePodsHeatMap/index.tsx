@@ -23,7 +23,7 @@ export const SearchablePodsHeatMap = ({
   useEffect(() => {
     if (!search) {
       setFilteredPods(pods);
-      setSelectedPod(pods[0]);
+      if (pods?.length) setSelectedPod(pods[0]);
       return;
     }
 
@@ -35,7 +35,7 @@ export const SearchablePodsHeatMap = ({
       }
     });
 
-    if (filteredPods.length > 0) setSelectedPod(filteredPods[0]);
+    if (filteredPods?.length > 0) setSelectedPod(filteredPods[0]);
     else setSelectedPod(undefined);
 
     setFilteredPods(filteredPods);
@@ -88,7 +88,7 @@ export const SearchablePodsHeatMap = ({
           </IconButton>
         </Paper>
       </Box>
-      {filteredPods.length > 0 && (
+      {filteredPods?.length > 0 && (
         <PodsHeatMap
           pods={filteredPods}
           podsDetailsMap={podsDetailsMap}
@@ -96,7 +96,7 @@ export const SearchablePodsHeatMap = ({
           selectedPod={selectedPod}
         />
       )}
-      {filteredPods.length === 0 && (
+      {filteredPods?.length === 0 && (
         <Box
           sx={{
             textAlign: "center",
