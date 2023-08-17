@@ -20,12 +20,13 @@ import (
 	"context"
 	"fmt"
 
+	"go.uber.org/multierr"
+	"go.uber.org/zap"
+
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"go.uber.org/multierr"
-	"go.uber.org/zap"
 
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -139,10 +140,10 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 	return bufferInfo, nil
 }
 
-// CreateWatermarkFetcher is used to create watermark fetcher for the given bucket
-func (r *isbsRedisSvc) CreateWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.Fetcher, error) {
+// CreateUXWatermarkFetcher is used to create watermark fetcher for the given bucket
+func (r *isbsRedisSvc) CreateUXWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.UXFetcher, error) {
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
-	var watermarkFetchers []fetch.Fetcher
+	var watermarkFetchers []fetch.UXFetcher
 	fetchers := 1
 	if isReduce {
 		fetchers = fromBufferPartitionCount

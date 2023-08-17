@@ -26,6 +26,9 @@ import (
 
 	"go.uber.org/goleak"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/stretchr/testify/assert"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -39,8 +42,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"github.com/prometheus/client_golang/prometheus/testutil"
-	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -79,12 +80,7 @@ func (t *testForwardFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
 }
 
-func (t *testForwardFetcher) GetHeadWatermark(int32) wmb.Watermark {
-	// won't be used
-	return wmb.Watermark{}
-}
-
-func (t *testForwardFetcher) GetHeadWMB(int32) wmb.WMB {
+func (t *testForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	// won't be used
 	return wmb.WMB{}
 }
@@ -817,12 +813,12 @@ func (t *testWMBFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testWMBWatermark)
 }
 
-func (t *testWMBFetcher) GetHeadWatermark(int32) wmb.Watermark {
+func (t *testWMBFetcher) ComputeHeadWatermark(int32) wmb.Watermark {
 	// won't be used
 	return wmb.Watermark{}
 }
 
-func (t *testWMBFetcher) GetHeadWMB(int32) wmb.WMB {
+func (t *testWMBFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	t.sameLock.RLock()
 	defer t.sameLock.RUnlock()
 	t.diffLock.RLock()

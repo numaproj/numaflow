@@ -86,7 +86,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
 	}
-	wmFetchers, err := service.GetEdgeWatermarkFetchers(ctx, ds.pipeline, isbSvcClient)
+	wmFetchers, err := service.GetUXEdgeWatermarkFetchers(ctx, ds.pipeline, isbSvcClient)
 	if err != nil {
 		return fmt.Errorf("failed to get watermark fetchers, %w", err)
 	}
@@ -146,7 +146,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 
 func (ds *daemonServer) newGRPCServer(
 	isbSvcClient isbsvc.ISBService,
-	wmFetchers map[v1alpha1.Edge][]fetch.Fetcher,
+	wmFetchers map[v1alpha1.Edge][]fetch.UXFetcher,
 	rater server.Ratable) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.

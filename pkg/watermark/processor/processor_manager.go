@@ -30,8 +30,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -108,7 +109,7 @@ func (v *ProcessorManager) init() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		v.startHeatBeatWatcher()
+		v.startHeartBeatWatcher()
 	}()
 
 	// start offset timeline watcher goroutine
@@ -181,7 +182,7 @@ func (v *ProcessorManager) refreshingProcessors() {
 		p := v.GetProcessor(pName)
 		if p == nil {
 			// processor hasn't been added to v.processors yet
-			// this new processor will be added in the startHeatBeatWatcher() with status=active
+			// this new processor will be added in the startHeartBeatWatcher() with status=active
 			continue
 		}
 		// default heartbeat rate is every 5 seconds
@@ -206,9 +207,9 @@ func (v *ProcessorManager) refreshingProcessors() {
 	v.log.Debugw("Active processors", zap.String("HB", v.hbWatcher.GetKVName()), zap.String("OT", v.otWatcher.GetKVName()), zap.String("DebugStr", debugStr.String()))
 }
 
-// startHeatBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
+// startHeartBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
-func (v *ProcessorManager) startHeatBeatWatcher() {
+func (v *ProcessorManager) startHeartBeatWatcher() {
 	watchCh, stopped := v.hbWatcher.Watch(v.ctx)
 	for {
 		select {

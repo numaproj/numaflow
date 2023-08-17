@@ -24,8 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"go.uber.org/goleak"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -33,6 +31,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 
 // ComputeWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testForwardFetcher) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (t *testForwardFetcher) ComputeWatermark(_ isb.Offset, _ int32) wmb.Watermark {
 	return t.getWatermark()
 }
 
@@ -78,12 +78,7 @@ func (t *testForwardFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
 }
 
-func (t *testForwardFetcher) GetHeadWatermark(int32) wmb.Watermark {
-	// won't be used
-	return wmb.Watermark{}
-}
-
-func (t *testForwardFetcher) GetHeadWMB(int32) wmb.WMB {
+func (t *testForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	// won't be used
 	return wmb.WMB{}
 }
