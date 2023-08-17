@@ -4,24 +4,11 @@ import Paper from "@mui/material/Paper";
 import IconButton from "@mui/material/IconButton";
 import ClearIcon from "@mui/icons-material/Clear";
 import InputBase from "@mui/material/InputBase";
-import CircularProgress from "@mui/material/CircularProgress";
 import { PodsHeatMap } from "./partials/PodsHeatMap";
 import {
   Pod,
-  PodDetail,
   SearchablePodsHeatMapProps,
 } from "../../../../../../../../../../../types/declarations/pods";
-
-const checkPodDetails = (
-  pods: Pod[],
-  podsDetailsMap: Map<string, PodDetail>
-) => {
-  if (!pods || !podsDetailsMap) return true;
-  for (let i = 0; i < pods.length; i++) {
-    if (!podsDetailsMap.has(pods[i]?.name)) return true;
-  }
-  return false;
-};
 
 export const SearchablePodsHeatMap = ({
   pods,
@@ -29,20 +16,7 @@ export const SearchablePodsHeatMap = ({
   onPodClick,
   selectedPod,
   setSelectedPod,
-  setHeatMapLoader,
 }: SearchablePodsHeatMapProps) => {
-  const loading = checkPodDetails(pods, podsDetailsMap);
-
-  if (loading) {
-    setHeatMapLoader(false);
-    return (
-      <Box sx={{ mb: 2 }}>
-        Loading pod heatmaps...
-        <CircularProgress size={16} sx={{ mx: 2 }} />
-      </Box>
-    );
-  } else setHeatMapLoader(true);
-
   const [search, setSearch] = useState<string>("");
   const [filteredPods, setFilteredPods] = useState<Pod[]>(pods);
 

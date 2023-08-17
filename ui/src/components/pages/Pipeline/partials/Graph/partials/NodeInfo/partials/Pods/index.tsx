@@ -29,7 +29,6 @@ export function Pods(props: PodsProps) {
   const [selectedContainer, setSelectedContainer] = useState<
     string | undefined
   >(undefined);
-  const [heatMapLoader, setHeatMapLoader] = useState<boolean>(false);
 
   const { pods, podsDetails, podsErr, podsDetailsErr, loading } =
     usePodsViewFetch(
@@ -87,11 +86,9 @@ export function Pods(props: PodsProps) {
 
   if (loading) {
     return (
-      <Box
-        data-testid={"pods-loading"}
-        sx={{ display: "flex", justifyContent: "center", my: 5 }}
-      >
-        <CircularProgress />
+      <Box data-testid={"pods-loading"} sx={{ my: 2 }}>
+        Loading pods view...
+        <CircularProgress size={16} sx={{ mx: 2 }} />
       </Box>
     );
   }
@@ -114,11 +111,10 @@ export function Pods(props: PodsProps) {
           onPodClick={handlePodClick}
           selectedPod={selectedPod}
           setSelectedPod={setSelectedPod}
-          setHeatMapLoader={setHeatMapLoader}
         />
       </Box>
-      {heatMapLoader && containerSelector}
-      {heatMapLoader && podDetail}
+      {containerSelector}
+      {podDetail}
     </Box>
   );
 }

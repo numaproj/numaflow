@@ -1,15 +1,16 @@
-import { Routes, Route } from "react-router-dom";
 import ScopedCssBaseline from "@mui/material/ScopedCssBaseline";
 import Box from "@mui/material/Box";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
+import { Slide, ToastContainer } from "react-toastify";
+import { Routes, Route } from "react-router-dom";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import logo from "./images/icon-on-blue-bg.png";
+
 import "./App.css";
-import { Slide, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 function App() {
