@@ -1484,6 +1484,67 @@
 
             
           
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6" type="checkbox" id="__nav_3_6" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_6">
+          Use Cases
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Use Cases" data-md-level="2">
+        <label class="md-nav__title" for="__nav_3_6">
+          <span class="md-nav__icon md-icon"></span>
+          Use Cases
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/use-cases/overview/" class="md-nav__link">
+        Overview
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/use-cases/monitoring-and-observability/" class="md-nav__link">
+        Monitoring and Observability
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
         </ul>
       </nav>
     </li>
@@ -1900,14 +1961,14 @@
 
 
 <h1 id="vertex">Vertex<a class="headerlink" href="#vertex" title="Permanent link">&para;</a></h1>
-<p>The <code>Vertex</code> is also a key component of Numaflow <code>Pipeline</code> where the data processing happens. <code>Vertex</code> is defined as a list in the <a href="../pipeline/">pipeline</a> spec, each representing a data processing task.</p>
+<p>The <code>Vertex</code> is a key component of Numaflow <code>Pipeline</code> where the data processing happens. <code>Vertex</code> is defined as a list in the <a href="../pipeline/">pipeline</a> spec, each representing a data processing task.</p>
 <p>There are 3 types of <code>Vertex</code> in Numaflow today:</p>
 <ol>
 <li><code>Source</code> - To ingest data from sources.</li>
 <li><code>Sink</code> - To forward processed data to sinks.</li>
 <li><code>UDF</code> - User Defined Function, which is used to define data processing logic.</li>
 </ol>
-<p>We have defined a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Kubernetes Custom Resource</a> defined for <code>Vertex</code>. A <code>Pipeline</code> containing multiple vertices will automatically generate multiple <code>Vertex</code> objects by the controller. As a user, you should NOT create a <code>Vertex</code> object directly.</p>
+<p>We have defined a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Kubernetes Custom Resource</a> for <code>Vertex</code>. A <code>Pipeline</code> containing multiple vertices will automatically generate multiple <code>Vertex</code> objects by the controller. As a user, you should NOT create a <code>Vertex</code> object directly.</p>
 <p>In a <code>Pipeline</code>, the vertices are not connected directly, but through <a href="../inter-step-buffer/">Inter-Step Buffers</a>.</p>
 <p>To query <code>Vertex</code> objects with <code>kubectl</code>:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>vertex<span class="w"> </span><span class="c1"># or &quot;vtx&quot; as a short name</span>

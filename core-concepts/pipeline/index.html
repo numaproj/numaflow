@@ -1484,6 +1484,67 @@
 
             
           
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6" type="checkbox" id="__nav_3_6" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_6">
+          Use Cases
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Use Cases" data-md-level="2">
+        <label class="md-nav__title" for="__nav_3_6">
+          <span class="md-nav__icon md-icon"></span>
+          Use Cases
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/use-cases/overview/" class="md-nav__link">
+        Overview
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/use-cases/monitoring-and-observability/" class="md-nav__link">
+        Monitoring and Observability
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
         </ul>
       </nav>
     </li>
@@ -1900,7 +1961,7 @@
 
 
 <h1 id="pipeline">Pipeline<a class="headerlink" href="#pipeline" title="Permanent link">&para;</a></h1>
-<p>The <code>Pipeline</code> is the most important concept in Numaflow, it represents a data processing job, it defines:</p>
+<p>The <code>Pipeline</code> represents a data processing job. The most important concept in Numaflow, it defines:</p>
 <ol>
 <li>A list of <a href="../vertex/">vertices</a>, which define the data processing tasks;</li>
 <li>A list of <code>edges</code>, which are used to describe the relationship between the vertices. Note an edge may go from a vertex to multiple vertices, and as of v0.10, an edge may also go from multiple vertices to a vertex. This many-to-one relationship is possible via <a href="../../user-guide/reference/join-vertex/">Join and Cycles</a></li>
