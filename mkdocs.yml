@@ -96,6 +96,9 @@ nav:
             - user-guide/reference/configuration/max-message-size.md
           - user-guide/reference/kustomize/kustomize.md
           - APIs.md
+      - Use Cases:
+          - user-guide/use-cases/overview.md
+          - user-guide/use-cases/monitoring-and-observability.md
   - Operator Manual:
       - Releases ⧉: "operations/releases.md"
       - operations/installation.md

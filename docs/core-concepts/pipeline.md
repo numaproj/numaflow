@@ -1,6 +1,6 @@
 # Pipeline
 
-The `Pipeline` is the most important concept in Numaflow, it represents a data processing job, it defines:
+The `Pipeline` represents a data processing job. The most important concept in Numaflow, it defines:
 
 1. A list of [vertices](vertex.md), which define the data processing tasks;
 1. A list of `edges`, which are used to describe the relationship between the vertices.

@@ -162,7 +162,7 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/main/examp
 
 ## A pipeline with reduce (aggregation)
 
-To view an example pipeline with the [Reduce UDF](user-guide/user-defined-functions/reduce/reduce.md), see [Reduce Examples](user-guide/user-defined-functions/reduce/examples.md).
+To set up an example pipeline with the [Reduce UDF](user-guide/user-defined-functions/reduce/reduce.md), see [Reduce Examples](user-guide/user-defined-functions/reduce/examples.md).
 
 ## What's Next
 
@@ -171,3 +171,5 @@ Try more examples in the [`examples`](https://github.com/numaproj/numaflow/tree/
 After exploring how Numaflow pipelines run, you can check what data [Sources](./user-guide/sources/generator.md) 
 and [Sinks](./user-guide/sinks/kafka.md) Numaflow supports out of the box, or learn how to write 
 [User Defined Functions](user-guide/user-defined-functions/user-defined-functions.md).
+
+Numaflow can also be paired with Numalogic, a collection of ML models and algorithms for real-time data analytics and AIOps including anomaly detection. Visit the [Numalogic homepage](https://numalogic.numaproj.io/) for more information.
