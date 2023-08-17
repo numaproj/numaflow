@@ -25,14 +25,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
-
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
 	"google.golang.org/grpc"

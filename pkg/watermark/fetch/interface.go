@@ -23,14 +23,18 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-// Fetcher fetches watermark data from Vn-1 vertex.
+// Fetcher fetches watermark data from Vn-1 vertex and computes the watermark for Vn.
 type Fetcher interface {
 	io.Closer
-	// ComputeWatermark processes the offset on the partition indicated and returns the overall Watermark
-	// from all Partitions
+	// ComputeWatermark computes a valid watermark for the given offset on the given partition
 	ComputeWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark
-	// GetHeadWatermark returns the latest watermark among all processors
-	GetHeadWatermark(fromPartitionIdx int32) wmb.Watermark
-	// GetHeadWMB returns the latest idle WMB among all processors
-	GetHeadWMB(fromPartitionIdx int32) wmb.WMB
+	// ComputeHeadIdleWMB computes a valid head idle WMB for the given partition.
+	ComputeHeadIdleWMB(fromPartitionIdx int32) wmb.WMB
+}
+
+// UXFetcher computes the watermark for Vn.
+type UXFetcher interface {
+	io.Closer
+	// ComputeHeadWatermark computes a valid head watermark for the given partition
+	ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark
 }
