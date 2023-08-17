@@ -2,10 +2,9 @@
 
 ## Synopsis
 
-- Numaflow allows developers with basic knowledge of Kubernetes but
-  without any special knowledge of data/stream processing to easily
-  create massively parallel data/stream processing jobs using a
-  programming language of their choice.
+- Numaflow allows developers without any special knowledge of data/stream
+ processing to easily create massively parallel data/stream processing jobs 
+ using a programming language of their choice, with just basic knowledge of Kubernetes.
 
 - Reliable data processing is highly desirable and exactly-once
   semantics is often required by many data processing applications.

@@ -12,6 +12,7 @@ stream processing platforms.
 - Event driven applications such as anomaly detection, monitoring, and alerting.
 - Streaming applications such as data instrumentation and data movement.
 - Workflows running in a streaming manner.
+- [Learn more in our User Guide](./user-guide/use-cases/overview.md).
 
 ## Key Features
 
@@ -20,7 +21,7 @@ stream processing platforms.
 - Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted.
 - Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed.
 
-## Data Integrity Guarantees:
+## Data Integrity Guarantees
 
 - Minimally provide at-least-once semantics
 - Provide exactly-once semantics for unbounded and near real-time data sources
@@ -28,7 +29,6 @@ stream processing platforms.
 
 ## Roadmap
 
-- Multi-partitioned edges for higher throughput (v0.9)
 - JOIN Vertex and Side Inputs feature (v0.10)
 - User-defined Source (v0.11)
 
