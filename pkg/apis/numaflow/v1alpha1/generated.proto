@@ -1077,14 +1077,13 @@ message SideInput {
 }
 
 message SideInputTrigger {
-  // +optional
+  // The schedule to trigger the retrievement of the side input data.
+  // It supports cron format, for example, "0 30 * * * *".
+  // Or interval based format, such as "@hourly", "@every 1h30m", etc.
   optional string schedule = 1;
 
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration interval = 2;
-
-  // +optional
-  optional string timezone = 3;
+  optional string timezone = 2;
 }
 
 message SideInputsManagerTemplate {
@@ -1186,6 +1185,10 @@ message Templates {
   // SideInputsManagerTemplate is used to customize the Side Inputs Manager.
   // +optional
   optional SideInputsManagerTemplate sideInputsManager = 3;
+
+  // VertexTemplate is used to customize the vertices of the pipeline.
+  // +optional
+  optional VertexTemplate vertex = 4;
 }
 
 message Transformer {
@@ -1318,6 +1321,19 @@ message VertexStatus {
   optional string selector = 5;
 
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 4;
+}
+
+message VertexTemplate {
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 1;
+
+  // Template for the vertex numa container
+  // +optional
+  optional ContainerTemplate containerTemplate = 2;
+
+  // Template for the vertex init container
+  // +optional
+  optional ContainerTemplate initContainerTemplate = 3;
 }
 
 message Watermark {

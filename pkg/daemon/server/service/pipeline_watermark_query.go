@@ -28,10 +28,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
-// GetEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
+// GetUXEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
-func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]fetch.Fetcher, error) {
-	var wmFetchers = make(map[v1alpha1.Edge][]fetch.Fetcher)
+func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]fetch.UXFetcher, error) {
+	var wmFetchers = make(map[v1alpha1.Edge][]fetch.UXFetcher)
 	if pipeline.Spec.Watermark.Disabled {
 		return wmFetchers, nil
 	}
@@ -40,7 +40,7 @@ func GetEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, 
 		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
 		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
 		partitionCount := pipeline.GetVertex(edge.To).GetPartitionCount()
-		wmFetcherList, err := isbSvcClient.CreateWatermarkFetcher(ctx, bucketName, partitionCount, isReduce)
+		wmFetcherList, err := isbSvcClient.CreateUXWatermarkFetcher(ctx, bucketName, partitionCount, isReduce)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
 		}
@@ -84,11 +84,11 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		var latestWatermarks []int64
 		for _, fetcher := range edgeFetchers {
 			if ps.pipeline.GetVertex(k.To).IsReduceUDF() {
-				watermark := fetcher.GetHeadWatermark(0).UnixMilli()
+				watermark := fetcher.ComputeHeadWatermark(0).UnixMilli()
 				latestWatermarks = append(latestWatermarks, watermark)
 			} else {
 				for idx := 0; idx < ps.pipeline.GetVertex(k.To).GetPartitionCount(); idx++ {
-					watermark := fetcher.GetHeadWatermark(int32(idx)).UnixMilli()
+					watermark := fetcher.ComputeHeadWatermark(int32(idx)).UnixMilli()
 					latestWatermarks = append(latestWatermarks, watermark)
 				}
 			}

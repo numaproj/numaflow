@@ -107,11 +107,11 @@ func (e *EventTypeWMProgressor) getWatermark() wmb.Watermark {
 	return e.watermarks[e.lastOffset.String()]
 }
 
-func (e *EventTypeWMProgressor) GetHeadWatermark(int32) wmb.Watermark {
+func (e *EventTypeWMProgressor) ComputeHeadWatermark(int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 
-func (e *EventTypeWMProgressor) GetHeadWMB(int32) wmb.WMB {
+func (e *EventTypeWMProgressor) ComputeHeadIdleWMB(int32) wmb.WMB {
 	return wmb.WMB{}
 }
 
@@ -348,8 +348,6 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 // ReadMessage size = 0
 func TestReduceDataForward_IdleWM(t *testing.T) {
-	//FIXME: fix this test
-	t.SkipNow()
 	var (
 		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
@@ -1325,8 +1323,17 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 		// wait until the test processor has been added to the processor list
 		time.Sleep(time.Millisecond * 100)
 	}
-	edgeFetcher := fetch.NewEdgeFetcher(ctx, pm, 1)
-	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, map[string]fetch.Fetcher{"fromVertex": edgeFetcher})
+	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, &dfv1.VertexInstance{
+		Vertex: &dfv1.Vertex{
+			Spec: dfv1.VertexSpec{
+				AbstractVertex: dfv1.AbstractVertex{
+					UDF: &dfv1.UDF{
+						GroupBy: &dfv1.GroupBy{},
+					},
+				},
+			},
+		},
+	}, map[string]*processor.ProcessorManager{"fromVertex": pm})
 	return edgeFetcherSet, sourcePublisher
 }
 

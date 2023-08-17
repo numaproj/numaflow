@@ -411,7 +411,7 @@ func Test_GetSideInputManagerDeployments(t *testing.T) {
 					Image: "side-input-1",
 				},
 				Trigger: &SideInputTrigger{
-					Schedule: pointer.String("0 0 * * *"),
+					Schedule: "0 0 * * *",
 				},
 			},
 		}

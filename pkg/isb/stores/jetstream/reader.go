@@ -131,7 +131,7 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 			return nil, fmt.Errorf("failed to get jetstream message metadata, %w", err)
 		}
 		rm := &isb.ReadMessage{
-			ReadOffset: newOffset(msg, jr.inProgressTickDuration, jr.log),
+			ReadOffset: newOffset(msg, jr.inProgressTickDuration, jr.partitionIdx, jr.log),
 			Message:    *m,
 			Metadata: isb.MessageMetadata{
 				NumDelivered: msgMetadata.NumDelivered,
@@ -187,16 +187,18 @@ func (jr *jetStreamReader) NoAck(ctx context.Context, offsets []isb.Offset) {
 
 // offset implements ID interface for JetStream.
 type offset struct {
-	seq        uint64
-	msg        *nats.Msg
-	cancelFunc context.CancelFunc
+	seq          uint64
+	msg          *nats.Msg
+	partitionIdx int32
+	cancelFunc   context.CancelFunc
 }
 
-func newOffset(msg *nats.Msg, tickDuration time.Duration, log *zap.SugaredLogger) *offset {
+func newOffset(msg *nats.Msg, tickDuration time.Duration, partitionIdx int32, log *zap.SugaredLogger) *offset {
 	metadata, _ := msg.Metadata()
 	o := &offset{
-		seq: metadata.Sequence.Stream,
-		msg: msg,
+		seq:          metadata.Sequence.Stream,
+		msg:          msg,
+		partitionIdx: partitionIdx,
 	}
 	// If tickDuration is 1s, which means ackWait is 1s or 2s, it does not make much sense to do it, instead, increasing ackWait is recommended.
 	if tickDuration.Seconds() > 1 {
@@ -224,7 +226,7 @@ func (o *offset) workInProgress(ctx context.Context, msg *nats.Msg, tickDuration
 }
 
 func (o *offset) String() string {
-	return fmt.Sprint(o.seq)
+	return fmt.Sprint(o.seq) + "-" + fmt.Sprint(o.partitionIdx)
 }
 
 func (o *offset) AckIt() error {
@@ -246,4 +248,8 @@ func (o *offset) NoAck() error {
 
 func (o *offset) Sequence() (int64, error) {
 	return int64(o.seq), nil
+}
+
+func (o *offset) PartitionIdx() int32 {
+	return o.partitionIdx
 }

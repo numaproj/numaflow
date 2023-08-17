@@ -18,10 +18,7 @@ package kafka
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -83,6 +80,40 @@ type KafkaSource struct {
 	// source watermark publisher stores
 	srcPublishWMStores store.WatermarkStore
 	lock               *sync.RWMutex
+}
+
+// kafkaOffset implements isb.Offset
+// we need topic information to ack the message
+type kafkaOffset struct {
+	offset       int64
+	partitionIdx int32
+	topic        string
+}
+
+func (k *kafkaOffset) String() string {
+	return fmt.Sprintf("%s:%d:%d", k.topic, k.offset, k.partitionIdx)
+}
+
+func (k *kafkaOffset) Sequence() (int64, error) {
+	return k.offset, nil
+}
+
+// AckIt acking is taken care by the consumer group
+func (k *kafkaOffset) AckIt() error {
+	// NOOP
+	return nil
+}
+
+func (k *kafkaOffset) NoAck() error {
+	return nil
+}
+
+func (k *kafkaOffset) PartitionIdx() int32 {
+	return k.partitionIdx
+}
+
+func (k *kafkaOffset) Topic() string {
+	return k.topic
 }
 
 type Option func(*KafkaSource) error
@@ -152,9 +183,8 @@ func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	oldestTimestamps := make(map[int32]time.Time)
 	for _, m := range msgs {
 		// Get latest timestamps for different partitions
-		_, partition, _, _ := offsetFrom(m.ReadOffset.String())
-		if t, ok := oldestTimestamps[partition]; !ok || m.EventTime.Before(t) {
-			oldestTimestamps[partition] = m.EventTime
+		if t, ok := oldestTimestamps[m.ReadOffset.PartitionIdx()]; !ok || m.EventTime.Before(t) {
+			oldestTimestamps[m.ReadOffset.PartitionIdx()] = m.EventTime
 		}
 	}
 	for p, t := range oldestTimestamps {
@@ -186,15 +216,16 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	defer close(r.handler.inflightacks)
 
 	for _, offset := range offsets {
-		topic, partition, poffset, err := offsetFrom(offset.String())
+		topic := offset.(*kafkaOffset).Topic()
+
+		// we need to mark the offset of the next message to read
+		pOffset, err := offset.Sequence()
 		if err != nil {
 			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
 			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("suppliedoffset", offset.String()), zap.Error(err))
 			continue
 		}
-
-		// we need to mark the offset of the next message to read
-		r.handler.sess.MarkOffset(topic, partition, poffset+1, "")
+		r.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset, "")
 		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
 
 	}
@@ -300,7 +331,7 @@ func NewKafkaSource(
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
 	fetchWM fetch.Fetcher,
-	publishWM map[string]publish.Publisher,
+	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	opts ...Option) (*KafkaSource, error) {
 
@@ -325,6 +356,8 @@ func NewKafkaSource(
 			return nil, operr
 		}
 	}
+
+	sarama.NewConfig()
 
 	config, err := configFromOpts(source.Config)
 	if err != nil {
@@ -368,7 +401,7 @@ func NewKafkaSource(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, publishWM, kafkasource, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, kafkasource, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -445,37 +478,22 @@ func (r *KafkaSource) startConsumer() {
 }
 
 func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
-	offset := toOffset(m.Topic, m.Partition, m.Offset)
+	readOffset := &kafkaOffset{
+		offset:       m.Offset,
+		partitionIdx: m.Partition,
+		topic:        m.Topic,
+	}
 	msg := isb.Message{
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{EventTime: m.Timestamp},
-			ID:          offset,
+			ID:          readOffset.String(),
 			Keys:        []string{string(m.Key)},
 		},
 		Body: isb.Body{Payload: m.Value},
 	}
 
 	return &isb.ReadMessage{
-		ReadOffset: isb.SimpleStringOffset(func() string { return offset }),
+		ReadOffset: readOffset,
 		Message:    msg,
 	}
-}
-
-func toOffset(topic string, partition int32, offset int64) string {
-	// TODO handle this elegantly
-	return fmt.Sprintf("%s:%v:%v", topic, partition, offset)
-}
-
-func offsetFrom(offset string) (string, int32, int64, error) {
-	tokens := strings.Split(offset, ":")
-	if len(tokens) < 3 {
-		return "", 0, 0, errors.New("malformed offset")
-	}
-	var poffset, partition int64
-	var err error
-	poffset, err = strconv.ParseInt(tokens[2], 10, 64)
-	if err == nil {
-		partition, err = strconv.ParseInt(tokens[1], 10, 32)
-	}
-	return tokens[0], int32(partition), poffset, err
 }

@@ -1,21 +1,21 @@
 import { Edge, Node } from "reactflow";
 import { GraphData, Pipeline } from "./pipeline";
 
-interface GraphProps {
+export interface GraphProps {
   data: GraphData;
   namespaceId: string | undefined;
   pipelineId: string | undefined;
 }
 
-interface SpecProps {
+export interface SpecProps {
   pipeline: Pipeline;
 }
 
-interface EdgeInfoProps {
+export interface EdgeInfoProps {
   edge: Edge;
 }
 
-interface NodeInfoProps {
+export interface NodeInfoProps {
   node: Node;
   namespaceId: string | undefined;
   pipelineId: string | undefined;

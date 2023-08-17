@@ -18,11 +18,9 @@ package v1alpha1
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -39,7 +37,7 @@ var (
 			ImagePullPolicy: &imagePullNever,
 		},
 		Trigger: &SideInputTrigger{
-			Interval: &metav1.Duration{Duration: time.Duration(1 * time.Second)},
+			Schedule: "@every 1h",
 		},
 	}
 
