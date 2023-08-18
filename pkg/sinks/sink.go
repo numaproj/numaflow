@@ -107,10 +107,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			names := u.VertexInstance.Vertex.GetToBuffers()
-			if u.VertexInstance.Vertex.IsASink() {
-				// Sink has no to buffers, we use the vertex name as the buffer writer name.
-				names = append(names, u.VertexInstance.Vertex.Spec.Name)
-			}
+			// sink has no to buffers, so we use the vertex name to publish the watermark
+			names = append(names, u.VertexInstance.Vertex.Spec.Name)
 			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
 		} else {
 			// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
