@@ -106,9 +106,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
-			names := u.VertexInstance.Vertex.GetToBuffers()
 			// sink has no to buffers, so we use the vertex name to publish the watermark
-			names = append(names, u.VertexInstance.Vertex.Spec.Name)
+			names := []string{u.VertexInstance.Vertex.Spec.Name}
 			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
 		} else {
 			// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
@@ -175,10 +174,10 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 				}
 			}()
 			<-ctx.Done()
-			log.Info("SIGTERM exiting inside partition...", zap.String("fromPartition", fromBufferPartitionName))
+			log.Infow("SIGTERM exiting inside partition...", zap.String("fromPartition", fromBufferPartitionName))
 			sinker.Stop()
 			wg.Wait()
-			log.Info("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
+			log.Infow("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
 		}(sinker, readers[index].GetName())
 	}
 	// start metrics server and pass the sinkHandler to it, so that it can be used to check the readiness of the sink
@@ -204,7 +203,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	for _, publisher := range publishWatermark {
 		err = publisher.Close()
 		if err != nil {
-			log.Error("Failed to close the watermark publisher", zap.Error(err))
+			log.Errorw("Failed to close the watermark publisher", zap.Error(err))
 		}
 	}
 
@@ -214,7 +213,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		_ = wmStore.Close()
 	}
 
-	log.Info("All udsink processors exited...")
+	log.Info("Exited...")
 	return nil
 }
 

@@ -114,10 +114,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		// build watermark progressors
 		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			names := u.VertexInstance.Vertex.GetToBuffers()
-			if u.VertexInstance.Vertex.IsASink() {
-				// Sink has no to buffers, we use the vertex name as the buffer writer name.
-				names = append(names, u.VertexInstance.Vertex.Spec.Name)
-			}
 			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
 		} else {
 			// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
