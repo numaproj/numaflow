@@ -51,7 +51,7 @@ type BufferReader interface {
 	// array of result is empty, the callee should process all the elements in the array even if the error is set. Read
 	// will not mark the message in the buffer as "READ" if the read for that index is erring.
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
-	// at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages.
+	// at-least-once semantics for reading, during the restart we will have to reprocess all unacknowledged messages.
 	Read(context.Context, int64) ([]*ReadMessage, error)
 	// Ack acknowledges an array of offset.
 	Ack(context.Context, []Offset) []error
@@ -82,7 +82,7 @@ type SourceWatermarkPublisher interface {
 
 // Offset is an interface used in the ReadMessage referencing offset information.
 type Offset interface {
-	// String return the offset identifier
+	// String returns the offset identifier
 	String() string
 	// Sequence returns a sequence id which can be used to index into the buffer (ISB)
 	Sequence() (int64, error)
@@ -91,7 +91,7 @@ type Offset interface {
 	// then the work can be done in this function, and call it in BufferReader Ack() function implementation.
 	AckIt() error
 	// NoAck to indicate the offset no longer needs to be acknowledged
-	// It is used when error occur, and we want to reprocess the batch to indicate acknowledgement no
+	// It is used when error occurs, and we want to reprocess the batch to indicate acknowledgement no
 	// longer needed.
 	NoAck() error
 	// PartitionIdx returns the partition index to which the offset belongs to.

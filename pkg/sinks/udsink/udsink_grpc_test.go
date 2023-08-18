@@ -19,9 +19,10 @@ package udsink
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/sdkclient/sink/clienttest"
 	"testing"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/sdkclient/sink/clienttest"
 
 	"github.com/golang/mock/gomock"
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"

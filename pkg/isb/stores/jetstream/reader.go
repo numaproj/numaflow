@@ -25,10 +25,11 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"go.uber.org/zap"
 )
 
 type jetStreamReader struct {
@@ -75,9 +76,9 @@ func NewJetStreamBufferReader(ctx context.Context, client *jsclient.NATSClient, 
 	}
 
 	// If ackWait is 3s, ticks every 2s.
-	inProgessTickSeconds := int64(consumer.Config.AckWait.Seconds() * 2 / 3)
-	if inProgessTickSeconds < 1 {
-		inProgessTickSeconds = 1
+	inProgressTickSeconds := int64(consumer.Config.AckWait.Seconds() * 2 / 3)
+	if inProgressTickSeconds < 1 {
+		inProgressTickSeconds = 1
 	}
 
 	sub, err := reader.client.Subscribe(subject, stream, nats.Bind(stream, stream))
@@ -86,7 +87,7 @@ func NewJetStreamBufferReader(ctx context.Context, client *jsclient.NATSClient, 
 	}
 
 	reader.sub = sub
-	reader.inProgressTickDuration = time.Duration(inProgessTickSeconds * int64(time.Second))
+	reader.inProgressTickDuration = time.Duration(inProgressTickSeconds * int64(time.Second))
 	return reader, nil
 }
 
@@ -209,6 +210,8 @@ func newOffset(msg *nats.Msg, tickDuration time.Duration, partitionIdx int32, lo
 	return o
 }
 
+// workInProgress tells the jetstream server that this message is being worked on
+// and resets the redelivery timer on the server, every tickDuration.
 func (o *offset) workInProgress(ctx context.Context, msg *nats.Msg, tickDuration time.Duration, log *zap.SugaredLogger) {
 	ticker := time.NewTicker(tickDuration)
 	defer ticker.Stop()

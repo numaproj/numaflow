@@ -150,7 +150,8 @@ func WithReadTimeout(timeout time.Duration) Option {
 }
 
 // NewMemGen function creates an instance of generator.
-func NewMemGen(vertexInstance *dfv1.VertexInstance,
+func NewMemGen(
+	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,

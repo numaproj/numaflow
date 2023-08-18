@@ -204,7 +204,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
 		}(bufferPartition, forwarder)
 	}
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, udfHandler, readers)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{udfHandler}, readers)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
