@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -188,6 +189,17 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return
 		}
 	}()
+
+	// we created fetcher and publisher stores for each to vertex, so we need to close them.
+	err = fetchWatermark.Close()
+	if err != nil {
+		log.Errorw("Failed to close fetch watermark", zap.Error(err))
+	}
+
+	for _, ws := range toVertexWatermarkStores {
+		ws.HeartbeatStore().Close()
+		ws.OffsetTimelineStore().Close()
+	}
 
 	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, []isb.BufferReader{sourcer})
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)

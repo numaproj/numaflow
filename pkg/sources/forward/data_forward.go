@@ -166,12 +166,7 @@ func (isdf *DataForward) Start() <-chan struct{} {
 			}
 		}
 
-		// Close the fetcher and all the publishers.
-		err := isdf.wmFetcher.Close()
-		if err != nil {
-			log.Error("Failed to close watermark fetcher, shutdown anyways...", zap.Error(err))
-		}
-
+		// publisher was created by the forwarder, so it should be closed by the forwarder.
 		for _, toVertexPublishers := range isdf.toVertexWMPublishers {
 			for _, pub := range toVertexPublishers {
 				if err := pub.Close(); err != nil {

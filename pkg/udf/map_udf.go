@@ -23,6 +23,9 @@ import (
 
 	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 
 	"go.uber.org/zap"
 
@@ -79,8 +82,13 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	}()
 
 	// create readers and writers
-	var readers []isb.BufferReader
-	var writers map[string][]isb.BufferWriter
+	var (
+		readers           []isb.BufferReader
+		writers           map[string][]isb.BufferWriter
+		processorManagers map[string]*processor.ProcessorManager
+		wmStores          map[string]store.WatermarkStore
+	)
+
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
 
@@ -94,13 +102,36 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		// build watermark progressors
 		// multiple go routines can share the same set of writers since nats conn is thread safe
 		// https://github.com/nats-io/nats.go/issues/241
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
-		if err != nil {
-			return err
-		}
-		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
-		if err != nil {
-			return err
+		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
+			names := u.VertexInstance.Vertex.GetToBuffers()
+			if u.VertexInstance.Vertex.IsASink() {
+				// Sink has no to buffers, we use the vertex name as the buffer writer name.
+				names = append(names, u.VertexInstance.Vertex.Spec.Name)
+			}
+			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
+		} else {
+			// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
+			processorManagers, err = jetstream.BuildProcessorManagers(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return fmt.Errorf("failed to build processor manager: %w", err)
+			}
+
+			// create watermark fetcher using processor managers
+			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, processorManagers)
+
+			// create watermark stores
+			wmStores, err = jetstream.BuildToVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return err
+			}
+
+			// create watermark publisher using watermark stores
+			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, wmStores)
+
+			readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
+			if err != nil {
+				return err
+			}
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
@@ -214,18 +245,29 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	// wait for all the forwarders to exit
 	finalWg.Wait()
 
-	// Close the watermark fetcher and publisher
+	// close the watermark fetcher and publisher since we created them
 	err = fetchWatermark.Close()
 	if err != nil {
 		log.Error("Failed to close the watermark fetcher", zap.Error(err))
 	}
 
+	// closing the publisher will only delete the keys from the store, but not the store itself
+	// we cannot close the store inside publisher because in some cases stores are shared between publishers
+	// and store itself is a separate entity that can be used by other components
 	for _, publisher := range publishWatermark {
 		err = publisher.Close()
 		if err != nil {
 			log.Error("Failed to close the watermark publisher", zap.Error(err))
 		}
 	}
+
+	// close the wm stores, since the publisher and fetcher are closed
+	// since we created the stores, we can close them
+	for _, wmStore := range wmStores {
+		wmStore.HeartbeatStore().Close()
+		wmStore.OffsetTimelineStore().Close()
+	}
+
 	log.Info("All udf data processors exited...")
 	return nil
 }
