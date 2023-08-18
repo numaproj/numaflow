@@ -275,6 +275,9 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	<-ctx.Done()
 
+	log.Info("SIGTERM, exiting...")
+	wg.Wait()
+
 	// close the watermark fetcher and publisher since we created them
 	err = fetchWatermark.Close()
 	if err != nil {
@@ -298,8 +301,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		wmStore.OffsetTimelineStore().Close()
 	}
 
-	log.Info("SIGTERM, exiting...")
-	wg.Wait()
 	log.Info("Exited...")
 	return nil
 }

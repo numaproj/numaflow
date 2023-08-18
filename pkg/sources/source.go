@@ -112,14 +112,14 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 
 		// create watermark fetcher using processor managers
-		fetchWatermark = fetch.NewEdgeFetcherSet(ctx, sp.VertexInstance, processorManagers)
+		fetchWatermark = fetch.NewSourceFetcher(ctx, processorManagers[sp.VertexInstance.Vertex.Name])
 
 		// build publisher stores for to vertex
 		toVertexWatermarkStores, err = jetstream.BuildToVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
 			return err
 		}
-		
+
 		// build publisher stores for source (we publish twice for source)
 		sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
@@ -202,6 +202,18 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, []isb.BufferReader{sourcer})
+	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
+	if shutdown, err := ms.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start metrics server, error: %w", err)
+	} else {
+		defer func() { _ = shutdown(context.Background()) }()
+	}
+	<-ctx.Done()
+	log.Info("SIGTERM, exiting...")
+	sourcer.Stop()
+	wg.Wait()
+
 	// we created fetcher and publisher stores for each to vertex, so we need to close them.
 	err = fetchWatermark.Close()
 	if err != nil {
@@ -217,18 +229,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// close all the source publisher stores
 	sourcePublisherStores.HeartbeatStore().Close()
 	sourcePublisherStores.OffsetTimelineStore().Close()
-
-	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyChecker, []isb.BufferReader{sourcer})
-	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
-	if shutdown, err := ms.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start metrics server, error: %w", err)
-	} else {
-		defer func() { _ = shutdown(context.Background()) }()
-	}
-	<-ctx.Done()
-	log.Info("SIGTERM, exiting...")
-	sourcer.Stop()
-	wg.Wait()
 
 	log.Info("Exited...")
 	return nil

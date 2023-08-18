@@ -198,7 +198,6 @@ func (e *edgeFetcher) updateHeadIdleWMB(fromPartitionIdx int32) wmb.WMB {
 
 // Close function stops the processor manager.
 func (e *edgeFetcher) Close() error {
-	e.processorManager.Stop()
 	return nil
 }
 
