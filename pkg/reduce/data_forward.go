@@ -202,7 +202,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				zap.Int("counter", df.wmbChecker.GetCounter()),
 				zap.Int64("offset", processorWMB.Offset),
 				zap.Int64("watermark", processorWMB.Watermark),
-				zap.Bool("Idle", processorWMB.Idle))
+				zap.Bool("idle", processorWMB.Idle))
 			return
 		}
 

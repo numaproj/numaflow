@@ -25,13 +25,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats.go"
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-
-	"github.com/nats-io/nats.go"
-	"go.uber.org/zap"
 )
 
 // NATSClient is a client for NATS server which be shared by multiple connections (reader, writer, kv, buffer management, etc.)
@@ -55,7 +55,7 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		nats.PingInterval(1 * time.Second),
 		// error handler for the connection
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
-			log.Error(err, "Nats default: error occurred for subscription")
+			log.Errorw("Nats default: error occurred for subscription", zap.Error(err))
 		}),
 		// connection closed handler
 		nats.ClosedHandler(func(nc *nats.Conn) {
@@ -65,7 +65,7 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		nats.RetryOnFailedConnect(true),
 		// disconnect handler to log when we lose connection
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			log.Error("Nats default: disconnected", zap.Error(err))
+			log.Errorw("Nats default: disconnected", zap.Error(err))
 		}),
 		// reconnect handler to log when we reconnect
 		nats.ReconnectHandler(func(nc *nats.Conn) {
@@ -123,7 +123,7 @@ func (c *NATSClient) Subscribe(subject string, stream string, opts ...nats.SubOp
 }
 
 // BindKVStore lookup and bind to an existing KeyValue store and return the KeyValue interface
-func (c *NATSClient) BindKVStore(bucketName string) (nats.KeyValue, error) {
+func (c *NATSClient) BindKVStore(kvName string) (nats.KeyValue, error) {
 	var (
 		err       error
 		jsContext nats.JetStreamContext
@@ -134,7 +134,7 @@ func (c *NATSClient) BindKVStore(bucketName string) (nats.KeyValue, error) {
 		return nil, err
 	}
 
-	return jsContext.KeyValue(bucketName)
+	return jsContext.KeyValue(kvName)
 }
 
 // CreateKVWatcher creates a new key watcher for the given bucket name and options
