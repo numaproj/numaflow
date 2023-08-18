@@ -27,11 +27,11 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
-type FunctionalSuite struct {
+type DiamondSuite struct {
 	E2ESuite
 }
 
-func (s *FunctionalSuite) TestJoinSinkVertex() {
+func (s *DiamondSuite) TestJoinSinkVertex() {
 	w := s.Given().Pipeline("@testdata/join-on-sink.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -48,7 +48,7 @@ func (s *FunctionalSuite) TestJoinSinkVertex() {
 	w.Expect().SinkContains("out", "888889")
 }
 
-func (s *FunctionalSuite) TestCycleToSelf() {
+func (s *DiamondSuite) TestCycleToSelf() {
 	w := s.Given().Pipeline("@testdata/cycle-to-self.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -74,7 +74,7 @@ func (s *FunctionalSuite) TestCycleToSelf() {
 	}
 
 }
-func (s *FunctionalSuite) TestCycleBackward() {
+func (s *DiamondSuite) TestCycleBackward() {
 	w := s.Given().Pipeline("@testdata/cycle-backward.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -100,6 +100,6 @@ func (s *FunctionalSuite) TestCycleBackward() {
 	}
 }
 
-func TestFunctionalSuite(t *testing.T) {
-	suite.Run(t, new(FunctionalSuite))
+func TestDiamondSuite(t *testing.T) {
+	suite.Run(t, new(DiamondSuite))
 }
