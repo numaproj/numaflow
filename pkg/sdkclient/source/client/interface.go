@@ -24,11 +24,15 @@ import (
 )
 
 // Client contains methods to call a gRPC client.
-// TODO - Add comments for each method.
 type Client interface {
+	// CloseConn closes the gRPC client connection.
 	CloseConn(ctx context.Context) error
+	// IsReady checks if the udsource connection is ready.
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
+	// ReadFn reads messages from the udsource.
 	ReadFn(ctx context.Context, req *sourcepb.ReadRequest, datumCh chan<- *sourcepb.ReadResponse) error
+	// AckFn acknowledges messages from the udsource.
 	AckFn(ctx context.Context, req *sourcepb.AckRequest) (*sourcepb.AckResponse, error)
+	// PendingFn returns the number of pending messages from the udsource.
 	PendingFn(ctx context.Context, req *emptypb.Empty) (*sourcepb.PendingResponse, error)
 }

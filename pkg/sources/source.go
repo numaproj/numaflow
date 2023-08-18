@@ -176,6 +176,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		readyCheckers = append(readyCheckers, udsGRPCClient)
 	}
 
+	// if the source includes a user-defined transformer, we create a gRPC client for it.
 	var transformerGRPCClient *transformer.GRPCBasedTransformer
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		transformerGRPCClient, err = transformer.NewGRPCBasedTransformer()
