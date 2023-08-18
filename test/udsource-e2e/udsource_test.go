@@ -30,6 +30,8 @@ type UserDefinedSourceSuite struct {
 	E2ESuite
 }
 
+// this test is currently broken because the UDSource is not completely implemented yet.
+// I put it here to exercise the test-driven development process.
 // TODO - include it in the CI workflow once we finish implementing UDSource
 func (s *UserDefinedSourceSuite) TestSimpleSource() {
 	w := s.Given().Pipeline("@testdata/simple-source.yaml").
@@ -39,6 +41,8 @@ func (s *UserDefinedSourceSuite) TestSimpleSource() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+
+	// the user-defined simple source sends the read index of the message as the message content
 	// verify the sink get the first batch of data
 	w.Expect().SinkContains("out", "0")
 	w.Expect().SinkContains("out", "1")
