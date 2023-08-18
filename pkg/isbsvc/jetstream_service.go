@@ -165,7 +165,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				return fmt.Errorf("failed to create offset timeline KV %q, %w", otKVName, err)
 			}
 		}
-		// Create processor bucket
+		// Create processor KV
 		procKVName := JetStreamProcessorKVName(bucket)
 		if _, err := js.KeyValue(procKVName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
