@@ -99,7 +99,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	defer func() {
 		for _, pms := range processorManagers {
 			for _, pm := range pms {
-				pm.Stop()
+				pm.Close()
 			}
 		}
 	}()

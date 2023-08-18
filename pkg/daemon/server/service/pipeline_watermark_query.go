@@ -48,6 +48,7 @@ func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline
 	return wmFetchers, nil
 }
 
+// GetProcessorManagers returns a map of ProcessorManager per edge.
 func GetProcessorManagers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbsvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]*processor.ProcessorManager, error) {
 	var processorManagers = make(map[v1alpha1.Edge][]*processor.ProcessorManager)
 	if pipeline.Spec.Watermark.Disabled {

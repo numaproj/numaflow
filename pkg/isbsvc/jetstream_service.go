@@ -315,7 +315,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-// CreateProcessorManagers is used to create watermark fetcher for the given bucket.
+// CreateProcessorManagers is used to create processor manager for the given bucket.
 func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
 	var processorManagers []*processor.ProcessorManager
 	fetchers := 1

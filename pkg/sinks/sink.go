@@ -195,7 +195,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
 	for _, pm := range processorManagers {
-		pm.Stop()
+		pm.Close()
 	}
 
 	// closing the publisher will only delete the keys from the store, but not the store itself

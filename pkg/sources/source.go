@@ -216,7 +216,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
 	for _, pm := range processorManagers {
-		pm.Stop()
+		pm.Close()
 	}
 
 	// close all the to vertex stores
