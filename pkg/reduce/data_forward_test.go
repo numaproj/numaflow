@@ -387,7 +387,6 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = f.Close()
 		for _, p := range publisherMap {
 			_ = p.Close()
 		}
@@ -594,7 +593,6 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = f.Close()
 		for _, p := range publisherMap {
 			_ = p.Close()
 		}
@@ -676,7 +674,6 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = f.Close()
 		for _, p := range publisherMap {
 			_ = p.Close()
 		}
@@ -762,7 +759,6 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = f.Close()
 		for _, p := range publishersMap {
 			_ = p.Close()
 		}
@@ -845,7 +841,6 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = f.Close()
 		for _, p := range publishersMap {
 			_ = p.Close()
 		}
@@ -928,7 +923,6 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = f.Close()
 		for _, p := range publishersMap {
 			_ = p.Close()
 		}
@@ -1032,7 +1026,6 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = f.Close()
 		for _, p := range publishersMap {
 			_ = p.Close()
 		}
@@ -1123,7 +1116,6 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = f.Close()
 		for _, p := range publishersMap {
 			_ = p.Close()
 		}
@@ -1218,7 +1210,6 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = f.Close()
 		for _, p := range publishersMap {
 			_ = p.Close()
 		}

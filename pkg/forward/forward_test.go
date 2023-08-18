@@ -61,11 +61,6 @@ type testForwardFetcher struct {
 	// for forward_test.go only
 }
 
-func (t *testForwardFetcher) Close() error {
-	// won't be used
-	return nil
-}
-
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
@@ -227,14 +222,6 @@ func TestNewInterStepDataForward(t *testing.T) {
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 
-			// close the fetcher and publishers
-			defer func() {
-				_ = fetchWatermark.Close()
-				for _, p := range publishWatermark {
-					_ = p.Close()
-				}
-			}()
-
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -384,7 +371,6 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			// close the fetcher and publishers
 			defer func() {
-				_ = fetchWatermark.Close()
 				for _, p := range publishWatermark {
 					_ = p.Close()
 				}
@@ -551,7 +537,6 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			// close the fetcher and publishers
 			defer func() {
-				_ = fetchWatermark.Close()
 				for _, p := range publishWatermark {
 					_ = p.Close()
 				}
@@ -798,11 +783,6 @@ func (t *testWMBFetcher) RevertBoolValue() {
 	t.WMBTestDiffHeadWMB = !t.WMBTestDiffHeadWMB
 }
 
-func (t *testWMBFetcher) Close() error {
-	// won't be used
-	return nil
-}
-
 func (t *testWMBFetcher) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
 	return t.getWatermark()
 }
@@ -885,7 +865,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = fetchWatermark.Close()
 		for _, p := range publishWatermark {
 			_ = p.Close()
 		}
@@ -1046,7 +1025,6 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = fetchWatermark.Close()
 		for _, p := range publishWatermark {
 			_ = p.Close()
 		}

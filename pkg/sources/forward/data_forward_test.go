@@ -59,11 +59,6 @@ type testForwardFetcher struct {
 	// for data_forward_test.go only
 }
 
-func (t *testForwardFetcher) Close() error {
-	// won't be used
-	return nil
-}
-
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }

@@ -86,17 +86,20 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
 	}
-	wmFetchers, err := service.GetUXEdgeWatermarkFetchers(ctx, ds.pipeline, isbSvcClient)
+	processorManagers, err := service.GetProcessorManagers(ctx, ds.pipeline, isbSvcClient)
+	if err != nil {
+		return fmt.Errorf("failed to get processor managers, %w", err)
+	}
+	wmFetchers, err := service.GetUXEdgeWatermarkFetchers(ctx, ds.pipeline, processorManagers)
 	if err != nil {
 		return fmt.Errorf("failed to get watermark fetchers, %w", err)
 	}
 
+	// Stop all the processor managers, it will stop watching for offset and heartbeat updates.
 	defer func() {
-		for _, fetcherList := range wmFetchers {
-			for _, f := range fetcherList {
-				if err := f.Close(); err != nil {
-					log.Errorw("Failed to close watermark fetcher", zap.Error(err))
-				}
+		for _, pms := range processorManagers {
+			for _, pm := range pms {
+				pm.Stop()
 			}
 		}
 	}()

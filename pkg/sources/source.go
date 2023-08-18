@@ -214,21 +214,18 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	sourcer.Stop()
 	wg.Wait()
 
-	// we created fetcher and publisher stores for each to vertex, so we need to close them.
-	err = fetchWatermark.Close()
-	if err != nil {
-		log.Errorw("Failed to close fetch watermark", zap.Error(err))
+	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
+	for _, pm := range processorManagers {
+		pm.Stop()
 	}
 
 	// close all the to vertex stores
 	for _, ws := range toVertexWatermarkStores {
-		ws.HeartbeatStore().Close()
-		ws.OffsetTimelineStore().Close()
+		_ = ws.Close()
 	}
 
 	// close all the source publisher stores
-	sourcePublisherStores.HeartbeatStore().Close()
-	sourcePublisherStores.OffsetTimelineStore().Close()
+	_ = sourcePublisherStores.Close()
 
 	log.Info("Exited...")
 	return nil

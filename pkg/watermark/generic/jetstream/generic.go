@@ -30,42 +30,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
-
-// BuildFetcher creates a Fetcher (implemented by EdgeFetcherSet) which is used to fetch the Watermarks for a given Vertex
-// (for all incoming Edges) and resolve the overall Watermark for the Vertex
-func BuildFetcher(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (fetch.Fetcher, error) {
-	// if watermark is not enabled, use no-op.
-	if vertexInstance.Vertex.Spec.Watermark.Disabled {
-		return nil, fmt.Errorf("watermark disabled")
-	}
-
-	pipelineName := vertexInstance.Vertex.Spec.PipelineName
-	processorManagers := make(map[string]*processor.ProcessorManager)
-
-	vertex := vertexInstance.Vertex
-	if vertex.IsASource() {
-		fromBucket := v1alpha1.GenerateSourceBucketName(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name)
-		processorManager, err := buildProcessorManagerForBucket(ctx, vertexInstance, fromBucket, client)
-		if err != nil {
-			return nil, err
-		}
-		return fetch.NewSourceFetcher(ctx, processorManager), nil
-	} else {
-		for _, e := range vertex.Spec.FromEdges {
-			fromBucket := v1alpha1.GenerateEdgeBucketName(vertexInstance.Vertex.Namespace, pipelineName, e.From, e.To)
-			processorManager, err := buildProcessorManagerForBucket(ctx, vertexInstance, fromBucket, client)
-			if err != nil {
-				return nil, err
-			}
-			processorManagers[e.From] = processorManager
-		}
-	}
-
-	return fetch.NewEdgeFetcherSet(ctx, vertexInstance, processorManagers), nil
-}
 
 // BuildProcessorManagers creates a map of ProcessorManagers for all the incoming edges of the given Vertex.
 func BuildProcessorManagers(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (map[string]*processor.ProcessorManager, error) {
@@ -139,7 +105,7 @@ func BuildToVertexWatermarkStores(ctx context.Context, vertexInstance *v1alpha1.
 			return nil, fmt.Errorf("failed at new OT KVJetStreamKVStore, OffsetTimelineBukcet: %s, %w", otStoreBucketName, err)
 		}
 		// build watermark store using the hb and ot store
-		wmStores[toBucket] = store.BuildWatermarkStore(hbStore, otStore)
+		wmStores[vertex.Spec.Name] = store.BuildWatermarkStore(hbStore, otStore)
 	} else {
 		for _, e := range vertex.Spec.ToEdges {
 			toBucket := v1alpha1.GenerateEdgeBucketName(vertex.Namespace, vertex.Spec.PipelineName, e.From, e.To)
@@ -159,7 +125,7 @@ func BuildToVertexWatermarkStores(ctx context.Context, vertexInstance *v1alpha1.
 			}
 
 			// build watermark store using the hb and ot store
-			wmStores[toBucket] = store.BuildWatermarkStore(hbStore, otStore)
+			wmStores[e.To] = store.BuildWatermarkStore(hbStore, otStore)
 		}
 	}
 
@@ -172,21 +138,18 @@ func BuildPublishersFromStores(ctx context.Context, vertexInstance *v1alpha1.Ver
 	var (
 		publishWatermark = make(map[string]publish.Publisher)
 		processorName    = fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
-		pipelineName     = vertexInstance.Vertex.Spec.PipelineName
 		vertex           = vertexInstance.Vertex
 	)
 
 	publishEntity := processor.NewProcessorEntity(processorName)
 
 	if vertex.IsASink() {
-		toBucket := vertex.GetToBuckets()[0]
-		wmStore := wmStores[toBucket]
+		wmStore := wmStores[vertex.Spec.Name]
 		publishWatermark[vertex.Spec.Name] = publish.NewPublish(ctx, publishEntity, wmStore, 1, publish.IsSink())
 	} else {
 		for _, e := range vertex.Spec.ToEdges {
-			toBucket := v1alpha1.GenerateEdgeBucketName(vertex.Namespace, pipelineName, e.From, e.To)
-			wmStore := wmStores[toBucket]
-			publishWatermark[toBucket] = publish.NewPublish(ctx, publishEntity, wmStore, int32(e.GetToVertexPartitionCount()))
+			wmStore := wmStores[e.To]
+			publishWatermark[e.To] = publish.NewPublish(ctx, publishEntity, wmStore, int32(e.GetToVertexPartitionCount()))
 		}
 	}
 	return publishWatermark

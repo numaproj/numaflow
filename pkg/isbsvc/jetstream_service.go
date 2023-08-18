@@ -30,7 +30,6 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
@@ -316,9 +315,9 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-// CreateUXWatermarkFetcher is used to create watermark fetcher for the given bucket.
-func (jss *jetStreamSvc) CreateUXWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.UXFetcher, error) {
-	var watermarkFetchers []fetch.UXFetcher
+// CreateProcessorManagers is used to create watermark fetcher for the given bucket.
+func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
+	var processorManagers []*processor.ProcessorManager
 	fetchers := 1
 	if isReduce {
 		fetchers = fromBufferPartitionCount
@@ -342,10 +341,9 @@ func (jss *jetStreamSvc) CreateUXWatermarkFetcher(ctx context.Context, bucketNam
 		} else {
 			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount))
 		}
-		watermarkFetcher := fetch.NewEdgeFetcher(ctx, pm, fromBufferPartitionCount)
-		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
+		processorManagers = append(processorManagers, pm)
 	}
-	return watermarkFetchers, nil
+	return processorManagers, nil
 }
 
 func JetStreamName(bufferName string) string {

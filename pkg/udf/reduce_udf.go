@@ -278,10 +278,9 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log.Info("SIGTERM, exiting...")
 	wg.Wait()
 
-	// close the watermark fetcher and publisher since we created them
-	err = fetchWatermark.Close()
-	if err != nil {
-		log.Error("Failed to close the watermark fetcher", zap.Error(err))
+	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
+	for _, pm := range processorManagers {
+		pm.Stop()
 	}
 
 	// closing the publisher will only delete the keys from the store, but not the store itself
@@ -290,15 +289,14 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	for _, publisher := range publishWatermark {
 		err = publisher.Close()
 		if err != nil {
-			log.Error("Failed to close the watermark publisher", zap.Error(err))
+			log.Errorw("Failed to close the watermark publisher", zap.Error(err))
 		}
 	}
 
 	// close the wm stores, since the publisher and fetcher are closed
 	// since we created the stores, we can close them
 	for _, wmStore := range wmStores {
-		wmStore.HeartbeatStore().Close()
-		wmStore.OffsetTimelineStore().Close()
+		_ = wmStore.Close()
 	}
 
 	log.Info("Exited...")

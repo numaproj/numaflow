@@ -196,11 +196,6 @@ func (e *edgeFetcher) updateHeadIdleWMB(fromPartitionIdx int32) wmb.WMB {
 	return headWMB
 }
 
-// Close function stops the processor manager.
-func (e *edgeFetcher) Close() error {
-	return nil
-}
-
 // getWatermark returns the smallest last processed watermark among all the partitions.
 func (e *edgeFetcher) getWatermark() wmb.Watermark {
 	minWm := int64(math.MaxInt64)
