@@ -27,10 +27,9 @@ func cleanup(mountPath string) {
 // side input store path with updated values from the side input bucket.
 func TestSideInputsValueUpdates(t *testing.T) {
 	var (
-		keyspace     = "sideInputTestWatch"
-		pipelineName = "testPipeline"
-		sideInputs   = []string{"TEST", "TEST2"}
-		dataTest     = []string{"HELLO", "HELLO2"}
+		keyspace   = "sideInputTestWatch"
+		sideInputs = []string{"TEST", "TEST2"}
+		dataTest   = []string{"HELLO", "HELLO2"}
 	)
 	mountPath, err := os.MkdirTemp("/tmp", "side-input")
 	assert.NoError(t, err)
@@ -77,7 +76,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 	}
 
 	bucketName := keyspace
-	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, bucketName, nc)
+	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, bucketName, nc)
 	go startSideInputSynchronizer(ctx, sideInputWatcher, mountPath)
 	for x := range sideInputs {
 		_, err = kv.Put(sideInputs[x], []byte(dataTest[x]))

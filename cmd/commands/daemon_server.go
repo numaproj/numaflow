@@ -39,13 +39,11 @@ func NewDaemonServerCommand() *cobra.Command {
 		Use:   "daemon-server",
 		Short: "Start the daemon server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("daemon-server")
-
 			pl, err := decodePipeline()
 			if err != nil {
 				return fmt.Errorf("failed to decode the pipeline spec: %v", err)
 			}
-
+			logger := logging.NewLogger().Named("daemon-server").With("pipeline", pl.Name)
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
 			server := server.NewDaemonServer(pl, v1alpha1.ISBSvcType(isbSvcType))
 			return server.Run(ctx)

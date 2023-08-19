@@ -45,11 +45,11 @@ func NewISBSvcCreateCommand() *cobra.Command {
 		Use:   "isbsvc-create",
 		Short: "Create buffers, buckets and side inputs store",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("isbsvc-create")
 			pipelineName, defined := os.LookupEnv(v1alpha1.EnvPipelineName)
 			if !defined {
 				return fmt.Errorf("required environment variable '%s' not defined", v1alpha1.EnvPipelineName)
 			}
+			logger := logging.NewLogger().Named("isbsvc-create").With("pipeline", pipelineName)
 			isbSvcConfig := &v1alpha1.BufferServiceConfig{}
 			encodedBufferServiceConfig := os.Getenv(v1alpha1.EnvISBSvcConfig)
 			if len(encodedBufferServiceConfig) > 0 {

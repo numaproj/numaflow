@@ -45,7 +45,7 @@ type jetStreamWatch struct {
 var _ kvs.KVWatcher = (*jetStreamWatch)(nil)
 
 // NewKVJetStreamKVWatch returns KVJetStreamWatch specific to JetStream which implements the KVWatcher interface.
-func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvName string, client *jsclient.NATSClient, opts ...Option) (kvs.KVWatcher, error) {
+func NewKVJetStreamKVWatch(ctx context.Context, kvName string, client *jsclient.NATSClient, opts ...Option) (kvs.KVWatcher, error) {
 
 	kvOpts := defaultOptions()
 
@@ -66,7 +66,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvName stri
 		kvwTimer: time.NewTimer(kvOpts.watcherCreationThreshold),
 		opts:     kvOpts,
 		doneCh:   make(chan struct{}),
-		log:      logging.FromContext(ctx).With("pipeline", pipelineName).With("kvName", kvName),
+		log:      logging.FromContext(ctx).With("kvName", kvName),
 	}
 	return jsw, nil
 }

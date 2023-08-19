@@ -1088,19 +1088,19 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 
 	// create hbStore
-	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer hbStore.Close()
 
 	// create otStore
-	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer otStore.Close()
 
 	// create watchers for heartbeat and offset timeline
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
@@ -1379,19 +1379,19 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 
 	// create hbStore
-	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer hbStore.Close()
 
 	// create otStore
-	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer otStore.Close()
 
 	// create watchers for heartbeat and offset timeline
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 3)

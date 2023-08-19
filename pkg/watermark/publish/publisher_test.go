@@ -67,9 +67,9 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
 
-	heartbeatKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	heartbeatKV, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
-	otKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_OT", defaultJetStreamClient)
+	otKV, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 
 	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), 1, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)

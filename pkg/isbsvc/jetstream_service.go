@@ -327,12 +327,12 @@ func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName
 	// if it's not a reduce vertex, we don't need multiple watermark fetchers. We use common fetcher among all partitions.
 	for i := 0; i < fetchers; i++ {
 		hbKVName := JetStreamProcessorKVName(bucketName)
-		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbKVName, jss.jsClient)
+		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, hbKVName, jss.jsClient)
 		if err != nil {
 			return nil, err
 		}
 		otKVName := JetStreamOTKVName(bucketName)
-		otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otKVName, jss.jsClient)
+		otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, otKVName, jss.jsClient)
 		if err != nil {
 			return nil, err
 		}
