@@ -141,6 +141,8 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 
 // CreateProcessorManagers is used to create the processor managers for the given bucket.
 func (r *isbsRedisSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
+	log := logging.FromContext(ctx).With("bucket", bucketName)
+	ctx = logging.WithLogger(ctx, log)
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	var processorManagers []*processor.ProcessorManager
 	fetchers := 1
@@ -153,9 +155,9 @@ func (r *isbsRedisSvc) CreateProcessorManagers(ctx context.Context, bucketName s
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 		var pm *processor.ProcessorManager
 		if isReduce {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
 		} else {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
 		}
 		processorManagers = append(processorManagers, pm)
 	}

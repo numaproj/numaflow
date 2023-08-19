@@ -317,6 +317,8 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 
 // CreateProcessorManagers is used to create processor manager for the given bucket.
 func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
+	log := logging.FromContext(ctx).With("bucket", bucketName)
+	ctx = logging.WithLogger(ctx, log)
 	var processorManagers []*processor.ProcessorManager
 	fetchers := 1
 	if isReduce {
@@ -337,9 +339,9 @@ func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName
 		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
 		var pm *processor.ProcessorManager
 		if isReduce {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
 		} else {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
 		}
 		processorManagers = append(processorManagers, pm)
 	}

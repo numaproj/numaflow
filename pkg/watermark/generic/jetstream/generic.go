@@ -24,6 +24,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 
@@ -75,8 +76,9 @@ func buildProcessorManagerForBucket(ctx context.Context, vertexInstance *v1alpha
 
 	// create a store watcher that watches the heartbeat and ot store.
 	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
+	log := logging.FromContext(ctx).With("bucket", fromBucket)
 	// create processor manager with the store watcher which will keep track of all the active processors and updates the offset timelines accordingly.
-	processManager := processor.NewProcessorManager(ctx, storeWatcher, fromBucket, int32(len(vertexInstance.Vertex.OwnedBuffers())),
+	processManager := processor.NewProcessorManager(logging.WithLogger(ctx, log), storeWatcher, int32(len(vertexInstance.Vertex.OwnedBuffers())),
 		processor.WithVertexReplica(vertexInstance.Replica), processor.WithIsReduce(vertexInstance.Vertex.IsReduceUDF()), processor.WithIsSource(vertexInstance.Vertex.IsASource()))
 
 	return processManager, nil

@@ -50,8 +50,6 @@ type ProcessorManager struct {
 	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
 	// used for tracking watermark.
 	processors map[string]*ProcessorToFetch
-	// name of the bucket, used for logging
-	bucket string
 	// fromBufferPartitionCount is the number of partitions in the fromBuffer
 	fromBufferPartitionCount int32
 	lock                     sync.RWMutex
@@ -64,7 +62,7 @@ type ProcessorManager struct {
 }
 
 // NewProcessorManager returns a new ProcessorManager instance
-func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.WatermarkStoreWatcher, bucket string, fromBufferPartitionCount int32, inputOpts ...ProcessorManagerOption) *ProcessorManager {
+func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.WatermarkStoreWatcher, fromBufferPartitionCount int32, inputOpts ...ProcessorManagerOption) *ProcessorManager {
 	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
@@ -81,9 +79,8 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 		otWatcher:                watermarkStoreWatcher.OffsetTimelineWatcher(),
 		heartbeat:                NewProcessorHeartbeat(),
 		processors:               make(map[string]*ProcessorToFetch),
-		bucket:                   bucket,
 		fromBufferPartitionCount: fromBufferPartitionCount,
-		log:                      logging.FromContext(ctx).With("bucket", bucket),
+		log:                      logging.FromContext(ctx),
 		doneCh:                   make(chan struct{}),
 		waitCh:                   make(chan struct{}),
 		opts:                     opts,
@@ -233,7 +230,7 @@ func (v *ProcessorManager) startHeartBeatWatcher() {
 					var entity = NewProcessorEntity(value.Key())
 					// if the processor is a reduce or source processor, then we only need one fromProcessor
 					// because the reduce or source will read from only one partition.
-					fromProcessor := NewProcessorToFetch(v.ctx, entity, v.bucket, 10, v.fromBufferPartitionCount)
+					fromProcessor := NewProcessorToFetch(v.ctx, entity, 10, v.fromBufferPartitionCount)
 					v.AddProcessor(value.Key(), fromProcessor)
 					v.log.Infow("Successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active
@@ -327,10 +324,6 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 			}
 		}
 	}
-}
-
-func (v *ProcessorManager) GetBucket() string {
-	return v.bucket
 }
 
 // Close stops the watchers, and waits for the goroutines to exit.
