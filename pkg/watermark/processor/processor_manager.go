@@ -333,8 +333,8 @@ func (v *ProcessorManager) GetBucket() string {
 	return v.bucket
 }
 
-// Stop stops the watchers, and waits for the goroutines to exit.
-func (v *ProcessorManager) Stop() {
+// Close stops the watchers, and waits for the goroutines to exit.
+func (v *ProcessorManager) Close() {
 	// send a signal to the goroutines to exit
 	close(v.doneCh)
 

@@ -19,7 +19,7 @@ package isbsvc
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 )
 
 // ISBService is an interface used to do the operations on ISBSvc
@@ -28,7 +28,7 @@ type ISBService interface {
 	DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error
 	ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error
 	GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error)
-	CreateUXWatermarkFetcher(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]fetch.UXFetcher, error)
+	CreateProcessorManagers(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]*processor.ProcessorManager, error)
 }
 
 // createOptions describes the options for creating buffers and buckets

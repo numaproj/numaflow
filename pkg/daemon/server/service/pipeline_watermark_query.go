@@ -26,27 +26,46 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 )
 
 // GetUXEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
-func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]fetch.UXFetcher, error) {
+func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, processorManagers map[v1alpha1.Edge][]*processor.ProcessorManager) (map[v1alpha1.Edge][]fetch.UXFetcher, error) {
 	var wmFetchers = make(map[v1alpha1.Edge][]fetch.UXFetcher)
 	if pipeline.Spec.Watermark.Disabled {
 		return wmFetchers, nil
+	}
+
+	for edge, pms := range processorManagers {
+		var fetchers []fetch.UXFetcher
+		for _, pm := range pms {
+			fetchers = append(fetchers, fetch.NewEdgeFetcher(ctx, pm, pipeline.GetVertex(edge.To).GetPartitionCount()))
+		}
+		wmFetchers[edge] = fetchers
+	}
+
+	return wmFetchers, nil
+}
+
+// GetProcessorManagers returns a map of ProcessorManager per edge.
+func GetProcessorManagers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbsvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]*processor.ProcessorManager, error) {
+	var processorManagers = make(map[v1alpha1.Edge][]*processor.ProcessorManager)
+	if pipeline.Spec.Watermark.Disabled {
+		return processorManagers, nil
 	}
 
 	for _, edge := range pipeline.ListAllEdges() {
 		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
 		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
 		partitionCount := pipeline.GetVertex(edge.To).GetPartitionCount()
-		wmFetcherList, err := isbSvcClient.CreateUXWatermarkFetcher(ctx, bucketName, partitionCount, isReduce)
+		pms, err := isbsvcClient.CreateProcessorManagers(ctx, bucketName, partitionCount, isReduce)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create watermark fetcher  %w", err)
+			return nil, fmt.Errorf("failed to create processor manager  %w", err)
 		}
-		wmFetchers[edge] = wmFetcherList
+		processorManagers[edge] = pms
 	}
-	return wmFetchers, nil
+	return processorManagers, nil
 }
 
 // GetPipelineWatermarks is used to return the head watermarks for a given pipeline.

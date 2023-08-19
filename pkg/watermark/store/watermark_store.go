@@ -42,3 +42,9 @@ func (ws *watermarkStore) HeartbeatStore() kvs.KVStorer {
 func (ws *watermarkStore) OffsetTimelineStore() kvs.KVStorer {
 	return ws.offsetTimelineStore
 }
+
+func (ws *watermarkStore) Close() error {
+	ws.heartbeatStore.Close()
+	ws.offsetTimelineStore.Close()
+	return nil
+}

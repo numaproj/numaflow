@@ -104,10 +104,3 @@ func (e *sourceFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	// TODO: what would this be...
 	return wmb.WMB{}
 }
-
-// Close function closes the watchers.
-func (e *sourceFetcher) Close() error {
-	e.log.Info("Closing source watermark fetcher")
-	e.processorManager.Stop()
-	return nil
-}

@@ -16,10 +16,15 @@ limitations under the License.
 
 package store
 
-import "github.com/numaproj/numaflow/pkg/shared/kvs"
+import (
+	"io"
+
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
+)
 
 // WatermarkStore defines a pair of heartbeat KV store and offset timeline KV store
 type WatermarkStore interface {
+	io.Closer
 	HeartbeatStore() kvs.KVStorer
 	OffsetTimelineStore() kvs.KVStorer
 }

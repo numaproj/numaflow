@@ -30,7 +30,6 @@ import (
 
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 type isbsRedisSvc struct {
@@ -140,10 +139,10 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 	return bufferInfo, nil
 }
 
-// CreateUXWatermarkFetcher is used to create watermark fetcher for the given bucket
-func (r *isbsRedisSvc) CreateUXWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.UXFetcher, error) {
+// CreateProcessorManagers is used to create the processor managers for the given bucket.
+func (r *isbsRedisSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
-	var watermarkFetchers []fetch.UXFetcher
+	var processorManagers []*processor.ProcessorManager
 	fetchers := 1
 	if isReduce {
 		fetchers = fromBufferPartitionCount
@@ -158,9 +157,8 @@ func (r *isbsRedisSvc) CreateUXWatermarkFetcher(ctx context.Context, bucketName 
 		} else {
 			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount))
 		}
-		watermarkFetcher := fetch.NewEdgeFetcher(ctx, pm, fromBufferPartitionCount)
-		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
+		processorManagers = append(processorManagers, pm)
 	}
 
-	return watermarkFetchers, nil
+	return processorManagers, nil
 }
