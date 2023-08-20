@@ -81,6 +81,7 @@ func BuildJetStreamWatermarkStore(ctx context.Context, bucket string, client *js
 	otStoreKVName := JetStreamOTKVName(bucket)
 	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, otStoreKVName, client)
 	if err != nil {
+		hbStore.Close()
 		return nil, fmt.Errorf("failed at new JetStream OT KV store %q, %w", otStoreKVName, err)
 	}
 	return &watermarkStore{

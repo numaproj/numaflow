@@ -72,6 +72,7 @@ func BuildJetStreamWatermarkStoreWatcher(ctx context.Context, bucket string, cli
 	otKVName := JetStreamOTKVName(bucket)
 	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, otKVName, client)
 	if err != nil {
+		hbWatch.Close()
 		return nil, fmt.Errorf("failed at new JetStream OT KV watch for %q, %w", otKVName, err)
 	}
 	return &watermarkStoreWatcher{
