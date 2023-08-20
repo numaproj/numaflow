@@ -37,7 +37,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -1281,17 +1280,14 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryBuffer, key string) (fetch.Fetcher, publish.Publisher) {
 
 	var (
-		keyspace     = key
-		hbBucketName = keyspace + "_PROCESSORS"
-		otBucketName = keyspace + "_OT"
+		keyspace = key
 	)
 
 	sourcePublishEntity := processor.NewProcessorEntity(fromBuffer.GetName())
-	hb, hbWatcherCh, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
-	ot, otWatcherCh, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	store, hbWatcherCh, otWatcherCh, _ := wmstore.BuildInmemWatermarkStore(ctx, pipelineName, keyspace)
 
 	// publisher for source
-	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, wmstore.BuildWatermarkStore(hb, ot), 1, publish.WithAutoRefreshHeartbeatDisabled())
+	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, store, 1, publish.WithAutoRefreshHeartbeatDisabled())
 
 	// publish heartbeat manually for the processor
 	go func() {
@@ -1300,15 +1296,13 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 			case <-ctx.Done():
 				return
 			default:
-				_ = hb.PutKV(ctx, fromBuffer.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
+				_ = store.HeartbeatStore().PutKV(ctx, fromBuffer.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 				time.Sleep(time.Duration(1) * time.Second)
 			}
 		}
 	}()
 
-	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_PROCESSORS", hbWatcherCh)
-	otWatcher, _ := inmem.NewInMemWatch(ctx, pipelineName, keyspace+"_OT", otWatcherCh)
-	storeWatcher := wmstore.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	storeWatcher, _ := wmstore.BuildInmemWatermarkStoreWatcher(ctx, pipelineName, keyspace, hbWatcherCh, otWatcherCh)
 	pm := processor.NewProcessorManager(ctx, storeWatcher, 1, processor.WithIsReduce(true))
 	for waitForReadyP := pm.GetProcessor(fromBuffer.GetName()); waitForReadyP == nil; waitForReadyP = pm.GetProcessor(fromBuffer.GetName()) {
 		// wait until the test processor has been added to the processor list
@@ -1336,10 +1330,9 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb
 	index := int32(0)
 	for key, partitionedBuffers := range toBuffers {
 		publishEntity := processor.NewProcessorEntity(key)
-		hb, hbKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_PROCESSORS")
-		ot, otKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipelineName, key+"_OT")
-		otStores[key] = ot
-		p := publish.NewPublish(ctx, publishEntity, wmstore.BuildWatermarkStore(hb, ot), int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		store, hbKVEntry, otKVEntry, _ := wmstore.BuildInmemWatermarkStore(ctx, pipelineName, key)
+		otStores[key] = store.OffsetTimelineStore()
+		p := publish.NewPublish(ctx, publishEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 
 		go func() {

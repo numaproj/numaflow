@@ -24,12 +24,10 @@ import (
 	"go.uber.org/zap"
 
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type isbsRedisSvc struct {
@@ -150,9 +148,7 @@ func (r *isbsRedisSvc) CreateProcessorManagers(ctx context.Context, bucketName s
 		fetchers = fromBufferPartitionCount
 	}
 	for i := 0; i < fetchers; i++ {
-		hbWatcher := noop.NewKVOpWatch()
-		otWatcher := noop.NewKVOpWatch()
-		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+		storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
 		var pm *processor.ProcessorManager
 		if isReduce {
 			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))

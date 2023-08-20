@@ -33,7 +33,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
-
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"

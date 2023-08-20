@@ -24,9 +24,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
@@ -187,9 +184,7 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 }
 
 func createProcessorManager(ctx context.Context, partitionCount int32) *processor.ProcessorManager {
-	hbWatcher := noop.NewKVOpWatch()
-	otWatcher := noop.NewKVOpWatch()
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
 	return processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 }
 
@@ -378,10 +373,8 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 	// 3. all publishers Idle but somehow the GetWatermark() of one of the EdgeFetchers is higher than the returned value
 
 	var (
-		ctx          = context.Background()
-		hbWatcher    = noop.NewKVOpWatch()
-		otWatcher    = noop.NewKVOpWatch()
-		storeWatcher = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+		ctx             = context.Background()
+		storeWatcher, _ = store.BuildNoOpWatermarkStoreWatcher()
 
 		edge1ProcessorManagerIdle    = processor.NewProcessorManager(ctx, storeWatcher, 2)
 		edge1ProcessorManagerNonIdle = processor.NewProcessorManager(ctx, storeWatcher, 2)

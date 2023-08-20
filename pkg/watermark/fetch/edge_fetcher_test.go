@@ -29,17 +29,13 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-
-	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 func TestBuffer_updateWatermarkWithOnePartition(t *testing.T) {
@@ -47,9 +43,7 @@ func TestBuffer_updateWatermarkWithOnePartition(t *testing.T) {
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
 	// so use no op watcher for testing
-	hbWatcher := noop.NewKVOpWatch()
-	otWatcher := noop.NewKVOpWatch()
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
 	var (
 		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
@@ -174,9 +168,7 @@ func TestBuffer_updateWatermarkWithMultiplePartition(t *testing.T) {
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
 	// so use no op watcher for testing
-	hbWatcher := noop.NewKVOpWatch()
-	otWatcher := noop.NewKVOpWatch()
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
 	partitionCount := int32(3)
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 	var (
@@ -337,9 +329,7 @@ func Test_edgeFetcher_ComputeHeadWatermark(t *testing.T) {
 	var (
 		partitionCount    = int32(2)
 		ctx               = context.Background()
-		hbWatcher         = noop.NewKVOpWatch()
-		otWatcher         = noop.NewKVOpWatch()
-		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+		storeWatcher, _   = store.BuildNoOpWatermarkStoreWatcher()
 		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 	)
@@ -506,9 +496,7 @@ func Test_edgeFetcher_updateHeadIdleWMB(t *testing.T) {
 	var (
 		partitionCount    = int32(3)
 		ctx               = context.Background()
-		hbWatcher         = noop.NewKVOpWatch()
-		otWatcher         = noop.NewKVOpWatch()
-		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+		storeWatcher, _   = store.BuildNoOpWatermarkStoreWatcher()
 		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 		processorManager3 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
@@ -860,11 +848,8 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 
 	epoch += 60000
 
-	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
-	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	var processorManager = processor.NewProcessorManager(ctx, storeWatcher, 1)
 	var fetcher = NewEdgeFetcher(ctx, processorManager, 1)
 
@@ -1098,11 +1083,8 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	defer otStore.Close()
 
 	// create watchers for heartbeat and offset timeline
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, keyspace+"_PROCESSORS", defaultJetStreamClient)
+	storeWatcher, err := store.BuildJetStreamWatermarkStoreWatcher(ctx, keyspace, defaultJetStreamClient)
 	assert.NoError(t, err)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, keyspace+"_OT", defaultJetStreamClient)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
 	fetcher := NewEdgeFetcher(ctx, processorManager, 1)
 
@@ -1389,11 +1371,8 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	defer otStore.Close()
 
 	// create watchers for heartbeat and offset timeline
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, keyspace+"_PROCESSORS", defaultJetStreamClient)
+	storeWatcher, err := store.BuildJetStreamWatermarkStoreWatcher(ctx, keyspace, defaultJetStreamClient)
 	assert.NoError(t, err)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, keyspace+"_OT", defaultJetStreamClient)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 3)
 	fetcher := NewEdgeFetcher(ctx, processorManager, 3)
 

@@ -62,11 +62,8 @@ func TestProcessorManager(t *testing.T) {
 	defer otStore.Close()
 	defer cancel()
 
-	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
-	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	var processorManager = NewProcessorManager(ctx, storeWatcher, 1)
 	// start p1 heartbeat for 3 loops then delete p1
 	go func() {
@@ -152,11 +149,8 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	defer hbStore.Close()
 	defer otStore.Close()
 
-	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
-	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	var processorManager = NewProcessorManager(ctx, storeWatcher, 1)
 	// start p1 heartbeat for 3 loops
 	go func(ctx context.Context) {
@@ -251,11 +245,8 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 	defer otStore.Close()
 	defer cancel()
 
-	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
-	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	var processorManager = NewProcessorManager(ctx, storeWatcher, 1, WithIsReduce(true), WithVertexReplica(2))
 	// start p1 heartbeat for 3 loops
 	go func(ctx context.Context) {
@@ -364,11 +355,8 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 	assert.NoError(t, err)
 	defer otStore.Close()
 
-	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
-	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
 	var processorManager = NewProcessorManager(ctx, storeWatcher, 3)
 	// start p1 heartbeat for 3 loops
 	go func(ctx context.Context) {
