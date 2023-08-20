@@ -33,7 +33,7 @@ import (
 
 func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 	var ctx = context.Background()
-	wmstore, _, _, err := store.BuildInmemWatermarkStore(ctx, "testPublisher", "test")
+	wmstore, _, _, err := store.BuildInmemWatermarkStore(ctx, "test")
 	assert.NoError(t, err)
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
 

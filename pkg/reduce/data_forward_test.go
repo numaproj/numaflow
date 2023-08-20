@@ -1284,7 +1284,7 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	)
 
 	sourcePublishEntity := processor.NewProcessorEntity(fromBuffer.GetName())
-	store, hbWatcherCh, otWatcherCh, _ := wmstore.BuildInmemWatermarkStore(ctx, pipelineName, keyspace)
+	store, hbWatcherCh, otWatcherCh, _ := wmstore.BuildInmemWatermarkStore(ctx, keyspace)
 
 	// publisher for source
 	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, store, 1, publish.WithAutoRefreshHeartbeatDisabled())
@@ -1302,7 +1302,7 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 		}
 	}()
 
-	storeWatcher, _ := wmstore.BuildInmemWatermarkStoreWatcher(ctx, pipelineName, keyspace, hbWatcherCh, otWatcherCh)
+	storeWatcher, _ := wmstore.BuildInmemWatermarkStoreWatcher(ctx, keyspace, hbWatcherCh, otWatcherCh)
 	pm := processor.NewProcessorManager(ctx, storeWatcher, 1, processor.WithIsReduce(true))
 	for waitForReadyP := pm.GetProcessor(fromBuffer.GetName()); waitForReadyP == nil; waitForReadyP = pm.GetProcessor(fromBuffer.GetName()) {
 		// wait until the test processor has been added to the processor list
@@ -1330,7 +1330,7 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb
 	index := int32(0)
 	for key, partitionedBuffers := range toBuffers {
 		publishEntity := processor.NewProcessorEntity(key)
-		store, hbKVEntry, otKVEntry, _ := wmstore.BuildInmemWatermarkStore(ctx, pipelineName, key)
+		store, hbKVEntry, otKVEntry, _ := wmstore.BuildInmemWatermarkStore(ctx, key)
 		otStores[key] = store.OffsetTimelineStore()
 		p := publish.NewPublish(ctx, publishEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p

@@ -52,9 +52,9 @@ func BuildNoOpWatermarkStoreWatcher() (WatermarkStoreWatcher, error) {
 }
 
 // BuildInmemWatermarkStoreWatcher returns an in-mem WatermarkStoreWatcher instance
-func BuildInmemWatermarkStoreWatcher(ctx context.Context, pipeline, bucket string, hbKVEntryCh, otKVEntryCh <-chan kvs.KVEntry) (WatermarkStoreWatcher, error) {
-	hbWatcher, _ := inmem.NewInMemWatch(ctx, pipeline, bucket+"_PROCESSORS", hbKVEntryCh)
-	otWatcher, _ := inmem.NewInMemWatch(ctx, pipeline, bucket+"_OT", otKVEntryCh)
+func BuildInmemWatermarkStoreWatcher(ctx context.Context, bucket string, hbKVEntryCh, otKVEntryCh <-chan kvs.KVEntry) (WatermarkStoreWatcher, error) {
+	hbWatcher, _ := inmem.NewInMemWatch(ctx, bucket+"_PROCESSORS", hbKVEntryCh)
+	otWatcher, _ := inmem.NewInMemWatch(ctx, bucket+"_OT", otKVEntryCh)
 	return &watermarkStoreWatcher{
 		heartbeatStoreWatcher:      hbWatcher,
 		offsetTimelineStoreWatcher: otWatcher,

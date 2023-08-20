@@ -48,21 +48,20 @@ func TestMain(m *testing.M) {
 func TestProcessorManager(t *testing.T) {
 	var (
 		err          error
-		pipelineName = "testFetch"
 		keyspace     = "fetcherTest"
 		hbBucketName = keyspace + "_PROCESSORS"
 		otBucketName = keyspace + "_OT"
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, hbBucketName)
 	assert.NoError(t, err)
-	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, otBucketName)
 	assert.NoError(t, err)
 	defer hbStore.Close()
 	defer otStore.Close()
 	defer cancel()
 
-	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
 	var processorManager = NewProcessorManager(ctx, storeWatcher, 1)
 	// start p1 heartbeat for 3 loops then delete p1
@@ -132,7 +131,6 @@ func TestProcessorManager(t *testing.T) {
 func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	var (
 		err          error
-		pipelineName       = "testFetch"
 		keyspace           = "fetcherTest"
 		hbBucketName       = keyspace + "_PROCESSORS"
 		otBucketName       = keyspace + "_OT"
@@ -140,16 +138,16 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 		testOffset   int64 = 100
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, hbBucketName)
 	assert.NoError(t, err)
-	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, otBucketName)
 	assert.NoError(t, err)
 
 	defer cancel()
 	defer hbStore.Close()
 	defer otStore.Close()
 
-	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
 	var processorManager = NewProcessorManager(ctx, storeWatcher, 1)
 	// start p1 heartbeat for 3 loops
@@ -229,7 +227,6 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 func TestProcessorManagerWatchForReduce(t *testing.T) {
 	var (
 		err          error
-		pipelineName       = "testFetch"
 		keyspace           = "fetcherTest"
 		hbBucketName       = keyspace + "_PROCESSORS"
 		otBucketName       = keyspace + "_OT"
@@ -237,15 +234,15 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		testOffset   int64 = 100
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, hbBucketName)
 	assert.NoError(t, err)
-	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, otBucketName)
 	assert.NoError(t, err)
 	defer hbStore.Close()
 	defer otStore.Close()
 	defer cancel()
 
-	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
 	var processorManager = NewProcessorManager(ctx, storeWatcher, 1, WithIsReduce(true), WithVertexReplica(2))
 	// start p1 heartbeat for 3 loops
@@ -338,7 +335,6 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 	var (
 		err            error
-		pipelineName         = "testFetch"
 		keyspace             = "fetcherTest"
 		hbBucketName         = keyspace + "_PROCESSORS"
 		otBucketName         = keyspace + "_OT"
@@ -348,14 +344,14 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, hbBucketName)
 	assert.NoError(t, err)
 	defer hbStore.Close()
-	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, otBucketName)
 	assert.NoError(t, err)
 	defer otStore.Close()
 
-	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
 	var processorManager = NewProcessorManager(ctx, storeWatcher, 3)
 	// start p1 heartbeat for 3 loops

@@ -828,7 +828,6 @@ func otValueToBytes(offset int64, watermark int64, idle bool, partitionIdx int32
 func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	var (
 		err          error
-		pipelineName       = "testFetch"
 		keyspace           = "fetcherTest"
 		hbBucketName       = keyspace + "_PROCESSORS"
 		otBucketName       = keyspace + "_OT"
@@ -839,16 +838,16 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, hbBucketName)
 	assert.NoError(t, err)
 	defer hbStore.Close()
-	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, otBucketName)
 	assert.NoError(t, err)
 	defer otStore.Close()
 
 	epoch += 60000
 
-	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, "testFetch", keyspace, hbWatcherCh, otWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
 	var processorManager = processor.NewProcessorManager(ctx, storeWatcher, 1)
 	var fetcher = NewEdgeFetcher(ctx, processorManager, 1)

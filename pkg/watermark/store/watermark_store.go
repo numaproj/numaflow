@@ -59,9 +59,9 @@ func BuildNoOpWatermarkStore() (WatermarkStore, error) {
 }
 
 // BuildInmemWatermarkStore returns an in-mem WatermarkStore instance, and the HB, OT entry channels
-func BuildInmemWatermarkStore(ctx context.Context, pipeline, bucket string) (WatermarkStore, chan kvs.KVEntry, chan kvs.KVEntry, error) {
-	hbKV, hbKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipeline, bucket+"_PROCESSORS")
-	otKV, otKVEntry, _ := inmem.NewKVInMemKVStore(ctx, pipeline, bucket+"_OT")
+func BuildInmemWatermarkStore(ctx context.Context, bucket string) (WatermarkStore, chan kvs.KVEntry, chan kvs.KVEntry, error) {
+	hbKV, hbKVEntry, _ := inmem.NewKVInMemKVStore(ctx, bucket+"_PROCESSORS")
+	otKV, otKVEntry, _ := inmem.NewKVInMemKVStore(ctx, bucket+"_OT")
 	return &watermarkStore{
 		heartbeatStore:      hbKV,
 		offsetTimelineStore: otKV,

@@ -1232,7 +1232,7 @@ func buildToVertexWatermarkStores(toBuffers map[string][]isb.BufferWriter) map[s
 	var ctx = context.Background()
 	otStores := make(map[string]wmstore.WatermarkStore)
 	for key := range toBuffers {
-		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, testPipelineName, fmt.Sprintf(publishKeyspace, key))
+		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, fmt.Sprintf(publishKeyspace, key))
 		otStores[key] = store
 	}
 	return otStores

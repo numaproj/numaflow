@@ -1601,7 +1601,7 @@ func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[s
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]kvs.KVStorer)
 	for key, partitionedBuffers := range toBuffers {
-		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, testPipelineName, fmt.Sprintf(publisherKeyspace, key))
+		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, fmt.Sprintf(publisherKeyspace, key))
 		otStores[key] = store.OffsetTimelineStore()
 		p := publish.NewPublish(ctx, processorEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
