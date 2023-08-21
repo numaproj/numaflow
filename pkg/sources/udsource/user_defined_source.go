@@ -20,13 +20,14 @@ import (
 	"context"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/sources/udsource/grpc"
 )
 
 type userDefinedSource struct {
-	udsource *UDSgRPCBasedUDSource
+	udsource *grpc.UDSgRPCBasedUDSource
 }
 
-func New(udsource *UDSgRPCBasedUDSource) (*userDefinedSource, error) {
+func New(udsource *grpc.UDSgRPCBasedUDSource) (*userDefinedSource, error) {
 	return &userDefinedSource{
 		udsource: udsource,
 	}, nil

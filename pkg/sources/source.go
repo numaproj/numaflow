@@ -43,6 +43,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/redisstreams"
 	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/sources/udsource"
+	"github.com/numaproj/numaflow/pkg/sources/udsource/grpc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
@@ -167,9 +168,9 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	}
 
 	// if the source is a user-defined source, we create a gRPC client for it.
-	var udsGRPCClient *udsource.UDSgRPCBasedUDSource
+	var udsGRPCClient *grpc.UDSgRPCBasedUDSource
 	if sp.VertexInstance.Vertex.IsUDSource() {
-		udsGRPCClient, err = udsource.NewUDSgRPCBasedUDSource()
+		udsGRPCClient, err = grpc.NewUDSgRPCBasedUDSource()
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
@@ -258,7 +259,7 @@ func (sp *SourceProcessor) getSourcer(
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	mapApplier applier.MapApplier,
-	udsGRPCClient *udsource.UDSgRPCBasedUDSource,
+	udsGRPCClient *grpc.UDSgRPCBasedUDSource,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,

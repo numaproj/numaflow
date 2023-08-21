@@ -14,10 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package udsource
+package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func Test_gRPCBasedUDSource_WaitUntilReadyWithMockClient(t *testing.T) {
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			t.Log(t.Name(), "test timeout")
 		}
 	}()
@@ -76,7 +77,7 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -104,7 +105,7 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
