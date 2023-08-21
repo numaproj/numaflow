@@ -23,7 +23,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -58,11 +57,11 @@ type SourceProcessor struct {
 
 func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var (
-		sourcePublisherStores   = store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
-		processorManagers       map[string]*processor.ProcessorManager
-		toVertexWatermarkStores = make(map[string]store.WatermarkStore)
-		log                     = logging.FromContext(ctx)
-		writersMap              = make(map[string][]isb.BufferWriter)
+		sourcePublisherStores, _ = store.BuildNoOpWatermarkStore()
+		processorManagers        map[string]*processor.ProcessorManager
+		toVertexWatermarkStores  = make(map[string]store.WatermarkStore)
+		log                      = logging.FromContext(ctx)
+		writersMap               = make(map[string][]isb.BufferWriter)
 	)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -78,7 +77,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// create a no op publisher stores
 
 	for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
-		toVertexWatermarkStores[e.To] = store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+		toVertexWatermarkStores[e.To], _ = store.BuildNoOpWatermarkStore()
 	}
 
 	switch sp.ISBSvcType {

@@ -22,15 +22,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 // BuildProcessorManagers creates a map of ProcessorManagers for all the incoming edges of the given Vertex.
@@ -60,23 +57,15 @@ func BuildProcessorManagers(ctx context.Context, vertexInstance *v1alpha1.Vertex
 
 // buildProcessorManagerForBucket creates a processor manager for the given bucket.
 func buildProcessorManagerForBucket(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, fromBucket string, client *jsclient.NATSClient) (*processor.ProcessorManager, error) {
-	pipelineName := vertexInstance.Vertex.Spec.PipelineName
-	hbKVName := isbsvc.JetStreamProcessorKVName(fromBucket)
-	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, hbKVName, client)
-	if err != nil {
-		return nil, fmt.Errorf("failed at new HB KVJetStreamKVWatch, hbKVName: %s, %w", hbKVName, err)
-	}
-
-	otKVName := isbsvc.JetStreamOTKVName(fromBucket)
-	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, pipelineName, otKVName, client)
-	if err != nil {
-		return nil, fmt.Errorf("failed at new OT KVJetStreamKVWatch, otKVName: %s, %w", otKVName, err)
-	}
-
 	// create a store watcher that watches the heartbeat and ot store.
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
+	storeWatcher, err := store.BuildJetStreamWatermarkStoreWatcher(ctx, fromBucket, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed at new JetStream watermark store watcher, %w", err)
+	}
+
+	log := logging.FromContext(ctx).With("bucket", fromBucket)
 	// create processor manager with the store watcher which will keep track of all the active processors and updates the offset timelines accordingly.
-	processManager := processor.NewProcessorManager(ctx, storeWatcher, fromBucket, int32(len(vertexInstance.Vertex.OwnedBuffers())),
+	processManager := processor.NewProcessorManager(logging.WithLogger(ctx, log), storeWatcher, int32(len(vertexInstance.Vertex.OwnedBuffers())),
 		processor.WithVertexReplica(vertexInstance.Replica), processor.WithIsReduce(vertexInstance.Vertex.IsReduceUDF()), processor.WithIsSource(vertexInstance.Vertex.IsASource()))
 
 	return processManager, nil
@@ -86,46 +75,26 @@ func buildProcessorManagerForBucket(ctx context.Context, vertexInstance *v1alpha
 func BuildToVertexWatermarkStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (map[string]store.WatermarkStore, error) {
 	var wmStores = make(map[string]store.WatermarkStore)
 	vertex := vertexInstance.Vertex
-	pipelineName := vertex.Spec.PipelineName
 
 	if vertex.IsASink() {
 		toBucket := vertex.GetToBuckets()[0]
-
-		// build heartBeat store
-		hbKVName := isbsvc.JetStreamProcessorKVName(toBucket)
-		hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbKVName, client)
+		// build watermark store
+		wmStore, err := store.BuildJetStreamWatermarkStore(ctx, toBucket, client)
 		if err != nil {
-			return nil, fmt.Errorf("failed at new HB KVJetStreamKVStore, HeartbeatKV: %s, %w", hbKVName, err)
+			return nil, fmt.Errorf("failed at new JetStream watermark store, %w", err)
 		}
-
-		// build offsetTimeline store
-		otStoreKVName := isbsvc.JetStreamOTKVName(toBucket)
-		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreKVName, client)
-		if err != nil {
-			return nil, fmt.Errorf("failed at new OT KVJetStreamKVStore, OffsetTimelineKV: %s, %w", otStoreKVName, err)
-		}
-		// build watermark store using the hb and ot store
-		wmStores[vertex.Spec.Name] = store.BuildWatermarkStore(hbStore, otStore)
+		wmStores[vertex.Spec.Name] = wmStore
 	} else {
 		for _, e := range vertex.Spec.ToEdges {
 			toBucket := v1alpha1.GenerateEdgeBucketName(vertex.Namespace, vertex.Spec.PipelineName, e.From, e.To)
-
-			// build heartBeat store
-			hbKVName := isbsvc.JetStreamProcessorKVName(toBucket)
-			hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, vertex.Spec.PipelineName, hbKVName, client)
+			// build watermark store
+			wmStore, err := store.BuildJetStreamWatermarkStore(ctx, toBucket, client)
 			if err != nil {
-				return nil, fmt.Errorf("failed at new HB KVJetStreamKVStore, HeartbeatKV: %s, %w", hbKVName, err)
-			}
-
-			// build offsetTimeline store
-			otStoreKVName := isbsvc.JetStreamOTKVName(toBucket)
-			otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otStoreKVName, client)
-			if err != nil {
-				return nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, otKVName: %s, %w", otStoreKVName, err)
+				return nil, fmt.Errorf("failed at new JetStream watermark store, %w", err)
 			}
 
 			// build watermark store using the hb and ot store
-			wmStores[e.To] = store.BuildWatermarkStore(hbStore, otStore)
+			wmStores[e.To] = wmStore
 		}
 	}
 
@@ -161,25 +130,15 @@ func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.Ve
 		return nil, fmt.Errorf("not a source vertex")
 	}
 	if vertexInstance.Vertex.Spec.Watermark.Disabled {
-		return store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore()), nil
+		return store.BuildNoOpWatermarkStore()
 	}
-	pipelineName := vertexInstance.Vertex.Spec.PipelineName
 	bucketName := vertexInstance.Vertex.GetFromBuckets()[0]
-	// heartbeat
-	hbKVName := isbsvc.JetStreamProcessorKVName(bucketName)
-	hbKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbKVName, client)
+	wmStore, err := store.BuildJetStreamWatermarkStore(ctx, bucketName, client)
 	if err != nil {
-		return nil, fmt.Errorf("failed at new HB KVJetStreamKVStore for source, hbKVName: %s, %w", hbKVName, err)
+		return nil, fmt.Errorf("failed at new JetStream watermark store, %w", err)
 	}
 
-	// OT
-	otKVName := isbsvc.JetStreamOTKVName(bucketName)
-	otKVStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otKVName, client)
-	if err != nil {
-		return nil, fmt.Errorf("failed at new OT KVJetStreamKVStore for source, otKVName: %s, %w", otKVName, err)
-	}
-	sourcePublishStores := store.BuildWatermarkStore(hbKVStore, otKVStore)
-	return sourcePublishStores, nil
+	return wmStore, nil
 }
 
 func BuildToVertexPublisherStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (map[string]store.WatermarkStore, error) {
@@ -187,18 +146,12 @@ func BuildToVertexPublisherStores(ctx context.Context, vertexInstance *v1alpha1.
 	var publisherStores = make(map[string]store.WatermarkStore)
 	for _, e := range vertexInstance.Vertex.Spec.ToEdges {
 		toBucket := v1alpha1.GenerateEdgeBucketName(vertexInstance.Vertex.Namespace, pipelineName, e.From, e.To)
-		hbPublisherKVName := isbsvc.JetStreamProcessorKVName(toBucket)
-		hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, hbPublisherKVName, client)
+		wmStore, err := store.BuildJetStreamWatermarkStore(ctx, toBucket, client)
 		if err != nil {
-			return nil, fmt.Errorf("failed at new HB Publish JetStreamKVStore, HeartbeatPublisherKV: %s, %w", hbPublisherKVName, err)
+			return nil, fmt.Errorf("failed at new JetStream watermark store, %w", err)
 		}
 
-		otKVName := isbsvc.JetStreamOTKVName(toBucket)
-		otStore, err := jetstream.NewKVJetStreamKVStore(ctx, pipelineName, otKVName, client)
-		if err != nil {
-			return nil, fmt.Errorf("failed at new OT Publish JetStreamKVStore, otKVName: %s, %w", otKVName, err)
-		}
-		publisherStores[e.To] = store.BuildWatermarkStore(hbStore, otStore)
+		publisherStores[e.To] = wmStore
 	}
 	return publisherStores, nil
 }

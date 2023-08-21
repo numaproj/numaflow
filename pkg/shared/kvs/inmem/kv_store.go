@@ -25,9 +25,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -55,25 +55,23 @@ func (k kvEntry) Operation() kvs.KVWatchOp {
 
 // inMemStore implements the watermark's KV store backed up by in mem store.
 type inMemStore struct {
-	pipelineName string
-	bucketName   string
-	kv           map[string][]byte
-	kvLock       sync.RWMutex
-	kvEntryCh    chan kvs.KVEntry
-	isClosed     bool
-	log          *zap.SugaredLogger
+	bucketName string
+	kv         map[string][]byte
+	kvLock     sync.RWMutex
+	kvEntryCh  chan kvs.KVEntry
+	isClosed   bool
+	log        *zap.SugaredLogger
 }
 
 var _ kvs.KVStorer = (*inMemStore)(nil)
 
 // NewKVInMemKVStore returns inMemStore.
-func NewKVInMemKVStore(ctx context.Context, pipelineName string, bucketName string) (kvs.KVStorer, chan kvs.KVEntry, error) {
+func NewKVInMemKVStore(ctx context.Context, bucketName string) (kvs.KVStorer, chan kvs.KVEntry, error) {
 	s := &inMemStore{
-		pipelineName: pipelineName,
-		bucketName:   bucketName,
-		kv:           make(map[string][]byte),
-		kvEntryCh:    make(chan kvs.KVEntry, 10),
-		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
+		bucketName: bucketName,
+		kv:         make(map[string][]byte),
+		kvEntryCh:  make(chan kvs.KVEntry, 10),
+		log:        logging.FromContext(ctx).With("bucketName", bucketName),
 	}
 	return s, s.kvEntryCh, nil
 }

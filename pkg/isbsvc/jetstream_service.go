@@ -28,10 +28,9 @@ import (
 	"go.uber.org/zap"
 
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
+	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type jetStreamSvc struct {
@@ -146,7 +145,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 
 	for _, bucket := range buckets {
 		// Create offset-timeline KV
-		otKVName := JetStreamOTKVName(bucket)
+		otKVName := wmstore.JetStreamOTKVName(bucket)
 		if _, err := js.KeyValue(otKVName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otKVName, err)
@@ -165,7 +164,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}
 		}
 		// Create processor KV
-		procKVName := JetStreamProcessorKVName(bucket)
+		procKVName := wmstore.JetStreamProcessorKVName(bucket)
 		if _, err := js.KeyValue(procKVName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procKVName, err)
@@ -209,12 +208,12 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 		log.Infow("Succeeded to delete a stream", zap.String("stream", streamName))
 	}
 	for _, bucket := range buckets {
-		otKVName := JetStreamOTKVName(bucket)
+		otKVName := wmstore.JetStreamOTKVName(bucket)
 		if err := js.DeleteKeyValue(otKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 			return fmt.Errorf("failed to delete offset timeline KV %q, %w", otKVName, err)
 		}
 		log.Infow("Succeeded to delete an offset timeline KV", zap.String("kvName", otKVName))
-		procKVName := JetStreamProcessorKVName(bucket)
+		procKVName := wmstore.JetStreamProcessorKVName(bucket)
 		if err := js.DeleteKeyValue(procKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 			return fmt.Errorf("failed to delete processor KV %q, %w", procKVName, err)
 		}
@@ -251,12 +250,12 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 		}
 	}
 	for _, bucket := range buckets {
-		otKVName := JetStreamOTKVName(bucket)
+		otKVName := wmstore.JetStreamOTKVName(bucket)
 		if _, err := js.KeyValue(otKVName); err != nil {
 			return fmt.Errorf("failed to query OT KV %q, %w", otKVName, err)
 		}
 
-		procKVName := JetStreamProcessorKVName(bucket)
+		procKVName := wmstore.JetStreamProcessorKVName(bucket)
 		if _, err := js.KeyValue(procKVName); err != nil {
 			return fmt.Errorf("failed to query processor KV %q, %w", procKVName, err)
 		}
@@ -317,6 +316,8 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 
 // CreateProcessorManagers is used to create processor manager for the given bucket.
 func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
+	log := logging.FromContext(ctx).With("bucket", bucketName)
+	ctx = logging.WithLogger(ctx, log)
 	var processorManagers []*processor.ProcessorManager
 	fetchers := 1
 	if isReduce {
@@ -324,22 +325,15 @@ func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName
 	}
 	// if it's not a reduce vertex, we don't need multiple watermark fetchers. We use common fetcher among all partitions.
 	for i := 0; i < fetchers; i++ {
-		hbKVName := JetStreamProcessorKVName(bucketName)
-		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbKVName, jss.jsClient)
+		storeWatcher, err := wmstore.BuildJetStreamWatermarkStoreWatcher(ctx, bucketName, jss.jsClient)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed at new JetStream watermark store watcher, %w", err)
 		}
-		otKVName := JetStreamOTKVName(bucketName)
-		otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otKVName, jss.jsClient)
-		if err != nil {
-			return nil, err
-		}
-		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
 		var pm *processor.ProcessorManager
 		if isReduce {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
 		} else {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
 		}
 		processorManagers = append(processorManagers, pm)
 	}
@@ -348,14 +342,6 @@ func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName
 
 func JetStreamName(bufferName string) string {
 	return bufferName
-}
-
-func JetStreamOTKVName(bucketName string) string {
-	return fmt.Sprintf("%s_OT", bucketName)
-}
-
-func JetStreamProcessorKVName(bucketName string) string {
-	return fmt.Sprintf("%s_PROCESSORS", bucketName)
 }
 
 func JetStreamSideInputsStoreKVName(sideInputStoreName string) string {

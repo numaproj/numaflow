@@ -68,7 +68,7 @@ func NewProcessorCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("invalid replica %q", replicaStr)
 			}
-			log = log.With("vertex", vertex.Name)
+			log = log.With("pipeline", vertex.Spec.PipelineName).With("vertex", vertex.Spec.Name)
 			vertexInstance := &dfv1.VertexInstance{
 				Vertex:   vertex,
 				Hostname: hostname,

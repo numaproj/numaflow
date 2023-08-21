@@ -24,12 +24,10 @@ import (
 	"go.uber.org/zap"
 
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type isbsRedisSvc struct {
@@ -141,6 +139,8 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 
 // CreateProcessorManagers is used to create the processor managers for the given bucket.
 func (r *isbsRedisSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
+	log := logging.FromContext(ctx).With("bucket", bucketName)
+	ctx = logging.WithLogger(ctx, log)
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	var processorManagers []*processor.ProcessorManager
 	fetchers := 1
@@ -148,14 +148,12 @@ func (r *isbsRedisSvc) CreateProcessorManagers(ctx context.Context, bucketName s
 		fetchers = fromBufferPartitionCount
 	}
 	for i := 0; i < fetchers; i++ {
-		hbWatcher := noop.NewKVOpWatch()
-		otWatcher := noop.NewKVOpWatch()
-		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+		storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
 		var pm *processor.ProcessorManager
 		if isReduce {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
 		} else {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
 		}
 		processorManagers = append(processorManagers, pm)
 	}

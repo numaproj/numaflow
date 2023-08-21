@@ -45,11 +45,11 @@ func NewISBSvcValidateCommand() *cobra.Command {
 		Use:   "isbsvc-validate",
 		Short: "Validate ISB Service buffers, buckets and side inputs store",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("isbsvc-validate")
 			pipelineName, existing := os.LookupEnv(v1alpha1.EnvPipelineName)
 			if !existing {
 				return fmt.Errorf("environment variable %q not existing", v1alpha1.EnvPipelineName)
 			}
+			logger := logging.NewLogger().Named("isbsvc-validate").With("pipeline", pipelineName)
 			var isbsClient isbsvc.ISBService
 			var err error
 			ctx := logging.WithLogger(context.Background(), logger)

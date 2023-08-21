@@ -41,7 +41,7 @@ type sourceFetcher struct {
 // NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
 // buckets of the source buffer.
 func NewSourceFetcher(ctx context.Context, manager *processor.ProcessorManager) Fetcher {
-	log := logging.FromContext(ctx).With("sourceBufferName", manager.GetBucket())
+	log := logging.FromContext(ctx)
 	log.Info("Creating a new source watermark fetcher")
 	return &sourceFetcher{
 		processorManager: manager,

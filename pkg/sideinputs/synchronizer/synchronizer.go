@@ -80,7 +80,7 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	}
 	// Create a new watcher for the side input KV store
 	kvName := isbsvc.JetStreamSideInputsStoreKVName(sis.sideInputsStore)
-	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, sis.pipelineName, kvName, natsClient)
+	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, kvName, natsClient)
 	if err != nil {
 		return fmt.Errorf("failed to create a sideInputWatcher, %w", err)
 	}

@@ -22,15 +22,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 func TestNewKafkasource(t *testing.T) {
@@ -55,7 +53,7 @@ func TestNewKafkasource(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore, _ := store.BuildNoOpWatermarkStore()
 	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"testVertex": publishWMStore,
@@ -98,7 +96,7 @@ func TestGroupNameOverride(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore, _ := store.BuildNoOpWatermarkStore()
 	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"testVertex": publishWMStore,
@@ -131,7 +129,7 @@ func TestDefaultBufferSize(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore, _ := store.BuildNoOpWatermarkStore()
 	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"testVertex": publishWMStore,
@@ -164,7 +162,7 @@ func TestBufferSizeOverrides(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore, _ := store.BuildNoOpWatermarkStore()
 	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"testVertex": publishWMStore,

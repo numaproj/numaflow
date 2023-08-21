@@ -31,8 +31,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -46,8 +44,7 @@ import (
 const (
 	testPipelineName    = "testPipeline"
 	testProcessorEntity = "publisherTestPod"
-	publisherHBKeyspace = testPipelineName + "_" + testProcessorEntity + "_%s_" + "PROCESSORS"
-	publisherOTKeyspace = testPipelineName + "_" + testProcessorEntity + "_%s_" + "OT"
+	publishKeyspace     = testPipelineName + "_" + testProcessorEntity + "_%s"
 )
 
 var (
@@ -1235,9 +1232,8 @@ func buildToVertexWatermarkStores(toBuffers map[string][]isb.BufferWriter) map[s
 	var ctx = context.Background()
 	otStores := make(map[string]wmstore.WatermarkStore)
 	for key := range toBuffers {
-		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
-		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
-		otStores[key] = wmstore.BuildWatermarkStore(heartbeatKV, otKV)
+		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, fmt.Sprintf(publishKeyspace, key))
+		otStores[key] = store
 	}
 	return otStores
 }
@@ -1245,7 +1241,7 @@ func buildToVertexWatermarkStores(toBuffers map[string][]isb.BufferWriter) map[s
 func buildNoOpToVertexStores(toBuffers map[string][]isb.BufferWriter) map[string]wmstore.WatermarkStore {
 	toVertexStores := make(map[string]wmstore.WatermarkStore)
 	for key := range toBuffers {
-		store := wmstore.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+		store, _ := wmstore.BuildNoOpWatermarkStore()
 		toVertexStores[key] = store
 	}
 	return toVertexStores
