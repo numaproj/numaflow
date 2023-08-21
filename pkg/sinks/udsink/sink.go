@@ -24,6 +24,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
@@ -104,15 +105,15 @@ func (s *UserDefinedSink) IsFull() bool {
 
 // Write writes to the UDSink container.
 func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	msgs := make([]*sinkpb.DatumRequest, len(messages))
+	msgs := make([]*sinkpb.SinkRequest, len(messages))
 	for i, m := range messages {
-		msgs[i] = &sinkpb.DatumRequest{
+		msgs[i] = &sinkpb.SinkRequest{
 			// NOTE: key is not used anywhere ATM
 			Id:        m.ID,
 			Value:     m.Payload,
-			EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(m.EventTime)},
+			EventTime: timestamppb.New(m.EventTime),
 			// Watermark is only available in readmessage....
-			Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})}, // TODO: insert the correct watermark
+			Watermark: timestamppb.New(time.Time{}), // TODO: insert the correct watermark
 		}
 	}
 	return nil, s.udsink.Apply(ctx, msgs)

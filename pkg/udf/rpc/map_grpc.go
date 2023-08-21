@@ -1,60 +1,43 @@
-/*
-Copyright 2022 The Numaproj Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-package transformer
+package rpc
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	v1 "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
+	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
-	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 	"github.com/numaproj/numaflow/pkg/udf"
 )
 
-// gRPCBasedTransformer applies user defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
-type gRPCBasedTransformer struct {
-	client sourcetransformer.Client
+type UDSgRPCBasedMap struct {
+	client mapper.Client
 }
 
-// NewGRPCBasedTransformer returns a new gRPCBasedTransformer object.
-func NewGRPCBasedTransformer(client sourcetransformer.Client) applier.SourceTransformerApplier {
-	return &gRPCBasedTransformer{client: client}
+//var _ mapapplier.MapApplier = (*UDSgRPCBasedMap)(nil)
+
+func NewUDSgRPCBasedMap(client mapper.Client) *UDSgRPCBasedMap {
+	return &UDSgRPCBasedMap{client: client}
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *gRPCBasedTransformer) CloseConn(ctx context.Context) error {
+func (u *UDSgRPCBasedMap) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
-// IsHealthy checks if the transformer container is healthy.
-func (u *gRPCBasedTransformer) IsHealthy(ctx context.Context) error {
+// IsHealthy checks if the map udf is healthy.
+func (u *UDSgRPCBasedMap) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
-// WaitUntilReady waits until the client is connected.
-func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
+// WaitUntilReady waits until the map udf is connected.
+func (u *UDSgRPCBasedMap) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -68,19 +51,18 @@ func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *gRPCBasedTransformer) ApplySourceTransform(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (u *UDSgRPCBasedMap) ApplySourceTransform(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
-	offset := readMessage.ReadOffset
 	parentMessageInfo := readMessage.MessageInfo
-	var req = &v1.SourceTransformRequest{
+	var req = &mappb.MapRequest{
 		Keys:      keys,
 		Value:     payload,
 		EventTime: timestamppb.New(parentMessageInfo.EventTime),
 		Watermark: timestamppb.New(readMessage.Watermark),
 	}
 
-	response, err := u.client.SourceTransformFn(ctx, req)
+	response, err := u.client.MapFn(ctx, req)
 	if err != nil {
 		udfErr, _ := sdkerr.FromError(err)
 		switch udfErr.ErrorKind() {
@@ -93,7 +75,7 @@ func (u *gRPCBasedTransformer) ApplySourceTransform(ctx context.Context, readMes
 				Jitter:   0.1,
 				Steps:    5,
 			}, func() (done bool, err error) {
-				response, err = u.client.SourceTransformFn(ctx, req)
+				response, err = u.client.MapFn(ctx, req)
 				if err != nil {
 					udfErr, _ = sdkerr.FromError(err)
 					switch udfErr.ErrorKind() {
@@ -139,18 +121,13 @@ func (u *gRPCBasedTransformer) ApplySourceTransform(ctx context.Context, readMes
 		}
 	}
 
-	taggedMessages := make([]*isb.WriteMessage, 0)
-	for i, result := range response.GetResults() {
+	writeMessages := make([]*isb.WriteMessage, 0)
+	for _, result := range response.GetResults() {
 		keys := result.Keys
-		if result.EventTime != nil {
-			// Transformer supports changing event time.
-			parentMessageInfo.EventTime = result.EventTime.AsTime()
-		}
 		taggedMessage := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: parentMessageInfo,
-					ID:          fmt.Sprintf("%s-%req", offset.String(), i),
 					Keys:        keys,
 				},
 				Body: isb.Body{
@@ -159,7 +136,7 @@ func (u *gRPCBasedTransformer) ApplySourceTransform(ctx context.Context, readMes
 			},
 			Tags: result.Tags,
 		}
-		taggedMessages = append(taggedMessages, taggedMessage)
+		writeMessages = append(writeMessages, taggedMessage)
 	}
-	return taggedMessages, nil
+	return writeMessages, nil
 }

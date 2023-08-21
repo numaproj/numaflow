@@ -28,10 +28,6 @@ import (
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
 	"google.golang.org/grpc"
@@ -39,6 +35,12 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
+	"github.com/numaproj/numaflow/pkg/udf"
 )
 
 func TestMain(m *testing.M) {
@@ -123,7 +125,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		got, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -178,7 +180,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -194,10 +196,10 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, udf.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
+			InternalErr: udf.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
@@ -231,7 +233,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -247,10 +249,10 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, udf.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
+			InternalErr: udf.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
@@ -292,7 +294,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		got, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -342,7 +344,7 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedUDF(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -358,10 +360,10 @@ func TestGRPCBasedUDF_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, udf.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
+			InternalErr: udf.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
@@ -422,7 +424,7 @@ func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
 	var results = make([][]byte, len(readMessages))
 	var resultKeys = make([][]string, len(readMessages))
 	for idx, readMessage := range readMessages {
-		apply, err := u.ApplyMap(ctx, &readMessage)
+		apply, err := u.ApplySourceTransform(ctx, &readMessage)
 		assert.NoError(t, err)
 		results[idx] = apply[0].Payload
 		resultKeys[idx] = apply[0].Header.Keys
@@ -566,10 +568,10 @@ func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {
 			},
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		}, writeMessageCh)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, udf.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
+			InternalErr: udf.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
@@ -791,10 +793,10 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		_, err := u.ApplyReduce(ctx, partitionID, messageCh)
 
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, udf.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
+			InternalErr: udf.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},

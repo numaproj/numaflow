@@ -35,7 +35,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
+	udfapplier "github.com/numaproj/numaflow/pkg/udf"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -88,7 +88,7 @@ func (f myForwardTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
 	}}, nil
 }
 
-func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardTest) ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -1164,7 +1164,7 @@ func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]Verte
 	return output, nil
 }
 
-func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f mySourceForwardTest) ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 		_ = ctx
 		offset := readMessage.ReadOffset
@@ -1435,7 +1435,7 @@ func (f myForwardDropTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, erro
 	return []VertexBuffer{}, nil
 }
 
-func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardDropTest) ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -1460,7 +1460,7 @@ func (f *myForwardToAllTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, er
 	return output, nil
 }
 
-func (f *myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f *myForwardToAllTest) ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -1478,7 +1478,7 @@ func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffe
 	}}, nil
 }
 
-func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardInternalErrTest) ApplySourceTransform(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -1511,7 +1511,7 @@ func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]VertexB
 	}}, fmt.Errorf("whereToStep failed")
 }
 
-func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardApplyWhereToErrTest) ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -1529,7 +1529,7 @@ func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffe
 	}}, nil
 }
 
-func (f myForwardApplyUDFErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardApplyUDFErrTest) ApplySourceTransform(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, fmt.Errorf("UDF error")
 }
 

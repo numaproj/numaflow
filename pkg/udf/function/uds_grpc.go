@@ -31,12 +31,14 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	map_applier "github.com/numaproj/numaflow/pkg/forward/applier"
+
+	mapapplier "github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
-	reduce_applier "github.com/numaproj/numaflow/pkg/reduce/applier"
+	reduceapplier "github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
+	"github.com/numaproj/numaflow/pkg/udf"
 )
 
 // UDSgRPCBasedUDF applies user defined function over gRPC (over Unix Domain Socket) client/server where server is the UDF.
@@ -44,8 +46,8 @@ type UDSgRPCBasedUDF struct {
 	client clientsdk.Client
 }
 
-var _ map_applier.MapApplier = (*UDSgRPCBasedUDF)(nil)
-var _ reduce_applier.ReduceApplier = (*UDSgRPCBasedUDF)(nil)
+var _ mapapplier.MapApplier = (*UDSgRPCBasedUDF)(nil)
+var _ reduceapplier.ReduceApplier = (*UDSgRPCBasedUDF)(nil)
 
 // NewUDSgRPCBasedUDF returns a new UDSgRPCBasedUDF object.
 func NewUDSgRPCBasedUDF(c clientsdk.Client) (*UDSgRPCBasedUDF, error) {
@@ -82,7 +84,7 @@ func (u *UDSgRPCBasedUDF) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (u *UDSgRPCBasedUDF) ApplySourceTransform(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	parentMessageInfo := readMessage.MessageInfo
@@ -128,29 +130,29 @@ func (u *UDSgRPCBasedUDF) ApplyMap(ctx context.Context, readMessage *isb.ReadMes
 				return true, nil
 			})
 			if !success {
-				return nil, ApplyUDFErr{
+				return nil, udf.ApplyUDFErr{
 					UserUDFErr: false,
-					Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-					InternalErr: InternalErr{
+					Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
+					InternalErr: udf.InternalErr{
 						Flag:        true,
 						MainCarDown: false,
 					},
 				}
 			}
 		case sdkerr.NonRetryable:
-			return nil, ApplyUDFErr{
+			return nil, udf.ApplyUDFErr{
 				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-				InternalErr: InternalErr{
+				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
+				InternalErr: udf.InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},
 			}
 		default:
-			return nil, ApplyUDFErr{
+			return nil, udf.ApplyUDFErr{
 				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-				InternalErr: InternalErr{
+				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
+				InternalErr: udf.InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},
@@ -203,10 +205,10 @@ func (u *UDSgRPCBasedUDF) ApplyMapStream(ctx context.Context, message *isb.ReadM
 	errs.Go(func() error {
 		err := u.client.MapStreamFn(ctx, d, datumCh)
 		if err != nil {
-			err = ApplyUDFErr{
+			err = udf.ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.MapStreamFn failed, %s", err),
-				InternalErr: InternalErr{
+				InternalErr: udf.InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},
@@ -298,28 +300,28 @@ readLoop:
 		switch udfErr.ErrorKind() {
 		case sdkerr.Retryable:
 			// TODO: currently we don't handle retryable errors for reduce
-			return nil, ApplyUDFErr{
+			return nil, udf.ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-				InternalErr: InternalErr{
+				InternalErr: udf.InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},
 			}
 		case sdkerr.NonRetryable:
-			return nil, ApplyUDFErr{
+			return nil, udf.ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-				InternalErr: InternalErr{
+				InternalErr: udf.InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},
 			}
 		default:
-			return nil, ApplyUDFErr{
+			return nil, udf.ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-				InternalErr: InternalErr{
+				InternalErr: udf.InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},

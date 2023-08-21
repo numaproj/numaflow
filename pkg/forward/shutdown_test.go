@@ -37,7 +37,7 @@ func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) 
 	return []VertexBuffer{}, nil
 }
 
-func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (s myShutdownTest) ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 

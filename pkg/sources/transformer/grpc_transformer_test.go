@@ -26,18 +26,20 @@ import (
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
+
 	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
+	"github.com/numaproj/numaflow/pkg/udf"
+
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/udf/function"
-
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/testutils"
 )
 
 func NewMockGRPCBasedTransformer(mockClient *funcmock.MockUserDefinedFunctionClient) *gRPCBasedTransformer {
@@ -114,7 +116,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		got, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -158,7 +160,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -174,10 +176,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, function.ApplyUDFErr{
+		assert.ErrorIs(t, err, udf.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: function.InternalErr{
+			InternalErr: udf.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
@@ -212,7 +214,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -228,10 +230,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, function.ApplyUDFErr{
+		assert.ErrorIs(t, err, udf.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: function.InternalErr{
+			InternalErr: udf.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
@@ -262,7 +264,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -278,10 +280,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, function.ApplyUDFErr{
+		assert.ErrorIs(t, err, udf.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: function.InternalErr{
+			InternalErr: udf.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
@@ -319,7 +321,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		got, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -362,7 +364,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplySourceTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -378,10 +380,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, function.ApplyUDFErr{
+		assert.ErrorIs(t, err, udf.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
-			InternalErr: function.InternalErr{
+			InternalErr: udf.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},

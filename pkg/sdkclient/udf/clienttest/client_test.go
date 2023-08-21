@@ -107,7 +107,7 @@ func TestMapFn(t *testing.T) {
 		Elements: []*functionpb.DatumResponse{
 			nil,
 		},
-	}, fmt.Errorf("mock MapFn error"))
+	}, fmt.Errorf("mock SourceTransformFn error"))
 	testClient, err := New(mockClient)
 	assert.NoError(t, err)
 	reflect.DeepEqual(testClient, &client{
@@ -119,7 +119,7 @@ func TestMapFn(t *testing.T) {
 
 	got, err = testClient.MapFn(ctx, testRequestDatum)
 	assert.Nil(t, got)
-	assert.EqualError(t, err, "NonRetryable: mock MapFn error")
+	assert.EqualError(t, err, "NonRetryable: mock SourceTransformFn error")
 }
 
 func TestMapStreamFn(t *testing.T) {

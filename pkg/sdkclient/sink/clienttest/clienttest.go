@@ -19,11 +19,12 @@ package clienttest
 import (
 	"context"
 	"fmt"
-	sinksdk "github.com/numaproj/numaflow/pkg/sdkclient/sink/client"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1/sinkmock"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	sinksdk "github.com/numaproj/numaflow/pkg/sdkclient/sink/client"
 )
 
 // client contains the grpc client for testing.

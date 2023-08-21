@@ -651,7 +651,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 // The UserError retry will be done on the ApplyUDF.
 func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
-		writeMessages, err := isdf.UDF.ApplyMap(ctx, readMessage)
+		writeMessages, err := isdf.UDF.ApplySourceTransform(ctx, readMessage)
 		if err != nil {
 			isdf.opts.logger.Errorw("UDF.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.

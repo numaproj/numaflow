@@ -17,9 +17,10 @@ limitations under the License.
 package reduce
 
 import (
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
 const (

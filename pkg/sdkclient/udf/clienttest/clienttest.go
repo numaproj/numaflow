@@ -19,7 +19,6 @@ package clienttest
 import (
 	"context"
 	"fmt"
-
 	"io"
 	"log"
 
@@ -30,6 +29,7 @@ import (
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
+
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 )
 
@@ -60,7 +60,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 // MapFn applies a function to each datum element.
 func (c *client) MapFn(ctx context.Context, datum *functionpb.DatumRequest) ([]*functionpb.DatumResponse, error) {
 	mappedDatumList, err := c.grpcClt.MapFn(ctx, datum)
-	err = toUDFErr("c.grpcClt.MapFn", err)
+	err = toUDFErr("c.grpcClt.SourceTransformFn", err)
 	if err != nil {
 		return nil, err
 	}

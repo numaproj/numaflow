@@ -42,7 +42,7 @@ func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]forward.Verte
 	}}, nil
 }
 
-func (f myForwardJetStreamTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardJetStreamTest) ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 

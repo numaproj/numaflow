@@ -25,7 +25,7 @@ import (
 // MapApplier applies the UDF on the read message and gives back a new message. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type MapApplier interface {
-	ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
+	ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
 	ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error
 }
 
@@ -35,7 +35,7 @@ type ApplyMapFunc struct {
 	applyMapStream func(context.Context, *isb.ReadMessage, chan<- isb.WriteMessage) error
 }
 
-func (a ApplyMapFunc) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (a ApplyMapFunc) ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return a.applyMap(ctx, message)
 }
 
