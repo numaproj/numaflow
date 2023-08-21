@@ -41,7 +41,7 @@ type sourceFetcher struct {
 // NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
 // buckets of the source buffer.
 func NewSourceFetcher(ctx context.Context, manager *processor.ProcessorManager) Fetcher {
-	log := logging.FromContext(ctx).With("sourceBufferName", manager.GetBucket())
+	log := logging.FromContext(ctx)
 	log.Info("Creating a new source watermark fetcher")
 	return &sourceFetcher{
 		processorManager: manager,
@@ -103,11 +103,4 @@ func (e *sourceFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Waterma
 func (e *sourceFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	// TODO: what would this be...
 	return wmb.WMB{}
-}
-
-// Close function closes the watchers.
-func (e *sourceFetcher) Close() error {
-	e.log.Info("Closing source watermark fetcher")
-	e.processorManager.Stop()
-	return nil
 }

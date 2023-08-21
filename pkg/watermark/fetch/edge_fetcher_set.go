@@ -18,7 +18,6 @@ package fetch
 
 import (
 	"context"
-	"errors"
 	"math"
 	"time"
 
@@ -121,18 +120,4 @@ func (efs *edgeFetcherSet) ComputeHeadIdleWMB(fromPartitionIdx int32) wmb.WMB {
 	}
 	return overallHeadWMB
 
-}
-
-func (efs *edgeFetcherSet) Close() error {
-	aggregateErr := ""
-	for _, fetcher := range efs.edgeFetchers {
-		err := fetcher.Close()
-		if err != nil {
-			aggregateErr += err.Error() + "; "
-		}
-	}
-	if aggregateErr != "" {
-		return errors.New(aggregateErr)
-	}
-	return nil
 }

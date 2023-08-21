@@ -24,6 +24,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -40,7 +43,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/sinks/udsink"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
@@ -51,9 +53,11 @@ type SinkProcessor struct {
 
 func (u *SinkProcessor) Start(ctx context.Context) error {
 	var (
-		readers        []isb.BufferReader
-		natsClientPool *jsclient.ClientPool
-		err            error
+		readers           []isb.BufferReader
+		natsClientPool    *jsclient.ClientPool
+		err               error
+		processorManagers map[string]*processor.ProcessorManager
+		wmStores          map[string]store.WatermarkStore
 	)
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
@@ -89,11 +93,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
-		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
-		if err != nil {
-			return err
-		}
 
 		// create reader for each partition. Each partition is a stream in jetstream
 		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
@@ -104,6 +103,30 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 				return err
 			}
 			readers = append(readers, reader)
+		}
+
+		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
+			// sink has no to buffers, so we use the vertex name to publish the watermark
+			names := []string{u.VertexInstance.Vertex.Spec.Name}
+			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
+		} else {
+			// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
+			processorManagers, err = jetstream.BuildProcessorManagers(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return fmt.Errorf("failed to build processor manager: %w", err)
+			}
+
+			// create watermark fetcher using processor managers
+			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, processorManagers)
+
+			// create watermark stores
+			wmStores, err = jetstream.BuildToVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return err
+			}
+
+			// create watermark publisher using watermark stores
+			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, wmStores)
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", u.ISBSvcType)
@@ -151,10 +174,10 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 				}
 			}()
 			<-ctx.Done()
-			log.Info("SIGTERM exiting inside partition...", zap.String("fromPartition", fromBufferPartitionName))
+			log.Infow("SIGTERM exiting inside partition...", zap.String("fromPartition", fromBufferPartitionName))
 			sinker.Stop()
 			wg.Wait()
-			log.Info("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
+			log.Infow("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
 		}(sinker, readers[index].GetName())
 	}
 	// start metrics server and pass the sinkHandler to it, so that it can be used to check the readiness of the sink
@@ -168,7 +191,29 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 	// wait for all the sinkers to exit
 	finalWg.Wait()
-	log.Info("All udsink processors exited...")
+
+	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
+	for _, pm := range processorManagers {
+		pm.Close()
+	}
+
+	// closing the publisher will only delete the keys from the store, but not the store itself
+	// we cannot close the store inside publisher because in some cases stores are shared between publishers
+	// and store itself is a separate entity that can be used by other components
+	for _, publisher := range publishWatermark {
+		err = publisher.Close()
+		if err != nil {
+			log.Errorw("Failed to close the watermark publisher", zap.Error(err))
+		}
+	}
+
+	// close the wm stores, since the publisher and fetcher are closed
+	// since we created the stores, we can close them
+	for _, wmStore := range wmStores {
+		_ = wmStore.Close()
+	}
+
+	log.Info("Exited...")
 	return nil
 }
 

@@ -27,7 +27,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -67,12 +66,10 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
 
-	heartbeatKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_PROCESSORS", defaultJetStreamClient)
-	assert.NoError(t, err)
-	otKV, err := jetstream.NewKVJetStreamKVStore(ctx, "testPublisher", keyspace+"_OT", defaultJetStreamClient)
+	wmstore, err := store.BuildJetStreamWatermarkStore(ctx, keyspace, defaultJetStreamClient)
 	assert.NoError(t, err)
 
-	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), 1, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
+	p := NewPublish(ctx, publishEntity, wmstore, 1, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
 
 	var epoch int64 = 1651161600000
 	var location, _ = time.LoadLocation("UTC")

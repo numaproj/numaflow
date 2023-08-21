@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -34,20 +33,11 @@ import (
 
 func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 	var ctx = context.Background()
-
-	var publisherHBKeyspace = "publisherTest_PROCESSORS"
-
-	// this test uses separate OT buckets, so it is an OT bucket per processor
-	var publisherOTKeyspace = "publisherTest_OT_publisherTestPod1"
-
-	heartbeatKV, _, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", publisherHBKeyspace)
+	wmstore, _, _, err := store.BuildInmemWatermarkStore(ctx, "test")
 	assert.NoError(t, err)
-	otKV, _, err := inmem.NewKVInMemKVStore(ctx, "testPublisher", publisherOTKeyspace)
-	assert.NoError(t, err)
-
 	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
 
-	p := NewPublish(ctx, publishEntity, store.BuildWatermarkStore(heartbeatKV, otKV), 1, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
+	p := NewPublish(ctx, publishEntity, wmstore, 1, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
 
 	var epoch int64 = 1651161600000
 	var location, _ = time.LoadLocation("UTC")

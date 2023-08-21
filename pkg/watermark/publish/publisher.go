@@ -280,19 +280,8 @@ func (p *publish) publishHeartbeat() {
 // Close stops the publisher and cleans up the data associated with key.
 func (p *publish) Close() error {
 	p.log.Info("Closing watermark publisher")
-	defer func() {
-		if p.otStore != nil {
-			p.otStore.Close()
-		}
-		if p.heartbeatStore != nil {
-			p.heartbeatStore.Close()
-		}
-	}()
-	// TODO: cleanup after processor dies
-	//   - delete the Offset-Timeline bucket
-	//   - remove itself from heartbeat bucket
 
-	// clean up heartbeat bucket
+	// clean up heartbeat bucket, upstream will take care of closing the stores
 	if err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetName()); err != nil {
 		p.log.Errorw("Failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetName()), zap.Error(err))
 		return err

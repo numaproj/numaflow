@@ -16,7 +16,16 @@ limitations under the License.
 
 package store
 
-import "github.com/numaproj/numaflow/pkg/shared/kvs"
+import (
+	"context"
+	"fmt"
+
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
+	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
+	noopkv "github.com/numaproj/numaflow/pkg/shared/kvs/noop"
+)
 
 // watermarkStoreWatcher defines a pair of heartbeatStoreWatcher and offsetTimelineStoreWatcher,
 // it implements interface WatermarkStoreWatcher
@@ -34,10 +43,40 @@ func (w *watermarkStoreWatcher) OffsetTimelineWatcher() kvs.KVWatcher {
 	return w.offsetTimelineStoreWatcher
 }
 
-// BuildWatermarkStoreWatcher returns a WatermarkStoreWatcher instance
-func BuildWatermarkStoreWatcher(hbStoreWatcher, otStoreWatcher kvs.KVWatcher) WatermarkStoreWatcher {
+// BuildNoOpWatermarkStoreWatcher returns a NoOp WatermarkStoreWatcher instance
+func BuildNoOpWatermarkStoreWatcher() (WatermarkStoreWatcher, error) {
 	return &watermarkStoreWatcher{
-		heartbeatStoreWatcher:      hbStoreWatcher,
-		offsetTimelineStoreWatcher: otStoreWatcher,
+		heartbeatStoreWatcher:      noopkv.NewKVOpWatch(),
+		offsetTimelineStoreWatcher: noopkv.NewKVOpWatch(),
+	}, nil
+}
+
+// BuildInmemWatermarkStoreWatcher returns an in-mem WatermarkStoreWatcher instance
+func BuildInmemWatermarkStoreWatcher(ctx context.Context, bucket string, hbKVEntryCh, otKVEntryCh <-chan kvs.KVEntry) (WatermarkStoreWatcher, error) {
+	hbWatcher, _ := inmem.NewInMemWatch(ctx, bucket+"_PROCESSORS", hbKVEntryCh)
+	otWatcher, _ := inmem.NewInMemWatch(ctx, bucket+"_OT", otKVEntryCh)
+	return &watermarkStoreWatcher{
+		heartbeatStoreWatcher:      hbWatcher,
+		offsetTimelineStoreWatcher: otWatcher,
+	}, nil
+}
+
+// BuildJetStreamWatermarkStoreWatcher returns a JetStream WatermarkStoreWatcher instance
+func BuildJetStreamWatermarkStoreWatcher(ctx context.Context, bucket string, client *jsclient.NATSClient) (WatermarkStoreWatcher, error) {
+	hbKVName := JetStreamProcessorKVName(bucket)
+	hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, hbKVName, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed at new JetStream HB KV watch for %q, %w", hbKVName, err)
 	}
+
+	otKVName := JetStreamOTKVName(bucket)
+	otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, otKVName, client)
+	if err != nil {
+		hbWatch.Close()
+		return nil, fmt.Errorf("failed at new JetStream OT KV watch for %q, %w", otKVName, err)
+	}
+	return &watermarkStoreWatcher{
+		heartbeatStoreWatcher:      hbWatch,
+		offsetTimelineStoreWatcher: otWatch,
+	}, nil
 }

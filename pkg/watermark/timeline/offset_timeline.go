@@ -42,13 +42,13 @@ type OffsetTimeline struct {
 }
 
 // NewOffsetTimeline returns OffsetTimeline.
-func NewOffsetTimeline(ctx context.Context, c int, bucket string) *OffsetTimeline {
+func NewOffsetTimeline(ctx context.Context, c int) *OffsetTimeline {
 	// Initialize a new empty watermarks DLL with nil values of the size capacity.
 	// This is to avoid length check: when a new element is added, the tail element will be deleted.
 	offsetTimeline := OffsetTimeline{
 		ctx:      ctx,
 		capacity: c,
-		log:      logging.FromContext(ctx).With("bucket", bucket),
+		log:      logging.FromContext(ctx),
 	}
 
 	for i := 0; i < c; i++ {

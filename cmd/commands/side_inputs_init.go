@@ -37,7 +37,6 @@ func NewSideInputsInitCommand() *cobra.Command {
 		Use:   "side-inputs-init",
 		Short: "Start the Side Inputs init service",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("side-inputs-init")
 
 			pipelineName, defined := os.LookupEnv(dfv1.EnvPipelineName)
 			if !defined {
@@ -47,7 +46,7 @@ func NewSideInputsInitCommand() *cobra.Command {
 			if len(sideInputs) == 0 {
 				return fmt.Errorf("no side inputs are defined for this vertex")
 			}
-
+			logger := logging.NewLogger().Named("side-inputs-init").With("pipeline", pipelineName)
 			ctx := logging.WithLogger(context.Background(), logger)
 			sideInputsInitializer := initializer.NewSideInputsInitializer(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInputs)
 			return sideInputsInitializer.Run(ctx)

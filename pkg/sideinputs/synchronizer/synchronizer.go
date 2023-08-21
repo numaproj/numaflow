@@ -79,8 +79,8 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", sis.isbSvcType)
 	}
 	// Create a new watcher for the side input KV store
-	bucketName := isbsvc.JetStreamSideInputsStoreBucket(sis.sideInputsStore)
-	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, sis.pipelineName, bucketName, natsClient)
+	kvName := isbsvc.JetStreamSideInputsStoreKVName(sis.sideInputsStore)
+	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, kvName, natsClient)
 	if err != nil {
 		return fmt.Errorf("failed to create a sideInputWatcher, %w", err)
 	}
