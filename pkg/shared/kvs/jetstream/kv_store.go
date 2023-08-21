@@ -42,15 +42,15 @@ type jetStreamStore struct {
 var _ kvs.KVStorer = (*jetStreamStore)(nil)
 
 // NewKVJetStreamKVStore returns KVJetStreamStore.
-func NewKVJetStreamKVStore(ctx context.Context, pipelineName string, bucketName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (kvs.KVStorer, error) {
+func NewKVJetStreamKVStore(ctx context.Context, kvName string, client *jsclient.NATSClient, opts ...JSKVStoreOption) (kvs.KVStorer, error) {
 	var err error
 	var jsStore = &jetStreamStore{
 		client: client,
-		log:    logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
+		log:    logging.FromContext(ctx).With("kvName", kvName),
 	}
 
 	// for JetStream KeyValue store, the bucket should have been created in advance
-	jsStore.kv, err = jsStore.client.BindKVStore(bucketName)
+	jsStore.kv, err = jsStore.client.BindKVStore(kvName)
 	if err != nil {
 		return nil, err
 	}

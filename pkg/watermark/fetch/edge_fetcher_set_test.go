@@ -24,9 +24,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
@@ -94,7 +91,7 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 		testPodsByVertex[vertex] = make([]*processor.ProcessorToFetch, numPods)
 		for pod := 0; pod < numPods; pod++ {
 			name := fmt.Sprintf("test-pod-%d-%d", vertex, pod)
-			testPodsByVertex[vertex][pod] = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity(name), "test-bucket", 5, partitionCount)
+			testPodsByVertex[vertex][pod] = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity(name), 5, partitionCount)
 			for _, watermark := range testPodTimelines[vertex][pod] {
 				testPodsByVertex[vertex][pod].GetOffsetTimelines()[watermark.Partition].Put(watermark)
 			}
@@ -187,16 +184,14 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 }
 
 func createProcessorManager(ctx context.Context, partitionCount int32) *processor.ProcessorManager {
-	hbWatcher := noop.NewKVOpWatch()
-	otWatcher := noop.NewKVOpWatch()
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	return processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+	storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
+	return processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 }
 
 func edge1Idle(ctx context.Context, processorManager *processor.ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 2)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 2)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 2)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 2)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      true,
@@ -239,8 +234,8 @@ func edge1Idle(ctx context.Context, processorManager *processor.ProcessorManager
 
 func edge1NonIdle(ctx context.Context, processorManager *processor.ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 2)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 2)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 2)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 2)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      false,
@@ -283,8 +278,8 @@ func edge1NonIdle(ctx context.Context, processorManager *processor.ProcessorMana
 
 func edge2Idle(ctx context.Context, processorManager *processor.ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 2)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 2)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 2)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 2)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      true,
@@ -327,8 +322,8 @@ func edge2Idle(ctx context.Context, processorManager *processor.ProcessorManager
 
 func edge2NonIdle(ctx context.Context, processorManager *processor.ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 2)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 2)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 2)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 2)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      false,
@@ -378,16 +373,14 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 	// 3. all publishers Idle but somehow the GetWatermark() of one of the EdgeFetchers is higher than the returned value
 
 	var (
-		ctx          = context.Background()
-		hbWatcher    = noop.NewKVOpWatch()
-		otWatcher    = noop.NewKVOpWatch()
-		storeWatcher = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+		ctx             = context.Background()
+		storeWatcher, _ = store.BuildNoOpWatermarkStoreWatcher()
 
-		edge1ProcessorManagerIdle    = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
-		edge1ProcessorManagerNonIdle = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
+		edge1ProcessorManagerIdle    = processor.NewProcessorManager(ctx, storeWatcher, 2)
+		edge1ProcessorManagerNonIdle = processor.NewProcessorManager(ctx, storeWatcher, 2)
 
-		edge2ProcessorManagerIdle    = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
-		edge2ProcessorManagerNonIdle = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 2)
+		edge2ProcessorManagerIdle    = processor.NewProcessorManager(ctx, storeWatcher, 2)
+		edge2ProcessorManagerNonIdle = processor.NewProcessorManager(ctx, storeWatcher, 2)
 	)
 
 	edge1Idle(ctx, edge1ProcessorManagerIdle)

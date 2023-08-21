@@ -47,7 +47,7 @@ type edgeFetcher struct {
 
 // NewEdgeFetcher returns a new edge fetcher.
 func NewEdgeFetcher(ctx context.Context, manager *processor.ProcessorManager, fromBufferPartitionCount int) *edgeFetcher {
-	log := logging.FromContext(ctx).With("bucketName", manager.GetBucket())
+	log := logging.FromContext(ctx)
 	log.Info("Creating a new edge watermark fetcher")
 	var lastProcessedWm []int64
 
@@ -99,7 +99,7 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 		// if the pod is not active and the head offset of all the timelines is less than the input offset, delete the processor
 		// (this means we are processing data later than what the stale processor has processed)
 		if p.IsDeleted() && (offset > headOffset) {
-			e.log.Info("Deleting processor because it's stale", zap.String("processor", p.GetEntity().GetName()))
+			e.log.Infow("Deleting processor because it's stale", zap.String("processor", p.GetEntity().GetName()))
 			e.processorManager.DeleteProcessor(p.GetEntity().GetName())
 		}
 	}
@@ -194,12 +194,6 @@ func (e *edgeFetcher) updateHeadIdleWMB(fromPartitionIdx int32) wmb.WMB {
 
 	e.log.Debugf("updateHeadIdleWMB: %s get idle head wmb for offset", debugString.String())
 	return headWMB
-}
-
-// Close function stops the processor manager.
-func (e *edgeFetcher) Close() error {
-	e.processorManager.Stop()
-	return nil
 }
 
 // getWatermark returns the smallest last processed watermark among all the partitions.

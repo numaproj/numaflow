@@ -39,8 +39,6 @@ func NewSideInputsManagerCommand() *cobra.Command {
 		Use:   "side-inputs-manager",
 		Short: "Start a Side Inputs Manager",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("side-inputs-manager")
-
 			encodedSiceInputSpec, defined := os.LookupEnv(dfv1.EnvSideInputObject)
 			if !defined {
 				return fmt.Errorf("environment %q is not defined", dfv1.EnvSideInputObject)
@@ -58,6 +56,8 @@ func NewSideInputsManagerCommand() *cobra.Command {
 			if !defined {
 				return fmt.Errorf("environment %q is not defined", dfv1.EnvPipelineName)
 			}
+
+			logger := logging.NewLogger().Named("side-inputs-manager").With("pipeline", pipelineName)
 
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
 			sideInputManager := manager.NewSideInputsManager(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInput)

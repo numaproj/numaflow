@@ -24,6 +24,9 @@ import (
 
 	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 
 	"go.uber.org/zap"
 
@@ -54,13 +57,16 @@ type ReduceUDFProcessor struct {
 
 func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	var (
-		readers        []isb.BufferReader
-		writers        map[string][]isb.BufferWriter
-		fromBuffer     string
-		err            error
-		natsClientPool *jsclient.ClientPool
-		windower       window.Windower
+		readers           []isb.BufferReader
+		writers           map[string][]isb.BufferWriter
+		fromBuffer        string
+		err               error
+		natsClientPool    *jsclient.ClientPool
+		windower          window.Windower
+		processorManagers map[string]*processor.ProcessorManager
+		wmStores          map[string]store.WatermarkStore
 	)
+
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -106,13 +112,32 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
-		fetchWatermark, publishWatermark, err = jetstream.BuildWatermarkProgressors(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
-		if err != nil {
-			return err
-		}
-		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
-		if err != nil {
-			return err
+		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
+			names := u.VertexInstance.Vertex.GetToBuffers()
+			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
+		} else {
+			// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
+			processorManagers, err = jetstream.BuildProcessorManagers(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return fmt.Errorf("failed to build processor manager: %w", err)
+			}
+
+			// create watermark fetcher using processor managers
+			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, processorManagers)
+
+			// create watermark stores
+			wmStores, err = jetstream.BuildToVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return err
+			}
+
+			// create watermark publisher using watermark stores
+			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, wmStores)
+
+			readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
+			if err != nil {
+				return err
+			}
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
@@ -246,21 +271,30 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	<-ctx.Done()
 
-	// Close the watermark fetcher and publisher
-	err = fetchWatermark.Close()
-	if err != nil {
-		log.Error("Failed to close the watermark fetcher", zap.Error(err))
+	log.Info("SIGTERM, exiting...")
+	wg.Wait()
+
+	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
+	for _, pm := range processorManagers {
+		pm.Close()
 	}
 
+	// closing the publisher will only delete the keys from the store, but not the store itself
+	// we cannot close the store inside publisher because in some cases stores are shared between publishers
+	// and store itself is a separate entity that can be used by other components
 	for _, publisher := range publishWatermark {
 		err = publisher.Close()
 		if err != nil {
-			log.Error("Failed to close the watermark publisher", zap.Error(err))
+			log.Errorw("Failed to close the watermark publisher", zap.Error(err))
 		}
 	}
 
-	log.Info("SIGTERM, exiting...")
-	wg.Wait()
+	// close the wm stores, since the publisher and fetcher are closed
+	// since we created the stores, we can close them
+	for _, wmStore := range wmStores {
+		_ = wmStore.Close()
+	}
+
 	log.Info("Exited...")
 	return nil
 }

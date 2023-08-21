@@ -29,8 +29,8 @@ import (
 func TestTimeline_GetEventTime(t *testing.T) {
 	var (
 		ctx            = context.Background()
-		emptyTimeline  = NewOffsetTimeline(ctx, 5, "myBucket")
-		testTimeline   = NewOffsetTimeline(ctx, 10, "myBucket")
+		emptyTimeline  = NewOffsetTimeline(ctx, 5)
+		testTimeline   = NewOffsetTimeline(ctx, 10)
 		testwatermarks = []wmb.WMB{
 			{Watermark: 10, Offset: 9},
 			{Watermark: 12, Offset: 10},
@@ -127,7 +127,7 @@ func TestTimeline_GetEventTime(t *testing.T) {
 func TestOffsetTimeline_GetOffset(t *testing.T) {
 	var (
 		ctx            = context.Background()
-		testTimeline   = NewOffsetTimeline(ctx, 10, "myBucket")
+		testTimeline   = NewOffsetTimeline(ctx, 10)
 		testwatermarks = []wmb.WMB{
 			{Watermark: 10, Offset: 9},
 			{Watermark: 12, Offset: 20},
@@ -223,7 +223,7 @@ func TestOffsetTimeline_GetOffset(t *testing.T) {
 func TestOffsetTimeline_PutIdle(t *testing.T) {
 	var (
 		ctx          = context.Background()
-		testTimeline = NewOffsetTimeline(ctx, 10, "myBucket")
+		testTimeline = NewOffsetTimeline(ctx, 10)
 		setUps       = []wmb.WMB{
 			{Idle: false, Watermark: 10, Offset: 9},
 			{Idle: false, Watermark: 12, Offset: 20},

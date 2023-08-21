@@ -32,7 +32,7 @@ import (
 // jetStreamWatch implements the KV store watcher backed up by Jetstream.
 type jetStreamWatch struct {
 	ctx               context.Context
-	kvBucketName      string
+	kvName            string
 	client            *jsclient.NATSClient
 	kvStore           nats.KeyValue
 	previousFetchTime time.Time
@@ -45,7 +45,7 @@ type jetStreamWatch struct {
 var _ kvs.KVWatcher = (*jetStreamWatch)(nil)
 
 // NewKVJetStreamKVWatch returns KVJetStreamWatch specific to JetStream which implements the KVWatcher interface.
-func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketName string, client *jsclient.NATSClient, opts ...Option) (kvs.KVWatcher, error) {
+func NewKVJetStreamKVWatch(ctx context.Context, kvName string, client *jsclient.NATSClient, opts ...Option) (kvs.KVWatcher, error) {
 
 	kvOpts := defaultOptions()
 
@@ -53,20 +53,20 @@ func NewKVJetStreamKVWatch(ctx context.Context, pipelineName string, kvBucketNam
 		o(kvOpts)
 	}
 
-	kvStore, err := client.BindKVStore(kvBucketName)
+	kvStore, err := client.BindKVStore(kvName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to bind kv store: %w", err)
 	}
 
 	jsw := &jetStreamWatch{
-		ctx:          ctx,
-		kvBucketName: kvBucketName,
-		client:       client,
-		kvStore:      kvStore,
-		kvwTimer:     time.NewTimer(kvOpts.watcherCreationThreshold),
-		opts:         kvOpts,
-		doneCh:       make(chan struct{}),
-		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("kvBucketName", kvBucketName),
+		ctx:      ctx,
+		kvName:   kvName,
+		client:   client,
+		kvStore:  kvStore,
+		kvwTimer: time.NewTimer(kvOpts.watcherCreationThreshold),
+		opts:     kvOpts,
+		doneCh:   make(chan struct{}),
+		log:      logging.FromContext(ctx).With("kvName", kvName),
 	}
 	return jsw, nil
 }
@@ -147,14 +147,14 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 
 				switch value.Operation() {
 				case nats.KeyValuePut:
-					jsw.log.Debug("Received a put event", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+					jsw.log.Debugw("Received a put event", zap.String("key", value.Key()), zap.Binary("b64Value", value.Value()))
 					updates <- kvEntry{
 						key:   value.Key(),
 						value: value.Value(),
 						op:    kvs.KVPut,
 					}
 				case nats.KeyValueDelete:
-					jsw.log.Debug("Received a delete event", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+					jsw.log.Debugw("Received a delete event", zap.String("key", value.Key()), zap.Binary("b64Value", value.Value()))
 					updates <- kvEntry{
 						key:   value.Key(),
 						value: value.Value(),
@@ -193,7 +193,7 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 }
 
 func (jsw *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
-	kvWatcher, err := jsw.client.CreateKVWatcher(jsw.kvBucketName, nats.Context(ctx))
+	kvWatcher, err := jsw.client.CreateKVWatcher(jsw.kvName, nats.Context(ctx))
 	// keep looping because the watermark won't work without a watcher
 	for err != nil {
 		select {
@@ -201,7 +201,7 @@ func (jsw *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
 			return nil
 		default:
 			jsw.log.Errorw("Creating watcher failed", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
-			kvWatcher, err = jsw.client.CreateKVWatcher(jsw.kvBucketName)
+			kvWatcher, err = jsw.client.CreateKVWatcher(jsw.kvName)
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
@@ -260,7 +260,7 @@ retryLoop:
 
 // GetKVName returns the KV store (bucket) name.
 func (jsw *jetStreamWatch) GetKVName() string {
-	return jsw.kvBucketName
+	return jsw.kvName
 }
 
 // Close send a signal to all the watchers to stop.

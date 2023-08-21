@@ -33,7 +33,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
-
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -50,8 +49,6 @@ type ProcessorManager struct {
 	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
 	// used for tracking watermark.
 	processors map[string]*ProcessorToFetch
-	// name of the bucket, used for logging
-	bucket string
 	// fromBufferPartitionCount is the number of partitions in the fromBuffer
 	fromBufferPartitionCount int32
 	lock                     sync.RWMutex
@@ -64,7 +61,7 @@ type ProcessorManager struct {
 }
 
 // NewProcessorManager returns a new ProcessorManager instance
-func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.WatermarkStoreWatcher, bucket string, fromBufferPartitionCount int32, inputOpts ...ProcessorManagerOption) *ProcessorManager {
+func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.WatermarkStoreWatcher, fromBufferPartitionCount int32, inputOpts ...ProcessorManagerOption) *ProcessorManager {
 	opts := &processorManagerOptions{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
@@ -81,9 +78,8 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 		otWatcher:                watermarkStoreWatcher.OffsetTimelineWatcher(),
 		heartbeat:                NewProcessorHeartbeat(),
 		processors:               make(map[string]*ProcessorToFetch),
-		bucket:                   bucket,
 		fromBufferPartitionCount: fromBufferPartitionCount,
-		log:                      logging.FromContext(ctx).With("bucket", bucket),
+		log:                      logging.FromContext(ctx),
 		doneCh:                   make(chan struct{}),
 		waitCh:                   make(chan struct{}),
 		opts:                     opts,
@@ -204,7 +200,7 @@ func (v *ProcessorManager) refreshingProcessors() {
 			debugStr.WriteString(fmt.Sprintf("[%s] ", pName))
 		}
 	}
-	v.log.Debugw("Active processors", zap.String("HB", v.hbWatcher.GetKVName()), zap.String("OT", v.otWatcher.GetKVName()), zap.String("DebugStr", debugStr.String()))
+	v.log.Debugw("Active processors", zap.String("hbKVName", v.hbWatcher.GetKVName()), zap.String("otKVName", v.otWatcher.GetKVName()), zap.String("DebugStr", debugStr.String()))
 }
 
 // startHeartBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
@@ -217,12 +213,12 @@ func (v *ProcessorManager) startHeartBeatWatcher() {
 			return
 		case value := <-watchCh:
 			if value == nil {
-				v.log.Warnw("nil value received from heartbeat watcher")
+				v.log.Warnw("Received nil value from heartbeat watcher")
 				continue
 			}
 			switch value.Operation() {
 			case kvs.KVPut:
-				v.log.Debug("Processor heartbeat watcher received a put", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+				v.log.Debugw("Processor heartbeat watcher received a put", zap.String("key", value.Key()), zap.ByteString("value", value.Value()))
 				// do we have such a processor
 				p := v.GetProcessor(value.Key())
 				if p == nil || p.IsDeleted() {
@@ -233,9 +229,9 @@ func (v *ProcessorManager) startHeartBeatWatcher() {
 					var entity = NewProcessorEntity(value.Key())
 					// if the processor is a reduce or source processor, then we only need one fromProcessor
 					// because the reduce or source will read from only one partition.
-					fromProcessor := NewProcessorToFetch(v.ctx, entity, v.bucket, 10, v.fromBufferPartitionCount)
+					fromProcessor := NewProcessorToFetch(v.ctx, entity, 10, v.fromBufferPartitionCount)
 					v.AddProcessor(value.Key(), fromProcessor)
-					v.log.Infow("v.AddProcessor successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
+					v.log.Infow("Successfully added a new fromProcessor", zap.String("fromProcessor", value.Key()))
 				} else { // else just make a note that this processor is still active
 					p.setStatus(_active)
 				}
@@ -259,10 +255,10 @@ func (v *ProcessorManager) startHeartBeatWatcher() {
 					v.heartbeat.Delete(value.Key())
 				}
 			case kvs.KVPurge:
-				v.log.Warnw("Received nats.KeyValuePurge", zap.String("bucket", v.hbWatcher.GetKVName()))
+				v.log.Warnw("Received nats.KeyValuePurge", zap.String("kvName", v.hbWatcher.GetKVName()))
 			}
-			v.log.Debugw("processorHeartbeatWatcher - Updates:", zap.String("Operation", value.Operation().String()),
-				zap.String("HB", v.hbWatcher.GetKVName()), zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+			v.log.Debugw("processorHeartbeatWatcher - Updates:", zap.String("operation", value.Operation().String()),
+				zap.String("hbKVName", v.hbWatcher.GetKVName()), zap.String("key", value.Key()), zap.ByteString("value", value.Value()))
 		}
 
 	}
@@ -282,7 +278,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 			}
 			switch value.Operation() {
 			case kvs.KVPut:
-				v.log.Debug("Processor timeline watcher received a put", zap.String("key", value.Key()), zap.String("value", string(value.Value())))
+				v.log.Debugw("Offset timeline watcher received a put", zap.String("key", value.Key()), zap.Binary("b64Value", value.Value()))
 				// a new processor's OT might take up to 5 secs to be reflected because we are not waiting for it to be added.
 				// This should not be a problem because the processor will send heartbeat as soon as it boots up.
 				// In case we miss it, we might see a delay.
@@ -308,7 +304,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					} else {
 						p.offsetTimelines[otValue.Partition].PutIdle(otValue)
 					}
-					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("idleWatermark", otValue.Watermark), zap.Int64("idleOffset", otValue.Offset))
+					v.log.Debugw("TimelineWatcher- Updates", zap.String("otKVName", v.otWatcher.GetKVName()), zap.Int64("idleWatermark", otValue.Watermark), zap.Int64("idleOffset", otValue.Offset))
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					// for reduce we will always have only one partition
@@ -317,7 +313,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					} else {
 						p.offsetTimelines[otValue.Partition].Put(otValue)
 					}
-					v.log.Debugw("TimelineWatcher- Updates", zap.String("bucket", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
+					v.log.Debugw("TimelineWatcher- Updates", zap.String("otKVName", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 				}
 			case kvs.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
@@ -329,12 +325,8 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 	}
 }
 
-func (v *ProcessorManager) GetBucket() string {
-	return v.bucket
-}
-
-// Stop stops the watchers, and waits for the goroutines to exit.
-func (v *ProcessorManager) Stop() {
+// Close stops the watchers, and waits for the goroutines to exit.
+func (v *ProcessorManager) Close() {
 	// send a signal to the goroutines to exit
 	close(v.doneCh)
 

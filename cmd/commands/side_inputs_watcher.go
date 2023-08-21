@@ -38,8 +38,6 @@ func NewSideInputsWatcherCommand() *cobra.Command {
 		Use:   "side-inputs-watcher",
 		Short: "Start the Side Inputs Watcher",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := logging.NewLogger().Named("side-inputs-watcher")
-
 			pipelineName, defined := os.LookupEnv(dfv1.EnvPipelineName)
 			if !defined {
 				return fmt.Errorf("environment %q is not defined", dfv1.EnvPipelineName)
@@ -49,6 +47,7 @@ func NewSideInputsWatcherCommand() *cobra.Command {
 				return fmt.Errorf("no side inputs are defined for this vertex")
 			}
 
+			logger := logging.NewLogger().Named("side-inputs-watcher").With("pipeline", pipelineName)
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
 			sideInputsWatcher := synchronizer.NewSideInputsSynchronizer(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInputs)
 			return sideInputsWatcher.Start(ctx)

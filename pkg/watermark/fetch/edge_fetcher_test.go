@@ -29,17 +29,13 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-
-	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 func TestBuffer_updateWatermarkWithOnePartition(t *testing.T) {
@@ -47,14 +43,12 @@ func TestBuffer_updateWatermarkWithOnePartition(t *testing.T) {
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
 	// so use no op watcher for testing
-	hbWatcher := noop.NewKVOpWatch()
-	otWatcher := noop.NewKVOpWatch()
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 1)
+	storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, 1)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, 1)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, 1)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 1)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 1)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, 1)
 		pod0Timeline = []wmb.WMB{
 			{Watermark: 11, Offset: 9, Partition: 0},
 			{Watermark: 12, Offset: 20, Partition: 0},
@@ -174,15 +168,13 @@ func TestBuffer_updateWatermarkWithMultiplePartition(t *testing.T) {
 
 	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
 	// so use no op watcher for testing
-	hbWatcher := noop.NewKVOpWatch()
-	otWatcher := noop.NewKVOpWatch()
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
+	storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
 	partitionCount := int32(3)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
-		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
+		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
+		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
+		testPod2     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
 		pod0Timeline = []wmb.WMB{
 			{Watermark: 11, Offset: 9, Partition: 0},
 			{Watermark: 12, Offset: 20, Partition: 1},
@@ -337,11 +329,9 @@ func Test_edgeFetcher_ComputeHeadWatermark(t *testing.T) {
 	var (
 		partitionCount    = int32(2)
 		ctx               = context.Background()
-		hbWatcher         = noop.NewKVOpWatch()
-		otWatcher         = noop.NewKVOpWatch()
-		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
-		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+		storeWatcher, _   = store.BuildNoOpWatermarkStoreWatcher()
+		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
+		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 	)
 
 	computeHeadWMTest1(ctx, processorManager1)
@@ -377,9 +367,9 @@ func Test_edgeFetcher_ComputeHeadWatermark(t *testing.T) {
 func computeHeadWMTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(2)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      true,
@@ -441,9 +431,9 @@ func computeHeadWMTest1(ctx context.Context, processorManager1 *processor.Proces
 func computeHeadWMTest2(ctx context.Context, processorManager2 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(2)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      false,
@@ -506,13 +496,11 @@ func Test_edgeFetcher_updateHeadIdleWMB(t *testing.T) {
 	var (
 		partitionCount    = int32(3)
 		ctx               = context.Background()
-		hbWatcher         = noop.NewKVOpWatch()
-		otWatcher         = noop.NewKVOpWatch()
-		storeWatcher      = store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
-		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
-		processorManager3 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
-		processorManager4 = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", partitionCount)
+		storeWatcher, _   = store.BuildNoOpWatermarkStoreWatcher()
+		processorManager1 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
+		processorManager2 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
+		processorManager3 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
+		processorManager4 = processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
 	)
 
 	updateHeadIdleWMBTest1(ctx, processorManager1)
@@ -570,9 +558,9 @@ func Test_edgeFetcher_updateHeadIdleWMB(t *testing.T) {
 func updateHeadIdleWMBTest1(ctx context.Context, processorManager1 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      true,
@@ -652,9 +640,9 @@ func updateHeadIdleWMBTest1(ctx context.Context, processorManager1 *processor.Pr
 func updateHeadIdleWMBTest2(ctx context.Context, processorManager2 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      false,
@@ -734,9 +722,9 @@ func updateHeadIdleWMBTest2(ctx context.Context, processorManager2 *processor.Pr
 func updateHeadIdleWMBTest3(ctx context.Context, processorManager3 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
 		pod0Timeline   = []wmb.WMB{
 			{
 				Idle:      false,
@@ -816,9 +804,9 @@ func updateHeadIdleWMBTest3(ctx context.Context, processorManager3 *processor.Pr
 func updateHeadIdleWMBTest4(ctx context.Context, processorManager4 *processor.ProcessorManager) {
 	var (
 		partitionCount = int32(3)
-		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), "test-bucket", 5, partitionCount)
-		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), "test-bucket", 5, partitionCount)
-		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), "test-bucket", 5, partitionCount)
+		testPod0       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, partitionCount)
+		testPod1       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, partitionCount)
+		testPod2       = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod3"), 5, partitionCount)
 	)
 	processorManager4.AddProcessor("testPod0", testPod0)
 	processorManager4.AddProcessor("testPod1", testPod1)
@@ -840,7 +828,6 @@ func otValueToBytes(offset int64, watermark int64, idle bool, partitionIdx int32
 func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	var (
 		err          error
-		pipelineName       = "testFetch"
 		keyspace           = "fetcherTest"
 		hbBucketName       = keyspace + "_PROCESSORS"
 		otBucketName       = keyspace + "_OT"
@@ -851,21 +838,18 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, hbBucketName)
+	hbStore, hbWatcherCh, err := inmem.NewKVInMemKVStore(ctx, hbBucketName)
 	assert.NoError(t, err)
 	defer hbStore.Close()
-	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, pipelineName, otBucketName)
+	otStore, otWatcherCh, err := inmem.NewKVInMemKVStore(ctx, otBucketName)
 	assert.NoError(t, err)
 	defer otStore.Close()
 
 	epoch += 60000
 
-	hbWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_PROCESSORS", hbWatcherCh)
+	storeWatcher, err := store.BuildInmemWatermarkStoreWatcher(ctx, keyspace, hbWatcherCh, otWatcherCh)
 	assert.NoError(t, err)
-	otWatcher, err := inmem.NewInMemWatch(ctx, "testFetch", keyspace+"_OT", otWatcherCh)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	var processorManager = processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 1)
+	var processorManager = processor.NewProcessorManager(ctx, storeWatcher, 1)
 	var fetcher = NewEdgeFetcher(ctx, processorManager, 1)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
@@ -1088,22 +1072,19 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 
 	// create hbStore
-	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer hbStore.Close()
 
 	// create otStore
-	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer otStore.Close()
 
 	// create watchers for heartbeat and offset timeline
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	storeWatcher, err := store.BuildJetStreamWatermarkStoreWatcher(ctx, keyspace, defaultJetStreamClient)
 	assert.NoError(t, err)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 1)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 1)
 	fetcher := NewEdgeFetcher(ctx, processorManager, 1)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)
@@ -1379,22 +1360,19 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	defaultJetStreamClient := natstest.JetStreamClient(t, s)
 
 	// create hbStore
-	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_PROCESSORS", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer hbStore.Close()
 
 	// create otStore
-	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
+	otStore, err := jetstream.NewKVJetStreamKVStore(ctx, keyspace+"_OT", defaultJetStreamClient)
 	assert.NoError(t, err)
 	defer otStore.Close()
 
 	// create watchers for heartbeat and offset timeline
-	hbWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_PROCESSORS", defaultJetStreamClient)
+	storeWatcher, err := store.BuildJetStreamWatermarkStoreWatcher(ctx, keyspace, defaultJetStreamClient)
 	assert.NoError(t, err)
-	otWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, "testFetch", keyspace+"_OT", defaultJetStreamClient)
-	assert.NoError(t, err)
-	storeWatcher := store.BuildWatermarkStoreWatcher(hbWatcher, otWatcher)
-	processorManager := processor.NewProcessorManager(ctx, storeWatcher, "test-bucket", 3)
+	processorManager := processor.NewProcessorManager(ctx, storeWatcher, 3)
 	fetcher := NewEdgeFetcher(ctx, processorManager, 3)
 
 	var heartBeatManagerMap = make(map[string]*heartBeatManager)

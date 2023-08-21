@@ -34,7 +34,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -47,8 +46,7 @@ import (
 const (
 	testPipelineName    = "testPipeline"
 	testProcessorEntity = "publisherTestPod"
-	publisherHBKeyspace = testPipelineName + "_" + testProcessorEntity + "_%s_" + "PROCESSORS"
-	publisherOTKeyspace = testPipelineName + "_" + testProcessorEntity + "_%s_" + "OT"
+	publisherKeyspace   = testPipelineName + "_" + testProcessorEntity + "_%s"
 )
 
 var (
@@ -59,11 +57,6 @@ var (
 
 type testForwardFetcher struct {
 	// for forward_test.go only
-}
-
-func (t *testForwardFetcher) Close() error {
-	// won't be used
-	return nil
 }
 
 func TestMain(m *testing.M) {
@@ -227,14 +220,6 @@ func TestNewInterStepDataForward(t *testing.T) {
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
 
-			// close the fetcher and publishers
-			defer func() {
-				_ = fetchWatermark.Close()
-				for _, p := range publishWatermark {
-					_ = p.Close()
-				}
-			}()
-
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
@@ -384,7 +369,6 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			// close the fetcher and publishers
 			defer func() {
-				_ = fetchWatermark.Close()
 				for _, p := range publishWatermark {
 					_ = p.Close()
 				}
@@ -551,7 +535,6 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			// close the fetcher and publishers
 			defer func() {
-				_ = fetchWatermark.Close()
 				for _, p := range publishWatermark {
 					_ = p.Close()
 				}
@@ -798,11 +781,6 @@ func (t *testWMBFetcher) RevertBoolValue() {
 	t.WMBTestDiffHeadWMB = !t.WMBTestDiffHeadWMB
 }
 
-func (t *testWMBFetcher) Close() error {
-	// won't be used
-	return nil
-}
-
 func (t *testWMBFetcher) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
 	return t.getWatermark()
 }
@@ -885,7 +863,6 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = fetchWatermark.Close()
 		for _, p := range publishWatermark {
 			_ = p.Close()
 		}
@@ -1046,7 +1023,6 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 
 	// close the fetcher and publishers
 	defer func() {
-		_ = fetchWatermark.Close()
 		for _, p := range publishWatermark {
 			_ = p.Close()
 		}
@@ -1625,10 +1601,9 @@ func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[s
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]kvs.KVStorer)
 	for key, partitionedBuffers := range toBuffers {
-		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
-		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
-		otStores[key] = otKV
-		p := publish.NewPublish(ctx, processorEntity, wmstore.BuildWatermarkStore(heartbeatKV, otKV), int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, fmt.Sprintf(publisherKeyspace, key))
+		otStores[key] = store.OffsetTimelineStore()
+		p := publish.NewPublish(ctx, processorEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 	}
 	return publishers, otStores

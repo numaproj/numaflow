@@ -29,7 +29,6 @@ import (
 
 // inMemWatch implements the watermark's KV store backed up by in memory store.
 type inMemWatch struct {
-	pipelineName string
 	bucketName   string
 	kvEntryCh    <-chan kvs.KVEntry
 	kvHistory    []kvs.KVEntry
@@ -42,15 +41,14 @@ type inMemWatch struct {
 var _ kvs.KVWatcher = (*inMemWatch)(nil)
 
 // NewInMemWatch returns inMemWatch which implements the KVWatcher interface.
-func NewInMemWatch(ctx context.Context, pipelineName string, bucketName string, kvEntryCh <-chan kvs.KVEntry) (kvs.KVWatcher, error) {
+func NewInMemWatch(ctx context.Context, bucketName string, kvEntryCh <-chan kvs.KVEntry) (kvs.KVWatcher, error) {
 	k := &inMemWatch{
-		pipelineName: pipelineName,
 		bucketName:   bucketName,
 		kvEntryCh:    kvEntryCh,
 		kvHistory:    []kvs.KVEntry{},
 		updatesChMap: make(map[string]chan kvs.KVEntry),
 		doneCh:       make(chan struct{}),
-		log:          logging.FromContext(ctx).With("pipeline", pipelineName).With("bucketName", bucketName),
+		log:          logging.FromContext(ctx).With("bucketName", bucketName),
 	}
 	return k, nil
 }

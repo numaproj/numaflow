@@ -47,8 +47,7 @@ import (
 const (
 	testPipelineName    = "testPipeline"
 	testProcessorEntity = "publisherTestPod"
-	publisherHBKeyspace = testPipelineName + "_" + testProcessorEntity + "_%s_" + "PROCESSORS"
-	publisherOTKeyspace = testPipelineName + "_" + testProcessorEntity + "_%s_" + "OT"
+	publishKeyspace     = testPipelineName + "_" + testProcessorEntity + "_%s"
 )
 
 var (
@@ -58,11 +57,6 @@ var (
 
 type testForwardFetcher struct {
 	// for data_forward_test.go only
-}
-
-func (t *testForwardFetcher) Close() error {
-	// won't be used
-	return nil
 }
 
 func TestMain(m *testing.M) {
@@ -179,7 +173,19 @@ func TestNewDataForward(t *testing.T) {
 					assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
 				}
 			}
-			validateMetrics(t, batchSize)
+
+			// iterate to see whether metrics will eventually succeed
+			err = validateMetrics(batchSize)
+			for err != nil {
+				select {
+				case <-ctx.Done():
+					t.Errorf("failed waiting metrics collection to succeed [%s] (%s)", ctx.Err(), err)
+				default:
+					time.Sleep(10 * time.Millisecond)
+					err = validateMetrics(batchSize)
+				}
+			}
+
 			// write some data
 			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
 			assert.Equal(t, make([]error, 3*batchSize), errs)
@@ -1166,7 +1172,7 @@ func (f myForwardApplyTransformerErrTest) ApplyMapStream(_ context.Context, _ *i
 	return fmt.Errorf("transformer error")
 }
 
-func validateMetrics(t *testing.T, batchSize int64) {
+func validateMetrics(batchSize int64) (err error) {
 	metadata := `
 		# HELP source_forwarder_read_total Total number of Messages Read
 		# TYPE source_forwarder_read_total counter
@@ -1175,9 +1181,9 @@ func validateMetrics(t *testing.T, batchSize int64) {
 		source_forwarder_read_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
-	err := testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "source_forwarder_read_total")
+	err = testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "source_forwarder_read_total")
 	if err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
+		return err
 	}
 
 	writeMetadata := `
@@ -1199,7 +1205,7 @@ func validateMetrics(t *testing.T, batchSize int64) {
 
 	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "source_forwarder_write_total")
 	if err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
+		return err
 	}
 
 	ackMetadata := `
@@ -1212,8 +1218,10 @@ func validateMetrics(t *testing.T, batchSize int64) {
 
 	err = testutil.CollectAndCompare(ackMessagesCount, strings.NewReader(ackMetadata+ackExpected), "source_forwarder_ack_total")
 	if err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
+		return err
 	}
+
+	return nil
 }
 
 func metricsReset() {
@@ -1227,9 +1235,8 @@ func buildToVertexWatermarkStores(toBuffers map[string][]isb.BufferWriter) map[s
 	var ctx = context.Background()
 	otStores := make(map[string]wmstore.WatermarkStore)
 	for key := range toBuffers {
-		heartbeatKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherHBKeyspace, key))
-		otKV, _, _ := inmem.NewKVInMemKVStore(ctx, testPipelineName, fmt.Sprintf(publisherOTKeyspace, key))
-		otStores[key] = wmstore.BuildWatermarkStore(heartbeatKV, otKV)
+		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, fmt.Sprintf(publishKeyspace, key))
+		otStores[key] = store
 	}
 	return otStores
 }
@@ -1237,7 +1244,7 @@ func buildToVertexWatermarkStores(toBuffers map[string][]isb.BufferWriter) map[s
 func buildNoOpToVertexStores(toBuffers map[string][]isb.BufferWriter) map[string]wmstore.WatermarkStore {
 	toVertexStores := make(map[string]wmstore.WatermarkStore)
 	for key := range toBuffers {
-		store := wmstore.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+		store, _ := wmstore.BuildNoOpWatermarkStore()
 		toVertexStores[key] = store
 	}
 	return toVertexStores

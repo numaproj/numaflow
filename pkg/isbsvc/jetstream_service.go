@@ -28,11 +28,9 @@ import (
 	"go.uber.org/zap"
 
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
+	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type jetStreamSvc struct {
@@ -88,13 +86,13 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
 	if sideInputsStore != "" {
-		bucket := JetStreamSideInputsStoreBucket(sideInputsStore)
-		if _, err := js.KeyValue(bucket); err != nil {
+		kvName := JetStreamSideInputsStoreKVName(sideInputsStore)
+		if _, err := js.KeyValue(kvName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to query information of bucket %q, %w", bucket, err)
+				return fmt.Errorf("failed to query information of KV %q, %w", kvName, err)
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
-				Bucket:       bucket,
+				Bucket:       kvName,
 				MaxValueSize: 0,
 				History:      1,                   // No history
 				TTL:          time.Hour * 24 * 30, // 30 days
@@ -102,9 +100,9 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				Storage:      nats.FileStorage,
 				Replicas:     3,
 			}); err != nil {
-				return fmt.Errorf("failed to create side inputs bucket %q, %w", bucket, err)
+				return fmt.Errorf("failed to create side inputs KV %q, %w", kvName, err)
 			}
-			log.Infow("Succeeded to create a side inputs bucket", zap.String("bucket", bucket))
+			log.Infow("Succeeded to create a side inputs KV", zap.String("kvName", kvName))
 		}
 	}
 	for _, buffer := range buffers {
@@ -146,14 +144,14 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	}
 
 	for _, bucket := range buckets {
-		// Create offset-timeline bucket
-		otBucket := JetStreamOTBucket(bucket)
-		if _, err := js.KeyValue(otBucket); err != nil {
+		// Create offset-timeline KV
+		otKVName := wmstore.JetStreamOTKVName(bucket)
+		if _, err := js.KeyValue(otKVName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otBucket, err)
+				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otKVName, err)
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
-				Bucket:       otBucket,
+				Bucket:       otKVName,
 				MaxValueSize: v.GetInt32("otBucket.maxValueSize"),
 				History:      uint8(v.GetUint("otBucket.history")),
 				TTL:          v.GetDuration("otBucket.ttl"),
@@ -162,17 +160,17 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				Replicas:     v.GetInt("otBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {
-				return fmt.Errorf("failed to create offset timeline bucket %q, %w", otBucket, err)
+				return fmt.Errorf("failed to create offset timeline KV %q, %w", otKVName, err)
 			}
 		}
-		// Create processor bucket
-		procBucket := JetStreamProcessorBucket(bucket)
-		if _, err := js.KeyValue(procBucket); err != nil {
+		// Create processor KV
+		procKVName := wmstore.JetStreamProcessorKVName(bucket)
+		if _, err := js.KeyValue(procKVName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procBucket, err)
+				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procKVName, err)
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
-				Bucket:       procBucket,
+				Bucket:       procKVName,
 				MaxValueSize: v.GetInt32("procBucket.maxValueSize"),
 				History:      uint8(v.GetUint("procBucket.history")),
 				TTL:          v.GetDuration("procBucket.ttl"),
@@ -181,7 +179,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				Replicas:     v.GetInt("procBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {
-				return fmt.Errorf("failed to create processor bucket %q, %w", otBucket, err)
+				return fmt.Errorf("failed to create processor KV %q, %w", procKVName, err)
 			}
 		}
 	}
@@ -210,24 +208,24 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 		log.Infow("Succeeded to delete a stream", zap.String("stream", streamName))
 	}
 	for _, bucket := range buckets {
-		otBucket := JetStreamOTBucket(bucket)
-		if err := js.DeleteKeyValue(otBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-			return fmt.Errorf("failed to delete offset timeline bucket %q, %w", otBucket, err)
+		otKVName := wmstore.JetStreamOTKVName(bucket)
+		if err := js.DeleteKeyValue(otKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete offset timeline KV %q, %w", otKVName, err)
 		}
-		log.Infow("Succeeded to delete an offset timeline bucket", zap.String("bucket", otBucket))
-		procBucket := JetStreamProcessorBucket(bucket)
-		if err := js.DeleteKeyValue(procBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-			return fmt.Errorf("failed to delete processor bucket %q, %w", procBucket, err)
+		log.Infow("Succeeded to delete an offset timeline KV", zap.String("kvName", otKVName))
+		procKVName := wmstore.JetStreamProcessorKVName(bucket)
+		if err := js.DeleteKeyValue(procKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete processor KV %q, %w", procKVName, err)
 		}
-		log.Infow("Succeeded to delete a processor bucket", zap.String("bucket", procBucket))
+		log.Infow("Succeeded to delete a processor KV", zap.String("kvName", procKVName))
 	}
 
 	if sideInputsStore != "" {
-		sideInputsBucket := JetStreamSideInputsStoreBucket(sideInputsStore)
-		if err := js.DeleteKeyValue(sideInputsBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-			return fmt.Errorf("failed to delete side inputs bucket %q, %w", sideInputsBucket, err)
+		sideInputsKVName := JetStreamSideInputsStoreKVName(sideInputsStore)
+		if err := js.DeleteKeyValue(sideInputsKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete side inputs KV %q, %w", sideInputsKVName, err)
 		}
-		log.Infow("Succeeded to delete a side inputs bucket", zap.String("bucket", sideInputsBucket))
+		log.Infow("Succeeded to delete a side inputs KV", zap.String("kvName", sideInputsKVName))
 	}
 	return nil
 }
@@ -252,20 +250,20 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 		}
 	}
 	for _, bucket := range buckets {
-		otBucket := JetStreamOTBucket(bucket)
-		if _, err := js.KeyValue(otBucket); err != nil {
-			return fmt.Errorf("failed to query OT bucket %q, %w", otBucket, err)
+		otKVName := wmstore.JetStreamOTKVName(bucket)
+		if _, err := js.KeyValue(otKVName); err != nil {
+			return fmt.Errorf("failed to query OT KV %q, %w", otKVName, err)
 		}
 
-		procBucket := JetStreamProcessorBucket(bucket)
-		if _, err := js.KeyValue(procBucket); err != nil {
-			return fmt.Errorf("failed to query processor bucket %q, %w", procBucket, err)
+		procKVName := wmstore.JetStreamProcessorKVName(bucket)
+		if _, err := js.KeyValue(procKVName); err != nil {
+			return fmt.Errorf("failed to query processor KV %q, %w", procKVName, err)
 		}
 	}
 	if sideInputsStore != "" {
-		sideInputsBucket := JetStreamSideInputsStoreBucket(sideInputsStore)
-		if _, err := js.KeyValue(sideInputsBucket); err != nil {
-			return fmt.Errorf("failed to query side inputs store %q, %w", sideInputsBucket, err)
+		sideInputsKVName := JetStreamSideInputsStoreKVName(sideInputsStore)
+		if _, err := js.KeyValue(sideInputsKVName); err != nil {
+			return fmt.Errorf("failed to query side inputs store KV %q, %w", sideInputsKVName, err)
 		}
 	}
 	return nil
@@ -316,50 +314,36 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-// CreateUXWatermarkFetcher is used to create watermark fetcher for the given bucket.
-func (jss *jetStreamSvc) CreateUXWatermarkFetcher(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]fetch.UXFetcher, error) {
-	var watermarkFetchers []fetch.UXFetcher
+// CreateProcessorManagers is used to create processor manager for the given bucket.
+func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
+	log := logging.FromContext(ctx).With("bucket", bucketName)
+	ctx = logging.WithLogger(ctx, log)
+	var processorManagers []*processor.ProcessorManager
 	fetchers := 1
 	if isReduce {
 		fetchers = fromBufferPartitionCount
 	}
 	// if it's not a reduce vertex, we don't need multiple watermark fetchers. We use common fetcher among all partitions.
 	for i := 0; i < fetchers; i++ {
-		hbBucketName := JetStreamProcessorBucket(bucketName)
-		hbWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, hbBucketName, jss.jsClient)
+		storeWatcher, err := wmstore.BuildJetStreamWatermarkStoreWatcher(ctx, bucketName, jss.jsClient)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed at new JetStream watermark store watcher, %w", err)
 		}
-		otBucketName := JetStreamOTBucket(bucketName)
-		otWatch, err := jetstream.NewKVJetStreamKVWatch(ctx, jss.pipelineName, otBucketName, jss.jsClient)
-		if err != nil {
-			return nil, err
-		}
-		storeWatcher := store.BuildWatermarkStoreWatcher(hbWatch, otWatch)
 		var pm *processor.ProcessorManager
 		if isReduce {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
 		} else {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, bucketName, int32(fromBufferPartitionCount))
+			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
 		}
-		watermarkFetcher := fetch.NewEdgeFetcher(ctx, pm, fromBufferPartitionCount)
-		watermarkFetchers = append(watermarkFetchers, watermarkFetcher)
+		processorManagers = append(processorManagers, pm)
 	}
-	return watermarkFetchers, nil
+	return processorManagers, nil
 }
 
 func JetStreamName(bufferName string) string {
 	return bufferName
 }
 
-func JetStreamOTBucket(bucketName string) string {
-	return fmt.Sprintf("%s_OT", bucketName)
-}
-
-func JetStreamProcessorBucket(bucketName string) string {
-	return fmt.Sprintf("%s_PROCESSORS", bucketName)
-}
-
-func JetStreamSideInputsStoreBucket(sideInputStoreName string) string {
+func JetStreamSideInputsStoreKVName(sideInputStoreName string) string {
 	return fmt.Sprintf("%s_SIDE_INPUTS", sideInputStoreName)
 }

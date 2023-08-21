@@ -26,7 +26,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 
@@ -67,7 +66,7 @@ func TestRead(t *testing.T) {
 		Replica:  0,
 	}
 
-	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore, _ := store.BuildNoOpWatermarkStore()
 	toBuffers := map[string][]isb.BufferWriter{
 		"writer": {dest},
 	}
@@ -126,7 +125,7 @@ func TestStop(t *testing.T) {
 		Hostname: "TestRead",
 		Replica:  0,
 	}
-	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore, _ := store.BuildNoOpWatermarkStore()
 	toBuffers := map[string][]isb.BufferWriter{
 		"writer": {dest},
 	}
@@ -230,7 +229,7 @@ func TestWatermark(t *testing.T) {
 		"writer": {dest},
 	}
 
-	publishWMStore := store.BuildWatermarkStore(noop.NewKVNoOpStore(), noop.NewKVNoOpStore())
+	publishWMStore, _ := store.BuildNoOpWatermarkStore()
 	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, nil, nil, publishWMStore, nil)
 	assert.NoError(t, err)
 	stop := mgen.Start()

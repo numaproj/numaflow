@@ -17,15 +17,12 @@ limitations under the License.
 package fetch
 
 import (
-	"io"
-
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // Fetcher fetches watermark data from Vn-1 vertex and computes the watermark for Vn.
 type Fetcher interface {
-	io.Closer
 	// ComputeWatermark computes a valid watermark for the given offset on the given partition
 	ComputeWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark
 	// ComputeHeadIdleWMB computes a valid head idle WMB for the given partition.
@@ -34,7 +31,6 @@ type Fetcher interface {
 
 // UXFetcher computes the watermark for Vn.
 type UXFetcher interface {
-	io.Closer
 	// ComputeHeadWatermark computes a valid head watermark for the given partition
 	ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark
 }
