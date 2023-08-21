@@ -26,9 +26,6 @@ import (
 
 	"go.uber.org/goleak"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs/inmem"
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
