@@ -23,11 +23,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/shared/kvs/noop"
-	"github.com/numaproj/numaflow/pkg/sources/udsource"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
-
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/forward/applier"
@@ -47,9 +42,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/nats"
 	"github.com/numaproj/numaflow/pkg/sources/redisstreams"
 	"github.com/numaproj/numaflow/pkg/sources/transformer"
+	"github.com/numaproj/numaflow/pkg/sources/udsource"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
