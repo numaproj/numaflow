@@ -31,8 +31,6 @@ import (
 // InternalErr can be returned and could be retried by the callee.
 type SinkApplier interface {
 	ApplySink(ctx context.Context, requests []*sinkpb.SinkRequest) []error
-	WaitUntilReady(ctx context.Context) error
-	IsHealthy(ctx context.Context) error
 }
 
 // UDSgRPCBasedUDSink applies user defined sink over gRPC (over Unix Domain Socket) client/server where server is the UDSink.
@@ -41,7 +39,7 @@ type UDSgRPCBasedUDSink struct {
 }
 
 // NewUDSgRPCBasedUDSink returns UDSgRPCBasedUDSink
-func NewUDSgRPCBasedUDSink(client sinkclient.Client) SinkApplier {
+func NewUDSgRPCBasedUDSink(client sinkclient.Client) *UDSgRPCBasedUDSink {
 	return &UDSgRPCBasedUDSink{client: client}
 }
 

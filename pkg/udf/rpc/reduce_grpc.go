@@ -14,17 +14,16 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
-	reducer "github.com/numaproj/numaflow/pkg/sdkclient/reducer"
+	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 )
 
 type UDSgRPCBasedReduce struct {
 	client reducer.Client
 }
 
-func NewUDSgRPCBasedReduce(client reducer.Client) applier.ReduceApplier {
+func NewUDSgRPCBasedReduce(client reducer.Client) *UDSgRPCBasedReduce {
 	return &UDSgRPCBasedReduce{client: client}
 }
 

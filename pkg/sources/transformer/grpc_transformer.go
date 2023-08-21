@@ -29,27 +29,26 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
 )
 
-// gRPCBasedTransformer applies user defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
-type gRPCBasedTransformer struct {
+// GRPCBasedTransformer applies user defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
+type GRPCBasedTransformer struct {
 	client sourcetransformer.Client
 }
 
 // NewGRPCBasedTransformer returns a new gRPCBasedTransformer object.
-func NewGRPCBasedTransformer(client sourcetransformer.Client) applier.SourceTransformApplier {
-	return &gRPCBasedTransformer{client: client}
+func NewGRPCBasedTransformer(client sourcetransformer.Client) *GRPCBasedTransformer {
+	return &GRPCBasedTransformer{client: client}
 }
 
 // IsHealthy checks if the transformer container is healthy.
-func (u *gRPCBasedTransformer) IsHealthy(ctx context.Context) error {
+func (u *GRPCBasedTransformer) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
 // WaitUntilReady waits until the client is connected.
-func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
+func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -63,7 +62,7 @@ func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset

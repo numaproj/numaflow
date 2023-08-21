@@ -545,7 +545,7 @@ func (isdf *DataForward) concurrentApplyTransformer(ctx context.Context, readMes
 // The UserError retry will be done on the applyTransformer.
 func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
-		writeMessages, err := isdf.transformer.ApplyMap(ctx, readMessage)
+		writeMessages, err := isdf.transformer.ApplyTransform(ctx, readMessage)
 		if err != nil {
 			isdf.opts.logger.Errorw("Transformer.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.

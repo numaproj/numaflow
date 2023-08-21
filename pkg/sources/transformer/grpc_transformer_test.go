@@ -42,9 +42,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 )
 
-func NewMockGRPCBasedTransformer(mockClient *transformermock.MockSourceTransformClient) *gRPCBasedTransformer {
+func NewMockGRPCBasedTransformer(mockClient *transformermock.MockSourceTransformClient) *GRPCBasedTransformer {
 	c, _ := sourcetransformer.NewFromClient(mockClient)
-	return &gRPCBasedTransformer{c}
+	return &GRPCBasedTransformer{c}
 }
 
 func TestGRPCBasedTransformer_WaitUntilReadyWithMockClient(t *testing.T) {
@@ -116,7 +116,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		got, err := u.ApplyTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -160,7 +160,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplyTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -214,7 +214,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplyTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -264,7 +264,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplyTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -321,7 +321,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		got, err := u.ApplyTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -364,7 +364,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		_, err := u.ApplyTransform(ctx, &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -444,7 +444,7 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
 	var results = make([][]byte, len(readMessages))
 	var resultKeys = make([][]string, len(readMessages))
 	for idx, readMessage := range readMessages {
-		apply, err := u.ApplyMap(ctx, &readMessage)
+		apply, err := u.ApplyTransform(ctx, &readMessage)
 		assert.NoError(t, err)
 		results[idx] = apply[0].Payload
 		resultKeys[idx] = apply[0].Header.Keys
@@ -503,7 +503,7 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangeEventTime(t *testing.T) 
 	var count = int64(2)
 	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
 	for _, readMessage := range readMessages {
-		apply, err := u.ApplyMap(ctx, &readMessage)
+		apply, err := u.ApplyTransform(ctx, &readMessage)
 		assert.NoError(t, err)
 		assert.Equal(t, testEventTime, apply[0].EventTime)
 	}

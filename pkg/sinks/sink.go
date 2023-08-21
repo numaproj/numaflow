@@ -60,7 +60,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		processorManagers map[string]*processor.ProcessorManager
 		wmStores          map[string]store.WatermarkStore
 		sdkClient         sinkclient.Client
-		sinkHandler       udsink.SinkApplier
+		sinkHandler       *udsink.UDSgRPCBasedUDSink
 	)
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)

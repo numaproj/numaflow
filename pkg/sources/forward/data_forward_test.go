@@ -78,14 +78,6 @@ func (t *testForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (f myForwardTest) IsHealthy(ctx context.Context) error {
-	return nil
-}
-
 func (f myForwardTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
 		ToVertexName:         "to1",
@@ -93,7 +85,7 @@ func (f myForwardTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, 
 	}}, nil
 }
 
-func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
@@ -761,14 +753,6 @@ func TestNewDataForward(t *testing.T) {
 type mySourceForwardTest struct {
 }
 
-func (f mySourceForwardTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (f mySourceForwardTest) IsHealthy(ctx context.Context) error {
-	return nil
-}
-
 func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
 		ToVertexName:         "to1",
@@ -793,7 +777,7 @@ func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forwa
 // such that we can verify message IsLate attribute gets set to true.
 var testSourceNewEventTime = testSourceWatermark.Add(time.Duration(-1) * time.Minute)
 
-func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f mySourceForwardTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 		_ = ctx
 		offset := readMessage.ReadOffset
@@ -1041,32 +1025,16 @@ func TestWriteToBuffer(t *testing.T) {
 type myForwardDropTest struct {
 }
 
-func (f myForwardDropTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (f myForwardDropTest) IsHealthy(ctx context.Context) error {
-	return nil
-}
-
 func (f myForwardDropTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{}, nil
 }
 
-func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardDropTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
 type myForwardToAllTest struct {
 	count int
-}
-
-func (f *myForwardToAllTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (f *myForwardToAllTest) IsHealthy(ctx context.Context) error {
-	return nil
 }
 
 func (f *myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
@@ -1082,19 +1050,11 @@ func (f *myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBu
 	return output, nil
 }
 
-func (f *myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f *myForwardToAllTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
 type myForwardInternalErrTest struct {
-}
-
-func (f myForwardInternalErrTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (f myForwardInternalErrTest) IsHealthy(ctx context.Context) error {
-	return nil
 }
 
 func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
@@ -1104,7 +1064,7 @@ func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]forward.Ver
 	}}, nil
 }
 
-func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardInternalErrTest) ApplyTransform(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -1118,14 +1078,6 @@ func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage
 type myForwardApplyWhereToErrTest struct {
 }
 
-func (f myForwardApplyWhereToErrTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (f myForwardApplyWhereToErrTest) IsHealthy(ctx context.Context) error {
-	return nil
-}
-
 func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
 		ToVertexName:         "to1",
@@ -1133,19 +1085,11 @@ func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]forward
 	}}, fmt.Errorf("whereToStep failed")
 }
 
-func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardApplyWhereToErrTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 
 type myForwardApplyTransformerErrTest struct {
-}
-
-func (f myForwardApplyTransformerErrTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (f myForwardApplyTransformerErrTest) IsHealthy(ctx context.Context) error {
-	return nil
 }
 
 func (f myForwardApplyTransformerErrTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
@@ -1155,7 +1099,7 @@ func (f myForwardApplyTransformerErrTest) WhereTo(_ []string, _ []string) ([]for
 	}}, nil
 }
 
-func (f myForwardApplyTransformerErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardApplyTransformerErrTest) ApplyTransform(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, fmt.Errorf("transformer error")
 }
 

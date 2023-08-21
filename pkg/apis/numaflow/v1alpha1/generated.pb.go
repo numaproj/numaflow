@@ -2307,7 +2307,7 @@ func init() {
 	proto.RegisterType((*Templates)(nil), "github.com.numaproj.numaflow.pkg.apis.numaflow.v1alpha1.Templates")
 	proto.RegisterType((*Transformer)(nil), "github.com.numaproj.numaflow.pkg.apis.numaflow.v1alpha1.Transformer")
 	proto.RegisterMapType((map[string]string)(nil), "github.com.numaproj.numaflow.pkg.apis.numaflow.v1alpha1.Transformer.KwargsEntry")
-	proto.RegisterType((*UDF)(nil), "github.com.numaproj.numaflow.pkg.apis.numaflow.v1alpha1.mapUDF")
+	proto.RegisterType((*UDF)(nil), "github.com.numaproj.numaflow.pkg.apis.numaflow.v1alpha1.UDF")
 	proto.RegisterType((*UDSink)(nil), "github.com.numaproj.numaflow.pkg.apis.numaflow.v1alpha1.UDSink")
 	proto.RegisterType((*UDSource)(nil), "github.com.numaproj.numaflow.pkg.apis.numaflow.v1alpha1.UDSource")
 	proto.RegisterType((*UDTransformer)(nil), "github.com.numaproj.numaflow.pkg.apis.numaflow.v1alpha1.UDTransformer")
@@ -9476,7 +9476,7 @@ func (this *AbstractVertex) String() string {
 		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
 		`Source:` + strings.Replace(this.Source.String(), "Source", "Source", 1) + `,`,
 		`Sink:` + strings.Replace(this.Sink.String(), "Sink", "Sink", 1) + `,`,
-		`mapUDF:` + strings.Replace(this.UDF.String(), "mapUDF", "mapUDF", 1) + `,`,
+		`UDF:` + strings.Replace(this.UDF.String(), "UDF", "UDF", 1) + `,`,
 		`ContainerTemplate:` + strings.Replace(this.ContainerTemplate.String(), "ContainerTemplate", "ContainerTemplate", 1) + `,`,
 		`InitContainerTemplate:` + strings.Replace(this.InitContainerTemplate.String(), "ContainerTemplate", "ContainerTemplate", 1) + `,`,
 		`AbstractPodTemplate:` + strings.Replace(strings.Replace(this.AbstractPodTemplate.String(), "AbstractPodTemplate", "AbstractPodTemplate", 1), `&`, ``, 1) + `,`,
@@ -10487,7 +10487,7 @@ func (this *UDF) String() string {
 	if this == nil {
 		return "nil"
 	}
-	s := strings.Join([]string{`&mapUDF{`,
+	s := strings.Join([]string{`&UDF{`,
 		`Container:` + strings.Replace(this.Container.String(), "Container", "Container", 1) + `,`,
 		`Builtin:` + strings.Replace(this.Builtin.String(), "Function", "Function", 1) + `,`,
 		`GroupBy:` + strings.Replace(this.GroupBy.String(), "GroupBy", "GroupBy", 1) + `,`,
@@ -11356,7 +11356,7 @@ func (m *AbstractVertex) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field mapUDF", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field UDF", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -24103,10 +24103,10 @@ func (m *UDF) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: mapUDF: wiretype end group for non-group")
+			return fmt.Errorf("proto: UDF: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: mapUDF: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UDF: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

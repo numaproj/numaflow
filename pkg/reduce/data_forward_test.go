@@ -136,14 +136,6 @@ func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forward.Ver
 type CounterReduceTest struct {
 }
 
-func (f CounterReduceTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (f CounterReduceTest) IsHealthy(ctx context.Context) error {
-	return nil
-}
-
 // Reduce returns a result with the count of messages
 func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	count := 0
@@ -179,14 +171,6 @@ func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuff
 }
 
 type SumReduceTest struct {
-}
-
-func (s SumReduceTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (s SumReduceTest) IsHealthy(ctx context.Context) error {
-	return nil
 }
 
 func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
@@ -225,14 +209,6 @@ func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.I
 }
 
 type MaxReduceTest struct {
-}
-
-func (m MaxReduceTest) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-func (m MaxReduceTest) IsHealthy(ctx context.Context) error {
-	return nil
 }
 
 func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {

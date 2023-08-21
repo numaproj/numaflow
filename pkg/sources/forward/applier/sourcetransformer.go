@@ -25,27 +25,15 @@ import (
 // SourceTransformApplier applies the source transform on the read message and gives back a new message. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type SourceTransformApplier interface {
-	ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
-	WaitUntilReady(ctx context.Context) error
-	IsHealthy(ctx context.Context) error
+	ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
 }
 
 // ApplySourceTransformFunc is a function type that implements SourceTransformApplier interface.
 type ApplySourceTransformFunc func(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
 
-// ApplySourceTransform implements SourceTransformApplier interface.
-func (f ApplySourceTransformFunc) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+// ApplyTransform implements SourceTransformApplier interface.
+func (f ApplySourceTransformFunc) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return f(ctx, message)
-}
-
-// WaitUntilReady implements SourceTransformApplier interface.
-func (f ApplySourceTransformFunc) WaitUntilReady(ctx context.Context) error {
-	return nil
-}
-
-// IsHealthy implements SourceTransformApplier interface.
-func (f ApplySourceTransformFunc) IsHealthy(ctx context.Context) error {
-	return nil
 }
 
 var (
