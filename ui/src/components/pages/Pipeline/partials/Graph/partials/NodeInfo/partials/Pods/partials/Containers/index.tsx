@@ -1,20 +1,11 @@
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Chip from "@mui/material/Chip";
-import CircularProgress from "@mui/material/CircularProgress";
 import { ContainerProps } from "../../../../../../../../../../../types/declarations/pods";
 
 export function Containers(props: ContainerProps) {
   const { pod, containerName: container, handleContainerClick } = props;
-
-  if (!pod && !container) {
-    return (
-      <Box sx={{ mb: 2 }}>
-        Loading containers...
-        <CircularProgress size={16} sx={{ mx: 2 }} />
-      </Box>
-    );
-  } else if (!pod) return;
+  if (!pod) return null;
 
   return (
     <Box sx={{ mb: 2 }}>
