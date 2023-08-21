@@ -112,19 +112,21 @@ func WithHealthCheckExecutor(f func() error) Option {
 }
 
 // NewMetricsOptions returns a metrics option list.
-func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, serverHandler HealthChecker, readers []isb.BufferReader) []Option {
+func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, healthCheckers []HealthChecker, readers []isb.BufferReader) []Option {
 	metricsOpts := []Option{
 		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
 	}
-	if serverHandler != nil {
-		if util.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
+
+	if util.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
+		for _, hc := range healthCheckers {
 			metricsOpts = append(metricsOpts, WithHealthCheckExecutor(func() error {
 				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				defer cancel()
-				return serverHandler.IsHealthy(cctx)
+				return hc.IsHealthy(cctx)
 			}))
 		}
 	}
+
 	lagReaders := make(map[string]isb.LagReader)
 	for _, reader := range readers {
 		if x, ok := reader.(isb.LagReader); ok {
@@ -253,14 +255,12 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/sidecar-livez", func(w http.ResponseWriter, r *http.Request) {
-		if len(ms.healthCheckExecutors) > 0 {
-			for _, ex := range ms.healthCheckExecutors {
-				if err := ex(); err != nil {
-					log.Errorw("Failed to execute sidecar health check", zap.Error(err))
-					w.WriteHeader(http.StatusInternalServerError)
-					_, _ = w.Write([]byte(err.Error()))
-					return
-				}
+		for _, ex := range ms.healthCheckExecutors {
+			if err := ex(); err != nil {
+				log.Errorw("Failed to execute sidecar health check", zap.Error(err))
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(err.Error()))
+				return
 			}
 		}
 		w.WriteHeader(http.StatusNoContent)

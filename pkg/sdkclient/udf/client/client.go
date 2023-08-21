@@ -35,6 +35,7 @@ import (
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/numaproj/numaflow-go/pkg/info"
+
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 )
 
@@ -49,8 +50,8 @@ func New(inputOptions ...Option) (*client, error) {
 	var opts = &options{
 		maxMessageSize:             1024 * 1024 * 64, // 64 MB
 		serverInfoFilePath:         info.ServerInfoFilePath,
-		tcpSockAddr:                function.TCP_ADDR,
-		udsSockAddr:                function.UDS_ADDR,
+		tcpSockAddr:                function.TcpAddr,
+		udsSockAddr:                function.UdsAddr,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 	}
 

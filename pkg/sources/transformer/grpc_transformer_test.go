@@ -26,10 +26,11 @@ import (
 	"github.com/golang/mock/gomock"
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1/funcmock"
-	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/numaproj/numaflow/pkg/sdkclient/udf/clienttest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
@@ -40,9 +41,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func NewMockGRPCBasedTransformer(mockClient *funcmock.MockUserDefinedFunctionClient) *gRPCBasedTransformer {
+func NewMockGRPCBasedTransformer(mockClient *funcmock.MockUserDefinedFunctionClient) *GRPCBasedTransformer {
 	c, _ := clienttest.New(mockClient)
-	return &gRPCBasedTransformer{c}
+	return &GRPCBasedTransformer{c}
 }
 
 func TestGRPCBasedTransformer_WaitUntilReadyWithMockClient(t *testing.T) {

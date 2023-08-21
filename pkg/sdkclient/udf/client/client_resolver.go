@@ -77,7 +77,7 @@ func (*multiProcResolver) Resolve(target resolver.Target)          {}
 func buildConnAddrs(numCpu int) []string {
 	var conn = make([]string, numCpu)
 	for i := 0; i < numCpu; i++ {
-		conn[i] = connAddr + function.TCP_ADDR + "," + strconv.Itoa(i+1)
+		conn[i] = connAddr + function.TcpAddr + "," + strconv.Itoa(i+1)
 	}
 	return conn
 }

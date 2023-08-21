@@ -19,8 +19,9 @@ package udsink
 import (
 	"context"
 	"fmt"
-	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sink/client"
 	"time"
+
+	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sink/client"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
