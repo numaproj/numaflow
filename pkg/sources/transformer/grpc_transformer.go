@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	functionpb "github.com/numaproj/numaflow-go/pkg/apis/proto/function/v1"
+
 	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
@@ -33,39 +34,39 @@ import (
 	"github.com/numaproj/numaflow/pkg/udf/function"
 )
 
-// gRPCBasedTransformer applies user defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
-type gRPCBasedTransformer struct {
+// GRPCBasedTransformer applies user defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
+type GRPCBasedTransformer struct {
 	client client.Client
 }
 
-var _ applier.MapApplier = (*gRPCBasedTransformer)(nil)
+var _ applier.MapApplier = (*GRPCBasedTransformer)(nil)
 
 // NewGRPCBasedTransformer returns a new gRPCBasedTransformer object.
-func NewGRPCBasedTransformer() (*gRPCBasedTransformer, error) {
+func NewGRPCBasedTransformer() (*GRPCBasedTransformer, error) {
 	c, err := client.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
-	return &gRPCBasedTransformer{c}, nil
+	return &GRPCBasedTransformer{c}, nil
 }
 
 // NewGRPCBasedTransformerWithClient need this for testing
-func NewGRPCBasedTransformerWithClient(client client.Client) *gRPCBasedTransformer {
-	return &gRPCBasedTransformer{client: client}
+func NewGRPCBasedTransformerWithClient(client client.Client) *GRPCBasedTransformer {
+	return &GRPCBasedTransformer{client: client}
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *gRPCBasedTransformer) CloseConn(ctx context.Context) error {
+func (u *GRPCBasedTransformer) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // IsHealthy checks if the transformer container is healthy.
-func (u *gRPCBasedTransformer) IsHealthy(ctx context.Context) error {
+func (u *GRPCBasedTransformer) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
 // WaitUntilReady waits until the client is connected.
-func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
+func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -79,7 +80,7 @@ func (u *gRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (u *GRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	offset := readMessage.ReadOffset
@@ -175,6 +176,6 @@ func (u *gRPCBasedTransformer) ApplyMap(ctx context.Context, readMessage *isb.Re
 	return taggedMessages, nil
 }
 
-func (u *gRPCBasedTransformer) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, _ chan<- isb.WriteMessage) error {
+func (u *GRPCBasedTransformer) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, _ chan<- isb.WriteMessage) error {
 	return fmt.Errorf("method ApplyMapStream not implemented")
 }
