@@ -59,7 +59,7 @@ describe("Custom Pods hook", () => {
       .mockResolvedValueOnce(mRes2 as any);
     (global as any).fetch = mockedFetch;
     await act(async () => {
-      const { result } = renderHook(() =>
+      renderHook(() =>
         usePodsViewFetch(
           "default",
           "simple-pipeline",
@@ -78,10 +78,30 @@ describe("Custom Pods hook", () => {
       json: jest.fn().mockResolvedValueOnce({ dummy: "response" }),
       ok: false,
     };
-    const mockedFetch = jest.fn().mockResolvedValueOnce(mRes as any);
+    const mockedFetch = jest.fn().mockResolvedValue(mRes as any);
     (global as any).fetch = mockedFetch;
     await act(async () => {
-      const { result } = renderHook(() =>
+      renderHook(() =>
+        usePodsViewFetch(
+          "default",
+          "simple-pipeline",
+          "cat",
+          jest.fn() as Dispatch<SetStateAction<Pod | undefined>>,
+          jest.fn() as Dispatch<SetStateAction<string | undefined>>
+        )
+      );
+    });
+    expect(mockedFetch).toBeCalledTimes(2);
+  });
+  it("should catch error", async () => {
+    const mRes = {
+      json: jest.fn().mockResolvedValueOnce(undefined),
+      ok: false,
+    };
+    const mockedFetch = jest.fn().mockRejectedValue(mRes as any);
+    (global as any).fetch = mockedFetch;
+    await act(async () => {
+      renderHook(() =>
         usePodsViewFetch(
           "default",
           "simple-pipeline",

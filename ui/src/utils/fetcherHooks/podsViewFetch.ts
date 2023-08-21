@@ -192,10 +192,12 @@ export const usePodsViewFetch = (
   useEffect(() => {
     if (checkPodDetails()) {
       setLoading(false);
+    } else if (podsErr || podsDetailsErr) {
+      setLoading(false);
     } else {
       setLoading(true);
     }
-  }, [pods, podsDetails]);
+  }, [pods, podsDetails, podsErr, podsDetailsErr]);
 
   return {
     pods,
