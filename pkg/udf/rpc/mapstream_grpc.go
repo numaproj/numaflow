@@ -12,7 +12,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	mapstreamer "github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
-	"github.com/numaproj/numaflow/pkg/udf"
 )
 
 type UDSgRPCBasedMapStream struct {
@@ -70,10 +69,10 @@ func (u *UDSgRPCBasedMapStream) ApplyMapStream(ctx context.Context, message *isb
 	errs.Go(func() error {
 		err := u.client.MapStreamFn(ctx, d, responseCh)
 		if err != nil {
-			err = udf.ApplyUDFErr{
+			err = ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.MapStreamFn failed, %s", err),
-				InternalErr: udf.InternalErr{
+				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},

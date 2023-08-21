@@ -197,7 +197,7 @@ func TestValidatePipeline(t *testing.T) {
 		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "abc"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "it could only be either a source, or a sink, or a UDF")
+		assert.Contains(t, err.Error(), "it could only be either a source, or a sink, or a mapUDF")
 	})
 
 	t.Run("duplicate vertex", func(t *testing.T) {

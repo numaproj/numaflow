@@ -22,7 +22,8 @@ import (
 	"time"
 
 	"github.com/araddon/dateparse"
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
+	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
+
 	"github.com/numaproj/numaflow/pkg/shared/expr"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
@@ -33,7 +34,7 @@ type expressions struct {
 	eventTimeFormat string
 }
 
-func New(args map[string]string) (functionsdk.MapTFunc, error) {
+func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) {
 
 	filterExpr, existing := args["filterExpr"]
 	if !existing {
@@ -56,26 +57,26 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 		eventTimeFormat: eventTimeFormat,
 	}
 
-	return func(ctx context.Context, keys []string, datum functionsdk.Datum) functionsdk.MessageTs {
+	return func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
 		log := logging.FromContext(ctx)
 		resultMsg, err := e.apply(datum.EventTime(), datum.Value())
 		if err != nil {
 			log.Errorf("Filter or event time extractor got an error: %v", err)
 		}
-		return functionsdk.MessageTsBuilder().Append(resultMsg)
+		return sourcetransformer.MessagesBuilder().Append(resultMsg)
 	}, nil
 
 }
 
-func (e expressions) apply(et time.Time, payload []byte) (functionsdk.MessageT, error) {
+func (e expressions) apply(et time.Time, payload []byte) (sourcetransformer.Message, error) {
 	result, err := expr.EvalBool(e.filterExpr, payload)
 	if err != nil {
-		return functionsdk.MessageTToDrop(), err
+		return sourcetransformer.MessageToDrop(), err
 	}
 	if result {
 		timeStr, err := expr.EvalStr(e.eventTimeExpr, payload)
 		if err != nil {
-			return functionsdk.NewMessageT(payload, et), err
+			return sourcetransformer.NewMessage(payload, et), err
 		}
 		var newEventTime time.Time
 		time.Local, _ = time.LoadLocation("UTC")
@@ -85,10 +86,10 @@ func (e expressions) apply(et time.Time, payload []byte) (functionsdk.MessageT, 
 			newEventTime, err = dateparse.ParseStrict(timeStr)
 		}
 		if err != nil {
-			return functionsdk.NewMessageT(payload, et), err
+			return sourcetransformer.NewMessage(payload, et), err
 		} else {
-			return functionsdk.NewMessageT(payload, newEventTime), nil
+			return sourcetransformer.NewMessage(payload, newEventTime), nil
 		}
 	}
-	return functionsdk.MessageTToDrop(), nil
+	return sourcetransformer.MessageToDrop(), nil
 }

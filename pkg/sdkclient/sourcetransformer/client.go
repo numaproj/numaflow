@@ -46,7 +46,7 @@ func New(inputOptions ...Option) (Client, error) {
 		maxMessageSize:             1024 * 1024 * 64, // 64 MB
 		serverInfoFilePath:         info.ServerInfoFilePath,
 		tcpSockAddr:                shared.TcpAddr,
-		udsSockAddr:                shared.MapAddr,
+		udsSockAddr:                shared.SourceTransformerAddr,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 	}
 
@@ -104,8 +104,18 @@ func New(inputOptions ...Option) (Client, error) {
 	return c, nil
 }
 
+// NewFromClient creates a new client object from a grpc client. This is used for testing.
+func NewFromClient(c transformpb.SourceTransformClient) (Client, error) {
+	return &client{
+		grpcClt: c,
+	}, nil
+}
+
 // CloseConn closes the grpc client connection.
 func (c *client) CloseConn(ctx context.Context) error {
+	if c.conn == nil {
+		return nil
+	}
 	return c.conn.Close()
 }
 
@@ -118,7 +128,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 	return resp.GetReady(), nil
 }
 
-// SourceTransformerFn applies a function to each request element.
+// SourceTransformFn SourceTransformerFn applies a function to each request element.
 func (c *client) SourceTransformFn(ctx context.Context, request *transformpb.SourceTransformRequest) (*transformpb.SourceTransformResponse, error) {
 	transformResponse, err := c.grpcClt.SourceTransformFn(ctx, request)
 	err = util.ToUDFErr("c.grpcClt.SourceTransformFn", err)

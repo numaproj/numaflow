@@ -34,6 +34,7 @@ import (
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -58,6 +59,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		err               error
 		processorManagers map[string]*processor.ProcessorManager
 		wmStores          map[string]store.WatermarkStore
+		sdkClient         sinkclient.Client
+		sinkHandler       udsink.SinkApplier
 	)
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
@@ -132,9 +135,13 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isb svc type %q", u.ISBSvcType)
 	}
 
-	var sinkHandler *udsink.UDSgRPCBasedUDSink = nil
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
-		sinkHandler, err = udsink.NewUDSgRPCBasedUDSink()
+		sdkClient, err = sinkclient.New()
+		if err != nil {
+			return fmt.Errorf("failed to create sdk client, %w", err)
+		}
+
+		sinkHandler = udsink.NewUDSgRPCBasedUDSink(sdkClient)
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
@@ -142,11 +149,11 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if err := sinkHandler.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on UDSink readiness check, %w", err)
 		}
-		// close the connection when the function exits
+
 		defer func() {
-			err = sinkHandler.CloseConn(ctx)
+			err = sdkClient.CloseConn(ctx)
 			if err != nil {
-				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+				log.Warnw("Failed to close sdk client", zap.Error(err))
 			}
 		}()
 	}
@@ -218,7 +225,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 }
 
 // getSinker takes in the logger from the parent context
-func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, sinkHandler *udsink.UDSgRPCBasedUDSink) (Sinker, error) {
+func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, sinkHandler udsink.SinkApplier) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	if x := sink.Log; x != nil {
 		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), logsink.WithLogger(logger))

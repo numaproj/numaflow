@@ -27,18 +27,22 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// SinkApplier applies the ssink on the read message and gives back a response. Any UserError will be retried here, while
+// InternalErr can be returned and could be retried by the callee.
+type SinkApplier interface {
+	ApplySink(ctx context.Context, requests []*sinkpb.SinkRequest) []error
+	WaitUntilReady(ctx context.Context) error
+	IsHealthy(ctx context.Context) error
+}
+
 // UDSgRPCBasedUDSink applies user defined sink over gRPC (over Unix Domain Socket) client/server where server is the UDSink.
 type UDSgRPCBasedUDSink struct {
 	client sinkclient.Client
 }
 
 // NewUDSgRPCBasedUDSink returns UDSgRPCBasedUDSink
-func NewUDSgRPCBasedUDSink() (*UDSgRPCBasedUDSink, error) {
-	c, err := sinkclient.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
-	}
-	return &UDSgRPCBasedUDSink{c}, nil
+func NewUDSgRPCBasedUDSink(client sinkclient.Client) SinkApplier {
+	return &UDSgRPCBasedUDSink{client: client}
 }
 
 // CloseConn closes the gRPC client connection.
@@ -66,12 +70,12 @@ func (u *UDSgRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *UDSgRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.SinkRequest) []error {
-	errs := make([]error, len(dList))
+func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.SinkRequest) []error {
+	errs := make([]error, len(requests))
 
-	response, err := u.client.SinkFn(ctx, dList)
+	response, err := u.client.SinkFn(ctx, requests)
 	if err != nil {
-		for i := range dList {
+		for i := range requests {
 			errs[i] = ApplyUDSinkErr{
 				UserUDSinkErr: false,
 				Message:       fmt.Sprintf("gRPC client.SinkFn failed, %s", err),
@@ -88,7 +92,7 @@ func (u *UDSgRPCBasedUDSink) Apply(ctx context.Context, dList []*sinkpb.SinkRequ
 	for _, res := range response.GetResults() {
 		resMap[res.GetId()] = res
 	}
-	for i, m := range dList {
+	for i, m := range requests {
 		if r, existing := resMap[m.GetId()]; !existing {
 			errs[i] = fmt.Errorf("not found in response")
 		} else {

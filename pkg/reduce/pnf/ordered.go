@@ -146,7 +146,7 @@ func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 		}
 	}
 
-	// indicate that we are done with reduce UDF invocation.
+	// indicate that we are done with reduce mapUDF invocation.
 	close(t.doneCh)
 	op.log.Debugw("Process->Reduce call took ", zap.String("partitionID", t.pf.PartitionID.String()), zap.Int64("duration(ms)", time.Since(start).Milliseconds()))
 

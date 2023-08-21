@@ -14,11 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package udf
+package rpc
 
 import "fmt"
 
-// ApplyUDFErr represents any UDF related error
+// ApplyUDFErr represents any mapUDF related error
 type ApplyUDFErr struct {
 	UserUDFErr bool
 	Message    string
@@ -31,7 +31,7 @@ type InternalErr struct {
 	MainCarDown bool
 }
 
-// IsUserUDFErr is true if the problem is due to the user code in the UDF.
+// IsUserUDFErr is true if the problem is due to the user code in the mapUDF.
 func (e ApplyUDFErr) IsUserUDFErr() bool {
 	return e.UserUDFErr
 }

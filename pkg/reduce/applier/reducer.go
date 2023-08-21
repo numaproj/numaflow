@@ -27,6 +27,8 @@ import (
 // InternalErr can be returned and could be retried by the callee.
 type ReduceApplier interface {
 	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error)
+	WaitUntilReady(ctx context.Context) error
+	IsHealthy(ctx context.Context) error
 }
 
 // ApplyReduceFunc utility function used to create a Reducer implementation
@@ -34,4 +36,12 @@ type ApplyReduceFunc func(context.Context, *partition.ID, <-chan *isb.ReadMessag
 
 func (a ApplyReduceFunc) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return a(ctx, partitionID, messageStream)
+}
+
+func (a ApplyReduceFunc) WaitUntilReady(ctx context.Context) error {
+	return nil
+}
+
+func (a ApplyReduceFunc) IsHealthy(ctx context.Context) error {
+	return nil
 }

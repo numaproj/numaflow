@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package sinker
 
 import (
 	"context"
@@ -79,8 +79,16 @@ func New(inputOptions ...Option) (Client, error) {
 	return c, nil
 }
 
+// NewFromClient creates a new client object from a grpc client, which is useful for testing.
+func NewFromClient(c sinkpb.SinkClient) (Client, error) {
+	return &client{grpcClt: c}, nil
+}
+
 // CloseConn closes the grpc client connection.
 func (c *client) CloseConn(ctx context.Context) error {
+	if c.conn == nil {
+		return nil
+	}
 	return c.conn.Close()
 }
 

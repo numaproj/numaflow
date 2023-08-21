@@ -13,7 +13,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
-	"github.com/numaproj/numaflow/pkg/udf"
 )
 
 type UDSgRPCBasedMap struct {
@@ -51,7 +50,7 @@ func (u *UDSgRPCBasedMap) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *UDSgRPCBasedMap) ApplySourceTransform(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (u *UDSgRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	parentMessageInfo := readMessage.MessageInfo
@@ -91,29 +90,29 @@ func (u *UDSgRPCBasedMap) ApplySourceTransform(ctx context.Context, readMessage 
 				return true, nil
 			})
 			if !success {
-				return nil, udf.ApplyUDFErr{
+				return nil, ApplyUDFErr{
 					UserUDFErr: false,
 					Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
-					InternalErr: udf.InternalErr{
+					InternalErr: InternalErr{
 						Flag:        true,
 						MainCarDown: false,
 					},
 				}
 			}
 		case sdkerr.NonRetryable:
-			return nil, udf.ApplyUDFErr{
+			return nil, ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
-				InternalErr: udf.InternalErr{
+				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},
 			}
 		default:
-			return nil, udf.ApplyUDFErr{
+			return nil, ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
-				InternalErr: udf.InternalErr{
+				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},

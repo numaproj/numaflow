@@ -134,7 +134,7 @@ func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 //
 //	desiredReplicas = currentReplicas * pending / (targetProcessingTime * rate)
 //
-// For UDF and sinks which have the read buffer information
+// For mapUDF and sinks which have the read buffer information
 //
 //	singleReplicaContribution = (totalAvailableBufferLength - pending) / currentReplicas
 //	desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
@@ -355,7 +355,7 @@ func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, parti
 			// and then we know how many replicas are needed to get them done in target seconds.
 			desired = int32(math.Round(((float64(pending) / rate) / float64(vertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(vertex.Status.Replicas)))
 		} else {
-			// For UDF and sinks, we calculate the available buffer length, and consider it is the contribution of current replicas,
+			// For mapUDF and sinks, we calculate the available buffer length, and consider it is the contribution of current replicas,
 			// then we figure out how many replicas are needed to keep the available buffer length at target level.
 			if pending >= partitionBufferLengths[i] {
 				// Simply return current replica number + max allowed if the pending messages are more than available buffer length

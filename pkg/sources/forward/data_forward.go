@@ -29,11 +29,11 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -53,7 +53,7 @@ type DataForward struct {
 	// toBuffers store the toVertex name to its owned buffers mapping.
 	toBuffers          map[string][]isb.BufferWriter
 	toWhichStepDecider forward.ToWhichStepDecider
-	transformer        applier.MapApplier
+	transformer        applier.SourceTransformApplier
 	wmFetcher          fetch.Fetcher
 	toVertexWMStores   map[string]store.WatermarkStore
 	// toVertexWMPublishers stores the toVertex to publisher mapping.
@@ -74,7 +74,7 @@ func NewDataForward(
 	fromStep isb.BufferReader,
 	toSteps map[string][]isb.BufferWriter,
 	toWhichStepDecider forward.ToWhichStepDecider,
-	transformer applier.MapApplier,
+	transformer applier.SourceTransformApplier,
 	fetchWatermark fetch.Fetcher,
 	srcWMPublisher isb.SourceWatermarkPublisher,
 	toVertexWmStores map[string]store.WatermarkStore,

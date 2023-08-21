@@ -22,8 +22,9 @@ import (
 	"strings"
 	"sync"
 
-	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
+	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/udf/rpc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -41,7 +42,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
-	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -197,12 +197,12 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log = log.With("protocol", "uds-grpc-reduce-udf")
 
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
-	c, err := clientsdk.New(clientsdk.WithMaxMessageSize(maxMessageSize))
+	sdkClient, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
 
-	udfHandler, err := function.NewUDSgRPCBasedUDF(c)
+	udfHandler := rpc.NewUDSgRPCBasedReduce(sdkClient)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)
 	}
@@ -211,7 +211,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed on FIXED_AGGREGATION readiness check, %w", err)
 	}
 	defer func() {
-		err = udfHandler.CloseConn(ctx)
+		err = sdkClient.CloseConn(ctx)
 		if err != nil {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}

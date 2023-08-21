@@ -39,7 +39,7 @@ type UserDefinedSink struct {
 	pipelineName string
 	isdf         *forward.InterStepDataForward
 	logger       *zap.SugaredLogger
-	udsink       *UDSgRPCBasedUDSink
+	udsink       SinkApplier
 }
 
 type Option func(*UserDefinedSink) error
@@ -57,7 +57,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	whereToDecider forward.GoWhere,
-	udsink *UDSgRPCBasedUDSink,
+	udsink SinkApplier,
 	opts ...Option) (*UserDefinedSink, error) {
 
 	s := new(UserDefinedSink)
@@ -81,7 +81,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	}
 	s.udsink = udsink
 
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {s}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {s}}, whereToDecider, applier.Terminal, applier.TerminalMapStream, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 			Watermark: timestamppb.New(time.Time{}), // TODO: insert the correct watermark
 		}
 	}
-	return nil, s.udsink.Apply(ctx, msgs)
+	return nil, s.udsink.ApplySink(ctx, msgs)
 }
 
 func (s *UserDefinedSink) Close() error {

@@ -14,23 +14,18 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	reducer "github.com/numaproj/numaflow/pkg/sdkclient/reducer"
-	"github.com/numaproj/numaflow/pkg/udf"
 )
 
 type UDSgRPCBasedReduce struct {
 	client reducer.Client
 }
 
-func NewUDSgRPCBasedReduce(client reducer.Client) *UDSgRPCBasedReduce {
+func NewUDSgRPCBasedReduce(client reducer.Client) applier.ReduceApplier {
 	return &UDSgRPCBasedReduce{client: client}
-}
-
-// CloseConn closes the gRPC client connection.
-func (u *UDSgRPCBasedReduce) CloseConn(ctx context.Context) error {
-	return u.client.CloseConn(ctx)
 }
 
 // IsHealthy checks if the map udf is healthy.
@@ -110,28 +105,28 @@ readLoop:
 		switch udfErr.ErrorKind() {
 		case sdkerr.Retryable:
 			// TODO: currently we don't handle retryable errors for reduce
-			return nil, udf.ApplyUDFErr{
+			return nil, ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-				InternalErr: udf.InternalErr{
+				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},
 			}
 		case sdkerr.NonRetryable:
-			return nil, udf.ApplyUDFErr{
+			return nil, ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-				InternalErr: udf.InternalErr{
+				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},
 			}
 		default:
-			return nil, udf.ApplyUDFErr{
+			return nil, ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-				InternalErr: udf.InternalErr{
+				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
 				},

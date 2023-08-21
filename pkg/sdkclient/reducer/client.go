@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mapper
+package reducer
 
 import (
 	"context"
@@ -107,6 +107,12 @@ func New(inputOptions ...Option) (Client, error) {
 	return c, nil
 }
 
+func NewFromClient(c reducepb.ReduceClient) (Client, error) {
+	return &client{
+		grpcClt: c,
+	}, nil
+}
+
 // CloseConn closes the grpc client connection.
 func (c *client) CloseConn(ctx context.Context) error {
 	return c.conn.Close()
@@ -124,7 +130,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 // ReduceFn applies a reduce function to a datum stream.
 func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.ReduceRequest) (*reducepb.ReduceResponse, error) {
 	var g errgroup.Group
-	var finalResponse *reducepb.ReduceResponse
+	var finalResponse = &reducepb.ReduceResponse{}
 
 	stream, err := c.grpcClt.ReduceFn(ctx)
 	err = util.ToUDFErr("c.grpcClt.ReduceFn", err)

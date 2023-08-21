@@ -88,9 +88,9 @@ var partitionsInFlight = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Help:      "Total number of partitions in flight",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
 
-// udfError is used to indicate the number of UDF errors
+// udfError is used to indicate the number of mapUDF errors
 var udfError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_udf",
 	Name:      "error_total",
-	Help:      "Total number of UDF Errors",
+	Help:      "Total number of mapUDF Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})

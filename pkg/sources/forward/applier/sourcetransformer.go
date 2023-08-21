@@ -22,8 +22,37 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// SourceTransformerApplier applies the source transform on the read message and gives back a new message. Any UserError will be retried here, while
+// SourceTransformApplier applies the source transform on the read message and gives back a new message. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
-type SourceTransformerApplier interface {
-	ApplySourceTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
+type SourceTransformApplier interface {
+	ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
+	WaitUntilReady(ctx context.Context) error
+	IsHealthy(ctx context.Context) error
 }
+
+// ApplySourceTransformFunc is a function type that implements SourceTransformApplier interface.
+type ApplySourceTransformFunc func(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)
+
+// ApplySourceTransform implements SourceTransformApplier interface.
+func (f ApplySourceTransformFunc) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+	return f(ctx, message)
+}
+
+// WaitUntilReady implements SourceTransformApplier interface.
+func (f ApplySourceTransformFunc) WaitUntilReady(ctx context.Context) error {
+	return nil
+}
+
+// IsHealthy implements SourceTransformApplier interface.
+func (f ApplySourceTransformFunc) IsHealthy(ctx context.Context) error {
+	return nil
+}
+
+var (
+	// Terminal Applier do not make any change to the message
+	Terminal = ApplySourceTransformFunc(func(ctx context.Context, msg *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+		return []*isb.WriteMessage{{
+			Message: msg.Message,
+		}}, nil
+	})
+)

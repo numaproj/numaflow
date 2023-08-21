@@ -23,11 +23,12 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
@@ -62,6 +63,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		toVertexWatermarkStores  = make(map[string]store.WatermarkStore)
 		log                      = logging.FromContext(ctx)
 		writersMap               = make(map[string][]isb.BufferWriter)
+		sdkClient                sourcetransformer.Client
 	)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -166,20 +168,24 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		toVertexPartitionMap[edge.To] = edge.GetToVertexPartitionCount()
 	}
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
-		t, err := transformer.NewGRPCBasedTransformer()
+		sdkClient, err = sourcetransformer.New()
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
+
+		defer func(sdkClient sourcetransformer.Client, ctx context.Context) {
+			err = sdkClient.CloseConn(ctx)
+			if err != nil {
+				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+			}
+		}(sdkClient, ctx)
+		t := transformer.NewGRPCBasedTransformer(sdkClient)
+
 		// Readiness check
 		if err = t.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on user defined transformer readiness check, %w", err)
 		}
-		defer func() {
-			err = t.CloseConn(ctx)
-			if err != nil {
-				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
-			}
-		}()
+
 		readyChecker = t
 		sourcer, err = sp.getSourcer(writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), t, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, log)
 	} else {
@@ -233,7 +239,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 // getSourcer is used to send the sourcer information
 func (sp *SourceProcessor) getSourcer(writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier applier.MapApplier,
+	transformerApplier applier.SourceTransformApplier,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
@@ -247,7 +253,7 @@ func (sp *SourceProcessor) getSourcer(writers map[string][]isb.BufferWriter,
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, generator.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return generator.NewMemGen(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
+		return generator.NewMemGen(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
 	} else if x := src.Kafka; x != nil {
 		readOptions := []kafka.Option{
 			kafka.WithGroupName(x.ConsumerGroupName),
@@ -256,9 +262,9 @@ func (sp *SourceProcessor) getSourcer(writers map[string][]isb.BufferWriter,
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, kafka.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return kafka.NewKafkaSource(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
+		return kafka.NewKafkaSource(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
 	} else if x := src.HTTP; x != nil {
-		return http.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, toVertexPublisherStores, publishWMStores, http.WithLogger(logger))
+		return http.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, http.WithLogger(logger))
 	} else if x := src.Nats; x != nil {
 		readOptions := []nats.Option{
 			nats.WithLogger(logger),
@@ -266,7 +272,7 @@ func (sp *SourceProcessor) getSourcer(writers map[string][]isb.BufferWriter,
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return nats.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
+		return nats.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
 	} else if x := src.RedisStreams; x != nil {
 		readOptions := []redisstreams.Option{
 			redisstreams.WithLogger(logger),
@@ -274,7 +280,7 @@ func (sp *SourceProcessor) getSourcer(writers map[string][]isb.BufferWriter,
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, redisstreams.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return redisstreams.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
+		return redisstreams.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }
