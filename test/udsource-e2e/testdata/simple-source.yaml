@@ -1,0 +1,22 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-source
+spec:
+  vertices:
+    - name: in
+      source:
+        udSource:
+          container:
+            image: quay.io/numaio/numaflow-go/source-simple-source:v1
+      limits:
+        readBatchSize: 2
+    - name: out
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+  edges:
+    - from: in
+      to: out

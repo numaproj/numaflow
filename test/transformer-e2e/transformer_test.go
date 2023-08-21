@@ -33,11 +33,11 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
-type FunctionalSuite struct {
+type TransformerSuite struct {
 	E2ESuite
 }
 
-func (s *FunctionalSuite) TestSourceFiltering() {
+func (s *TransformerSuite) TestSourceFiltering() {
 	w := s.Given().Pipeline("@testdata/source-filtering.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -66,7 +66,7 @@ func (s *FunctionalSuite) TestSourceFiltering() {
 	w.Expect().SinkNotContains("out", expect2)
 }
 
-func (s *FunctionalSuite) TestTimeExtractionFilter() {
+func (s *TransformerSuite) TestTimeExtractionFilter() {
 	w := s.Given().Pipeline("@testdata/time-extraction-filter.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -85,7 +85,7 @@ func (s *FunctionalSuite) TestTimeExtractionFilter() {
 	w.Expect().SinkNotContains("out", testMsgTwo)
 }
 
-func (s *FunctionalSuite) TestBuiltinEventTimeExtractor() {
+func (s *TransformerSuite) TestBuiltinEventTimeExtractor() {
 	w := s.Given().Pipeline("@testdata/extract-event-time-from-payload.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -157,8 +157,8 @@ wmLoop:
 	done <- struct{}{}
 }
 
-func TestFunctionalSuite(t *testing.T) {
-	suite.Run(t, new(FunctionalSuite))
+func TestTransformerSuite(t *testing.T) {
+	suite.Run(t, new(TransformerSuite))
 }
 
 type Item struct {
