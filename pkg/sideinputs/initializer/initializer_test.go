@@ -93,14 +93,14 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 
 	for x, sideInput := range sideInputs {
 		p := path.Join(mountPath, sideInput)
-		fileData, err := utils.FetchSideInputFile(p)
+		fileData, err := utils.FetchSideInputFileValue(p)
 		for err != nil {
 			select {
 			case <-ctx.Done():
 				t.Fatalf("Context timeout")
 			default:
 				time.Sleep(10 * time.Millisecond)
-				fileData, err = utils.FetchSideInputFile(p)
+				fileData, err = utils.FetchSideInputFileValue(p)
 			}
 		}
 		assert.Equal(t, dataTest[x], string(fileData))

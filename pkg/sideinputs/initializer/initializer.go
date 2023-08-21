@@ -56,8 +56,9 @@ func NewSideInputsInitializer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInpu
 // and update the values on the disk. This would exit once all the side inputs are initialized.
 func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	var (
-		natsClient *jsclient.NATSClient
-		err        error
+		natsClient       *jsclient.NATSClient
+		err              error
+		sideInputWatcher kvs.KVWatcher
 	)
 
 	log := logging.FromContext(ctx)
@@ -75,14 +76,14 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 			return err
 		}
 		defer natsClient.Close()
+		// Load the required KV bucket and create a sideInputWatcher for it
+		kvName := isbsvc.JetStreamSideInputsStoreKVName(sii.sideInputsStore)
+		sideInputWatcher, err = jetstream.NewKVJetStreamKVWatch(ctx, kvName, natsClient)
+		if err != nil {
+			return fmt.Errorf("failed to create a sideInputWatcher, %w", err)
+		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sii.isbSvcType)
-	}
-	// Load the required KV bucket and create a sideInputWatcher for it
-	kvName := isbsvc.JetStreamSideInputsStoreKVName(sii.sideInputsStore)
-	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, kvName, natsClient)
-	if err != nil {
-		return fmt.Errorf("failed to create a sideInputWatcher, %w", err)
 	}
 	return startSideInputInitializer(ctx, sideInputWatcher, dfv1.PathSideInputsMount, sii.sideInputs)
 }

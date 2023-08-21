@@ -17,7 +17,6 @@ limitations under the License.
 package synchronizer
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path"
@@ -57,8 +56,9 @@ func NewSideInputsSynchronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInp
 // and keeps on watching for updates for all the side inputs while writing the new values to the disk.
 func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	var (
-		natsClient *jsclient.NATSClient
-		err        error
+		natsClient       *jsclient.NATSClient
+		err              error
+		sideInputWatcher kvs.KVWatcher
 	)
 
 	log := logging.FromContext(ctx)
@@ -76,14 +76,14 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err
 		}
+		// Create a new watcher for the side input KV store
+		kvName := isbsvc.JetStreamSideInputsStoreKVName(sis.sideInputsStore)
+		sideInputWatcher, err = jetstream.NewKVJetStreamKVWatch(ctx, kvName, natsClient)
+		if err != nil {
+			return fmt.Errorf("failed to create a sideInputWatcher, %w", err)
+		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sis.isbSvcType)
-	}
-	// Create a new watcher for the side input KV store
-	kvName := isbsvc.JetStreamSideInputsStoreKVName(sis.sideInputsStore)
-	sideInputWatcher, err := jetstream.NewKVJetStreamKVWatch(ctx, kvName, natsClient)
-	if err != nil {
-		return fmt.Errorf("failed to create a sideInputWatcher, %w", err)
 	}
 	go startSideInputSynchronizer(ctx, sideInputWatcher, dfv1.PathSideInputsMount)
 	<-ctx.Done()
@@ -95,7 +95,6 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 func startSideInputSynchronizer(ctx context.Context, watch kvs.KVWatcher, mountPath string) {
 	log := logging.FromContext(ctx)
 	watchCh, stopped := watch.Watch(ctx)
-	var prevValue []byte
 	for {
 		select {
 		case <-stopped:
@@ -109,14 +108,10 @@ func startSideInputSynchronizer(ctx context.Context, watch kvs.KVWatcher, mountP
 			log.Infow("Side Input value received ",
 				zap.String("key", value.Key()), zap.String("value", string(value.Value())))
 			p := path.Join(mountPath, value.Key())
-			// Check if the value has changed from the last update
-			if prevValue == nil || bytes.Equal(prevValue, value.Value()) == false {
-				// Write changes to disk
-				err := utils.UpdateSideInputFile(ctx, p, value.Value())
-				if err != nil {
-					log.Errorw("Failed to update Side Input value %s", zap.Error(err))
-				}
-				prevValue = value.Value()
+			// Write changes to disk
+			err := utils.UpdateSideInputFile(ctx, p, value.Value())
+			if err != nil {
+				log.Errorw("Failed to update Side Input value %s", zap.Error(err))
 			}
 			continue
 		case <-ctx.Done():

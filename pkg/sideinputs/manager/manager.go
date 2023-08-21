@@ -57,6 +57,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 
 	var natsClient *jsclient.NATSClient
 	var err error
+	var siStore kvs.KVStorer
 	switch sim.isbSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		return fmt.Errorf("unsupported isbsvc type %q", sim.isbSvcType)
@@ -66,6 +67,12 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err
 		}
+		sideInputBucketName := isbsvc.JetStreamSideInputsStoreKVName(sim.sideInputsStore)
+		siStore, err = jetstream.NewKVJetStreamKVStore(ctx, sim.pipelineName, sideInputBucketName, natsClient)
+		if err != nil {
+			return fmt.Errorf("failed to create a new KVStore: %w", err)
+		}
+
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sim.isbSvcType)
 	}
@@ -85,12 +92,6 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}
 	}()
-
-	sideInputBucketName := isbsvc.JetStreamSideInputsStoreBucket(sim.sideInputsStore)
-	siStore, err := jetstream.NewKVJetStreamKVStore(ctx, sim.pipelineName, sideInputBucketName, natsClient)
-	if err != nil {
-		return fmt.Errorf("failed to create a new KVStore: %w", err)
-	}
 
 	f := func() {
 		if err := sim.execute(ctx, sideInputClient, siStore); err != nil {
@@ -115,7 +116,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 
 func (sim *sideInputsManager) execute(ctx context.Context, sideInputClient *udsideinput.UDSgRPCBasedUDSideinput, siStore kvs.KVStorer) error {
 	log := logging.FromContext(ctx)
-	log.Info("Executing Side Input manager cron ...")
+	log.Info("Executing Side Inputs manager cron ...")
 	resp, err := sideInputClient.Apply(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve side input: %w", err)
