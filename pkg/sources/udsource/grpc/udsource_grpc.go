@@ -14,6 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package grpc defines
+*/
 package grpc
 
 import (
@@ -154,7 +157,7 @@ func (u *UDSgRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Off
 
 func ConvertToSourceOffset(offset isb.Offset) *sourcepb.Offset {
 	return &sourcepb.Offset{
-		PartitionId: string(offset.PartitionIdx()),
+		PartitionId: strconv.Itoa(int(offset.PartitionIdx())),
 		Offset:      []byte(offset.String()),
 	}
 }
