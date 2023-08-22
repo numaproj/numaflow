@@ -51,7 +51,7 @@ spec:
       udf:
         container:
           # Split input message into an array with comma, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/flatmap
-          image: quay.io/numaio/numaflow-java/map-flatmap
+          image: quay.io/numaio/numaflow-java/map-flatmap:v0.5.0
     - name: java-udsink
       scale:
         min: 1
@@ -59,7 +59,7 @@ spec:
         udsink:
           container:
             # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
-            image: quay.io/numaio/numaflow-java/simple-sink
+            image: quay.io/numaio/numaflow-java/simple-sink:v0.5.0
   edges:
     - from: in
       to: go-split

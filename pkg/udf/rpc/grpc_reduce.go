@@ -35,6 +35,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 )
 
+// UDSgRPCBasedReduce is a reduce applier that uses gRPC client to invoke the reduce UDF. It implements the applier.ReduceApplier interface.
 type UDSgRPCBasedReduce struct {
 	client reducer.Client
 }

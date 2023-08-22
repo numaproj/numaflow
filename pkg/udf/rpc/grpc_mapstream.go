@@ -30,6 +30,7 @@ import (
 	mapstreamer "github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
 )
 
+// UDSgRPCBasedMapStream is a map stream applier that uses gRPC client to invoke the map stream UDF. It implements the applier.MapStreamApplier interface.
 type UDSgRPCBasedMapStream struct {
 	client mapstreamer.Client
 }

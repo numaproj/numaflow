@@ -28,7 +28,7 @@ spec:
       partitions: 2
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/reduce-sum
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
         groupBy:
           window:
             fixed:

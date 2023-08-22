@@ -31,6 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 )
 
+// UDSgRPCBasedMap is a map applier that uses gRPC client to invoke the map UDF. It implements the applier.MapApplier interface.
 type UDSgRPCBasedMap struct {
 	client mapper.Client
 }
