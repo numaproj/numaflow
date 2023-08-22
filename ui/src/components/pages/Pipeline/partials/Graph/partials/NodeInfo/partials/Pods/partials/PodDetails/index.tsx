@@ -1,5 +1,4 @@
 import Box from "@mui/material/Box";
-import CircularProgress from "@mui/material/CircularProgress";
 import { PodInfo } from "./partials/PodInfo";
 import { PodLogs } from "./partials/PodLogs";
 import { PodDetailProps } from "../../../../../../../../../../../types/declarations/pods";
@@ -15,14 +14,7 @@ export function PodDetail({
   pod,
   podDetails,
 }: PodDetailProps) {
-  if (!pod && !containerName && !podDetails) {
-    return (
-      <Box sx={{ mb: 2 }}>
-        Loading pod details...
-        <CircularProgress size={16} sx={{ mx: 2 }} />
-      </Box>
-    );
-  } else if (!pod) return;
+  if (!pod) return null;
 
   return (
     <Box
