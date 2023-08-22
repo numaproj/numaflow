@@ -105,6 +105,12 @@ func New(inputOptions ...Option) (Client, error) {
 	return c, nil
 }
 
+func NewFromClient(c mapstreampb.MapStreamClient) (Client, error) {
+	return &client{
+		grpcClt: c,
+	}, nil
+}
+
 // CloseConn closes the grpc client connection.
 func (c *client) CloseConn(ctx context.Context) error {
 	return c.conn.Close()

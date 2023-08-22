@@ -104,8 +104,18 @@ func New(inputOptions ...Option) (Client, error) {
 	return c, nil
 }
 
+// NewFromClient creates a new client object from a grpc client. This is used for testing.
+func NewFromClient(c mappb.MapClient) (Client, error) {
+	return &client{
+		grpcClt: c,
+	}, nil
+}
+
 // CloseConn closes the grpc client connection.
 func (c *client) CloseConn(ctx context.Context) error {
+	if c.conn == nil {
+		return nil
+	}
 	return c.conn.Close()
 }
 
