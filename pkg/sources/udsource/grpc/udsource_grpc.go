@@ -85,15 +85,14 @@ func (u *UDSgRPCBasedUDSource) ApplyPendingFn(ctx context.Context) (int64, error
 }
 
 // ApplyReadFn reads messages from the source.
-// TODO(udsource) Should we pass in a channel and stream the messages?
-func (u *UDSgRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
+// TODO(udsource) - this should be able to simplify, also needs improvement.
+func (u *UDSgRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeout time.Duration) ([]*isb.ReadMessage, error) {
 	var readMessages []*isb.ReadMessage
 
-	// Construct the request
-	// TODO(udsource) - add timeout to the request
 	var r = &sourcepb.ReadRequest{
 		Request: &sourcepb.ReadRequest_Request{
-			NumRecords: uint64(count),
+			NumRecords:  uint64(count),
+			TimeoutInMs: uint32(timeout.Milliseconds()),
 		},
 	}
 	// Call the client

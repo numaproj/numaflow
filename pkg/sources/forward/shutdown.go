@@ -66,7 +66,7 @@ func (isdf *DataForward) Stop() {
 // ForceStop sets up the force shutdown flag.
 func (isdf *DataForward) ForceStop() {
 	// call stop (what if we have an enthusiastic shutdown that forces first)
-	// e.g. I know I have written a wrong source transformer, so shutdown ASAP
+	// e.g., I know I have written a wrong source transformer, so shutdown ASAP
 	isdf.Stop()
 	isdf.Shutdown.rwlock.Lock()
 	defer isdf.Shutdown.rwlock.Unlock()
