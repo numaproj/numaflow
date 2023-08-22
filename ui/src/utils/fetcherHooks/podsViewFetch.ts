@@ -179,12 +179,25 @@ export const usePodsViewFetch = (
     };
   }, []);
 
+  // checks if all pods are present in podsDetailsMap
+  const checkPodDetails = () => {
+    if (!pods || !podsDetails) return false;
+    for (let i = 0; i < pods.length; i++) {
+      if (!podsDetails.has(pods[i]?.name)) return false;
+    }
+    return true;
+  };
+
   //sets loading variable
   useEffect(() => {
-    if (pods && podsDetails) {
+    if (checkPodDetails()) {
       setLoading(false);
+    } else if (podsErr || podsDetailsErr) {
+      setLoading(false);
+    } else {
+      setLoading(true);
     }
-  }, [pods, podsDetails]);
+  }, [pods, podsDetails, podsErr, podsDetailsErr]);
 
   return {
     pods,

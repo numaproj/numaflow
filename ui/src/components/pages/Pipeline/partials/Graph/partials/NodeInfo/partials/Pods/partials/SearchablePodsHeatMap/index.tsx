@@ -4,24 +4,11 @@ import Paper from "@mui/material/Paper";
 import IconButton from "@mui/material/IconButton";
 import ClearIcon from "@mui/icons-material/Clear";
 import InputBase from "@mui/material/InputBase";
-import CircularProgress from "@mui/material/CircularProgress";
 import { PodsHeatMap } from "./partials/PodsHeatMap";
 import {
   Pod,
-  PodDetail,
   SearchablePodsHeatMapProps,
 } from "../../../../../../../../../../../types/declarations/pods";
-
-const checkPodDetails = (
-  pods: Pod[],
-  podsDetailsMap: Map<string, PodDetail>
-) => {
-  if (!pods || !podsDetailsMap) return true;
-  for (let i = 0; i < pods.length; i++) {
-    if (!podsDetailsMap.has(pods[i]?.name)) return true;
-  }
-  return false;
-};
 
 export const SearchablePodsHeatMap = ({
   pods,
@@ -29,27 +16,14 @@ export const SearchablePodsHeatMap = ({
   onPodClick,
   selectedPod,
   setSelectedPod,
-  setHeatMapLoader,
 }: SearchablePodsHeatMapProps) => {
-  const loading = checkPodDetails(pods, podsDetailsMap);
-
-  if (loading) {
-    setHeatMapLoader(false);
-    return (
-      <Box sx={{ mb: 2 }}>
-        Loading pod heatmaps...
-        <CircularProgress size={16} sx={{ mx: 2 }} />
-      </Box>
-    );
-  } else setHeatMapLoader(true);
-
   const [search, setSearch] = useState<string>("");
   const [filteredPods, setFilteredPods] = useState<Pod[]>(pods);
 
   useEffect(() => {
     if (!search) {
       setFilteredPods(pods);
-      setSelectedPod(pods[0]);
+      if (pods?.length) setSelectedPod(pods[0]);
       return;
     }
 
@@ -61,7 +35,7 @@ export const SearchablePodsHeatMap = ({
       }
     });
 
-    if (filteredPods.length > 0) setSelectedPod(filteredPods[0]);
+    if (filteredPods?.length > 0) setSelectedPod(filteredPods[0]);
     else setSelectedPod(undefined);
 
     setFilteredPods(filteredPods);
@@ -114,7 +88,7 @@ export const SearchablePodsHeatMap = ({
           </IconButton>
         </Paper>
       </Box>
-      {filteredPods.length > 0 && (
+      {filteredPods?.length > 0 && (
         <PodsHeatMap
           pods={filteredPods}
           podsDetailsMap={podsDetailsMap}
@@ -122,7 +96,7 @@ export const SearchablePodsHeatMap = ({
           selectedPod={selectedPod}
         />
       )}
-      {filteredPods.length === 0 && (
+      {filteredPods?.length === 0 && (
         <Box
           sx={{
             textAlign: "center",
