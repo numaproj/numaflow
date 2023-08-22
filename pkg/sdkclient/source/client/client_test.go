@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package clienttest
+package client
 
 import (
 	"context"
@@ -57,7 +57,7 @@ func TestIsReady(t *testing.T) {
 	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&sourcepb.ReadyResponse{Ready: true}, nil)
 	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&sourcepb.ReadyResponse{Ready: false}, fmt.Errorf("mock connection refused"))
 
-	testClient, err := New(mockClient)
+	testClient, err := NewFromClient(mockClient)
 	assert.NoError(t, err)
 	reflect.DeepEqual(testClient, &client{
 		grpcClt: mockClient,
@@ -87,7 +87,7 @@ func TestAckFn(t *testing.T) {
 	mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(&sourcepb.AckResponse{}, nil)
 	mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(&sourcepb.AckResponse{}, fmt.Errorf("mock connection refused"))
 
-	testClient, err := New(mockClient)
+	testClient, err := NewFromClient(mockClient)
 	assert.NoError(t, err)
 	reflect.DeepEqual(testClient, &client{
 		grpcClt: mockClient,
@@ -117,7 +117,7 @@ func TestPendingFn(t *testing.T) {
 	}, nil)
 	mockClient.EXPECT().PendingFn(gomock.Any(), gomock.Any()).Return(&sourcepb.PendingResponse{}, fmt.Errorf("mock connection refused"))
 
-	testClient, err := New(mockClient)
+	testClient, err := NewFromClient(mockClient)
 	assert.NoError(t, err)
 	reflect.DeepEqual(testClient, &client{
 		grpcClt: mockClient,

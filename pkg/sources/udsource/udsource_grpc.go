@@ -27,33 +27,29 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// UDSgRPCBasedUDSource applies a user-defined source over gRPC
-// (over Unix Domain Socket) client/server where server is the UDSource.
-type UDSgRPCBasedUDSource struct {
+// GRPCBasedUDSource applies a user-defined source over gRPC
+// connection where server is the UDSource.
+type GRPCBasedUDSource struct {
 	client sourceclient.Client
 }
 
-// NewUDSgRPCBasedUDSource returns UDSgRPCBasedUDSource
-func NewUDSgRPCBasedUDSource() (*UDSgRPCBasedUDSource, error) {
-	c, err := sourceclient.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
-	}
-	return &UDSgRPCBasedUDSource{c}, nil
+// NewUDSgRPCBasedUDSource accepts a gRPC client and returns a new GRPCBasedUDSource.
+func NewUDSgRPCBasedUDSource(c sourceclient.Client) (*GRPCBasedUDSource, error) {
+	return &GRPCBasedUDSource{c}, nil
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *UDSgRPCBasedUDSource) CloseConn(ctx context.Context) error {
+func (u *GRPCBasedUDSource) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // IsHealthy checks if the udsource is healthy.
-func (u *UDSgRPCBasedUDSource) IsHealthy(ctx context.Context) error {
+func (u *GRPCBasedUDSource) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
 // WaitUntilReady waits until the udsource is connected.
-func (u *UDSgRPCBasedUDSource) WaitUntilReady(ctx context.Context) error {
+func (u *GRPCBasedUDSource) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -68,7 +64,7 @@ func (u *UDSgRPCBasedUDSource) WaitUntilReady(ctx context.Context) error {
 }
 
 // ApplyPendingFn returns the number of pending messages in the source.
-func (u *UDSgRPCBasedUDSource) ApplyPendingFn(ctx context.Context) (int64, error) {
+func (u *GRPCBasedUDSource) ApplyPendingFn(ctx context.Context) (int64, error) {
 	if resp, err := u.client.PendingFn(ctx, &emptypb.Empty{}); err == nil {
 		return int64(resp.Result.Count), nil
 	} else {
@@ -77,13 +73,13 @@ func (u *UDSgRPCBasedUDSource) ApplyPendingFn(ctx context.Context) (int64, error
 }
 
 // ApplyReadFn reads messages from the source.
-func (u *UDSgRPCBasedUDSource) ApplyReadFn(_ context.Context, _ int64) ([]*isb.ReadMessage, error) {
+func (u *GRPCBasedUDSource) ApplyReadFn(_ context.Context, _ int64) ([]*isb.ReadMessage, error) {
 	// TODO(udsource) - Implement it
 	return nil, nil
 }
 
 // ApplyAckFn acknowledges messages in the source.
-func (u *UDSgRPCBasedUDSource) ApplyAckFn(_ context.Context, _ []isb.Offset) []error {
+func (u *GRPCBasedUDSource) ApplyAckFn(_ context.Context, _ []isb.Offset) []error {
 	// TODO(udsource) - Implement it
 	return nil
 }

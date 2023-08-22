@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
+	mapsdk "github.com/numaproj/numaflow-go/pkg/mapper"
 
 	"github.com/numaproj/numaflow/pkg/shared/expr"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -30,7 +30,7 @@ type filter struct {
 	expression string
 }
 
-func New(args map[string]string) (functionsdk.MapFunc, error) {
+func New(args map[string]string) (mapsdk.MapperFunc, error) {
 	expr, existing := args["expression"]
 	if !existing {
 		return nil, fmt.Errorf(`missing "expression"`)
@@ -39,23 +39,23 @@ func New(args map[string]string) (functionsdk.MapFunc, error) {
 		expression: expr,
 	}
 
-	return func(ctx context.Context, keys []string, datum functionsdk.Datum) functionsdk.Messages {
+	return func(ctx context.Context, keys []string, datum mapsdk.Datum) mapsdk.Messages {
 		log := logging.FromContext(ctx)
 		resultMsg, err := f.apply(datum.Value())
 		if err != nil {
 			log.Errorf("Filter map function apply got an error: %v", err)
 		}
-		return functionsdk.MessagesBuilder().Append(resultMsg)
+		return mapsdk.MessagesBuilder().Append(resultMsg)
 	}, nil
 }
 
-func (f filter) apply(msg []byte) (functionsdk.Message, error) {
+func (f filter) apply(msg []byte) (mapsdk.Message, error) {
 	result, err := expr.EvalBool(f.expression, msg)
 	if err != nil {
-		return functionsdk.MessageToDrop(), err
+		return mapsdk.MessageToDrop(), err
 	}
 	if result {
-		return functionsdk.NewMessage(msg), nil
+		return mapsdk.NewMessage(msg), nil
 	}
-	return functionsdk.MessageToDrop(), nil
+	return mapsdk.MessageToDrop(), nil
 }

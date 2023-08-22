@@ -28,10 +28,10 @@ import (
 	"go.uber.org/zap"
 
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
+	applier2 "github.com/numaproj/numaflow/pkg/sources/forward/applier"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -154,7 +154,7 @@ func NewMemGen(
 	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier applier.MapApplier,
+	transformerApplier applier2.SourceTransformApplier,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
@@ -222,7 +222,7 @@ func NewMemGen(
 	gensrc.sourcePublishWM = gensrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancel the context
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, gensrc, writers, fsd, mapApplier, fetchWM, gensrc, toVertexPublisherStores, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, gensrc, writers, fsd, transformerApplier, fetchWM, gensrc, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

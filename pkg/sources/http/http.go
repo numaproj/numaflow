@@ -29,10 +29,10 @@ import (
 	"go.uber.org/zap"
 
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -90,7 +90,7 @@ func New(
 	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier applier.MapApplier,
+	transformerApplier applier.SourceTransformApplier,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
@@ -199,7 +199,7 @@ func New(
 		}
 	}
 
-	h.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, h, writers, fsd, mapApplier, fetchWM, h, toVertexPublisherStores, forwardOpts...)
+	h.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, h, writers, fsd, transformerApplier, fetchWM, h, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

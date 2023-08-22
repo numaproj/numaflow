@@ -14,38 +14,46 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package grpc_resolver
 
 import (
+	"log"
 	"strconv"
 	"strings"
 
-	"github.com/numaproj/numaflow-go/pkg/function"
+	"github.com/numaproj/numaflow-go/pkg/info"
+	"github.com/numaproj/numaflow-go/pkg/shared"
 	"google.golang.org/grpc/resolver"
 )
 
 const (
-	custScheme      = "udf"
-	custServiceName = "numaflow.numaproj.io"
-	connAddr        = "0.0.0.0"
+	CustScheme      = "udf"
+	CustServiceName = "numaflow.numaproj.io"
+	ConnAddr        = "0.0.0.0"
 )
 
-type multiProcResolverBuilder struct {
+type MultiProcResolverBuilder struct {
 	addrsList []string
 }
 
-func (m *multiProcResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func NewMultiProcResolverBuilder(addrsList []string) *MultiProcResolverBuilder {
+	return &MultiProcResolverBuilder{
+		addrsList: addrsList,
+	}
+}
+
+func (m *MultiProcResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	r := &multiProcResolver{
 		target: target,
 		cc:     cc,
 		addrsStore: map[string][]string{
-			custServiceName: m.addrsList,
+			CustServiceName: m.addrsList,
 		},
 	}
 	r.start()
 	return r, nil
 }
-func (*multiProcResolverBuilder) Scheme() string { return custScheme }
+func (*MultiProcResolverBuilder) Scheme() string { return CustScheme }
 
 type multiProcResolver struct {
 	target     resolver.Target
@@ -72,12 +80,26 @@ func (*multiProcResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 func (*multiProcResolver) Close()                                  {}
 func (*multiProcResolver) Resolve(target resolver.Target)          {}
 
-// Populate the connection list for the clients
+// BuildConnAddrs Populate the connection list for the clients
 // Format (serverAddr, serverIdx) : (0.0.0.0:5551, 1)
-func buildConnAddrs(numCpu int) []string {
+func BuildConnAddrs(numCpu int) []string {
 	var conn = make([]string, numCpu)
 	for i := 0; i < numCpu; i++ {
-		conn[i] = connAddr + function.TcpAddr + "," + strconv.Itoa(i+1)
+		conn[i] = ConnAddr + shared.TcpAddr + "," + strconv.Itoa(i+1)
 	}
 	return conn
+}
+
+// RegMultiProcResolver  is used to populate the connection properties based
+// on multiprocessing TCP or UDS connection
+func RegMultiProcResolver(svrInfo *info.ServerInfo) error {
+	numCpu, err := strconv.Atoi(svrInfo.Metadata["CPU_LIMIT"])
+	if err != nil {
+		return err
+	}
+	log.Println("Num CPU:", numCpu)
+	conn := BuildConnAddrs(numCpu)
+	res := NewMultiProcResolverBuilder(conn)
+	resolver.Register(res)
+	return nil
 }

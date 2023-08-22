@@ -14,11 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package function
+package rpc
 
 import "fmt"
 
-// ApplyUDFErr represents any UDF related error
+// ApplyUDFErr represents any mapUDF related error
 type ApplyUDFErr struct {
 	UserUDFErr bool
 	Message    string
