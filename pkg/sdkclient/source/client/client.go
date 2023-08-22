@@ -100,7 +100,6 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 
 // ReadFn reads data from the source.
 func (c *client) ReadFn(ctx context.Context, req *sourcepb.ReadRequest, datumCh chan<- *sourcepb.ReadResponse) error {
-	defer close(datumCh)
 	stream, err := c.grpcClt.ReadFn(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to execute c.grpcClt.ReadFn(): %w", err)
@@ -113,9 +112,12 @@ func (c *client) ReadFn(ctx context.Context, req *sourcepb.ReadRequest, datumCh 
 			var resp *sourcepb.ReadResponse
 			resp, err = stream.Recv()
 			if err == io.EOF {
+				print("keran - I received EOF")
 				return nil
 			}
 			if err != nil {
+				print("keran - I received error")
+				print(err.Error())
 				return err
 			}
 			datumCh <- resp

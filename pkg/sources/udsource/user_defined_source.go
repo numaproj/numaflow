@@ -124,9 +124,9 @@ func New(
 	return u, nil
 }
 
-// GetName returns the name of the user-defined source
+// GetName returns the name of the user-defined source vertex
 func (u *userDefinedSource) GetName() string {
-	return "UserDefinedSource"
+	return u.name
 }
 
 // GetPartitionIdx returns the partition number for the user-defined source.

@@ -90,7 +90,6 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 	}
 	// Call the client
 	var datumCh = make(chan *sourcepb.ReadResponse)
-	defer close(datumCh)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -99,17 +98,22 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 			// TODO: handle error
 			fmt.Printf("failed to read messages from udsource: %v\n", err)
 		}
+		defer close(datumCh)
 	}()
 
 	// Collect the messages from the channel and return
 	for {
+		println("I am in the loop")
 		select {
 		case <-ctx.Done():
+			println("I am returning because context is done")
 			return readMessages, fmt.Errorf("context is done, %w", ctx.Err())
 		case datum, ok := <-datumCh:
 			if ok {
 				// Convert the datum to ReadMessage and append to the list
 				r := datum.GetResult()
+				println("Received message: ")
+				println(r.Payload)
 				readMessage := &isb.ReadMessage{
 					Message: isb.Message{
 						Header: isb.Header{
@@ -126,6 +130,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 				readMessages = append(readMessages, readMessage)
 			} else {
 				wg.Wait()
+				println("I am returning because client.ReadFn is done")
 				return readMessages, nil
 			}
 		}
