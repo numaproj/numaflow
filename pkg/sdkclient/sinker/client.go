@@ -28,6 +28,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -51,22 +53,17 @@ func New(inputOptions ...Option) (Client, error) {
 		inputOption(opts)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), opts.serverInfoReadinessTimeout)
-	defer cancel()
-
-	if err := info.WaitUntilReady(ctx, info.WithServerInfoFilePath(opts.serverInfoFilePath)); err != nil {
-		return nil, fmt.Errorf("failed to wait until server info is ready: %w", err)
-	}
-
-	serverInfo, err := info.Read(info.WithServerInfoFilePath(opts.serverInfoFilePath))
+	// Wait for server info to be ready
+	serverInfo, err := util.WaitForServerInfo(opts.serverInfoReadinessTimeout, opts.serverInfoFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read server info: %w", err)
+		return nil, err
 	}
-	// TODO: Use serverInfo to check compatibility.
+
 	if serverInfo != nil {
 		log.Printf("ServerInfo: %v\n", serverInfo)
 	}
 
+	// connect to the server
 	c := new(client)
 	sockAddr := fmt.Sprintf("%s:%s", shared.UDS, opts.sockAddr)
 	conn, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -74,6 +71,7 @@ func New(inputOptions ...Option) (Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
 	}
+
 	c.conn = conn
 	c.grpcClt = sinkpb.NewSinkClient(conn)
 	return c, nil

@@ -18,19 +18,15 @@ package sourcetransformer
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
 	transformpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"github.com/numaproj/numaflow-go/pkg/shared"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/numaproj/numaflow-go/pkg/info"
-
-	resolver2 "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -54,51 +50,23 @@ func New(inputOptions ...Option) (Client, error) {
 		inputOption(opts)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), opts.serverInfoReadinessTimeout)
-	defer cancel()
-
-	if err := info.WaitUntilReady(ctx, info.WithServerInfoFilePath(opts.serverInfoFilePath)); err != nil {
-		return nil, fmt.Errorf("failed to wait until server info is ready: %w", err)
-	}
-
-	serverInfo, err := info.Read(info.WithServerInfoFilePath(opts.serverInfoFilePath))
+	// Wait for server info to be ready
+	serverInfo, err := util.WaitForServerInfo(opts.serverInfoReadinessTimeout, opts.serverInfoFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read server info: %w", err)
+		return nil, err
 	}
-	// TODO: Use serverInfo to check compatibility.
+
 	if serverInfo != nil {
 		log.Printf("ServerInfo: %v\n", serverInfo)
 	}
 
-	c := new(client)
-	var conn *grpc.ClientConn
-	var sockAddr string
-	// Make a TCP connection client for multiprocessing grpc server
-	if serverInfo.Protocol == info.TCP {
-		// Populate connection variables for client connection
-		// based on multiprocessing enabled/disabled
-		if err := resolver2.RegMultiProcResolver(serverInfo); err != nil {
-			return nil, fmt.Errorf("failed to start Multiproc Client: %w", err)
-		}
-
-		sockAddr = fmt.Sprintf("%s%s", resolver2.ConnAddr, opts.tcpSockAddr)
-		log.Println("Multiprocessing TCP Client:", sockAddr)
-		conn, err = grpc.Dial(
-			fmt.Sprintf("%s:///%s", resolver2.CustScheme, resolver2.CustServiceName),
-			// This sets the initial load balancing policy as Round Robin
-			grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.maxMessageSize), grpc.MaxCallSendMsgSize(opts.maxMessageSize)),
-		)
-	} else {
-		sockAddr = fmt.Sprintf("%s:%s", shared.UDS, opts.udsSockAddr)
-		log.Println("UDS Client:", sockAddr)
-		conn, err = grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.maxMessageSize), grpc.MaxCallSendMsgSize(opts.maxMessageSize)))
-	}
+	// Connect to the server
+	conn, err := util.ConnectToServer(opts.udsSockAddr, opts.tcpSockAddr, serverInfo, opts.maxMessageSize)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
+		return nil, err
 	}
+
+	c := new(client)
 	c.conn = conn
 	c.grpcClt = transformpb.NewSourceTransformClient(conn)
 	return c, nil

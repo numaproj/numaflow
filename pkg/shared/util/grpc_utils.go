@@ -17,12 +17,20 @@ limitations under the License.
 package util
 
 import (
+	"context"
+	"fmt"
 	"log"
+	"time"
 
+	"github.com/numaproj/numaflow-go/pkg/info"
+	"github.com/numaproj/numaflow-go/pkg/shared"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
+	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 )
 
 // ToUDFErr converts gRPC error to UDF Error
@@ -52,4 +60,64 @@ func ToUDFErr(name string, err error) error {
 		log.Printf("failed %s: %s", name, udfError.Error())
 		return udfError
 	}
+}
+
+// WaitForServerInfo waits until the server info is ready. It returns an error if the server info is not ready within the given timeout.
+func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := info.WaitUntilReady(ctx, info.WithServerInfoFilePath(filePath)); err != nil {
+		return nil, fmt.Errorf("failed to wait until server info is ready: %w", err)
+	}
+
+	serverInfo, err := info.Read(info.WithServerInfoFilePath(filePath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read server info: %w", err)
+	}
+
+	return serverInfo, nil
+}
+
+// ConnectToServer connects to the server with the given socket address based on the server info protocol.
+func ConnectToServer(udsSockAddr string, tcpSockAddr string, serverInfo *info.ServerInfo, maxMessageSize int) (*grpc.ClientConn, error) {
+	var conn *grpc.ClientConn
+	var err error
+	var sockAddr string
+
+	if serverInfo.Protocol == info.TCP {
+		sockAddr = getTcpSockAddr(tcpSockAddr)
+		log.Println("Multiprocessing TCP Client:", sockAddr)
+
+		if err := resolver.RegMultiProcResolver(serverInfo); err != nil {
+			return nil, fmt.Errorf("failed to start Multiproc Client: %w", err)
+		}
+
+		conn, err = grpc.Dial(
+			fmt.Sprintf("%s:///%s", resolver.CustScheme, resolver.CustServiceName),
+			grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMessageSize), grpc.MaxCallSendMsgSize(maxMessageSize)),
+		)
+	} else {
+		sockAddr = getUdsSockAddr(udsSockAddr)
+		log.Println("UDS Client:", sockAddr)
+
+		conn, err = grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMessageSize), grpc.MaxCallSendMsgSize(maxMessageSize)))
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
+	}
+
+	return conn, nil
+}
+
+func getTcpSockAddr(tcpSock string) string {
+	return fmt.Sprintf("%s%s", resolver.ConnAddr, tcpSock)
+}
+
+func getUdsSockAddr(udsSock string) string {
+	return fmt.Sprintf("%s:%s", shared.UDS, udsSock)
 }
