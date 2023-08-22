@@ -22,7 +22,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// MapApplier applies the map mapUDF on the read message and gives back a new message. Any UserError will be retried here, while
+// MapApplier applies the map UDF on the read message and gives back a new message. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type MapApplier interface {
 	ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error)

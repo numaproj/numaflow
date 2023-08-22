@@ -22,14 +22,14 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// CopyUDFTestApply applies a copy mapUDF that simply copies the input to output.
+// CopyUDFTestApply applies a copy UDF that simply copies the input to output.
 func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	_ = ctx
 	offset := readMessage.ReadOffset
 	payload := readMessage.Body.Payload
 	parentPaneInfo := readMessage.MessageInfo
 
-	// apply mapUDF
+	// apply UDF
 	_ = payload
 	// copy the payload
 	result := payload
@@ -55,7 +55,7 @@ func CopyUDFTestApplyStream(ctx context.Context, readMessage *isb.ReadMessage, w
 	payload := readMessage.Body.Payload
 	parentPaneInfo := readMessage.MessageInfo
 
-	// apply mapUDF
+	// apply UDF
 	_ = payload
 	// copy the payload
 	result := payload

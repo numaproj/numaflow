@@ -313,7 +313,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 func (r *vertexReconciler) buildReduceVertexPVCSpec(vertex *dfv1.Vertex, replicaIndex int) (*corev1.PersistentVolumeClaim, error) {
 	if !vertex.IsReduceUDF() {
-		return nil, fmt.Errorf("not a reduce mapUDF")
+		return nil, fmt.Errorf("not a reduce UDF")
 	}
 
 	pvcName := dfv1.GeneratePBQStoragePVCName(vertex.Spec.PipelineName, vertex.Spec.Name, replicaIndex)

@@ -52,7 +52,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		names[v.Name] = true
 
 		if v.Source == nil && v.Sink == nil && v.UDF == nil {
-			return fmt.Errorf("invalid vertex %q, it could only be either a source, or a sink, or a mapUDF", v.Name)
+			return fmt.Errorf("invalid vertex %q, it could only be either a source, or a sink, or a UDF", v.Name)
 		}
 		if v.Source != nil {
 			if v.Sink != nil || v.UDF != nil {

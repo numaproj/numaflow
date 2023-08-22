@@ -119,7 +119,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	enableMapUdfStream, err := u.VertexInstance.Vertex.MapUdfStreamEnabled()
 	if err != nil {
-		return fmt.Errorf("failed to parse mapUDF map streaming metadata, %w", err)
+		return fmt.Errorf("failed to parse UDF map streaming metadata, %w", err)
 	}
 
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
@@ -132,7 +132,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 		// Readiness check
 		if err := mapStreamHandler.WaitUntilReady(ctx); err != nil {
-			return fmt.Errorf("failed on mapUDF readiness check, %w", err)
+			return fmt.Errorf("failed on map stream UDF readiness check, %w", err)
 		}
 		defer func() {
 			err = mapStreamHandler.CloseConn(ctx)
@@ -150,7 +150,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 		// Readiness check
 		if err := mapHandler.WaitUntilReady(ctx); err != nil {
-			return fmt.Errorf("failed on mapUDF readiness check, %w", err)
+			return fmt.Errorf("failed on map UDF readiness check, %w", err)
 		}
 		defer func() {
 			err = mapHandler.CloseConn(ctx)

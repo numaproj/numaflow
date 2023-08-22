@@ -647,7 +647,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			<-stopped
 		})
-		// Test the scenario with mapUDF error
+		// Test the scenario with UDF error
 		t.Run(tt.name+"_UDFError", func(t *testing.T) {
 			batchSize := tt.batchSize
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
@@ -1530,12 +1530,12 @@ func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string) ([]VertexBuffe
 }
 
 func (f myForwardApplyUDFErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return nil, fmt.Errorf("mapUDF error")
+	return nil, fmt.Errorf("UDF error")
 }
 
 func (f myForwardApplyUDFErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, writeMessagesCh chan<- isb.WriteMessage) error {
 	close(writeMessagesCh)
-	return fmt.Errorf("mapUDF error")
+	return fmt.Errorf("UDF error")
 }
 
 func validateMetrics(t *testing.T, batchSize int64) {

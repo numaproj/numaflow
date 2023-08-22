@@ -31,7 +31,7 @@ type InternalErr struct {
 	MainCarDown bool
 }
 
-// IsUserUDFErr is true if the problem is due to the user code in the mapUDF.
+// IsUserUDFErr is true if the problem is due to the user code in the UDF.
 func (e ApplyUDFErr) IsUserUDFErr() bool {
 	return e.UserUDFErr
 }

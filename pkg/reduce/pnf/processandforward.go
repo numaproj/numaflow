@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package pnf processes and then forwards messages belonging to a window. It reads the data from PBQ (which is populated
-// by the `data forwarder`), calls the mapUDF reduce function, and then forwards to the next ISB. After a successful forward, it
+// by the `data forwarder`), calls the UDF reduce function, and then forwards to the next ISB. After a successful forward, it
 // invokes `GC` to clean up the PBQ. Since pnf is a reducer, it mutates the watermark. The watermark after the pnf will
 // be the end time of the window.
 package pnf
