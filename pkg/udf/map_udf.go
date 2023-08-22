@@ -256,9 +256,9 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	var metricsOpts []metrics.Option
 	if enableMapUdfStream {
-		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapHandler}, readers)
-	} else {
 		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapStreamHandler}, readers)
+	} else {
+		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapHandler}, readers)
 
 	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)

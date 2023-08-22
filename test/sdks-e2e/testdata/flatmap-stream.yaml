@@ -35,7 +35,7 @@ spec:
         udsink:
           container:
             # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/log
-            image: quay.io/numaio/numaflow-go/sink-log:latest
+            image: quay.io/numaio/numaflow-go/sink-log:v0.5.0
 
 # TODO: fix it when we have python sdk changes @kohlisid
 
