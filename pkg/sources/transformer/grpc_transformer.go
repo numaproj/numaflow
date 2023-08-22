@@ -62,6 +62,11 @@ func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
+// CloseConn closes the gRPC client connection.
+func (u *GRPCBasedTransformer) CloseConn(ctx context.Context) error {
+	return u.client.CloseConn(ctx)
+}
+
 func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload

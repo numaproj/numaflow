@@ -32,6 +32,11 @@ func (u *UDSgRPCBasedReduce) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
+// CloseConn closes the gRPC client connection.
+func (u *UDSgRPCBasedReduce) CloseConn(ctx context.Context) error {
+	return u.client.CloseConn(ctx)
+}
+
 // WaitUntilReady waits until the map udf is connected.
 func (u *UDSgRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 	for {

@@ -23,6 +23,7 @@ import (
 
 	"go.uber.org/zap"
 
+	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -173,7 +174,12 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// if the source is a user-defined source, we create a gRPC client for it.
 	var udsGRPCClient *udsource.UDSgRPCBasedUDSource
 	if sp.VertexInstance.Vertex.IsUDSource() {
-		udsGRPCClient, err = udsource.NewUDSgRPCBasedUDSource()
+		srcClient, err := sourceclient.New()
+		if err != nil {
+			return fmt.Errorf("failed to create a new gRPC client: %w", err)
+		}
+
+		udsGRPCClient, err = udsource.NewUDSgRPCBasedUDSource(srcClient)
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
@@ -196,13 +202,15 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
 
-		defer func(sdkClient sourcetransformer.Client, ctx context.Context) {
-			err = sdkClient.CloseConn(ctx)
+		transformerGRPCClient := transformer.NewGRPCBasedTransformer(sdkClient)
+
+		// Close the connection when we are done
+		defer func() {
+			err = transformerGRPCClient.CloseConn(ctx)
 			if err != nil {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
-		}(sdkClient, ctx)
-		transformerGRPCClient := transformer.NewGRPCBasedTransformer(sdkClient)
+		}()
 
 		// Readiness check
 		if err = transformerGRPCClient.WaitUntilReady(ctx); err != nil {

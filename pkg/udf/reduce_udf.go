@@ -211,7 +211,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed on FIXED_AGGREGATION readiness check, %w", err)
 	}
 	defer func() {
-		err = sdkClient.CloseConn(ctx)
+		err = udfHandler.CloseConn(ctx)
 		if err != nil {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}

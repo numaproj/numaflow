@@ -25,7 +25,7 @@ import (
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/sdkclient/source/clienttest"
+	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
 
 	"github.com/golang/mock/gomock"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1/sourcemock"
@@ -33,7 +33,7 @@ import (
 )
 
 func NewMockUDSgRPCBasedUDSource(mockClient *sourcemock.MockSourceClient) *UDSgRPCBasedUDSource {
-	c, _ := clienttest.New(mockClient)
+	c, _ := sourceclient.NewFromClient(mockClient)
 	return &UDSgRPCBasedUDSource{c}
 }
 

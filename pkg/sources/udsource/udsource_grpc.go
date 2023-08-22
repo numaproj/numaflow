@@ -33,12 +33,8 @@ type UDSgRPCBasedUDSource struct {
 	client sourceclient.Client
 }
 
-// NewUDSgRPCBasedUDSource returns UDSgRPCBasedUDSource
-func NewUDSgRPCBasedUDSource() (*UDSgRPCBasedUDSource, error) {
-	c, err := sourceclient.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
-	}
+// NewUDSgRPCBasedUDSource accepts a gRPC client and returns a new UDSgRPCBasedUDSource.
+func NewUDSgRPCBasedUDSource(c sourceclient.Client) (*UDSgRPCBasedUDSource, error) {
 	return &UDSgRPCBasedUDSource{c}, nil
 }
 

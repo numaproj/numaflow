@@ -40,7 +40,7 @@ type client struct {
 var _ Client = (*client)(nil)
 
 // New creates a new client object.
-func New(inputOptions ...Option) (*client, error) {
+func New(inputOptions ...Option) (Client, error) {
 	var opts = &options{
 		sockAddr:                   shared.SourceAddr,
 		serverInfoFilePath:         info.ServerInfoFilePath,
@@ -80,6 +80,11 @@ func New(inputOptions ...Option) (*client, error) {
 	c.conn = conn
 	c.grpcClt = sourcepb.NewSourceClient(conn)
 	return c, nil
+}
+
+// NewFromClient creates a new client object from the grpc client. This is used for testing.
+func NewFromClient(c sourcepb.SourceClient) (Client, error) {
+	return &client{grpcClt: c}, nil
 }
 
 // CloseConn closes the grpc client connection.
