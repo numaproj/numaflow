@@ -74,10 +74,6 @@ func TestSymLinkUpdate(t *testing.T) {
 func TestSymLinkFileDelete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	var (
-		size      = int64(10 * 1024 * 1024) // 100 MB
-		byteArray = make([]byte, size)
-	)
 	mountPath, err := os.MkdirTemp("", "side-input")
 	assert.NoError(t, err)
 	// Clean up
@@ -88,12 +84,14 @@ func TestSymLinkFileDelete(t *testing.T) {
 	fileName := filePath.Name()
 
 	// Write data to the link
+	byteArray := []byte("test")
 	err = UpdateSideInputFile(ctx, fileName, byteArray)
 	assert.NoError(t, err)
 	// Get the target file from the symlink
 	file1, err := os.Readlink(fileName)
 	assert.NoError(t, err)
 	// Write data to the link again
+	byteArray = []byte("test-new")
 	err = UpdateSideInputFile(ctx, fileName, byteArray)
 	assert.NoError(t, err)
 	// The older file should have been deleted
