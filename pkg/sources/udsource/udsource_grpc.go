@@ -19,10 +19,15 @@ package udsource
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"sync"
 	"time"
+
+	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
+	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -73,13 +78,86 @@ func (u *GRPCBasedUDSource) ApplyPendingFn(ctx context.Context) (int64, error) {
 }
 
 // ApplyReadFn reads messages from the source.
-func (u *GRPCBasedUDSource) ApplyReadFn(_ context.Context, _ int64) ([]*isb.ReadMessage, error) {
-	// TODO(udsource) - Implement it
-	return nil, nil
+// TODO(udsource) - this should be able to simplify, also needs improvement.
+func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeout time.Duration) ([]*isb.ReadMessage, error) {
+	var readMessages []*isb.ReadMessage
+
+	var r = &sourcepb.ReadRequest{
+		Request: &sourcepb.ReadRequest_Request{
+			NumRecords:  uint64(count),
+			TimeoutInMs: uint32(timeout.Milliseconds()),
+		},
+	}
+	// Call the client
+	var datumCh = make(chan *sourcepb.ReadResponse)
+	defer close(datumCh)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := u.client.ReadFn(ctx, r, datumCh); err != nil {
+			// TODO: handle error
+			fmt.Printf("failed to read messages from udsource: %v\n", err)
+		}
+	}()
+
+	// Collect the messages from the channel and return
+	for {
+		select {
+		case <-ctx.Done():
+			return readMessages, fmt.Errorf("context is done, %w", ctx.Err())
+		case datum, ok := <-datumCh:
+			if ok {
+				// Convert the datum to ReadMessage and append to the list
+				r := datum.GetResult()
+				readMessage := &isb.ReadMessage{
+					Message: isb.Message{
+						Header: isb.Header{
+							MessageInfo: isb.MessageInfo{EventTime: r.GetEventTime().AsTime()},
+							// TODO(udsource) - construct id from the source partition ID and offset
+							ID: "id",
+						},
+						Body: isb.Body{
+							Payload: r.GetPayload(),
+						},
+					},
+					ReadOffset: ConvertToIsbOffset(r.GetOffset()),
+				}
+				readMessages = append(readMessages, readMessage)
+			} else {
+				wg.Wait()
+				return readMessages, nil
+			}
+		}
+	}
 }
 
 // ApplyAckFn acknowledges messages in the source.
-func (u *GRPCBasedUDSource) ApplyAckFn(_ context.Context, _ []isb.Offset) []error {
-	// TODO(udsource) - Implement it
-	return nil
+func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset) error {
+	rOffsets := make([]*sourcepb.Offset, len(offsets))
+	for i, offset := range offsets {
+		rOffsets[i] = ConvertToSourceOffset(offset)
+	}
+	var r = &sourcepb.AckRequest{
+		Request: &sourcepb.AckRequest_Request{
+			Offsets: rOffsets,
+		},
+	}
+	_, err := u.client.AckFn(ctx, r)
+	return err
+}
+
+func ConvertToSourceOffset(offset isb.Offset) *sourcepb.Offset {
+	return &sourcepb.Offset{
+		PartitionId: strconv.Itoa(int(offset.PartitionIdx())),
+		Offset:      []byte(offset.String()),
+	}
+}
+
+func ConvertToIsbOffset(offset *sourcepb.Offset) isb.Offset {
+	if partitionIdx, err := strconv.Atoi(offset.GetPartitionId()); err != nil {
+		return utils.NewSimpleSourceOffset(string(offset.Offset), utils.DefaultPartitionIdx)
+	} else {
+		return utils.NewSimpleSourceOffset(string(offset.Offset), int32(partitionIdx))
+	}
 }

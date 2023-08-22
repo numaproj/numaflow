@@ -26,11 +26,10 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-	"github.com/numaproj/numaflow/pkg/sources/udsource/grpc"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -61,8 +60,8 @@ type userDefinedSource struct {
 	name string
 	// name of the pipeline
 	pipelineName string
-	// applier applies the user-defined source functions
-	applier *grpc.UDSgRPCBasedUDSource
+	// sourceApplier applies the user-defined source functions
+	sourceApplier *GRPCBasedUDSource
 	// forwarder writes the source data to destination
 	forwarder *sourceforward.DataForward
 	// context cancel function
@@ -85,17 +84,17 @@ func New(
 	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	transformer applier.MapApplier,
+	transformer applier.SourceTransformApplier,
+	sourceApplier *GRPCBasedUDSource,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
-	applier *grpc.UDSgRPCBasedUDSource,
 	opts ...Option) (*userDefinedSource, error) {
 
 	u := &userDefinedSource{
 		name:               vertexInstance.Vertex.Spec.Name,
 		pipelineName:       vertexInstance.Vertex.Spec.PipelineName,
-		applier:            applier,
+		sourceApplier:      sourceApplier,
 		srcPublishWMStores: publishWMStores,
 		srcWMPublishers:    make(map[int32]publish.Publisher),
 		lock:               new(sync.RWMutex),
@@ -138,18 +137,18 @@ func (u *userDefinedSource) GetPartitionIdx() int32 {
 
 // Read reads the messages from the user-defined source
 func (u *userDefinedSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
-	return u.applier.ApplyReadFn(ctx, count, u.readTimeout)
+	return u.sourceApplier.ApplyReadFn(ctx, count, u.readTimeout)
 }
 
 // Ack acknowledges the messages from the user-defined source
 // If there is an error, it is returned in the error array
 func (u *userDefinedSource) Ack(ctx context.Context, offsets []isb.Offset) []error {
-	return []error{u.applier.ApplyAckFn(ctx, offsets)}
+	return []error{u.sourceApplier.ApplyAckFn(ctx, offsets)}
 }
 
 // Pending returns the number of pending messages in the user-defined source
 func (u *userDefinedSource) Pending(ctx context.Context) (int64, error) {
-	return u.applier.ApplyPendingFn(ctx)
+	return u.sourceApplier.ApplyPendingFn(ctx)
 }
 
 func (u *userDefinedSource) NoAck(_ context.Context, _ []isb.Offset) {
@@ -159,7 +158,7 @@ func (u *userDefinedSource) NoAck(_ context.Context, _ []isb.Offset) {
 func (u *userDefinedSource) Close() error {
 	u.logger.Info("Shutting down user-defined source...")
 	u.cancelFn()
-	return u.applier.CloseConn(context.Background())
+	return u.sourceApplier.CloseConn(context.Background())
 }
 
 func (u *userDefinedSource) Stop() {

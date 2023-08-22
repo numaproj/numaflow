@@ -45,7 +45,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/redisstreams"
 	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/sources/udsource"
-	"github.com/numaproj/numaflow/pkg/sources/udsource/grpc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
@@ -286,7 +285,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, udsource.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		udsource, err := udsource.New(sp.VertexInstance, writers, fsd, mapApplier, fetchWM, toVertexPublisherStores, publishWMStores, udsGRPCClient, readOptions...)
+		udsource, err := udsource.New(sp.VertexInstance, writers, fsd, transformerApplier, udsGRPCClient, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
 		return udsource, err
 	} else if x := src.Generator; x != nil {
 		readOptions := []generator.Option{

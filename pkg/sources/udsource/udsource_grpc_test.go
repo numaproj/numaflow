@@ -18,19 +18,41 @@ package udsource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
+	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 
 	"github.com/golang/mock/gomock"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1/sourcemock"
 	"github.com/stretchr/testify/assert"
 )
+
+type rpcMsg struct {
+	msg proto.Message
+}
+
+func (r *rpcMsg) Matches(msg interface{}) bool {
+	m, ok := msg.(proto.Message)
+	if !ok {
+		return false
+	}
+	return proto.Equal(m, r.msg)
+}
+
+func (r *rpcMsg) String() string {
+	return fmt.Sprintf("is %s", r.msg)
+}
 
 func NewMockUDSgRPCBasedUDSource(mockClient *sourcemock.MockSourceClient) *GRPCBasedUDSource {
 	c, _ := sourceclient.NewFromClient(mockClient)
@@ -118,9 +140,70 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 }
 
 func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
-	// TODO(udsource): implement this test
+	// TODO: add test for ApplyReadFn after merging the SDK updates.
 }
 
 func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
-	// TODO(udsource): implement this test
+	t.Run("test success", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockClient := sourcemock.NewMockSourceClient(ctrl)
+		req := &sourcepb.AckRequest{
+			Request: &sourcepb.AckRequest_Request{
+				Offsets: []*sourcepb.Offset{
+					{Offset: []byte("test-offset-1"), PartitionId: "0"}, {Offset: []byte("test-offset-2"), PartitionId: "0"},
+				},
+			},
+		}
+
+		mockClient.EXPECT().AckFn(gomock.Any(), &rpcMsg{msg: req}).Return(&sourcepb.AckResponse{Result: &sourcepb.AckResponse_Result{Success: &emptypb.Empty{}}}, nil).AnyTimes()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		go func() {
+			<-ctx.Done()
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
+
+		u := NewMockUDSgRPCBasedUDSource(mockClient)
+		err := u.ApplyAckFn(ctx, []isb.Offset{
+			utils.NewSimpleSourceOffset("test-offset-1", 0),
+			utils.NewSimpleSourceOffset("test-offset-2", 0),
+		})
+		assert.NoError(t, err)
+	})
+
+	t.Run("test error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockClient := sourcemock.NewMockSourceClient(ctrl)
+		req := &sourcepb.AckRequest{
+			Request: &sourcepb.AckRequest_Request{
+				Offsets: []*sourcepb.Offset{
+					{Offset: []byte("test-offset-1"), PartitionId: "0"}, {Offset: []byte("test-offset-2"), PartitionId: "0"},
+				},
+			},
+		}
+
+		mockClient.EXPECT().AckFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		go func() {
+			<-ctx.Done()
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
+
+		u := NewMockUDSgRPCBasedUDSource(mockClient)
+		err := u.ApplyAckFn(ctx, []isb.Offset{
+			utils.NewSimpleSourceOffset("test-offset-1", 0),
+			utils.NewSimpleSourceOffset("test-offset-2", 0),
+		})
+		assert.ErrorIs(t, err, status.New(codes.DeadlineExceeded, "mock test err").Err())
+	})
 }
