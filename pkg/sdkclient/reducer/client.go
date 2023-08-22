@@ -49,7 +49,7 @@ func New(inputOptions ...Option) (Client, error) {
 		maxMessageSize:             1024 * 1024 * 64, // 64 MB
 		serverInfoFilePath:         info.ServerInfoFilePath,
 		tcpSockAddr:                shared.TcpAddr,
-		udsSockAddr:                shared.MapAddr,
+		udsSockAddr:                shared.ReduceAddr,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 	}
 

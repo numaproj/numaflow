@@ -25,7 +25,7 @@ spec:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
   edges:
     - from: in
       to: p1
