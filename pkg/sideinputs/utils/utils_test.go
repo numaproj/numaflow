@@ -36,10 +36,6 @@ func cleanup(mountPath string) {
 // TestSymLinkUpdate tests that the symlink is updated with a new file
 // whenever data is written to the symlink.
 func TestSymLinkUpdate(t *testing.T) {
-	var (
-		size      = int64(10 * 1024 * 1024) // 100 MB
-		byteArray = make([]byte, size)
-	)
 	mountPath, err := os.MkdirTemp("", "side-input")
 	assert.NoError(t, err)
 	// Clean up
@@ -55,7 +51,7 @@ func TestSymLinkUpdate(t *testing.T) {
 		err := os.Mkdir(mountPath, 0777)
 		assert.NoError(t, err)
 	}
-	byteArray = []byte("test")
+	byteArray := []byte("test")
 	// Write data to the link
 	err = UpdateSideInputFile(ctx, filePath, byteArray)
 	assert.NoError(t, err)
@@ -109,10 +105,6 @@ func TestSymLinkFileDelete(t *testing.T) {
 func TestUpdateSideInputFileNoUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	var (
-		size      = int64(10 * 1024 * 1024) // 100 MB
-		byteArray = make([]byte, size)
-	)
 	mountPath, err := os.MkdirTemp("", "side-input")
 	assert.NoError(t, err)
 	// Clean up
@@ -122,7 +114,7 @@ func TestUpdateSideInputFileNoUpdate(t *testing.T) {
 	assert.NoError(t, err)
 	fileName := filePath.Name()
 
-	byteArray = []byte("test")
+	byteArray := []byte("test")
 	// Write data to the link
 	err = UpdateSideInputFile(ctx, fileName, byteArray)
 	assert.NoError(t, err)
