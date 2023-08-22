@@ -152,7 +152,7 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 				},
 			}}
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal, fetchWatermark, publishWatermark, forward.WithReadBatchSize(batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, applier.Terminal, applier.TerminalMapStream, fetchWatermark, publishWatermark, forward.WithReadBatchSize(batchSize), forward.WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 
 			stopped := f.Start()

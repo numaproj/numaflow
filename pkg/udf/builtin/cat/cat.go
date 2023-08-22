@@ -19,11 +19,11 @@ package cat
 import (
 	"context"
 
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
+	mapsdk "github.com/numaproj/numaflow-go/pkg/mapper"
 )
 
-func New() functionsdk.MapFunc {
-	return func(ctx context.Context, keys []string, datum functionsdk.Datum) functionsdk.Messages {
-		return functionsdk.MessagesBuilder().Append(functionsdk.NewMessage(datum.Value()).WithKeys(keys))
+func New() mapsdk.MapperFunc {
+	return func(ctx context.Context, keys []string, datum mapsdk.Datum) mapsdk.Messages {
+		return mapsdk.MessagesBuilder().Append(mapsdk.NewMessage(datum.Value()).WithKeys(keys))
 	}
 }

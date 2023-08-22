@@ -23,10 +23,10 @@ import (
 )
 
 type userDefinedSource struct {
-	udsource *UDSgRPCBasedUDSource
+	udsource *GRPCBasedUDSource
 }
 
-func New(udsource *UDSgRPCBasedUDSource) (*userDefinedSource, error) {
+func New(udsource *GRPCBasedUDSource) (*userDefinedSource, error) {
 	return &userDefinedSource{
 		udsource: udsource,
 	}, nil

@@ -14,11 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package mapstreamer
 
 import (
 	"context"
-	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
+
+	v1 "github.com/numaproj/numaflow-go/pkg/apis/proto/mapstream/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -26,5 +27,5 @@ import (
 type Client interface {
 	CloseConn(ctx context.Context) error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
-	SinkFn(ctx context.Context, datumList []*sinkpb.DatumRequest) ([]*sinkpb.Response, error)
+	MapStreamFn(ctx context.Context, request *v1.MapStreamRequest, responseCh chan<- *v1.MapStreamResponse) error
 }

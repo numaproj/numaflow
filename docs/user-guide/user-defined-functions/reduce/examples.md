@@ -32,7 +32,7 @@ The snippet for the reduce vertex is as follows.
   udf:
     container:
       # compute the sum
-      image: quay.io/numaio/numaflow-go/reduce-sum
+      image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
     groupBy:
       window:
         fixed:
@@ -87,7 +87,7 @@ The snippet for the reduce vertex is as follows.
   udf:
     container:
       # compute the sum
-      image: quay.io/numaio/numaflow-go/reduce-sum
+      image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
     groupBy:
       window:
         sliding:

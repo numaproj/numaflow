@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,10 +29,6 @@ type testDatum struct {
 	eventTime time.Time
 	watermark time.Time
 	metadata  testDatumMetadata
-}
-
-func (h *testDatum) Metadata() functionsdk.DatumMetadata {
-	return h.metadata
 }
 
 func (h *testDatum) Value() []byte {

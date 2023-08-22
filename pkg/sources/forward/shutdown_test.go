@@ -34,11 +34,19 @@ import (
 type myShutdownTest struct {
 }
 
+func (s myShutdownTest) WaitUntilReady(ctx context.Context) error {
+	return nil
+}
+
+func (s myShutdownTest) IsHealthy(ctx context.Context) error {
+	return nil
+}
+
 func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{}, nil
 }
 
-func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (s myShutdownTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
 }
 

@@ -23,9 +23,9 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 

@@ -27,12 +27,12 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -329,7 +329,7 @@ func NewKafkaSource(
 	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier applier.MapApplier,
+	transformerApplier applier.SourceTransformApplier,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
@@ -401,7 +401,7 @@ func NewKafkaSource(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, kafkasource, toVertexPublisherStores, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, transformerApplier, fetchWM, kafkasource, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
