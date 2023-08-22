@@ -36,9 +36,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 )
 
-func NewMockUDSGRPCBasedReduce(mockClient *reducemock.MockReduceClient) *UDSgRPCBasedReduce {
+func NewMockUDSGRPCBasedReduce(mockClient *reducemock.MockReduceClient) *GRPCBasedReduce {
 	c, _ := reducer.NewFromClient(mockClient)
-	return &UDSgRPCBasedReduce{c}
+	return &GRPCBasedReduce{c}
 }
 
 func TestGRPCBasedReduce_WaitUntilReadyWithMockClient(t *testing.T) {

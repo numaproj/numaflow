@@ -36,9 +36,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
 )
 
-func NewMockUDSGRPCBasedMapStream(mockClient *mapstreammock.MockMapStreamClient) *UDSgRPCBasedMapStream {
+func NewMockUDSGRPCBasedMapStream(mockClient *mapstreammock.MockMapStreamClient) *GRPCBasedMapStream {
 	c, _ := mapstreamer.NewFromClient(mockClient)
-	return &UDSgRPCBasedMapStream{c}
+	return &GRPCBasedMapStream{c}
 }
 
 func TestGRPCBasedMapStream_WaitUntilReadyWithMockClient(t *testing.T) {

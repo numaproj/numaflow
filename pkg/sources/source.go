@@ -171,7 +171,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	}
 
 	// if the source is a user-defined source, we create a gRPC client for it.
-	var udsGRPCClient *udsource.UDSgRPCBasedUDSource
+	var udsGRPCClient *udsource.GRPCBasedUDSource
 	if sp.VertexInstance.Vertex.IsUDSource() {
 		srcClient, err := sourceclient.New()
 		if err != nil {
@@ -194,9 +194,9 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}()
 		readyCheckers = append(readyCheckers, udsGRPCClient)
 	}
-
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
-		sdkClient, err = sourcetransformer.New()
+		sdkClient, err = sourcetransformer.New(sourcetransformer.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
@@ -271,7 +271,7 @@ func (sp *SourceProcessor) getSourcer(
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
 	transformerApplier applier.SourceTransformApplier,
-	udsGRPCClient *udsource.UDSgRPCBasedUDSource,
+	udsGRPCClient *udsource.GRPCBasedUDSource,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,

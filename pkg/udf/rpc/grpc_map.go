@@ -31,29 +31,27 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 )
 
-// UDSgRPCBasedMap is a map applier that uses gRPC client to invoke the map UDF. It implements the applier.MapApplier interface.
-type UDSgRPCBasedMap struct {
+// GRPCBasedMap is a map applier that uses gRPC client to invoke the map UDF. It implements the applier.MapApplier interface.
+type GRPCBasedMap struct {
 	client mapper.Client
 }
 
-//var _ mapapplier.MapApplier = (*UDSgRPCBasedMap)(nil)
-
-func NewUDSgRPCBasedMap(client mapper.Client) *UDSgRPCBasedMap {
-	return &UDSgRPCBasedMap{client: client}
+func NewUDSgRPCBasedMap(client mapper.Client) *GRPCBasedMap {
+	return &GRPCBasedMap{client: client}
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *UDSgRPCBasedMap) CloseConn(ctx context.Context) error {
+func (u *GRPCBasedMap) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // IsHealthy checks if the map udf is healthy.
-func (u *UDSgRPCBasedMap) IsHealthy(ctx context.Context) error {
+func (u *GRPCBasedMap) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
 // WaitUntilReady waits until the map udf is connected.
-func (u *UDSgRPCBasedMap) WaitUntilReady(ctx context.Context) error {
+func (u *GRPCBasedMap) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -67,7 +65,7 @@ func (u *UDSgRPCBasedMap) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *UDSgRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	keys := readMessage.Keys
 	payload := readMessage.Body.Payload
 	parentMessageInfo := readMessage.MessageInfo

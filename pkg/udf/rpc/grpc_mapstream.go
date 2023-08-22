@@ -30,29 +30,27 @@ import (
 	mapstreamer "github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
 )
 
-// UDSgRPCBasedMapStream is a map stream applier that uses gRPC client to invoke the map stream UDF. It implements the applier.MapStreamApplier interface.
-type UDSgRPCBasedMapStream struct {
+// GRPCBasedMapStream is a map stream applier that uses gRPC client to invoke the map stream UDF. It implements the applier.MapStreamApplier interface.
+type GRPCBasedMapStream struct {
 	client mapstreamer.Client
 }
 
-//var _ mapapplier.MapApplier = (*UDSgRPCBasedMapStream)(nil)
-
-func NewUDSgRPCBasedMapStream(client mapstreamer.Client) *UDSgRPCBasedMapStream {
-	return &UDSgRPCBasedMapStream{client: client}
+func NewUDSgRPCBasedMapStream(client mapstreamer.Client) *GRPCBasedMapStream {
+	return &GRPCBasedMapStream{client: client}
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *UDSgRPCBasedMapStream) CloseConn(ctx context.Context) error {
+func (u *GRPCBasedMapStream) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // IsHealthy checks if the map stream udf is healthy.
-func (u *UDSgRPCBasedMapStream) IsHealthy(ctx context.Context) error {
+func (u *GRPCBasedMapStream) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
 // WaitUntilReady waits until the map stream udf is connected.
-func (u *UDSgRPCBasedMapStream) WaitUntilReady(ctx context.Context) error {
+func (u *GRPCBasedMapStream) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -66,7 +64,7 @@ func (u *UDSgRPCBasedMapStream) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *UDSgRPCBasedMapStream) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+func (u *GRPCBasedMapStream) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
 	defer close(writeMessageCh)
 
 	keys := message.Keys

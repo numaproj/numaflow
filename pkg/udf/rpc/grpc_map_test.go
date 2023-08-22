@@ -59,9 +59,9 @@ func (r *rpcMsg) String() string {
 	return fmt.Sprintf("is %s", r.msg)
 }
 
-func NewMockUDSGRPCBasedMap(mockClient *mapmock.MockMapClient) *UDSgRPCBasedMap {
+func NewMockUDSGRPCBasedMap(mockClient *mapmock.MockMapClient) *GRPCBasedMap {
 	c, _ := mapper.NewFromClient(mockClient)
-	return &UDSgRPCBasedMap{c}
+	return &GRPCBasedMap{c}
 }
 
 func TestGRPCBasedMap_WaitUntilReadyWithMockClient(t *testing.T) {

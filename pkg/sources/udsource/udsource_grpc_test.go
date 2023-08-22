@@ -32,9 +32,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func NewMockUDSgRPCBasedUDSource(mockClient *sourcemock.MockSourceClient) *UDSgRPCBasedUDSource {
+func NewMockUDSgRPCBasedUDSource(mockClient *sourcemock.MockSourceClient) *GRPCBasedUDSource {
 	c, _ := sourceclient.NewFromClient(mockClient)
-	return &UDSgRPCBasedUDSource{c}
+	return &GRPCBasedUDSource{c}
 }
 
 func Test_gRPCBasedUDSource_WaitUntilReadyWithMockClient(t *testing.T) {

@@ -69,8 +69,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		writers           map[string][]isb.BufferWriter
 		processorManagers map[string]*processor.ProcessorManager
 		wmStores          map[string]store.WatermarkStore
-		mapHandler        *rpc.UDSgRPCBasedMap
-		mapStreamHandler  *rpc.UDSgRPCBasedMapStream
+		mapHandler        *rpc.GRPCBasedMap
+		mapStreamHandler  *rpc.GRPCBasedMapStream
 	)
 
 	// watermark variables

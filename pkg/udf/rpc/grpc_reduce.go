@@ -35,27 +35,27 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 )
 
-// UDSgRPCBasedReduce is a reduce applier that uses gRPC client to invoke the reduce UDF. It implements the applier.ReduceApplier interface.
-type UDSgRPCBasedReduce struct {
+// GRPCBasedReduce is a reduce applier that uses gRPC client to invoke the reduce UDF. It implements the applier.ReduceApplier interface.
+type GRPCBasedReduce struct {
 	client reducer.Client
 }
 
-func NewUDSgRPCBasedReduce(client reducer.Client) *UDSgRPCBasedReduce {
-	return &UDSgRPCBasedReduce{client: client}
+func NewUDSgRPCBasedReduce(client reducer.Client) *GRPCBasedReduce {
+	return &GRPCBasedReduce{client: client}
 }
 
 // IsHealthy checks if the map udf is healthy.
-func (u *UDSgRPCBasedReduce) IsHealthy(ctx context.Context) error {
+func (u *GRPCBasedReduce) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *UDSgRPCBasedReduce) CloseConn(ctx context.Context) error {
+func (u *GRPCBasedReduce) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // WaitUntilReady waits until the map udf is connected.
-func (u *UDSgRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
+func (u *GRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -70,7 +70,7 @@ func (u *UDSgRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 }
 
 // ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *UDSgRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	datumCh := make(chan *reducepb.ReduceRequest)
 	var wg sync.WaitGroup
 	var result *reducepb.ReduceResponse
