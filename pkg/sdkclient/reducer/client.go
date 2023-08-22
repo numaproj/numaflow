@@ -33,7 +33,7 @@ import (
 
 	"github.com/numaproj/numaflow-go/pkg/info"
 
-	resolver2 "github.com/numaproj/numaflow/pkg/sdkclient/resolver"
+	resolver2 "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
