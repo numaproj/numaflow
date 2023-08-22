@@ -67,8 +67,9 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err
 		}
+		// Load the required KV bucket and create a sideInputWatcher for it
 		sideInputBucketName := isbsvc.JetStreamSideInputsStoreKVName(sim.sideInputsStore)
-		siStore, err = jetstream.NewKVJetStreamKVStore(ctx, sim.pipelineName, sideInputBucketName, natsClient)
+		siStore, err = jetstream.NewKVJetStreamKVStore(ctx, sideInputBucketName, natsClient)
 		if err != nil {
 			return fmt.Errorf("failed to create a new KVStore: %w", err)
 		}
@@ -77,6 +78,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", sim.isbSvcType)
 	}
 
+	// Create a new gRPC client for UDSideInput
 	sideInputClient, err := udsideinput.NewUDSgRPCBasedUDSideinput()
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)

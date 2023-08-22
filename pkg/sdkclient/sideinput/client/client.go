@@ -3,9 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
 
 	sideinputpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1"
-	"github.com/numaproj/numaflow-go/pkg/sideinput"
+	"github.com/numaproj/numaflow-go/pkg/shared"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -22,16 +23,16 @@ var _ Client = (*client)(nil)
 // New creates a new client object.
 func New(inputOptions ...Option) (*client, error) {
 	var opts = &options{
-		sockAddr:       sideinput.Addr,
+		sockAddr:       shared.SideInputAddr,
 		maxMessageSize: 1024 * 1024 * 64, // 64 MB
 	}
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}
-	_, cancel := context.WithTimeout(context.Background(), sideinput.DefaultTimeout)
+	_, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	c := new(client)
-	sockAddr := fmt.Sprintf("%s:%s", sideinput.Protocol, opts.sockAddr)
+	sockAddr := fmt.Sprintf("%s:%s", shared.UDS, opts.sockAddr)
 	conn, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.maxMessageSize), grpc.MaxCallSendMsgSize(opts.maxMessageSize)))
 	if err != nil {
