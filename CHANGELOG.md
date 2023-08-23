@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.9.2 (2023-08-23)
+
+ * [6f81361f](https://github.com/numaproj/numaflow/commit/6f81361f8f36fad74208895aab599e63f9436b79) Update manifests to v0.9.2
+ * [66c32197](https://github.com/numaproj/numaflow/commit/66c32197db97ed4335aacb0267558bc83026e788) fix: error when kv_watch with no keys (#981)
+
+### Contributors
+
+ * Derek Wang
+
 ## v0.9.1 (2023-08-11)
 
  * [4cbd729c](https://github.com/numaproj/numaflow/commit/4cbd729c91e0387781d00d97bfd8e0b61d0fd8c7) Update manifests to v0.9.1
