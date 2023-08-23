@@ -113,8 +113,8 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 			// If the context is done, return the messages collected so far
 			return readMessages, fmt.Errorf("context is done, %w", ctx.Err())
 		case err := <-errCh:
-			// If the ReadFn goroutine returns an error, return nil and the error
-			return nil, err
+			// If the ReadFn goroutine returns an error, return the messages collected so far
+			return readMessages, err
 		case datum, ok := <-datumCh:
 			if !ok {
 				// If the channel is closed, wait for the ReadFn goroutine to finish
@@ -128,6 +128,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 					Header: isb.Header{
 						MessageInfo: isb.MessageInfo{EventTime: r.GetEventTime().AsTime()},
 						ID:          constructMessageID(r),
+						Keys:        r.GetKeys(),
 					},
 					Body: isb.Body{
 						Payload: r.GetPayload(),

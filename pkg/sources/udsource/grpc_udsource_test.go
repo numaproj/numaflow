@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
@@ -140,7 +142,93 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 }
 
 func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
-	// TODO: add test for ApplyReadFn after merging the SDK updates.
+	t.Run("test success", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockClient := sourcemock.NewMockSourceClient(ctrl)
+		mockReadClient := sourcemock.NewMockSource_ReadFnClient(ctrl)
+
+		req := &sourcepb.ReadRequest{
+			Request: &sourcepb.ReadRequest_Request{
+				NumRecords:  1,
+				TimeoutInMs: 1000,
+			},
+		}
+
+		var TestEventTime = time.Unix(1661169600, 0).UTC()
+		expectedResponse := &sourcepb.ReadResponse{
+			Result: &sourcepb.ReadResponse_Result{
+				Payload:   []byte(`test_payload`),
+				Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
+				EventTime: timestamppb.New(TestEventTime),
+				Keys:      []string{"test_key"},
+			},
+		}
+
+		mockReadClient.EXPECT().Recv().Return(expectedResponse, nil).Times(1)
+		mockReadClient.EXPECT().Recv().Return(nil, io.EOF).Times(1)
+		mockClient.EXPECT().ReadFn(gomock.Any(), &rpcMsg{msg: req}).Return(mockReadClient, nil)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		go func() {
+			<-ctx.Done()
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
+
+		u := NewMockUDSgRPCBasedUDSource(mockClient)
+		readMessages, err := u.ApplyReadFn(ctx, 1, time.Millisecond*1000)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(readMessages))
+		assert.Equal(t, []byte(`test_payload`), readMessages[0].Body.Payload)
+		assert.Equal(t, []string{"test_key"}, readMessages[0].Keys)
+		assert.Equal(t, utils.NewSimpleSourceOffset("test_offset", 0), readMessages[0].ReadOffset)
+		assert.Equal(t, TestEventTime, readMessages[0].EventTime)
+	})
+
+	t.Run("test error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockClient := sourcemock.NewMockSourceClient(ctrl)
+		mockReadClient := sourcemock.NewMockSource_ReadFnClient(ctrl)
+
+		req := &sourcepb.ReadRequest{
+			Request: &sourcepb.ReadRequest_Request{
+				NumRecords:  1,
+				TimeoutInMs: 1000,
+			},
+		}
+
+		var TestEventTime = time.Unix(1661169600, 0).UTC()
+		expectedResponse := &sourcepb.ReadResponse{
+			Result: &sourcepb.ReadResponse_Result{
+				Payload:   []byte(`test_payload`),
+				Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
+				EventTime: timestamppb.New(TestEventTime),
+				Keys:      []string{"test_key"},
+			},
+		}
+
+		mockReadClient.EXPECT().Recv().Return(expectedResponse, errors.New("mock error for read")).AnyTimes()
+		mockClient.EXPECT().ReadFn(gomock.Any(), &rpcMsg{msg: req}).Return(mockReadClient, nil)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		go func() {
+			<-ctx.Done()
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
+
+		u := NewMockUDSgRPCBasedUDSource(mockClient)
+		readMessages, err := u.ApplyReadFn(ctx, 1, time.Millisecond*1000)
+		assert.Error(t, err)
+		assert.Equal(t, 0, len(readMessages))
+	})
 }
 
 func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
