@@ -1,4 +1,4 @@
-package client
+package sideinput
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 // client contains the grpc connection and the grpc client.
 type client struct {
 	conn    *grpc.ClientConn
-	grpcClt sideinputpb.UserDefinedSideInputClient
+	grpcClt sideinputpb.SideInputClient
 }
 
 var _ Client = (*client)(nil)
@@ -39,8 +39,15 @@ func New(inputOptions ...Option) (*client, error) {
 		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
 	}
 	c.conn = conn
-	c.grpcClt = sideinputpb.NewUserDefinedSideInputClient(conn)
+	c.grpcClt = sideinputpb.NewSideInputClient(conn)
 	return c, nil
+}
+
+// NewFromClient creates a new client object from a grpc client. This is used for testing.
+func NewFromClient(c sideinputpb.SideInputClient) (Client, error) {
+	return &client{
+		grpcClt: c,
+	}, nil
 }
 
 // CloseConn closes the grpc connection.

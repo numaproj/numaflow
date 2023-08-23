@@ -8,22 +8,18 @@ import (
 	v1 "github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	sideinputclient "github.com/numaproj/numaflow/pkg/sdkclient/sideinput/client"
+	"github.com/numaproj/numaflow/pkg/sdkclient/sideinput"
 )
 
 // UDSgRPCBasedUDSideinput applies user defined side input over gRPC (over Unix Domain Socket) client/server
 // where server is the UDSideInput.
 type UDSgRPCBasedUDSideinput struct {
-	client sideinputclient.Client
+	client sideinput.Client
 }
 
 // NewUDSgRPCBasedUDSideinput returns UDSgRPCBasedUDSideinput
-func NewUDSgRPCBasedUDSideinput() (*UDSgRPCBasedUDSideinput, error) {
-	c, err := sideinputclient.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a new gRPC client: %w", err)
-	}
-	return &UDSgRPCBasedUDSideinput{c}, nil
+func NewUDSgRPCBasedUDSideinput(client sideinput.Client) *UDSgRPCBasedUDSideinput {
+	return &UDSgRPCBasedUDSideinput{client: client}
 }
 
 // CloseConn closes the gRPC client connection.

@@ -26,6 +26,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	"github.com/numaproj/numaflow/pkg/sdkclient/sideinput"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
@@ -67,6 +68,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 			log.Errorw("Failed to get a NATS client.", zap.Error(err))
 			return err
 		}
+		defer natsClient.Close()
 		// Load the required KV bucket and create a sideInputWatcher for it
 		sideInputBucketName := isbsvc.JetStreamSideInputsStoreKVName(sim.sideInputsStore)
 		siStore, err = jetstream.NewKVJetStreamKVStore(ctx, sideInputBucketName, natsClient)
@@ -79,7 +81,11 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	}
 
 	// Create a new gRPC client for UDSideInput
-	sideInputClient, err := udsideinput.NewUDSgRPCBasedUDSideinput()
+	c, err := sideinput.New()
+	if err != nil {
+		return fmt.Errorf("failed to create a new gRPC client: %w", err)
+	}
+	sideInputClient := udsideinput.NewUDSgRPCBasedUDSideinput(c)
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
