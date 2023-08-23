@@ -44,10 +44,10 @@ func (s *UserDefinedSourceSuite) TestSimpleSource() {
 
 	// the user-defined simple source sends the read index of the message as the message content
 	// verify the sink get the first batch of data
-	w.Expect().SinkContains("out", "0")
-	w.Expect().SinkContains("out", "1")
+	w.Expect().VertexPodLogContains("out", "0")
+	w.Expect().VertexPodLogContains("out", "1")
 	// verify the sink get the second batch of data
-	w.Expect().SinkContains("out", "2")
+	w.Expect().VertexPodLogContains("out", "2")
 }
 
 func TestUserDefinedSourceSuite(t *testing.T) {
