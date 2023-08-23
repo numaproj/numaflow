@@ -197,15 +197,31 @@ func (jsw *jetStreamWatch) newWatcher(ctx context.Context) nats.KeyWatcher {
 
 // lastUpdateKVTime returns the last update time of the kv store
 func (jsw *jetStreamWatch) lastUpdateKVTime() time.Time {
-	keys, err := jsw.kvStore.Keys()
-	for err != nil {
-		jsw.log.Errorw("Failed to get keys", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
+	var (
+		keys       []string
+		err        error
+		lastUpdate time.Time
+		value      nats.KeyValueEntry
+	)
+
+retryLoop:
+	for {
 		keys, err = jsw.kvStore.Keys()
+		if err == nil {
+			break retryLoop
+		} else {
+			// if there are no keys in the store, return zero time because there are no updates
+			// upstream will handle it
+			if err == nats.ErrNoKeysFound {
+				return time.Time{}
+			}
+			jsw.log.Errorw("Failed to get keys", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
+		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	var lastUpdate = time.Time{}
+
 	for _, key := range keys {
-		value, err := jsw.kvStore.Get(key)
+		value, err = jsw.kvStore.Get(key)
 		for err != nil {
 			jsw.log.Errorw("Failed to get value", zap.String("watcher", jsw.GetKVName()), zap.Error(err))
 			value, err = jsw.kvStore.Get(key)
