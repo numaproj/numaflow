@@ -19,17 +19,16 @@ package udsource
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 
+	"google.golang.org/protobuf/types/known/emptypb"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
 	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
-
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // GRPCBasedUDSource applies a user-defined source over gRPC
@@ -134,7 +133,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 						Payload: r.GetPayload(),
 					},
 				},
-				ReadOffset: ConvertToIsbOffset(r.GetOffset()),
+				ReadOffset: utils.ConvertToIsbOffset(r.GetOffset()),
 			}
 			readMessages = append(readMessages, readMessage)
 		}
@@ -145,7 +144,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset) error {
 	rOffsets := make([]*sourcepb.Offset, len(offsets))
 	for i, offset := range offsets {
-		rOffsets[i] = ConvertToSourceOffset(offset)
+		rOffsets[i] = utils.ConvertToSourceOffset(offset)
 	}
 	var r = &sourcepb.AckRequest{
 		Request: &sourcepb.AckRequest_Request{
@@ -154,23 +153,6 @@ func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset
 	}
 	_, err := u.client.AckFn(ctx, r)
 	return err
-}
-
-func ConvertToSourceOffset(offset isb.Offset) *sourcepb.Offset {
-	return &sourcepb.Offset{
-		PartitionId: strconv.Itoa(int(offset.PartitionIdx())),
-		Offset:      []byte(offset.String()),
-	}
-}
-
-func ConvertToIsbOffset(offset *sourcepb.Offset) isb.Offset {
-	if partitionIdx, err := strconv.Atoi(offset.GetPartitionId()); err != nil {
-		// If the partition ID is not a number, use the default partition index
-		// TODO - should we force users to use a number as partition ID?
-		return utils.NewSimpleSourceOffset(string(offset.Offset), utils.DefaultPartitionIdx)
-	} else {
-		return utils.NewSimpleSourceOffset(string(offset.Offset), int32(partitionIdx))
-	}
 }
 
 func constructMessageID(r *sourcepb.ReadResponse_Result) string {
