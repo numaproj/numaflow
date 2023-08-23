@@ -7511,7 +7511,7 @@ spec:
                                   type: array
                               type: object
                           type: object
-                        udSource:
+                        udsource:
                           properties:
                             container:
                               properties:

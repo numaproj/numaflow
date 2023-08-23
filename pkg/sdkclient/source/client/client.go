@@ -112,12 +112,9 @@ func (c *client) ReadFn(ctx context.Context, req *sourcepb.ReadRequest, datumCh 
 			var resp *sourcepb.ReadResponse
 			resp, err = stream.Recv()
 			if err == io.EOF {
-				print("keran - I received EOF")
 				return nil
 			}
 			if err != nil {
-				print("keran - I received error")
-				print(err.Error())
 				return err
 			}
 			datumCh <- resp

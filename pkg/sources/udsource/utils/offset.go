@@ -7,6 +7,7 @@ import (
 // DefaultPartitionIdx Default partition index
 var DefaultPartitionIdx = int32(0)
 
+// simpleSourceOffset is a simple implementation of isb.Offset from source side.
 type simpleSourceOffset struct {
 	offset       string
 	partitionIdx int32

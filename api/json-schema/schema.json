@@ -19278,7 +19278,7 @@
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
         },
-        "udSource": {
+        "udsource": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSource"
         }
       },

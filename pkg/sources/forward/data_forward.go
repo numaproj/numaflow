@@ -197,7 +197,6 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// at-least-once semantics for reading, during the restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
 	readMessages, err := isdf.reader.Read(ctx, isdf.opts.readBatchSize)
-	isdf.opts.logger.Info("Read from source", zap.Int("count", len(readMessages)), zap.Duration("took", time.Since(start)))
 	if err != nil {
 		isdf.opts.logger.Warnw("failed to read from source", zap.Error(err))
 		readMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
@@ -313,16 +312,12 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		sourcePartitionsIndices[m.readMessage.ReadOffset.PartitionIdx()] = true
 	}
 
-	isdf.opts.logger.Info("Forwarding to buffers", zap.Int("count", len(writeMessages)))
-
 	// forward the messages to the edge buffer (could be multiple edges)
 	writeOffsets, err = isdf.writeToBuffers(ctx, messageToStep)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 		return
 	}
-
-	isdf.opts.logger.Info("Finished forwarding to buffers", zap.Int("count", len(writeMessages)))
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
@@ -377,13 +372,9 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	isdf.opts.logger.Info("Acking", zap.Int("count", len(readOffsets)))
-
 	// when we apply transformer, we don't handle partial errors (it's either non or all, non will return early),
 	// so we should be able to ack all the readOffsets including data messages and control messages
 	err = isdf.ackFromBuffer(ctx, readOffsets)
-
-	isdf.opts.logger.Info("Finished acking", zap.Int("count", len(readOffsets)))
 	// implicit return for posterity :-)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed to ack from source", zap.Error(err))

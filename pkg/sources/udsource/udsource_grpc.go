@@ -78,61 +78,64 @@ func (u *GRPCBasedUDSource) ApplyPendingFn(ctx context.Context) (int64, error) {
 }
 
 // ApplyReadFn reads messages from the source.
-// TODO(udsource) - this should be able to simplify, also needs improvement.
 func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeout time.Duration) ([]*isb.ReadMessage, error) {
 	var readMessages []*isb.ReadMessage
 
+	// Construct the gRPC request
 	var r = &sourcepb.ReadRequest{
 		Request: &sourcepb.ReadRequest_Request{
 			NumRecords:  uint64(count),
 			TimeoutInMs: uint32(timeout.Milliseconds()),
 		},
 	}
-	// Call the client
+
+	// Prepare the ReadResponse channel
 	var datumCh = make(chan *sourcepb.ReadResponse)
+	// Prepare the error channel to receive errors from the ReadFn goroutine
+	errCh := make(chan error, 1)
+	defer close(errCh)
 	var wg sync.WaitGroup
 	wg.Add(1)
+
+	// Start the goroutine to read messages and send to the channel
 	go func() {
 		defer wg.Done()
-		if err := u.client.ReadFn(ctx, r, datumCh); err != nil {
-			// TODO: handle error
-			fmt.Printf("failed to read messages from udsource: %v\n", err)
-		}
 		defer close(datumCh)
+		if err := u.client.ReadFn(ctx, r, datumCh); err != nil {
+			errCh <- fmt.Errorf("failed to read messages from udsource: %w", err)
+		}
 	}()
 
 	// Collect the messages from the channel and return
 	for {
-		println("I am in the loop")
 		select {
 		case <-ctx.Done():
-			println("I am returning because context is done")
+			// If the context is done, return the messages collected so far
 			return readMessages, fmt.Errorf("context is done, %w", ctx.Err())
+		case err := <-errCh:
+			// If the ReadFn goroutine returns an error, return nil and the error
+			return nil, err
 		case datum, ok := <-datumCh:
-			if ok {
-				// Convert the datum to ReadMessage and append to the list
-				r := datum.GetResult()
-				println("Received message: ")
-				println(r.Payload)
-				readMessage := &isb.ReadMessage{
-					Message: isb.Message{
-						Header: isb.Header{
-							MessageInfo: isb.MessageInfo{EventTime: r.GetEventTime().AsTime()},
-							// TODO(udsource) - construct id from the source partition ID and offset
-							ID: "id",
-						},
-						Body: isb.Body{
-							Payload: r.GetPayload(),
-						},
-					},
-					ReadOffset: ConvertToIsbOffset(r.GetOffset()),
-				}
-				readMessages = append(readMessages, readMessage)
-			} else {
+			if !ok {
+				// If the channel is closed, wait for the ReadFn goroutine to finish
 				wg.Wait()
-				println("I am returning because client.ReadFn is done")
 				return readMessages, nil
 			}
+			// Convert the datum to ReadMessage and append to the list
+			r := datum.GetResult()
+			readMessage := &isb.ReadMessage{
+				Message: isb.Message{
+					Header: isb.Header{
+						MessageInfo: isb.MessageInfo{EventTime: r.GetEventTime().AsTime()},
+						ID:          constructMessageID(r),
+					},
+					Body: isb.Body{
+						Payload: r.GetPayload(),
+					},
+				},
+				ReadOffset: ConvertToIsbOffset(r.GetOffset()),
+			}
+			readMessages = append(readMessages, readMessage)
 		}
 	}
 }
@@ -161,8 +164,15 @@ func ConvertToSourceOffset(offset isb.Offset) *sourcepb.Offset {
 
 func ConvertToIsbOffset(offset *sourcepb.Offset) isb.Offset {
 	if partitionIdx, err := strconv.Atoi(offset.GetPartitionId()); err != nil {
+		// If the partition ID is not a number, use the default partition index
+		// TODO - should we force users to use a number as partition ID?
 		return utils.NewSimpleSourceOffset(string(offset.Offset), utils.DefaultPartitionIdx)
 	} else {
 		return utils.NewSimpleSourceOffset(string(offset.Offset), int32(partitionIdx))
 	}
+}
+
+func constructMessageID(r *sourcepb.ReadResponse_Result) string {
+	// For a user-defined source, the partition ID plus the offset should be able to uniquely identify a message
+	return r.Offset.GetPartitionId() + "-" + string(r.Offset.GetOffset())
 }
