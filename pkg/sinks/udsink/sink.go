@@ -108,9 +108,9 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 	msgs := make([]*sinkpb.SinkRequest, len(messages))
 	for i, m := range messages {
 		msgs[i] = &sinkpb.SinkRequest{
-			// NOTE: key is not used anywhere ATM
 			Id:        m.ID,
 			Value:     m.Payload,
+			Keys:      m.Keys,
 			EventTime: timestamppb.New(m.EventTime),
 			// Watermark is only available in readmessage....
 			Watermark: timestamppb.New(time.Time{}), // TODO: insert the correct watermark
