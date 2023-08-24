@@ -129,6 +129,12 @@ func (sim *sideInputsManager) execute(ctx context.Context, sideInputClient *udsi
 	if err != nil {
 		return fmt.Errorf("failed to retrieve side input: %w", err)
 	}
+	// If the NoBroadcast flag is True, skip writing to the store.
+	if resp.NoBroadcast {
+		log.Info("Side input is not broadcasted, skipping ...")
+		return nil
+	}
+	// Write the side input value to the store.
 	err = siStore.PutKV(ctx, sim.sideInput.Name, resp.Value)
 	if err != nil {
 		return fmt.Errorf("failed to write side input %q to store: %w", sim.sideInput.Name, err)
