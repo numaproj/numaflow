@@ -29,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // GRPCBasedMap is a map applier that uses gRPC client to invoke the map UDF. It implements the applier.MapApplier interface.
@@ -52,6 +53,7 @@ func (u *GRPCBasedMap) IsHealthy(ctx context.Context) error {
 
 // WaitUntilReady waits until the map udf is connected.
 func (u *GRPCBasedMap) WaitUntilReady(ctx context.Context) error {
+	log := logging.FromContext(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -59,8 +61,10 @@ func (u *GRPCBasedMap) WaitUntilReady(ctx context.Context) error {
 		default:
 			if _, err := u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
+			} else {
+				log.Infof("waiting for map udf to be ready: %v", err)
+				time.Sleep(1 * time.Second)
 			}
-			time.Sleep(1 * time.Second)
 		}
 	}
 }

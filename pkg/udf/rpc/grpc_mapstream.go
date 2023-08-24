@@ -27,7 +27,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	mapstreamer "github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
+	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // GRPCBasedMapStream is a map stream applier that uses gRPC client to invoke the map stream UDF. It implements the applier.MapStreamApplier interface.
@@ -51,6 +52,7 @@ func (u *GRPCBasedMapStream) IsHealthy(ctx context.Context) error {
 
 // WaitUntilReady waits until the map stream udf is connected.
 func (u *GRPCBasedMapStream) WaitUntilReady(ctx context.Context) error {
+	log := logging.FromContext(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -58,8 +60,10 @@ func (u *GRPCBasedMapStream) WaitUntilReady(ctx context.Context) error {
 		default:
 			if _, err := u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
+			} else {
+				log.Infof("waiting for map stream udf to be ready: %v", err)
+				time.Sleep(1 * time.Second)
 			}
-			time.Sleep(1 * time.Second)
 		}
 	}
 }

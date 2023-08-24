@@ -28,6 +28,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 )
 
@@ -54,6 +55,7 @@ func (u *GRPCBasedUDSource) IsHealthy(ctx context.Context) error {
 
 // WaitUntilReady waits until the udsource is connected.
 func (u *GRPCBasedUDSource) WaitUntilReady(ctx context.Context) error {
+	log := logging.FromContext(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -61,8 +63,10 @@ func (u *GRPCBasedUDSource) WaitUntilReady(ctx context.Context) error {
 		default:
 			if _, err := u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
+			} else {
+				log.Infof("waiting for udsource to be ready: %v", err)
+				time.Sleep(1 * time.Second)
 			}
-			time.Sleep(1 * time.Second)
 		}
 	}
 }
