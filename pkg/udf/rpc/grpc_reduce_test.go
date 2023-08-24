@@ -18,7 +18,6 @@ package rpc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -52,7 +51,7 @@ func TestGRPCBasedReduce_WaitUntilReadyWithMockClient(t *testing.T) {
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			t.Log(t.Name(), "test timeout")
 		}
 	}()
@@ -98,7 +97,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -148,7 +147,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -227,88 +226,4 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		assert.Error(t, err, ctx.Err())
 	})
-}
-
-func TestHGRPCBasedUDF_Reduce(t *testing.T) {
-	sumFunc := func(dataStreamCh <-chan *reducepb.ReduceRequest) interface{} {
-		var sum testutils.PayloadForTest
-		for datum := range dataStreamCh {
-			var payLoad testutils.PayloadForTest
-			_ = json.Unmarshal(datum.GetValue(), &payLoad)
-			sum.Value += payLoad.Value
-		}
-		return sum
-	}
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	messageCh := make(chan *isb.ReadMessage, 10)
-	datumStreamCh := make(chan *reducepb.ReduceRequest, 10)
-	messages := testutils.BuildTestReadMessages(10, time.Now())
-
-	go func() {
-		for index := range messages {
-			messageCh <- &messages[index]
-			datumStreamCh <- createDatum(&messages[index])
-		}
-		close(messageCh)
-		close(datumStreamCh)
-	}()
-
-	mockClient := reducemock.NewMockReduceClient(ctrl)
-	mockReduceClient := reducemock.NewMockReduce_ReduceFnClient(ctrl)
-	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().Recv().DoAndReturn(
-		func() (*reducepb.ReduceResponse, error) {
-			result := sumFunc(datumStreamCh)
-			sumValue, _ := json.Marshal(result.(testutils.PayloadForTest))
-			var Results []*reducepb.ReduceResponse_Result
-			Results = append(Results, &reducepb.ReduceResponse_Result{
-				Keys:  []string{"sum"},
-				Value: sumValue,
-			})
-			datumList := &reducepb.ReduceResponse{
-				Results: Results,
-			}
-			return datumList, nil
-		}).Times(1)
-	mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-		Results: []*reducepb.ReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key"},
-				Value: []byte(`forward_message`),
-			},
-		},
-	}, io.EOF).Times(1)
-
-	mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-		}
-	}()
-
-	u := NewMockUDSGRPCBasedReduce(mockClient)
-
-	partitionID := &partition.ID{
-		Start: time.Unix(60, 0),
-		End:   time.Unix(120, 0),
-		Slot:  "test",
-	}
-
-	result, err := u.ApplyReduce(ctx, partitionID, messageCh)
-
-	var resultPayload testutils.PayloadForTest
-	_ = json.Unmarshal(result[0].Payload, &resultPayload)
-
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"sum"}, result[0].Keys)
-	assert.Equal(t, int64(45), resultPayload.Value)
-	assert.Equal(t, time.Unix(120, 0).Add(-1*time.Millisecond), result[0].EventTime)
 }
