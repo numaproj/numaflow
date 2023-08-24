@@ -52,12 +52,6 @@ type MessageInfo struct {
 	IsLate bool
 }
 
-// MessageMetadata is the metadata of the message
-type MessageMetadata struct {
-	// NumDelivered is the number of times the message has been delivered.
-	NumDelivered uint64
-}
-
 // Header is the header of the message
 type Header struct {
 	MessageInfo
@@ -86,8 +80,6 @@ type ReadMessage struct {
 	Message
 	ReadOffset Offset
 	Watermark  time.Time
-	// Metadata is the metadata of the message after a message is read from the buffer.
-	Metadata MessageMetadata
 }
 
 // ToReadMessage converts Message to a ReadMessage by providing the offset and watermark

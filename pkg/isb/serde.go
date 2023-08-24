@@ -282,7 +282,6 @@ func (rm ReadMessage) MarshalBinary() (data []byte, err error) {
 		MLen:            int32(len(message)),
 		SimpleIntOffset: offset,
 		WMEpoch:         rm.Watermark.UnixMilli(),
-		NumDelivered:    rm.Metadata.NumDelivered,
 	}
 	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
 		return nil, err
@@ -320,8 +319,5 @@ func (rm *ReadMessage) UnmarshalBinary(data []byte) (err error) {
 		return preamble.SimpleIntOffset
 	})
 	rm.Watermark = time.UnixMilli(preamble.WMEpoch).UTC()
-	rm.Metadata = MessageMetadata{
-		NumDelivered: preamble.NumDelivered,
-	}
 	return err
 }

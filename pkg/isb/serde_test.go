@@ -291,7 +291,6 @@ func TestReadMessage(t *testing.T) {
 		Message    Message
 		ReadOffset Offset
 		Watermark  time.Time
-		Metadata   MessageMetadata
 	}
 	tests := []struct {
 		name               string
@@ -321,9 +320,6 @@ func TestReadMessage(t *testing.T) {
 					return 123
 				}),
 				Watermark: time.UnixMilli(1676613600000),
-				Metadata: MessageMetadata{
-					NumDelivered: 1,
-				},
 			},
 			wantData: ReadMessage{
 				Message: Message{
@@ -344,9 +340,6 @@ func TestReadMessage(t *testing.T) {
 					return 123
 				}),
 				Watermark: time.UnixMilli(1676613600000).UTC(),
-				Metadata: MessageMetadata{
-					NumDelivered: 1,
-				},
 			},
 			wantMarshalError:   false,
 			wantUnmarshalError: false,
@@ -358,7 +351,6 @@ func TestReadMessage(t *testing.T) {
 				Message:    tt.fields.Message,
 				ReadOffset: tt.fields.ReadOffset,
 				Watermark:  tt.fields.Watermark,
-				Metadata:   tt.fields.Metadata,
 			}
 			gotData, err := rm.MarshalBinary()
 			if (err != nil) != tt.wantMarshalError {
@@ -373,8 +365,7 @@ func TestReadMessage(t *testing.T) {
 			}
 			if !reflect.DeepEqual((*newRM).Message, tt.wantData.Message) ||
 				!reflect.DeepEqual((*newRM).Watermark, tt.wantData.Watermark) ||
-				!reflect.DeepEqual((*newRM).ReadOffset.String(), tt.wantData.ReadOffset.String()) ||
-				!reflect.DeepEqual((*newRM).Metadata, tt.wantData.Metadata) {
+				!reflect.DeepEqual((*newRM).ReadOffset.String(), tt.wantData.ReadOffset.String()) {
 				t.Errorf("MarshalBinary() gotData = %v, want %v", newRM, tt.wantData)
 			}
 		})

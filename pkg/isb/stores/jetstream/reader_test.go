@@ -91,7 +91,6 @@ func TestJetStreamBufferRead(t *testing.T) {
 	assert.Equal(t, 20, len(readMessages))
 	for _, m := range readMessages {
 		assert.NotNil(t, m)
-		assert.Equal(t, m.Metadata.NumDelivered, uint64(1))
 	}
 	offsetsInsideReadMessages := make([]isb.Offset, len(readMessages))
 	for idx, readMessage := range readMessages {

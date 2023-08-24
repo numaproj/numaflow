@@ -114,9 +114,6 @@ func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {
 					},
 				},
 				ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-				Metadata: isb.MessageMetadata{
-					NumDelivered: 1,
-				},
 			}, writeMessageCh)
 			assert.NoError(t, err)
 		}()
