@@ -88,7 +88,7 @@ func TestRead(t *testing.T) {
 
 	// wait for the context to be completely stopped.
 	for {
-		_, ok := <-mgen.srcchan
+		_, ok := <-mgen.srcChan
 		if !ok {
 			break
 		}
