@@ -24,7 +24,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
+	"github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1/sourcemock"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -34,10 +37,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
 	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
-
-	"github.com/golang/mock/gomock"
-	"github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1/sourcemock"
-	"github.com/stretchr/testify/assert"
 )
 
 type rpcMsg struct {
