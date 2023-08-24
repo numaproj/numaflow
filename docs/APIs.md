@@ -4462,7 +4462,7 @@ RedisStreamsSource </a> </em>
 </tr>
 <tr>
 <td>
-<code>udSource</code></br> <em>
+<code>udsource</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDSource"> UDSource </a> </em>
 </td>
 <td>

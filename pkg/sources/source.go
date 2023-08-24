@@ -279,7 +279,13 @@ func (sp *SourceProcessor) getSourcer(
 
 	src := sp.VertexInstance.Vertex.Spec.Source
 	if x := src.UDSource; x != nil && udsGRPCClient != nil {
-		udsource, err := udsource.New(udsGRPCClient)
+		readOptions := []udsource.Option{
+			udsource.WithLogger(logger),
+		}
+		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
+			readOptions = append(readOptions, udsource.WithReadTimeout(l.ReadTimeout.Duration))
+		}
+		udsource, err := udsource.New(sp.VertexInstance, writers, fsd, transformerApplier, udsGRPCClient, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
 		return udsource, err
 	} else if x := src.Generator; x != nil {
 		readOptions := []generator.Option{

@@ -29,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
 )
 
@@ -49,6 +50,7 @@ func (u *GRPCBasedTransformer) IsHealthy(ctx context.Context) error {
 
 // WaitUntilReady waits until the client is connected.
 func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
+	log := logging.FromContext(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -56,8 +58,10 @@ func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 		default:
 			if _, err := u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
+			} else {
+				log.Infof("waiting for transformer to be ready: %v", err)
+				time.Sleep(1 * time.Second)
 			}
-			time.Sleep(1 * time.Second)
 		}
 	}
 }

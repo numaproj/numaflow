@@ -22,12 +22,13 @@ import (
 	"time"
 
 	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// SinkApplier applies the ssink on the read message and gives back a response. Any UserError will be retried here, while
+// SinkApplier applies the sink on the read message and gives back a response. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type SinkApplier interface {
 	ApplySink(ctx context.Context, requests []*sinkpb.SinkRequest) []error
@@ -55,6 +56,7 @@ func (u *UDSgRPCBasedUDSink) IsHealthy(ctx context.Context) error {
 
 // WaitUntilReady waits until the udsink is connected.
 func (u *UDSgRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
+	log := logging.FromContext(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -62,8 +64,10 @@ func (u *UDSgRPCBasedUDSink) WaitUntilReady(ctx context.Context) error {
 		default:
 			if _, err := u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
+			} else {
+				log.Infof("waiting for udsink to be ready: %v", err)
+				time.Sleep(1 * time.Second)
 			}
-			time.Sleep(1 * time.Second)
 		}
 	}
 }
