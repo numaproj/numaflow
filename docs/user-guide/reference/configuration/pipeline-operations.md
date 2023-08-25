@@ -12,10 +12,6 @@ The scenarios include but are not limited to:
 
 To summarize, if there are unprocessed messages in the pipeline, and the new pipeline spec will change the way how the messages are processed, then you should delete and recreate the pipeline.
 
-```bash
-  kubectl apply -f my-pipeline.yaml
-```
-
 ## Pause a Pipeline
 
 To pause a pipeline, use the command below, it will bring the pipeline to `Paused` status, and terminate all running vertex pods.
