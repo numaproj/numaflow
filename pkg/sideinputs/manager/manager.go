@@ -86,10 +86,6 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
 
-	// Readiness check
-	if err = sideInputClient.WaitUntilReady(ctx); err != nil {
-		return fmt.Errorf("failed on SideInput readiness check, %w", err)
-	}
 	// close the connection when the function exits
 	defer func() {
 		err = sideInputClient.CloseConn(ctx)
@@ -97,6 +93,11 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}
 	}()
+
+	// Readiness check
+	if err = sideInputClient.WaitUntilReady(ctx); err != nil {
+		return fmt.Errorf("failed on SideInput readiness check, %w", err)
+	}
 
 	f := func() {
 		if err := sim.execute(ctx, sideInputClient, siStore); err != nil {
