@@ -14,7 +14,7 @@ To summarize, if there are unprocessed messages in the pipeline, and the new pip
 
 ## Pause a Pipeline
 
-To pause a pipeline, use the command below, it will bring the pipeline to `Paused` status, and terminate all running vertex pods.
+To pause a pipeline, use the command below, it will bring the pipeline to `Paused` status, and terminate all the running vertex pods.
 
 ```bash
   kubectl patch pl my-pipeline --type=merge --patch '{"spec": {"lifecycle": {"desiredPhase": "Paused"}}}'
