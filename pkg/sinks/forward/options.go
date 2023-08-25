@@ -13,8 +13,8 @@ import (
 type options struct {
 	// readBatchSize is the default batch size
 	readBatchSize int64
-	// udsinkConcurrency sets the concurrency for concurrent UDSink processing
-	udsinkConcurrency int
+	// sinkConcurrency sets the concurrency for concurrent sink processing
+	sinkConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
 	// logger is used to pass the logger variable
@@ -39,10 +39,10 @@ func WithReadBatchSize(f int64) Option {
 	}
 }
 
-// WithUDSinkConcurrency sets concurrency for map UDF processing
-func WithUDSinkConcurrency(f int) Option {
+// WithSinkConcurrency sets concurrency for map UDF processing
+func WithSinkConcurrency(f int) Option {
 	return func(o *options) error {
-		o.udsinkConcurrency = f
+		o.sinkConcurrency = f
 		return nil
 	}
 }
