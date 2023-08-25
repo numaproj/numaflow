@@ -372,7 +372,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 
 	// when we apply transformer, we don't handle partial errors (it's either non or all, non will return early),
 	// so we should be able to ack all the readOffsets including data messages and control messages
-	err = isdf.reader.Ack(ctx, readOffsets)[0]
+	err = isdf.ackFromSource(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed to ack from source", zap.Error(err))
@@ -383,6 +383,13 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 
 	// ProcessingTimes of the entire forwardAChunk
 	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Observe(float64(time.Since(start).Microseconds()))
+}
+
+func (isdf *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {
+	// for all the sources, we either ack all offsets or none.
+	// when a batch ack fails, the source Ack() function populate the error array with the same error;
+	// hence we can just return the first error.
+	return isdf.reader.Ack(ctx, offsets)[0]
 }
 
 // writeToBuffers is a blocking call until all the messages have been forwarded to all the toBuffers, or a shutdown
