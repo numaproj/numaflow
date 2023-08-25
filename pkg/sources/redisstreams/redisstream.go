@@ -54,7 +54,7 @@ type redisStreamsSource struct {
 	// forwarder that writes the consumed data to destination
 	forwarder *sourceforward.DataForward
 	// context cancel function
-	cancelfn context.CancelFunc
+	cancelFn context.CancelFunc
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
 }
@@ -131,9 +131,8 @@ func New(
 	}
 
 	for _, o := range opts {
-		operr := o(redisStreamsSource)
-		if operr != nil {
-			return nil, operr
+		if err := o(redisStreamsSource); err != nil {
+			return nil, err
 		}
 	}
 	if redisStreamsReader.Log == nil {
@@ -156,10 +155,10 @@ func New(
 
 	// Create Watermark Publisher
 	ctx, cancel := context.WithCancel(context.Background())
-	redisStreamsSource.cancelfn = cancel
+	redisStreamsSource.cancelFn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
+	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
 	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	// create the ConsumerGroup here if not already created
@@ -231,7 +230,7 @@ func produceMsg(inMsg redis.XMessage, replica int32) (*isb.ReadMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to json serialize RedisStream values: %v; inMsg=%+v", err, inMsg)
 	}
-	keys := []string{}
+	var keys []string
 	for k := range inMsg.Values {
 		keys = append(keys, k)
 	}
@@ -246,7 +245,7 @@ func produceMsg(inMsg redis.XMessage, replica int32) (*isb.ReadMessage, error) {
 			ID:          inMsg.ID,
 			Keys:        keys,
 		},
-		Body: isb.Body{Payload: []byte(jsonSerialized)},
+		Body: isb.Body{Payload: jsonSerialized},
 	}
 
 	return &isb.ReadMessage{
@@ -298,14 +297,14 @@ func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMess
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		// toVertexPartitionIdx is 0 because we publish watermarks within source itself.
+		// toVertexPartitionIdx is 0 because we publish watermarks within the source itself.
 		rsSource.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }
 
 func (rsSource *redisStreamsSource) Close() error {
 	rsSource.Log.Info("Shutting down redis source server...")
-	rsSource.cancelfn()
+	rsSource.cancelFn()
 	rsSource.Log.Info("Redis source server shutdown")
 	return nil
 }

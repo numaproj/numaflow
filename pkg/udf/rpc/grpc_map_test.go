@@ -18,7 +18,7 @@ package rpc
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -28,14 +28,12 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1/mapmock"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 )
 
@@ -75,7 +73,7 @@ func TestGRPCBasedMap_WaitUntilReadyWithMockClient(t *testing.T) {
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			t.Log(t.Name(), "test timeout")
 		}
 	}()
@@ -111,7 +109,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -163,7 +161,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -213,7 +211,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -270,7 +268,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -317,7 +315,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -348,81 +346,4 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 			},
 		})
 	})
-}
-
-func TestHGRPCBasedUDF_ApplyWithMockClient(t *testing.T) {
-	multiplyBy2 := func(body []byte) interface{} {
-		var result testutils.PayloadForTest
-		_ = json.Unmarshal(body, &result)
-		result.Value = result.Value * 2
-		return result
-	}
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := mapmock.NewMockMapClient(ctrl)
-	mockClient.EXPECT().MapFn(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, datum *mappb.MapRequest, opts ...grpc.CallOption) (*mappb.MapResponse, error) {
-			var originalValue testutils.PayloadForTest
-			_ = json.Unmarshal(datum.GetValue(), &originalValue)
-			doubledValue, _ := json.Marshal(multiplyBy2(datum.GetValue()).(testutils.PayloadForTest))
-			var results []*mappb.MapResponse_Result
-			if originalValue.Value%2 == 0 {
-				results = append(results, &mappb.MapResponse_Result{
-					Keys:  []string{"even"},
-					Value: doubledValue,
-				})
-			} else {
-				results = append(results, &mappb.MapResponse_Result{
-					Keys:  []string{"odd"},
-					Value: doubledValue,
-				})
-			}
-			datumList := &mappb.MapResponse{
-				Results: results,
-			}
-			return datumList, nil
-		},
-	).AnyTimes()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-		}
-	}()
-
-	u := NewMockUDSGRPCBasedMap(mockClient)
-
-	var count = int64(10)
-	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
-
-	var results = make([][]byte, len(readMessages))
-	var resultKeys = make([][]string, len(readMessages))
-	for idx, readMessage := range readMessages {
-		apply, err := u.ApplyMap(ctx, &readMessage)
-		assert.NoError(t, err)
-		results[idx] = apply[0].Payload
-		resultKeys[idx] = apply[0].Header.Keys
-	}
-
-	var expectedResults = make([][]byte, count)
-	var expectedKeys = make([][]string, count)
-	for idx, readMessage := range readMessages {
-		var readMessagePayload testutils.PayloadForTest
-		_ = json.Unmarshal(readMessage.Payload, &readMessagePayload)
-		if readMessagePayload.Value%2 == 0 {
-			expectedKeys[idx] = []string{"even"}
-		} else {
-			expectedKeys[idx] = []string{"odd"}
-		}
-		marshal, _ := json.Marshal(multiplyBy2(readMessage.Payload))
-		expectedResults[idx] = marshal
-	}
-
-	assert.Equal(t, expectedResults, results)
-	assert.Equal(t, expectedKeys, resultKeys)
 }

@@ -18,14 +18,15 @@ package jetstream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"go.uber.org/zap"
 
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -229,7 +230,7 @@ retryLoop:
 			} else {
 				// if there are no keys in the store, return zero time because there are no updates
 				// upstream will handle it
-				if err == nats.ErrNoKeysFound {
+				if errors.Is(err, nats.ErrNoKeysFound) {
 					return time.Time{}
 				}
 				jsw.log.Errorw("Failed to get keys", zap.String("watcher", jsw.GetKVName()), zap.Error(err))

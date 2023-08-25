@@ -18,6 +18,7 @@ package wal
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -111,7 +112,7 @@ func (w *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 	for size > w.rOffset-start && !w.isEnd() {
 		message, sizeRead, err := decodeReadMessage(w.fp)
 		if err != nil {
-			if err == errChecksumMismatch {
+			if errors.Is(err, errChecksumMismatch) {
 				w.corrupted = true
 			}
 			return nil, false, err
