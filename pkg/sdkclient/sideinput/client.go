@@ -73,3 +73,23 @@ func (c client) RetrieveSideInput(ctx context.Context, in *emptypb.Empty) (*side
 	}
 	return retrieveResponse, nil
 }
+
+// IsHealthy checks if the client is healthy.
+func (c client) IsHealthy(ctx context.Context) error {
+	return c.WaitUntilReady(ctx)
+}
+
+// WaitUntilReady waits until the client is connected.
+func (c client) WaitUntilReady(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("failed on readiness check: %w", ctx.Err())
+		default:
+			if _, err := c.IsReady(ctx, &emptypb.Empty{}); err == nil {
+				return nil
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
+}

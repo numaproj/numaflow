@@ -50,7 +50,7 @@ func UpdateSideInputFile(ctx context.Context, fileSymLink string, value []byte) 
 	// If true then don't update file again and return
 	if err == nil && bytes.Equal(currentValue, value) {
 		log.Debugw("Side Input value is same as current value, "+
-			"skipping update", zap.String("Side Input", fileSymLink))
+			"skipping update", zap.String("side_input", fileSymLink))
 		return nil
 	}
 

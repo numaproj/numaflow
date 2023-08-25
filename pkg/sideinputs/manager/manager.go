@@ -23,6 +23,7 @@ import (
 
 	cronlib "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
@@ -31,7 +32,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	udsideinput "github.com/numaproj/numaflow/pkg/sideinputs/udsideinput"
 )
 
 type sideInputsManager struct {
@@ -80,18 +80,15 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", sim.isbSvcType)
 	}
 
-	// Create a new gRPC client for UDSideInput
-	c, err := sideinput.New()
+	// Create a new gRPC client for Side Input
+	sideInputClient, err := sideinput.New()
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
-	sideInputClient := udsideinput.NewUDSgRPCBasedUDSideinput(c)
-	if err != nil {
-		return fmt.Errorf("failed to create a new gRPC client: %w", err)
-	}
+
 	// Readiness check
 	if err = sideInputClient.WaitUntilReady(ctx); err != nil {
-		return fmt.Errorf("failed on UDSideInput readiness check, %w", err)
+		return fmt.Errorf("failed on SideInput readiness check, %w", err)
 	}
 	// close the connection when the function exits
 	defer func() {
@@ -122,10 +119,10 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	return nil
 }
 
-func (sim *sideInputsManager) execute(ctx context.Context, sideInputClient *udsideinput.UDSgRPCBasedUDSideinput, siStore kvs.KVStorer) error {
+func (sim *sideInputsManager) execute(ctx context.Context, sideInputClient sideinput.Client, siStore kvs.KVStorer) error {
 	log := logging.FromContext(ctx)
 	log.Info("Executing Side Inputs manager cron ...")
-	resp, err := sideInputClient.Apply(ctx)
+	resp, err := sideInputClient.RetrieveSideInput(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("failed to retrieve side input: %w", err)
 	}
