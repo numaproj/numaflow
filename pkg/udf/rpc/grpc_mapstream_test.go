@@ -18,7 +18,6 @@ package rpc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -32,7 +31,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
 )
 
@@ -52,7 +50,7 @@ func TestGRPCBasedMapStream_WaitUntilReadyWithMockClient(t *testing.T) {
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			t.Log(t.Name(), "test timeout")
 		}
 	}()
@@ -91,7 +89,7 @@ func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -155,7 +153,7 @@ func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -187,105 +185,4 @@ func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {
 			},
 		})
 	})
-}
-
-func TestHGRPCBasedUDF_ApplyStreamWithMockClient(t *testing.T) {
-	multiplyBy2 := func(body []byte) interface{} {
-		var result testutils.PayloadForTest
-		_ = json.Unmarshal(body, &result)
-		result.Value = result.Value * 2
-		return result
-	}
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	var count = int64(1)
-	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
-
-	mockClient := mapstreammock.NewMockMapStreamClient(ctrl)
-	mockMapStreamClient := mapstreammock.NewMockMapStream_MapStreamFnClient(ctrl)
-	for _, message := range readMessages {
-		keys := message.Keys
-		payload := message.Body.Payload
-		parentMessageInfo := message.MessageInfo
-		var datum = &mapstreampb.MapStreamRequest{
-			Keys:      keys,
-			Value:     payload,
-			EventTime: timestamppb.New(parentMessageInfo.EventTime),
-			Watermark: timestamppb.New(message.Watermark),
-		}
-		mockMapStreamClient.EXPECT().Recv().DoAndReturn(
-			func() (*mapstreampb.MapStreamResponse, error) {
-				var originalValue testutils.PayloadForTest
-				_ = json.Unmarshal(datum.GetValue(), &originalValue)
-				doubledValue, _ := json.Marshal(multiplyBy2(datum.GetValue()).(testutils.PayloadForTest))
-				var element *mapstreampb.MapStreamResponse_Result
-				if originalValue.Value%2 == 0 {
-					element = &mapstreampb.MapStreamResponse_Result{
-						Keys:  []string{"even"},
-						Value: doubledValue,
-					}
-				} else {
-					element = &mapstreampb.MapStreamResponse_Result{
-						Keys:  []string{"odd"},
-						Value: doubledValue,
-					}
-				}
-
-				response := &mapstreampb.MapStreamResponse{
-					Result: element,
-				}
-
-				return response, nil
-			},
-		).Times(1)
-	}
-	mockMapStreamClient.EXPECT().Recv().Return(nil, io.EOF).Times(1)
-
-	mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockMapStreamClient, nil).AnyTimes()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-		}
-	}()
-
-	u := NewMockUDSGRPCBasedMapStream(mockClient)
-
-	var results = make([][]byte, len(readMessages))
-	var resultKeys = make([][]string, len(readMessages))
-	idx := 0
-	for _, readMessage := range readMessages {
-		writeMessageCh := make(chan isb.WriteMessage)
-		go func() {
-			err := u.ApplyMapStream(ctx, &readMessage, writeMessageCh)
-			assert.NoError(t, err)
-		}()
-		for m := range writeMessageCh {
-			results[idx] = m.Payload
-			resultKeys[idx] = m.Header.Keys
-			idx++
-		}
-	}
-
-	var expectedResults = make([][]byte, count)
-	var expectedKeys = make([][]string, count)
-	for idx, readMessage := range readMessages {
-		var readMessagePayload testutils.PayloadForTest
-		_ = json.Unmarshal(readMessage.Payload, &readMessagePayload)
-		if readMessagePayload.Value%2 == 0 {
-			expectedKeys[idx] = []string{"even"}
-		} else {
-			expectedKeys[idx] = []string{"odd"}
-		}
-		marshal, _ := json.Marshal(multiplyBy2(readMessage.Payload))
-		expectedResults[idx] = marshal
-	}
-
-	assert.Equal(t, expectedResults, results)
-	assert.Equal(t, expectedKeys, resultKeys)
 }

@@ -56,8 +56,8 @@ func WithReadTimeout(t time.Duration) Option {
 }
 
 type userDefinedSource struct {
-	// name of the user-defined source
-	name string
+	// name of the user-defined source vertex
+	vertexName string
 	// name of the pipeline
 	pipelineName string
 	// sourceApplier applies the user-defined source functions
@@ -92,7 +92,7 @@ func New(
 	opts ...Option) (*userDefinedSource, error) {
 
 	u := &userDefinedSource{
-		name:               vertexInstance.Vertex.Spec.Name,
+		vertexName:         vertexInstance.Vertex.Spec.Name,
 		pipelineName:       vertexInstance.Vertex.Spec.PipelineName,
 		sourceApplier:      sourceApplier,
 		srcPublishWMStores: publishWMStores,
@@ -126,7 +126,7 @@ func New(
 
 // GetName returns the name of the user-defined source vertex
 func (u *userDefinedSource) GetName() string {
-	return u.name
+	return u.vertexName
 }
 
 // GetPartitionIdx returns the partition number for the user-defined source.
@@ -200,7 +200,7 @@ func (u *userDefinedSource) loadSourceWatermarkPublisher(partitionID int32) publ
 	if p, ok := u.srcWMPublishers[partitionID]; ok {
 		return p
 	}
-	entityName := fmt.Sprintf("%s-%s-%d", u.pipelineName, u.name, partitionID)
+	entityName := fmt.Sprintf("%s-%s-%d", u.pipelineName, u.vertexName, partitionID)
 	processorEntity := processor.NewProcessorEntity(entityName)
 	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
 	sourcePublishWM := publish.NewPublish(u.lifecycleCtx, processorEntity, u.srcPublishWMStores, 1, publish.IsSource())

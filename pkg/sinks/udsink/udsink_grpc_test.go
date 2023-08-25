@@ -18,6 +18,7 @@ package udsink
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func Test_gRPCBasedUDSink_WaitUntilReadyWithMockClient(t *testing.T) {
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			t.Log(t.Name(), "test timeout")
 		}
 	}()
@@ -103,7 +104,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
@@ -145,7 +146,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
