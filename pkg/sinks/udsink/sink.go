@@ -37,9 +37,9 @@ import (
 type UserDefinedSink struct {
 	name         string
 	pipelineName string
-	isdf         *sinkforward.DataForward
+	df           *sinkforward.DataForward
 	logger       *zap.SugaredLogger
-	udsink       SinkApplier
+	udSink       SinkApplier
 }
 
 type Option func(*UserDefinedSink) error
@@ -79,13 +79,13 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	s.udsink = udsink
+	s.udSink = udsink
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {s}}, whereToDecider, fetchWatermark, publishWatermark, forwardOpts...)
+	newDF, err := sinkforward.NewDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {s}}, whereToDecider, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
-	s.isdf = isdf
+	s.df = newDF
 	return s, nil
 }
 
@@ -116,7 +116,7 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 			Watermark: timestamppb.New(time.Time{}), // TODO: insert the correct watermark
 		}
 	}
-	return nil, s.udsink.ApplySink(ctx, msgs)
+	return nil, s.udSink.ApplySink(ctx, msgs)
 }
 
 func (s *UserDefinedSink) Close() error {
@@ -124,13 +124,13 @@ func (s *UserDefinedSink) Close() error {
 }
 
 func (s *UserDefinedSink) Start() <-chan struct{} {
-	return s.isdf.Start()
+	return s.df.Start()
 }
 
 func (s *UserDefinedSink) Stop() {
-	s.isdf.Stop()
+	s.df.Stop()
 }
 
 func (s *UserDefinedSink) ForceStop() {
-	s.isdf.ForceStop()
+	s.df.ForceStop()
 }

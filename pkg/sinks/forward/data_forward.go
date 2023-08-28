@@ -24,7 +24,6 @@ import (
 
 // DataForward forwards the data from previous step to the current step via inter-step buffer.
 type DataForward struct {
-	// I have my reasons for overriding the default principle https://github.com/golang/go/issues/22602
 	ctx context.Context
 	// cancelFn cancels our new context, our cancellation is little more complex and needs to be well orchestrated, hence
 	// we need something more than a cancel().
@@ -46,7 +45,7 @@ type DataForward struct {
 	Shutdown
 }
 
-// NewDataForward creates an inter-step forwarder.
+// NewDataForward creates a new sink forwarder.
 func NewDataForward(
 	vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
@@ -73,11 +72,10 @@ func NewDataForward(
 		toWhichStepDecider:  toWhichStepDecider,
 		wmFetcher:           fetchWatermark,
 		wmPublishers:        publishWatermark,
-		// should we do a check here for the values not being null?
-		vertexName:   vertex.Spec.Name,
-		pipelineName: vertex.Spec.PipelineName,
-		idleManager:  wmb.NewIdleManager(len(toSteps)),
-		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable
+		vertexName:          vertex.Spec.Name,
+		pipelineName:        vertex.Spec.PipelineName,
+		idleManager:         wmb.NewIdleManager(len(toSteps)),
+		wmbChecker:          wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwLock: new(sync.RWMutex),
 		},
@@ -90,7 +88,7 @@ func NewDataForward(
 	return &df, nil
 }
 
-// Start starts reading from source and forwards to the next buffers. Call `Stop` to stop.
+// Start starts reading from Vn-1 and forwards to sink. Call `Stop` to stop.
 func (df *DataForward) Start() <-chan struct{} {
 	log := logging.FromContext(df.ctx)
 	stopped := make(chan struct{})
@@ -145,7 +143,7 @@ func (df *DataForward) Start() <-chan struct{} {
 	return stopped
 }
 
-// readWriteMessagePair represents a read message and its processed (via transformer) write messages.
+// readWriteMessagePair represents a read message and its processed write messages.
 type readWriteMessagePair struct {
 	readMessage   *isb.ReadMessage
 	writeMessages []*isb.WriteMessage
@@ -221,23 +219,20 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
 	}
 
-	// udf concurrent processing request channel
-	udfCh := make(chan *readWriteMessagePair)
-	// udfResults stores the results after map UDF processing for all read messages. It indexes
-	// a read message to the corresponding write message
-	udfResults := make([]readWriteMessagePair, len(dataMessages))
-	// applyUDF, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
+	rwCh := make(chan *readWriteMessagePair)
+	// sinkResults stores the write results converted from read messages
+	sinkResults := make([]readWriteMessagePair, len(dataMessages))
 
-	// create a pool of map UDF Processors
+	// create a pool of workers to convert read message to write message
 	var wg sync.WaitGroup
 	for i := 0; i < df.opts.sinkConcurrency; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			df.concurrentApplyUDF(ctx, udfCh)
+			df.rwWorker(rwCh)
 		}()
 	}
-	concurrentUDFProcessingStart := time.Now()
+	rwProcessingTime := time.Now()
 
 	// send to map UDF only the data messages
 	for idx, m := range dataMessages {
@@ -246,21 +241,20 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		// assign watermark to the message
 		m.Watermark = time.Time(processorWM)
 		// send map UDF processing work to the channel
-		udfResults[idx].readMessage = m
-		udfCh <- &udfResults[idx]
+		sinkResults[idx].readMessage = m
+		rwCh <- &sinkResults[idx]
 	}
 	// let the go routines know that there is no more work
-	close(udfCh)
+	close(rwCh)
 	// wait till the processing is done. this will not be an infinite wait because the map UDF processing will exit if
 	// context.Done() is closed.
 	wg.Wait()
-	df.opts.logger.Debugw("concurrent applyUDF completed", zap.Int("concurrency", df.opts.sinkConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
-	concurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
+	df.opts.logger.Debugw("concurrent convert read message to write message completed", zap.Int("concurrency", df.opts.sinkConcurrency), zap.Duration("took", time.Since(rwProcessingTime)))
 	// map UDF processing is done.
 
 	// let's figure out which vertex to send the results to.
 	// update the toBuffer(s) with writeMessages.
-	for _, m := range udfResults {
+	for _, m := range sinkResults {
 		// update toBuffers
 		for _, message := range m.writeMessages {
 			if err := df.whereToStep(message, messageToStep, m.readMessage); err != nil {
@@ -338,15 +332,11 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 }
 
-// concurrentApplyUDF applies the map UDF based on the request from the channel
-func (df *DataForward) concurrentApplyUDF(ctx context.Context, readMessagePair <-chan *readWriteMessagePair) {
-	for message := range readMessagePair {
-		start := time.Now()
-		udfReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Inc()
+// rwWorker converts the read message to write messages using channel
+func (df *DataForward) rwWorker(rwPair <-chan *readWriteMessagePair) {
+	for message := range rwPair {
 		writeMessages := []*isb.WriteMessage{{Message: message.readMessage.Message}}
-		udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(writeMessages)))
 		message.writeMessages = append(message.writeMessages, writeMessages...)
-		udfProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 	}
 }
 
