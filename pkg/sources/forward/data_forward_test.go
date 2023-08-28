@@ -90,663 +90,658 @@ func (f myForwardTest) ApplyTransform(ctx context.Context, message *isb.ReadMess
 }
 
 func TestNewDataForward(t *testing.T) {
-	tests := []struct {
-		name      string
-		batchSize int64
-	}{
-		{
-			name:      "batch_forward",
-			batchSize: 10,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name+"_basic", func(t *testing.T) {
-			metricsReset()
-			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
-			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
-			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to11, to12},
-			}
+	var (
+		testName        = "sink_forward"
+		batchSize int64 = 10
+	)
 
-			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				PipelineName: "testPipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
-				},
-			}}
+	t.Run(testName+"_basic", func(t *testing.T) {
+		metricsReset()
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
+		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+		to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
+		to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
+		toSteps := map[string][]isb.BufferWriter{
+			"to1": {to11, to12},
+		}
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+		vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+			},
+		}}
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			noOpStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, noOpStores, WithReadBatchSize(batchSize))
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
 
-			assert.NoError(t, err)
-			assert.False(t, to11.IsFull())
-			assert.False(t, to12.IsFull())
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-			assert.True(t, to11.IsEmpty())
-			assert.True(t, to12.IsEmpty())
+		fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+		noOpStores := buildNoOpToVertexStores(toSteps)
+		f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, noOpStores, WithReadBatchSize(batchSize))
 
-			stopped := f.Start()
-			// write some data
-			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
-			assert.Equal(t, make([]error, batchSize), errs)
+		assert.NoError(t, err)
+		assert.False(t, to11.IsFull())
+		assert.False(t, to12.IsFull())
 
-			var updatedBatchSize int
-			if tt.batchSize > 1 {
-				updatedBatchSize = int(batchSize / 2)
-			} else {
-				updatedBatchSize = int(batchSize)
-			}
-			// read some data
-			readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
+		assert.True(t, to11.IsEmpty())
+		assert.True(t, to12.IsEmpty())
+
+		stopped := f.Start()
+		// write some data
+		_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+		assert.Equal(t, make([]error, batchSize), errs)
+
+		var updatedBatchSize int
+		if batchSize > 1 {
+			updatedBatchSize = int(batchSize / 2)
+		} else {
+			updatedBatchSize = int(batchSize)
+		}
+		// read some data
+		readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
+		assert.NoError(t, err, "expected no error")
+		assert.Len(t, readMessages, updatedBatchSize)
+		for i, j := 0, 0; i < updatedBatchSize; i, j = i+1, j+2 {
+			assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+			assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
+			assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
+			assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
+		}
+
+		if batchSize > 1 {
+			readMessages, err = to12.Read(ctx, int64(updatedBatchSize))
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, updatedBatchSize)
-			for i, j := 0, 0; i < updatedBatchSize; i, j = i+1, j+2 {
+			for i, j := 0, 1; i < updatedBatchSize; i, j = i+1, j+2 {
 				assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
 				assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
 				assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
 			}
+		}
 
-			if tt.batchSize > 1 {
-				readMessages, err = to12.Read(ctx, int64(updatedBatchSize))
-				assert.NoError(t, err, "expected no error")
-				assert.Len(t, readMessages, updatedBatchSize)
-				for i, j := 0, 1; i < updatedBatchSize; i, j = i+1, j+2 {
-					assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
-					assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
-					assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
-					assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
-				}
+		// iterate to see whether metrics will eventually succeed
+		err = validateMetrics(batchSize)
+		for err != nil {
+			select {
+			case <-ctx.Done():
+				t.Errorf("failed waiting metrics collection to succeed [%s] (%s)", ctx.Err(), err)
+			default:
+				time.Sleep(10 * time.Millisecond)
+				err = validateMetrics(batchSize)
 			}
+		}
 
-			// iterate to see whether metrics will eventually succeed
-			err = validateMetrics(batchSize)
-			for err != nil {
-				select {
-				case <-ctx.Done():
-					t.Errorf("failed waiting metrics collection to succeed [%s] (%s)", ctx.Err(), err)
-				default:
-					time.Sleep(10 * time.Millisecond)
-					err = validateMetrics(batchSize)
-				}
-			}
+		// write some data
+		_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
+		assert.Equal(t, make([]error, 3*batchSize), errs)
 
-			// write some data
-			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
-			assert.Equal(t, make([]error, 3*batchSize), errs)
+		f.Stop()
+		time.Sleep(1 * time.Millisecond)
+		// only for shutdown will work as from buffer is not empty
+		f.ForceStop()
 
-			f.Stop()
-			time.Sleep(1 * time.Millisecond)
-			// only for shutdown will work as from buffer is not empty
-			f.ForceStop()
+		<-stopped
 
-			<-stopped
+	})
+	// Explicitly tests the case where we forward to all buffers
+	t.Run(testName+"_toAll", func(t *testing.T) {
 
-		})
-		// Explicitly tests the case where we forward to all buffers
-		t.Run(tt.name+"_toAll", func(t *testing.T) {
-			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 10*batchSize, 0)
-			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
-			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
+		fromStep := simplebuffer.NewInMemoryBuffer("from", 10*batchSize, 0)
+		to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
+		to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
 
-			to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
-			to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
+		to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
+		to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
 
-			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to11, to12},
-				"to2": {to21, to22},
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
+		toSteps := map[string][]isb.BufferWriter{
+			"to1": {to11, to12},
+			"to2": {to21, to22},
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				PipelineName: "testPipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
-				},
-			}}
-			fetchWatermark := &testForwardFetcher{}
-			toVertexStores := buildToVertexWatermarkStores(toSteps)
+		vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+			},
+		}}
+		fetchWatermark := &testForwardFetcher{}
+		toVertexStores := buildToVertexWatermarkStores(toSteps)
 
-			f, err := NewDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
+		f, err := NewDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
 
-			assert.NoError(t, err)
-			assert.False(t, to11.IsFull())
-			assert.False(t, to12.IsFull())
+		assert.NoError(t, err)
+		assert.False(t, to11.IsFull())
+		assert.False(t, to12.IsFull())
 
-			assert.True(t, to11.IsEmpty())
-			assert.True(t, to12.IsEmpty())
+		assert.True(t, to11.IsEmpty())
+		assert.True(t, to12.IsEmpty())
 
-			stopped := f.Start()
-			// write some data
-			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
-			assert.Equal(t, make([]error, batchSize), errs)
+		stopped := f.Start()
+		// write some data
+		_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+		assert.Equal(t, make([]error, batchSize), errs)
 
-			var updatedBatchSize int
-			if tt.batchSize > 1 {
-				updatedBatchSize = int(batchSize / 2)
-			} else {
-				updatedBatchSize = int(batchSize)
-			}
+		var updatedBatchSize int
+		if batchSize > 1 {
+			updatedBatchSize = int(batchSize / 2)
+		} else {
+			updatedBatchSize = int(batchSize)
+		}
+		// read some data
+		readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
+		assert.NoError(t, err, "expected no error")
+		assert.Len(t, readMessages, updatedBatchSize)
+		for i, j := 0, 0; i < updatedBatchSize; i, j = i+1, j+2 {
+			assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+			assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
+			assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
+			assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
+		}
+
+		if batchSize > 1 {
 			// read some data
-			readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
+			readMessages, err = to12.Read(ctx, int64(updatedBatchSize))
 			assert.NoError(t, err, "expected no error")
 			assert.Len(t, readMessages, updatedBatchSize)
-			for i, j := 0, 0; i < updatedBatchSize; i, j = i+1, j+2 {
+			for i, j := 0, 1; i < updatedBatchSize; i, j = i+1, j+2 {
 				assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
 				assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
 				assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
 				assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
 			}
+		}
+		// write some data
+		_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
+		assert.Equal(t, make([]error, 3*batchSize), errs)
 
-			if tt.batchSize > 1 {
-				// read some data
-				readMessages, err = to12.Read(ctx, int64(updatedBatchSize))
-				assert.NoError(t, err, "expected no error")
-				assert.Len(t, readMessages, updatedBatchSize)
-				for i, j := 0, 1; i < updatedBatchSize; i, j = i+1, j+2 {
-					assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
-					assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
-					assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
-					assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
-				}
-			}
-			// write some data
-			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
-			assert.Equal(t, make([]error, 3*batchSize), errs)
-
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				otKeys1, _ := toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
-			loop:
-				for {
-					select {
-					case <-ctx.Done():
-						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
-						break loop
-					default:
-						if len(otKeys1) == 0 {
-							otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
-							time.Sleep(time.Millisecond * 10)
-						} else {
-							// NOTE: in this test we only have one processor to publish
-							// so len(otKeys) should always be 1
-							otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
-							otValue1, _ := toVertexStores["to1"].OffsetTimelineStore().GetValue(ctx, otKeys1[0])
-							otDecode1, _ := wmb.DecodeToWMB(otValue1)
-							if tt.batchSize > 1 && !otDecode1.Idle {
-								break loop
-							} else if tt.batchSize == 1 && otDecode1.Idle {
-								break loop
-							} else {
-								time.Sleep(time.Millisecond * 10)
-							}
-						}
-					}
-
-				}
-			}()
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				otKeys2, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-			loop:
-				for {
-					select {
-					case <-ctx.Done():
-						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
-						break loop
-					default:
-						if len(otKeys2) == 0 {
-							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-							time.Sleep(time.Millisecond * 10)
-						} else {
-							// NOTE: in this test we only have one processor to publish
-							// so len(otKeys) should always be 1
-							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-							otValue2, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys2[0])
-							otDecode1, _ := wmb.DecodeToWMB(otValue2)
-							// if the batch size is 1, then the watermark should be idle because
-							// one of partitions will be idle
-							if tt.batchSize > 1 && !otDecode1.Idle {
-								break loop
-							} else if tt.batchSize == 1 && otDecode1.Idle {
-								break loop
-							} else {
-								time.Sleep(time.Millisecond * 10)
-							}
-						}
-					}
-
-				}
-			}()
-			wg.Wait()
-			f.Stop()
-			<-stopped
-		})
-		// Explicitly tests the case where we drop all events
-		t.Run(tt.name+"_dropAll", func(t *testing.T) {
-			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
-			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
-
-			to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
-			to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
-			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to11, to12},
-				"to2": {to21, to22},
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
-
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
-
-			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				PipelineName: "testPipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
-				},
-			}}
-
-			fetchWatermark := &testForwardFetcher{}
-			toVertexStores := buildToVertexWatermarkStores(toSteps)
-
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
-
-			assert.NoError(t, err)
-			assert.False(t, to11.IsFull())
-			assert.False(t, to12.IsFull())
-
-			assert.True(t, to11.IsEmpty())
-			assert.True(t, to12.IsEmpty())
-
-			stopped := f.Start()
-
-			// write some data
-			_, errs := fromStep.Write(ctx, writeMessages)
-			assert.Equal(t, make([]error, 4*batchSize), errs)
-
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				otKeys1, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-			loop:
-				for {
-					select {
-					case <-ctx.Done():
-						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
-						break loop
-					default:
-						if len(otKeys1) == 0 {
-							otKeys1, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-							time.Sleep(time.Millisecond * 10)
-						} else {
-							// NOTE: in this test we only have one processor to publish
-							// so len(otKeys) should always be 1
-							otKeys1, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-							otValue1, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys1[0])
-							otDecode1, _ := wmb.DecodeToWMB(otValue1)
-							// if the batch size is 1, then the watermark should be idle because
-							// one of partitions will be idle
-							if otDecode1.Idle {
-								break loop
-							} else {
-								time.Sleep(time.Millisecond * 10)
-							}
-						}
-					}
-
-				}
-			}()
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				otKeys2, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-			loop:
-				for {
-					select {
-					case <-ctx.Done():
-						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
-						break loop
-					default:
-						if len(otKeys2) == 0 {
-							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-							time.Sleep(time.Millisecond * 10)
-						} else {
-							// NOTE: in this test we only have one processor to publish
-							// so len(otKeys) should always be 1
-							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-							otValue2, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys2[0])
-							otDecode2, _ := wmb.DecodeToWMB(otValue2)
-							// if the batch size is 1, then the watermark should be idle because
-							// one of partitions will be idle
-							if otDecode2.Idle {
-								break loop
-							} else {
-								time.Sleep(time.Millisecond * 10)
-							}
-						}
-					}
-
-				}
-			}()
-			wg.Wait()
-
-			msgs := to11.GetMessages(1)
-			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			otKeys1, _ := toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
+		loop:
+			for {
 				select {
 				case <-ctx.Done():
-					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
+					assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+					break loop
 				default:
-					msgs = to11.GetMessages(1)
-					time.Sleep(1 * time.Millisecond)
-				}
-			}
-
-			msgs = to12.GetMessages(1)
-			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
-				select {
-				case <-ctx.Done():
-					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
-				default:
-					msgs = to12.GetMessages(1)
-					time.Sleep(1 * time.Millisecond)
-				}
-			}
-
-			msgs = to21.GetMessages(1)
-			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
-				select {
-				case <-ctx.Done():
-					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
-				default:
-					msgs = to21.GetMessages(1)
-					time.Sleep(1 * time.Millisecond)
-				}
-			}
-
-			msgs = to22.GetMessages(1)
-			for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
-				select {
-				case <-ctx.Done():
-					logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
-				default:
-					msgs = to22.GetMessages(1)
-					time.Sleep(1 * time.Millisecond)
-				}
-			}
-
-			// since this is a dropping WhereTo, the buffer can never be full
-			f.Stop()
-
-			<-stopped
-		})
-		// Explicitly tests the case where we forward to only one buffer
-		t.Run(tt.name+"_toOneStep", func(t *testing.T) {
-			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
-			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
-			to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
-			to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
-			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to11, to12},
-				"to2": {to21, to22},
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
-
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
-
-			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				PipelineName: "testPipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
-				},
-			}}
-
-			fetchWatermark := &testForwardFetcher{}
-			toVertexStores := buildToVertexWatermarkStores(toSteps)
-
-			f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
-
-			assert.NoError(t, err)
-			assert.False(t, to11.IsFull())
-			assert.False(t, to12.IsFull())
-
-			assert.True(t, to11.IsEmpty())
-			assert.True(t, to12.IsEmpty())
-
-			stopped := f.Start()
-			// write some data
-			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
-			assert.Equal(t, make([]error, batchSize), errs)
-			var updatedBatchSize int
-			if tt.batchSize > 1 {
-				updatedBatchSize = int(batchSize / 2)
-			} else {
-				updatedBatchSize = int(batchSize)
-			}
-			// read some data
-			readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
-			assert.NoError(t, err, "expected no error")
-
-			assert.Len(t, readMessages, updatedBatchSize)
-			for i, j := 0, 0; i < updatedBatchSize; i, j = i+1, j+2 {
-				assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
-				assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
-				assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
-				assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
-			}
-			// write some data
-			_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
-			assert.Equal(t, make([]error, 3*batchSize), errs)
-
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				otKeys1, _ := toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
-			loop:
-				for {
-					select {
-					case <-ctx.Done():
-						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
-						break loop
-					default:
-						if len(otKeys1) == 0 {
-							otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
-							time.Sleep(time.Millisecond * 10)
+					if len(otKeys1) == 0 {
+						otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
+						time.Sleep(time.Millisecond * 10)
+					} else {
+						// NOTE: in this test we only have one processor to publish
+						// so len(otKeys) should always be 1
+						otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
+						otValue1, _ := toVertexStores["to1"].OffsetTimelineStore().GetValue(ctx, otKeys1[0])
+						otDecode1, _ := wmb.DecodeToWMB(otValue1)
+						if batchSize > 1 && !otDecode1.Idle {
+							break loop
+						} else if batchSize == 1 && otDecode1.Idle {
+							break loop
 						} else {
-							// NOTE: in this test we only have one processor to publish
-							// so len(otKeys) should always be 1
-							otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
-							otValue1, _ := toVertexStores["to1"].OffsetTimelineStore().GetValue(ctx, otKeys1[0])
-							otDecode1, _ := wmb.DecodeToWMB(otValue1)
-							if tt.batchSize > 1 && !otDecode1.Idle {
-								break loop
-							} else if tt.batchSize == 1 && otDecode1.Idle {
-								break loop
-							} else {
-								time.Sleep(time.Millisecond * 10)
-							}
+							time.Sleep(time.Millisecond * 10)
 						}
 					}
-
 				}
-			}()
 
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				otKeys2, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-			loop:
-				for {
-					select {
-					case <-ctx.Done():
-						assert.Fail(t, "context cancelled while waiting to get a valid watermark")
-						break loop
-					default:
-						if len(otKeys2) == 0 {
-							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-							time.Sleep(time.Millisecond * 10)
+			}
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			otKeys2, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+		loop:
+			for {
+				select {
+				case <-ctx.Done():
+					assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+					break loop
+				default:
+					if len(otKeys2) == 0 {
+						otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+						time.Sleep(time.Millisecond * 10)
+					} else {
+						// NOTE: in this test we only have one processor to publish
+						// so len(otKeys) should always be 1
+						otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+						otValue2, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys2[0])
+						otDecode1, _ := wmb.DecodeToWMB(otValue2)
+						// if the batch size is 1, then the watermark should be idle because
+						// one of partitions will be idle
+						if batchSize > 1 && !otDecode1.Idle {
+							break loop
+						} else if batchSize == 1 && otDecode1.Idle {
+							break loop
 						} else {
-							// NOTE: in this test we only have one processor to publish
-							// so len(otKeys) should always be 1
-							otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
-							otValue2, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys2[0])
-							otDecode2, _ := wmb.DecodeToWMB(otValue2)
-							// if the batch size is 1, then the watermark should be idle because
-							// one of partitions will be idle
-							if otDecode2.Idle {
-								break loop
-							} else {
-								time.Sleep(time.Millisecond * 10)
-							}
+							time.Sleep(time.Millisecond * 10)
 						}
 					}
-
 				}
-			}()
-			wg.Wait()
 
-			// stop will cancel the contexts and therefore the forwarder stops without waiting
-			f.Stop()
-
-			<-stopped
-		})
-		// Test the scenario with Transformer error
-		t.Run(tt.name+"_TransformerError", func(t *testing.T) {
-			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to1},
 			}
+		}()
+		wg.Wait()
+		f.Stop()
+		<-stopped
+	})
+	// Explicitly tests the case where we drop all events
+	t.Run(testName+"_dropAll", func(t *testing.T) {
 
-			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				PipelineName: "testPipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
-				},
-			}}
+		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+		to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
+		to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
+		to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
+		to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
+		toSteps := map[string][]isb.BufferWriter{
+			"to1": {to11, to12},
+			"to2": {to21, to22},
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			toVertexStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyTransformerErrTest{}, myForwardApplyTransformerErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
+		vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+			},
+		}}
 
-			assert.NoError(t, err)
-			assert.False(t, to1.IsFull())
-			assert.True(t, to1.IsEmpty())
+		fetchWatermark := &testForwardFetcher{}
+		toVertexStores := buildToVertexWatermarkStores(toSteps)
 
-			stopped := f.Start()
-			// write some data
-			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
-			assert.Equal(t, make([]error, batchSize), errs)
-			assert.True(t, to1.IsEmpty())
+		f, err := NewDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
 
-			f.Stop()
-			time.Sleep(1 * time.Millisecond)
+		assert.NoError(t, err)
+		assert.False(t, to11.IsFull())
+		assert.False(t, to12.IsFull())
 
-			<-stopped
-		})
-		// Test the scenario with error
-		t.Run(tt.name+"_whereToError", func(t *testing.T) {
-			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to1},
+		assert.True(t, to11.IsEmpty())
+		assert.True(t, to12.IsEmpty())
+
+		stopped := f.Start()
+
+		// write some data
+		_, errs := fromStep.Write(ctx, writeMessages)
+		assert.Equal(t, make([]error, 4*batchSize), errs)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			otKeys1, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+		loop:
+			for {
+				select {
+				case <-ctx.Done():
+					assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+					break loop
+				default:
+					if len(otKeys1) == 0 {
+						otKeys1, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+						time.Sleep(time.Millisecond * 10)
+					} else {
+						// NOTE: in this test we only have one processor to publish
+						// so len(otKeys) should always be 1
+						otKeys1, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+						otValue1, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys1[0])
+						otDecode1, _ := wmb.DecodeToWMB(otValue1)
+						// if the batch size is 1, then the watermark should be idle because
+						// one of partitions will be idle
+						if otDecode1.Idle {
+							break loop
+						} else {
+							time.Sleep(time.Millisecond * 10)
+						}
+					}
+				}
+
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
+		}()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			otKeys2, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+		loop:
+			for {
+				select {
+				case <-ctx.Done():
+					assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+					break loop
+				default:
+					if len(otKeys2) == 0 {
+						otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+						time.Sleep(time.Millisecond * 10)
+					} else {
+						// NOTE: in this test we only have one processor to publish
+						// so len(otKeys) should always be 1
+						otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+						otValue2, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys2[0])
+						otDecode2, _ := wmb.DecodeToWMB(otValue2)
+						// if the batch size is 1, then the watermark should be idle because
+						// one of partitions will be idle
+						if otDecode2.Idle {
+							break loop
+						} else {
+							time.Sleep(time.Millisecond * 10)
+						}
+					}
+				}
 
-			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				PipelineName: "testPipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
-				},
-			}}
-
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			toVertexStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
-
-			assert.NoError(t, err)
-			assert.True(t, to1.IsEmpty())
-
-			stopped := f.Start()
-			// write some data
-			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
-			assert.Equal(t, make([]error, batchSize), errs)
-
-			f.Stop()
-			time.Sleep(1 * time.Millisecond)
-
-			assert.True(t, to1.IsEmpty())
-			<-stopped
-		})
-		t.Run(tt.name+"_withInternalError", func(t *testing.T) {
-			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to1},
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
+		}()
+		wg.Wait()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+		msgs := to11.GetMessages(1)
+		for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+			select {
+			case <-ctx.Done():
+				logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
+			default:
+				msgs = to11.GetMessages(1)
+				time.Sleep(1 * time.Millisecond)
+			}
+		}
 
-			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				PipelineName: "testPipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
-				},
-			}}
+		msgs = to12.GetMessages(1)
+		for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+			select {
+			case <-ctx.Done():
+				logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to1, %s", ctx.Err())
+			default:
+				msgs = to12.GetMessages(1)
+				time.Sleep(1 * time.Millisecond)
+			}
+		}
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			toVertexStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
+		msgs = to21.GetMessages(1)
+		for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+			select {
+			case <-ctx.Done():
+				logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
+			default:
+				msgs = to21.GetMessages(1)
+				time.Sleep(1 * time.Millisecond)
+			}
+		}
 
-			assert.NoError(t, err)
-			assert.False(t, to1.IsFull())
-			assert.True(t, to1.IsEmpty())
+		msgs = to22.GetMessages(1)
+		for len(msgs) == 0 || msgs[0].Kind != isb.WMB {
+			select {
+			case <-ctx.Done():
+				logging.FromContext(ctx).Fatalf("expect to have the ctrl message in to2, %s", ctx.Err())
+			default:
+				msgs = to22.GetMessages(1)
+				time.Sleep(1 * time.Millisecond)
+			}
+		}
 
-			stopped := f.Start()
-			// write some data
-			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
-			assert.Equal(t, make([]error, batchSize), errs)
+		// since this is a dropping WhereTo, the buffer can never be full
+		f.Stop()
 
-			f.Stop()
-			time.Sleep(1 * time.Millisecond)
-			<-stopped
-		})
-	}
+		<-stopped
+	})
+	// Explicitly tests the case where we forward to only one buffer
+	t.Run(testName+"_toOneStep", func(t *testing.T) {
+
+		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+		to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
+		to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
+		to21 := simplebuffer.NewInMemoryBuffer("to2-1", 2*batchSize, 0)
+		to22 := simplebuffer.NewInMemoryBuffer("to2-2", 2*batchSize, 1)
+		toSteps := map[string][]isb.BufferWriter{
+			"to1": {to11, to12},
+			"to2": {to21, to22},
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+		vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+			},
+		}}
+
+		fetchWatermark := &testForwardFetcher{}
+		toVertexStores := buildToVertexWatermarkStores(toSteps)
+
+		f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
+
+		assert.NoError(t, err)
+		assert.False(t, to11.IsFull())
+		assert.False(t, to12.IsFull())
+
+		assert.True(t, to11.IsEmpty())
+		assert.True(t, to12.IsEmpty())
+
+		stopped := f.Start()
+		// write some data
+		_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+		assert.Equal(t, make([]error, batchSize), errs)
+		var updatedBatchSize int
+		if batchSize > 1 {
+			updatedBatchSize = int(batchSize / 2)
+		} else {
+			updatedBatchSize = int(batchSize)
+		}
+		// read some data
+		readMessages, err := to11.Read(ctx, int64(updatedBatchSize))
+		assert.NoError(t, err, "expected no error")
+
+		assert.Len(t, readMessages, updatedBatchSize)
+		for i, j := 0, 0; i < updatedBatchSize; i, j = i+1, j+2 {
+			assert.Equal(t, []interface{}{writeMessages[j].MessageInfo}, []interface{}{readMessages[i].MessageInfo})
+			assert.Equal(t, []interface{}{writeMessages[j].Kind}, []interface{}{readMessages[i].Kind})
+			assert.Equal(t, []interface{}{writeMessages[j].Keys}, []interface{}{readMessages[i].Keys})
+			assert.Equal(t, []interface{}{writeMessages[j].Body}, []interface{}{readMessages[i].Body})
+		}
+		// write some data
+		_, errs = fromStep.Write(ctx, writeMessages[batchSize:4*batchSize])
+		assert.Equal(t, make([]error, 3*batchSize), errs)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			otKeys1, _ := toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
+		loop:
+			for {
+				select {
+				case <-ctx.Done():
+					assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+					break loop
+				default:
+					if len(otKeys1) == 0 {
+						otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
+						time.Sleep(time.Millisecond * 10)
+					} else {
+						// NOTE: in this test we only have one processor to publish
+						// so len(otKeys) should always be 1
+						otKeys1, _ = toVertexStores["to1"].OffsetTimelineStore().GetAllKeys(ctx)
+						otValue1, _ := toVertexStores["to1"].OffsetTimelineStore().GetValue(ctx, otKeys1[0])
+						otDecode1, _ := wmb.DecodeToWMB(otValue1)
+						if batchSize > 1 && !otDecode1.Idle {
+							break loop
+						} else if batchSize == 1 && otDecode1.Idle {
+							break loop
+						} else {
+							time.Sleep(time.Millisecond * 10)
+						}
+					}
+				}
+
+			}
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			otKeys2, _ := toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+		loop:
+			for {
+				select {
+				case <-ctx.Done():
+					assert.Fail(t, "context cancelled while waiting to get a valid watermark")
+					break loop
+				default:
+					if len(otKeys2) == 0 {
+						otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+						time.Sleep(time.Millisecond * 10)
+					} else {
+						// NOTE: in this test we only have one processor to publish
+						// so len(otKeys) should always be 1
+						otKeys2, _ = toVertexStores["to2"].OffsetTimelineStore().GetAllKeys(ctx)
+						otValue2, _ := toVertexStores["to2"].OffsetTimelineStore().GetValue(ctx, otKeys2[0])
+						otDecode2, _ := wmb.DecodeToWMB(otValue2)
+						// if the batch size is 1, then the watermark should be idle because
+						// one of partitions will be idle
+						if otDecode2.Idle {
+							break loop
+						} else {
+							time.Sleep(time.Millisecond * 10)
+						}
+					}
+				}
+
+			}
+		}()
+		wg.Wait()
+
+		// stop will cancel the contexts and therefore the forwarder stops without waiting
+		f.Stop()
+
+		<-stopped
+	})
+	// Test the scenario with Transformer error
+	t.Run(testName+"_TransformerError", func(t *testing.T) {
+
+		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+		to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+		toSteps := map[string][]isb.BufferWriter{
+			"to1": {to1},
+		}
+
+		vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+			},
+		}}
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+		fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+		toVertexStores := buildNoOpToVertexStores(toSteps)
+		f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyTransformerErrTest{}, myForwardApplyTransformerErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
+
+		assert.NoError(t, err)
+		assert.False(t, to1.IsFull())
+		assert.True(t, to1.IsEmpty())
+
+		stopped := f.Start()
+		// write some data
+		_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+		assert.Equal(t, make([]error, batchSize), errs)
+		assert.True(t, to1.IsEmpty())
+
+		f.Stop()
+		time.Sleep(1 * time.Millisecond)
+
+		<-stopped
+	})
+	// Test the scenario with error
+	t.Run(testName+"_whereToError", func(t *testing.T) {
+
+		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+		to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+		toSteps := map[string][]isb.BufferWriter{
+			"to1": {to1},
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+		vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+			},
+		}}
+
+		fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+		toVertexStores := buildNoOpToVertexStores(toSteps)
+		f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
+
+		assert.NoError(t, err)
+		assert.True(t, to1.IsEmpty())
+
+		stopped := f.Start()
+		// write some data
+		_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+		assert.Equal(t, make([]error, batchSize), errs)
+
+		f.Stop()
+		time.Sleep(1 * time.Millisecond)
+
+		assert.True(t, to1.IsEmpty())
+		<-stopped
+	})
+	t.Run(testName+"_withInternalError", func(t *testing.T) {
+
+		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+		to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+		toSteps := map[string][]isb.BufferWriter{
+			"to1": {to1},
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+		vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+			},
+		}}
+
+		fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+		toVertexStores := buildNoOpToVertexStores(toSteps)
+		f, err := NewDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
+
+		assert.NoError(t, err)
+		assert.False(t, to1.IsFull())
+		assert.True(t, to1.IsEmpty())
+
+		stopped := f.Start()
+		// write some data
+		_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+		assert.Equal(t, make([]error, batchSize), errs)
+
+		f.Stop()
+		time.Sleep(1 * time.Millisecond)
+		<-stopped
+	})
+
 }
 
 // mySourceForwardTest tests source data transformer by updating message event time, and then verifying new event time and IsLate assignments.
