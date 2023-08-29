@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,7 +41,14 @@ func TestMain(m *testing.M) {
 // testForwarderPublisher is for data_forward_test.go only
 type testForwarderPublisher struct {
 	Name string
-	Idle bool
+	idle bool
+	lock sync.RWMutex
+}
+
+func (t *testForwarderPublisher) IsIdle() bool {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	return t.idle
 }
 
 func (t *testForwarderPublisher) Close() error {
@@ -51,7 +59,9 @@ func (t *testForwarderPublisher) PublishWatermark(_ wmb.Watermark, _ isb.Offset,
 }
 
 func (t *testForwarderPublisher) PublishIdleWatermark(_ wmb.Watermark, _ isb.Offset, _ int32) {
-	t.Idle = true
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.idle = true
 }
 
 func (t *testForwarderPublisher) GetLatestWatermark() wmb.Watermark {
@@ -308,7 +318,7 @@ func TestNewDataForward(t *testing.T) {
 		assert.Equal(t, make([]error, batchSize), errs)
 
 		// we don't write control message for sink, only publish idle watermark
-		for !publishWatermark["to1"].(*testForwarderPublisher).Idle {
+		for !publishWatermark["to1"].(*testForwarderPublisher).IsIdle() {
 			select {
 			case <-ctx.Done():
 				logging.FromContext(ctx).Fatalf("expect to have the idle wm in to1, %s", ctx.Err())
@@ -316,7 +326,7 @@ func TestNewDataForward(t *testing.T) {
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
-		for !publishWatermark["to2"].(*testForwarderPublisher).Idle {
+		for !publishWatermark["to2"].(*testForwarderPublisher).IsIdle() {
 			select {
 			case <-ctx.Done():
 				logging.FromContext(ctx).Fatalf("expect to have the idle wm in to2, %s", ctx.Err())
@@ -395,7 +405,7 @@ func TestNewDataForward(t *testing.T) {
 		}
 
 		// we don't write control message for sink, only publish idle watermark
-		for !publishWatermark["to2"].(*testForwarderPublisher).Idle {
+		for !publishWatermark["to2"].(*testForwarderPublisher).IsIdle() {
 			select {
 			case <-ctx.Done():
 				logging.FromContext(ctx).Fatalf("expect to have the idle wm in to2, %s", ctx.Err())
