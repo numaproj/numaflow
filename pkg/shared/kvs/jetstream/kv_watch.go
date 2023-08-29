@@ -167,7 +167,7 @@ func (jsw *jetStreamWatch) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 				kvLastUpdatedTime := jsw.lastUpdateKVTime()
 
 				// if the last update time is zero, it means that there are no key-value pairs in the store yet or ctx was canceled both the cases we should not recreate the watcher
-				// if the last update time is not after the previous fetch time, it means that the store is not getting any updates
+				// if the last update time is not after the previous fetch time, it means that the store is not getting any updates (watermark is not getting updated)
 				// therefore, we don't have to recreate the watcher
 				if kvLastUpdatedTime.IsZero() || !kvLastUpdatedTime.After(jsw.previousFetchTime) {
 					jsw.log.Debug("The watcher is not receiving any updates, but the store is not getting any updates either", zap.String("watcher", jsw.GetKVName()), zap.Time("lastUpdateKVTime", kvLastUpdatedTime), zap.Time("previousFetchTime", jsw.previousFetchTime))
