@@ -285,8 +285,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, udsource.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		udsource, err := udsource.New(sp.VertexInstance, writers, fsd, transformerApplier, udsGRPCClient, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
-		return udsource, err
+		return udsource.New(sp.VertexInstance, writers, fsd, transformerApplier, udsGRPCClient, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
 	} else if x := src.Generator; x != nil {
 		readOptions := []generator.Option{
 			generator.WithLogger(logger),
@@ -361,7 +360,7 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 		}
 
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
+			// If returned tags are not "DROP", and there are no conditions defined in the edge, treat it as "ALL".
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
 				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)

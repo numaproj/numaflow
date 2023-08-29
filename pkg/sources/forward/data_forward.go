@@ -20,12 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -374,7 +372,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	// when we apply transformer, we don't handle partial errors (it's either non or all, non will return early),
 	// so we should be able to ack all the readOffsets including data messages and control messages
-	err = df.ackFromBuffer(ctx, readOffsets)
+	err = df.ackFromSource(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
 		df.opts.logger.Errorw("failed to ack from source", zap.Error(err))
@@ -387,54 +385,11 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 }
 
-// ackFromBuffer acknowledges an array of offsets back to the reader
-// and is a blocking call or until shutdown has been initiated.
-func (df *DataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) error {
-	var ackRetryBackOff = wait.Backoff{
-		Factor:   1,
-		Jitter:   0.1,
-		Steps:    math.MaxInt,
-		Duration: time.Millisecond * 10,
-	}
-	var ackOffsets = offsets
-	attempt := 0
-
-	ctxClosedErr := wait.ExponentialBackoff(ackRetryBackOff, func() (done bool, err error) {
-		errs := df.reader.Ack(ctx, ackOffsets)
-		attempt += 1
-		summarizedErr := errorArrayToMap(errs)
-		var failedOffsets []isb.Offset
-		if len(summarizedErr) > 0 {
-			df.opts.logger.Errorw("Failed to ack from buffer, retrying", zap.Any("errors", summarizedErr), zap.Int("attempt", attempt))
-			// no point retrying if ctx.Done has been invoked
-			select {
-			case <-ctx.Done():
-				// no point in retrying after we have been asked to stop.
-				return false, ctx.Err()
-			default:
-				// retry only the failed offsets
-				for i, offset := range ackOffsets {
-					if errs[i] != nil {
-						failedOffsets = append(failedOffsets, offset)
-					}
-				}
-				ackOffsets = failedOffsets
-				if ok, _ := df.IsShuttingDown(); ok {
-					ackErr := fmt.Errorf("AckFromBuffer, Stop called while stuck on an internal error, %v", summarizedErr)
-					return false, ackErr
-				}
-				return false, nil
-			}
-		} else {
-			return true, nil
-		}
-	})
-
-	if ctxClosedErr != nil {
-		df.opts.logger.Errorw("Context closed while waiting to ack messages inside forward", zap.Error(ctxClosedErr))
-	}
-
-	return ctxClosedErr
+func (df *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {
+	// for all the sources, we either ack all offsets or none.
+	// when a batch ack fails, the source Ack() function populate the error array with the same error;
+	// hence we can just return the first error.
+	return df.reader.Ack(ctx, offsets)[0]
 }
 
 // writeToBuffers is a blocking call until all the messages have been forwarded to all the toBuffers, or a shutdown

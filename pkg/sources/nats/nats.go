@@ -52,7 +52,7 @@ type natsSource struct {
 	messages    chan *isb.ReadMessage
 	readTimeout time.Duration
 
-	cancelfn  context.CancelFunc
+	cancelFn  context.CancelFunc
 	forwarder *sourceforward.DataForward
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
@@ -75,9 +75,8 @@ func New(
 		readTimeout:  1 * time.Second, // default timeout
 	}
 	for _, o := range opts {
-		operr := o(n)
-		if operr != nil {
-			return nil, operr
+		if err := o(n); err != nil {
+			return nil, err
 		}
 	}
 	if n.logger == nil {
@@ -98,10 +97,10 @@ func New(
 	}
 	n.forwarder = forwarder
 	ctx, cancel := context.WithCancel(context.Background())
-	n.cancelfn = cancel
+	n.cancelFn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
+	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
 	n.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	source := vertexInstance.Vertex.Spec.Source.Nats
@@ -248,7 +247,7 @@ func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		// toVertexPartitionIdx is 0 because we publish watermarks within source itself.
+		// toVertexPartitionIdx is 0 because we publish watermarks within the source itself.
 		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }
@@ -261,7 +260,7 @@ func (ns *natsSource) NoAck(_ context.Context, _ []isb.Offset) {}
 
 func (ns *natsSource) Close() error {
 	ns.logger.Info("Shutting down nats source server...")
-	ns.cancelfn()
+	ns.cancelFn()
 	if err := ns.sub.Unsubscribe(); err != nil {
 		ns.logger.Errorw("Failed to unsubscribe nats subscription", zap.Error(err))
 	}

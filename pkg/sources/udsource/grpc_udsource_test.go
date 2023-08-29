@@ -28,6 +28,7 @@ import (
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1/sourcemock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -38,6 +39,10 @@ import (
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
 	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 )
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
 
 type rpcMsg struct {
 	msg proto.Message
