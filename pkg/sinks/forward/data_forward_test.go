@@ -24,10 +24,8 @@ import (
 )
 
 const (
-	testPipelineName    = "testPipeline"
-	testVertexName      = "testVertex"
-	testProcessorEntity = "publisherTestPod"
-	publishKeyspace     = testPipelineName + "_" + testProcessorEntity + "_%s"
+	testPipelineName = "testPipeline"
+	testVertexName   = "testVertex"
 )
 
 var (
