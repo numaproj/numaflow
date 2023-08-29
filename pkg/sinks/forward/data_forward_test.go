@@ -619,7 +619,7 @@ func validateMetrics(batchSize int64) (err error) {
 		`
 	var writeExpected string
 	writeExpected = `
-		sink_forwarder_write_total{partition_name="to",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
+		sink_forwarder_write_total{partition_name="to1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
 	`
 	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "sink_forwarder_write_total")
 	if err != nil {
