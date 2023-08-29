@@ -158,7 +158,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 				}
 				select {
 				case <-ctx.Done():
-					t.Fatalf("expected 10 msgs, %s", ctx.Err())
+					t.Fatalf("expected 10 msgs, got %d, %s", streamInfo.State.Msgs, ctx.Err())
 				default:
 					time.Sleep(1 * time.Millisecond)
 				}
