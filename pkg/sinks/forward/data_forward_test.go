@@ -125,8 +125,8 @@ func TestNewDataForward(t *testing.T) {
 
 		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-		fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-		fetchWatermark = &testForwardFetcher{}
+		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+		fetchWatermark := &testForwardFetcher{}
 		f, err := NewDataForward(vertex, fromStep, toSteps, myForwardTest{}, fetchWatermark, publishWatermark)
 
 		assert.NoError(t, err)
@@ -209,8 +209,8 @@ func TestNewDataForward(t *testing.T) {
 			},
 		}}
 
-		fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-		fetchWatermark = &testForwardFetcher{}
+		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+		fetchWatermark := &testForwardFetcher{}
 		f, err := NewDataForward(vertex, fromStep, toSteps, myForwardToAllTest{}, fetchWatermark, publishWatermark)
 
 		assert.NoError(t, err)
@@ -465,17 +465,6 @@ func TestNewDataForward(t *testing.T) {
 	})
 }
 
-// mySourceForwardTest tests source data transformer by updating message event time, and then verifying new event time and IsLate assignments.
-type mySourceForwardTest struct {
-}
-
-func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
-	return []forward.VertexBuffer{{
-		ToVertexName:         "to1",
-		ToVertexPartitionIdx: 0,
-	}}, nil
-}
-
 // TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
 func TestWriteToBuffer(t *testing.T) {
 	tests := []struct {
@@ -583,19 +572,17 @@ func (f myForwardDropTest) ApplyTransform(ctx context.Context, message *isb.Read
 }
 
 type myForwardToAllTest struct {
-	count int
 }
 
 func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	var output = []forward.VertexBuffer{{
 		ToVertexName:         "to1",
-		ToVertexPartitionIdx: int32(f.count % 2),
+		ToVertexPartitionIdx: 0,
 	},
 		{
 			ToVertexName:         "to2",
-			ToVertexPartitionIdx: int32(f.count % 2),
+			ToVertexPartitionIdx: 0,
 		}}
-	f.count++
 	return output, nil
 }
 
@@ -627,8 +614,7 @@ func validateMetrics(batchSize int64) (err error) {
 		# HELP sink_forwarder_write_total Total number of Messages Written
 		# TYPE sink_forwarder_write_total counter
 		`
-	var writeExpected string
-	writeExpected = `
+	writeExpected := `
 		sink_forwarder_write_total{partition_name="to1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
 	`
 	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "sink_forwarder_write_total")

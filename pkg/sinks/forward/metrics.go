@@ -77,13 +77,6 @@ var ackMessageError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of Acknowledged Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
-// udfError is used to indicate the number of UDF errors
-var udfError = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "sink_forwarder",
-	Name:      "udf_error_total",
-	Help:      "Total number of UDF Errors",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
-
 // platformError is used to indicate the number of Internal/Platform errors
 var platformError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "sink_forwarder",
