@@ -19,7 +19,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
@@ -411,79 +410,49 @@ func TestNewDataForward(t *testing.T) {
 		<-stopped
 	})
 
-	// // Test the scenario with error
-	// t.Run(testName+"_whereToError", func(t *testing.T) {
-	//
-	// 	fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-	// 	to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-	// 	toSteps := map[string][]isb.BufferWriter{
-	// 		"to1": {to1},
-	// 	}
-	// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	// 	defer cancel()
-	//
-	// 	writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
-	//
-	// 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-	// 		PipelineName: "testPipeline",
-	// 		AbstractVertex: dfv1.AbstractVertex{
-	// 			Name: "testVertex",
-	// 		},
-	// 	}}
-	//
-	// 	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	// 	toVertexStores := buildNoOpToVertexStores(toSteps)
-	// 	f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
-	//
-	// 	assert.NoError(t, err)
-	// 	assert.True(t, to1.IsEmpty())
-	//
-	// 	stopped := f.Start()
-	// 	// write some data
-	// 	_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
-	// 	assert.Equal(t, make([]error, batchSize), errs)
-	//
-	// 	f.Stop()
-	// 	time.Sleep(1 * time.Millisecond)
-	//
-	// 	assert.True(t, to1.IsEmpty())
-	// 	<-stopped
-	// })
-	// t.Run(testName+"_withInternalError", func(t *testing.T) {
-	// 	fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-	// 	to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
-	// 	toSteps := map[string][]isb.BufferWriter{
-	// 		"to1": {to1},
-	// 	}
-	// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	// 	defer cancel()
-	//
-	// 	writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
-	//
-	// 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-	// 		PipelineName: "testPipeline",
-	// 		AbstractVertex: dfv1.AbstractVertex{
-	// 			Name: "testVertex",
-	// 		},
-	// 	}}
-	//
-	// 	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	// 	toVertexStores := buildNoOpToVertexStores(toSteps)
-	// 	f, err := NewDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(batchSize))
-	//
-	// 	assert.NoError(t, err)
-	// 	assert.False(t, to1.IsFull())
-	// 	assert.True(t, to1.IsEmpty())
-	//
-	// 	stopped := f.Start()
-	// 	// write some data
-	// 	_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
-	// 	assert.Equal(t, make([]error, batchSize), errs)
-	//
-	// 	f.Stop()
-	// 	time.Sleep(1 * time.Millisecond)
-	// 	<-stopped
-	// })
+	t.Run(testName+"_withInternalError", func(t *testing.T) {
+		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+		to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
+		toSteps := map[string][]isb.BufferWriter{
+			"to1": {to1},
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+
+		vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: testPipelineName,
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: testVertexName,
+			},
+		}}
+
+		fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+		f, err := NewDataForward(vertex, fromStep, toSteps, myForwardWhereToErrTest{}, fetchWatermark, publishWatermark)
+
+		assert.NoError(t, err)
+		assert.True(t, to1.IsEmpty())
+
+		stopped := f.Start()
+		// write some data
+		_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
+		assert.Equal(t, make([]error, batchSize), errs)
+
+		f.Stop()
+		time.Sleep(100 * time.Millisecond)
+
+		// after write data, the store is still empty because we got where to error
+		assert.True(t, to1.IsEmpty())
+
+		// all the events are not acked, so they should still be in the from buffer
+		for _, msg := range fromStep.GetMessages(int(batchSize)) {
+			assert.NotEqual(t, time.Time{}, msg.EventTime)
+		}
+		assert.Equal(t, time.Time{}, fromStep.GetMessages(int(batchSize) + 1)[int(batchSize)].EventTime)
+
+		<-stopped
+	})
 }
 
 // mySourceForwardTest tests source data transformer by updating message event time, and then verifying new event time and IsLate assignments.
@@ -746,20 +715,10 @@ func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuf
 	return output, nil
 }
 
-type myForwardInternalErrTest struct {
+type myForwardWhereToErrTest struct {
 }
 
-func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
-	return []forward.VertexBuffer{{
-		ToVertexName:         "to1",
-		ToVertexPartitionIdx: 0,
-	}}, nil
-}
-
-type myForwardApplyWhereToErrTest struct {
-}
-
-func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+func (f myForwardWhereToErrTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -813,24 +772,4 @@ func metricsReset() {
 	readMessagesCount.Reset()
 	writeMessagesCount.Reset()
 	ackMessagesCount.Reset()
-}
-
-// buildPublisherMap builds OTStore and publisher for each toBuffer
-func buildToVertexWatermarkStores(toBuffers map[string][]isb.BufferWriter) map[string]wmstore.WatermarkStore {
-	var ctx = context.Background()
-	otStores := make(map[string]wmstore.WatermarkStore)
-	for key := range toBuffers {
-		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, fmt.Sprintf(publishKeyspace, key))
-		otStores[key] = store
-	}
-	return otStores
-}
-
-func buildNoOpToVertexStores(toBuffers map[string][]isb.BufferWriter) map[string]wmstore.WatermarkStore {
-	toVertexStores := make(map[string]wmstore.WatermarkStore)
-	for key := range toBuffers {
-		store, _ := wmstore.BuildNoOpWatermarkStore()
-		toVertexStores[key] = store
-	}
-	return toVertexStores
 }
