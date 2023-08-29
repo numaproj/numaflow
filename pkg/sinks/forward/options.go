@@ -25,9 +25,10 @@ type Option func(*options) error
 
 func DefaultOptions() *options {
 	return &options{
-		readBatchSize: dfv1.DefaultReadBatchSize,
-		retryInterval: time.Millisecond,
-		logger:        logging.NewLogger(),
+		readBatchSize:   dfv1.DefaultReadBatchSize,
+		sinkConcurrency: dfv1.DefaultReadBatchSize,
+		retryInterval:   time.Millisecond,
+		logger:          logging.NewLogger(),
 	}
 }
 
