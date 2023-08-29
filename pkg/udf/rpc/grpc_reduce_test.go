@@ -145,6 +145,7 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
+
 		go func() {
 			<-ctx.Done()
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -159,7 +160,11 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		go func() {
 			for index := range messages {
-				messageCh <- &messages[index]
+				select {
+				case <-ctx.Done():
+					return
+				case messageCh <- &messages[index]:
+				}
 			}
 			close(messageCh)
 		}()

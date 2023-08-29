@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
@@ -75,10 +74,13 @@ func (u *GRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 
 // ApplyReduce accepts a channel of isbMessages and returns the aggregated result
 func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	datumCh := make(chan *reducepb.ReduceRequest)
-	var wg sync.WaitGroup
-	var result *reducepb.ReduceResponse
-	var err error
+	var (
+		result     *reducepb.ReduceResponse
+		err        error
+		errCh      = make(chan error, 1)
+		responseCh = make(chan *reducepb.ReduceResponse, 1)
+		datumCh    = make(chan *reducepb.ReduceRequest)
+	)
 
 	// pass key and window information inside the context
 	mdMap := map[string]string{
@@ -86,100 +88,90 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 		shared.WinEndTime:   strconv.FormatInt(partitionID.End.UnixMilli(), 10),
 	}
 
-	ctx = metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
+	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	grpcCtx := metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
+
+	// There can be two error scenarios:
+	// 1. The u.client.ReduceFn method returns an error before reading all the messages from the messageStream
+	// 2. The u.client.ReduceFn method returns an error after reading all the messages from the messageStream
 
 	// invoke the reduceFn method with datumCh channel
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		// TODO handle this error here itself
-		result, err = u.client.ReduceFn(ctx, datumCh)
+		result, err = u.client.ReduceFn(grpcCtx, datumCh)
+		if err != nil {
+			errCh <- err
+		} else {
+			responseCh <- result
+		}
+		close(errCh)
+		close(responseCh)
 	}()
 
-readLoop:
-	for {
-		select {
-		case msg, ok := <-messageStream:
-			if msg != nil {
+	// create datum from isbMessage and send it to datumCh channel for reduceFn
+	go func() {
+	readLoop:
+		for {
+			select {
+			case msg, ok := <-messageStream:
+				// if the messageStream is closed, break the loop
+				if !ok {
+					break readLoop
+				}
+				// if the message is nil, break the loop
+				if msg == nil {
+					break readLoop
+				}
 				d := createDatum(msg)
+
+				// send the datum to datumCh channel, handle the case when the context is canceled
 				select {
 				case datumCh <- d:
-				case <-ctx.Done():
-					close(datumCh)
-					return nil, ctx.Err()
+				case <-cctx.Done():
+					break readLoop
 				}
-			}
-			if !ok {
+
+			case <-cctx.Done(): // if the context is done, break the loop
 				break readLoop
 			}
-		case <-ctx.Done():
-			close(datumCh)
-			return nil, ctx.Err()
 		}
-	}
+		// after reading all the messages from the messageStream or if ctx was canceled close the datumCh channel
+		close(datumCh)
+	}()
 
-	// close the datumCh, let the reduceFn know that there are no more messages
-	close(datumCh)
-
-	wg.Wait()
-
-	if err != nil {
-		// if any error happens in reduce
-		// will exit and restart the numa container
-		udfErr, _ := sdkerr.FromError(err)
-		switch udfErr.ErrorKind() {
-		case sdkerr.Retryable:
-			// TODO: currently we don't handle retryable errors for reduce
-			return nil, ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
+	// wait for the reduceFn to finish
+	for {
+		select {
+		case err = <-errCh:
+			if err != nil {
+				return nil, convertToUdfError(err)
 			}
-		case sdkerr.NonRetryable:
-			return nil, ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			}
-		default:
-			return nil, ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			}
-		}
-	}
-
-	taggedMessages := make([]*isb.WriteMessage, 0)
-	for _, response := range result.GetResults() {
-		keys := response.Keys
-		taggedMessage := &isb.WriteMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: partitionID.End.Add(-1 * time.Millisecond),
-						IsLate:    false,
+		case result = <-responseCh:
+			taggedMessages := make([]*isb.WriteMessage, 0)
+			for _, response := range result.GetResults() {
+				keys := response.Keys
+				taggedMessage := &isb.WriteMessage{
+					Message: isb.Message{
+						Header: isb.Header{
+							MessageInfo: isb.MessageInfo{
+								EventTime: partitionID.End.Add(-1 * time.Millisecond),
+								IsLate:    false,
+							},
+							Keys: keys,
+						},
+						Body: isb.Body{
+							Payload: response.Value,
+						},
 					},
-					Keys: keys,
-				},
-				Body: isb.Body{
-					Payload: response.Value,
-				},
-			},
-			Tags: response.Tags,
+					Tags: response.Tags,
+				}
+				taggedMessages = append(taggedMessages, taggedMessage)
+			}
+			return taggedMessages, nil
+		case <-cctx.Done():
+			return nil, convertToUdfError(ctx.Err())
 		}
-		taggedMessages = append(taggedMessages, taggedMessage)
 	}
-	return taggedMessages, nil
 }
 
 func createDatum(readMessage *isb.ReadMessage) *reducepb.ReduceRequest {
@@ -193,4 +185,41 @@ func createDatum(readMessage *isb.ReadMessage) *reducepb.ReduceRequest {
 		Watermark: timestamppb.New(readMessage.Watermark),
 	}
 	return d
+}
+
+// convertToUdfError converts the error returned by the reduceFn to ApplyUDFErr
+func convertToUdfError(err error) ApplyUDFErr {
+	// if any error happens in reduce
+	// will exit and restart the numa container
+	udfErr, _ := sdkerr.FromError(err)
+	switch udfErr.ErrorKind() {
+	case sdkerr.Retryable:
+		// TODO: currently we don't handle retryable errors for reduce
+		return ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		}
+	case sdkerr.NonRetryable:
+		return ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		}
+	default:
+		return ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		}
+	}
 }
