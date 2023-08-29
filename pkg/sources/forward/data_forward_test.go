@@ -91,7 +91,7 @@ func (f myForwardTest) ApplyTransform(ctx context.Context, message *isb.ReadMess
 
 func TestNewDataForward(t *testing.T) {
 	var (
-		testName        = "sink_forward"
+		testName        = "source_forward"
 		batchSize int64 = 10
 	)
 
