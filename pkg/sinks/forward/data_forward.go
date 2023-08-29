@@ -296,7 +296,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			}
 		}
 	}
-	fmt.Println(activeWatermarkBuffers)
 	// - condition1 "len(dataMessages) > 0" :
 	//   Meaning, we do have some data messages, but we may not have written to all out buffers or its partitions.
 	//   It could be all data messages are dropped, or conditional forwarding to part of the out buffers.
