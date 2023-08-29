@@ -466,226 +466,100 @@ func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]forward.VertexBu
 	}}, nil
 }
 
-type mySourceForwardTestRoundRobin struct {
-	count int
-}
+// TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
+func TestWriteToBuffer(t *testing.T) {
+	tests := []struct {
+		name       string
+		batchSize  int64
+		strategy   dfv1.BufferFullWritingStrategy
+		throwError bool
+	}{
+		{
+			name:      "test-discard-latest",
+			batchSize: 10,
+			strategy:  dfv1.DiscardLatest,
+			// should not throw any error as we drop messages and finish writing before context is cancelled
+			throwError: false,
+		},
+		{
+			name:      "test-retry-until-success",
+			batchSize: 10,
+			strategy:  dfv1.RetryUntilSuccess,
+			// should throw context closed error as we keep retrying writing until context is cancelled
+			throwError: true,
+		},
+		{
+			name:      "test-discard-latest",
+			batchSize: 1,
+			strategy:  dfv1.DiscardLatest,
+			// should not throw any error as we drop messages and finish writing before context is cancelled
+			throwError: false,
+		},
+		{
+			name:      "test-retry-until-success",
+			batchSize: 1,
+			strategy:  dfv1.RetryUntilSuccess,
+			// should throw context closed error as we keep retrying writing until context is cancelled
+			throwError: true,
+		},
+	}
+	for _, value := range tests {
+		t.Run(value.name, func(t *testing.T) {
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*value.batchSize, 0)
+			buffer := simplebuffer.NewInMemoryBuffer("to1", value.batchSize, 0, simplebuffer.WithBufferFullWritingStrategy(value.strategy))
+			toSteps := map[string][]isb.BufferWriter{
+				"to1": {buffer},
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
 
-func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
-	var output = []forward.VertexBuffer{{
-		ToVertexName:         "to1",
-		ToVertexPartitionIdx: int32(f.count % 2),
-	}}
-	f.count++
-	return output, nil
-}
+			fetchWatermark := &testForwardFetcher{}
+			publishWatermark := map[string]publish.Publisher{
+				"to1": &testForwarderPublisher{},
+				"to2": &testForwarderPublisher{},
+			}
+			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, fetchWatermark, publishWatermark)
 
-// func TestDataForwardSinglePartition(t *testing.T) {
-// 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
-// 	to1 := simplebuffer.NewInMemoryBuffer("to1", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
-// 	toSteps := map[string][]isb.BufferWriter{
-// 		"to1": {to1},
-// 	}
-// 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-// 		PipelineName: "testPipeline",
-// 		AbstractVertex: dfv1.AbstractVertex{
-// 			Name: "receivingVertex",
-// 		},
-// 	}}
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-// 	defer cancel()
-//
-// 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-// 	fetchWatermark := &testForwardFetcher{}
-// 	toVertexStores := buildNoOpToVertexStores(toSteps)
-//
-// 	f, err := NewDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(5))
-// 	assert.NoError(t, err)
-// 	assert.False(t, to1.IsFull())
-// 	assert.True(t, to1.IsEmpty())
-//
-// 	stopped := f.Start()
-// 	count := int64(2)
-// 	// write some data
-// 	_, errs := fromStep.Write(ctx, writeMessages[0:count])
-// 	assert.Equal(t, make([]error, count), errs)
-//
-// 	// read some data
-// 	readMessages, err := to1.Read(ctx, count)
-// 	assert.NoError(t, err, "expected no error")
-// 	assert.Len(t, readMessages, int(count))
-// 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-// 	assert.Equal(t, []interface{}{"0-0-receivingVertex-0", "1-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
-// 	for _, m := range readMessages {
-// 		// verify new event time gets assigned to messages.
-// 		assert.Equal(t, testSourceNewEventTime, m.EventTime)
-// 		// verify messages are marked as late because of event time update.
-// 		assert.Equal(t, true, m.IsLate)
-// 	}
-// 	f.Stop()
-// 	time.Sleep(1 * time.Millisecond)
-// 	// only for shutdown will work as from buffer is not empty
-// 	f.ForceStop()
-// 	<-stopped
-// }
-//
-// func TestDataForwardMultiplePartition(t *testing.T) {
-// 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
-// 	to11 := simplebuffer.NewInMemoryBuffer("to1-0", 10, 0, simplebuffer.WithReadTimeOut(time.Second*10))
-// 	to12 := simplebuffer.NewInMemoryBuffer("to1-1", 10, 1, simplebuffer.WithReadTimeOut(time.Second*10))
-// 	toSteps := map[string][]isb.BufferWriter{
-// 		"to1": {to11, to12},
-// 	}
-// 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-// 		PipelineName: "testPipeline",
-// 		AbstractVertex: dfv1.AbstractVertex{
-// 			Name: "receivingVertex",
-// 		},
-// 	}}
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-// 	defer cancel()
-//
-// 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-// 	fetchWatermark := &testForwardFetcher{}
-// 	toVertexStores := buildNoOpToVertexStores(toSteps)
-//
-// 	f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(5))
-// 	assert.NoError(t, err)
-// 	assert.False(t, to11.IsFull())
-// 	assert.False(t, to12.IsFull())
-// 	assert.True(t, to11.IsEmpty())
-// 	assert.True(t, to12.IsEmpty())
-//
-// 	stopped := f.Start()
-// 	count := int64(4)
-// 	// write some data
-// 	_, errs := fromStep.Write(ctx, writeMessages[0:count])
-// 	assert.Equal(t, make([]error, count), errs)
-//
-// 	time.Sleep(time.Second)
-// 	// read some data
-// 	// since we have produced four messages, both the partitions should have two messages each.(we write in round-robin fashion)
-// 	readMessages, err := to11.Read(ctx, 2)
-// 	assert.NoError(t, err, "expected no error")
-// 	assert.Len(t, readMessages, 2)
-// 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[2].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-// 	assert.Equal(t, []interface{}{"0-0-receivingVertex-0", "2-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
-// 	for _, m := range readMessages {
-// 		// verify new event time gets assigned to messages.
-// 		assert.Equal(t, testSourceNewEventTime, m.EventTime)
-// 		// verify messages are marked as late because of event time update.
-// 		assert.Equal(t, true, m.IsLate)
-// 	}
-//
-// 	time.Sleep(time.Second)
-//
-// 	readMessages, err = to12.Read(ctx, 2)
-// 	assert.NoError(t, err, "expected no error")
-// 	assert.Len(t, readMessages, 2)
-// 	assert.Equal(t, []interface{}{writeMessages[1].Header.Keys, writeMessages[3].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
-// 	assert.Equal(t, []interface{}{"1-0-receivingVertex-0", "3-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
-// 	for _, m := range readMessages {
-// 		// verify new event time gets assigned to messages.
-// 		assert.Equal(t, testSourceNewEventTime, m.EventTime)
-// 		// verify messages are marked as late because of event time update.
-// 		assert.Equal(t, true, m.IsLate)
-// 	}
-// 	f.Stop()
-// 	time.Sleep(1 * time.Millisecond)
-// 	// only for shutdown will work as from buffer is not empty
-// 	f.ForceStop()
-// 	<-stopped
-// }
-//
-// // TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
-// func TestWriteToBuffer(t *testing.T) {
-// 	tests := []struct {
-// 		name       string
-// 		batchSize  int64
-// 		strategy   dfv1.BufferFullWritingStrategy
-// 		throwError bool
-// 	}{
-// 		{
-// 			name:      "test-discard-latest",
-// 			batchSize: 10,
-// 			strategy:  dfv1.DiscardLatest,
-// 			// should not throw any error as we drop messages and finish writing before context is cancelled
-// 			throwError: false,
-// 		},
-// 		{
-// 			name:      "test-retry-until-success",
-// 			batchSize: 10,
-// 			strategy:  dfv1.RetryUntilSuccess,
-// 			// should throw context closed error as we keep retrying writing until context is cancelled
-// 			throwError: true,
-// 		},
-// 		{
-// 			name:      "test-discard-latest",
-// 			batchSize: 1,
-// 			strategy:  dfv1.DiscardLatest,
-// 			// should not throw any error as we drop messages and finish writing before context is cancelled
-// 			throwError: false,
-// 		},
-// 		{
-// 			name:      "test-retry-until-success",
-// 			batchSize: 1,
-// 			strategy:  dfv1.RetryUntilSuccess,
-// 			// should throw context closed error as we keep retrying writing until context is cancelled
-// 			throwError: true,
-// 		},
-// 	}
-// 	for _, value := range tests {
-// 		t.Run(value.name, func(t *testing.T) {
-// 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*value.batchSize, 0)
-// 			buffer := simplebuffer.NewInMemoryBuffer("to1", value.batchSize, 0, simplebuffer.WithBufferFullWritingStrategy(value.strategy))
-// 			toSteps := map[string][]isb.BufferWriter{
-// 				"to1": {buffer},
-// 			}
-// 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-// 			defer cancel()
-// 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-// 				PipelineName: "testPipeline",
-// 				AbstractVertex: dfv1.AbstractVertex{
-// 					Name: "testVertex",
-// 				},
-// 			}}
-//
-// 			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-// 			toVertexStores := buildNoOpToVertexStores(toSteps)
-// 			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, WithReadBatchSize(value.batchSize))
-// 			assert.NoError(t, err)
-// 			assert.False(t, buffer.IsFull())
-// 			assert.True(t, buffer.IsEmpty())
-//
-// 			stopped := f.Start()
-// 			go func() {
-// 				for !buffer.IsFull() {
-// 					select {
-// 					case <-ctx.Done():
-// 						logging.FromContext(ctx).Fatalf("not full, %s", ctx.Err())
-// 					default:
-// 						time.Sleep(1 * time.Millisecond)
-// 					}
-// 				}
-// 				// stop will cancel the context
-// 				f.Stop()
-// 			}()
-//
-// 			// try to write to buffer after it is full.
-// 			var messageToStep = make(map[string][][]isb.Message)
-// 			messageToStep["to1"] = make([][]isb.Message, 1)
-// 			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
-// 			messageToStep["to1"][0] = append(messageToStep["to1"][0], writeMessages[0:value.batchSize+1]...)
-// 			_, err = f.writeToBuffers(ctx, messageToStep)
-//
-// 			assert.Equal(t, value.throwError, err != nil)
-// 			if value.throwError {
-// 				// assert the number of failed messages
-// 				assert.True(t, strings.Contains(err.Error(), "with failed messages:1"))
-// 			}
-// 			<-stopped
-// 		})
-// 	}
-// }
+			assert.NoError(t, err)
+			assert.False(t, buffer.IsFull())
+			assert.True(t, buffer.IsEmpty())
+
+			stopped := f.Start()
+			go func() {
+				for !buffer.IsFull() {
+					select {
+					case <-ctx.Done():
+						logging.FromContext(ctx).Fatalf("not full, %s", ctx.Err())
+					default:
+						time.Sleep(1 * time.Millisecond)
+					}
+				}
+				// stop will cancel the context
+				f.Stop()
+			}()
+
+			// try to write to buffer after it is full.
+			var messageToStep = make(map[string][][]isb.Message)
+			messageToStep["to1"] = make([][]isb.Message, 1)
+			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
+			messageToStep["to1"][0] = append(messageToStep["to1"][0], writeMessages[0:value.batchSize+1]...)
+			_, err = f.writeToBuffers(ctx, messageToStep)
+
+			assert.Equal(t, value.throwError, err != nil)
+			if value.throwError {
+				// assert the number of failed messages
+				assert.True(t, strings.Contains(err.Error(), "with failed messages:1"))
+			}
+			<-stopped
+		})
+	}
+}
 
 type myForwardDropTest struct {
 }
