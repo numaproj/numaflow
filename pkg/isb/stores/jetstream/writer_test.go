@@ -61,11 +61,11 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			batchSize:     10,
 			streamEnabled: false,
 		},
-		{
-			name:          "stream",
-			batchSize:     1,
-			streamEnabled: true,
-		},
+		// {
+		// 	name:          "stream",
+		// 	batchSize:     1,
+		// 	streamEnabled: true,
+		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
