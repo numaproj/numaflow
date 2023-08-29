@@ -185,6 +185,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
 		for toVertexName, toVertexBuffer := range df.toBuffers {
 			for _, partition := range toVertexBuffer {
+				// NOTE: ATM all the sinkers have only one partition
 				if p, ok := df.wmPublishers[toVertexName]; ok {
 					idlehandler.PublishIdleWatermark(ctx, partition, p, df.idleManager, df.opts.logger, dfv1.VertexTypeSink, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 				}
@@ -284,15 +285,18 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	for toVertexName, toVertexBufferOffsets := range writeOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
 		if publisher, ok := df.wmPublishers[toVertexName]; ok {
-			for index := range toVertexBufferOffsets {
-				// For Sink vertex, and it does not care about the offset during watermark publishing
-				publisher.PublishWatermark(processorWM, nil, int32(index))
-				activeWatermarkBuffers[toVertexName][index] = true
-				// reset because the toBuffer partition is no longer idling
-				df.idleManager.Reset(df.toBuffers[toVertexName][index].GetName())
+			for index, offset := range toVertexBufferOffsets {
+				if len(offset) > 0 {
+					// For Sink vertex, and it does not care about the offset during watermark publishing
+					publisher.PublishWatermark(processorWM, nil, int32(index))
+					activeWatermarkBuffers[toVertexName][index] = true
+					// reset because the toBuffer partition is no longer idling
+					df.idleManager.Reset(df.toBuffers[toVertexName][index].GetName())
+				}
 			}
 		}
 	}
+	fmt.Println(activeWatermarkBuffers)
 	// - condition1 "len(dataMessages) > 0" :
 	//   Meaning, we do have some data messages, but we may not have written to all out buffers or its partitions.
 	//   It could be all data messages are dropped, or conditional forwarding to part of the out buffers.
