@@ -116,8 +116,8 @@ func NewDataForward(
 }
 
 // Start starts reading from source and forwards to the next buffers. Call `Stop` to stop.
-func (isdf *DataForward) Start() <-chan struct{} {
-	log := logging.FromContext(isdf.ctx)
+func (df *DataForward) Start() <-chan struct{} {
+	log := logging.FromContext(df.ctx)
 	stopped := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -127,8 +127,8 @@ func (isdf *DataForward) Start() <-chan struct{} {
 		defer wg.Done()
 		for {
 			select {
-			case <-isdf.ctx.Done():
-				ok, err := isdf.IsShuttingDown()
+			case <-df.ctx.Done():
+				ok, err := df.IsShuttingDown()
 				if err != nil {
 					// ignore the error for now.
 					log.Errorw("Failed to check if it can shutdown", zap.Error(err))
@@ -142,19 +142,19 @@ func (isdf *DataForward) Start() <-chan struct{} {
 				// shutdown the reader should be empty.
 			}
 			// keep doing what you are good at
-			isdf.forwardAChunk(isdf.ctx)
+			df.forwardAChunk(df.ctx)
 		}
 	}()
 
 	go func() {
 		wg.Wait()
 		// clean up resources for source reader and all the writers if any.
-		if err := isdf.reader.Close(); err != nil {
+		if err := df.reader.Close(); err != nil {
 			log.Errorw("Failed to close source reader, shutdown anyways...", zap.Error(err))
 		} else {
-			log.Infow("Closed source reader", zap.String("sourceFrom", isdf.reader.GetName()))
+			log.Infow("Closed source reader", zap.String("sourceFrom", df.reader.GetName()))
 		}
-		for _, buffer := range isdf.toBuffers {
+		for _, buffer := range df.toBuffers {
 			for _, partition := range buffer {
 				if err := partition.Close(); err != nil {
 					log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", partition.GetName()))
@@ -164,8 +164,8 @@ func (isdf *DataForward) Start() <-chan struct{} {
 			}
 		}
 
-		// the publisher was created by the forwarder, so it should be closed by the forwarder.
-		for _, toVertexPublishers := range isdf.toVertexWMPublishers {
+		// publisher was created by the forwarder, so it should be closed by the forwarder.
+		for _, toVertexPublishers := range df.toVertexWMPublishers {
 			for _, pub := range toVertexPublishers {
 				if err := pub.Close(); err != nil {
 					log.Errorw("Failed to close publisher, shutdown anyways...", zap.Error(err))
@@ -189,17 +189,17 @@ type readWriteMessagePair struct {
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
 // buffer-not-reachable, etc., but do not include errors due to user code transformer, WhereTo, etc.
-func (isdf *DataForward) forwardAChunk(ctx context.Context) {
+func (df *DataForward) forwardAChunk(ctx context.Context) {
 	start := time.Now()
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during the restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
-	readMessages, err := isdf.reader.Read(ctx, isdf.opts.readBatchSize)
+	readMessages, err := df.reader.Read(ctx, df.opts.readBatchSize)
 	if err != nil {
-		isdf.opts.logger.Warnw("failed to read from source", zap.Error(err))
-		readMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
+		df.opts.logger.Warnw("failed to read from source", zap.Error(err))
+		readMessagesError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Inc()
 	}
-	readMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(readMessages)))
+	readMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(readMessages)))
 
 	// Process only if we have any read messages.
 	// There is a natural looping here if there is an internal error while reading, and we are not able to proceed.
@@ -220,9 +220,9 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	var writeOffsets map[string][][]isb.Offset
 	// create space for writeMessages specific to each step as we could forward to all the steps too.
 	var messageToStep = make(map[string][][]isb.Message)
-	for toVertex := range isdf.toBuffers {
+	for toVertex := range df.toBuffers {
 		// over allocating to have a predictable pattern
-		messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
+		messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
 	}
 
 	// user defined transformer concurrent processing request channel
@@ -235,11 +235,11 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 
 	// create a pool of Transformer Processors
 	var wg sync.WaitGroup
-	for i := 0; i < isdf.opts.transformerConcurrency; i++ {
+	for i := 0; i < df.opts.transformerConcurrency; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			isdf.concurrentApplyTransformer(ctx, transformerCh)
+			df.concurrentApplyTransformer(ctx, transformerCh)
 		}()
 	}
 	concurrentTransformerProcessingStart := time.Now()
@@ -247,7 +247,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// send to transformer only the data messages
 	for idx, m := range readMessages {
 		// emit message size metric
-		readBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(m.Payload)))
+		readBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(m.Payload)))
 		// assign watermark to the message
 		m.Watermark = time.Time(processorWM)
 		// send transformer processing work to the channel
@@ -259,8 +259,8 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// wait till the processing is done. this will not be an infinite wait because the transformer processing will exit if
 	// context.Done() is closed.
 	wg.Wait()
-	isdf.opts.logger.Debugw("concurrent applyTransformer completed", zap.Int("concurrency", isdf.opts.transformerConcurrency), zap.Duration("took", time.Since(concurrentTransformerProcessingStart)))
-	concurrentTransformerProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
+	df.opts.logger.Debugw("concurrent applyTransformer completed", zap.Int("concurrency", df.opts.transformerConcurrency), zap.Duration("took", time.Since(concurrentTransformerProcessingStart)))
+	concurrentTransformerProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
 	// transformer processing is done.
 
 	// publish source watermark and assign IsLate attribute based on new event time.
@@ -277,10 +277,10 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 	// publish source watermark
-	isdf.srcWMPublisher.PublishSourceWatermarks(transformedReadMessages)
+	df.srcWMPublisher.PublishSourceWatermarks(transformedReadMessages)
 	// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
 	// but ideally we should use the latest to determine the IsLate attribute.
-	processorWM = isdf.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, isdf.reader.GetPartitionIdx())
+	processorWM = df.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, df.reader.GetPartitionIdx())
 	// assign isLate
 	for _, m := range writeMessages {
 		if processorWM.After(m.EventTime) { // Set late data at source level
@@ -295,14 +295,14 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		// Look for errors in transformer processing if we see even 1 error we return.
 		// Handling partial retrying is not worth ATM.
 		if m.transformerError != nil {
-			transformerError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
-			isdf.opts.logger.Errorw("failed to apply source transformer", zap.Error(m.transformerError))
+			transformerError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Inc()
+			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(m.transformerError))
 			return
 		}
 		// update toBuffers
 		for _, message := range m.writeMessages {
-			if err := isdf.whereToStep(message, messageToStep, m.readMessage); err != nil {
-				isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
+			if err := df.whereToStep(message, messageToStep, m.readMessage); err != nil {
+				df.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
 				return
 			}
 		}
@@ -311,9 +311,9 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	// forward the messages to the edge buffer (could be multiple edges)
-	writeOffsets, err = isdf.writeToBuffers(ctx, messageToStep)
+	writeOffsets, err = df.writeToBuffers(ctx, messageToStep)
 	if err != nil {
-		isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
+		df.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 		return
 	}
 
@@ -326,7 +326,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// TODO: sort and get the highest value
 	for toVertexName, toVertexBufferOffsets := range writeOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
-		if vertexPublishers, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
+		if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
 				if len(offsets) > 0 {
 					// publish watermark to all the source partitions
@@ -334,14 +334,14 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 					for sp := range sourcePartitionsIndices {
 						var publisher, ok = vertexPublishers[sp]
 						if !ok {
-							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
+							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
 
 						publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
 						activeWatermarkBuffers[toVertexName][index] = true
 						// reset because the toBuffer partition is no longer idling
-						isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
+						df.idleManager.Reset(df.toBuffers[toVertexName][index].GetName())
 					}
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
@@ -349,21 +349,21 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	// condition "len(activeWatermarkBuffers) < len(isdf.toVertexWMPublishers)":
+	// condition "len(activeWatermarkBuffers) < len(df.toVertexWMPublishers)":
 	// send idle watermark only if we have idled out buffers
-	for toVertexName := range isdf.toVertexWMPublishers {
+	for toVertexName := range df.toVertexWMPublishers {
 		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
 			if !activePartition {
 				// use the watermark of the current read batch for the idle watermark
 				// same as read len==0 because there's no event published to the buffer
-				if vertexPublishers, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
+				if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
 					for sp := range sourcePartitionsIndices {
 						var publisher, ok = vertexPublishers[sp]
 						if !ok {
-							publisher = isdf.createToVertexWatermarkPublisher(toVertexName, sp)
+							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
-						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[toVertexName][index], publisher, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeSource, processorWM)
+						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, processorWM)
 					}
 				}
 			}
@@ -372,29 +372,29 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 
 	// when we apply transformer, we don't handle partial errors (it's either non or all, non will return early),
 	// so we should be able to ack all the readOffsets including data messages and control messages
-	err = isdf.ackFromSource(ctx, readOffsets)
+	err = df.ackFromSource(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
-		isdf.opts.logger.Errorw("failed to ack from source", zap.Error(err))
-		ackMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(readOffsets)))
+		df.opts.logger.Errorw("failed to ack from source", zap.Error(err))
+		ackMessageError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(readOffsets)))
 		return
 	}
-	ackMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(readOffsets)))
+	ackMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(readOffsets)))
 
 	// ProcessingTimes of the entire forwardAChunk
-	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Observe(float64(time.Since(start).Microseconds()))
+	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 }
 
-func (isdf *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {
+func (df *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {
 	// for all the sources, we either ack all offsets or none.
 	// when a batch ack fails, the source Ack() function populate the error array with the same error;
 	// hence we can just return the first error.
-	return isdf.reader.Ack(ctx, offsets)[0]
+	return df.reader.Ack(ctx, offsets)[0]
 }
 
 // writeToBuffers is a blocking call until all the messages have been forwarded to all the toBuffers, or a shutdown
 // has been initiated while we are stuck looping on an InternalError.
-func (isdf *DataForward) writeToBuffers(
+func (df *DataForward) writeToBuffers(
 	ctx context.Context, messageToStep map[string][][]isb.Message,
 ) (writeOffsets map[string][][]isb.Offset, err error) {
 	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
@@ -403,9 +403,9 @@ func (isdf *DataForward) writeToBuffers(
 	for toVertexName, toVertexMessages := range messageToStep {
 		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexMessages))
 	}
-	for toVertexName, toVertexBuffer := range isdf.toBuffers {
+	for toVertexName, toVertexBuffer := range df.toBuffers {
 		for index, partition := range toVertexBuffer {
-			writeOffsets[toVertexName][index], err = isdf.writeToBuffer(ctx, partition, messageToStep[toVertexName][index])
+			writeOffsets[toVertexName][index], err = df.writeToBuffer(ctx, partition, messageToStep[toVertexName][index])
 			if err != nil {
 				return nil, err
 			}
@@ -415,7 +415,7 @@ func (isdf *DataForward) writeToBuffers(
 }
 
 // writeToBuffer forwards an array of messages to a single buffer and is a blocking call or until shutdown has been initiated.
-func (isdf *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.BufferWriter, messages []isb.Message) (writeOffsets []isb.Offset, err error) {
+func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.BufferWriter, messages []isb.Message) (writeOffsets []isb.Offset, err error) {
 	var (
 		totalCount int
 		writeCount int
@@ -440,10 +440,10 @@ func (isdf *DataForward) writeToBuffer(ctx context.Context, toBufferPartition is
 					needRetry = true
 					// we retry only failed messages
 					failedMessages = append(failedMessages, msg)
-					writeMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Inc()
+					writeMessagesError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Inc()
 					// a shutdown can break the blocking loop caused due to InternalErr
-					if ok, _ := isdf.IsShuttingDown(); ok {
-						platformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName}).Inc()
+					if ok, _ := df.IsShuttingDown(); ok {
+						platformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName}).Inc()
 						return writeOffsets, fmt.Errorf("writeToBuffer failed, Stop called while stuck on an internal error with failed messages:%d, %v", len(failedMessages), errs)
 					}
 				}
@@ -458,64 +458,64 @@ func (isdf *DataForward) writeToBuffer(ctx context.Context, toBufferPartition is
 		}
 
 		if needRetry {
-			isdf.opts.logger.Errorw("Retrying failed messages",
+			df.opts.logger.Errorw("Retrying failed messages",
 				zap.Any("errors", errorArrayToMap(errs)),
-				zap.String(metrics.LabelPipeline, isdf.pipelineName),
-				zap.String(metrics.LabelVertex, isdf.vertexName),
+				zap.String(metrics.LabelPipeline, df.pipelineName),
+				zap.String(metrics.LabelVertex, df.vertexName),
 				zap.String(metrics.LabelPartitionName, toBufferPartition.GetName()),
 			)
 			// set messages to the failed slice for the retry
 			messages = failedMessages
 			// TODO: implement retry with backoff etc.
-			time.Sleep(isdf.opts.retryInterval)
+			time.Sleep(df.opts.retryInterval)
 		} else {
 			break
 		}
 	}
 
-	dropMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(totalCount - writeCount))
-	dropBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(dropBytes)
-	writeMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(writeCount))
-	writeBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(writeBytes)
+	dropMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(totalCount - writeCount))
+	dropBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(dropBytes)
+	writeMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(writeCount))
+	writeBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(writeBytes)
 	return writeOffsets, nil
 }
 
 // concurrentApplyTransformer applies the transformer based on the request from the channel
-func (isdf *DataForward) concurrentApplyTransformer(ctx context.Context, readMessagePair <-chan *readWriteMessagePair) {
+func (df *DataForward) concurrentApplyTransformer(ctx context.Context, readMessagePair <-chan *readWriteMessagePair) {
 	for message := range readMessagePair {
 		start := time.Now()
-		transformerReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
-		writeMessages, err := isdf.applyTransformer(ctx, message.readMessage)
-		transformerWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(writeMessages)))
+		transformerReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Inc()
+		writeMessages, err := df.applyTransformer(ctx, message.readMessage)
+		transformerWriteMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(writeMessages)))
 		message.writeMessages = append(message.writeMessages, writeMessages...)
 		message.transformerError = err
-		transformerProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Observe(float64(time.Since(start).Microseconds()))
+		transformerProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.reader.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 	}
 }
 
 // applyTransformer applies the transformer and will block if there is any InternalErr. On the other hand, if this is a UserError
 // the skip flag is set. The ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the applyTransformer.
-func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (df *DataForward) applyTransformer(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
-		writeMessages, err := isdf.transformer.ApplyTransform(ctx, readMessage)
+		writeMessages, err := df.transformer.ApplyTransform(ctx, readMessage)
 		if err != nil {
-			isdf.opts.logger.Errorw("Transformer.Apply error", zap.Error(err))
+			df.opts.logger.Errorw("Transformer.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.
-			time.Sleep(isdf.opts.retryInterval)
+			time.Sleep(df.opts.retryInterval)
 			// keep retrying, I cannot think of a use case where a user could say, errors are fine :-)
 			// as a platform, we should not lose or corrupt data.
 			// this does not mean we should prohibit this from a shutdown.
-			if ok, _ := isdf.IsShuttingDown(); ok {
-				isdf.opts.logger.Errorw("Transformer.Apply, Stop called while stuck on an internal error", zap.Error(err))
-				platformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName}).Inc()
+			if ok, _ := df.IsShuttingDown(); ok {
+				df.opts.logger.Errorw("Transformer.Apply, Stop called while stuck on an internal error", zap.Error(err))
+				platformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName}).Inc()
 				return nil, err
 			}
 			continue
 		} else {
 			// if we do not get a time from Transformer, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
-				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
+				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), df.vertexName, index)
 				if m.EventTime.IsZero() {
 					m.EventTime = readMessage.EventTime
 				}
@@ -526,15 +526,15 @@ func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
-func (isdf *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
+func (df *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-	to, err := isdf.toWhichStepDecider.WhereTo(writeMessage.Keys, writeMessage.Tags)
+	to, err := df.toWhichStepDecider.WhereTo(writeMessage.Keys, writeMessage.Tags)
 	if err != nil {
-		isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.reader.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
+		df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: df.reader.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
 		// a shutdown can break the blocking loop caused due to InternalErr
-		if ok, _ := isdf.IsShuttingDown(); ok {
+		if ok, _ := df.IsShuttingDown(); ok {
 			err := fmt.Errorf("whereToStep, Stop called while stuck on an internal error, %v", err)
-			platformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName}).Inc()
+			platformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName}).Inc()
 			return err
 		}
 		return err
@@ -542,7 +542,7 @@ func (isdf *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToSt
 
 	for _, t := range to {
 		if _, ok := messageToStep[t.ToVertexName]; !ok {
-			isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.reader.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("no such destination (%s)", t.ToVertexName)}))
+			df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: df.reader.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("no such destination (%s)", t.ToVertexName)}))
 		}
 		messageToStep[t.ToVertexName][t.ToVertexPartitionIdx] = append(messageToStep[t.ToVertexName][t.ToVertexPartitionIdx], writeMessage.Message)
 	}
@@ -550,14 +550,14 @@ func (isdf *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToSt
 }
 
 // createToVertexWatermarkPublisher creates a watermark publisher for the given toVertexName and partition
-func (isdf *DataForward) createToVertexWatermarkPublisher(toVertexName string, partition int32) publish.Publisher {
+func (df *DataForward) createToVertexWatermarkPublisher(toVertexName string, partition int32) publish.Publisher {
 
-	wmStore := isdf.toVertexWMStores[toVertexName]
-	entityName := fmt.Sprintf("%s-%s-%d", isdf.pipelineName, isdf.vertexName, partition)
+	wmStore := df.toVertexWMStores[toVertexName]
+	entityName := fmt.Sprintf("%s-%s-%d", df.pipelineName, df.vertexName, partition)
 	processorEntity := processor.NewProcessorEntity(entityName)
 
-	publisher := publish.NewPublish(isdf.ctx, processorEntity, wmStore, int32(len(isdf.toBuffers[toVertexName])))
-	isdf.toVertexWMPublishers[toVertexName][partition] = publisher
+	publisher := publish.NewPublish(df.ctx, processorEntity, wmStore, int32(len(df.toBuffers[toVertexName])))
+	df.toVertexWMPublishers[toVertexName][partition] = publisher
 	return publisher
 }
 
