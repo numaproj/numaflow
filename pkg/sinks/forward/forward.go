@@ -284,8 +284,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		// context.Done() is closed.
 		wg.Wait()
 		df.opts.logger.Debugw("concurrent applyUDF completed", zap.Int("concurrency", df.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
-		concurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
-		// map UDF processing is done.
 
 		// let's figure out which vertex to send the results to.
 		// update the toBuffer(s) with writeMessages.
@@ -516,14 +514,10 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 // concurrentApplyUDF applies the map UDF based on the request from the channel
 func (df *DataForward) concurrentApplyUDF(ctx context.Context, readMessagePair <-chan *readWriteMessagePair) {
 	for message := range readMessagePair {
-		start := time.Now()
-		udfReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Inc()
 		writeMessages := []*isb.WriteMessage{{
 			Message: message.readMessage.Message,
 		}}
-		udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(writeMessages)))
 		message.writeMessages = append(message.writeMessages, writeMessages...)
-		udfProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 	}
 }
 

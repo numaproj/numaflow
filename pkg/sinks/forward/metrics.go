@@ -93,13 +93,6 @@ var ackMessageError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of Acknowledged Errors",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
-// udfError is used to indicate the number of UDF errors
-var udfError = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "sink_forwarder",
-	Name:      "udf_error_total",
-	Help:      "Total number of UDF Errors",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
-
 // platformError is used to indicate the number of Internal/Platform errors
 var platformError = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "sink_forwarder",
@@ -113,34 +106,4 @@ var forwardAChunkProcessingTime = promauto.NewHistogramVec(prometheus.HistogramO
 	Name:      "forward_chunk_processing_time",
 	Help:      "Processing times of the entire forward a chunk (100 microseconds to 20 minutes)",
 	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 60),
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
-
-// udfProcessingTime is a histogram to Observe UDF Processing times as a whole
-var udfProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
-	Subsystem: "sink_forwarder",
-	Name:      "udf_processing_time",
-	Help:      "Processing times of UDF (100 microseconds to 15 minutes)",
-	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 60),
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
-
-// concurrentUDFProcessingTime is a histogram to Observe UDF Processing times as a whole
-var concurrentUDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
-	Subsystem: "sink_forwarder",
-	Name:      "concurrent_udf_processing_time",
-	Help:      "Processing times of Concurrent UDF (100 microseconds to 20 minutes)",
-	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 60),
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
-
-// udfReadMessagesCount is used to indicate the number of messages read by UDF
-var udfReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "sink_forwarder",
-	Name:      "udf_read_total",
-	Help:      "Total number of Messages Read by UDF",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
-
-// udfWriteMessagesCount is used to indicate the number of messages written by UDF
-var udfWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "sink_forwarder",
-	Name:      "udf_write_total",
-	Help:      "Total number of Messages Written by UDF",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
