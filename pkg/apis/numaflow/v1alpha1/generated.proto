@@ -1036,7 +1036,7 @@ message Scale {
   // +optional
   optional uint32 lookbackSeconds = 4;
 
-  // Deprecated: Use ScaleUpCooldownSeconds and ScaleDownCooldownSeconds instead.
+  // Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead.
   // Cooldown seconds after a scaling operation before another one.
   // +optional
   optional uint32 cooldownSeconds = 5;

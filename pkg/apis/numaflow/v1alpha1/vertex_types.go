@@ -560,7 +560,7 @@ type Scale struct {
 	// Lookback seconds to calculate the average pending messages and processing rate.
 	// +optional
 	LookbackSeconds *uint32 `json:"lookbackSeconds,omitempty" protobuf:"varint,4,opt,name=lookbackSeconds"`
-	// Deprecated: Use ScaleUpCooldownSeconds and ScaleDownCooldownSeconds instead.
+	// Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead.
 	// Cooldown seconds after a scaling operation before another one.
 	// +optional
 	DeprecatedCooldownSeconds *uint32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`

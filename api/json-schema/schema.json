@@ -19063,7 +19063,7 @@
       "description": "Scale defines the parameters for autoscaling.",
       "properties": {
         "cooldownSeconds": {
-          "description": "Deprecated: Use ScaleUpCooldownSeconds and ScaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.",
+          "description": "Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.",
           "format": "int64",
           "type": "integer"
         },

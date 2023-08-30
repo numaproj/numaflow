@@ -4054,7 +4054,7 @@ processing rate.
 <td>
 <em>(Optional)</em>
 <p>
-Deprecated: Use ScaleUpCooldownSeconds and ScaleDownCooldownSeconds
+Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds
 instead. Cooldown seconds after a scaling operation before another one.
 </p>
 </td>

@@ -3480,7 +3480,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"cooldownSeconds": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Deprecated: Use ScaleUpCooldownSeconds and ScaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.",
+							Description: "Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
