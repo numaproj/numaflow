@@ -404,6 +404,10 @@ func (r *vertexReconciler) findExistingPods(ctx context.Context, vertex *dfv1.Ve
 	}
 	result := make(map[string]corev1.Pod)
 	for _, v := range pods.Items {
+		if !v.DeletionTimestamp.IsZero() {
+			// Ignore pods being deleted
+			continue
+		}
 		result[v.Name] = v
 	}
 	return result, nil
