@@ -1679,8 +1679,8 @@ func (in *Scale) DeepCopyInto(out *Scale) {
 		*out = new(uint32)
 		**out = **in
 	}
-	if in.CooldownSeconds != nil {
-		in, out := &in.CooldownSeconds, &out.CooldownSeconds
+	if in.DeprecatedCooldownSeconds != nil {
+		in, out := &in.DeprecatedCooldownSeconds, &out.DeprecatedCooldownSeconds
 		*out = new(uint32)
 		**out = **in
 	}
@@ -1701,6 +1701,16 @@ func (in *Scale) DeepCopyInto(out *Scale) {
 	}
 	if in.ReplicasPerScale != nil {
 		in, out := &in.ReplicasPerScale, &out.ReplicasPerScale
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.ScaleUpCooldownSeconds != nil {
+		in, out := &in.ScaleUpCooldownSeconds, &out.ScaleUpCooldownSeconds
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.ScaleDownCooldownSeconds != nil {
+		in, out := &in.ScaleDownCooldownSeconds, &out.ScaleDownCooldownSeconds
 		*out = new(uint32)
 		**out = **in
 	}

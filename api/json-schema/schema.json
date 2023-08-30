@@ -19063,7 +19063,7 @@
       "description": "Scale defines the parameters for autoscaling.",
       "properties": {
         "cooldownSeconds": {
-          "description": "Cooldown seconds after a scaling operation before another one.",
+          "description": "Deprecated: Use ScaleUpCooldownSeconds and ScaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.",
           "format": "int64",
           "type": "integer"
         },
@@ -19088,6 +19088,16 @@
         },
         "replicasPerScale": {
           "description": "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations",
+          "format": "int64",
+          "type": "integer"
+        },
+        "scaleDownCooldownSeconds": {
+          "description": "ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down. It defaults to the CooldownSeconds if not set.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "scaleUpCooldownSeconds": {
+          "description": "ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up. It defaults to the CooldownSeconds if not set.",
           "format": "int64",
           "type": "integer"
         },

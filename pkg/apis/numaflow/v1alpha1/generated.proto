@@ -1036,6 +1036,7 @@ message Scale {
   // +optional
   optional uint32 lookbackSeconds = 4;
 
+  // Deprecated: Use ScaleUpCooldownSeconds and ScaleDownCooldownSeconds instead.
   // Cooldown seconds after a scaling operation before another one.
   // +optional
   optional uint32 cooldownSeconds = 5;
@@ -1060,6 +1061,16 @@ message Scale {
   // The is use to prevent too aggressive scaling operations
   // +optional
   optional uint32 replicasPerScale = 9;
+
+  // ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up.
+  // It defaults to the CooldownSeconds if not set.
+  // +optional
+  optional uint32 scaleUpCooldownSeconds = 11;
+
+  // ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down.
+  // It defaults to the CooldownSeconds if not set.
+  // +optional
+  optional uint32 scaleDownCooldownSeconds = 12;
 }
 
 // SideInput defines information of a Side Input
