@@ -66,7 +66,6 @@ func (df *DataForward) Stop() {
 // ForceStop sets up the force shutdown flag.
 func (df *DataForward) ForceStop() {
 	// call stop (what if we have an enthusiastic shutdown that forces first)
-	// e.g. I know I have written a wrong map UDF, so shutdown ASAP
 	df.Stop()
 	df.Shutdown.rwlock.Lock()
 	defer df.Shutdown.rwlock.Unlock()

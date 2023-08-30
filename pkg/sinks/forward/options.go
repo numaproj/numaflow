@@ -29,35 +29,22 @@ import (
 type options struct {
 	// readBatchSize is the default batch size
 	readBatchSize int64
-	// udfConcurrency sets the concurrency for concurrent map UDF processing
-	udfConcurrency int
+	// sinkConcurrency sets the concurrency for concurrent processing
+	sinkConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
-	// vertexType indicates the type of the vertex
-	vertexType dfv1.VertexType
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
-	// enableMapUdfStream indicates whether the message streaming is enabled or not for map UDF processing
-	enableMapUdfStream bool
 }
 
 type Option func(*options) error
 
 func DefaultOptions() *options {
 	return &options{
-		readBatchSize:      dfv1.DefaultReadBatchSize,
-		udfConcurrency:     dfv1.DefaultReadBatchSize,
-		retryInterval:      time.Millisecond,
-		logger:             logging.NewLogger(),
-		enableMapUdfStream: false,
-	}
-}
-
-// WithRetryInterval sets the retry interval
-func WithRetryInterval(f time.Duration) Option {
-	return func(o *options) error {
-		o.retryInterval = time.Duration(f)
-		return nil
+		readBatchSize:   dfv1.DefaultReadBatchSize,
+		sinkConcurrency: dfv1.DefaultReadBatchSize,
+		retryInterval:   time.Millisecond,
+		logger:          logging.NewLogger(),
 	}
 }
 
@@ -69,10 +56,18 @@ func WithReadBatchSize(f int64) Option {
 	}
 }
 
-// WithUDFConcurrency sets concurrency for map UDF processing
-func WithUDFConcurrency(f int) Option {
+// WithSinkConcurrency sets concurrency for processing
+func WithSinkConcurrency(f int) Option {
 	return func(o *options) error {
-		o.udfConcurrency = f
+		o.sinkConcurrency = f
+		return nil
+	}
+}
+
+// WithRetryInterval sets the retry interval
+func WithRetryInterval(f time.Duration) Option {
+	return func(o *options) error {
+		o.retryInterval = time.Duration(f)
 		return nil
 	}
 }
@@ -81,22 +76,6 @@ func WithUDFConcurrency(f int) Option {
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *options) error {
 		o.logger = l
-		return nil
-	}
-}
-
-// WithVertexType sets the type of the vertex
-func WithVertexType(t dfv1.VertexType) Option {
-	return func(o *options) error {
-		o.vertexType = t
-		return nil
-	}
-}
-
-// WithUDFStreaming sets streaming for map UDF processing
-func WithUDFStreaming(f bool) Option {
-	return func(o *options) error {
-		o.enableMapUdfStream = f
 		return nil
 	}
 }

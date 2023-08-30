@@ -38,9 +38,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-// DataForward forwards the data from previous step to the current step via inter-step buffer.
+// DataForward forwards the data from previous vertex to sinker.
 type DataForward struct {
-	// I have my reasons for overriding the default principle https://github.com/golang/go/issues/22602
 	ctx context.Context
 	// cancelFn cancels our new context, our cancellation is little more complex and needs to be well orchestrated, hence
 	// we need something more than a cancel().
@@ -62,7 +61,7 @@ type DataForward struct {
 	Shutdown
 }
 
-// NewDataForward creates an inter-step forwarder.
+// NewDataForward creates a sink data forwarder.
 func NewDataForward(
 	vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
@@ -81,7 +80,7 @@ func NewDataForward(
 	// creating a context here which is managed by the forwarder's lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 
-	var isdf = DataForward{
+	var df = DataForward{
 		ctx:                 ctx,
 		cancelFn:            cancel,
 		fromBufferPartition: fromStep,
@@ -101,27 +100,19 @@ func NewDataForward(
 	}
 
 	// Add logger from parent ctx to child context.
-	isdf.ctx = logging.WithLogger(ctx, options.logger)
+	df.ctx = logging.WithLogger(ctx, options.logger)
 
-	if isdf.opts.enableMapUdfStream && isdf.opts.readBatchSize != 1 {
-		return nil, fmt.Errorf("batch size is not 1 with map UDF streaming")
-	}
-
-	if isdf.opts.vertexType == dfv1.VertexTypeSource {
-		return nil, fmt.Errorf("source vertex is not supported by inter-step forwarder, please use source forwarder instead")
-	}
-
-	return &isdf, nil
+	return &df, nil
 }
 
-// Start starts reading the buffer and forwards to the next buffers. Call `Stop` to stop.
+// Start starts reading the buffer and forwards to sinker. Call `Stop` to stop.
 func (df *DataForward) Start() <-chan struct{} {
 	log := logging.FromContext(df.ctx)
 	stopped := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		log.Info("Starting forwarder...")
+		log.Info("Starting sink forwarder...")
 		// with wg approach can do more cleanup in case we need in the future.
 		defer wg.Done()
 		for {
@@ -169,7 +160,7 @@ func (df *DataForward) Start() <-chan struct{} {
 	return stopped
 }
 
-// readWriteMessagePair represents a read message and its processed (via map UDF) write messages.
+// readWriteMessagePair represents a read message and its processed write messages.
 type readWriteMessagePair struct {
 	readMessage   *isb.ReadMessage
 	writeMessages []*isb.WriteMessage
@@ -178,7 +169,7 @@ type readWriteMessagePair struct {
 // forwardAChunk forwards a chunk of message from the fromBufferPartition to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
-// buffer-not-reachable, etc., but does not include errors due to user code UDFs, WhereTo, etc.
+// buffer-not-reachable, etc., but does not include errors due to WhereTo, etc.
 func (df *DataForward) forwardAChunk(ctx context.Context) {
 	start := time.Now()
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
@@ -216,7 +207,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		for toVertexName, toVertexBuffer := range df.toBuffers {
 			for _, partition := range toVertexBuffer {
 				if p, ok := df.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, partition, p, df.idleManager, df.opts.logger, df.opts.vertexType, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					idlehandler.PublishIdleWatermark(ctx, partition, p, df.idleManager, df.opts.logger, dfv1.VertexTypeSink, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 				}
 			}
 		}
@@ -242,71 +233,69 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	processorWM := df.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
 
 	var writeOffsets map[string][][]isb.Offset
-	if !df.opts.enableMapUdfStream {
-		// create space for writeMessages specific to each step as we could forward to all the steps too.
-		var messageToStep = make(map[string][][]isb.Message)
-		for toVertex := range df.toBuffers {
-			// over allocating to have a predictable pattern
-			messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
-		}
 
-		// udf concurrent processing request channel
-		udfCh := make(chan *readWriteMessagePair)
-		// udfResults stores the results after map UDF processing for all read messages. It indexes
-		// a read message to the corresponding write message
-		udfResults := make([]readWriteMessagePair, len(dataMessages))
-		// applyUDF, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
+	// create space for writeMessages specific to each step as we could forward to all the steps too.
+	var messageToStep = make(map[string][][]isb.Message)
+	for toVertex := range df.toBuffers {
+		// over allocating to have a predictable pattern
+		messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
+	}
 
-		// create a pool of map UDF Processors
-		var wg sync.WaitGroup
-		for i := 0; i < df.opts.udfConcurrency; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				df.concurrentApplyUDF(ctx, udfCh)
-			}()
-		}
-		concurrentUDFProcessingStart := time.Now()
+	// concurrent processing request channel
+	processingCh := make(chan *readWriteMessagePair)
+	// sinkResults stores the results after processing for all read messages. It indexes
+	// a read message to the write message
+	sinkResults := make([]readWriteMessagePair, len(dataMessages))
 
-		// send to map UDF only the data messages
-		for idx, m := range dataMessages {
-			// emit message size metric
-			readBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(m.Payload)))
-			// assign watermark to the message
-			m.Watermark = time.Time(processorWM)
-			// send map UDF processing work to the channel
-			udfResults[idx].readMessage = m
-			udfCh <- &udfResults[idx]
-		}
-		// let the go routines know that there is no more work
-		close(udfCh)
-		// wait till the processing is done. this will not be an infinite wait because the map UDF processing will exit if
-		// context.Done() is closed.
-		wg.Wait()
-		df.opts.logger.Debugw("concurrent applyUDF completed", zap.Int("concurrency", df.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
+	// create a pool of processors
+	var wg sync.WaitGroup
+	for i := 0; i < df.opts.sinkConcurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			df.concurrentConvertReadToWriteMsgs(ctx, processingCh)
+		}()
+	}
+	concurrentProcessingStart := time.Now()
 
-		// let's figure out which vertex to send the results to.
-		// update the toBuffer(s) with writeMessages.
-		for _, m := range udfResults {
-			// update toBuffers
-			for _, message := range m.writeMessages {
-				if err := df.whereToStep(message, messageToStep, m.readMessage); err != nil {
-					df.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
-					df.fromBufferPartition.NoAck(ctx, readOffsets)
-					return
-				}
+	// only send the data messages
+	for idx, m := range dataMessages {
+		// emit message size metric
+		readBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(m.Payload)))
+		// assign watermark to the message
+		m.Watermark = time.Time(processorWM)
+		// send message to the channel
+		sinkResults[idx].readMessage = m
+		processingCh <- &sinkResults[idx]
+	}
+	// let the go routines know that there is no more work
+	close(processingCh)
+	// wait till the processing is done. this will not be an infinite wait because the processing will exit if
+	// context.Done() is closed.
+	wg.Wait()
+	df.opts.logger.Debugw("concurrent convert read message to write message completed", zap.Int("concurrency", df.opts.sinkConcurrency), zap.Duration("took", time.Since(concurrentProcessingStart)))
+
+	// let's figure out which vertex to send the results to.
+	// update the toBuffer(s) with writeMessages.
+	for _, m := range sinkResults {
+		// update toBuffers
+		for _, message := range m.writeMessages {
+			if err := df.whereToStep(message, messageToStep, m.readMessage); err != nil {
+				df.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
+				df.fromBufferPartition.NoAck(ctx, readOffsets)
+				return
 			}
 		}
-
-		// forward the message to the edge buffer (could be multiple edges)
-		writeOffsets, err = df.writeToBuffers(ctx, messageToStep)
-		if err != nil {
-			df.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
-			df.fromBufferPartition.NoAck(ctx, readOffsets)
-			return
-		}
-		df.opts.logger.Debugw("writeToBuffers completed")
 	}
+
+	// forward the message to the edge buffer (could be multiple edges)
+	writeOffsets, err = df.writeToBuffers(ctx, messageToStep)
+	if err != nil {
+		df.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
+		df.fromBufferPartition.NoAck(ctx, readOffsets)
+		return
+	}
+	df.opts.logger.Debugw("writeToBuffers completed")
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
@@ -319,15 +308,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
 		if publisher, ok := df.wmPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
-				if df.opts.vertexType == dfv1.VertexTypeMapUDF || df.opts.vertexType == dfv1.VertexTypeReduceUDF {
-					if len(offsets) > 0 {
-						publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
-						activeWatermarkBuffers[toVertexName][index] = true
-						// reset because the toBuffer partition is no longer idling
-						df.idleManager.Reset(df.toBuffers[toVertexName][index].GetName())
-					}
-					// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
-				} else { // For Sink vertex, and it does not care about the offset during watermark publishing
+				// For Sink vertex, and it does not care about the offset during watermark publishing
+				if len(offsets) > 0 {
 					publisher.PublishWatermark(processorWM, nil, int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is no longer idling
@@ -352,15 +334,13 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 					// use the watermark of the current read batch for the idle watermark
 					// same as read len==0 because there's no event published to the buffer
 					if p, ok := df.wmPublishers[bufferName]; ok {
-						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[bufferName][index], p, df.idleManager, df.opts.logger, df.opts.vertexType, processorWM)
+						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[bufferName][index], p, df.idleManager, df.opts.logger, dfv1.VertexTypeSink, processorWM)
 					}
 				}
 			}
 		}
 	}
 
-	// when we apply udf, we don't handle partial errors (it's either non or all, non will return early),
-	// so we should be able to ack all the readOffsets including data messages and control messages
 	err = df.ackFromBuffer(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
@@ -511,8 +491,8 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 	return writeOffsets, nil
 }
 
-// concurrentApplyUDF applies the map UDF based on the request from the channel
-func (df *DataForward) concurrentApplyUDF(ctx context.Context, readMessagePair <-chan *readWriteMessagePair) {
+// concurrentConvertReadToWriteMsgs concurrently convert read messages to write messages
+func (df *DataForward) concurrentConvertReadToWriteMsgs(_ context.Context, readMessagePair <-chan *readWriteMessagePair) {
 	for message := range readMessagePair {
 		writeMessages := []*isb.WriteMessage{{
 			Message: message.readMessage.Message,
