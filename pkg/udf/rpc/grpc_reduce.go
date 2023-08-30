@@ -110,13 +110,18 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 
 	// create datum from isbMessage and send it to datumCh channel for reduceFn
 	go func() {
-	readLoop:
+		// after reading all the messages from the messageStream or if ctx was canceled close the datumCh channel
+		defer close(datumCh)
 		for {
 			select {
 			case msg, ok := <-messageStream:
-				// if the messageStream is closed or if the message is nil, break the loop
-				if !ok || msg == nil {
-					break readLoop
+				// if the messageStream is closed, break the loop
+				if !ok {
+					return
+				}
+				// if the message is nil, break the loop
+				if msg == nil {
+					return
 				}
 				d := createDatum(msg)
 
@@ -124,15 +129,13 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 				select {
 				case datumCh <- d:
 				case <-cctx.Done():
-					break readLoop
+					return
 				}
 
 			case <-cctx.Done(): // if the context is done, break the loop
-				break readLoop
+				return
 			}
 		}
-		// after reading all the messages from the messageStream or if ctx was canceled close the datumCh channel
-		close(datumCh)
 	}()
 
 	// wait for the reduceFn to finish
