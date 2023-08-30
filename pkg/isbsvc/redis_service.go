@@ -138,8 +138,6 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 
 // CreateWatermarkStores is used to create the watermark stores for the given bucket.
 func (r *isbsRedisSvc) CreateWatermarkStores(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]store.WatermarkStore, error) {
-	log := logging.FromContext(ctx).With("bucket", bucketName)
-	ctx = logging.WithLogger(ctx, log)
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
 	var wmStores []store.WatermarkStore
 	fetchers := 1
