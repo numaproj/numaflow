@@ -114,12 +114,8 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 		for {
 			select {
 			case msg, ok := <-messageStream:
-				// if the messageStream is closed, break the loop
-				if !ok {
-					break readLoop
-				}
-				// if the message is nil, break the loop
-				if msg == nil {
+				// if the messageStream is closed or if the message is nil, break the loop
+				if !ok || msg == nil {
 					break readLoop
 				}
 				d := createDatum(msg)
