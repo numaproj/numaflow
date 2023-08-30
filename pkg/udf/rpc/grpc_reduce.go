@@ -88,8 +88,9 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 		shared.WinEndTime:   strconv.FormatInt(partitionID.End.UnixMilli(), 10),
 	}
 
-	cctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
 	grpcCtx := metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
 
 	// There can be two error scenarios:
@@ -125,11 +126,11 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 				// send the datum to datumCh channel, handle the case when the context is canceled
 				select {
 				case datumCh <- d:
-				case <-cctx.Done():
+				case <-ctx.Done():
 					return
 				}
 
-			case <-cctx.Done(): // if the context is done, return
+			case <-ctx.Done(): // if the context is done, return
 				return
 			}
 		}
@@ -164,7 +165,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 				taggedMessages = append(taggedMessages, taggedMessage)
 			}
 			return taggedMessages, nil
-		case <-cctx.Done():
+		case <-ctx.Done():
 			return nil, convertToUdfError(ctx.Err())
 		}
 	}
