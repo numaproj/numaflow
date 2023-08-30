@@ -25,12 +25,10 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
@@ -49,11 +47,9 @@ type DataForward struct {
 	cancelFn            context.CancelFunc
 	fromBufferPartition isb.BufferReader
 	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
-	toBuffers    map[string][]isb.BufferWriter
-	FSD          forward.ToWhichStepDecider
-	mapUDF       applier.MapApplier
-	mapStreamUDF applier.MapStreamApplier
-	wmFetcher    fetch.Fetcher
+	toBuffers map[string][]isb.BufferWriter
+	FSD       forward.ToWhichStepDecider
+	wmFetcher fetch.Fetcher
 	// wmPublishers stores the vertex to publisher mapping
 	wmPublishers map[string]publish.Publisher
 	opts         options
@@ -72,8 +68,6 @@ func NewDataForward(
 	fromStep isb.BufferReader,
 	toSteps map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	applyUDF applier.MapApplier,
-	applyUDFStream applier.MapStreamApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*DataForward, error) {
@@ -93,8 +87,6 @@ func NewDataForward(
 		fromBufferPartition: fromStep,
 		toBuffers:           toSteps,
 		FSD:                 fsd,
-		mapUDF:              applyUDF,
-		mapStreamUDF:        applyUDFStream,
 		wmFetcher:           fetchWatermark,
 		wmPublishers:        publishWatermark,
 		// should we do a check here for the values not being null?
@@ -181,7 +173,6 @@ func (df *DataForward) Start() <-chan struct{} {
 type readWriteMessagePair struct {
 	readMessage   *isb.ReadMessage
 	writeMessages []*isb.WriteMessage
-	udfError      error
 }
 
 // forwardAChunk forwards a chunk of message from the fromBufferPartition to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
@@ -299,15 +290,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		// let's figure out which vertex to send the results to.
 		// update the toBuffer(s) with writeMessages.
 		for _, m := range udfResults {
-			// look for errors in udf processing, if we see even 1 error NoAck all messages
-			// then return. Handling partial retrying is not worth ATM.
-			if m.udfError != nil {
-				udfError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Inc()
-				df.opts.logger.Errorw("failed to applyUDF", zap.Error(m.udfError))
-				// As there's no partial failure, non-ack all the readOffsets
-				df.fromBufferPartition.NoAck(ctx, readOffsets)
-				return
-			}
 			// update toBuffers
 			for _, message := range m.writeMessages {
 				if err := df.whereToStep(message, messageToStep, m.readMessage); err != nil {
@@ -326,14 +308,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 		df.opts.logger.Debugw("writeToBuffers completed")
-	} else {
-		writeOffsets, err = df.streamMessage(ctx, dataMessages, processorWM)
-		if err != nil {
-			df.opts.logger.Errorw("failed to streamMessage", zap.Error(err))
-			// As there's no partial failure, non-ack all the readOffsets
-			df.fromBufferPartition.NoAck(ctx, readOffsets)
-			return
-		}
 	}
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
@@ -400,100 +374,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	// ProcessingTimes of the entire forwardAChunk
 	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Observe(float64(time.Since(start).Microseconds()))
-}
-
-// streamMessage streams the data messages to the next step.
-func (df *DataForward) streamMessage(
-	ctx context.Context,
-	dataMessages []*isb.ReadMessage,
-	processorWM wmb.Watermark,
-) (map[string][][]isb.Offset, error) {
-	// create space for writeMessages specific to each step as we could forward to all the steps too.
-	// these messages are for per partition (due to round-robin writes) for load balancing
-	var messageToStep = make(map[string][][]isb.Message)
-	var writeOffsets = make(map[string][][]isb.Offset)
-
-	for toVertex := range df.toBuffers {
-		// over allocating to have a predictable pattern
-		messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
-		writeOffsets[toVertex] = make([][]isb.Offset, len(df.toBuffers[toVertex]))
-	}
-
-	if len(dataMessages) > 1 {
-		errMsg := "data message size is not 1 with map UDF streaming"
-		df.opts.logger.Errorw(errMsg)
-		return nil, fmt.Errorf(errMsg)
-	} else if len(dataMessages) == 1 {
-		// send to map UDF only the data messages
-
-		// emit message size metric
-		readBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).
-			Add(float64(len(dataMessages[0].Payload)))
-		// assign watermark to the message
-		dataMessages[0].Watermark = time.Time(processorWM)
-
-		// process the mapStreamUDF and get the result
-		start := time.Now()
-		udfReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Inc()
-
-		writeMessageCh := make(chan isb.WriteMessage)
-		errs, ctx := errgroup.WithContext(ctx)
-		errs.Go(func() error {
-			return df.mapStreamUDF.ApplyMapStream(ctx, dataMessages[0], writeMessageCh)
-		})
-
-		// Stream the message to the next vertex. First figure out which vertex
-		// to send the result to. Then update the toBuffer(s) with writeMessage.
-		msgIndex := 0
-		for writeMessage := range writeMessageCh {
-			// add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
-			writeMessage.ID = fmt.Sprintf("%s-%s-%d", dataMessages[0].ReadOffset.String(), df.vertexName, msgIndex)
-			msgIndex += 1
-			udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(1))
-
-			// update toBuffers
-			if err := df.whereToStep(&writeMessage, messageToStep, dataMessages[0]); err != nil {
-				return nil, fmt.Errorf("failed at whereToStep, error: %w", err)
-			}
-
-			// Forward the message to the edge buffer (could be multiple edges)
-			curWriteOffsets, err := df.writeToBuffers(ctx, messageToStep)
-			if err != nil {
-				return nil, fmt.Errorf("failed to write to toBuffers, error: %w", err)
-			}
-			// Merge curWriteOffsets into writeOffsets
-			for vertexName, toVertexBufferOffsets := range curWriteOffsets {
-				for index, offsets := range toVertexBufferOffsets {
-					writeOffsets[vertexName][index] = append(writeOffsets[vertexName][index], offsets...)
-				}
-			}
-		}
-
-		// look for errors in udf processing, if we see even 1 error NoAck all messages
-		// then return. Handling partial retrying is not worth ATM.
-		if err := errs.Wait(); err != nil {
-			udfError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName,
-				metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Inc()
-			// We do not retry as we are streaming
-			if ok, _ := df.IsShuttingDown(); ok {
-				df.opts.logger.Errorw("mapUDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
-				platformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName}).Inc()
-			}
-			return nil, fmt.Errorf("failed to applyUDF, error: %w", err)
-		}
-
-		udfProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName,
-			metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Observe(float64(time.Since(start).Microseconds()))
-	} else {
-		// Even not data messages, forward the message to the edge buffer (could be multiple edges)
-		var err error
-		writeOffsets, err = df.writeToBuffers(ctx, messageToStep)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write to toBuffers, error: %w", err)
-		}
-	}
-
-	return writeOffsets, nil
 }
 
 // ackFromBuffer acknowledges an array of offsets back to fromBufferPartition and is a blocking call or until shutdown has been initiated.
@@ -638,44 +518,12 @@ func (df *DataForward) concurrentApplyUDF(ctx context.Context, readMessagePair <
 	for message := range readMessagePair {
 		start := time.Now()
 		udfReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Inc()
-		writeMessages, err := df.applyUDF(ctx, message.readMessage)
+		writeMessages := []*isb.WriteMessage{{
+			Message: message.readMessage.Message,
+		}}
 		udfWriteMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(writeMessages)))
 		message.writeMessages = append(message.writeMessages, writeMessages...)
-		message.udfError = err
 		udfProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Observe(float64(time.Since(start).Microseconds()))
-	}
-}
-
-// applyUDF applies the map UDF and will block if there is any InternalErr. On the other hand, if this is a UserError
-// the skip flag is set. ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
-// The UserError retry will be done on the ApplyUDF.
-func (df *DataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	for {
-		writeMessages, err := df.mapUDF.ApplyMap(ctx, readMessage)
-		if err != nil {
-			df.opts.logger.Errorw("mapUDF.Apply error", zap.Error(err))
-			// TODO: implement retry with backoff etc.
-			time.Sleep(df.opts.retryInterval)
-			// keep retrying, I cannot think of a use case where a user could say, errors are fine :-)
-			// as a platform we should not lose or corrupt data.
-			// this does not mean we should prohibit this from a shutdown.
-			if ok, _ := df.IsShuttingDown(); ok {
-				df.opts.logger.Errorw("mapUDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
-				platformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName}).Inc()
-				return nil, err
-			}
-			continue
-		} else {
-			// if we do not get a time from map UDF, we set it to the time from (N-1)th vertex
-			for index, m := range writeMessages {
-				// add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
-				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), df.vertexName, index)
-				if m.EventTime.IsZero() {
-					m.EventTime = readMessage.EventTime
-				}
-			}
-			return writeMessages, nil
-		}
 	}
 }
 
