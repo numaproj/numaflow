@@ -32,11 +32,11 @@ type Shutdown struct {
 }
 
 // IsShuttingDown returns whether we can stop processing.
-func (df *DataForward) IsShuttingDown() (bool, error) {
-	df.Shutdown.rwlock.RLock()
-	defer df.Shutdown.rwlock.RUnlock()
+func (isdf *DataForward) IsShuttingDown() (bool, error) {
+	isdf.Shutdown.rwlock.RLock()
+	defer isdf.Shutdown.rwlock.RUnlock()
 
-	if df.Shutdown.forceShutdown || df.Shutdown.startShutdown {
+	if isdf.Shutdown.forceShutdown || isdf.Shutdown.startShutdown {
 		return true, nil
 	}
 
@@ -51,24 +51,24 @@ func (s *Shutdown) String() string {
 }
 
 // Stop stops the processing.
-func (df *DataForward) Stop() {
-	df.Shutdown.rwlock.Lock()
-	defer df.Shutdown.rwlock.Unlock()
-	if df.Shutdown.initiateTime.IsZero() {
-		df.Shutdown.initiateTime = time.Now()
+func (isdf *DataForward) Stop() {
+	isdf.Shutdown.rwlock.Lock()
+	defer isdf.Shutdown.rwlock.Unlock()
+	if isdf.Shutdown.initiateTime.IsZero() {
+		isdf.Shutdown.initiateTime = time.Now()
 	}
-	df.Shutdown.startShutdown = true
-	df.Shutdown.shutdownRequestCtr++
+	isdf.Shutdown.startShutdown = true
+	isdf.Shutdown.shutdownRequestCtr++
 	// call cancel
-	df.cancelFn()
+	isdf.cancelFn()
 }
 
 // ForceStop sets up the force shutdown flag.
-func (df *DataForward) ForceStop() {
+func (isdf *DataForward) ForceStop() {
 	// call stop (what if we have an enthusiastic shutdown that forces first)
 	// e.g., I know I have written a wrong source transformer, so shutdown ASAP
-	df.Stop()
-	df.Shutdown.rwlock.Lock()
-	defer df.Shutdown.rwlock.Unlock()
-	df.Shutdown.forceShutdown = true
+	isdf.Stop()
+	isdf.Shutdown.rwlock.Lock()
+	defer isdf.Shutdown.rwlock.Unlock()
+	isdf.Shutdown.forceShutdown = true
 }

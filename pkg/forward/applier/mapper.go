@@ -34,3 +34,12 @@ type ApplyMapFunc func(context.Context, *isb.ReadMessage) ([]*isb.WriteMessage, 
 func (f ApplyMapFunc) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return f(ctx, message)
 }
+
+var (
+	// Terminal Applier do not make any change to the message
+	Terminal = ApplyMapFunc(func(ctx context.Context, msg *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+		return []*isb.WriteMessage{{
+			Message: msg.Message,
+		}}, nil
+	})
+)

@@ -27,13 +27,14 @@ import (
 
 	"go.uber.org/zap"
 
+	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
+	applier2 "github.com/numaproj/numaflow/pkg/sources/forward/applier"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-	applier2 "github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
