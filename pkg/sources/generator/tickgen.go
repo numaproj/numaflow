@@ -314,15 +314,21 @@ func (mg *memgen) Start() <-chan struct{} {
 func (mg *memgen) NewWorker(ctx context.Context, rate int) func(chan time.Time, chan struct{}) {
 
 	return func(tickChan chan time.Time, done chan struct{}) {
-		for {
-			select {
-			case <-ctx.Done():
-				log.Info("Context.Done is called. emptying any pending ticks")
+		defer func() {
+			// empty any pending ticks
+			if len(tickChan) > 0 {
+				log.Info("emptying any pending ticks")
 				for len(tickChan) > 0 {
 					<-tickChan
 				}
-				close(done)
-				close(mg.srcChan)
+			}
+		}()
+		defer close(done)
+		defer close(mg.srcChan)
+
+		for {
+			select {
+			case <-ctx.Done():
 				return
 			case ts := <-tickChan:
 				tickgenSourceCount.With(map[string]string{metrics.LabelVertex: mg.vertexName, metrics.LabelPipeline: mg.pipelineName})
