@@ -48,7 +48,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
@@ -60,7 +59,7 @@ type SourceProcessor struct {
 func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var (
 		sourcePublisherStores, _ = store.BuildNoOpWatermarkStore()
-		processorManagers        map[string]*processor.ProcessorManager
+		sourceWmStores           = make(map[string]store.WatermarkStore)
 		toVertexWatermarkStores  = make(map[string]store.WatermarkStore)
 		log                      = logging.FromContext(ctx)
 		writersMap               = make(map[string][]isb.BufferWriter)
@@ -110,13 +109,15 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	case dfv1.ISBSvcTypeJetStream:
 		// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
-		processorManagers, err = jetstream.BuildProcessorManagers(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
+		sourceWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
-			return fmt.Errorf("failed to build processor manager: %w", err)
+			return fmt.Errorf("failed to build watermark stores: %w", err)
 		}
 
+		sp.VertexInstance.Vertex.GetPartitionCount()
+
 		// create watermark fetcher using processor managers
-		fetchWatermark = fetch.NewSourceFetcher(ctx, processorManagers[sp.VertexInstance.Vertex.Name])
+		fetchWatermark = fetch.NewSourceFetcher(ctx, sourceWmStores[sp.VertexInstance.Vertex.Name], fetch.WithIsSource(true))
 
 		// build publisher stores for to vertex
 		toVertexWatermarkStores, err = jetstream.BuildToVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
@@ -249,12 +250,12 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	sourcer.Stop()
 	wg.Wait()
 
-	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
-	for _, pm := range processorManagers {
-		pm.Close()
+	// close all the source wm stores
+	for _, wmStore := range sourceWmStores {
+		_ = wmStore.Close()
 	}
 
-	// close all the to vertex stores
+	// close all the to vertex wm stores
 	for _, ws := range toVertexWatermarkStores {
 		_ = ws.Close()
 	}

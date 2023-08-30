@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package processor
+package fetch
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 
 	"go.uber.org/zap"
 
+	entity2 "github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/timeline"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -52,7 +53,7 @@ func (s status) String() string {
 // ProcessorToFetch is the smallest unit of entity (from which we fetch data) that does inorder processing or contains inorder data. It tracks OT for all the partitions of the from buffer.
 type ProcessorToFetch struct {
 	ctx    context.Context
-	entity ProcessorEntitier
+	entity entity2.ProcessorEntitier
 	status status
 	// offsetTimelines is a slice of OTs for each partition of the incoming buffer.
 	offsetTimelines []*timeline.OffsetTimeline
@@ -61,7 +62,7 @@ type ProcessorToFetch struct {
 }
 
 // GetEntity returns the processor entity.
-func (p *ProcessorToFetch) GetEntity() ProcessorEntitier {
+func (p *ProcessorToFetch) GetEntity() entity2.ProcessorEntitier {
 	return p.entity
 }
 
@@ -79,7 +80,7 @@ func (p *ProcessorToFetch) String() string {
 }
 
 // NewProcessorToFetch creates ProcessorToFetch.
-func NewProcessorToFetch(ctx context.Context, processor ProcessorEntitier, capacity int, fromBufferPartitionCount int32) *ProcessorToFetch {
+func NewProcessorToFetch(ctx context.Context, processor entity2.ProcessorEntitier, capacity int, fromBufferPartitionCount int32) *ProcessorToFetch {
 
 	var offsetTimelines []*timeline.OffsetTimeline
 	for i := int32(0); i < fromBufferPartitionCount; i++ {

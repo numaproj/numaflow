@@ -26,7 +26,6 @@ import (
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
@@ -137,26 +136,20 @@ func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buffe
 	return bufferInfo, nil
 }
 
-// CreateProcessorManagers is used to create the processor managers for the given bucket.
-func (r *isbsRedisSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
+// CreateWatermarkStores is used to create the watermark stores for the given bucket.
+func (r *isbsRedisSvc) CreateWatermarkStores(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]store.WatermarkStore, error) {
 	log := logging.FromContext(ctx).With("bucket", bucketName)
 	ctx = logging.WithLogger(ctx, log)
 	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
-	var processorManagers []*processor.ProcessorManager
+	var wmStores []store.WatermarkStore
 	fetchers := 1
 	if isReduce {
 		fetchers = fromBufferPartitionCount
 	}
 	for i := 0; i < fetchers; i++ {
-		storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
-		var pm *processor.ProcessorManager
-		if isReduce {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
-		} else {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
-		}
-		processorManagers = append(processorManagers, pm)
+		wmStore, _ := store.BuildNoOpWatermarkStore()
+		wmStores = append(wmStores, wmStore)
 	}
 
-	return processorManagers, nil
+	return wmStores, nil
 }

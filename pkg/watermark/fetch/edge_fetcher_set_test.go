@@ -28,19 +28,20 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
-	var ctx = context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// test fetching from 2 edges
 
 	numIncomingVertices := 2
 	partitionCount := int32(3)
-	processorManagers := make([]*processor.ProcessorManager, 0)
+	processorManagers := make([]*ProcessorManager, 0)
 	for i := 0; i < numIncomingVertices; i++ {
 		processorManagers = append(processorManagers, createProcessorManager(ctx, partitionCount))
 	}
@@ -85,13 +86,13 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 		},
 	}
 
-	testPodsByVertex := make([][]*processor.ProcessorToFetch, numIncomingVertices)
+	testPodsByVertex := make([][]*ProcessorToFetch, numIncomingVertices)
 	for vertex := 0; vertex < numIncomingVertices; vertex++ {
 		numPods := len(testPodTimelines[vertex])
-		testPodsByVertex[vertex] = make([]*processor.ProcessorToFetch, numPods)
+		testPodsByVertex[vertex] = make([]*ProcessorToFetch, numPods)
 		for pod := 0; pod < numPods; pod++ {
 			name := fmt.Sprintf("test-pod-%d-%d", vertex, pod)
-			testPodsByVertex[vertex][pod] = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity(name), 5, partitionCount)
+			testPodsByVertex[vertex][pod] = NewProcessorToFetch(ctx, entity.NewProcessorEntity(name), 5, partitionCount)
 			for _, watermark := range testPodTimelines[vertex][pod] {
 				testPodsByVertex[vertex][pod].GetOffsetTimelines()[watermark.Partition].Put(watermark)
 			}
@@ -183,15 +184,15 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 
 }
 
-func createProcessorManager(ctx context.Context, partitionCount int32) *processor.ProcessorManager {
-	storeWatcher, _ := store.BuildNoOpWatermarkStoreWatcher()
-	return processor.NewProcessorManager(ctx, storeWatcher, partitionCount)
+func createProcessorManager(ctx context.Context, partitionCount int32) *ProcessorManager {
+	wmStore, _ := store.BuildNoOpWatermarkStore()
+	return NewProcessorManager(ctx, wmStore, partitionCount)
 }
 
-func edge1Idle(ctx context.Context, processorManager *processor.ProcessorManager) {
+func edge1Idle(ctx context.Context, processorManager *ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 2)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 2)
+		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, 2)
+		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, 2)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      true,
@@ -232,10 +233,10 @@ func edge1Idle(ctx context.Context, processorManager *processor.ProcessorManager
 	processorManager.AddProcessor("testPod1", testPod1)
 }
 
-func edge1NonIdle(ctx context.Context, processorManager *processor.ProcessorManager) {
+func edge1NonIdle(ctx context.Context, processorManager *ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 2)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 2)
+		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, 2)
+		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, 2)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      false,
@@ -276,10 +277,10 @@ func edge1NonIdle(ctx context.Context, processorManager *processor.ProcessorMana
 	processorManager.AddProcessor("testPod1", testPod1)
 }
 
-func edge2Idle(ctx context.Context, processorManager *processor.ProcessorManager) {
+func edge2Idle(ctx context.Context, processorManager *ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 2)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 2)
+		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, 2)
+		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, 2)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      true,
@@ -320,10 +321,10 @@ func edge2Idle(ctx context.Context, processorManager *processor.ProcessorManager
 	processorManager.AddProcessor("testPod1", testPod1)
 }
 
-func edge2NonIdle(ctx context.Context, processorManager *processor.ProcessorManager) {
+func edge2NonIdle(ctx context.Context, processorManager *ProcessorManager) {
 	var (
-		testPod0     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod1"), 5, 2)
-		testPod1     = processor.NewProcessorToFetch(ctx, processor.NewProcessorEntity("testPod2"), 5, 2)
+		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, 2)
+		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, 2)
 		pod0Timeline = []wmb.WMB{
 			{
 				Idle:      false,
@@ -373,15 +374,17 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 	// 3. all publishers Idle but somehow the GetWatermark() of one of the EdgeFetchers is higher than the returned value
 
 	var (
-		ctx             = context.Background()
-		storeWatcher, _ = store.BuildNoOpWatermarkStoreWatcher()
+		ctx, cancel = context.WithCancel(context.Background())
+		wmStore, _  = store.BuildNoOpWatermarkStore()
 
-		edge1ProcessorManagerIdle    = processor.NewProcessorManager(ctx, storeWatcher, 2)
-		edge1ProcessorManagerNonIdle = processor.NewProcessorManager(ctx, storeWatcher, 2)
+		edge1ProcessorManagerIdle    = NewProcessorManager(ctx, wmStore, 2)
+		edge1ProcessorManagerNonIdle = NewProcessorManager(ctx, wmStore, 2)
 
-		edge2ProcessorManagerIdle    = processor.NewProcessorManager(ctx, storeWatcher, 2)
-		edge2ProcessorManagerNonIdle = processor.NewProcessorManager(ctx, storeWatcher, 2)
+		edge2ProcessorManagerIdle    = NewProcessorManager(ctx, wmStore, 2)
+		edge2ProcessorManagerNonIdle = NewProcessorManager(ctx, wmStore, 2)
 	)
+
+	defer cancel()
 
 	edge1Idle(ctx, edge1ProcessorManagerIdle)
 	edge1NonIdle(ctx, edge1ProcessorManagerNonIdle)

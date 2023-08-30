@@ -26,21 +26,23 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 // GetUXEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
-func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, processorManagers map[v1alpha1.Edge][]*processor.ProcessorManager) (map[v1alpha1.Edge][]fetch.UXFetcher, error) {
+func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, wmStores map[v1alpha1.Edge][]store.WatermarkStore) (map[v1alpha1.Edge][]fetch.UXFetcher, error) {
 	var wmFetchers = make(map[v1alpha1.Edge][]fetch.UXFetcher)
 	if pipeline.Spec.Watermark.Disabled {
 		return wmFetchers, nil
 	}
 
-	for edge, pms := range processorManagers {
+	for edge, stores := range wmStores {
 		var fetchers []fetch.UXFetcher
-		for _, pm := range pms {
-			fetchers = append(fetchers, fetch.NewEdgeFetcher(ctx, pm, pipeline.GetVertex(edge.To).GetPartitionCount()))
+		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
+		partitionCount := pipeline.GetVertex(edge.To).GetPartitionCount()
+		for i, s := range stores {
+			fetchers = append(fetchers, fetch.NewEdgeFetcher(ctx, s, partitionCount, fetch.WithIsReduce(isReduce), fetch.WithVertexReplica(int32(i))))
 		}
 		wmFetchers[edge] = fetchers
 	}
@@ -48,24 +50,24 @@ func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline
 	return wmFetchers, nil
 }
 
-// GetProcessorManagers returns a map of ProcessorManager per edge.
-func GetProcessorManagers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbsvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]*processor.ProcessorManager, error) {
-	var processorManagers = make(map[v1alpha1.Edge][]*processor.ProcessorManager)
+// GetWatermarkStores returns a map of ProcessorManager per edge.
+func GetWatermarkStores(ctx context.Context, pipeline *v1alpha1.Pipeline, isbsvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]store.WatermarkStore, error) {
+	var wmStoresMap = make(map[v1alpha1.Edge][]store.WatermarkStore)
 	if pipeline.Spec.Watermark.Disabled {
-		return processorManagers, nil
+		return wmStoresMap, nil
 	}
 
 	for _, edge := range pipeline.ListAllEdges() {
 		bucketName := v1alpha1.GenerateEdgeBucketName(pipeline.Namespace, pipeline.Name, edge.From, edge.To)
 		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
 		partitionCount := pipeline.GetVertex(edge.To).GetPartitionCount()
-		pms, err := isbsvcClient.CreateProcessorManagers(ctx, bucketName, partitionCount, isReduce)
+		stores, err := isbsvcClient.CreateWatermarkStores(ctx, bucketName, partitionCount, isReduce)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create processor manager  %w", err)
 		}
-		processorManagers[edge] = pms
+		wmStoresMap[edge] = stores
 	}
-	return processorManagers, nil
+	return wmStoresMap, nil
 }
 
 // GetPipelineWatermarks is used to return the head watermarks for a given pipeline.

@@ -30,7 +30,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type mockGetType func(url string) (*http.Response, error)
@@ -67,7 +67,7 @@ func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffe
 	return nil
 }
 
-func (ms *mockIsbSvcClient) CreateProcessorManagers(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]*processor.ProcessorManager, error) {
+func (ms *mockIsbSvcClient) CreateWatermarkStores(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]store.WatermarkStore, error) {
 	return nil, nil
 }
 

@@ -32,6 +32,8 @@ type KVStorer interface {
 	GetValue(context.Context, string) ([]byte, error)
 	// GetStoreName returns the bucket name of the KV store.
 	GetStoreName() string
+	// Watch starts the kv watcher and returns a kv updates channel and a watcher stopped channel.
+	Watch(context.Context) (<-chan KVEntry, <-chan struct{})
 	// Close closes the backend connection
 	Close()
 }

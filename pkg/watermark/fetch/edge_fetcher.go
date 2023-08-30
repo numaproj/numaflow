@@ -33,20 +33,20 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // edgeFetcher is a fetcher between two vertices.
 type edgeFetcher struct {
-	processorManager *processor.ProcessorManager
+	processorManager *ProcessorManager
 	lastProcessedWm  []int64
 	log              *zap.SugaredLogger
 	sync.RWMutex
 }
 
 // NewEdgeFetcher returns a new edge fetcher.
-func NewEdgeFetcher(ctx context.Context, manager *processor.ProcessorManager, fromBufferPartitionCount int) *edgeFetcher {
+func NewEdgeFetcher(ctx context.Context, wmStore store.WatermarkStore, fromBufferPartitionCount int, opts ...Option) *edgeFetcher {
 	log := logging.FromContext(ctx)
 	log.Info("Creating a new edge watermark fetcher")
 	var lastProcessedWm []int64
@@ -55,6 +55,9 @@ func NewEdgeFetcher(ctx context.Context, manager *processor.ProcessorManager, fr
 	for i := 0; i < fromBufferPartitionCount; i++ {
 		lastProcessedWm = append(lastProcessedWm, -1)
 	}
+
+	// create the processor manager to track the processors and their offset timelines.
+	manager := NewProcessorManager(ctx, wmStore, int32(fromBufferPartitionCount), opts...)
 
 	return &edgeFetcher{
 		processorManager: manager,

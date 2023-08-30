@@ -33,8 +33,8 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -202,7 +202,7 @@ func (r *KafkaSource) loadSourceWatermarkPublisher(partitionID int32) publish.Pu
 		return p
 	}
 	entityName := fmt.Sprintf("%s-%s-%d", r.pipelineName, r.vertexName, partitionID)
-	processorEntity := processor.NewProcessorEntity(entityName)
+	processorEntity := entity.NewProcessorEntity(entityName)
 	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
 	sourcePublishWM := publish.NewPublish(r.lifecycleCtx, processorEntity, r.srcPublishWMStores, 1, publish.IsSource(), publish.WithDelay(r.watermarkMaxDelay))
 	r.sourcePublishWMs[partitionID] = sourcePublishWM

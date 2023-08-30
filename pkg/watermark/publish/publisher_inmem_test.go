@@ -26,16 +26,16 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 func TestPublisherWithSharedOTBuckets_InMem(t *testing.T) {
 	var ctx = context.Background()
-	wmstore, _, _, err := store.BuildInmemWatermarkStore(ctx, "test")
+	wmstore, err := store.BuildInmemWatermarkStore(ctx, "test")
 	assert.NoError(t, err)
-	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
+	publishEntity := entity.NewProcessorEntity("publisherTestPod1")
 
 	p := NewPublish(ctx, publishEntity, wmstore, 1, WithAutoRefreshHeartbeatDisabled(), WithPodHeartbeatRate(1)).(*publish)
 

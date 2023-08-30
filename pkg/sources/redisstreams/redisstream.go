@@ -25,11 +25,12 @@ import (
 	"strings"
 	"time"
 
-	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
-
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+
+	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -40,7 +41,6 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -157,7 +157,7 @@ func New(
 	ctx, cancel := context.WithCancel(context.Background())
 	redisStreamsSource.cancelFn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
-	processorEntity := processor.NewProcessorEntity(entityName)
+	processorEntity := entity.NewProcessorEntity(entityName)
 	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
 	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 

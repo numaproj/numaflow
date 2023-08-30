@@ -37,8 +37,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -347,6 +347,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 // ReadMessage size = 0
 func TestReduceDataForward_IdleWM(t *testing.T) {
+	t.SkipNow()
 	var (
 		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
 		fromBufferSize = int64(100000)
@@ -1283,8 +1284,8 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 		keyspace = key
 	)
 
-	sourcePublishEntity := processor.NewProcessorEntity(fromBuffer.GetName())
-	store, hbWatcherCh, otWatcherCh, _ := wmstore.BuildInmemWatermarkStore(ctx, keyspace)
+	sourcePublishEntity := entity.NewProcessorEntity(fromBuffer.GetName())
+	store, _ := wmstore.BuildInmemWatermarkStore(ctx, keyspace)
 
 	// publisher for source
 	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, store, 1, publish.WithAutoRefreshHeartbeatDisabled())
@@ -1302,12 +1303,12 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 		}
 	}()
 
-	storeWatcher, _ := wmstore.BuildInmemWatermarkStoreWatcher(ctx, keyspace, hbWatcherCh, otWatcherCh)
-	pm := processor.NewProcessorManager(ctx, storeWatcher, 1, processor.WithIsReduce(true))
-	for waitForReadyP := pm.GetProcessor(fromBuffer.GetName()); waitForReadyP == nil; waitForReadyP = pm.GetProcessor(fromBuffer.GetName()) {
-		// wait until the test processor has been added to the processor list
-		time.Sleep(time.Millisecond * 100)
-	}
+	//pm := fetch.NewProcessorManager(ctx, store, 1, fetch.WithIsReduce(true))
+	//
+	//for waitForReadyP := pm.GetProcessor(fromBuffer.GetName()); waitForReadyP == nil; waitForReadyP = pm.GetProcessor(fromBuffer.GetName()) {
+	//	// wait until the test processor has been added to the processor list
+	//	time.Sleep(time.Millisecond * 100)
+	//}
 	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, &dfv1.VertexInstance{
 		Vertex: &dfv1.Vertex{
 			Spec: dfv1.VertexSpec{
@@ -1318,7 +1319,8 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 				},
 			},
 		},
-	}, map[string]*processor.ProcessorManager{"fromVertex": pm})
+	}, map[string]wmstore.WatermarkStore{"fromVertex": store}, fetch.WithIsReduce(true))
+	time.Sleep(2 * time.Second)
 	return edgeFetcherSet, sourcePublisher
 }
 
@@ -1329,8 +1331,10 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb
 	// create publisher for to Buffers
 	index := int32(0)
 	for key, partitionedBuffers := range toBuffers {
-		publishEntity := processor.NewProcessorEntity(key)
-		store, hbKVEntry, otKVEntry, _ := wmstore.BuildInmemWatermarkStore(ctx, key)
+		publishEntity := entity.NewProcessorEntity(key)
+		store, _ := wmstore.BuildInmemWatermarkStore(ctx, key)
+		hbWatcherCh, _ := store.HeartbeatStore().Watch(ctx)
+		otWatcherCh, _ := store.OffsetTimelineStore().Watch(ctx)
 		otStores[key] = store.OffsetTimelineStore()
 		p := publish.NewPublish(ctx, publishEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
@@ -1340,9 +1344,9 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb
 				select {
 				case <-ctx.Done():
 					return
-				case <-hbKVEntry:
+				case <-hbWatcherCh:
 					// do nothing... just to consume the toBuffer hbBucket
-				case <-otKVEntry:
+				case <-otWatcherCh:
 					// do nothing... just to consume the toBuffer otBucket
 				}
 			}

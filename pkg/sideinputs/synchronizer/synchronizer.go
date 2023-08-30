@@ -56,9 +56,9 @@ func NewSideInputsSynchronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInp
 // and keeps on watching for updates for all the side inputs while writing the new values to the disk.
 func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	var (
-		natsClient       *jsclient.NATSClient
-		err              error
-		sideInputWatcher kvs.KVWatcher
+		natsClient     *jsclient.NATSClient
+		err            error
+		sideInputStore kvs.KVStorer
 	)
 
 	log := logging.FromContext(ctx)
@@ -78,21 +78,21 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 		}
 		// Create a new watcher for the side input KV store
 		kvName := isbsvc.JetStreamSideInputsStoreKVName(sis.sideInputsStore)
-		sideInputWatcher, err = jetstream.NewKVJetStreamKVWatch(ctx, kvName, natsClient)
+		sideInputStore, err = jetstream.NewKVJetStreamKVStore(ctx, kvName, natsClient)
 		if err != nil {
-			return fmt.Errorf("failed to create a sideInputWatcher, %w", err)
+			return fmt.Errorf("failed to create a sideInputStore, %w", err)
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sis.isbSvcType)
 	}
-	go startSideInputSynchronizer(ctx, sideInputWatcher, dfv1.PathSideInputsMount)
+	go startSideInputSynchronizer(ctx, sideInputStore, dfv1.PathSideInputsMount)
 	<-ctx.Done()
 	return nil
 }
 
 // startSideInputSynchronizer watches the Side Input KV store for any changes
 // and writes the updated value to the mount volume.
-func startSideInputSynchronizer(ctx context.Context, watch kvs.KVWatcher, mountPath string) {
+func startSideInputSynchronizer(ctx context.Context, watch kvs.KVStorer, mountPath string) {
 	log := logging.FromContext(ctx)
 	watchCh, stopped := watch.Watch(ctx)
 	for {

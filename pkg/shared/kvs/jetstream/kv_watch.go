@@ -55,6 +55,7 @@ func NewKVJetStreamKVWatch(ctx context.Context, kvName string, client *jsclient.
 	}
 
 	kvStore, err := client.BindKVStore(kvName)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to bind kv store: %w", err)
 	}

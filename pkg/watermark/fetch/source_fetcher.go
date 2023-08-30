@@ -25,24 +25,24 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
-
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // sourceFetcher is a fetcher on source buffers.
 type sourceFetcher struct {
-	processorManager *processor.ProcessorManager
+	processorManager *ProcessorManager
 	log              *zap.SugaredLogger
 }
 
 // NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
 // buckets of the source buffer.
-func NewSourceFetcher(ctx context.Context, manager *processor.ProcessorManager) Fetcher {
+func NewSourceFetcher(ctx context.Context, store store.WatermarkStore, opts ...Option) Fetcher {
 	log := logging.FromContext(ctx)
 	log.Info("Creating a new source watermark fetcher")
+	manager := NewProcessorManager(ctx, store, 1, opts...)
 	return &sourceFetcher{
 		processorManager: manager,
 		log:              log,

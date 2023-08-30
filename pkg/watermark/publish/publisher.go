@@ -33,7 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
@@ -52,7 +52,7 @@ type Publisher interface {
 // publish publishes the watermark and heartbeat for a processor entity.
 type publish struct {
 	ctx    context.Context
-	entity processor.ProcessorEntitier
+	entity entity.ProcessorEntitier
 	// osStore uses millisecond as the time unit for the value
 	otStore kvs.KVStorer
 	// heartbeatStore uses second as the time unit for the value
@@ -65,7 +65,7 @@ type publish struct {
 }
 
 // NewPublish returns `Publish`.
-func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, watermarkStores store.WatermarkStore, toVertexPartitionCount int32, inputOpts ...PublishOption) Publisher {
+func NewPublish(ctx context.Context, processorEntity entity.ProcessorEntitier, watermarkStores store.WatermarkStore, toVertexPartitionCount int32, inputOpts ...PublishOption) Publisher {
 	log := logging.FromContext(ctx).With("entityID", processorEntity.GetName()).
 		With("otStore", watermarkStores.OffsetTimelineStore().GetStoreName()).
 		With("hbStore", watermarkStores.HeartbeatStore().GetStoreName())
@@ -221,6 +221,7 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset, toVe
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
+			println("publish idle watermark")
 			p.log.Debugw("New idle watermark published", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Int64("offset", seq), zap.Int64("watermark", validWM.UnixMilli()))
 			break
 		}

@@ -57,3 +57,7 @@ func (k noOpStore) GetStoreName() string {
 
 func (k noOpStore) Close() {
 }
+
+func (k noOpStore) Watch(_ context.Context) (<-chan kvs.KVEntry, <-chan struct{}) {
+	return nil, nil
+}

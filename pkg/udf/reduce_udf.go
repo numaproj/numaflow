@@ -26,7 +26,6 @@ import (
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 
 	"go.uber.org/zap"
@@ -57,14 +56,14 @@ type ReduceUDFProcessor struct {
 
 func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	var (
-		readers           []isb.BufferReader
-		writers           map[string][]isb.BufferWriter
-		fromBuffer        string
-		err               error
-		natsClientPool    *jsclient.ClientPool
-		windower          window.Windower
-		processorManagers map[string]*processor.ProcessorManager
-		wmStores          map[string]store.WatermarkStore
+		readers            []isb.BufferReader
+		writers            map[string][]isb.BufferWriter
+		fromBuffer         string
+		err                error
+		natsClientPool     *jsclient.ClientPool
+		windower           window.Windower
+		fromVertexWmStores map[string]store.WatermarkStore
+		toVertexWmStores   map[string]store.WatermarkStore
 	)
 
 	log := logging.FromContext(ctx)
@@ -116,23 +115,24 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			names := u.VertexInstance.Vertex.GetToBuffers()
 			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
 		} else {
-			// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
-			processorManagers, err = jetstream.BuildProcessorManagers(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			// create from vertex watermark stores
+			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
-				return fmt.Errorf("failed to build processor manager: %w", err)
+				return fmt.Errorf("failed to build watermark stores: %w", err)
 			}
 
-			// create watermark fetcher using processor managers
-			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, processorManagers)
+			// create watermark fetcher using watermark stores
+			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, fromVertexWmStores, fetch.WithVertexReplica(u.VertexInstance.Replica),
+				fetch.WithIsReduce(u.VertexInstance.Vertex.IsReduceUDF()), fetch.WithIsSource(u.VertexInstance.Vertex.IsASource()))
 
-			// create watermark stores
-			wmStores, err = jetstream.BuildToVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			// create to vertex watermark stores
+			toVertexWmStores, err = jetstream.BuildToVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
 				return err
 			}
 
 			// create watermark publisher using watermark stores
-			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, wmStores)
+			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, toVertexWmStores)
 
 			readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
 			if err != nil {
@@ -274,11 +274,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log.Info("SIGTERM, exiting...")
 	wg.Wait()
 
-	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
-	for _, pm := range processorManagers {
-		pm.Close()
-	}
-
 	// closing the publisher will only delete the keys from the store, but not the store itself
 	// we cannot close the store inside publisher because in some cases stores are shared between publishers
 	// and store itself is a separate entity that can be used by other components
@@ -289,9 +284,15 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	// close the wm stores, since the publisher and fetcher are closed
+	// close the from vertex wm stores
 	// since we created the stores, we can close them
-	for _, wmStore := range wmStores {
+	for _, wmStore := range fromVertexWmStores {
+		_ = wmStore.Close()
+	}
+
+	// close the to vertex wm stores
+	// since we created the stores, we can close them
+	for _, wmStore := range toVertexWmStores {
 		_ = wmStore.Close()
 	}
 

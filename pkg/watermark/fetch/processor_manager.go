@@ -20,7 +20,7 @@ limitations under the License.
 // fetch the active processors list at any given time. ProcessorManager is also responsible for watching the offset
 // timeline changes and updating the offset timeline for each processor.
 
-package processor
+package fetch
 
 import (
 	"context"
@@ -34,6 +34,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	entity2 "github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
@@ -41,9 +42,8 @@ import (
 // ProcessorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor). The code is running on Vn vertex.
 // It has the mapping of all the processors which in turn has all the information about each processor timelines.
 type ProcessorManager struct {
-	ctx       context.Context
-	hbWatcher kvs.KVWatcher
-	otWatcher kvs.KVWatcher
+	ctx            context.Context
+	watermarkStore store.WatermarkStore
 	// heartbeat just tracks the heartbeat of each processing unit. we use it to mark a processing unit's status (e.g, inactive)
 	heartbeat *ProcessorHeartbeat
 	// processors has reference to the actual processing unit (ProcessorEntitier) which includes offset timeline which is
@@ -52,36 +52,33 @@ type ProcessorManager struct {
 	// fromBufferPartitionCount is the number of partitions in the fromBuffer
 	fromBufferPartitionCount int32
 	lock                     sync.RWMutex
-	doneCh                   chan struct{}
-	waitCh                   chan struct{}
 	log                      *zap.SugaredLogger
 
 	// opts
-	opts *processorManagerOptions
+	opts *options
 }
 
 // NewProcessorManager returns a new ProcessorManager instance
-func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.WatermarkStoreWatcher, fromBufferPartitionCount int32, inputOpts ...ProcessorManagerOption) *ProcessorManager {
-	opts := &processorManagerOptions{
+func NewProcessorManager(ctx context.Context, wmStore store.WatermarkStore, fromBufferPartitionCount int32, inputOpts ...Option) *ProcessorManager {
+	opts := &options{
 		podHeartbeatRate:         5,
 		refreshingProcessorsRate: 5,
 		isReduce:                 false,
 		isSource:                 false,
 		vertexReplica:            0,
 	}
+
 	for _, opt := range inputOpts {
 		opt(opts)
 	}
+
 	v := &ProcessorManager{
 		ctx:                      ctx,
-		hbWatcher:                watermarkStoreWatcher.HeartbeatWatcher(),
-		otWatcher:                watermarkStoreWatcher.OffsetTimelineWatcher(),
+		watermarkStore:           wmStore,
 		heartbeat:                NewProcessorHeartbeat(),
 		processors:               make(map[string]*ProcessorToFetch),
 		fromBufferPartitionCount: fromBufferPartitionCount,
 		log:                      logging.FromContext(ctx),
-		doneCh:                   make(chan struct{}),
-		waitCh:                   make(chan struct{}),
 		opts:                     opts,
 	}
 	if v.opts.isReduce || v.opts.isSource {
@@ -93,30 +90,14 @@ func NewProcessorManager(ctx context.Context, watermarkStoreWatcher store.Waterm
 }
 
 func (v *ProcessorManager) init() {
-	var wg = sync.WaitGroup{}
 	// start refreshing processors goroutine
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		v.startRefreshingProcessors()
-	}()
+	go v.startRefreshingProcessors()
 
 	// start heartbeat watcher goroutine
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		v.startHeartBeatWatcher()
-	}()
+	go v.startHeartBeatWatcher()
 
 	// start offset timeline watcher goroutine
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		v.startTimeLineWatcher()
-	}()
-
-	wg.Wait()
-	close(v.waitCh)
+	go v.startTimeLineWatcher()
 }
 
 // AddProcessor adds a new processor. If the given processor already exists, the value will be updated.
@@ -165,8 +146,6 @@ func (v *ProcessorManager) startRefreshingProcessors() {
 			return
 		case <-ticker.C:
 			v.refreshingProcessors()
-		case <-v.doneCh:
-			return
 		}
 	}
 }
@@ -200,15 +179,17 @@ func (v *ProcessorManager) refreshingProcessors() {
 			debugStr.WriteString(fmt.Sprintf("[%s] ", pName))
 		}
 	}
-	v.log.Debugw("Active processors", zap.String("hbKVName", v.hbWatcher.GetKVName()), zap.String("otKVName", v.otWatcher.GetKVName()), zap.String("DebugStr", debugStr.String()))
+	v.log.Debugw("Active processors", zap.String("hbKVName", v.watermarkStore.HeartbeatStore().GetStoreName()), zap.String("otKVName", v.watermarkStore.OffsetTimelineStore().GetStoreName()), zap.String("DebugStr", debugStr.String()))
 }
 
 // startHeartBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
 func (v *ProcessorManager) startHeartBeatWatcher() {
-	watchCh, stopped := v.hbWatcher.Watch(v.ctx)
+	watchCh, stopped := v.watermarkStore.HeartbeatStore().Watch(v.ctx)
 	for {
 		select {
+		case <-v.ctx.Done():
+			return
 		case <-stopped:
 			return
 		case value := <-watchCh:
@@ -226,7 +207,7 @@ func (v *ProcessorManager) startHeartBeatWatcher() {
 					// A fromProcessor needs to be added to v.processors
 					// The fromProcessor may have been deleted
 					// TODO: make capacity configurable
-					var entity = NewProcessorEntity(value.Key())
+					var entity = entity2.NewProcessorEntity(value.Key())
 					// if the processor is a reduce or source processor, then we only need one fromProcessor
 					// because the reduce or source will read from only one partition.
 					fromProcessor := NewProcessorToFetch(v.ctx, entity, 10, v.fromBufferPartitionCount)
@@ -255,10 +236,10 @@ func (v *ProcessorManager) startHeartBeatWatcher() {
 					v.heartbeat.Delete(value.Key())
 				}
 			case kvs.KVPurge:
-				v.log.Warnw("Received nats.KeyValuePurge", zap.String("kvName", v.hbWatcher.GetKVName()))
+				v.log.Warnw("Received nats.KeyValuePurge", zap.String("kvName", v.watermarkStore.HeartbeatStore().GetStoreName()))
 			}
 			v.log.Debugw("processorHeartbeatWatcher - Updates:", zap.String("operation", value.Operation().String()),
-				zap.String("hbKVName", v.hbWatcher.GetKVName()), zap.String("key", value.Key()), zap.ByteString("value", value.Value()))
+				zap.String("hbKVName", v.watermarkStore.HeartbeatStore().GetStoreName()), zap.String("key", value.Key()), zap.ByteString("value", value.Value()))
 		}
 
 	}
@@ -266,10 +247,12 @@ func (v *ProcessorManager) startHeartBeatWatcher() {
 
 // startTimeLineWatcher starts the processor Timeline Watcher to listen to offset timeline bucket and update the processor's timeline.
 func (v *ProcessorManager) startTimeLineWatcher() {
-	watchCh, stopped := v.otWatcher.Watch(v.ctx)
+	watchCh, stopped := v.watermarkStore.OffsetTimelineStore().Watch(v.ctx)
 
 	for {
 		select {
+		case <-v.ctx.Done():
+			return
 		case <-stopped:
 			return
 		case value := <-watchCh:
@@ -304,7 +287,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					} else {
 						p.offsetTimelines[otValue.Partition].PutIdle(otValue)
 					}
-					v.log.Debugw("TimelineWatcher- Updates", zap.String("otKVName", v.otWatcher.GetKVName()), zap.Int64("idleWatermark", otValue.Watermark), zap.Int64("idleOffset", otValue.Offset))
+					v.log.Debugw("TimelineWatcher- Updates", zap.String("otKVName", v.watermarkStore.OffsetTimelineStore().GetStoreName()), zap.Int64("idleWatermark", otValue.Watermark), zap.Int64("idleOffset", otValue.Offset))
 				} else {
 					// NOTE: currently, for source edges, the otValue.Idle is always false
 					// for reduce we will always have only one partition
@@ -313,7 +296,7 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 					} else {
 						p.offsetTimelines[otValue.Partition].Put(otValue)
 					}
-					v.log.Debugw("TimelineWatcher- Updates", zap.String("otKVName", v.otWatcher.GetKVName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
+					v.log.Debugw("TimelineWatcher- Updates", zap.String("otKVName", v.watermarkStore.OffsetTimelineStore().GetStoreName()), zap.Int64("watermark", otValue.Watermark), zap.Int64("offset", otValue.Offset))
 				}
 			case kvs.KVDelete:
 				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
@@ -323,17 +306,4 @@ func (v *ProcessorManager) startTimeLineWatcher() {
 			}
 		}
 	}
-}
-
-// Close stops the watchers, and waits for the goroutines to exit.
-func (v *ProcessorManager) Close() {
-	// send a signal to the goroutines to exit
-	close(v.doneCh)
-
-	// close the watchers
-	v.hbWatcher.Close()
-	v.otWatcher.Close()
-
-	// wait for the goroutines to exit
-	<-v.waitCh
 }

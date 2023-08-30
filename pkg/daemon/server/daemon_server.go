@@ -86,7 +86,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
 	}
-	processorManagers, err := service.GetProcessorManagers(ctx, ds.pipeline, isbSvcClient)
+	processorManagers, err := service.GetWatermarkStores(ctx, ds.pipeline, isbSvcClient)
 	if err != nil {
 		return fmt.Errorf("failed to get processor managers, %w", err)
 	}
