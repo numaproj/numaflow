@@ -19,9 +19,8 @@ package kafka
 import (
 	"sync"
 
-	"go.uber.org/zap"
-
 	"github.com/IBM/sarama"
+	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
