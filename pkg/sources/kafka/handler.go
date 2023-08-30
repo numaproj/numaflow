@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/IBM/sarama"
+
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
