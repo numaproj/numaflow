@@ -33,6 +33,8 @@ type options struct {
 	udfConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
+	// vertexType indicates the type of the vertex
+	vertexType dfv1.VertexType
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
 	// enableMapUdfStream indicates whether the message streaming is enabled or not for map UDF processing
@@ -79,6 +81,14 @@ func WithUDFConcurrency(f int) Option {
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *options) error {
 		o.logger = l
+		return nil
+	}
+}
+
+// WithVertexType sets the type of the vertex
+func WithVertexType(t dfv1.VertexType) Option {
+	return func(o *options) error {
+		o.vertexType = t
 		return nil
 	}
 }
