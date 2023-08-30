@@ -2153,7 +2153,7 @@ This renders the following UI on https://localhost:8443/.</p>
 </code></pre></div>
 <h2 id="creating-an-advanced-pipeline">Creating an advanced pipeline<a class="headerlink" href="#creating-an-advanced-pipeline" title="Permanent link">&para;</a></h2>
 <p>Now we will walk you through creating an advanced pipeline. In our example, this is called the <code>even-odd</code> pipeline, illustrated by the following diagram:</p>
-<p><img alt="Pipeline Diagram" src="../assets/even-odd.png" /></p>
+<p><img alt="Pipeline Diagram" src="../assets/even-odd-square.png" /></p>
 <p>There are five vertices in this example of an advanced pipeline. An <a href="../user-guide/sources/http/">HTTP</a> source vertex which serves an HTTP endpoint to receive numbers as source data, a <a href="../user-guide/user-defined-functions/map/map/">UDF</a> vertex to tag the ingested numbers with the key <code>even</code> or <code>odd</code>, three <a href="../user-guide/sinks/log/">Log</a> sinks, one to print the <code>even</code> numbers, one to print the <code>odd</code> numbers, and the other one to print both the even and odd numbers.</p>
 <p>Run the following command to create the <code>even-odd</code> pipeline.</p>
 <p><div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/2-even-odd-pipeline.yaml
