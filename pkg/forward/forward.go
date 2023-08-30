@@ -350,13 +350,15 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
 		if publisher, ok := isdf.wmPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
-				if len(offsets) > 0 {
-					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
-					activeWatermarkBuffers[toVertexName][index] = true
-					// reset because the toBuffer partition is no longer idling
-					isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
+				if isdf.opts.vertexType == dfv1.VertexTypeMapUDF || isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
+					if len(offsets) > 0 {
+						publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
+						activeWatermarkBuffers[toVertexName][index] = true
+						// reset because the toBuffer partition is no longer idling
+						isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
+					}
+					// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 				}
-				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 			}
 		}
 	}
