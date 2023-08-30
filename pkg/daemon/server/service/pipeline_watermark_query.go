@@ -50,7 +50,7 @@ func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline
 	return wmFetchers, nil
 }
 
-// GetWatermarkStores returns a map of ProcessorManager per edge.
+// GetWatermarkStores returns a map of watermark stores per edge.
 func GetWatermarkStores(ctx context.Context, pipeline *v1alpha1.Pipeline, isbsvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]store.WatermarkStore, error) {
 	var wmStoresMap = make(map[v1alpha1.Edge][]store.WatermarkStore)
 	if pipeline.Spec.Watermark.Disabled {

@@ -82,6 +82,28 @@ func NewKVJetStreamKVStore(ctx context.Context, kvName string, client *jsclient.
 	return jsStore, nil
 }
 
+// kvEntry is each key-value entry in the store and the operation associated with the kv pair.
+type kvEntry struct {
+	key   string
+	value []byte
+	op    kvs.KVWatchOp
+}
+
+// Key returns the key
+func (k kvEntry) Key() string {
+	return k.key
+}
+
+// Value returns the value.
+func (k kvEntry) Value() []byte {
+	return k.value
+}
+
+// Operation returns the operation on that key-value pair.
+func (k kvEntry) Operation() kvs.KVWatchOp {
+	return k.op
+}
+
 // GetAllKeys returns all the keys in the key-value store.
 func (jss *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
 	jss.kvLock.RLock()
@@ -234,7 +256,7 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 }
 
 func (jss *jetStreamStore) newWatcher(ctx context.Context) nats.KeyWatcher {
-	kvWatcher, err := jss.client.CreateKVWatcher(jss.kvName, nats.Context(ctx))
+	kvWatcher, err := jss.kv.WatchAll(nats.Context(ctx))
 	// keep looping because the watermark won't work without a watcher
 	for err != nil {
 		select {
@@ -242,7 +264,7 @@ func (jss *jetStreamStore) newWatcher(ctx context.Context) nats.KeyWatcher {
 			return nil
 		default:
 			jss.log.Errorw("Creating watcher failed", zap.String("watcher", jss.GetKVName()), zap.Error(err))
-			kvWatcher, err = jss.client.CreateKVWatcher(jss.kvName)
+			kvWatcher, err = jss.kv.WatchAll(nats.Context(ctx))
 			time.Sleep(100 * time.Millisecond)
 		}
 	}

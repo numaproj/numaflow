@@ -328,12 +328,6 @@ func (jss *jetStreamSvc) CreateWatermarkStores(ctx context.Context, bucketName s
 		if err != nil {
 			return nil, fmt.Errorf("failed at new JetStream watermark store watcher, %w", err)
 		}
-		//var pm *fetch.ProcessorManager
-		//if isReduce {
-		//	pm = fetch.NewProcessorManager(ctx, wmStore, int32(fromBufferPartitionCount), fetch.WithVertexReplica(int32(i)), fetch.WithIsReduce(isReduce))
-		//} else {
-		//	pm = fetch.NewProcessorManager(ctx, wmStore, int32(fromBufferPartitionCount))
-		//}
 		wmStores = append(wmStores, wmStore)
 	}
 	return wmStores, nil
