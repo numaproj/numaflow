@@ -576,7 +576,7 @@ type Scale struct {
 	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
 	// It only applies to UDF and Sink vertices because only they have buffers to read.
 	// +optional
-	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,10,opt,name=targetBufferAvailability"`
+	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,8,opt,name=targetBufferAvailability"`
 	// ReplicasPerScale defines maximum replicas can be scaled up or down at once.
 	// The is use to prevent too aggressive scaling operations
 	// +optional
@@ -584,11 +584,11 @@ type Scale struct {
 	// ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up.
 	// It defaults to the CooldownSeconds if not set.
 	// +optional
-	ScaleUpCooldownSeconds *uint32 `json:"scaleUpCooldownSeconds,omitempty" protobuf:"varint,11,opt,name=scaleUpCooldownSeconds"`
+	ScaleUpCooldownSeconds *uint32 `json:"scaleUpCooldownSeconds,omitempty" protobuf:"varint,10,opt,name=scaleUpCooldownSeconds"`
 	// ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down.
 	// It defaults to the CooldownSeconds if not set.
 	// +optional
-	ScaleDownCooldownSeconds *uint32 `json:"scaleDownCooldownSeconds,omitempty" protobuf:"varint,12,opt,name=scaleDownCooldownSeconds"`
+	ScaleDownCooldownSeconds *uint32 `json:"scaleDownCooldownSeconds,omitempty" protobuf:"varint,11,opt,name=scaleDownCooldownSeconds"`
 }
 
 func (s Scale) GetLookbackSeconds() int {
