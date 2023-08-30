@@ -70,7 +70,7 @@ func NewBlackhole(vertex *dfv1.Vertex,
 		bh.logger = logging.NewLogger()
 	}
 
-	forwardOpts := []sinkforward.Option{sinkforward.WithVertexType(dfv1.VertexTypeSink), sinkforward.WithLogger(bh.logger)}
+	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(bh.logger)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))

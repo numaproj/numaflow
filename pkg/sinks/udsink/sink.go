@@ -73,7 +73,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 		s.logger = logging.NewLogger()
 	}
 
-	forwardOpts := []sinkforward.Option{sinkforward.WithVertexType(dfv1.VertexTypeSink), sinkforward.WithLogger(s.logger)}
+	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(s.logger)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))

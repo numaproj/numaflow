@@ -71,7 +71,7 @@ func NewToLog(vertex *dfv1.Vertex,
 		toLog.logger = logging.NewLogger()
 	}
 
-	forwardOpts := []sinkforward.Option{sinkforward.WithVertexType(dfv1.VertexTypeSink), sinkforward.WithLogger(toLog.logger)}
+	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(toLog.logger)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))

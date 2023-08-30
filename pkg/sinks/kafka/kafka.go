@@ -83,7 +83,7 @@ func NewToKafka(vertex *dfv1.Vertex,
 	toKafka.topic = kafkaSink.Topic
 	toKafka.kafkaSink = kafkaSink
 
-	forwardOpts := []sinkforward.Option{sinkforward.WithVertexType(dfv1.VertexTypeSink), sinkforward.WithLogger(toKafka.log)}
+	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(toKafka.log)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
