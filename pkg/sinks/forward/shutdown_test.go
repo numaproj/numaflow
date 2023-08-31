@@ -24,11 +24,19 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 )
+
+type myShutdownTest struct {
+}
+
+func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{}, nil
+}
 
 func TestInterStepDataForward(t *testing.T) {
 	tests := []struct {
