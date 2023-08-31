@@ -29,9 +29,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
-// GetUXEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
+// BuildUXEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
-func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, wmStores map[v1alpha1.Edge][]store.WatermarkStore) (map[v1alpha1.Edge][]fetch.UXFetcher, error) {
+func BuildUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, wmStores map[v1alpha1.Edge][]store.WatermarkStore) (map[v1alpha1.Edge][]fetch.UXFetcher, error) {
 	var wmFetchers = make(map[v1alpha1.Edge][]fetch.UXFetcher)
 	if pipeline.Spec.Watermark.Disabled {
 		return wmFetchers, nil
@@ -50,8 +50,8 @@ func GetUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline
 	return wmFetchers, nil
 }
 
-// GetWatermarkStores returns a map of watermark stores per edge.
-func GetWatermarkStores(ctx context.Context, pipeline *v1alpha1.Pipeline, isbsvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]store.WatermarkStore, error) {
+// BuildWatermarkStores returns a map of watermark stores per edge.
+func BuildWatermarkStores(ctx context.Context, pipeline *v1alpha1.Pipeline, isbsvcClient isbsvc.ISBService) (map[v1alpha1.Edge][]store.WatermarkStore, error) {
 	var wmStoresMap = make(map[v1alpha1.Edge][]store.WatermarkStore)
 	if pipeline.Spec.Watermark.Disabled {
 		return wmStoresMap, nil
