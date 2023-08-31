@@ -383,7 +383,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	assert.Equal(t, make([]error, 1), errs)
 	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), offsets[0], 0)
 
-	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffers, pipelineName)
+	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffers)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -589,7 +589,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -670,7 +670,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -755,7 +755,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -837,7 +837,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -919,7 +919,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -1022,7 +1022,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -1112,7 +1112,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(cctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(cctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(cctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -1206,7 +1206,7 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -1324,7 +1324,7 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	return edgeFetcherSet, sourcePublisher
 }
 
-func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
+func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]kvs.KVStorer)
 
