@@ -29,6 +29,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // kvEntry is each key-value entry in the store and the operation associated with the kv pair.
@@ -57,29 +58,35 @@ func (k kvEntry) Operation() kvs.KVWatchOp {
 type inMemStore struct {
 	bucketName string
 	kv         map[string][]byte
-	kvLock     sync.RWMutex
-	kvEntryCh  chan kvs.KVEntry
-	isClosed   bool
-	log        *zap.SugaredLogger
+	lock       sync.RWMutex
+	// kvHistory is an ever an growing list of histories
+	kvHistory []kvs.KVEntry
+	// updatesChMap is a map of channels where updates are published
+	updatesChMap map[string]chan kvs.KVEntry
+	isClosed     bool
+	doneCh       chan struct{}
+	log          *zap.SugaredLogger
 }
 
 var _ kvs.KVStorer = (*inMemStore)(nil)
 
 // NewKVInMemKVStore returns inMemStore.
-func NewKVInMemKVStore(ctx context.Context, bucketName string) (kvs.KVStorer, chan kvs.KVEntry, error) {
+func NewKVInMemKVStore(ctx context.Context, bucketName string) (kvs.KVStorer, error) {
 	s := &inMemStore{
-		bucketName: bucketName,
-		kv:         make(map[string][]byte),
-		kvEntryCh:  make(chan kvs.KVEntry, 10),
-		log:        logging.FromContext(ctx).With("bucketName", bucketName),
+		bucketName:   bucketName,
+		kv:           make(map[string][]byte),
+		kvHistory:    make([]kvs.KVEntry, 0),
+		updatesChMap: make(map[string]chan kvs.KVEntry),
+		doneCh:       make(chan struct{}),
+		log:          logging.FromContext(ctx).With("bucketName", bucketName),
 	}
-	return s, s.kvEntryCh, nil
+	return s, nil
 }
 
 // GetAllKeys returns all the keys in the key-value store.
 func (kv *inMemStore) GetAllKeys(_ context.Context) ([]string, error) {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
+	kv.lock.Lock()
+	defer kv.lock.Unlock()
 	var keys []string
 	for key := range kv.kv {
 		keys = append(keys, key)
@@ -92,8 +99,8 @@ func (kv *inMemStore) GetAllKeys(_ context.Context) ([]string, error) {
 
 // GetValue returns the value for a given key.
 func (kv *inMemStore) GetValue(_ context.Context, k string) ([]byte, error) {
-	kv.kvLock.RLock()
-	defer kv.kvLock.RUnlock()
+	kv.lock.RLock()
+	defer kv.lock.RUnlock()
 	if val, ok := kv.kv[k]; ok {
 		return val, nil
 	} else {
@@ -108,15 +115,22 @@ func (kv *inMemStore) GetStoreName() string {
 
 // DeleteKey deletes the key from the in mem key-value store.
 func (kv *inMemStore) DeleteKey(_ context.Context, k string) error {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
+	kv.lock.Lock()
+	defer kv.lock.Unlock()
+
 	if val, ok := kv.kv[k]; ok {
 		delete(kv.kv, k)
-		kv.kvEntryCh <- kvEntry{
+		entry := kvEntry{
 			key:   k,
 			value: val,
 			op:    kvs.KVDelete,
 		}
+
+		// notify all the watchers about the delete operation
+		for _, updatesCh := range kv.updatesChMap {
+			updatesCh <- entry
+		}
+		kv.kvHistory = append(kv.kvHistory, entry)
 		return nil
 	} else {
 		return fmt.Errorf("key %s not found", k)
@@ -125,26 +139,73 @@ func (kv *inMemStore) DeleteKey(_ context.Context, k string) error {
 
 // PutKV puts an element to the in mem key-value store.
 func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
+	kv.lock.Lock()
+	defer kv.lock.Unlock()
 	if kv.isClosed {
 		return fmt.Errorf("kv store is closed")
 	}
 	var val = make([]byte, len(v))
 	copy(val, v)
 	kv.kv[k] = val
-	kv.kvEntryCh <- kvEntry{
+	entry := kvEntry{
 		key:   k,
 		value: val,
 		op:    kvs.KVPut,
 	}
+
+	// notify all the watchers about the put operation
+	for _, updatesCh := range kv.updatesChMap {
+		updatesCh <- entry
+	}
+	kv.kvHistory = append(kv.kvHistory, entry)
 	return nil
 }
 
-// Close closes the channel connection and clean up the bucket.
+// Watch watches the key-value store and returns the "updates channel" and a done channel.
+func (kv *inMemStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan struct{}) {
+	// create a new updates channel and fill in the history
+	var id = util.RandomString(10)
+	var updates = make(chan kvs.KVEntry)
+	var stopped = make(chan struct{})
+
+	// for new updates channel initialization
+	go func() {
+		kv.lock.Lock()
+		// fill in the history for the new updates channel
+		for _, value := range kv.kvHistory {
+			updates <- value
+		}
+		// add the new updates channel to the map before unlock
+		// so the new updates channel won't miss new kv operations
+		kv.updatesChMap[id] = updates
+		kv.lock.Unlock()
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				kv.log.Infow("Stopping watching", zap.String("watcher", kv.bucketName))
+				kv.lock.Lock()
+				delete(kv.updatesChMap, id)
+				kv.lock.Unlock()
+				close(updates)
+				close(stopped)
+				return
+			case <-kv.doneCh:
+				close(updates)
+				close(stopped)
+				return
+			}
+		}
+	}()
+	return updates, stopped
+}
+
+// Close closes the in mem key-value store. It will close all the watchers.
 func (kv *inMemStore) Close() {
-	kv.kvLock.Lock()
-	defer kv.kvLock.Unlock()
+	close(kv.doneCh)
+	kv.lock.Lock()
+	defer kv.lock.Unlock()
 	kv.isClosed = true
-	close(kv.kvEntryCh)
 }

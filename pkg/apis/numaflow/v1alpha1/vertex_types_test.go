@@ -541,13 +541,15 @@ func Test_Scale_Parameters(t *testing.T) {
 	s := Scale{}
 	assert.Equal(t, int32(0), s.GetMinReplicas())
 	assert.Equal(t, int32(DefaultMaxReplicas), s.GetMaxReplicas())
-	assert.Equal(t, DefaultCooldownSeconds, s.GetCooldownSeconds())
+	assert.Equal(t, DefaultCooldownSeconds, s.GetScaleUpCooldownSeconds())
+	assert.Equal(t, DefaultCooldownSeconds, s.GetScaleDownCooldownSeconds())
 	assert.Equal(t, DefaultLookbackSeconds, s.GetLookbackSeconds())
 	assert.Equal(t, DefaultReplicasPerScale, s.GetReplicasPerScale())
 	assert.Equal(t, DefaultTargetBufferAvailability, s.GetTargetBufferAvailability())
 	assert.Equal(t, DefaultTargetProcessingSeconds, s.GetTargetProcessingSeconds())
 	assert.Equal(t, DefaultZeroReplicaSleepSeconds, s.GetZeroReplicaSleepSeconds())
-	cds := uint32(100)
+	upcds := uint32(100)
+	downcds := uint32(99)
 	lbs := uint32(101)
 	rps := uint32(3)
 	tps := uint32(102)
@@ -556,7 +558,8 @@ func Test_Scale_Parameters(t *testing.T) {
 	s = Scale{
 		Min:                      pointer.Int32(2),
 		Max:                      pointer.Int32(4),
-		CooldownSeconds:          &cds,
+		ScaleUpCooldownSeconds:   &upcds,
+		ScaleDownCooldownSeconds: &downcds,
 		LookbackSeconds:          &lbs,
 		ReplicasPerScale:         &rps,
 		TargetProcessingSeconds:  &tps,
@@ -565,7 +568,8 @@ func Test_Scale_Parameters(t *testing.T) {
 	}
 	assert.Equal(t, int32(2), s.GetMinReplicas())
 	assert.Equal(t, int32(4), s.GetMaxReplicas())
-	assert.Equal(t, int(cds), s.GetCooldownSeconds())
+	assert.Equal(t, int(upcds), s.GetScaleUpCooldownSeconds())
+	assert.Equal(t, int(downcds), s.GetScaleDownCooldownSeconds())
 	assert.Equal(t, int(lbs), s.GetLookbackSeconds())
 	assert.Equal(t, int(rps), s.GetReplicasPerScale())
 	assert.Equal(t, int(tbu), s.GetTargetBufferAvailability())

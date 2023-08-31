@@ -26,7 +26,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
@@ -38,18 +38,18 @@ type edgeFetcherSet struct {
 }
 
 // NewEdgeFetcherSet creates a new edgeFetcherSet object which implements the Fetcher interface.
-func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance, processorManagers map[string]*processor.ProcessorManager) Fetcher {
+func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance, wmStores map[string]store.WatermarkStore, opts ...Option) Fetcher {
 	var edgeFetchers = make(map[string]*edgeFetcher)
-	for key, processorManager := range processorManagers {
+	for key, wmStore := range wmStores {
 		var fetchWatermark *edgeFetcher
 		// create a fetcher that fetches watermark.
 		if vertexInstance.Vertex.IsASource() {
 			// panic: source vertex is handled using new source fetcher
 			panic("NewEdgeFetcherSet can't create a new edge fetcher set for a source vertex.")
 		} else if vertexInstance.Vertex.IsReduceUDF() {
-			fetchWatermark = NewEdgeFetcher(ctx, processorManager, 1)
+			fetchWatermark = NewEdgeFetcher(ctx, wmStore, 1, opts...)
 		} else {
-			fetchWatermark = NewEdgeFetcher(ctx, processorManager, vertexInstance.Vertex.Spec.GetPartitionCount())
+			fetchWatermark = NewEdgeFetcher(ctx, wmStore, vertexInstance.Vertex.Spec.GetPartitionCount(), opts...)
 		}
 		edgeFetchers[key] = fetchWatermark
 	}

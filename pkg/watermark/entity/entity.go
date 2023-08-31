@@ -17,7 +17,7 @@ limitations under the License.
 /*
 Package processor is the smallest processor entity for which the watermark will strictly monotonically increase.
 */
-package processor
+package entity
 
 // ProcessorEntitier defines what can be a processor. The Processor is the smallest unit where the watermark will
 // monotonically increase.

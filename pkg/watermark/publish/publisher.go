@@ -33,7 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
@@ -52,7 +52,7 @@ type Publisher interface {
 // publish publishes the watermark and heartbeat for a processor entity.
 type publish struct {
 	ctx    context.Context
-	entity processor.ProcessorEntitier
+	entity entity.ProcessorEntitier
 	// osStore uses millisecond as the time unit for the value
 	otStore kvs.KVStorer
 	// heartbeatStore uses second as the time unit for the value
@@ -65,7 +65,7 @@ type publish struct {
 }
 
 // NewPublish returns `Publish`.
-func NewPublish(ctx context.Context, processorEntity processor.ProcessorEntitier, watermarkStores store.WatermarkStore, toVertexPartitionCount int32, inputOpts ...PublishOption) Publisher {
+func NewPublish(ctx context.Context, processorEntity entity.ProcessorEntitier, watermarkStores store.WatermarkStore, toVertexPartitionCount int32, inputOpts ...PublishOption) Publisher {
 	log := logging.FromContext(ctx).With("entityID", processorEntity.GetName()).
 		With("otStore", watermarkStores.OffsetTimelineStore().GetStoreName()).
 		With("hbStore", watermarkStores.HeartbeatStore().GetStoreName())
@@ -271,7 +271,7 @@ func (p *publish) publishHeartbeat() {
 		case <-ticker.C:
 			err := p.heartbeatStore.PutKV(p.ctx, p.entity.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			if err != nil {
-				p.log.Errorw("Put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
+				p.log.Errorw("put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 			}
 		}
 	}

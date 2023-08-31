@@ -34,8 +34,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	applier2 "github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -232,7 +232,7 @@ func NewMemGen(
 func (mg *memgen) buildSourceWatermarkPublisher(publishWMStores store.WatermarkStore) publish.Publisher {
 	// for tickgen, it can be the name of the replica
 	entityName := fmt.Sprintf("%s-%d", mg.vertexInstance.Vertex.Name, mg.vertexInstance.Replica)
-	processorEntity := processor.NewProcessorEntity(entityName)
+	processorEntity := entity.NewProcessorEntity(entityName)
 	// source publisher toVertexPartitionCount will be 1, because we publish watermarks within the source itself.
 	return publish.NewPublish(mg.lifecycleCtx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(mg.vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 }

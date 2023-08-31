@@ -137,28 +137,6 @@ func (c *NATSClient) BindKVStore(kvName string) (nats.KeyValue, error) {
 	return jsContext.KeyValue(kvName)
 }
 
-// CreateKVWatcher creates a new key watcher for the given bucket name and options
-// context is part of the options
-func (c *NATSClient) CreateKVWatcher(bucketName string, opts ...nats.WatchOpt) (nats.KeyWatcher, error) {
-	var (
-		kv        nats.KeyValue
-		err       error
-		jsContext nats.JetStreamContext
-	)
-
-	jsContext, err = c.nc.JetStream()
-	if err != nil {
-		return nil, err
-	}
-
-	kv, err = jsContext.KeyValue(bucketName)
-	if err != nil {
-		return nil, err
-	}
-
-	return kv.WatchAll(opts...)
-}
-
 // PendingForStream returns the number of pending messages for the given consumer and stream
 func (c *NATSClient) PendingForStream(consumer string, stream string) (int64, error) {
 	var (

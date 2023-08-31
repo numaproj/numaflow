@@ -30,8 +30,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -201,7 +201,7 @@ func (u *userDefinedSource) loadSourceWatermarkPublisher(partitionID int32) publ
 		return p
 	}
 	entityName := fmt.Sprintf("%s-%s-%d", u.pipelineName, u.vertexName, partitionID)
-	processorEntity := processor.NewProcessorEntity(entityName)
+	processorEntity := entity.NewProcessorEntity(entityName)
 	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
 	sourcePublishWM := publish.NewPublish(u.lifecycleCtx, processorEntity, u.srcPublishWMStores, 1, publish.IsSource())
 	u.srcWMPublishers[partitionID] = sourcePublishWM

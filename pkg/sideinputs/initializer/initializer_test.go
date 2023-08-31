@@ -81,14 +81,14 @@ func TestSideInputsInitializer_Success(t *testing.T) {
 	assert.NoError(t, err)
 
 	bucketName := keyspace
-	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, bucketName, nc)
+	sideInputStore, _ := jetstream.NewKVJetStreamKVStore(ctx, bucketName, nc)
 	for x := range sideInputs {
 		_, err = kv.Put(sideInputs[x], []byte(dataTest[x]))
 		if err != nil {
 			fmt.Println("Error in writing to bucket ", err)
 		}
 	}
-	err = startSideInputInitializer(ctx, sideInputWatcher, mountPath, sideInputs)
+	err = startSideInputInitializer(ctx, sideInputStore, mountPath, sideInputs)
 	assert.NoError(t, err)
 
 	for x, sideInput := range sideInputs {
@@ -150,8 +150,8 @@ func TestSideInputsTimeout(t *testing.T) {
 	assert.NoError(t, err)
 
 	bucketName := keyspace
-	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, bucketName, nc)
+	sideInputStore, _ := jetstream.NewKVJetStreamKVStore(ctx, bucketName, nc)
 
-	_ = startSideInputInitializer(ctx, sideInputWatcher, mountPath, sideInputs)
+	_ = startSideInputInitializer(ctx, sideInputStore, mountPath, sideInputs)
 	assert.Equal(t, context.DeadlineExceeded, ctx.Err())
 }

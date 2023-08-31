@@ -37,8 +37,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window/keyed"
@@ -450,11 +450,11 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 // buildPublisherMapAndOTStore builds OTStore and publisher for each toBuffer
 func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
 	var ctx = context.Background()
-	processorEntity := processor.NewProcessorEntity("publisherTestPod")
+	processorEntity := entity.NewProcessorEntity("publisherTestPod")
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]kvs.KVStorer)
 	for key, partitionedBuffers := range toBuffers {
-		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, publisherKeyspace)
+		store, _ := wmstore.BuildInmemWatermarkStore(ctx, publisherKeyspace)
 		otStores[key] = store.OffsetTimelineStore()
 		p := publish.NewPublish(ctx, processorEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p

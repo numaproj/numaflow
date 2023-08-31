@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -37,8 +38,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -348,7 +349,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 // ReadMessage size = 0
 func TestReduceDataForward_IdleWM(t *testing.T) {
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 15*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{7}
@@ -382,7 +383,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	assert.Equal(t, make([]error, 1), errs)
 	p.PublishIdleWatermark(wmb.Watermark(time.UnixMilli(int64(startTime))), offsets[0], 0)
 
-	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffers, pipelineName)
+	publisherMap, otStores := buildPublisherMapAndOTStore(ctx, toBuffers)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -588,7 +589,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -669,7 +670,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publisherMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -754,7 +755,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -836,7 +837,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -918,7 +919,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -1021,7 +1022,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -1111,7 +1112,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(cctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(cctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(cctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -1205,7 +1206,7 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 
 	// create in memory watermark publisher and fetcher
 	f, p := fetcherAndPublisher(ctx, fromBuffer, t.Name())
-	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer, pipelineName)
+	publishersMap, _ := buildPublisherMapAndOTStore(ctx, toBuffer)
 
 	// close the fetcher and publishers
 	defer func() {
@@ -1283,11 +1284,12 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 		keyspace = key
 	)
 
-	sourcePublishEntity := processor.NewProcessorEntity(fromBuffer.GetName())
-	store, hbWatcherCh, otWatcherCh, _ := wmstore.BuildInmemWatermarkStore(ctx, keyspace)
+	sourcePublishEntity := entity.NewProcessorEntity(fromBuffer.GetName())
+	store, _ := wmstore.BuildInmemWatermarkStore(ctx, keyspace)
 
+	heartBeatsCount := atomic.Int32{}
 	// publisher for source
-	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, store, 1, publish.WithAutoRefreshHeartbeatDisabled())
+	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, store, 1, publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 
 	// publish heartbeat manually for the processor
 	go func() {
@@ -1297,17 +1299,12 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 				return
 			default:
 				_ = store.HeartbeatStore().PutKV(ctx, fromBuffer.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
-				time.Sleep(time.Duration(1) * time.Second)
+				time.Sleep(time.Duration(100) * time.Millisecond)
+				heartBeatsCount.Inc()
 			}
 		}
 	}()
 
-	storeWatcher, _ := wmstore.BuildInmemWatermarkStoreWatcher(ctx, keyspace, hbWatcherCh, otWatcherCh)
-	pm := processor.NewProcessorManager(ctx, storeWatcher, 1, processor.WithIsReduce(true))
-	for waitForReadyP := pm.GetProcessor(fromBuffer.GetName()); waitForReadyP == nil; waitForReadyP = pm.GetProcessor(fromBuffer.GetName()) {
-		// wait until the test processor has been added to the processor list
-		time.Sleep(time.Millisecond * 100)
-	}
 	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, &dfv1.VertexInstance{
 		Vertex: &dfv1.Vertex{
 			Spec: dfv1.VertexSpec{
@@ -1318,19 +1315,32 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 				},
 			},
 		},
-	}, map[string]*processor.ProcessorManager{"fromVertex": pm})
+	}, map[string]wmstore.WatermarkStore{"fromVertex": store}, fetch.WithIsReduce(true))
+
+	// wait for 10 heartbeats to be published so that the processor gets created
+	for heartBeatsCount.Load() < 10 {
+		select {
+		case <-ctx.Done():
+			return edgeFetcherSet, sourcePublisher
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
 	return edgeFetcherSet, sourcePublisher
 }
 
-func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter, pipelineName string) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
+func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]kvs.KVStorer)
 
 	// create publisher for to Buffers
 	index := int32(0)
 	for key, partitionedBuffers := range toBuffers {
-		publishEntity := processor.NewProcessorEntity(key)
-		store, hbKVEntry, otKVEntry, _ := wmstore.BuildInmemWatermarkStore(ctx, key)
+		publishEntity := entity.NewProcessorEntity(key)
+		store, _ := wmstore.BuildInmemWatermarkStore(ctx, key)
+		hbWatcherCh, _ := store.HeartbeatStore().Watch(ctx)
+		otWatcherCh, _ := store.OffsetTimelineStore().Watch(ctx)
 		otStores[key] = store.OffsetTimelineStore()
 		p := publish.NewPublish(ctx, publishEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
@@ -1340,9 +1350,9 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb
 				select {
 				case <-ctx.Done():
 					return
-				case <-hbKVEntry:
+				case <-hbWatcherCh:
 					// do nothing... just to consume the toBuffer hbBucket
-				case <-otKVEntry:
+				case <-otWatcherCh:
 					// do nothing... just to consume the toBuffer otBucket
 				}
 			}

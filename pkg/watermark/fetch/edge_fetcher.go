@@ -33,20 +33,20 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // edgeFetcher is a fetcher between two vertices.
 type edgeFetcher struct {
-	processorManager *processor.ProcessorManager
+	processorManager *processorManager
 	lastProcessedWm  []int64
 	log              *zap.SugaredLogger
 	sync.RWMutex
 }
 
-// NewEdgeFetcher returns a new edge fetcher.
-func NewEdgeFetcher(ctx context.Context, manager *processor.ProcessorManager, fromBufferPartitionCount int) *edgeFetcher {
+// NewEdgeFetcher returns a new edge fetcher. This could have been private, except that UI uses it.
+func NewEdgeFetcher(ctx context.Context, wmStore store.WatermarkStore, fromBufferPartitionCount int, opts ...Option) *edgeFetcher {
 	log := logging.FromContext(ctx)
 	log.Info("Creating a new edge watermark fetcher")
 	var lastProcessedWm []int64
@@ -55,6 +55,9 @@ func NewEdgeFetcher(ctx context.Context, manager *processor.ProcessorManager, fr
 	for i := 0; i < fromBufferPartitionCount; i++ {
 		lastProcessedWm = append(lastProcessedWm, -1)
 	}
+
+	// create the processor manager to track the processors and their offset timelines.
+	manager := newProcessorManager(ctx, wmStore, int32(fromBufferPartitionCount), opts...)
 
 	return &edgeFetcher{
 		processorManager: manager,
@@ -73,7 +76,7 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 	}
 	var debugString strings.Builder
 	var epoch int64 = math.MaxInt64
-	var allProcessors = e.processorManager.GetAllProcessors()
+	var allProcessors = e.processorManager.getAllProcessors()
 	for _, p := range allProcessors {
 		// headOffset is used to check whether this pod can be deleted.
 		headOffset := int64(-1)
@@ -100,7 +103,7 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 		// (this means we are processing data later than what the stale processor has processed)
 		if p.IsDeleted() && (offset > headOffset) {
 			e.log.Infow("Deleting processor because it's stale", zap.String("processor", p.GetEntity().GetName()))
-			e.processorManager.DeleteProcessor(p.GetEntity().GetName())
+			e.processorManager.deleteProcessor(p.GetEntity().GetName())
 		}
 	}
 	// if there are no processors
@@ -126,7 +129,7 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 func (e *edgeFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var debugString strings.Builder
 	var headWatermark int64 = math.MaxInt64
-	var allProcessors = e.processorManager.GetAllProcessors()
+	var allProcessors = e.processorManager.getAllProcessors()
 	// get the head offset of each processor
 	for _, p := range allProcessors {
 		if !p.IsActive() {
@@ -160,7 +163,7 @@ func (e *edgeFetcher) updateHeadIdleWMB(fromPartitionIdx int32) wmb.WMB {
 		Watermark: math.MaxInt64,
 	}
 	// if any head wmb from Vn-1 processors is not idle, we skip publishing
-	var allProcessors = e.processorManager.GetAllProcessors()
+	var allProcessors = e.processorManager.getAllProcessors()
 	for _, p := range allProcessors {
 		debugString.WriteString(fmt.Sprintf("[Processor: %v] \n", p))
 		if !p.IsActive() {

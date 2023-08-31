@@ -560,9 +560,10 @@ type Scale struct {
 	// Lookback seconds to calculate the average pending messages and processing rate.
 	// +optional
 	LookbackSeconds *uint32 `json:"lookbackSeconds,omitempty" protobuf:"varint,4,opt,name=lookbackSeconds"`
+	// Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead.
 	// Cooldown seconds after a scaling operation before another one.
 	// +optional
-	CooldownSeconds *uint32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`
+	DeprecatedCooldownSeconds *uint32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`
 	// After scaling down to 0, sleep how many seconds before scaling up to peek.
 	// +optional
 	ZeroReplicaSleepSeconds *uint32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,6,opt,name=zeroReplicaSleepSeconds"`
@@ -575,11 +576,19 @@ type Scale struct {
 	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
 	// It only applies to UDF and Sink vertices because only they have buffers to read.
 	// +optional
-	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,10,opt,name=targetBufferAvailability"`
+	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,8,opt,name=targetBufferAvailability"`
 	// ReplicasPerScale defines maximum replicas can be scaled up or down at once.
 	// The is use to prevent too aggressive scaling operations
 	// +optional
 	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
+	// ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up.
+	// It defaults to the CooldownSeconds if not set.
+	// +optional
+	ScaleUpCooldownSeconds *uint32 `json:"scaleUpCooldownSeconds,omitempty" protobuf:"varint,10,opt,name=scaleUpCooldownSeconds"`
+	// ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down.
+	// It defaults to the CooldownSeconds if not set.
+	// +optional
+	ScaleDownCooldownSeconds *uint32 `json:"scaleDownCooldownSeconds,omitempty" protobuf:"varint,11,opt,name=scaleDownCooldownSeconds"`
 }
 
 func (s Scale) GetLookbackSeconds() int {
@@ -589,9 +598,22 @@ func (s Scale) GetLookbackSeconds() int {
 	return DefaultLookbackSeconds
 }
 
-func (s Scale) GetCooldownSeconds() int {
-	if s.CooldownSeconds != nil {
-		return int(*s.CooldownSeconds)
+func (s Scale) GetScaleUpCooldownSeconds() int {
+	if s.ScaleUpCooldownSeconds != nil {
+		return int(*s.ScaleUpCooldownSeconds)
+	}
+	if s.DeprecatedCooldownSeconds != nil {
+		return int(*s.DeprecatedCooldownSeconds)
+	}
+	return DefaultCooldownSeconds
+}
+
+func (s Scale) GetScaleDownCooldownSeconds() int {
+	if s.ScaleDownCooldownSeconds != nil {
+		return int(*s.ScaleDownCooldownSeconds)
+	}
+	if s.DeprecatedCooldownSeconds != nil {
+		return int(*s.DeprecatedCooldownSeconds)
 	}
 	return DefaultCooldownSeconds
 }
