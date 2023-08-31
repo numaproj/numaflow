@@ -23,6 +23,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/forward"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
@@ -161,8 +162,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	var finalWg sync.WaitGroup
 	for index := range u.VertexInstance.Vertex.OwnedBuffers() {
 		finalWg.Add(1)
-		publishWM := publishWatermark[u.VertexInstance.Vertex.Spec.Name]
-		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWM, sinkHandler)
+		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWatermark, sinkHandler)
 		if err != nil {
 			return fmt.Errorf("failed to find a sink, errpr: %w", err)
 		}
@@ -226,17 +226,32 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 }
 
 // getSinker takes in the logger from the parent context
-func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM publish.Publisher, sinkHandler udsink.SinkApplier) (Sinker, error) {
+func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, sinkHandler udsink.SinkApplier) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	if x := sink.Log; x != nil {
-		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, logsink.WithLogger(logger))
+		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {
-		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, fetchWM, publishWM, kafkasink.WithLogger(logger))
+		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), kafkasink.WithLogger(logger))
 	} else if x := sink.Blackhole; x != nil {
-		return blackhole.NewBlackhole(u.VertexInstance.Vertex, reader, fetchWM, publishWM, blackhole.WithLogger(logger))
+		return blackhole.NewBlackhole(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), blackhole.WithLogger(logger))
 	} else if x := sink.UDSink; x != nil {
 		// if the sink is a user defined sink, then we need to pass the sinkHandler to it which will be used to invoke the user defined sink
-		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, sinkHandler, udsink.WithLogger(logger))
+		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, u.getSinkGoWhereDecider(), sinkHandler, udsink.WithLogger(logger))
 	}
 	return nil, fmt.Errorf("invalid sink spec")
+}
+
+// getSinkGoWhereDecider returns a function that decides where to send the message
+// based on the keys and tags
+// for sink processor, we send the message to the same vertex and partition will be set to 0
+func (u *SinkProcessor) getSinkGoWhereDecider() forward.GoWhere {
+	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
+		var result []forward.VertexBuffer
+		result = append(result, forward.VertexBuffer{
+			ToVertexName:         u.VertexInstance.Vertex.Spec.Name,
+			ToVertexPartitionIdx: 0,
+		})
+		return result, nil
+	})
+	return fsd
 }
