@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -139,16 +138,4 @@ func TestWriteFailureToKafka(t *testing.T) {
 	assert.Equal(t, "test1", errs[1].Error())
 	toKafka.Stop()
 
-}
-
-func getSinkGoWhereDecider(vertexName string) forward.GoWhere {
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
-		var result []forward.VertexBuffer
-		result = append(result, forward.VertexBuffer{
-			ToVertexName:         vertexName,
-			ToVertexPartitionIdx: 0,
-		})
-		return result, nil
-	})
-	return fsd
 }
