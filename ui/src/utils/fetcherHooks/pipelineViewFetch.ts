@@ -525,7 +525,17 @@ export const usePipelineViewFetch = (
       });
     }
     return newEdges;
-  }, [spec, buffers, edgeWatermark, ns_pl, backEdges, selfEdges, fwdEdges]);
+  }, [
+    spec,
+    buffers,
+    edgeWatermark,
+    ns_pl,
+    backEdges,
+    selfEdges,
+    fwdEdges,
+    backEdgesHeight,
+    nodeOutDegree,
+  ]);
 
   //sets loading variable
   useEffect(() => {
