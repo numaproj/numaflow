@@ -61,7 +61,7 @@ type DataForward struct {
 func NewDataForward(
 	vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
-	toSteps isb.BufferWriter,
+	toStep isb.BufferWriter,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
 	opts ...Option) (*DataForward, error) {
@@ -79,7 +79,7 @@ func NewDataForward(
 		ctx:                 ctx,
 		cancelFn:            cancel,
 		fromBufferPartition: fromStep,
-		toBuffer:            toSteps,
+		toBuffer:            toStep,
 		wmFetcher:           fetchWatermark,
 		wmPublisher:         publishWatermark,
 		// should we do a check here for the values not being null?
