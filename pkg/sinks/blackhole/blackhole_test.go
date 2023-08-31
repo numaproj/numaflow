@@ -29,10 +29,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 )
 
-var (
-	testStartTime = time.Unix(1636470000, 0).UTC()
-)
-
 func TestBlackhole_Start(t *testing.T) {
 	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
