@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -347,9 +348,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 // ReadMessage size = 0
 func TestReduceDataForward_IdleWM(t *testing.T) {
-	t.SkipNow()
 	var (
-		ctx, cancel    = context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel    = context.WithTimeout(context.Background(), 15*time.Second)
 		fromBufferSize = int64(100000)
 		toBufferSize   = int64(10)
 		messageValue   = []int{7}
@@ -1287,8 +1287,9 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 	sourcePublishEntity := entity.NewProcessorEntity(fromBuffer.GetName())
 	store, _ := wmstore.BuildInmemWatermarkStore(ctx, keyspace)
 
+	heartBeatsCount := atomic.Int32{}
 	// publisher for source
-	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, store, 1, publish.WithAutoRefreshHeartbeatDisabled())
+	sourcePublisher := publish.NewPublish(ctx, sourcePublishEntity, store, 1, publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 
 	// publish heartbeat manually for the processor
 	go func() {
@@ -1298,17 +1299,12 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 				return
 			default:
 				_ = store.HeartbeatStore().PutKV(ctx, fromBuffer.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
-				time.Sleep(time.Duration(1) * time.Second)
+				time.Sleep(time.Duration(100) * time.Millisecond)
+				heartBeatsCount.Inc()
 			}
 		}
 	}()
 
-	//pm := fetch.NewProcessorManager(ctx, store, 1, fetch.WithIsReduce(true))
-	//
-	//for waitForReadyP := pm.GetProcessor(fromBuffer.GetName()); waitForReadyP == nil; waitForReadyP = pm.GetProcessor(fromBuffer.GetName()) {
-	//	// wait until the test processor has been added to the processor list
-	//	time.Sleep(time.Millisecond * 100)
-	//}
 	edgeFetcherSet := fetch.NewEdgeFetcherSet(ctx, &dfv1.VertexInstance{
 		Vertex: &dfv1.Vertex{
 			Spec: dfv1.VertexSpec{
@@ -1320,7 +1316,17 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 			},
 		},
 	}, map[string]wmstore.WatermarkStore{"fromVertex": store}, fetch.WithIsReduce(true))
-	time.Sleep(2 * time.Second)
+
+	// wait for 10 heartbeats to be published so that the processor gets created
+	for heartBeatsCount.Load() < 10 {
+		select {
+		case <-ctx.Done():
+			return edgeFetcherSet, sourcePublisher
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
 	return edgeFetcherSet, sourcePublisher
 }
 

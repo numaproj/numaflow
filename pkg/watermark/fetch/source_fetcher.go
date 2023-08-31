@@ -33,16 +33,16 @@ import (
 
 // sourceFetcher is a fetcher on source buffers.
 type sourceFetcher struct {
-	processorManager *ProcessorManager
+	processorManager *processorManager
 	log              *zap.SugaredLogger
 }
 
-// NewSourceFetcher returns a new source fetcher, processorManager has the details about the processors responsible for writing to the
+// NewSourceFetcher returns a new source fetcher, pm has the details about the processors responsible for writing to the
 // buckets of the source buffer.
 func NewSourceFetcher(ctx context.Context, store store.WatermarkStore, opts ...Option) Fetcher {
 	log := logging.FromContext(ctx)
 	log.Info("Creating a new source watermark fetcher")
-	manager := NewProcessorManager(ctx, store, 1, opts...)
+	manager := newProcessorManager(ctx, store, 1, opts...)
 	return &sourceFetcher{
 		processorManager: manager,
 		log:              log,
@@ -59,7 +59,7 @@ func (e *sourceFetcher) getWatermark() wmb.Watermark {
 	var epoch int64 = math.MaxInt64
 	var debugString strings.Builder
 
-	for _, p := range e.processorManager.GetAllProcessors() {
+	for _, p := range e.processorManager.getAllProcessors() {
 
 		if len(p.GetOffsetTimelines()) != 1 {
 			e.log.Fatalf("sourceFetcher %+v has %d offset timelines, expected 1", e, len(p.GetOffsetTimelines()))
@@ -83,7 +83,7 @@ func (e *sourceFetcher) getWatermark() wmb.Watermark {
 // ComputeHeadWatermark returns the latest watermark of all the processors for the given partition.
 func (e *sourceFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
 	var epoch int64 = math.MinInt64
-	for _, p := range e.processorManager.GetAllProcessors() {
+	for _, p := range e.processorManager.getAllProcessors() {
 		if !p.IsActive() {
 			continue
 		}

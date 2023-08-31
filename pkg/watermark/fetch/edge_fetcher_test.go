@@ -41,10 +41,10 @@ func TestBuffer_updateWatermarkWithOnePartition(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
+	// We don't really need watcher because we manually call the `put` function and the `addProcessor` function
 	// so use no op watcher for testing
 	wmStore, _ := store.BuildNoOpWatermarkStore()
-	processorManager := NewProcessorManager(ctx, wmStore, 1)
+	pm := newProcessorManager(ctx, wmStore, 1)
 	var (
 		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, 1)
 		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, 1)
@@ -85,58 +85,58 @@ func TestBuffer_updateWatermarkWithOnePartition(t *testing.T) {
 			tl.Put(watermark)
 		}
 	}
-	processorManager.AddProcessor("testPod0", testPod0)
-	processorManager.AddProcessor("testPod1", testPod1)
-	processorManager.AddProcessor("testPod2", testPod2)
+	pm.addProcessor("testPod0", testPod0)
+	pm.addProcessor("testPod1", testPod1)
+	pm.addProcessor("testPod2", testPod2)
 
 	type args struct {
 		offset int64
 	}
 	tests := []struct {
 		name             string
-		processorManager *ProcessorManager
+		processorManager *processorManager
 		args             args
 		want             int64
 	}{
 		{
 			name:             "offset_9",
-			processorManager: processorManager,
+			processorManager: pm,
 			args:             args{9},
 			want:             -1,
 		},
 		{
 			name:             "offset_15",
-			processorManager: processorManager,
+			processorManager: pm,
 			args:             args{15},
 			want:             8,
 		},
 		{
 			name:             "offset_18",
-			processorManager: processorManager,
+			processorManager: pm,
 			args:             args{18},
 			want:             9,
 		},
 		{
 			name:             "offset_22",
-			processorManager: processorManager,
+			processorManager: pm,
 			args:             args{22},
 			want:             10,
 		},
 		{
 			name:             "offset_23",
-			processorManager: processorManager,
+			processorManager: pm,
 			args:             args{23},
 			want:             10,
 		},
 		{
 			name:             "offset_28",
-			processorManager: processorManager,
+			processorManager: pm,
 			args:             args{28},
 			want:             14,
 		},
 		{
 			name:             "offset_29",
-			processorManager: processorManager,
+			processorManager: pm,
 			args:             args{29},
 			want:             17,
 		},
@@ -167,11 +167,11 @@ func TestBuffer_updateWatermarkWithMultiplePartition(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// We don't really need watcher because we manually call the `Put` function and the `addProcessor` function
+	// We don't really need watcher because we manually call the `put` function and the `addProcessor` function
 	// so use no op watcher for testing
 	wmStore, _ := store.BuildNoOpWatermarkStore()
 	partitionCount := int32(3)
-	processorManager := NewProcessorManager(ctx, wmStore, partitionCount)
+	pm := newProcessorManager(ctx, wmStore, partitionCount)
 	var (
 		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, partitionCount)
 		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, partitionCount)
@@ -215,92 +215,92 @@ func TestBuffer_updateWatermarkWithMultiplePartition(t *testing.T) {
 	for _, watermark := range pod2Timeline {
 		testPod2.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager.AddProcessor("testPod0", testPod0)
-	processorManager.AddProcessor("testPod1", testPod1)
-	processorManager.AddProcessor("testPod2", testPod2)
+	pm.addProcessor("testPod0", testPod0)
+	pm.addProcessor("testPod1", testPod1)
+	pm.addProcessor("testPod2", testPod2)
 
 	type args struct {
 		offset int64
 	}
 	tests := []struct {
-		name             string
-		processorManager *ProcessorManager
-		args             args
-		want             int64
-		partitionIdx     int32
-		lastProcessedWm  []int64
+		name            string
+		pm              *processorManager
+		args            args
+		want            int64
+		partitionIdx    int32
+		lastProcessedWm []int64
 	}{
 		{
-			name:             "offset_9",
-			processorManager: processorManager,
-			args:             args{9},
-			want:             -1,
-			partitionIdx:     0,
-			lastProcessedWm:  []int64{-1, -1, -1},
+			name:            "offset_9",
+			pm:              pm,
+			args:            args{9},
+			want:            -1,
+			partitionIdx:    0,
+			lastProcessedWm: []int64{-1, -1, -1},
 		},
 		{
-			name:             "offset_15",
-			processorManager: processorManager,
-			args:             args{15},
-			want:             -1,
-			partitionIdx:     1,
-			lastProcessedWm:  []int64{-1, -1, -1},
+			name:            "offset_15",
+			pm:              pm,
+			args:            args{15},
+			want:            -1,
+			partitionIdx:    1,
+			lastProcessedWm: []int64{-1, -1, -1},
 		},
 		{
-			name:             "offset_18",
-			processorManager: processorManager,
-			args:             args{18},
-			partitionIdx:     0,
-			lastProcessedWm:  []int64{6, 8, 8},
-			want:             8,
+			name:            "offset_18",
+			pm:              pm,
+			args:            args{18},
+			partitionIdx:    0,
+			lastProcessedWm: []int64{6, 8, 8},
+			want:            8,
 		},
 		{
-			name:             "offset_22",
-			processorManager: processorManager,
-			args:             args{22},
-			partitionIdx:     2,
-			lastProcessedWm:  []int64{6, 5, 6},
-			want:             5,
+			name:            "offset_22",
+			pm:              pm,
+			args:            args{22},
+			partitionIdx:    2,
+			lastProcessedWm: []int64{6, 5, 6},
+			want:            5,
 		},
 		{
-			name:             "offset_23",
-			processorManager: processorManager,
-			args:             args{23},
-			partitionIdx:     0,
-			lastProcessedWm:  []int64{7, 8, 7},
-			want:             7,
+			name:            "offset_23",
+			pm:              pm,
+			args:            args{23},
+			partitionIdx:    0,
+			lastProcessedWm: []int64{7, 8, 7},
+			want:            7,
 		},
 		{
-			name:             "offset_28",
-			processorManager: processorManager,
-			args:             args{28},
-			partitionIdx:     1,
-			lastProcessedWm:  []int64{8, 9, 8},
-			want:             8,
+			name:            "offset_28",
+			pm:              pm,
+			args:            args{28},
+			partitionIdx:    1,
+			lastProcessedWm: []int64{8, 9, 8},
+			want:            8,
 		},
 		{
-			name:             "offset_29",
-			processorManager: processorManager,
-			args:             args{29},
-			partitionIdx:     2,
-			lastProcessedWm:  []int64{10, 10, 9},
-			want:             10,
+			name:            "offset_29",
+			pm:              pm,
+			args:            args{29},
+			partitionIdx:    2,
+			lastProcessedWm: []int64{10, 10, 9},
+			want:            10,
 		},
 		{
-			name:             "offset_31",
-			processorManager: processorManager,
-			args:             args{31},
-			partitionIdx:     0,
-			lastProcessedWm:  []int64{13, 14, 14},
-			want:             14,
+			name:            "offset_31",
+			pm:              pm,
+			args:            args{31},
+			partitionIdx:    0,
+			lastProcessedWm: []int64{13, 14, 14},
+			want:            14,
 		},
 		{
-			name:             "offset_35",
-			processorManager: processorManager,
-			args:             args{40},
-			partitionIdx:     1,
-			lastProcessedWm:  []int64{25, 26, 27},
-			want:             25,
+			name:            "offset_35",
+			pm:              pm,
+			args:            args{40},
+			partitionIdx:    1,
+			lastProcessedWm: []int64{25, 26, 27},
+			want:            25,
 		},
 	}
 	location, _ := time.LoadLocation("UTC")
@@ -311,7 +311,7 @@ func TestBuffer_updateWatermarkWithMultiplePartition(t *testing.T) {
 				lastProcessed[i] = wmb.InitialWatermark.UnixMilli()
 			}
 			b := &edgeFetcher{
-				processorManager: tt.processorManager,
+				processorManager: tt.pm,
 				log:              zaptest.NewLogger(t).Sugar(),
 				lastProcessedWm:  tt.lastProcessedWm,
 			}
@@ -331,8 +331,8 @@ func Test_edgeFetcher_ComputeHeadWatermark(t *testing.T) {
 		partitionCount    = int32(2)
 		ctx, cancel       = context.WithCancel(context.Background())
 		wmStore, _        = store.BuildNoOpWatermarkStore()
-		processorManager1 = NewProcessorManager(ctx, wmStore, partitionCount)
-		processorManager2 = NewProcessorManager(ctx, wmStore, partitionCount)
+		processorManager1 = newProcessorManager(ctx, wmStore, partitionCount)
+		processorManager2 = newProcessorManager(ctx, wmStore, partitionCount)
 	)
 	defer cancel()
 
@@ -341,7 +341,7 @@ func Test_edgeFetcher_ComputeHeadWatermark(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		processorManager *ProcessorManager
+		processorManager *processorManager
 		want             int64
 	}{
 		{
@@ -366,7 +366,7 @@ func Test_edgeFetcher_ComputeHeadWatermark(t *testing.T) {
 	}
 }
 
-func computeHeadWMTest1(ctx context.Context, processorManager1 *ProcessorManager) {
+func computeHeadWMTest1(ctx context.Context, processorManager1 *processorManager) {
 	var (
 		partitionCount = int32(2)
 		testPod0       = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, partitionCount)
@@ -425,12 +425,12 @@ func computeHeadWMTest1(ctx context.Context, processorManager1 *ProcessorManager
 	for _, watermark := range pod2Timeline {
 		testPod2.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager1.AddProcessor("testPod0", testPod0)
-	processorManager1.AddProcessor("testPod1", testPod1)
-	processorManager1.AddProcessor("testPod2", testPod2)
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
 }
 
-func computeHeadWMTest2(ctx context.Context, processorManager2 *ProcessorManager) {
+func computeHeadWMTest2(ctx context.Context, processorManager2 *processorManager) {
 	var (
 		partitionCount = int32(2)
 		testPod0       = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, partitionCount)
@@ -489,9 +489,9 @@ func computeHeadWMTest2(ctx context.Context, processorManager2 *ProcessorManager
 	for _, watermark := range pod2Timeline {
 		testPod2.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager2.AddProcessor("testPod0", testPod0)
-	processorManager2.AddProcessor("testPod1", testPod1)
-	processorManager2.AddProcessor("testPod2", testPod2)
+	processorManager2.addProcessor("testPod0", testPod0)
+	processorManager2.addProcessor("testPod1", testPod1)
+	processorManager2.addProcessor("testPod2", testPod2)
 }
 
 func Test_edgeFetcher_updateHeadIdleWMB(t *testing.T) {
@@ -499,10 +499,10 @@ func Test_edgeFetcher_updateHeadIdleWMB(t *testing.T) {
 		partitionCount    = int32(3)
 		ctx, cancel       = context.WithCancel(context.Background())
 		wmStore, _        = store.BuildNoOpWatermarkStore()
-		processorManager1 = NewProcessorManager(ctx, wmStore, partitionCount)
-		processorManager2 = NewProcessorManager(ctx, wmStore, partitionCount)
-		processorManager3 = NewProcessorManager(ctx, wmStore, partitionCount)
-		processorManager4 = NewProcessorManager(ctx, wmStore, partitionCount)
+		processorManager1 = newProcessorManager(ctx, wmStore, partitionCount)
+		processorManager2 = newProcessorManager(ctx, wmStore, partitionCount)
+		processorManager3 = newProcessorManager(ctx, wmStore, partitionCount)
+		processorManager4 = newProcessorManager(ctx, wmStore, partitionCount)
 	)
 	defer cancel()
 
@@ -513,7 +513,7 @@ func Test_edgeFetcher_updateHeadIdleWMB(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		processorManager *ProcessorManager
+		processorManager *processorManager
 		want             wmb.WMB
 	}{
 		{
@@ -558,7 +558,7 @@ func Test_edgeFetcher_updateHeadIdleWMB(t *testing.T) {
 	}
 }
 
-func updateHeadIdleWMBTest1(ctx context.Context, processorManager1 *ProcessorManager) {
+func updateHeadIdleWMBTest1(ctx context.Context, processorManager1 *processorManager) {
 	var (
 		partitionCount = int32(3)
 		testPod0       = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, partitionCount)
@@ -635,12 +635,12 @@ func updateHeadIdleWMBTest1(ctx context.Context, processorManager1 *ProcessorMan
 	for _, watermark := range pod2Timeline {
 		testPod2.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager1.AddProcessor("testPod0", testPod0)
-	processorManager1.AddProcessor("testPod1", testPod1)
-	processorManager1.AddProcessor("testPod2", testPod2)
+	processorManager1.addProcessor("testPod0", testPod0)
+	processorManager1.addProcessor("testPod1", testPod1)
+	processorManager1.addProcessor("testPod2", testPod2)
 }
 
-func updateHeadIdleWMBTest2(ctx context.Context, processorManager2 *ProcessorManager) {
+func updateHeadIdleWMBTest2(ctx context.Context, processorManager2 *processorManager) {
 	var (
 		partitionCount = int32(3)
 		testPod0       = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, partitionCount)
@@ -717,12 +717,12 @@ func updateHeadIdleWMBTest2(ctx context.Context, processorManager2 *ProcessorMan
 	for _, watermark := range pod2Timeline {
 		testPod2.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager2.AddProcessor("testPod0", testPod0)
-	processorManager2.AddProcessor("testPod1", testPod1)
-	processorManager2.AddProcessor("testPod2", testPod2)
+	processorManager2.addProcessor("testPod0", testPod0)
+	processorManager2.addProcessor("testPod1", testPod1)
+	processorManager2.addProcessor("testPod2", testPod2)
 }
 
-func updateHeadIdleWMBTest3(ctx context.Context, processorManager3 *ProcessorManager) {
+func updateHeadIdleWMBTest3(ctx context.Context, processorManager3 *processorManager) {
 	var (
 		partitionCount = int32(3)
 		testPod0       = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, partitionCount)
@@ -799,21 +799,21 @@ func updateHeadIdleWMBTest3(ctx context.Context, processorManager3 *ProcessorMan
 	for _, watermark := range pod2Timeline {
 		testPod2.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager3.AddProcessor("testPod0", testPod0)
-	processorManager3.AddProcessor("testPod1", testPod1)
-	processorManager3.AddProcessor("testPod2", testPod2)
+	processorManager3.addProcessor("testPod0", testPod0)
+	processorManager3.addProcessor("testPod1", testPod1)
+	processorManager3.addProcessor("testPod2", testPod2)
 }
 
-func updateHeadIdleWMBTest4(ctx context.Context, processorManager4 *ProcessorManager) {
+func updateHeadIdleWMBTest4(ctx context.Context, processorManager4 *processorManager) {
 	var (
 		partitionCount = int32(3)
 		testPod0       = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, partitionCount)
 		testPod1       = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, partitionCount)
 		testPod2       = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod3"), 5, partitionCount)
 	)
-	processorManager4.AddProcessor("testPod0", testPod0)
-	processorManager4.AddProcessor("testPod1", testPod1)
-	processorManager4.AddProcessor("testPod2", testPod2)
+	processorManager4.addProcessor("testPod0", testPod0)
+	processorManager4.addProcessor("testPod1", testPod1)
+	processorManager4.addProcessor("testPod2", testPod2)
 }
 
 // end to end test for fetcher using inmem store
@@ -843,7 +843,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 	heartBeatManagerMap["p1"].start()
 	heartBeatManagerMap["p2"].start()
 
-	allProcessors := fetcher.processorManager.GetAllProcessors()
+	allProcessors := fetcher.processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -852,7 +852,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -891,7 +891,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -904,26 +904,26 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=100, which is < inputOffset 103
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
 
 	heartBeatManagerMap["p1"].start()
 
 	// wait until p1 becomes active
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -932,7 +932,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -944,13 +944,13 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
-	p1 := fetcher.processorManager.GetProcessor("p1")
+	p1 := fetcher.processorManager.getProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
 	assert.NotNil(t, p1.GetOffsetTimelines())
@@ -973,13 +973,13 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(100 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
 	heartBeatManagerMap["p1"].start()
 
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -988,7 +988,7 @@ func TestFetcherWithSameOTBucket_InMem(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1078,7 +1078,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	heartBeatManagerMap["p1"].start()
 	heartBeatManagerMap["p2"].start()
 
-	allProcessors := fetcher.processorManager.GetAllProcessors()
+	allProcessors := fetcher.processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -1087,7 +1087,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1134,7 +1134,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1149,7 +1149,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1158,21 +1158,21 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	assert.True(t, allProcessors["p2"].IsActive())
 
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 0)
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
 
 	heartBeatManagerMap["p1"].start()
 
 	// wait until p1 becomes active
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -1181,7 +1181,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1190,7 +1190,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
-	p1 := fetcher.processorManager.GetProcessor("p1")
+	p1 := fetcher.processorManager.getProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
 	assert.NotNil(t, p1.GetOffsetTimelines())
@@ -1213,19 +1213,19 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
 	heartBeatManagerMap["p1"].start()
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1240,7 +1240,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1259,7 +1259,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1278,7 +1278,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 	heartBeatManagerMap["p1"].stop()
@@ -1366,7 +1366,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	heartBeatManagerMap["p1"].start()
 	heartBeatManagerMap["p2"].start()
 
-	allProcessors := fetcher.processorManager.GetAllProcessors()
+	allProcessors := fetcher.processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -1375,7 +1375,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1447,7 +1447,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1464,11 +1464,11 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
@@ -1477,21 +1477,21 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 1)
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset, 10) }), 2)
 
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 	// "p1" should be deleted after this GetWatermark offset=103
 	// because "p1" offsetTimeline's head offset=102, which is < inputOffset 103
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+3, 10) }), 0)
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	assert.Equal(t, 1, len(allProcessors))
 	assert.True(t, allProcessors["p2"].IsActive())
 
 	heartBeatManagerMap["p1"].start()
 
 	// wait until p1 becomes active
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -1500,7 +1500,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1509,7 +1509,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	// "p1" has been deleted from vertex.Processors
 	// so "p1" will be considered as a new processors with a new default offset timeline
 	_ = fetcher.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(testOffset+1, 10) }), 0)
-	p1 := fetcher.processorManager.GetProcessor("p1")
+	p1 := fetcher.processorManager.getProcessor("p1")
 	assert.NotNil(t, p1)
 	assert.True(t, p1.IsActive())
 	assert.NotNil(t, p1.GetOffsetTimelines())
@@ -1539,20 +1539,20 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
 	heartBeatManagerMap["p1"].start()
 
-	allProcessors = fetcher.processorManager.GetAllProcessors()
+	allProcessors = fetcher.processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1570,7 +1570,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1601,7 +1601,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 
@@ -1632,7 +1632,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = fetcher.processorManager.GetAllProcessors()
+			allProcessors = fetcher.processorManager.getAllProcessors()
 		}
 	}
 	heartBeatManagerMap["p1"].stop()

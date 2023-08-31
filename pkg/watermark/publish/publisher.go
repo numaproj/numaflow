@@ -221,7 +221,6 @@ func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset, toVe
 			// TODO: better exponential backoff
 			time.Sleep(time.Millisecond * 250)
 		} else {
-			println("publish idle watermark")
 			p.log.Debugw("New idle watermark published", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("HB", p.heartbeatStore.GetStoreName()), zap.String("OT", p.otStore.GetStoreName()), zap.String("key", key), zap.Int64("offset", seq), zap.Int64("watermark", validWM.UnixMilli()))
 			break
 		}
@@ -272,7 +271,7 @@ func (p *publish) publishHeartbeat() {
 		case <-ticker.C:
 			err := p.heartbeatStore.PutKV(p.ctx, p.entity.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
 			if err != nil {
-				p.log.Errorw("Put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
+				p.log.Errorw("put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 			}
 		}
 	}

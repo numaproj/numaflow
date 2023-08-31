@@ -41,7 +41,7 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 
 	numIncomingVertices := 2
 	partitionCount := int32(3)
-	processorManagers := make([]*ProcessorManager, 0)
+	processorManagers := make([]*processorManager, 0)
 	for i := 0; i < numIncomingVertices; i++ {
 		processorManagers = append(processorManagers, createProcessorManager(ctx, partitionCount))
 	}
@@ -96,7 +96,7 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 			for _, watermark := range testPodTimelines[vertex][pod] {
 				testPodsByVertex[vertex][pod].GetOffsetTimelines()[watermark.Partition].Put(watermark)
 			}
-			processorManagers[vertex].AddProcessor(name, testPodsByVertex[vertex][pod])
+			processorManagers[vertex].addProcessor(name, testPodsByVertex[vertex][pod])
 		}
 
 	}
@@ -184,12 +184,12 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 
 }
 
-func createProcessorManager(ctx context.Context, partitionCount int32) *ProcessorManager {
+func createProcessorManager(ctx context.Context, partitionCount int32) *processorManager {
 	wmStore, _ := store.BuildNoOpWatermarkStore()
-	return NewProcessorManager(ctx, wmStore, partitionCount)
+	return newProcessorManager(ctx, wmStore, partitionCount)
 }
 
-func edge1Idle(ctx context.Context, processorManager *ProcessorManager) {
+func edge1Idle(ctx context.Context, processorManager *processorManager) {
 	var (
 		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, 2)
 		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, 2)
@@ -229,11 +229,11 @@ func edge1Idle(ctx context.Context, processorManager *ProcessorManager) {
 	for _, watermark := range pod1Timeline {
 		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager.AddProcessor("testPod0", testPod0)
-	processorManager.AddProcessor("testPod1", testPod1)
+	processorManager.addProcessor("testPod0", testPod0)
+	processorManager.addProcessor("testPod1", testPod1)
 }
 
-func edge1NonIdle(ctx context.Context, processorManager *ProcessorManager) {
+func edge1NonIdle(ctx context.Context, processorManager *processorManager) {
 	var (
 		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, 2)
 		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, 2)
@@ -273,11 +273,11 @@ func edge1NonIdle(ctx context.Context, processorManager *ProcessorManager) {
 	for _, watermark := range pod1Timeline {
 		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager.AddProcessor("testPod0", testPod0)
-	processorManager.AddProcessor("testPod1", testPod1)
+	processorManager.addProcessor("testPod0", testPod0)
+	processorManager.addProcessor("testPod1", testPod1)
 }
 
-func edge2Idle(ctx context.Context, processorManager *ProcessorManager) {
+func edge2Idle(ctx context.Context, processorManager *processorManager) {
 	var (
 		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, 2)
 		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, 2)
@@ -317,11 +317,11 @@ func edge2Idle(ctx context.Context, processorManager *ProcessorManager) {
 	for _, watermark := range pod1Timeline {
 		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager.AddProcessor("testPod0", testPod0)
-	processorManager.AddProcessor("testPod1", testPod1)
+	processorManager.addProcessor("testPod0", testPod0)
+	processorManager.addProcessor("testPod1", testPod1)
 }
 
-func edge2NonIdle(ctx context.Context, processorManager *ProcessorManager) {
+func edge2NonIdle(ctx context.Context, processorManager *processorManager) {
 	var (
 		testPod0     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod1"), 5, 2)
 		testPod1     = NewProcessorToFetch(ctx, entity.NewProcessorEntity("testPod2"), 5, 2)
@@ -361,8 +361,8 @@ func edge2NonIdle(ctx context.Context, processorManager *ProcessorManager) {
 	for _, watermark := range pod1Timeline {
 		testPod1.GetOffsetTimelines()[watermark.Partition].Put(watermark)
 	}
-	processorManager.AddProcessor("testPod0", testPod0)
-	processorManager.AddProcessor("testPod1", testPod1)
+	processorManager.addProcessor("testPod0", testPod0)
+	processorManager.addProcessor("testPod1", testPod1)
 }
 
 func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
@@ -377,11 +377,11 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 		ctx, cancel = context.WithCancel(context.Background())
 		wmStore, _  = store.BuildNoOpWatermarkStore()
 
-		edge1ProcessorManagerIdle    = NewProcessorManager(ctx, wmStore, 2)
-		edge1ProcessorManagerNonIdle = NewProcessorManager(ctx, wmStore, 2)
+		edge1ProcessorManagerIdle    = newProcessorManager(ctx, wmStore, 2)
+		edge1ProcessorManagerNonIdle = newProcessorManager(ctx, wmStore, 2)
 
-		edge2ProcessorManagerIdle    = NewProcessorManager(ctx, wmStore, 2)
-		edge2ProcessorManagerNonIdle = NewProcessorManager(ctx, wmStore, 2)
+		edge2ProcessorManagerIdle    = newProcessorManager(ctx, wmStore, 2)
+		edge2ProcessorManagerNonIdle = newProcessorManager(ctx, wmStore, 2)
 	)
 
 	defer cancel()

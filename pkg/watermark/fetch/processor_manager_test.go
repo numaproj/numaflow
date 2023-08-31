@@ -56,7 +56,7 @@ func TestProcessorManager(t *testing.T) {
 	defer cancel()
 
 	assert.NoError(t, err)
-	var processorManager = NewProcessorManager(ctx, wmStore, 1)
+	var processorManager = newProcessorManager(ctx, wmStore, 1)
 	// start p1 heartbeat for 3 loops then delete p1
 	go func() {
 		var err error
@@ -82,7 +82,7 @@ func TestProcessorManager(t *testing.T) {
 		}
 	}()
 
-	allProcessors := processorManager.GetAllProcessors()
+	allProcessors := processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -91,7 +91,7 @@ func TestProcessorManager(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = processorManager.GetAllProcessors()
+			allProcessors = processorManager.getAllProcessors()
 		}
 	}
 
@@ -107,18 +107,18 @@ func TestProcessorManager(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = processorManager.GetAllProcessors()
+			allProcessors = processorManager.getAllProcessors()
 		}
 	}
 
-	allProcessors = processorManager.GetAllProcessors()
+	allProcessors = processorManager.getAllProcessors()
 	assert.Equal(t, 2, len(allProcessors))
 	assert.True(t, allProcessors["p1"].IsDeleted())
 	assert.True(t, allProcessors["p2"].IsActive())
 
-	processorManager.DeleteProcessor("p1")
-	processorManager.DeleteProcessor("p2")
-	assert.Equal(t, 0, len(processorManager.GetAllProcessors()))
+	processorManager.deleteProcessor("p1")
+	processorManager.deleteProcessor("p2")
+	assert.Equal(t, 0, len(processorManager.getAllProcessors()))
 }
 
 func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
@@ -135,7 +135,7 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	defer cancel()
 	defer wmStore.Close()
 
-	var processorManager = NewProcessorManager(ctx, wmStore, 1)
+	var processorManager = newProcessorManager(ctx, wmStore, 1)
 	// start p1 heartbeat for 3 loops
 	go func(ctx context.Context) {
 		for {
@@ -162,7 +162,7 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 		}
 	}(ctx)
 
-	allProcessors := processorManager.GetAllProcessors()
+	allProcessors := processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -171,7 +171,7 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = processorManager.GetAllProcessors()
+			allProcessors = processorManager.getAllProcessors()
 		}
 	}
 
@@ -184,7 +184,7 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 		err = wmStore.OffsetTimelineStore().PutKV(ctx, "p1", otValueByte)
 		assert.NoError(t, err)
 	}
-	for processorManager.GetProcessor("p1").GetOffsetTimelines()[0].GetHeadOffset() != 115 || processorManager.GetProcessor("p2").GetOffsetTimelines()[0].GetHeadOffset() != 115 {
+	for processorManager.getProcessor("p1").GetOffsetTimelines()[0].GetHeadOffset() != 115 || processorManager.getProcessor("p2").GetOffsetTimelines()[0].GetHeadOffset() != 115 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -199,15 +199,15 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 0,
-	}, processorManager.GetProcessor("p1").GetOffsetTimelines()[0].GetHeadWMB())
+	}, processorManager.getProcessor("p1").GetOffsetTimelines()[0].GetHeadWMB())
 	assert.Equal(t, wmb.WMB{
 		Idle:      false,
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 0,
-	}, processorManager.GetProcessor("p2").GetOffsetTimelines()[0].GetHeadWMB())
-	processorManager.DeleteProcessor("p1")
-	processorManager.DeleteProcessor("p2")
+	}, processorManager.getProcessor("p2").GetOffsetTimelines()[0].GetHeadWMB())
+	processorManager.deleteProcessor("p1")
+	processorManager.deleteProcessor("p2")
 }
 
 func TestProcessorManagerWatchForReduce(t *testing.T) {
@@ -223,7 +223,7 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 	defer wmStore.Close()
 	defer cancel()
 
-	var processorManager = NewProcessorManager(ctx, wmStore, 1, WithIsReduce(true), WithVertexReplica(2))
+	var processorManager = newProcessorManager(ctx, wmStore, 1, WithIsReduce(true), WithVertexReplica(2))
 	// start p1 heartbeat for 3 loops
 	go func(ctx context.Context) {
 		for {
@@ -251,7 +251,7 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		}
 	}(ctx)
 
-	allProcessors := processorManager.GetAllProcessors()
+	allProcessors := processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -260,7 +260,7 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = processorManager.GetAllProcessors()
+			allProcessors = processorManager.getAllProcessors()
 		}
 	}
 
@@ -284,7 +284,7 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		err = wmStore.OffsetTimelineStore().PutKV(ctx, "p1", otValueByte)
 		assert.NoError(t, err)
 	}
-	for processorManager.GetProcessor("p1").GetOffsetTimelines()[0].GetHeadOffset() != 115 || processorManager.GetProcessor("p2").GetOffsetTimelines()[0].GetHeadOffset() != 115 {
+	for processorManager.getProcessor("p1").GetOffsetTimelines()[0].GetHeadOffset() != 115 || processorManager.getProcessor("p2").GetOffsetTimelines()[0].GetHeadOffset() != 115 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -300,15 +300,15 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 2,
-	}, processorManager.GetProcessor("p1").GetOffsetTimelines()[0].GetHeadWMB())
+	}, processorManager.getProcessor("p1").GetOffsetTimelines()[0].GetHeadWMB())
 	assert.Equal(t, wmb.WMB{
 		Idle:      false,
 		Offset:    115,
 		Watermark: 63000,
 		Partition: 2,
-	}, processorManager.GetProcessor("p2").GetOffsetTimelines()[0].GetHeadWMB())
-	processorManager.DeleteProcessor("p1")
-	processorManager.DeleteProcessor("p2")
+	}, processorManager.getProcessor("p2").GetOffsetTimelines()[0].GetHeadWMB())
+	processorManager.deleteProcessor("p1")
+	processorManager.deleteProcessor("p2")
 }
 
 func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
@@ -325,7 +325,7 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 	assert.NoError(t, err)
 	defer wmStore.Close()
 
-	var processorManager = NewProcessorManager(ctx, wmStore, 3)
+	var processorManager = newProcessorManager(ctx, wmStore, 3)
 	// start p1 heartbeat for 3 loops
 	go func(ctx context.Context) {
 		var err error
@@ -354,7 +354,7 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 		}
 	}(ctx)
 
-	allProcessors := processorManager.GetAllProcessors()
+	allProcessors := processorManager.getAllProcessors()
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
@@ -363,7 +363,7 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 			}
 		default:
 			time.Sleep(1 * time.Millisecond)
-			allProcessors = processorManager.GetAllProcessors()
+			allProcessors = processorManager.getAllProcessors()
 		}
 	}
 
@@ -386,7 +386,7 @@ loop:
 				t.Fatalf("expected offset timeline to be updated: %s", ctx.Err())
 			}
 		default:
-			for _, p := range processorManager.GetAllProcessors() {
+			for _, p := range processorManager.getAllProcessors() {
 				for _, ot := range p.GetOffsetTimelines() {
 					if ot.GetHeadWMB().Offset != 115 {
 						goto notDone
@@ -406,15 +406,15 @@ loop:
 			Offset:    115,
 			Watermark: 63000,
 			Partition: int32(i),
-		}, processorManager.GetProcessor("p1").GetOffsetTimelines()[i].GetHeadWMB())
+		}, processorManager.getProcessor("p1").GetOffsetTimelines()[i].GetHeadWMB())
 		assert.Equal(t, wmb.WMB{
 			Idle:      false,
 			Offset:    115,
 			Watermark: 63000,
 			Partition: int32(i),
-		}, processorManager.GetProcessor("p2").GetOffsetTimelines()[i].GetHeadWMB())
+		}, processorManager.getProcessor("p2").GetOffsetTimelines()[i].GetHeadWMB())
 	}
 	cancel()
-	processorManager.DeleteProcessor("p1")
-	processorManager.DeleteProcessor("p2")
+	processorManager.deleteProcessor("p1")
+	processorManager.deleteProcessor("p2")
 }
