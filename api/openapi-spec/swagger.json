@@ -19050,7 +19050,7 @@
       "type": "object",
       "properties": {
         "cooldownSeconds": {
-          "description": "Cooldown seconds after a scaling operation before another one.",
+          "description": "Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.",
           "type": "integer",
           "format": "int64"
         },
@@ -19075,6 +19075,16 @@
         },
         "replicasPerScale": {
           "description": "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations",
+          "type": "integer",
+          "format": "int64"
+        },
+        "scaleDownCooldownSeconds": {
+          "description": "ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down. It defaults to the CooldownSeconds if not set.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "scaleUpCooldownSeconds": {
+          "description": "ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up. It defaults to the CooldownSeconds if not set.",
           "type": "integer",
           "format": "int64"
         },
