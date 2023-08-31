@@ -395,7 +395,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	err = isdf.ackFromBuffer(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
-		isdf.opts.logger.Errorw("failed to ack from buffer", zap.Error(err))
+		isdf.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
 		ackMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
 		return
 	}

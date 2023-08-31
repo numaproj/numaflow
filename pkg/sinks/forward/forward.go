@@ -285,7 +285,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	err = df.ackFromBuffer(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
-		df.opts.logger.Errorw("failed to ack from buffer", zap.Error(err))
+		df.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
 		ackMessageError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
 		return
 	}
