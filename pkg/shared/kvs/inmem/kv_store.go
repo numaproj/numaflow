@@ -185,7 +185,7 @@ func (kv *inMemStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan str
 		for {
 			select {
 			case <-ctx.Done():
-				kv.log.Infow("stopping watching", zap.String("watcher", kv.bucketName))
+				kv.log.Infow("Stopping watching", zap.String("watcher", kv.bucketName))
 				kv.lock.Lock()
 				delete(kv.updatesChMap, id)
 				kv.lock.Unlock()
