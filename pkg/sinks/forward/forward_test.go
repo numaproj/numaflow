@@ -308,14 +308,13 @@ func TestWriteToBuffer(t *testing.T) {
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
 				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
+					Name: "to1",
 				},
 			}}
 
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark := map[string]publish.Publisher{
 				"to1": &testForwarderPublisher{},
-				"to2": &testForwarderPublisher{},
 			}
 			f, err := NewDataForward(vertex, fromStep, toSteps, fetchWatermark, publishWatermark)
 

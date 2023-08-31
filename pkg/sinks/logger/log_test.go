@@ -69,8 +69,8 @@ func TestToLog_Start(t *testing.T) {
 	<-stopped
 }
 
-// TestToLog_ForwardToTwoVertex writes to 2 vertices and have a logger sinks attached to each vertex.
-func TestToLog_ForwardToTwoVertex(t *testing.T) {
+// TestToLog_ForwardToTwoVertex writes to a vertex which has a logger sink
+func TestToLog_Forward(t *testing.T) {
 	tests := []struct {
 		name      string
 		batchSize int64
@@ -92,10 +92,7 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
 			to1 := simplebuffer.NewInMemoryBuffer("sinks.logger1", 5*batchSize, 0)
-			to2 := simplebuffer.NewInMemoryBuffer("sinks.logger2", 5*batchSize, 0)
 
-			// start the last vertex first
-			// add 2 sinks per vertex
 			vertex1 := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				AbstractVertex: dfv1.AbstractVertex{
 					Name: "sinks.logger1",
@@ -105,35 +102,18 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 				},
 			}}
 
-			vertex2 := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "sinks.logger2",
-					Sink: &dfv1.Sink{
-						Log: &dfv1.Log{},
-					},
-				},
-			}}
 			fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex1.Spec.Name})
 			logger1, _ := NewToLog(vertex1, to1, fetchWatermark1, publishWatermark1)
-			fetchWatermark2, publishWatermark2 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex2.Spec.Name})
-			logger2, _ := NewToLog(vertex2, to2, fetchWatermark2, publishWatermark2)
 			logger1Stopped := logger1.Start()
-			logger2Stopped := logger2.Start()
 
 			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to1},
-				"to2": {to2},
+				"sinks.logger1": {to1},
 			}
 
 			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				PipelineName: "testPipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
-				},
-			}}
+			
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := sinkforward.NewDataForward(vertex, fromStep, toSteps, fetchWatermark, publishWatermark, sinkforward.WithReadBatchSize(batchSize))
+			f, err := sinkforward.NewDataForward(vertex1, fromStep, toSteps, fetchWatermark, publishWatermark, sinkforward.WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 
 			stopped := f.Start()
@@ -144,10 +124,8 @@ func TestToLog_ForwardToTwoVertex(t *testing.T) {
 			<-stopped
 			// downstream should be stopped only after upstream is stopped
 			logger1.Stop()
-			logger2.Stop()
 
 			<-logger1Stopped
-			<-logger2Stopped
 		})
 	}
 }
