@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
@@ -45,15 +44,12 @@ type DataForward struct {
 	// we need something more than a cancel().
 	cancelFn            context.CancelFunc
 	fromBufferPartition isb.BufferReader
-	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
-	toBuffers map[string][]isb.BufferWriter
-	FSD       forward.ToWhichStepDecider
-	wmFetcher fetch.Fetcher
-	// wmPublishers stores the vertex to publisher mapping
-	wmPublishers map[string]publish.Publisher
-	opts         options
-	vertexName   string
-	pipelineName string
+	toBuffer            isb.BufferWriter
+	wmFetcher           fetch.Fetcher
+	wmPublisher         publish.Publisher
+	opts                options
+	vertexName          string
+	pipelineName        string
 	// idleManager manages the idle watermark status.
 	idleManager *wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid.
@@ -65,10 +61,9 @@ type DataForward struct {
 func NewDataForward(
 	vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
-	toSteps map[string][]isb.BufferWriter,
-	fsd forward.ToWhichStepDecider,
+	toSteps isb.BufferWriter,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
+	publishWatermark publish.Publisher,
 	opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
@@ -84,15 +79,13 @@ func NewDataForward(
 		ctx:                 ctx,
 		cancelFn:            cancel,
 		fromBufferPartition: fromStep,
-		toBuffers:           toSteps,
-		FSD:                 fsd,
+		toBuffer:            toSteps,
 		wmFetcher:           fetchWatermark,
-		wmPublishers:        publishWatermark,
-		// should we do a check here for the values not being null?
-		vertexName:   vertex.Spec.Name,
-		pipelineName: vertex.Spec.PipelineName,
-		idleManager:  wmb.NewIdleManager(len(toSteps)),
-		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable
+		wmPublisher:         publishWatermark,
+		vertexName:          vertex.Spec.Name,
+		pipelineName:        vertex.Spec.PipelineName,
+		idleManager:         wmb.NewIdleManager(1),
+		wmbChecker:          wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
@@ -144,14 +137,11 @@ func (df *DataForward) Start() <-chan struct{} {
 		} else {
 			log.Infow("Closed buffer reader", zap.String("bufferFrom", df.fromBufferPartition.GetName()))
 		}
-		for _, buffer := range df.toBuffers {
-			for _, partition := range buffer {
-				if err := partition.Close(); err != nil {
-					log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", partition.GetName()))
-				} else {
-					log.Infow("Closed partition writer", zap.String("bufferTo", partition.GetName()))
-				}
-			}
+
+		if err := df.toBuffer.Close(); err != nil {
+			log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", df.toBuffer.GetName()))
+		} else {
+			log.Infow("Closed partition writer", zap.String("bufferTo", df.toBuffer.GetName()))
 		}
 
 		close(stopped)
@@ -166,7 +156,7 @@ type readWriteMessagePair struct {
 	writeMessages []*isb.WriteMessage
 }
 
-// forwardAChunk forwards a chunk of message from the fromBufferPartition to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
+// forwardAChunk forwards a chunk of message from the fromBufferPartition to the toBuffer. It does the Read -> Process -> Forward -> Ack chain
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
 // buffer-not-reachable, etc., but does not include errors due to WhereTo, etc.
@@ -202,15 +192,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				zap.Bool("idle", processorWMB.Idle))
 			return
 		}
-
-		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
-		for toVertexName, toVertexBuffer := range df.toBuffers {
-			for _, partition := range toVertexBuffer {
-				if p, ok := df.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, partition, p, df.idleManager, df.opts.logger, dfv1.VertexTypeSink, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
-				}
-			}
-		}
+		// if the validation passed, we will publish the watermark
+		idlehandler.PublishIdleWatermark(ctx, df.toBuffer, df.wmPublisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSink, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 		return
 	}
 
@@ -232,14 +215,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// we fetch the watermark for the partition from which we read the message.
 	processorWM := df.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
 
-	var writeOffsets map[string][][]isb.Offset
-
-	// create space for writeMessages specific to each step as we could forward to all the steps too.
-	var messageToStep = make(map[string][][]isb.Message)
-	for toVertex := range df.toBuffers {
-		// over allocating to have a predictable pattern
-		messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
-	}
+	var (
+		writeOffsets  []isb.Offset
+		messageToStep []isb.Message
+	)
 
 	// concurrent processing request channel
 	processingCh := make(chan *readWriteMessagePair)
@@ -275,70 +254,26 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	wg.Wait()
 	df.opts.logger.Debugw("concurrent convert read message to write message completed", zap.Int("concurrency", df.opts.sinkConcurrency), zap.Duration("took", time.Since(concurrentProcessingStart)))
 
-	// let's figure out which vertex to send the results to.
-	// update the toBuffer(s) with writeMessages.
 	for _, m := range sinkResults {
-		// update toBuffers
 		for _, message := range m.writeMessages {
-			if err := df.whereToStep(message, messageToStep, m.readMessage); err != nil {
-				df.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
-				df.fromBufferPartition.NoAck(ctx, readOffsets)
-				return
-			}
+			messageToStep = append(messageToStep, message.Message)
+			df.fromBufferPartition.NoAck(ctx, readOffsets)
 		}
 	}
 
 	// forward the message to the edge buffer (could be multiple edges)
-	writeOffsets, err = df.writeToBuffers(ctx, messageToStep)
+	writeOffsets, err = df.writeToBuffer(ctx, df.toBuffer, messageToStep)
 	if err != nil {
-		df.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
+		df.opts.logger.Errorw("failed to write to toBuffer", zap.Error(err))
 		df.fromBufferPartition.NoAck(ctx, readOffsets)
 		return
 	}
 	df.opts.logger.Debugw("writeToBuffers completed")
 
-	// activeWatermarkBuffers records the buffers that the publisher has published
-	// a watermark in this batch processing cycle.
-	// it's used to determine which buffers should receive an idle watermark.
-	// It is created as a slice because it tracks per partition activity info.
-	var activeWatermarkBuffers = make(map[string][]bool)
-	// forward the highest watermark to all the edges to avoid idle edge problem
-	// TODO: sort and get the highest value
-	for toVertexName, toVertexBufferOffsets := range writeOffsets {
-		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
-		if publisher, ok := df.wmPublishers[toVertexName]; ok {
-			for index, offsets := range toVertexBufferOffsets {
-				// For Sink vertex, and it does not care about the offset during watermark publishing
-				if len(offsets) > 0 {
-					publisher.PublishWatermark(processorWM, nil, int32(index))
-					activeWatermarkBuffers[toVertexName][index] = true
-					// reset because the toBuffer partition is no longer idling
-					df.idleManager.Reset(df.toBuffers[toVertexName][index].GetName())
-				}
-			}
-		}
-	}
-	// - condition1 "len(dataMessages) > 0" :
-	//   Meaning, we do have some data messages, but we may not have written to all out buffers or its partitions.
-	//   It could be all data messages are dropped, or conditional forwarding to part of the out buffers.
-	//   If we don't have this condition check, when dataMessages is zero but ctrlMessages > 0, we will
-	//   wrongly publish an idle watermark without the ctrl message and the ctrl message tracking map.
-	// - condition 2 "len(activeWatermarkBuffers) < len(df.wmPublishers)" :
-	//   send idle watermark only if we have idle out buffers
-	// Note: When the len(dataMessages) is 0, meaning all the readMessages are control messages, we choose not to do extra steps
-	// This is because, if the idle continues, we will eventually handle the idle watermark when we read the next batch where the len(readMessages) will be zero
-	if len(dataMessages) > 0 {
-		for bufferName := range df.wmPublishers {
-			for index, activePartition := range activeWatermarkBuffers[bufferName] {
-				if !activePartition {
-					// use the watermark of the current read batch for the idle watermark
-					// same as read len==0 because there's no event published to the buffer
-					if p, ok := df.wmPublishers[bufferName]; ok {
-						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[bufferName][index], p, df.idleManager, df.opts.logger, dfv1.VertexTypeSink, processorWM)
-					}
-				}
-			}
-		}
+	if len(writeOffsets) > 0 {
+		df.wmPublisher.PublishWatermark(processorWM, nil, 0)
+	} else {
+		idlehandler.PublishIdleWatermark(ctx, df.toBuffer, df.wmPublisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSink, processorWM)
 	}
 
 	err = df.ackFromBuffer(ctx, readOffsets)
@@ -401,28 +336,6 @@ func (df *DataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) 
 	}
 
 	return ctxClosedErr
-}
-
-// writeToBuffers is a blocking call until all the messages have be forwarded to all the toBuffers, or a shutdown
-// has been initiated while we are stuck looping on an InternalError.
-func (df *DataForward) writeToBuffers(
-	ctx context.Context, messageToStep map[string][][]isb.Message,
-) (writeOffsets map[string][][]isb.Offset, err error) {
-	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
-	// So writeOffsets also contains all the to buffers, but the returned offsets might be empty.
-	writeOffsets = make(map[string][][]isb.Offset)
-	for toVertexName, toVertexMessages := range messageToStep {
-		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexMessages))
-	}
-	for toVertexName, toVertexBuffer := range df.toBuffers {
-		for index, partition := range toVertexBuffer {
-			writeOffsets[toVertexName][index], err = df.writeToBuffer(ctx, partition, messageToStep[toVertexName][index])
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	return writeOffsets, nil
 }
 
 // writeToBuffer forwards an array of messages to a single buffer and is a blocking call or until shutdown has been initiated.
@@ -499,30 +412,6 @@ func (df *DataForward) concurrentConvertReadToWriteMsgs(_ context.Context, readM
 		}}
 		message.writeMessages = append(message.writeMessages, writeMessages...)
 	}
-}
-
-// whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
-func (df *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
-	// call WhereTo and drop it on errors
-	to, err := df.FSD.WhereTo(writeMessage.Keys, writeMessage.Tags)
-	if err != nil {
-		df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: df.fromBufferPartition.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
-		// a shutdown can break the blocking loop caused due to InternalErr
-		if ok, _ := df.IsShuttingDown(); ok {
-			err := fmt.Errorf("whereToStep, Stop called while stuck on an internal error, %v", err)
-			platformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName}).Inc()
-			return err
-		}
-		return err
-	}
-
-	for _, t := range to {
-		if _, ok := messageToStep[t.ToVertexName]; !ok {
-			df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: df.fromBufferPartition.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("no such destination (%s)", t.ToVertexName)}))
-		}
-		messageToStep[t.ToVertexName][t.ToVertexPartitionIdx] = append(messageToStep[t.ToVertexName][t.ToVertexPartitionIdx], writeMessage.Message)
-	}
-	return nil
 }
 
 // errorArrayToMap summarizes an error array to map
