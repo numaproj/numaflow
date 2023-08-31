@@ -52,7 +52,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewToLog(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark publish.Publisher,
+	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*ToLog, error) {
 
 	toLog := new(ToLog)

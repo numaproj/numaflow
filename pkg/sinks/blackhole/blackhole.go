@@ -51,7 +51,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewBlackhole(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark publish.Publisher,
+	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*Blackhole, error) {
 
 	bh := new(Blackhole)

@@ -46,7 +46,7 @@ func TestBlackhole_Start(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	s, err := NewBlackhole(vertex, fromStep, fetchWatermark, publishWatermark[vertex.Spec.Name])
+	s, err := NewBlackhole(vertex, fromStep, fetchWatermark, publishWatermark)
 	assert.NoError(t, err)
 
 	stopped := s.Start()
