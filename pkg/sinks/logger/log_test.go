@@ -69,7 +69,7 @@ func TestToLog_Start(t *testing.T) {
 	<-stopped
 }
 
-// TestToLog_ForwardToTwoVertex writes to a vertex which has a logger sink
+// TestToLog_Forward writes to a vertex which has a logger sink
 func TestToLog_Forward(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -111,7 +111,7 @@ func TestToLog_Forward(t *testing.T) {
 			}
 
 			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
-			
+
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			f, err := sinkforward.NewDataForward(vertex1, fromStep, toSteps, fetchWatermark, publishWatermark, sinkforward.WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
