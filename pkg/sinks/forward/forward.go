@@ -61,7 +61,7 @@ type DataForward struct {
 func NewDataForward(
 	vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
-	toSteps map[string][]isb.BufferWriter,
+	toSteps isb.BufferWriter,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*DataForward, error) {
@@ -79,13 +79,13 @@ func NewDataForward(
 		ctx:                 ctx,
 		cancelFn:            cancel,
 		fromBufferPartition: fromStep,
-		toBuffer:            toSteps[vertex.Spec.Name][0],
+		toBuffer:            toSteps,
 		wmFetcher:           fetchWatermark,
 		wmPublisher:         publishWatermark[vertex.Spec.Name],
 		// should we do a check here for the values not being null?
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
-		idleManager:  wmb.NewIdleManager(len(toSteps)),
+		idleManager:  wmb.NewIdleManager(1),
 		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),

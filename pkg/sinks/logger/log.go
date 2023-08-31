@@ -76,7 +76,7 @@ func NewToLog(vertex *dfv1.Vertex,
 		}
 	}
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toLog}}, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, toLog, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

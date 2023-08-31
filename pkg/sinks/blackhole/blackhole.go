@@ -75,7 +75,7 @@ func NewBlackhole(vertex *dfv1.Vertex,
 		}
 	}
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {bh}}, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, bh, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

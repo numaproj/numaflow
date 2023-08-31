@@ -153,7 +153,7 @@ func TestNewDataForward(t *testing.T) {
 
 		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 		fetchWatermark := &testForwardFetcher{}
-		f, err := NewDataForward(vertex, fromStep, toSteps, fetchWatermark, publishWatermark)
+		f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark)
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -218,9 +218,6 @@ func TestNewDataForward(t *testing.T) {
 		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
 		to1 := simplebuffer.NewInMemoryBuffer(testVertexName, 5*batchSize, 0)
 
-		toSteps := map[string][]isb.BufferWriter{
-			testVertexName: {to1},
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
@@ -235,7 +232,7 @@ func TestNewDataForward(t *testing.T) {
 		publishWatermark := map[string]publish.Publisher{
 			testVertexName: &testForwarderPublisher{},
 		}
-		f, err := NewDataForward(vertex, fromStep, toSteps, fetchWatermark, publishWatermark)
+		f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark)
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -300,9 +297,6 @@ func TestWriteToBuffer(t *testing.T) {
 		t.Run(value.name, func(t *testing.T) {
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*value.batchSize, 0)
 			buffer := simplebuffer.NewInMemoryBuffer("to1", value.batchSize, 0, simplebuffer.WithBufferFullWritingStrategy(value.strategy))
-			toSteps := map[string][]isb.BufferWriter{
-				"to1": {buffer},
-			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
@@ -316,7 +310,7 @@ func TestWriteToBuffer(t *testing.T) {
 			publishWatermark := map[string]publish.Publisher{
 				"to1": &testForwarderPublisher{},
 			}
-			f, err := NewDataForward(vertex, fromStep, toSteps, fetchWatermark, publishWatermark)
+			f, err := NewDataForward(vertex, fromStep, buffer, fetchWatermark, publishWatermark)
 
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
