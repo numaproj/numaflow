@@ -54,7 +54,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewUserDefinedSink(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
+	publishWatermark publish.Publisher,
 	udsink SinkApplier,
 	opts ...Option) (*UserDefinedSink, error) {
 

@@ -59,7 +59,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewToKafka(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
+	publishWatermark publish.Publisher,
 	opts ...Option) (*ToKafka, error) {
 
 	kafkaSink := vertex.Spec.Sink.Kafka

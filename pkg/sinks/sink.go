@@ -160,7 +160,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	var finalWg sync.WaitGroup
 	for index := range u.VertexInstance.Vertex.OwnedBuffers() {
 		finalWg.Add(1)
-		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWatermark, sinkHandler)
+		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWatermark[u.VertexInstance.Vertex.Name], sinkHandler)
 		if err != nil {
 			return fmt.Errorf("failed to find a sink, errpr: %w", err)
 		}
@@ -225,7 +225,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 }
 
 // getSinker takes in the logger from the parent context
-func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM map[string]publish.Publisher, sinkHandler udsink.SinkApplier) (Sinker, error) {
+func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM publish.Publisher, sinkHandler udsink.SinkApplier) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	if x := sink.Log; x != nil {
 		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, logsink.WithLogger(logger))
