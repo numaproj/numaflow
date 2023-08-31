@@ -160,7 +160,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	var finalWg sync.WaitGroup
 	for index := range u.VertexInstance.Vertex.OwnedBuffers() {
 		finalWg.Add(1)
-		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWatermark[u.VertexInstance.Vertex.Name], sinkHandler)
+		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWatermark[u.VertexInstance.Vertex.Spec.Name], sinkHandler)
 		if err != nil {
 			return fmt.Errorf("failed to find a sink, errpr: %w", err)
 		}
