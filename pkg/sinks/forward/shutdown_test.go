@@ -24,35 +24,24 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 )
 
-type myShutdownTest struct {
-}
-
-func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
-	return []forward.VertexBuffer{}, nil
-}
-
-func TestInterStepDataForward(t *testing.T) {
+func TestShutDown(t *testing.T) {
 	tests := []struct {
-		name          string
-		batchSize     int64
-		streamEnabled bool
+		name      string
+		batchSize int64
 	}{
 		{
-			name:          "stream_forward",
-			batchSize:     1,
-			streamEnabled: true,
+			name:      "batch_forward",
+			batchSize: 1,
 		},
 		{
-			name:          "batch_forward",
-			batchSize:     5,
-			streamEnabled: false,
+			name:      "batch_forward",
+			batchSize: 5,
 		},
 	}
 	for _, tt := range tests {
@@ -72,12 +61,12 @@ func TestInterStepDataForward(t *testing.T) {
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
 				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
+					Name: "to1",
 				},
 			}}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertex, fromStep, toSteps, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data but buffer is not full even though we are not reading
@@ -92,7 +81,7 @@ func TestInterStepDataForward(t *testing.T) {
 		t.Run(tt.name+"_forceStop", func(t *testing.T) {
 			batchSize := tt.batchSize
 			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to1 := simplebuffer.NewInMemoryBuffer("to", 2*batchSize, 0)
+			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
 			}
@@ -105,12 +94,12 @@ func TestInterStepDataForward(t *testing.T) {
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
 				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
+					Name: "to1",
 				},
 			}}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertex, fromStep, toSteps, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data such that the fromBufferPartition can be empty, that is toBuffer gets full

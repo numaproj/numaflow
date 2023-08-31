@@ -26,7 +26,6 @@ import (
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
@@ -56,7 +55,6 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
-	whereToDecider forward.GoWhere,
 	udsink SinkApplier,
 	opts ...Option) (*UserDefinedSink, error) {
 
@@ -81,7 +79,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	}
 	s.udsink = udsink
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {s}}, whereToDecider, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {s}}, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

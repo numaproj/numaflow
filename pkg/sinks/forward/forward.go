@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
@@ -47,7 +46,6 @@ type DataForward struct {
 	fromBufferPartition isb.BufferReader
 	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
 	toBuffers map[string][]isb.BufferWriter
-	FSD       forward.ToWhichStepDecider
 	wmFetcher fetch.Fetcher
 	// wmPublishers stores the vertex to publisher mapping
 	wmPublishers map[string]publish.Publisher
@@ -66,7 +64,6 @@ func NewDataForward(
 	vertex *dfv1.Vertex,
 	fromStep isb.BufferReader,
 	toSteps map[string][]isb.BufferWriter,
-	fsd forward.ToWhichStepDecider,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
 	opts ...Option) (*DataForward, error) {
@@ -85,7 +82,6 @@ func NewDataForward(
 		cancelFn:            cancel,
 		fromBufferPartition: fromStep,
 		toBuffers:           toSteps,
-		FSD:                 fsd,
 		wmFetcher:           fetchWatermark,
 		wmPublishers:        publishWatermark,
 		// should we do a check here for the values not being null?
@@ -503,25 +499,10 @@ func (df *DataForward) concurrentConvertReadToWriteMsgs(_ context.Context, readM
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
 func (df *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
-	// call WhereTo and drop it on errors
-	to, err := df.FSD.WhereTo(writeMessage.Keys, writeMessage.Tags)
-	if err != nil {
-		df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: df.fromBufferPartition.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
-		// a shutdown can break the blocking loop caused due to InternalErr
-		if ok, _ := df.IsShuttingDown(); ok {
-			err := fmt.Errorf("whereToStep, Stop called while stuck on an internal error, %v", err)
-			platformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName}).Inc()
-			return err
-		}
-		return err
+	if _, ok := messageToStep[df.vertexName]; !ok {
+		df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: df.fromBufferPartition.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("no such destination (%s)", df.vertexName)}))
 	}
-
-	for _, t := range to {
-		if _, ok := messageToStep[t.ToVertexName]; !ok {
-			df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: df.fromBufferPartition.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("no such destination (%s)", t.ToVertexName)}))
-		}
-		messageToStep[t.ToVertexName][t.ToVertexPartitionIdx] = append(messageToStep[t.ToVertexName][t.ToVertexPartitionIdx], writeMessage.Message)
-	}
+	messageToStep[df.vertexName][0] = append(messageToStep[df.vertexName][0], writeMessage.Message)
 	return nil
 }
 

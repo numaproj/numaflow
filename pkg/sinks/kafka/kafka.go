@@ -25,7 +25,6 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -61,7 +60,6 @@ func NewToKafka(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
-	whereToDecider forward.GoWhere,
 	opts ...Option) (*ToKafka, error) {
 
 	kafkaSink := vertex.Spec.Sink.Kafka
@@ -90,7 +88,7 @@ func NewToKafka(vertex *dfv1.Vertex,
 		}
 	}
 
-	f, err := sinkforward.NewDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, whereToDecider, fetchWatermark, publishWatermark, forwardOpts...)
+	f, err := sinkforward.NewDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
