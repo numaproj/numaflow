@@ -79,7 +79,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	}
 	s.udsink = udsink
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark[vertex.Spec.Name], forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

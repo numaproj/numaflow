@@ -88,7 +88,7 @@ func NewToKafka(vertex *dfv1.Vertex,
 		}
 	}
 
-	f, err := sinkforward.NewDataForward(vertex, fromBuffer, toKafka, fetchWatermark, publishWatermark, forwardOpts...)
+	f, err := sinkforward.NewDataForward(vertex, fromBuffer, toKafka, fetchWatermark, publishWatermark[vertex.Spec.Name], forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

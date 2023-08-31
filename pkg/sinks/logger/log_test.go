@@ -113,7 +113,7 @@ func TestToLog_Forward(t *testing.T) {
 			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := sinkforward.NewDataForward(vertex1, fromStep, to1, fetchWatermark, publishWatermark, sinkforward.WithReadBatchSize(batchSize))
+			f, err := sinkforward.NewDataForward(vertex1, fromStep, to1, fetchWatermark, publishWatermark["sinks.logger1"], sinkforward.WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 
 			stopped := f.Start()

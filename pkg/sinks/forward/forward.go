@@ -63,7 +63,7 @@ func NewDataForward(
 	fromStep isb.BufferReader,
 	toSteps isb.BufferWriter,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
+	publishWatermark publish.Publisher,
 	opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
@@ -81,7 +81,7 @@ func NewDataForward(
 		fromBufferPartition: fromStep,
 		toBuffer:            toSteps,
 		wmFetcher:           fetchWatermark,
-		wmPublisher:         publishWatermark[vertex.Spec.Name],
+		wmPublisher:         publishWatermark,
 		// should we do a check here for the values not being null?
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
