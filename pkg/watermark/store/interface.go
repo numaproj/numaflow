@@ -28,9 +28,3 @@ type WatermarkStore interface {
 	HeartbeatStore() kvs.KVStorer
 	OffsetTimelineStore() kvs.KVStorer
 }
-
-// WatermarkStoreWatcher defines a pair of heartbeat KV watcher and offset timeline KV watcher
-type WatermarkStoreWatcher interface {
-	HeartbeatWatcher() kvs.KVWatcher
-	OffsetTimelineWatcher() kvs.KVWatcher
-}
