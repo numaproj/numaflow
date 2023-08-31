@@ -81,10 +81,6 @@ func NewKVInMemKVStore(ctx context.Context, bucketName string) (kvs.KVStorer, er
 	return s, nil
 }
 
-func (kv *inMemStore) GetKVName() string {
-	return kv.bucketName
-}
-
 // GetAllKeys returns all the keys in the key-value store.
 func (kv *inMemStore) GetAllKeys(_ context.Context) ([]string, error) {
 	kv.lock.Lock()
@@ -128,6 +124,7 @@ func (kv *inMemStore) DeleteKey(_ context.Context, k string) error {
 			op:    kvs.KVDelete,
 		}
 
+		// notify all the watchers about the delete operation
 		for _, updatesCh := range kv.updatesChMap {
 			updatesCh <- entry
 		}
@@ -154,6 +151,7 @@ func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 		op:    kvs.KVPut,
 	}
 
+	// notify all the watchers about the put operation
 	for _, updatesCh := range kv.updatesChMap {
 		updatesCh <- entry
 	}
@@ -171,6 +169,7 @@ func (kv *inMemStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan str
 	// for new updates channel initialization
 	go func() {
 		kv.lock.Lock()
+		// fill in the history for the new updates channel
 		for _, value := range kv.kvHistory {
 			updates <- value
 		}
@@ -201,7 +200,7 @@ func (kv *inMemStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan str
 	return updates, stopped
 }
 
-// Close closes the channel connection and clean up the bucket.
+// Close closes the in mem key-value store. It will close all the watchers.
 func (kv *inMemStore) Close() {
 	close(kv.doneCh)
 	kv.lock.Lock()

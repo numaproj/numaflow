@@ -113,13 +113,13 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			names := []string{u.VertexInstance.Vertex.Spec.Name}
 			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
 		} else {
-			// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
+			// build from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
 				return fmt.Errorf("failed to from vertex watermark stores: %w", err)
 			}
 
-			// create watermark fetcher using processor managers
+			// create watermark fetcher using watermark stores
 			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, fromVertexWmStores)
 
 			// create watermark stores
@@ -209,7 +209,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	// stop the from vertex wm stores
+	// close the from vertex wm stores
 	// since we created the stores, we can close them
 	for _, wmStore := range fromVertexWmStores {
 		_ = wmStore.Close()

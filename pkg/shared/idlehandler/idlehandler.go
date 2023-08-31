@@ -34,7 +34,6 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 	var toVertexPartition = toBufferPartition.GetPartitionIdx()
 
 	if !idleManager.Exists(toPartitionName) {
-		println("idleManager.Exists(toPartitionName) is false")
 		if vertexType == dfv1.VertexTypeSink {
 			// for Sink vertex, we don't need to write any ctrl message
 			// and because when we publish the watermark, offset is not important for sink
@@ -48,7 +47,6 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 				logger.Errorw("Failed to write ctrl message to buffer", zap.String("toPartitionName", toPartitionName), zap.Error(errs[0]))
 				return
 			}
-			println("wrote a ctrl message to ISB")
 			logger.Debug("Succeeded to write ctrl message to buffer", zap.String("toPartitionName", toPartitionName), zap.Error(errs[0]))
 
 			if len(writeOffsets) == 1 {

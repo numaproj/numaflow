@@ -40,14 +40,14 @@ func WithPodHeartbeatRate(rate int64) Option {
 	}
 }
 
-// WithRefreshingProcessorsRate sets the processor refreshing rate in seconds.
+// WithRefreshingProcessorsRate to set the rate of refreshing processors in seconds.
 func WithRefreshingProcessorsRate(rate int64) Option {
 	return func(opts *options) {
 		opts.refreshingProcessorsRate = rate
 	}
 }
 
-// WithIsReduce sets the processor manager is for reduce.
+// WithIsReduce to indicate if the vertex is reduce.
 func WithIsReduce(isReduce bool) Option {
 	return func(opts *options) {
 		opts.isReduce = isReduce
@@ -61,7 +61,7 @@ func WithVertexReplica(replica int32) Option {
 	}
 }
 
-// WithIsSource sets the vertex is source.
+// WithIsSource to indicate if the vertex is source.
 func WithIsSource(isSource bool) Option {
 	return func(opts *options) {
 		opts.isSource = isSource

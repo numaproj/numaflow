@@ -313,20 +313,20 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-// CreateWatermarkStores is used to create watermark stores for a bucket.
+// CreateWatermarkStores is used to create watermark stores.
 func (jss *jetStreamSvc) CreateWatermarkStores(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]wmstore.WatermarkStore, error) {
 	log := logging.FromContext(ctx).With("bucket", bucketName)
 	ctx = logging.WithLogger(ctx, log)
 	var wmStores []wmstore.WatermarkStore
-	fetchers := 1
+	partitions := 1
 	if isReduce {
-		fetchers = fromBufferPartitionCount
+		partitions = fromBufferPartitionCount
 	}
-	// if it's not a reduce vertex, we don't need multiple watermark fetchers. We use common fetcher among all partitions.
-	for i := 0; i < fetchers; i++ {
+	// if it's not a reduce vertex, we only need one store to store the watermark
+	for i := 0; i < partitions; i++ {
 		wmStore, err := wmstore.BuildJetStreamWatermarkStore(ctx, bucketName, jss.jsClient)
 		if err != nil {
-			return nil, fmt.Errorf("failed at new JetStream watermark store watcher, %w", err)
+			return nil, fmt.Errorf("failed to create new JetStream watermark store, %w", err)
 		}
 		wmStores = append(wmStores, wmStore)
 	}

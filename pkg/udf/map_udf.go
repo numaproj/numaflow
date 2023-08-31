@@ -62,7 +62,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	fromBuffer := u.VertexInstance.Vertex.OwnedBuffers()
 	log = log.With("protocol", "uds-grpc-map-udf")
 
-	// create readers and writers
 	var (
 		readers            []isb.BufferReader
 		writers            map[string][]isb.BufferWriter
@@ -75,6 +74,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
 
+	// create readers and writers
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		readers, writers, err = buildRedisBufferIO(ctx, u.VertexInstance)
