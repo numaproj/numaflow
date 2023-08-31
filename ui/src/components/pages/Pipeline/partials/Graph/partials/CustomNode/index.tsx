@@ -6,7 +6,7 @@ import { GetNodeInfoValueComponent } from "./partials/NodeLabelInfo";
 import "reactflow/dist/style.css";
 import "./style.css";
 
-const getColor = (nodeType) => {
+const getColor = (nodeType: string) => {
   return nodeType === "source"
     ? "#34BFFF"
     : nodeType === "udf"
@@ -14,7 +14,7 @@ const getColor = (nodeType) => {
     : "#82A9C9";
 };
 
-const getBorderColor = (nodeType) => {
+const getBorderColor = (nodeType: string) => {
   return nodeType === "source"
     ? "#2382ad"
     : nodeType === "udf"
@@ -89,6 +89,7 @@ const CustomNode: FC<NodeProps> = ({
           {(data?.type === "udf" || data?.type === "sink") && (
             <Handle
               type="target"
+              id="0"
               position={targetPosition}
               isConnectable={isConnectable}
             />
@@ -96,9 +97,36 @@ const CustomNode: FC<NodeProps> = ({
           {(data?.type === "source" || data?.type === "udf") && (
             <Handle
               type="source"
+              id="0"
               position={sourcePosition}
               isConnectable={isConnectable}
             />
+          )}
+          {data?.centerSourceHandle && (
+            <Handle type="source" id="1" position={Position.Top} />
+          )}
+          {data?.centerTargetHandle && (
+            <Handle type="target" id="1" position={Position.Top} />
+          )}
+          {data?.quadHandle && (
+            <>
+              <Handle
+                type="source"
+                id="2"
+                position={Position.Top}
+                style={{
+                  left: "75%",
+                }}
+              />
+              <Handle
+                type="target"
+                id="2"
+                position={Position.Top}
+                style={{
+                  left: "25%",
+                }}
+              />
+            </>
           )}
         </div>
       </Tooltip>

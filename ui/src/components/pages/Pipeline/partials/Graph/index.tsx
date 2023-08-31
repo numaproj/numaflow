@@ -26,8 +26,8 @@ import { GraphProps } from "../../../../../types/declarations/graph";
 import "reactflow/dist/style.css";
 import "./style.css";
 
-const nodeWidth = 172;
-const nodeHeight = 36;
+const nodeWidth = 230;
+const nodeHeight = 48;
 const graphDirection = "LR";
 
 const defaultNodeTypes: NodeTypes = {
