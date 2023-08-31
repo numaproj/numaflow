@@ -92,8 +92,8 @@ func TestSideInputsValueUpdates(t *testing.T) {
 	}
 
 	bucketName := keyspace
-	sideInputWatcher, _ := jetstream.NewKVJetStreamKVWatch(ctx, bucketName, nc)
-	go startSideInputSynchronizer(ctx, sideInputWatcher, mountPath)
+	sideInputStore, _ := jetstream.NewKVJetStreamKVStore(ctx, bucketName, nc)
+	go startSideInputSynchronizer(ctx, sideInputStore, mountPath)
 	for x := range sideInputs {
 		_, err = kv.Put(sideInputs[x], []byte(dataTest[x]))
 		if err != nil {

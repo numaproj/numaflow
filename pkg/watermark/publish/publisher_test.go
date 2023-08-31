@@ -27,7 +27,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
@@ -64,7 +64,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 	assert.NoError(t, err)
 	defer deleteFn()
 
-	publishEntity := processor.NewProcessorEntity("publisherTestPod1")
+	publishEntity := entity.NewProcessorEntity("publisherTestPod1")
 
 	wmstore, err := store.BuildJetStreamWatermarkStore(ctx, keyspace, defaultJetStreamClient)
 	assert.NoError(t, err)

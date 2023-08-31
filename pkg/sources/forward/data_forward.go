@@ -32,8 +32,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -554,7 +554,7 @@ func (isdf *DataForward) createToVertexWatermarkPublisher(toVertexName string, p
 
 	wmStore := isdf.toVertexWMStores[toVertexName]
 	entityName := fmt.Sprintf("%s-%s-%d", isdf.pipelineName, isdf.vertexName, partition)
-	processorEntity := processor.NewProcessorEntity(entityName)
+	processorEntity := entity.NewProcessorEntity(entityName)
 
 	publisher := publish.NewPublish(isdf.ctx, processorEntity, wmStore, int32(len(isdf.toBuffers[toVertexName])))
 	isdf.toVertexWMPublishers[toVertexName][partition] = publisher

@@ -14,26 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package processor
+package fetch
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 )
 
-func TestOptions(t *testing.T) {
-	testOpts := []ProcessorManagerOption{
-		WithPodHeartbeatRate(10),
-		WithRefreshingProcessorsRate(15),
-	}
-	opts := &processorManagerOptions{
-		podHeartbeatRate:         5,
-		refreshingProcessorsRate: 5,
-	}
-	for _, opt := range testOpts {
-		opt(opts)
-	}
-	assert.Equal(t, int64(10), opts.podHeartbeatRate)
-	assert.Equal(t, int64(15), opts.refreshingProcessorsRate)
+func TestFromProcessor_setStatus(t *testing.T) {
+	var ctx = context.Background()
+	p := NewProcessorToFetch(ctx, entity.NewProcessorEntity("test-pod"), 5, 1)
+	p.setStatus(_inactive)
+	assert.Equal(t, _inactive, p.status)
 }

@@ -14,22 +14,32 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package processor
+package entity
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-func TestProcessorHeartbeat(t *testing.T) {
-	hb := NewProcessorHeartbeat()
-	hb.Put("pod1", 1)
-	assert.Equal(t, int64(1), hb.Get("pod1"))
-	hb.Put("pod1", 5)
-	assert.Equal(t, int64(5), hb.Get("pod1"))
-	hb.Put("pod2", 6)
-	assert.Equal(t, map[string]int64{"pod1": int64(5), "pod2": int64(6)}, hb.GetAll())
-	hb.Delete("pod1")
-	assert.Equal(t, map[string]int64{"pod2": int64(6)}, hb.GetAll())
+func TestEntity(t *testing.T) {
+	e := NewProcessorEntity("pod0")
+	assert.Equal(t, "pod0", e.GetName())
+}
+
+func ExampleWatermark_String() {
+	location, _ := time.LoadLocation("UTC")
+	wm := wmb.Watermark(time.Unix(1651129200, 0).In(location))
+	fmt.Println(wm)
+	// output:
+	// 2022-04-28T07:00:00Z
+}
+
+func TestExampleWatermarkUnix(t *testing.T) {
+	wm := wmb.Watermark(time.UnixMilli(1651129200000))
+	assert.Equal(t, int64(1651129200000), wm.UnixMilli())
 }

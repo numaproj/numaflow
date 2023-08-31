@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package processor
+package fetch
 
-type processorManagerOptions struct {
+type options struct {
 	// podHeartbeatRate uses second as time unit
 	podHeartbeatRate int64
 	// refreshingProcessorsRate uses second as time unit
@@ -30,40 +30,40 @@ type processorManagerOptions struct {
 	isSource bool
 }
 
-// ProcessorManagerOption set options for FromVertex.
-type ProcessorManagerOption func(*processorManagerOptions)
+// Option set options for FromVertex.
+type Option func(options *options)
 
 // WithPodHeartbeatRate sets the heartbeat rate in seconds.
-func WithPodHeartbeatRate(rate int64) ProcessorManagerOption {
-	return func(opts *processorManagerOptions) {
+func WithPodHeartbeatRate(rate int64) Option {
+	return func(opts *options) {
 		opts.podHeartbeatRate = rate
 	}
 }
 
-// WithRefreshingProcessorsRate sets the processor refreshing rate in seconds.
-func WithRefreshingProcessorsRate(rate int64) ProcessorManagerOption {
-	return func(opts *processorManagerOptions) {
+// WithRefreshingProcessorsRate to set the rate of refreshing processors in seconds.
+func WithRefreshingProcessorsRate(rate int64) Option {
+	return func(opts *options) {
 		opts.refreshingProcessorsRate = rate
 	}
 }
 
-// WithIsReduce sets the processor manager is for reduce.
-func WithIsReduce(isReduce bool) ProcessorManagerOption {
-	return func(opts *processorManagerOptions) {
+// WithIsReduce to indicate if the vertex is reduce.
+func WithIsReduce(isReduce bool) Option {
+	return func(opts *options) {
 		opts.isReduce = isReduce
 	}
 }
 
 // WithVertexReplica sets the vertex replica.
-func WithVertexReplica(replica int32) ProcessorManagerOption {
-	return func(opts *processorManagerOptions) {
+func WithVertexReplica(replica int32) Option {
+	return func(opts *options) {
 		opts.vertexReplica = replica
 	}
 }
 
-// WithIsSource sets the vertex is source.
-func WithIsSource(isSource bool) ProcessorManagerOption {
-	return func(opts *processorManagerOptions) {
+// WithIsSource to indicate if the vertex is source.
+func WithIsSource(isSource bool) Option {
+	return func(opts *options) {
 		opts.isSource = isSource
 	}
 }

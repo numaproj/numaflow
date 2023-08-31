@@ -26,7 +26,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -55,13 +54,13 @@ type SinkProcessor struct {
 
 func (u *SinkProcessor) Start(ctx context.Context) error {
 	var (
-		readers           []isb.BufferReader
-		natsClientPool    *jsclient.ClientPool
-		err               error
-		processorManagers map[string]*processor.ProcessorManager
-		wmStores          map[string]store.WatermarkStore
-		sdkClient         sinkclient.Client
-		sinkHandler       *udsink.UDSgRPCBasedUDSink
+		readers            []isb.BufferReader
+		natsClientPool     *jsclient.ClientPool
+		err                error
+		fromVertexWmStores map[string]store.WatermarkStore
+		sinkWmStores       map[string]store.WatermarkStore
+		sdkClient          sinkclient.Client
+		sinkHandler        *udsink.UDSgRPCBasedUDSink
 	)
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
@@ -114,23 +113,23 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			names := []string{u.VertexInstance.Vertex.Spec.Name}
 			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
 		} else {
-			// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
-			processorManagers, err = jetstream.BuildProcessorManagers(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			// build from vertex watermark stores
+			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
-				return fmt.Errorf("failed to build processor manager: %w", err)
+				return fmt.Errorf("failed to from vertex watermark stores: %w", err)
 			}
 
-			// create watermark fetcher using processor managers
-			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, processorManagers)
+			// create watermark fetcher using watermark stores
+			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, fromVertexWmStores)
 
 			// create watermark stores
-			wmStores, err = jetstream.BuildToVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			sinkWmStores, err = jetstream.BuildToVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to to vertex watermark stores: %w", err)
 			}
 
 			// create watermark publisher using watermark stores
-			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, wmStores)
+			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, sinkWmStores)
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", u.ISBSvcType)
@@ -200,11 +199,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	// wait for all the sinkers to exit
 	finalWg.Wait()
 
-	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
-	for _, pm := range processorManagers {
-		pm.Close()
-	}
-
 	// closing the publisher will only delete the keys from the store, but not the store itself
 	// we cannot close the store inside publisher because in some cases stores are shared between publishers
 	// and store itself is a separate entity that can be used by other components
@@ -215,9 +209,15 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	// close the wm stores, since the publisher and fetcher are closed
+	// close the from vertex wm stores
 	// since we created the stores, we can close them
-	for _, wmStore := range wmStores {
+	for _, wmStore := range fromVertexWmStores {
+		_ = wmStore.Close()
+	}
+
+	// close the sink wm stores
+	// since we created the stores, we can close them
+	for _, wmStore := range sinkWmStores {
 		_ = wmStore.Close()
 	}
 

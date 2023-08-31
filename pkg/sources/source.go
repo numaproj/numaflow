@@ -48,7 +48,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
@@ -60,7 +59,7 @@ type SourceProcessor struct {
 func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var (
 		sourcePublisherStores, _ = store.BuildNoOpWatermarkStore()
-		processorManagers        map[string]*processor.ProcessorManager
+		sourceWmStores           = make(map[string]store.WatermarkStore)
 		toVertexWatermarkStores  = make(map[string]store.WatermarkStore)
 		log                      = logging.FromContext(ctx)
 		writersMap               = make(map[string][]isb.BufferWriter)
@@ -71,11 +70,14 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	// create a new NATS client pool
 	natsClientPool, err := jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(2))
 	if err != nil {
 		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
 	}
 	defer natsClientPool.CloseAll()
+
 	// watermark variables no-op initialization
 	// create a no op fetcher
 	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToBuffers())
@@ -109,22 +111,22 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			writersMap[e.To] = bufferWriters
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		// build processor manager which will keep track of all the processors using heartbeat and updates their offset timelines
-		processorManagers, err = jetstream.BuildProcessorManagers(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
+		// build watermark stores for from vertex
+		sourceWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
-			return fmt.Errorf("failed to build processor manager: %w", err)
+			return fmt.Errorf("failed to build watermark stores: %w", err)
 		}
 
-		// create watermark fetcher using processor managers
-		fetchWatermark = fetch.NewSourceFetcher(ctx, processorManagers[sp.VertexInstance.Vertex.Name])
+		// create watermark fetcher using watermark stores of from vertex
+		fetchWatermark = fetch.NewSourceFetcher(ctx, sourceWmStores[sp.VertexInstance.Vertex.Name], fetch.WithIsSource(true))
 
-		// build publisher stores for to vertex
+		// build watermark stores for to-vertex
 		toVertexWatermarkStores, err = jetstream.BuildToVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
 			return err
 		}
 
-		// build publisher stores for source (we publish twice for source)
+		// build watermark stores for source (we publish twice for source)
 		sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
 			return err
@@ -249,12 +251,12 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	sourcer.Stop()
 	wg.Wait()
 
-	// stop the processor managers, it will stop watching heartbeat and offset timeline updates
-	for _, pm := range processorManagers {
-		pm.Close()
+	// close all the source wm stores
+	for _, wmStore := range sourceWmStores {
+		_ = wmStore.Close()
 	}
 
-	// close all the to vertex stores
+	// close all the to vertex wm stores
 	for _, ws := range toVertexWatermarkStores {
 		_ = ws.Close()
 	}
