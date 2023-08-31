@@ -56,11 +56,11 @@ func (k kvEntry) Operation() kvs.KVWatchOp {
 
 // inMemStore implements the watermark's KV store backed up by in mem store.
 type inMemStore struct {
-	bucketName   string
-	kv           map[string][]byte
-	lock         sync.RWMutex
-	// kvHistory is an ever an growing list of histories 
-	kvHistory    []kvs.KVEntry
+	bucketName string
+	kv         map[string][]byte
+	lock       sync.RWMutex
+	// kvHistory is an ever an growing list of histories
+	kvHistory []kvs.KVEntry
 	// updatesChMap is a map of channels where updates are published
 	updatesChMap map[string]chan kvs.KVEntry
 	isClosed     bool
