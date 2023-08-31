@@ -331,11 +331,10 @@ func TestWriteToBuffer(t *testing.T) {
 			}()
 
 			// try to write to buffer after it is full.
-			var messageToStep = make(map[string][][]isb.Message)
-			messageToStep["to1"] = make([][]isb.Message, 1)
+			var messageToStep []isb.Message
 			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
-			messageToStep["to1"][0] = append(messageToStep["to1"][0], writeMessages[0:value.batchSize+1]...)
-			_, err = f.writeToBuffers(ctx, messageToStep)
+			messageToStep = append(messageToStep, writeMessages[0:value.batchSize+1]...)
+			_, err = f.writeToBuffer(ctx, buffer, messageToStep)
 
 			assert.Equal(t, value.throwError, err != nil)
 			if value.throwError {
