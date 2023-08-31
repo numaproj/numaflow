@@ -52,7 +52,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewToLog(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
+	publishWatermark publish.Publisher,
 	opts ...Option) (*ToLog, error) {
 
 	toLog := new(ToLog)
@@ -76,7 +76,7 @@ func NewToLog(vertex *dfv1.Vertex,
 		}
 	}
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, toLog, fetchWatermark, publishWatermark[vertex.Spec.Name], forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, toLog, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

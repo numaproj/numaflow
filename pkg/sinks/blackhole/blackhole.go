@@ -51,7 +51,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewBlackhole(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
+	publishWatermark publish.Publisher,
 	opts ...Option) (*Blackhole, error) {
 
 	bh := new(Blackhole)
@@ -75,7 +75,7 @@ func NewBlackhole(vertex *dfv1.Vertex,
 		}
 	}
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, bh, fetchWatermark, publishWatermark[vertex.Spec.Name], forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, bh, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

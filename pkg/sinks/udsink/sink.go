@@ -54,7 +54,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewUserDefinedSink(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
+	publishWatermark publish.Publisher,
 	udsink SinkApplier,
 	opts ...Option) (*UserDefinedSink, error) {
 
@@ -79,7 +79,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	}
 	s.udsink = udsink
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark[vertex.Spec.Name], forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
