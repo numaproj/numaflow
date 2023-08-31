@@ -120,7 +120,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		// create watermark fetcher using watermark stores of from vertex
 		fetchWatermark = fetch.NewSourceFetcher(ctx, sourceWmStores[sp.VertexInstance.Vertex.Name], fetch.WithIsSource(true))
 
-		// build watermark stores for to vertex
+		// build watermark stores for to-vertex
 		toVertexWatermarkStores, err = jetstream.BuildToVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 		if err != nil {
 			return err

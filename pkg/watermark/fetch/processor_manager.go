@@ -89,6 +89,7 @@ func newProcessorManager(ctx context.Context, wmStore store.WatermarkStore, from
 	return v
 }
 
+// init initializes few go-routines which exit on ctx.Done.
 func (v *processorManager) init() {
 	// start refreshing processors goroutine
 	go v.startRefreshingProcessors()

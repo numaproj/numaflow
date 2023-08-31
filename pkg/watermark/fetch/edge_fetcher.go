@@ -45,7 +45,7 @@ type edgeFetcher struct {
 	sync.RWMutex
 }
 
-// NewEdgeFetcher returns a new edge fetcher.
+// NewEdgeFetcher returns a new edge fetcher. This could have been private, except that UI uses it.
 func NewEdgeFetcher(ctx context.Context, wmStore store.WatermarkStore, fromBufferPartitionCount int, opts ...Option) *edgeFetcher {
 	log := logging.FromContext(ctx)
 	log.Info("Creating a new edge watermark fetcher")
