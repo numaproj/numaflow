@@ -59,7 +59,9 @@ type inMemStore struct {
 	bucketName   string
 	kv           map[string][]byte
 	lock         sync.RWMutex
+	// kvHistory is an ever an growing list of histories 
 	kvHistory    []kvs.KVEntry
+	// updatesChMap is a map of channels where updates are published
 	updatesChMap map[string]chan kvs.KVEntry
 	isClosed     bool
 	doneCh       chan struct{}
@@ -159,7 +161,7 @@ func (kv *inMemStore) PutKV(_ context.Context, k string, v []byte) error {
 	return nil
 }
 
-// Watch watches the key-value store.
+// Watch watches the key-value store and returns the "updates channel" and a done channel.
 func (kv *inMemStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan struct{}) {
 	// create a new updates channel and fill in the history
 	var id = util.RandomString(10)
@@ -186,8 +188,8 @@ func (kv *inMemStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan str
 				kv.log.Infow("stopping watching", zap.String("watcher", kv.bucketName))
 				kv.lock.Lock()
 				delete(kv.updatesChMap, id)
-				close(updates)
 				kv.lock.Unlock()
+				close(updates)
 				close(stopped)
 				return
 			case <-kv.doneCh:

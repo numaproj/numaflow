@@ -155,7 +155,7 @@ func (jss *jetStreamStore) GetKVName() string {
 	return jss.kvName
 }
 
-// Watch watches the key-value store (aka bucket).
+// Watch watches the key-value store (aka bucket) and returns the updates channel and done channel.
 func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan struct{}) {
 	var err error
 	// create a new watcher, it will keep retrying until the context is done
