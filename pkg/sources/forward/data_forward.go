@@ -20,20 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -53,7 +51,7 @@ type DataForward struct {
 	// toBuffers store the toVertex name to its owned buffers mapping.
 	toBuffers          map[string][]isb.BufferWriter
 	toWhichStepDecider forward.ToWhichStepDecider
-	transformer        applier.MapApplier
+	transformer        applier.SourceTransformApplier
 	wmFetcher          fetch.Fetcher
 	toVertexWMStores   map[string]store.WatermarkStore
 	// toVertexWMPublishers stores the toVertex to publisher mapping.
@@ -74,7 +72,7 @@ func NewDataForward(
 	fromStep isb.BufferReader,
 	toSteps map[string][]isb.BufferWriter,
 	toWhichStepDecider forward.ToWhichStepDecider,
-	transformer applier.MapApplier,
+	transformer applier.SourceTransformApplier,
 	fetchWatermark fetch.Fetcher,
 	srcWMPublisher isb.SourceWatermarkPublisher,
 	toVertexWmStores map[string]store.WatermarkStore,
@@ -166,7 +164,7 @@ func (isdf *DataForward) Start() <-chan struct{} {
 			}
 		}
 
-		// publisher was created by the forwarder, so it should be closed by the forwarder.
+		// the publisher was created by the forwarder, so it should be closed by the forwarder.
 		for _, toVertexPublishers := range isdf.toVertexWMPublishers {
 			for _, pub := range toVertexPublishers {
 				if err := pub.Close(); err != nil {
@@ -374,7 +372,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 
 	// when we apply transformer, we don't handle partial errors (it's either non or all, non will return early),
 	// so we should be able to ack all the readOffsets including data messages and control messages
-	err = isdf.ackFromBuffer(ctx, readOffsets)
+	err = isdf.ackFromSource(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
 		isdf.opts.logger.Errorw("failed to ack from source", zap.Error(err))
@@ -387,54 +385,11 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	forwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.reader.GetName()}).Observe(float64(time.Since(start).Microseconds()))
 }
 
-// ackFromBuffer acknowledges an array of offsets back to the reader
-// and is a blocking call or until shutdown has been initiated.
-func (isdf *DataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) error {
-	var ackRetryBackOff = wait.Backoff{
-		Factor:   1,
-		Jitter:   0.1,
-		Steps:    math.MaxInt,
-		Duration: time.Millisecond * 10,
-	}
-	var ackOffsets = offsets
-	attempt := 0
-
-	ctxClosedErr := wait.ExponentialBackoff(ackRetryBackOff, func() (done bool, err error) {
-		errs := isdf.reader.Ack(ctx, ackOffsets)
-		attempt += 1
-		summarizedErr := errorArrayToMap(errs)
-		var failedOffsets []isb.Offset
-		if len(summarizedErr) > 0 {
-			isdf.opts.logger.Errorw("Failed to ack from buffer, retrying", zap.Any("errors", summarizedErr), zap.Int("attempt", attempt))
-			// no point retrying if ctx.Done has been invoked
-			select {
-			case <-ctx.Done():
-				// no point in retrying after we have been asked to stop.
-				return false, ctx.Err()
-			default:
-				// retry only the failed offsets
-				for i, offset := range ackOffsets {
-					if errs[i] != nil {
-						failedOffsets = append(failedOffsets, offset)
-					}
-				}
-				ackOffsets = failedOffsets
-				if ok, _ := isdf.IsShuttingDown(); ok {
-					ackErr := fmt.Errorf("AckFromBuffer, Stop called while stuck on an internal error, %v", summarizedErr)
-					return false, ackErr
-				}
-				return false, nil
-			}
-		} else {
-			return true, nil
-		}
-	})
-
-	if ctxClosedErr != nil {
-		isdf.opts.logger.Errorw("Context closed while waiting to ack messages inside forward", zap.Error(ctxClosedErr))
-	}
-
-	return ctxClosedErr
+func (isdf *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {
+	// for all the sources, we either ack all offsets or none.
+	// when a batch ack fails, the source Ack() function populate the error array with the same error;
+	// hence we can just return the first error.
+	return isdf.reader.Ack(ctx, offsets)[0]
 }
 
 // writeToBuffers is a blocking call until all the messages have been forwarded to all the toBuffers, or a shutdown
@@ -543,7 +498,7 @@ func (isdf *DataForward) concurrentApplyTransformer(ctx context.Context, readMes
 // The UserError retry will be done on the applyTransformer.
 func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
-		writeMessages, err := isdf.transformer.ApplyMap(ctx, readMessage)
+		writeMessages, err := isdf.transformer.ApplyTransform(ctx, readMessage)
 		if err != nil {
 			isdf.opts.logger.Errorw("Transformer.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.

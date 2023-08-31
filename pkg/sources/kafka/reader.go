@@ -27,12 +27,12 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -42,7 +42,7 @@ import (
 
 type KafkaSource struct {
 	// name of the source vertex
-	name string
+	vertexName string
 	// name of the pipeline
 	pipelineName string
 	// group name for the source vertex
@@ -54,19 +54,19 @@ type KafkaSource struct {
 	// forwarder that writes the consumed data to destination
 	forwarder *sourceforward.DataForward
 	// context cancel function
-	cancelfn context.CancelFunc
+	cancelFn context.CancelFunc
 	// lifecycle context
-	lifecyclectx context.Context
-	// consumergroup handler for kafka consumer group
+	lifecycleCtx context.Context
+	// handler for a kafka consumer group
 	handler *consumerHandler
 	// sarama config for kafka consumer group
 	config *sarama.Config
 	// logger
 	logger *zap.SugaredLogger
-	// channel to inidcate that we are done
-	stopch chan struct{}
+	// channel to indicate that we are done
+	stopCh chan struct{}
 	// size of the buffer that holds consumed but yet to be forwarded messages
-	handlerbuffer int
+	handlerBuffer int
 	// read timeout for the from buffer
 	readTimeout time.Duration
 	// client used to calculate pending messages
@@ -129,7 +129,7 @@ func WithLogger(l *zap.SugaredLogger) Option {
 // WithBufferSize is used to return size of message channel information
 func WithBufferSize(s int) Option {
 	return func(o *KafkaSource) error {
-		o.handlerbuffer = s
+		o.handlerBuffer = s
 		return nil
 	}
 }
@@ -151,7 +151,7 @@ func WithGroupName(gn string) Option {
 }
 
 func (r *KafkaSource) GetName() string {
-	return r.name
+	return r.vertexName
 }
 
 // GetPartitionIdx returns the partition number for the source vertex buffer
@@ -167,7 +167,7 @@ loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-r.handler.messages:
-			kafkaSourceReadCount.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
+			kafkaSourceReadCount.With(map[string]string{metrics.LabelVertex: r.vertexName, metrics.LabelPipeline: r.pipelineName}).Inc()
 			msgs = append(msgs, toReadMessage(m))
 		case <-timeout:
 			// log that timeout has happened and don't return an error
@@ -189,7 +189,7 @@ func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 	for p, t := range oldestTimestamps {
 		publisher := r.loadSourceWatermarkPublisher(p)
-		// toVertexPartitionIdx is 0 because we publish watermarks within source itself.
+		// toVertexPartitionIdx is 0 because we publish watermarks within the source itself.
 		publisher.PublishWatermark(wmb.Watermark(t), nil, 0) // Source publisher does not care about the offset
 	}
 }
@@ -201,10 +201,10 @@ func (r *KafkaSource) loadSourceWatermarkPublisher(partitionID int32) publish.Pu
 	if p, ok := r.sourcePublishWMs[partitionID]; ok {
 		return p
 	}
-	entityName := fmt.Sprintf("%s-%s-%d", r.pipelineName, r.name, partitionID)
+	entityName := fmt.Sprintf("%s-%s-%d", r.pipelineName, r.vertexName, partitionID)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
-	sourcePublishWM := publish.NewPublish(r.lifecyclectx, processorEntity, r.srcPublishWMStores, 1, publish.IsSource(), publish.WithDelay(r.watermarkMaxDelay))
+	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
+	sourcePublishWM := publish.NewPublish(r.lifecycleCtx, processorEntity, r.srcPublishWMStores, 1, publish.IsSource(), publish.WithDelay(r.watermarkMaxDelay))
 	r.sourcePublishWMs[partitionID] = sourcePublishWM
 	return sourcePublishWM
 }
@@ -221,12 +221,12 @@ func (r *KafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 		// we need to mark the offset of the next message to read
 		pOffset, err := offset.Sequence()
 		if err != nil {
-			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
-			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("suppliedoffset", offset.String()), zap.Error(err))
+			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: r.vertexName, metrics.LabelPipeline: r.pipelineName}).Inc()
+			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("supplied-offset", offset.String()), zap.Error(err))
 			continue
 		}
 		r.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset, "")
-		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: r.name, metrics.LabelPipeline: r.pipelineName}).Inc()
+		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: r.vertexName, metrics.LabelPipeline: r.pipelineName}).Inc()
 
 	}
 	// How come it does not return errors at all?
@@ -277,19 +277,19 @@ func (r *KafkaSource) ForceStop() {
 func (r *KafkaSource) Close() error {
 	r.logger.Info("Closing kafka reader...")
 	// finally, shut down the client
-	r.cancelfn()
+	r.cancelFn()
 	if r.adminClient != nil {
 		// closes the underlying sarama client as well.
 		if err := r.adminClient.Close(); err != nil {
 			r.logger.Errorw("Error in closing kafka admin client", zap.Error(err))
 		}
 	}
-	<-r.stopch
+	<-r.stopCh
 	r.logger.Info("Kafka reader closed")
 	return nil
 }
 
-func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
+func (r *KafkaSource) Pending(_ context.Context) (int64, error) {
 	if r.adminClient == nil || r.saramaClient == nil {
 		return isb.PendingNotAvailable, nil
 	}
@@ -320,40 +320,39 @@ func (r *KafkaSource) Pending(ctx context.Context) (int64, error) {
 		}
 		totalPending += partitionOffset - block.Offset
 	}
-	kafkaPending.WithLabelValues(r.name, r.pipelineName, r.topic, r.groupName).Set(float64(totalPending))
+	kafkaPending.WithLabelValues(r.vertexName, r.pipelineName, r.topic, r.groupName).Set(float64(totalPending))
 	return totalPending, nil
 }
 
-// NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group .
+// NewKafkaSource returns a KafkaSource reader based on Kafka Consumer Group.
 func NewKafkaSource(
 	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier applier.MapApplier,
+	transformerApplier applier.SourceTransformApplier,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	opts ...Option) (*KafkaSource, error) {
 
 	source := vertexInstance.Vertex.Spec.Source.Kafka
-	kafkasource := &KafkaSource{
-		name:               vertexInstance.Vertex.Spec.Name,
+	kafkaSource := &KafkaSource{
+		vertexName:         vertexInstance.Vertex.Spec.Name,
 		pipelineName:       vertexInstance.Vertex.Spec.PipelineName,
 		topic:              source.Topic,
 		brokers:            source.Brokers,
 		readTimeout:        1 * time.Second, // default timeout
-		handlerbuffer:      100,             // default buffer size for kafka reads
+		handlerBuffer:      100,             // default buffer size for kafka reads
 		srcPublishWMStores: publishWMStores,
-		sourcePublishWMs:   make(map[int32]publish.Publisher, 0),
+		sourcePublishWMs:   make(map[int32]publish.Publisher),
 		watermarkMaxDelay:  vertexInstance.Vertex.Spec.Watermark.GetMaxDelay(),
 		lock:               new(sync.RWMutex),
 		logger:             logging.NewLogger(), // default logger
 	}
 
 	for _, o := range opts {
-		operr := o(kafkasource)
-		if operr != nil {
-			return nil, operr
+		if err := o(kafkaSource); err != nil {
+			return nil, err
 		}
 	}
 
@@ -380,34 +379,34 @@ func NewKafkaSource(
 		}
 	}
 
-	sarama.Logger = zap.NewStdLog(kafkasource.logger.Desugar())
+	sarama.Logger = zap.NewStdLog(kafkaSource.logger.Desugar())
 
 	// return errors from the underlying kafka client using the Errors channel
 	config.Consumer.Return.Errors = true
-	kafkasource.config = config
+	kafkaSource.config = config
 
 	ctx, cancel := context.WithCancel(context.Background())
-	kafkasource.cancelfn = cancel
-	kafkasource.lifecyclectx = ctx
+	kafkaSource.cancelFn = cancel
+	kafkaSource.lifecycleCtx = ctx
 
-	kafkasource.stopch = make(chan struct{})
+	kafkaSource.stopCh = make(chan struct{})
 
-	handler := newConsumerHandler(kafkasource.handlerbuffer)
-	kafkasource.handler = handler
+	handler := newConsumerHandler(kafkaSource.handlerBuffer)
+	kafkaSource.handler = handler
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(kafkasource.logger)}
+	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(kafkaSource.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkasource, writers, fsd, mapApplier, fetchWM, kafkasource, toVertexPublisherStores, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkaSource, writers, fsd, transformerApplier, fetchWM, kafkaSource, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
-		kafkasource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
+		kafkaSource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
-	kafkasource.forwarder = forwarder
-	return kafkasource, nil
+	kafkaSource.forwarder = forwarder
+	return kafkaSource, nil
 }
 
 // refreshAdminClient refreshes the admin client
@@ -416,7 +415,8 @@ func (r *KafkaSource) refreshAdminClient() error {
 		return fmt.Errorf("failed to refresh controller, %w", err)
 	}
 	// we are not closing the old admin client because it will close the underlying sarama client as well
-	// it is safe to not close the admin client, since we are using the same sarama client we will not leak any resources(tcp connections)
+	// it is safe to not close the admin client,
+	// since we are using the same sarama client, we will not leak any resources(tcp connections)
 	admin, err := sarama.NewClusterAdminFromClient(r.saramaClient)
 	if err != nil {
 		return fmt.Errorf("failed to create new admin client, %w", err)
@@ -425,8 +425,8 @@ func (r *KafkaSource) refreshAdminClient() error {
 	return nil
 }
 
-func configFromOpts(yamlconfig string) (*sarama.Config, error) {
-	config, err := sharedutil.GetSaramaConfigFromYAMLString(yamlconfig)
+func configFromOpts(yamlConfig string) (*sarama.Config, error) {
+	config, err := sharedutil.GetSaramaConfigFromYAMLString(yamlConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +447,7 @@ func (r *KafkaSource) startConsumer() {
 		defer wg.Done()
 		for {
 			select {
-			case <-r.lifecyclectx.Done():
+			case <-r.lifecycleCtx.Done():
 				return
 			case cErr := <-client.Errors():
 				r.logger.Errorw("Kafka consumer error", zap.Error(cErr))
@@ -459,22 +459,22 @@ func (r *KafkaSource) startConsumer() {
 	go func() {
 		defer wg.Done()
 		for {
-			// `Consume` should be called inside an infinite loop, when a
-			// server-side rebalance happens, the consumer session will need to be
+			// `Consume` should be called inside an infinite loop; when a
+			// server-side re-balance happens, the consumer session will need to be
 			// recreated to get the new claims
-			if conErr := client.Consume(r.lifecyclectx, []string{r.topic}, r.handler); conErr != nil {
+			if conErr := client.Consume(r.lifecycleCtx, []string{r.topic}, r.handler); conErr != nil {
 				// Panic on errors to let it crash and restart the process
 				r.logger.Panicw("Kafka consumer failed with error: ", zap.Error(conErr))
 			}
 			// check if context was cancelled, signaling that the consumer should stop
-			if r.lifecyclectx.Err() != nil {
+			if r.lifecycleCtx.Err() != nil {
 				return
 			}
 		}
 	}()
 	wg.Wait()
 	_ = client.Close()
-	close(r.stopch)
+	close(r.stopCh)
 }
 
 func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {

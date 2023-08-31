@@ -1036,6 +1036,7 @@ message Scale {
   // +optional
   optional uint32 lookbackSeconds = 4;
 
+  // Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead.
   // Cooldown seconds after a scaling operation before another one.
   // +optional
   optional uint32 cooldownSeconds = 5;
@@ -1054,12 +1055,22 @@ message Scale {
   // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
   // It only applies to UDF and Sink vertices because only they have buffers to read.
   // +optional
-  optional uint32 targetBufferAvailability = 10;
+  optional uint32 targetBufferAvailability = 8;
 
   // ReplicasPerScale defines maximum replicas can be scaled up or down at once.
   // The is use to prevent too aggressive scaling operations
   // +optional
   optional uint32 replicasPerScale = 9;
+
+  // ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up.
+  // It defaults to the CooldownSeconds if not set.
+  // +optional
+  optional uint32 scaleUpCooldownSeconds = 10;
+
+  // ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down.
+  // It defaults to the CooldownSeconds if not set.
+  // +optional
+  optional uint32 scaleDownCooldownSeconds = 11;
 }
 
 // SideInput defines information of a Side Input

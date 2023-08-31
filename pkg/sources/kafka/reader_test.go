@@ -23,10 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
@@ -68,7 +68,7 @@ func TestNewKafkasource(t *testing.T) {
 
 	// config is all set and initialized correctly
 	assert.NotNil(t, ks.config)
-	assert.Equal(t, 100, ks.handlerbuffer)
+	assert.Equal(t, 100, ks.handlerBuffer)
 	assert.Equal(t, 100*time.Millisecond, ks.readTimeout)
 	assert.Equal(t, 100, cap(ks.handler.messages))
 	assert.NotNil(t, ks.forwarder)
@@ -136,7 +136,7 @@ func TestDefaultBufferSize(t *testing.T) {
 	}
 	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, WithLogger(logging.NewLogger()), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
-	assert.Equal(t, 100, ks.handlerbuffer)
+	assert.Equal(t, 100, ks.handlerBuffer)
 
 }
 
@@ -169,6 +169,6 @@ func TestBufferSizeOverrides(t *testing.T) {
 	}
 	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, WithLogger(logging.NewLogger()), WithBufferSize(110), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
-	assert.Equal(t, 110, ks.handlerbuffer)
+	assert.Equal(t, 110, ks.handlerBuffer)
 
 }

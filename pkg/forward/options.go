@@ -29,7 +29,7 @@ import (
 type options struct {
 	// readBatchSize is the default batch size
 	readBatchSize int64
-	// udfConcurrency sets the concurrency for concurrent UDF processing
+	// udfConcurrency sets the concurrency for concurrent map UDF processing
 	udfConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
@@ -37,7 +37,7 @@ type options struct {
 	vertexType dfv1.VertexType
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
-	// enableMapUdfStream indicates whether the message streaming is enabled or not for UDF processing
+	// enableMapUdfStream indicates whether the message streaming is enabled or not for map UDF processing
 	enableMapUdfStream bool
 }
 
@@ -69,7 +69,7 @@ func WithReadBatchSize(f int64) Option {
 	}
 }
 
-// WithUDFConcurrency sets concurrency for UDF processing
+// WithUDFConcurrency sets concurrency for map UDF processing
 func WithUDFConcurrency(f int) Option {
 	return func(o *options) error {
 		o.udfConcurrency = f
@@ -93,7 +93,7 @@ func WithVertexType(t dfv1.VertexType) Option {
 	}
 }
 
-// WithUDFStreaming sets streaming for UDF processing
+// WithUDFStreaming sets streaming for map UDF processing
 func WithUDFStreaming(f bool) Option {
 	return func(o *options) error {
 		o.enableMapUdfStream = f

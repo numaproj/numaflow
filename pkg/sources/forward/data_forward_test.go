@@ -32,7 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	udfapplier "github.com/numaproj/numaflow/pkg/udf/function"
+	udfapplier "github.com/numaproj/numaflow/pkg/udf/rpc"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -85,12 +85,8 @@ func (f myForwardTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, 
 	}}, nil
 }
 
-func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
-}
-
-func (f myForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
 }
 
 func TestNewDataForward(t *testing.T) {
@@ -781,7 +777,7 @@ func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forwa
 // such that we can verify message IsLate attribute gets set to true.
 var testSourceNewEventTime = testSourceWatermark.Add(time.Duration(-1) * time.Minute)
 
-func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f mySourceForwardTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 		_ = ctx
 		offset := readMessage.ReadOffset
@@ -808,39 +804,6 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 		}
 		return []*isb.WriteMessage{{Message: writeMessage}}, nil
 	}(ctx, message)
-}
-
-func (f mySourceForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return func(ctx context.Context, readMessage *isb.ReadMessage, writeMessages chan<- isb.WriteMessage) error {
-		defer close(writeMessages)
-
-		_ = ctx
-		offset := readMessage.ReadOffset
-		payload := readMessage.Body.Payload
-		parentPaneInfo := readMessage.MessageInfo
-
-		// apply source data transformer
-		_ = payload
-		// copy the payload
-		result := payload
-		// assign new event time
-		parentPaneInfo.EventTime = testSourceNewEventTime
-		var key []string
-
-		writeMessage := isb.Message{
-			Header: isb.Header{
-				MessageInfo: parentPaneInfo,
-				ID:          offset.String(),
-				Keys:        key,
-			},
-			Body: isb.Body{
-				Payload: result,
-			},
-		}
-
-		writeMessages <- isb.WriteMessage{Message: writeMessage}
-		return nil
-	}(ctx, message, writeMessageCh)
 }
 
 // TestSourceWatermarkPublisher is a dummy implementation of isb.SourceWatermarkPublisher interface
@@ -1066,12 +1029,8 @@ func (f myForwardDropTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuff
 	return []forward.VertexBuffer{}, nil
 }
 
-func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardDropTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
-}
-
-func (f myForwardDropTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
 }
 
 type myForwardToAllTest struct {
@@ -1091,12 +1050,8 @@ func (f *myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBu
 	return output, nil
 }
 
-func (f *myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f *myForwardToAllTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
-}
-
-func (f myForwardToAllTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
 }
 
 type myForwardInternalErrTest struct {
@@ -1109,20 +1064,8 @@ func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]forward.Ver
 	}}, nil
 }
 
-func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardInternalErrTest) ApplyTransform(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, udfapplier.ApplyUDFErr{
-		UserUDFErr: false,
-		InternalErr: struct {
-			Flag        bool
-			MainCarDown bool
-		}{Flag: true, MainCarDown: false},
-		Message: "InternalErr test",
-	}
-}
-
-func (f myForwardInternalErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, writeMessagesCh chan<- isb.WriteMessage) error {
-	close(writeMessagesCh)
-	return udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
 			Flag        bool
@@ -1142,12 +1085,8 @@ func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]forward
 	}}, fmt.Errorf("whereToStep failed")
 }
 
-func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardApplyWhereToErrTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return testutils.CopyUDFTestApply(ctx, message)
-}
-
-func (f myForwardApplyWhereToErrTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
 }
 
 type myForwardApplyTransformerErrTest struct {
@@ -1160,13 +1099,8 @@ func (f myForwardApplyTransformerErrTest) WhereTo(_ []string, _ []string) ([]for
 	}}, nil
 }
 
-func (f myForwardApplyTransformerErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardApplyTransformerErrTest) ApplyTransform(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return nil, fmt.Errorf("transformer error")
-}
-
-func (f myForwardApplyTransformerErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, writeMessagesCh chan<- isb.WriteMessage) error {
-	close(writeMessagesCh)
-	return fmt.Errorf("transformer error")
 }
 
 func validateMetrics(batchSize int64) (err error) {

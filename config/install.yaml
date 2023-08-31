@@ -8216,6 +8216,12 @@ spec:
                         replicasPerScale:
                           format: int32
                           type: integer
+                        scaleDownCooldownSeconds:
+                          format: int32
+                          type: integer
+                        scaleUpCooldownSeconds:
+                          format: int32
+                          type: integer
                         targetBufferAvailability:
                           format: int32
                           type: integer
@@ -10040,7 +10046,7 @@ spec:
                                   type: array
                               type: object
                           type: object
-                        udSource:
+                        udsource:
                           properties:
                             container:
                               properties:
@@ -12871,6 +12877,12 @@ spec:
                   replicasPerScale:
                     format: int32
                     type: integer
+                  scaleDownCooldownSeconds:
+                    format: int32
+                    type: integer
+                  scaleUpCooldownSeconds:
+                    format: int32
+                    type: integer
                   targetBufferAvailability:
                     format: int32
                     type: integer
@@ -14695,7 +14707,7 @@ spec:
                             type: array
                         type: object
                     type: object
-                  udSource:
+                  udsource:
                     properties:
                       container:
                         properties:

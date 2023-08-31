@@ -17,3 +17,5 @@
 .Graph .controls button:first-child {
     margin-right: 10px;
 }
+
+.react-flow svg { overflow: visible; }

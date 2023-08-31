@@ -18,11 +18,12 @@ package udsink
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/sdkclient/sink/clienttest"
+	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
 
 	"github.com/golang/mock/gomock"
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
@@ -31,8 +32,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func NewMockUDSgRPCBasedUDSink(mockClient *sinkmock.MockUserDefinedSinkClient) *UDSgRPCBasedUDSink {
-	c, _ := clienttest.New(mockClient)
+func NewMockUDSgRPCBasedUDSink(mockClient *sinkmock.MockSinkClient) *UDSgRPCBasedUDSink {
+	c, _ := sinkclient.NewFromClient(mockClient)
 	return &UDSgRPCBasedUDSink{c}
 }
 
@@ -40,14 +41,14 @@ func Test_gRPCBasedUDSink_WaitUntilReadyWithMockClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
+	mockClient := sinkmock.NewMockSinkClient(ctrl)
 	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&sinkpb.ReadyResponse{Ready: true}, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			t.Log(t.Name(), "test timeout")
 		}
 	}()
@@ -63,21 +64,21 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		testDatumList := []*sinkpb.DatumRequest{
+		testDatumList := []*sinkpb.SinkRequest{
 			{
 				Id:        "test_id_0",
 				Value:     []byte(`sink_message_success`),
-				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
-				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+				EventTime: timestamppb.New(time.Unix(1661169660, 0)),
+				Watermark: timestamppb.New(time.Time{}),
 			},
 			{
 				Id:        "test_id_1",
 				Value:     []byte(`sink_message_err`),
-				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
-				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+				EventTime: timestamppb.New(time.Unix(1661169660, 0)),
+				Watermark: timestamppb.New(time.Time{}),
 			},
 		}
-		testResponseList := []*sinkpb.Response{
+		testResponseList := []*sinkpb.SinkResponse_Result{
 			{
 				Id:      "test_id_0",
 				Success: true,
@@ -90,26 +91,26 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 			},
 		}
 
-		mockSinkClient := sinkmock.NewMockUserDefinedSink_SinkFnClient(ctrl)
+		mockSinkClient := sinkmock.NewMockSink_SinkFnClient(ctrl)
 		mockSinkClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-		mockSinkClient.EXPECT().CloseAndRecv().Return(&sinkpb.ResponseList{
-			Responses: testResponseList,
+		mockSinkClient.EXPECT().CloseAndRecv().Return(&sinkpb.SinkResponse{
+			Results: testResponseList,
 		}, nil)
 
-		mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
+		mockClient := sinkmock.NewMockSinkClient(ctrl)
 		mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkClient, nil)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
 
 		u := NewMockUDSgRPCBasedUDSink(mockClient)
-		gotErrList := u.Apply(ctx, testDatumList)
+		gotErrList := u.ApplySink(ctx, testDatumList)
 		assert.Equal(t, 2, len(gotErrList))
 		assert.Equal(t, nil, gotErrList[0])
 		assert.Equal(t, fmt.Errorf("mock sink message error"), gotErrList[1])
@@ -120,38 +121,38 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		testDatumList := []*sinkpb.DatumRequest{
+		testDatumList := []*sinkpb.SinkRequest{
 			{
 				Id:        "test_id_0",
 				Value:     []byte(`sink_message_grpc_err`),
-				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
-				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+				EventTime: timestamppb.New(time.Unix(1661169660, 0)),
+				Watermark: timestamppb.New(time.Time{}),
 			},
 			{
 				Id:        "test_id_1",
 				Value:     []byte(`sink_message_grpc_err`),
-				EventTime: &sinkpb.EventTime{EventTime: timestamppb.New(time.Unix(1661169660, 0))},
-				Watermark: &sinkpb.Watermark{Watermark: timestamppb.New(time.Time{})},
+				EventTime: timestamppb.New(time.Unix(1661169660, 0)),
+				Watermark: timestamppb.New(time.Time{}),
 			},
 		}
 
-		mockSinkErrClient := sinkmock.NewMockUserDefinedSink_SinkFnClient(ctrl)
+		mockSinkErrClient := sinkmock.NewMockSink_SinkFnClient(ctrl)
 		mockSinkErrClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 
-		mockClient := sinkmock.NewMockUserDefinedSinkClient(ctrl)
+		mockClient := sinkmock.NewMockSinkClient(ctrl)
 		mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkErrClient, fmt.Errorf("mock SinkFn error"))
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		go func() {
 			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Log(t.Name(), "test timeout")
 			}
 		}()
 
 		u := NewMockUDSgRPCBasedUDSink(mockClient)
-		gotErrList := u.Apply(ctx, testDatumList)
+		gotErrList := u.ApplySink(ctx, testDatumList)
 		expectedErrList := []error{
 			ApplyUDSinkErr{
 				UserUDSinkErr: false,

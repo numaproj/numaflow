@@ -66,7 +66,7 @@ func (isdf *InterStepDataForward) Stop() {
 // ForceStop sets up the force shutdown flag.
 func (isdf *InterStepDataForward) ForceStop() {
 	// call stop (what if we have an enthusiastic shutdown that forces first)
-	// e.g. I know I have written a wrong UDF, so shutdown ASAP
+	// e.g. I know I have written a wrong map UDF, so shutdown ASAP
 	isdf.Stop()
 	isdf.Shutdown.rwlock.Lock()
 	defer isdf.Shutdown.rwlock.Unlock()

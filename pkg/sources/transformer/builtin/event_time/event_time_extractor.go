@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/araddon/dateparse"
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
+	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
 
 	"github.com/numaproj/numaflow/pkg/shared/expr"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -38,7 +38,7 @@ type eventTimeExtractor struct {
 	format string
 }
 
-func New(args map[string]string) (functionsdk.MapTFunc, error) {
+func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) {
 	expr, existing := args["expression"]
 	if !existing {
 		return nil, fmt.Errorf(`missing "expression"`)
@@ -54,22 +54,22 @@ func New(args map[string]string) (functionsdk.MapTFunc, error) {
 		format:     format,
 	}
 
-	return func(ctx context.Context, keys []string, datum functionsdk.Datum) functionsdk.MessageTs {
+	return func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
 		log := logging.FromContext(ctx)
 		resultMsg, err := e.apply(datum.Value(), datum.EventTime())
 		if err != nil {
 			log.Warnf("event time extractor got an error: %v, skip updating event time...", err)
 		}
-		return functionsdk.MessageTsBuilder().Append(resultMsg)
+		return sourcetransformer.MessagesBuilder().Append(resultMsg)
 	}, nil
 }
 
 // apply compiles the payload to extract the new event time. If there is any error during extraction,
 // we pass on the original input event time. Otherwise, we assign the new event time to the message.
-func (e eventTimeExtractor) apply(payload []byte, et time.Time) (functionsdk.MessageT, error) {
+func (e eventTimeExtractor) apply(payload []byte, et time.Time) (sourcetransformer.Message, error) {
 	timeStr, err := expr.EvalStr(e.expression, payload)
 	if err != nil {
-		return functionsdk.NewMessageT(payload, et), err
+		return sourcetransformer.NewMessage(payload, et), err
 	}
 
 	var newEventTime time.Time
@@ -80,8 +80,8 @@ func (e eventTimeExtractor) apply(payload []byte, et time.Time) (functionsdk.Mes
 		newEventTime, err = dateparse.ParseStrict(timeStr)
 	}
 	if err != nil {
-		return functionsdk.NewMessageT(payload, et), err
+		return sourcetransformer.NewMessage(payload, et), err
 	} else {
-		return functionsdk.NewMessageT(payload, newEventTime), nil
+		return sourcetransformer.NewMessage(payload, newEventTime), nil
 	}
 }

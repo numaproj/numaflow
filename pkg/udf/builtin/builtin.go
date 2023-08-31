@@ -20,8 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	"github.com/numaproj/numaflow-go/pkg/function/server"
+	mapsdk "github.com/numaproj/numaflow-go/pkg/mapper"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -43,11 +42,11 @@ func (b *Builtin) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	server.New().RegisterMapper(executor).Start(ctx, server.WithMaxMessageSize(1024*1024*64))
+	mapsdk.NewServer(executor, mapsdk.WithMaxMessageSize(1024*1024*64)).Start(ctx)
 	return nil
 }
 
-func (b *Builtin) executor() (functionsdk.MapFunc, error) {
+func (b *Builtin) executor() (mapsdk.MapperFunc, error) {
 	// TODO: deal with args later
 	switch b.Name {
 	case "cat":

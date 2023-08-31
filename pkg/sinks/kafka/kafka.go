@@ -90,7 +90,7 @@ func NewToKafka(vertex *dfv1.Vertex,
 		}
 	}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, whereToDecider, applier.Terminal, fetchWatermark, publishWatermark, forwardOpts...)
+	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, whereToDecider, applier.Terminal, applier.TerminalMapStream, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

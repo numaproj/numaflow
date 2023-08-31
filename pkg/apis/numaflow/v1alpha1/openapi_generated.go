@@ -3480,7 +3480,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"cooldownSeconds": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Cooldown seconds after a scaling operation before another one.",
+							Description: "Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3509,6 +3509,20 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					"replicasPerScale": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"scaleUpCooldownSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up. It defaults to the CooldownSeconds if not set.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"scaleDownCooldownSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down. It defaults to the CooldownSeconds if not set.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3835,7 +3849,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"),
 						},
 					},
-					"udSource": {
+					"udsource": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource"),
 						},

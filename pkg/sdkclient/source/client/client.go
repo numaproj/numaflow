@@ -25,10 +25,12 @@ import (
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 	"github.com/numaproj/numaflow-go/pkg/info"
-	"github.com/numaproj/numaflow-go/pkg/source"
+	"github.com/numaproj/numaflow-go/pkg/shared"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -40,9 +42,9 @@ type client struct {
 var _ Client = (*client)(nil)
 
 // New creates a new client object.
-func New(inputOptions ...Option) (*client, error) {
+func New(inputOptions ...Option) (Client, error) {
 	var opts = &options{
-		sockAddr:                   source.UdsAddr,
+		sockAddr:                   shared.SourceAddr,
 		serverInfoFilePath:         info.ServerInfoFilePath,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 		maxMessageSize:             1024 * 1024 * 64,  // 64 MB
@@ -52,24 +54,19 @@ func New(inputOptions ...Option) (*client, error) {
 		inputOption(opts)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), opts.serverInfoReadinessTimeout)
-	defer cancel()
-
-	if err := info.WaitUntilReady(ctx, info.WithServerInfoFilePath(opts.serverInfoFilePath)); err != nil {
-		return nil, fmt.Errorf("failed to wait until server info is ready: %w", err)
-	}
-
-	serverInfo, err := info.Read(info.WithServerInfoFilePath(opts.serverInfoFilePath))
+	// Wait for server info to be ready
+	serverInfo, err := util.WaitForServerInfo(opts.serverInfoReadinessTimeout, opts.serverInfoFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read server info: %w", err)
+		return nil, err
 	}
-	// TODO: Use serverInfo to check compatibility.
+
 	if serverInfo != nil {
 		log.Printf("ServerInfo: %v\n", serverInfo)
 	}
 
+	// connect to the grpc server
 	c := new(client)
-	sockAddr := fmt.Sprintf("%s:%s", source.UDS, opts.sockAddr)
+	sockAddr := fmt.Sprintf("%s:%s", shared.UDS, opts.sockAddr)
 	conn, err := grpc.Dial(sockAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.maxMessageSize),
@@ -80,6 +77,11 @@ func New(inputOptions ...Option) (*client, error) {
 	c.conn = conn
 	c.grpcClt = sourcepb.NewSourceClient(conn)
 	return c, nil
+}
+
+// NewFromClient creates a new client object from the grpc client. This is used for testing.
+func NewFromClient(c sourcepb.SourceClient) (Client, error) {
+	return &client{grpcClt: c}, nil
 }
 
 // CloseConn closes the grpc client connection.
@@ -98,7 +100,6 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 
 // ReadFn reads data from the source.
 func (c *client) ReadFn(ctx context.Context, req *sourcepb.ReadRequest, datumCh chan<- *sourcepb.ReadResponse) error {
-	defer close(datumCh)
 	stream, err := c.grpcClt.ReadFn(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to execute c.grpcClt.ReadFn(): %w", err)

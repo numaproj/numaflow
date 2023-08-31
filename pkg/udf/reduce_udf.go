@@ -22,8 +22,9 @@ import (
 	"strings"
 	"sync"
 
-	clientsdk "github.com/numaproj/numaflow/pkg/sdkclient/udf/client"
+	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/udf/rpc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -41,7 +42,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
-	"github.com/numaproj/numaflow/pkg/udf/function"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -197,21 +197,21 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log = log.With("protocol", "uds-grpc-reduce-udf")
 
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
-	c, err := clientsdk.New(clientsdk.WithMaxMessageSize(maxMessageSize))
+	sdkClient, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
 
-	udfHandler, err := function.NewUDSgRPCBasedUDF(c)
+	reduceHandler := rpc.NewUDSgRPCBasedReduce(sdkClient)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)
 	}
 	// Readiness check
-	if err := udfHandler.WaitUntilReady(ctx); err != nil {
+	if err := reduceHandler.WaitUntilReady(ctx); err != nil {
 		return fmt.Errorf("failed on FIXED_AGGREGATION readiness check, %w", err)
 	}
 	defer func() {
-		err = udfHandler.CloseConn(ctx)
+		err = reduceHandler.CloseConn(ctx)
 		if err != nil {
 			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 		}
@@ -219,7 +219,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer))
 
 	// start metrics server
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{udfHandler}, readers)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{reduceHandler}, readers)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -246,7 +246,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 	idleManager := wmb.NewIdleManager(len(writers))
 
-	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, udfHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, reduceHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager)
 
 	// for reduce, we read only from one partition
 	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)

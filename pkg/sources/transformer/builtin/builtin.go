@@ -20,8 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	"github.com/numaproj/numaflow-go/pkg/function/server"
+	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -44,11 +43,11 @@ func (b *Builtin) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	server.New().RegisterMapperT(executor).Start(ctx, server.WithMaxMessageSize(1024*1024*64))
+	sourcetransformer.NewServer(executor, sourcetransformer.WithMaxMessageSize(1024*1024*64)).Start(ctx)
 	return nil
 }
 
-func (b *Builtin) executor() (functionsdk.MapTFunc, error) {
+func (b *Builtin) executor() (sourcetransformer.SourceTransformFunc, error) {
 	// TODO: deal with args later
 	switch b.Name {
 	case "filter":

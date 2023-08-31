@@ -26,12 +26,13 @@ import (
 	"time"
 
 	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -53,7 +54,7 @@ type redisStreamsSource struct {
 	// forwarder that writes the consumed data to destination
 	forwarder *sourceforward.DataForward
 	// context cancel function
-	cancelfn context.CancelFunc
+	cancelFn context.CancelFunc
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
 }
@@ -80,7 +81,7 @@ func New(
 	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier applier.MapApplier,
+	transformerApplier applier.SourceTransformApplier,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
@@ -130,9 +131,8 @@ func New(
 	}
 
 	for _, o := range opts {
-		operr := o(redisStreamsSource)
-		if operr != nil {
-			return nil, operr
+		if err := o(redisStreamsSource); err != nil {
+			return nil, err
 		}
 	}
 	if redisStreamsReader.Log == nil {
@@ -146,7 +146,7 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, redisStreamsSource, writers, fsd, mapApplier, fetchWM, redisStreamsSource, toVertexPublisherStores, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, redisStreamsSource, writers, fsd, transformerApplier, fetchWM, redisStreamsSource, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		redisStreamsSource.Log.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -155,10 +155,10 @@ func New(
 
 	// Create Watermark Publisher
 	ctx, cancel := context.WithCancel(context.Background())
-	redisStreamsSource.cancelfn = cancel
+	redisStreamsSource.cancelFn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
+	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
 	redisStreamsSource.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	// create the ConsumerGroup here if not already created
@@ -230,7 +230,7 @@ func produceMsg(inMsg redis.XMessage, replica int32) (*isb.ReadMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to json serialize RedisStream values: %v; inMsg=%+v", err, inMsg)
 	}
-	keys := []string{}
+	var keys []string
 	for k := range inMsg.Values {
 		keys = append(keys, k)
 	}
@@ -245,7 +245,7 @@ func produceMsg(inMsg redis.XMessage, replica int32) (*isb.ReadMessage, error) {
 			ID:          inMsg.ID,
 			Keys:        keys,
 		},
-		Body: isb.Body{Payload: []byte(jsonSerialized)},
+		Body: isb.Body{Payload: jsonSerialized},
 	}
 
 	return &isb.ReadMessage{
@@ -297,14 +297,14 @@ func (rsSource *redisStreamsSource) PublishSourceWatermarks(msgs []*isb.ReadMess
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		// toVertexPartitionIdx is 0 because we publish watermarks within source itself.
+		// toVertexPartitionIdx is 0 because we publish watermarks within the source itself.
 		rsSource.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }
 
 func (rsSource *redisStreamsSource) Close() error {
 	rsSource.Log.Info("Shutting down redis source server...")
-	rsSource.cancelfn()
+	rsSource.cancelFn()
 	rsSource.Log.Info("Redis source server shutdown")
 	return nil
 }

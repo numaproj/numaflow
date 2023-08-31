@@ -19,6 +19,7 @@ package pnf
 import (
 	"container/list"
 	"context"
+	"errors"
 	"strconv"
 	"sync"
 	"time"
@@ -132,7 +133,7 @@ func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 	start := time.Now()
 	err := t.pf.Process(ctx)
 	if err != nil {
-		if err == ctx.Err() {
+		if errors.Is(err, ctx.Err()) {
 			udfError.With(map[string]string{
 				metrics.LabelVertex:             op.vertexName,
 				metrics.LabelPipeline:           op.pipelineName,

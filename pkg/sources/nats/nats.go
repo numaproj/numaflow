@@ -26,10 +26,10 @@ import (
 	"go.uber.org/zap"
 
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -53,7 +53,7 @@ type natsSource struct {
 	messages    chan *isb.ReadMessage
 	readTimeout time.Duration
 
-	cancelfn  context.CancelFunc
+	cancelFn  context.CancelFunc
 	forwarder *sourceforward.DataForward
 	// source watermark publisher
 	sourcePublishWM publish.Publisher
@@ -63,7 +63,7 @@ func New(
 	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
 	fsd forward.ToWhichStepDecider,
-	mapApplier applier.MapApplier,
+	transformerApplier applier.SourceTransformApplier,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
@@ -76,9 +76,8 @@ func New(
 		readTimeout:  1 * time.Second, // default timeout
 	}
 	for _, o := range opts {
-		operr := o(n)
-		if operr != nil {
-			return nil, operr
+		if err := o(n); err != nil {
+			return nil, err
 		}
 	}
 	if n.logger == nil {
@@ -92,17 +91,17 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, mapApplier, fetchWM, n, toVertexPublisherStores, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, transformerApplier, fetchWM, n, toVertexPublisherStores, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
 	n.forwarder = forwarder
 	ctx, cancel := context.WithCancel(context.Background())
-	n.cancelfn = cancel
+	n.cancelFn = cancel
 	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
 	processorEntity := processor.NewProcessorEntity(entityName)
-	// toVertexPartitionCount is 1 because we publish watermarks within source itself.
+	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
 	n.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	source := vertexInstance.Vertex.Spec.Source.Nats
@@ -249,7 +248,7 @@ func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		}
 	}
 	if len(msgs) > 0 && !oldest.IsZero() {
-		// toVertexPartitionIdx is 0 because we publish watermarks within source itself.
+		// toVertexPartitionIdx is 0 because we publish watermarks within the source itself.
 		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
 }
@@ -262,7 +261,7 @@ func (ns *natsSource) NoAck(_ context.Context, _ []isb.Offset) {}
 
 func (ns *natsSource) Close() error {
 	ns.logger.Info("Shutting down nats source server...")
-	ns.cancelfn()
+	ns.cancelFn()
 	if err := ns.sub.Unsubscribe(); err != nil {
 		ns.logger.Errorw("Failed to unsubscribe nats subscription", zap.Error(err))
 	}
