@@ -32,6 +32,35 @@ spec:
       to: out
 ```
 
+To enable debug logs in the daemon pod, set environment variable `NUMAFLOW_DEBUG` to `true` for the daemon pod.
+For example:
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-pipeline
+spec:
+  templates:
+    daemon:
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+  vertices:
+    - name: in
+      source:
+        generator:
+          rpu: 100
+          duration: 1s
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out
+```
+
 ## Profiling
 
 If your pipeline is running with `NUMAFLOW_DEBUG` then `pprof` is enabled in the Vertex Pod. You
