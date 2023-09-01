@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/daemon/server"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -44,6 +45,7 @@ func NewDaemonServerCommand() *cobra.Command {
 				return fmt.Errorf("failed to decode the pipeline spec: %v", err)
 			}
 			logger := logging.NewLogger().Named("daemon-server").With("pipeline", pl.Name)
+			logger.Infow("Starting daemon server", "version", numaflow.GetVersion())
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
 			server := server.NewDaemonServer(pl, v1alpha1.ISBSvcType(isbSvcType))
 			return server.Run(ctx)
