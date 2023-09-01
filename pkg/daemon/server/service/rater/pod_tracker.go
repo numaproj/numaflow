@@ -56,7 +56,7 @@ func NewPodTracker(ctx context.Context, p *v1alpha1.Pipeline, opts ...PodTracker
 			Timeout: time.Second,
 		},
 		activePods:      NewUniqueStringList(),
-		refreshInterval: 30 * time.Second, // Default refresh interval for updating active pod set
+		refreshInterval: 30 * time.Second, // Default refresh interval for updating the active pod set
 	}
 
 	for _, opt := range opts {
@@ -78,12 +78,6 @@ func WithRefreshInterval(d time.Duration) PodTrackerOption {
 
 func (pt *PodTracker) Start(ctx context.Context) error {
 	pt.log.Debugf("Starting tracking active pods for pipeline %s...", pt.pipeline.Name)
-	vNames := ""
-	for _, v := range pt.pipeline.Spec.Vertices {
-		vNames += v.Name + ","
-	}
-	// Ok, at this moment, the out vertex is present.
-	pt.log.Debugf("The pipeline contains the following vertices %s", vNames)
 	go func() {
 		ticker := time.NewTicker(pt.refreshInterval)
 		defer ticker.Stop()
@@ -94,7 +88,6 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 				return
 			case <-ticker.C:
 				for _, v := range pt.pipeline.Spec.Vertices {
-					pt.log.Debugf("Updating the active pod set for vertex %s, vertex repli", v.Name)
 					var vType string
 					if v.IsReduceUDF() {
 						vType = "reduce"
@@ -152,16 +145,14 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, pt.pipeline.Name+"-"+vertexName+"-headless", pt.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := pt.httpClient.Head(url)
 	if err != nil {
-		// during performance test (100 pods per vertex), we never saw a false negative, meaning every time isActive returns false,
-		// it truly means the pod doesn't exist.
-		// in reality, we can imagine that a pod can be active but the Head request times out for some reason and returns an incorrect false,
-		// if we ever observe such case, we can think about adding retry here.
-
-		// Even though I can see 4 pods for out sink, the pod tracker gives
-		// "Sending HEAD request to pod raptor-pipeline-out-0 is unsuccessful"
+		// during performance test (100 pods per vertex), we never saw a false negative,
+		// meaning every time isActive returns false; it truly means the pod doesn't exist.
+		// in reality, we can imagine that a pod can be active but the Head request times out for some reason
+		// and returns an incorrect false, if we ever observe such case, we can think about adding retry here.
 		pt.log.Debugf("Sending HEAD request to pod %s is unsuccessful: %v, treating the pod as inactive", podName, err)
 		return false
 	}
+	pt.log.Debugf("Sending HEAD request to pod %s is successful, treating the pod as active", podName)
 	_ = resp.Body.Close()
 	return true
 }

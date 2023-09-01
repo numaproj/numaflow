@@ -67,13 +67,6 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		natsClientPool *jsclient.ClientPool
 	)
 
-	vNames := ""
-	for _, v := range ds.pipeline.Spec.Vertices {
-		vNames += v.Name + ","
-	}
-	// Ok, it contains out.
-	log.Infof("Keran is testing, the pipeline has vertices: %s", vNames)
-
 	natsClientPool, err = jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(1))
 	defer natsClientPool.CloseAll()
 
