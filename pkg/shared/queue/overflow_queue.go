@@ -22,15 +22,13 @@ import (
 )
 
 // OverflowQueue is a thread safe queue implementation with max size, and the oldest elements automatically overflow.
-// We enforce the element type to be fmt.Stringer,
-// so that we can print the queue in a human-readable format for debugging.
-type OverflowQueue[T fmt.Stringer] struct {
+type OverflowQueue[T any] struct {
 	elements []T
 	maxSize  int
 	lock     *sync.RWMutex
 }
 
-func New[T fmt.Stringer](size int) *OverflowQueue[T] {
+func New[T any](size int) *OverflowQueue[T] {
 	return &OverflowQueue[T]{
 		elements: []T{},
 		maxSize:  size,
