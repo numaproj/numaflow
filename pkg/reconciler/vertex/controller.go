@@ -160,6 +160,56 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		return ctrl.Result{}, err
 	}
 
+	// Create services
+	existingSvcs, err := r.findExistingServices(ctx, vertex)
+	if err != nil {
+		r.markPhaseLogEvent(vertex, log, "FindExistingSvcsFailed", err.Error(), "Failed to find existing services", zap.Error(err))
+		return ctrl.Result{}, err
+	}
+	for _, s := range vertex.GetServiceObjs() {
+		svcHash := sharedutil.MustHash(s.Spec)
+		s.Annotations = map[string]string{dfv1.KeyHash: svcHash}
+		needToCreate := false
+		if existingSvc, existing := existingSvcs[s.Name]; existing {
+			if existingSvc.GetAnnotations()[dfv1.KeyHash] != svcHash {
+				if err := r.client.Delete(ctx, &existingSvc); err != nil {
+					if !apierrors.IsNotFound(err) {
+						r.markPhaseLogEvent(vertex, log, "DelSvcFailed", err.Error(), "Failed to delete existing service", zap.String("service", existingSvc.Name), zap.Error(err))
+						return ctrl.Result{}, err
+					}
+				} else {
+					log.Infow("Deleted a stale service to recreate", zap.String("service", existingSvc.Name))
+				}
+				needToCreate = true
+			}
+			delete(existingSvcs, s.Name)
+		} else {
+			needToCreate = true
+		}
+		if needToCreate {
+			if err := r.client.Create(ctx, s); err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					continue
+				}
+				r.markPhaseLogEvent(vertex, log, "CreateSvcFailed", err.Error(), "Failed to create a service", zap.String("service", s.Name), zap.Error(err))
+				return ctrl.Result{}, err
+			} else {
+				log.Infow("Succeeded to create a service", zap.String("service", s.Name))
+			}
+		}
+	}
+	for _, v := range existingSvcs { // clean up stale services
+		if err := r.client.Delete(ctx, &v); err != nil {
+			if !apierrors.IsNotFound(err) {
+				r.markPhaseLogEvent(vertex, log, "DelSvcFailed", err.Error(), "Failed to delete service not in use", zap.String("service", v.Name), zap.Error(err))
+				return ctrl.Result{}, err
+			}
+		} else {
+			log.Infow("Deleted a stale service", zap.String("service", v.Name))
+		}
+	}
+
+	// Create pods
 	existingPods, err := r.findExistingPods(ctx, vertex)
 	if err != nil {
 		r.markPhaseLogEvent(vertex, log, "FindExistingPodFailed", err.Error(), "Failed to find existing pods", zap.Error(err))
@@ -257,55 +307,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	}
 	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
 	vertex.Status.Selector = selector.String()
-
-	// create services
-	existingSvcs, err := r.findExistingServices(ctx, vertex)
-	if err != nil {
-		r.markPhaseLogEvent(vertex, log, "FindExistingSvcsFailed", err.Error(), "Failed to find existing services", zap.Error(err))
-		return ctrl.Result{}, err
-	}
-	for _, s := range vertex.GetServiceObjs() {
-		svcHash := sharedutil.MustHash(s.Spec)
-		s.Annotations = map[string]string{dfv1.KeyHash: svcHash}
-		needToCreate := false
-		if existingSvc, existing := existingSvcs[s.Name]; existing {
-			if existingSvc.GetAnnotations()[dfv1.KeyHash] != svcHash {
-				if err := r.client.Delete(ctx, &existingSvc); err != nil {
-					if !apierrors.IsNotFound(err) {
-						r.markPhaseLogEvent(vertex, log, "DelSvcFailed", err.Error(), "Failed to delete existing service", zap.String("service", existingSvc.Name), zap.Error(err))
-						return ctrl.Result{}, err
-					}
-				} else {
-					log.Infow("Deleted a stale service to recreate", zap.String("service", existingSvc.Name))
-				}
-				needToCreate = true
-			}
-			delete(existingSvcs, s.Name)
-		} else {
-			needToCreate = true
-		}
-		if needToCreate {
-			if err := r.client.Create(ctx, s); err != nil {
-				if apierrors.IsAlreadyExists(err) {
-					continue
-				}
-				r.markPhaseLogEvent(vertex, log, "CreateSvcFailed", err.Error(), "Failed to create a service", zap.String("service", s.Name), zap.Error(err))
-				return ctrl.Result{}, err
-			} else {
-				log.Infow("Succeeded to create a service", zap.String("service", s.Name))
-			}
-		}
-	}
-	for _, v := range existingSvcs { // clean up stale services
-		if err := r.client.Delete(ctx, &v); err != nil {
-			if !apierrors.IsNotFound(err) {
-				r.markPhaseLogEvent(vertex, log, "DelSvcFailed", err.Error(), "Failed to delete service not in use", zap.String("service", v.Name), zap.Error(err))
-				return ctrl.Result{}, err
-			}
-		} else {
-			log.Infow("Deleted a stale service", zap.String("service", v.Name))
-		}
-	}
 
 	vertex.Status.MarkPhaseRunning()
 	return ctrl.Result{}, nil

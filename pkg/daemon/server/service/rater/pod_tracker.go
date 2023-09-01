@@ -122,7 +122,7 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 }
 
 // LeastRecentlyUsed returns the least recently used pod from the active pod list.
-// if there is no active pods, it returns an empty string.
+// if there are no active pods, it returns an empty string.
 func (pt *PodTracker) LeastRecentlyUsed() string {
 	if e := pt.activePods.Front(); e != "" {
 		pt.activePods.MoveToBack(e)
@@ -148,7 +148,7 @@ func (pt *PodTracker) getPodKey(index int, vertexName string, vertexType string)
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	// using the vertex headless service to check if a pod exists or not.
-	// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2469/metrics
+	// example for 0th pod: https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2469/metrics
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, pt.pipeline.Name+"-"+vertexName+"-headless", pt.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := pt.httpClient.Head(url)
 	if err != nil {
