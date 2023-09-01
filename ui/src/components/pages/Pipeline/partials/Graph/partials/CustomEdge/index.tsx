@@ -15,6 +15,7 @@ const CustomEdge: FC<EdgeProps> = ({
   sourcePosition,
   targetPosition,
   data,
+  markerEnd,
 }) => {
   const obj = getSmoothStepPath({
     sourceX,
@@ -25,8 +26,53 @@ const CustomEdge: FC<EdgeProps> = ({
     targetPosition,
   });
 
-  const [edgePath, labelX] = obj;
-  let [, , labelY] = obj;
+  const [, labelX] = obj;
+  let [edgePath, , labelY] = obj;
+  let labelRenderer = "";
+
+  if (data?.fwdEdge) {
+    if (sourceY !== targetY) {
+      if (data?.fromNodeOutDegree > 1) {
+        if (sourceY < targetY) {
+          labelY = targetY - 14;
+        } else {
+          labelY = targetY + 2;
+        }
+      } else {
+        if (sourceY < targetY) {
+          labelY = targetY - 47;
+        } else {
+          labelY = targetY + 36;
+        }
+      }
+    }
+    labelRenderer = `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`;
+  }
+
+  if (data?.backEdge) {
+    const height = data?.backEdgeHeight * 35;
+    edgePath = `M ${sourceX} ${sourceY} L ${sourceX} ${
+      -height + 5
+    } Q ${sourceX} ${-height} ${sourceX - 5} ${-height} L ${
+      targetX + 5
+    } ${-height} Q ${targetX} ${-height} ${targetX} ${
+      -height + 5
+    } L ${targetX} ${targetY}`;
+    const centerX = (sourceX + targetX) / 2;
+    labelRenderer = `translate(-50%, -50%) translate(${centerX}px,${-height}px)`;
+  }
+
+  if (data?.selfEdge) {
+    edgePath = `M ${sourceX} ${sourceY} L ${sourceX} ${
+      sourceY - 15
+    } Q ${sourceX} ${sourceY - 20} ${sourceX - 5} ${sourceY - 20} L ${
+      targetX + 5
+    } ${targetY - 20} Q ${targetX} ${sourceY - 20} ${targetX} ${
+      sourceY - 15
+    } L ${targetX} ${sourceY}`;
+    const centerX = (sourceX + targetX) / 2;
+    labelRenderer = `translate(-50%, -50%) translate(${centerX}px,${labelY}px)`;
+  }
 
   // Highlight the edge on isFull - thick red line
   let edgeStyle, wmStyle, pendingStyle;
@@ -39,17 +85,12 @@ const CustomEdge: FC<EdgeProps> = ({
     };
   }
 
-  if (sourceY === targetY) {
+  if (sourceY === targetY || data?.backEdge) {
     wmStyle = { marginTop: "-0.87rem" };
     pendingStyle = { marginTop: "0.15rem" };
   } else {
     wmStyle = { right: "0.1rem" };
     pendingStyle = { left: "0.1rem" };
-    if (sourceY < targetY) {
-      labelY = targetY - 14;
-    } else {
-      labelY = targetY + 2;
-    }
   }
   const getMinWM = () => {
     if (data?.edgeWatermark?.watermarks) {
@@ -101,13 +142,14 @@ const CustomEdge: FC<EdgeProps> = ({
           d={edgePath}
           style={edgeStyle}
           data-testid={id}
+          markerEnd={markerEnd}
         />
       </svg>
       <EdgeLabelRenderer>
         <div
           className={"edge"}
           style={{
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+            transform: labelRenderer,
           }}
         >
           {data?.edgeWatermark?.isWaterMarkEnabled && (
