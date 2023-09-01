@@ -24,8 +24,10 @@ import (
 
 func TestNewTimestampedCounts(t *testing.T) {
 	tc := NewTimestampedCounts(TestTime)
+	tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0}})
 	assert.Equal(t, int64(TestTime), tc.timestamp)
-	assert.Equal(t, 0, len(tc.podPartitionCount))
+	assert.Equal(t, 1, len(tc.podPartitionCount))
+	assert.Equal(t, "{timestamp: 1620000000, podPartitionCount: map[pod1:map[partition1:10]]}", tc.String())
 }
 
 func TestTimestampedCounts_Update(t *testing.T) {

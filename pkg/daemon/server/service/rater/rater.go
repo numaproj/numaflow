@@ -38,7 +38,8 @@ type Ratable interface {
 }
 
 // CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
-// e.g. if the current time is 12:00:07, the retrieved count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
+// e.g., if the current time is 12:00:07,
+// the retrieved count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
 const CountWindow = time.Second * 10
 
 // metricsHttpClient interface for the GET/HEAD call to metrics endpoint.
@@ -107,7 +108,7 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 	return &rater
 }
 
-// Function monitor() defines each of the worker's job.
+// Function monitor() defines each of the worker's jobs.
 // It waits for keys in the channel, and starts a monitoring job
 func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
 	r.log.Infof("Started monitoring worker %v", id)
@@ -200,8 +201,8 @@ func (r *Rater) Start(ctx context.Context) error {
 	}
 }
 
-// sleep function uses a select statement to check if the context is cancelled before sleeping for the given duration
-// it helps ensure the sleep will be released when the context is cancelled, allowing the goroutine to exit gracefully
+// sleep function uses a select statement to check if the context is canceled before sleeping for the given duration
+// it helps ensure the sleep will be released when the context is canceled, allowing the goroutine to exit gracefully
 func sleep(ctx context.Context, duration time.Duration) {
 	select {
 	case <-ctx.Done():
@@ -257,12 +258,15 @@ func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodRea
 
 // GetRates returns the processing rates of the vertex partition in the format of lookback second to rate mappings
 func (r *Rater) GetRates(vertexName, partitionName string) map[string]float64 {
+	r.log.Debugf("Getting rates for vertex %s, partition %s", vertexName, partitionName)
+	r.log.Debugf("Current timestampedPodCounts for vertex %s is: %v", vertexName, r.timestampedPodCounts[vertexName])
 	var result = make(map[string]float64)
 	// calculate rates for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap(vertexName) {
 		r := CalculateRate(r.timestampedPodCounts[vertexName], i, partitionName)
 		result[n] = r
 	}
+	r.log.Debugf("Got rates for vertex %s, partition %s: %v", vertexName, partitionName, result)
 	return result
 }
 
