@@ -25,6 +25,7 @@ import (
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 
+	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	"github.com/numaproj/numaflow/server/routes"
@@ -55,7 +56,7 @@ func Start(insecure bool, port int, namespaced bool, managedNamespace string, ba
 	}
 
 	if insecure {
-		logger.Infof("Starting server (TLS disabled) on %s", server.Addr)
+		logger.Infow("Starting server (TLS disabled) on "+server.Addr, "version", numaflow.GetVersion())
 		if err := server.ListenAndServe(); err != nil {
 			panic(err)
 		}
@@ -66,7 +67,7 @@ func Start(insecure bool, port int, namespaced bool, managedNamespace string, ba
 		}
 		server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12}
 
-		logger.Infof("Starting server on %s", server.Addr)
+		logger.Infow("Starting server on "+server.Addr, "version", numaflow.GetVersion())
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			panic(err)
 		}

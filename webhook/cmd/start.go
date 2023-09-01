@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	"github.com/numaproj/numaflow"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -76,7 +77,7 @@ func Start() {
 	portStr := sharedutil.LookupEnvStringOr(portEnvVar, "443")
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		logger.Fatal("port should be a number, not valid")
+		logger.Fatal("Port should be a number, not valid")
 	}
 
 	options := webhook.Options{
@@ -99,9 +100,9 @@ func Start() {
 		},
 		Logger: logger,
 	}
+	logger.Infow("Starting admission controller", "version", numaflow.GetVersion())
 	ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
 	if err := controller.Run(ctx); err != nil {
 		logger.Fatalw("Failed to create admission controller", zap.Error(err))
 	}
-
 }
