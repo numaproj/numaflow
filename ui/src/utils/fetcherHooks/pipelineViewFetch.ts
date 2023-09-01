@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Edge, Node } from "reactflow";
+import { Edge, MarkerType, Node } from "reactflow";
 import { isEqual } from "lodash";
 import {
   BufferInfo,
@@ -25,6 +25,18 @@ export const usePipelineViewFetch = (
   const [edgeWatermark, setEdgeWatermark] = useState<
     Map<string, EdgeWatermark>
   >(new Map());
+  const [selfEdges, setSelfEdges] = useState<Set<string>>(new Set());
+  const [backEdges, setBackEdges] = useState<Set<string>>(new Set());
+  const [fwdEdges, setFwdEdges] = useState<Set<string>>(new Set());
+  const [selfVertices, setSelfVertices] = useState<Set<string>>(new Set());
+  const [prevVertices, setPrevVertices] = useState<Set<string>>(new Set());
+  const [nextVertices, setNextVertices] = useState<Set<string>>(new Set());
+  const [backEdgesHeight, setBackEdgesHeight] = useState<Map<string, number>>(
+    new Map()
+  );
+  const [nodeOutDegree, setNodeOutDegree] = useState<Map<string, number>>(
+    new Map()
+  );
   const [pipelineErr, setPipelineErr] = useState<any[] | undefined>(undefined);
   const [buffersErr, setBuffersErr] = useState<any[] | undefined>(undefined);
   const [podsErr, setPodsErr] = useState<any[] | undefined>(undefined);
@@ -299,6 +311,93 @@ export const usePipelineViewFetch = (
     return () => clearInterval(interval);
   }, [getPipelineWatermarks]);
 
+  const setPipelineDetails = useCallback(() => {
+    const sourceVertices: string[] = [];
+    spec?.vertices?.forEach((vertex) => {
+      if (vertex?.source) {
+        sourceVertices.push(vertex?.name);
+      }
+    });
+
+    // directed graph is represented as an adjacency list
+    const adjacencyList: { [key: string]: string[] } = {};
+    if (spec?.vertices && spec?.edges) {
+      spec?.edges?.forEach((edge) => {
+        if (!adjacencyList[edge?.from]) {
+          adjacencyList[edge?.from] = [];
+        }
+
+        adjacencyList[edge?.from].push(edge?.to);
+      });
+
+      const selfEdges: Set<string> = new Set();
+      const backEdges: Set<string> = new Set();
+      const forwardEdges: Set<string> = new Set();
+      const selfVertices: Set<string> = new Set();
+      const prevVertices: Set<string> = new Set();
+      const nextVertices: Set<string> = new Set();
+      const backEdgesHeight = new Map();
+
+      const visited: Set<string> = new Set();
+      const recStack: Set<string> = new Set();
+      let height = 1;
+      const dfs = (node: string) => {
+        visited.add(node);
+        recStack.add(node);
+        adjacencyList[node]?.forEach((child: string) => {
+          const id = `${node}-${child}`;
+          if (node === child) {
+            selfEdges.add(id);
+            selfVertices.add(node);
+            return;
+          }
+          if (recStack.has(child)) {
+            backEdges.add(id);
+            backEdgesHeight.set(id, height);
+            height++;
+            nextVertices.add(node);
+            prevVertices.add(child);
+            return;
+          }
+          if (!recStack.has(child)) {
+            forwardEdges.add(id);
+            if (!visited.has(child)) dfs(child);
+          }
+        });
+        recStack.delete(node);
+      };
+      sourceVertices?.forEach((vertex: any) => {
+        if (!visited.has(vertex)) {
+          dfs(vertex);
+        }
+      });
+
+      const nodeOutDegree: Map<string, number> = new Map();
+      spec?.edges.forEach((edge) => {
+        if (forwardEdges.has(`${edge?.from}-${edge?.to}`)) {
+          nodeOutDegree.set(
+            edge?.from,
+            (nodeOutDegree.get(edge?.from) || 0) + 1
+          );
+        }
+      });
+
+      setSelfEdges(selfEdges);
+      setBackEdges(backEdges);
+      setFwdEdges(forwardEdges);
+      setSelfVertices(selfVertices);
+      setPrevVertices(prevVertices);
+      setNextVertices(nextVertices);
+      setBackEdgesHeight(backEdgesHeight);
+      setNodeOutDegree(nodeOutDegree);
+    }
+  }, [spec]);
+
+  // This useEffect is used to update edges and vertices types
+  useEffect(() => {
+    setPipelineDetails();
+  }, [setPipelineDetails]);
+
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];
     if (spec?.vertices && buffers && vertexPods && vertexMetrics) {
@@ -335,11 +434,24 @@ export const usePipelineViewFetch = (
           }
         });
         if (newNode.data.buffers.length === 0) newNode.data.buffers = null;
+        // added handles(connector points) for self loops and cycles
+        newNode.data.centerSourceHandle = nextVertices.has(newNode.id);
+        newNode.data.centerTargetHandle = prevVertices.has(newNode.id);
+        newNode.data.quadHandle = selfVertices.has(newNode.id);
         newVertices.push(newNode);
       });
     }
     return newVertices;
-  }, [spec, buffers, vertexPods, vertexMetrics, ns_pl]);
+  }, [
+    spec,
+    buffers,
+    vertexPods,
+    vertexMetrics,
+    ns_pl,
+    prevVertices,
+    selfVertices,
+    nextVertices,
+  ]);
 
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];
@@ -369,6 +481,12 @@ export const usePipelineViewFetch = (
 
       spec.edges.forEach((edge: any) => {
         const id = edge?.from + "-" + edge?.to;
+        const markerEnd = {
+          type: MarkerType.Arrow,
+          width: 15,
+          height: 15,
+          color: "black",
+        };
         const pipelineEdge = {
           id,
           source: edge?.from,
@@ -377,6 +495,13 @@ export const usePipelineViewFetch = (
             conditions: edge?.conditions,
             backpressureLabel: edgeBackpressureLabel.get(edge?.to),
             isFull: edgeIsFull.get(edge?.to),
+            source: edge?.from,
+            target: edge?.to,
+            fwdEdge: fwdEdges.has(id),
+            backEdge: backEdges.has(id),
+            selfEdge: selfEdges.has(id),
+            backEdgeHeight: backEdgesHeight.get(id) || 0,
+            fromNodeOutDegree: nodeOutDegree.get(edge?.from) || 0,
           },
         } as Edge;
         pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
@@ -384,11 +509,33 @@ export const usePipelineViewFetch = (
           : null;
         pipelineEdge.animated = true;
         pipelineEdge.type = "custom";
+        if (backEdges.has(id)) {
+          pipelineEdge.sourceHandle = "1";
+          pipelineEdge.targetHandle = "1";
+          pipelineEdge.markerEnd = markerEnd;
+        } else if (selfEdges.has(id)) {
+          pipelineEdge.sourceHandle = "2";
+          pipelineEdge.targetHandle = "2";
+          pipelineEdge.markerEnd = markerEnd;
+        } else if (fwdEdges.has(id)) {
+          pipelineEdge.sourceHandle = "0";
+          pipelineEdge.targetHandle = "0";
+        }
         newEdges.push(pipelineEdge);
       });
     }
     return newEdges;
-  }, [spec, buffers, edgeWatermark, ns_pl]);
+  }, [
+    spec,
+    buffers,
+    edgeWatermark,
+    ns_pl,
+    backEdges,
+    selfEdges,
+    fwdEdges,
+    backEdgesHeight,
+    nodeOutDegree,
+  ]);
 
   //sets loading variable
   useEffect(() => {
