@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	"github.com/numaproj/numaflow"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sinks"
@@ -44,6 +45,7 @@ func NewProcessorCommand() *cobra.Command {
 		Short: "Start a processor",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			log := logging.NewLogger().Named(fmt.Sprintf("%s-processor", processorType))
+			log.Infow("Starting vertex data processor", "version", numaflow.GetVersion())
 			encodedVertex, defined := os.LookupEnv(dfv1.EnvVertexObject)
 			if !defined {
 				return fmt.Errorf("required environment variable '%s' not defined", dfv1.EnvVertexObject)
