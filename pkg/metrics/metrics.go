@@ -65,6 +65,11 @@ type timestampedPending struct {
 	timestamp int64
 }
 
+// String returns a string representation of timestampedPending
+func (t timestampedPending) String() string {
+	return fmt.Sprintf("{timestamp: %d, pending: %v}", t.timestamp, t.pending)
+}
+
 // metricsServer runs an HTTP server to:
 // 1. Expose metrics;
 // 2. Serve an endpoint to execute health checks

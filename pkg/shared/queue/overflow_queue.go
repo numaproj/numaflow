@@ -16,16 +16,21 @@ limitations under the License.
 
 package queue
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 // OverflowQueue is a thread safe queue implementation with max size, and the oldest elements automatically overflow.
-type OverflowQueue[T any] struct {
+// We enforce the element type to be fmt.Stringer,
+// so that we can print the queue in a human-readable format for debugging.
+type OverflowQueue[T fmt.Stringer] struct {
 	elements []T
 	maxSize  int
 	lock     *sync.RWMutex
 }
 
-func New[T any](size int) *OverflowQueue[T] {
+func New[T fmt.Stringer](size int) *OverflowQueue[T] {
 	return &OverflowQueue[T]{
 		elements: []T{},
 		maxSize:  size,
@@ -62,6 +67,16 @@ func (q *OverflowQueue[T]) Length() int {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 	return len(q.elements)
+}
+
+// String returns a string representation of the queue
+func (q *OverflowQueue[T]) String() string {
+	res := "["
+	for _, e := range q.Items() {
+		res += fmt.Sprintf("%v,", e)
+	}
+	res += "]"
+	return res
 }
 
 func reverse[T any](input []T) []T {

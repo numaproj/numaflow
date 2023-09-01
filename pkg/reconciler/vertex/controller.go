@@ -85,7 +85,7 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return result, err
 }
 
-// reconcile does the real logic
+// reconcile does the real logic.
 func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (ctrl.Result, error) {
 	log := logging.FromContext(ctx)
 	vertexKey := scaling.KeyOfVertex(*vertex)
@@ -154,13 +154,12 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		}
 	}
 
-	pipeline := &dfv1.Pipeline{}
-	if err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: vertex.Spec.PipelineName}, pipeline); err != nil {
-		r.markPhaseLogEvent(vertex, log, "GetPipelineFailed", err.Error(), "Failed to get pipeline object", zap.Error(err))
-		return ctrl.Result{}, err
-	}
-
 	// Create services
+	// Note: We purposely put service reconciliation before pod,
+	// to prevent pod reconciliation failure from blocking service creation.
+	// It's ok to keep failing to scale up/down pods (e.g., due to quota),
+	// but without services, certain platform functionalities will be broken.
+	// E.g., the vertex processing rate calculation relies on the headless service to determine the number of active pods.
 	existingSvcs, err := r.findExistingServices(ctx, vertex)
 	if err != nil {
 		r.markPhaseLogEvent(vertex, log, "FindExistingSvcsFailed", err.Error(), "Failed to find existing services", zap.Error(err))
@@ -209,6 +208,11 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		}
 	}
 
+	pipeline := &dfv1.Pipeline{}
+	if err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: vertex.Spec.PipelineName}, pipeline); err != nil {
+		r.markPhaseLogEvent(vertex, log, "GetPipelineFailed", err.Error(), "Failed to get pipeline object", zap.Error(err))
+		return ctrl.Result{}, err
+	}
 	// Create pods
 	existingPods, err := r.findExistingPods(ctx, vertex)
 	if err != nil {
@@ -382,8 +386,8 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 		})
 	}
 
-	bfs := []string{}
-	bks := []string{}
+	var bfs []string
+	var bks []string
 	// Only source vertices need to check all the pipeline buffers and buckets
 	if vertex.IsASource() {
 		bfs = append(bfs, pl.GetAllBuffers()...)

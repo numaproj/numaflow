@@ -259,7 +259,7 @@ func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodRea
 // GetRates returns the processing rates of the vertex partition in the format of lookback second to rate mappings
 func (r *Rater) GetRates(vertexName, partitionName string) map[string]float64 {
 	r.log.Debugf("Getting rates for vertex %s, partition %s", vertexName, partitionName)
-	r.log.Debugf("Current timestampedPodCounts for vertex %s is: %s", vertexName, stringify(r.timestampedPodCounts[vertexName]))
+	r.log.Debugf("Current timestampedPodCounts for vertex %s is: %v", vertexName, r.timestampedPodCounts[vertexName])
 	var result = make(map[string]float64)
 	// calculate rates for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap(vertexName) {
@@ -284,12 +284,4 @@ func (r *Rater) buildLookbackSecondsMap(vertexName string) map[string]int64 {
 		lookbackSecondsMap[k] = v
 	}
 	return lookbackSecondsMap
-}
-
-func stringify(q *sharedqueue.OverflowQueue[*TimestampedCounts]) string {
-	res := ""
-	for _, ele := range q.Items() {
-		res += ele.ToString() + "\n"
-	}
-	return res
 }

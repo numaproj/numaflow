@@ -47,18 +47,6 @@ spec:
         env:
           - name: NUMAFLOW_DEBUG
             value: "true" # DO NOT forget the double quotes!!!
-  vertices:
-    - name: in
-      source:
-        generator:
-          rpu: 100
-          duration: 1s
-    - name: out
-      sink:
-        log: {}
-  edges:
-    - from: in
-      to: out
 ```
 
 ## Profiling
