@@ -29,7 +29,6 @@ import (
 
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
@@ -314,30 +313,24 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	return bufferInfo, nil
 }
 
-// CreateProcessorManagers is used to create processor manager for the given bucket.
-func (jss *jetStreamSvc) CreateProcessorManagers(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]*processor.ProcessorManager, error) {
+// CreateWatermarkStores is used to create watermark stores.
+func (jss *jetStreamSvc) CreateWatermarkStores(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]wmstore.WatermarkStore, error) {
 	log := logging.FromContext(ctx).With("bucket", bucketName)
 	ctx = logging.WithLogger(ctx, log)
-	var processorManagers []*processor.ProcessorManager
-	fetchers := 1
+	var wmStores []wmstore.WatermarkStore
+	partitions := 1
 	if isReduce {
-		fetchers = fromBufferPartitionCount
+		partitions = fromBufferPartitionCount
 	}
-	// if it's not a reduce vertex, we don't need multiple watermark fetchers. We use common fetcher among all partitions.
-	for i := 0; i < fetchers; i++ {
-		storeWatcher, err := wmstore.BuildJetStreamWatermarkStoreWatcher(ctx, bucketName, jss.jsClient)
+	// if it's not a reduce vertex, we only need one store to store the watermark
+	for i := 0; i < partitions; i++ {
+		wmStore, err := wmstore.BuildJetStreamWatermarkStore(ctx, bucketName, jss.jsClient)
 		if err != nil {
-			return nil, fmt.Errorf("failed at new JetStream watermark store watcher, %w", err)
+			return nil, fmt.Errorf("failed to create new JetStream watermark store, %w", err)
 		}
-		var pm *processor.ProcessorManager
-		if isReduce {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount), processor.WithVertexReplica(int32(i)), processor.WithIsReduce(isReduce))
-		} else {
-			pm = processor.NewProcessorManager(ctx, storeWatcher, int32(fromBufferPartitionCount))
-		}
-		processorManagers = append(processorManagers, pm)
+		wmStores = append(wmStores, wmStore)
 	}
-	return processorManagers, nil
+	return wmStores, nil
 }
 
 func JetStreamName(bufferName string) string {

@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	"github.com/numaproj/numaflow"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sideinputs/manager"
@@ -58,6 +59,7 @@ func NewSideInputsManagerCommand() *cobra.Command {
 			}
 
 			logger := logging.NewLogger().Named("side-inputs-manager").With("pipeline", pipelineName)
+			logger.Infow("Starting side inputs manager", "version", numaflow.GetVersion())
 
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
 			sideInputManager := manager.NewSideInputsManager(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInput)

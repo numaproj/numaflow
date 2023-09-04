@@ -69,11 +69,10 @@ func (tc *TimestampedCounts) PodPartitionCountSnapshot() map[string]map[string]f
 	return counts
 }
 
-// ToString returns a string representation of the TimestampedCounts
+// String returns a string representation of the TimestampedCounts
 // it's used for debugging purpose
-func (tc *TimestampedCounts) ToString() string {
+func (tc *TimestampedCounts) String() string {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	res := fmt.Sprintf("{timestamp: %d, podPartitionCount: %v}", tc.timestamp, tc.podPartitionCount)
-	return res
+	return fmt.Sprintf("{timestamp: %d, podPartitionCount: %v}", tc.timestamp, tc.podPartitionCount)
 }

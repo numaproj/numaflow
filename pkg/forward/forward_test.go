@@ -36,8 +36,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/rpc"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -217,8 +217,22 @@ func TestNewInterStepDataForward(t *testing.T) {
 					Name: "testVertex",
 				},
 			}}
+
 			fetchWatermark := &testForwardFetcher{}
-			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			toVertexWmStores := buildWatermarkStores(toSteps)
+			publishWatermark, otStores := buildPublisherMapAndOTStoreFromWmStores(toSteps, toVertexWmStores)
+
+			defer func() {
+				for _, p := range publishWatermark {
+					_ = p.Close()
+				}
+			}()
+
+			defer func() {
+				for _, store := range toVertexWmStores {
+					_ = store.Close()
+				}
+			}()
 
 			f, err := NewInterStepDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, publishWatermark, WithReadBatchSize(batchSize), WithVertexType(dfv1.VertexTypeMapUDF), WithUDFStreaming(tt.streamEnabled))
 
@@ -365,12 +379,18 @@ func TestNewInterStepDataForward(t *testing.T) {
 			}}
 
 			fetchWatermark := &testForwardFetcher{}
-			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			toVertexWmStores := buildWatermarkStores(toSteps)
+			publishWatermark, otStores := buildPublisherMapAndOTStoreFromWmStores(toSteps, toVertexWmStores)
 
-			// close the fetcher and publishers
 			defer func() {
 				for _, p := range publishWatermark {
 					_ = p.Close()
+				}
+			}()
+
+			defer func() {
+				for _, store := range toVertexWmStores {
+					_ = store.Close()
 				}
 			}()
 
@@ -531,12 +551,18 @@ func TestNewInterStepDataForward(t *testing.T) {
 			}}
 
 			fetchWatermark := &testForwardFetcher{}
-			publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+			toVertexWmStores := buildWatermarkStores(toSteps)
+			publishWatermark, otStores := buildPublisherMapAndOTStoreFromWmStores(toSteps, toVertexWmStores)
 
-			// close the fetcher and publishers
 			defer func() {
 				for _, p := range publishWatermark {
 					_ = p.Close()
+				}
+			}()
+
+			defer func() {
+				for _, store := range toVertexWmStores {
+					_ = store.Close()
 				}
 			}()
 
@@ -859,12 +885,18 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
-	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+	toVertexWmStores := buildWatermarkStores(toSteps)
+	publishWatermark, otStores := buildPublisherMapAndOTStoreFromWmStores(toSteps, toVertexWmStores)
 
-	// close the fetcher and publishers
 	defer func() {
 		for _, p := range publishWatermark {
 			_ = p.Close()
+		}
+	}()
+
+	defer func() {
+		for _, store := range toVertexWmStores {
+			_ = store.Close()
 		}
 	}()
 
@@ -1019,7 +1051,20 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
-	publishWatermark, otStores := buildPublisherMapAndOTStore(toSteps)
+	toVertexWmStores := buildWatermarkStores(toSteps)
+	publishWatermark, otStores := buildPublisherMapAndOTStoreFromWmStores(toSteps, toVertexWmStores)
+
+	defer func() {
+		for _, p := range publishWatermark {
+			_ = p.Close()
+		}
+	}()
+
+	defer func() {
+		for _, store := range toVertexWmStores {
+			_ = store.Close()
+		}
+	}()
 
 	// close the fetcher and publishers
 	defer func() {
@@ -1594,17 +1639,26 @@ func metricsReset() {
 	ackMessagesCount.Reset()
 }
 
-// buildPublisherMap builds OTStore and publisher for each toBuffer
-func buildPublisherMapAndOTStore(toBuffers map[string][]isb.BufferWriter) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
+func buildWatermarkStores(toBuffers map[string][]isb.BufferWriter) map[string]wmstore.WatermarkStore {
 	var ctx = context.Background()
-	processorEntity := processor.NewProcessorEntity("publisherTestPod")
+	watermarkStores := make(map[string]wmstore.WatermarkStore)
+	for key := range toBuffers {
+		store, _ := wmstore.BuildInmemWatermarkStore(ctx, fmt.Sprintf(publisherKeyspace, key))
+		watermarkStores[key] = store
+	}
+	return watermarkStores
+}
+
+func buildPublisherMapAndOTStoreFromWmStores(toBuffers map[string][]isb.BufferWriter, wmStores map[string]wmstore.WatermarkStore) (map[string]publish.Publisher, map[string]kvs.KVStorer) {
+	var ctx = context.Background()
+	processorEntity := entity.NewProcessorEntity("publisherTestPod")
 	publishers := make(map[string]publish.Publisher)
 	otStores := make(map[string]kvs.KVStorer)
-	for key, partitionedBuffers := range toBuffers {
-		store, _, _, _ := wmstore.BuildInmemWatermarkStore(ctx, fmt.Sprintf(publisherKeyspace, key))
-		otStores[key] = store.OffsetTimelineStore()
-		p := publish.NewPublish(ctx, processorEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+
+	for key, store := range wmStores {
+		p := publish.NewPublish(ctx, processorEntity, store, int32(len(toBuffers[key])), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
+		otStores[key] = store.OffsetTimelineStore()
 	}
 	return publishers, otStores
 }

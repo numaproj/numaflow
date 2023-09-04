@@ -14,27 +14,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package processor
+package fetch
 
 import "sync"
 
-// ProcessorHeartbeat has details about each processor heartbeat. This information is populated
+// processorHeartbeat has details about each processor heartbeat. This information is populated
 // by watching the Vn-1th vertex's processors. It stores only the latest heartbeat value.
-type ProcessorHeartbeat struct {
+type processorHeartbeat struct {
 	// heartbeat has the processor name to last heartbeat timestamp
 	heartbeat map[string]int64
 	lock      sync.RWMutex
 }
 
-// NewProcessorHeartbeat returns ProcessorHeartbeat.
-func NewProcessorHeartbeat() *ProcessorHeartbeat {
-	return &ProcessorHeartbeat{
+// newProcessorHeartbeat returns processorHeartbeat.
+func newProcessorHeartbeat() *processorHeartbeat {
+	return &processorHeartbeat{
 		heartbeat: make(map[string]int64),
 	}
 }
 
-// Put inserts a heartbeat entry for a given processor key and value.
-func (hb *ProcessorHeartbeat) Put(key string, value int64) {
+// put inserts a heartbeat entry for a given processor key and value.
+func (hb *processorHeartbeat) put(key string, value int64) {
 	if value == -1 {
 		return
 	}
@@ -43,8 +43,8 @@ func (hb *ProcessorHeartbeat) Put(key string, value int64) {
 	hb.heartbeat[key] = value
 }
 
-// Get gets the heartbeat for a given processor.
-func (hb *ProcessorHeartbeat) Get(key string) int64 {
+// get the heartbeat for a given processor.
+func (hb *processorHeartbeat) get(key string) int64 {
 	hb.lock.RLock()
 	defer hb.lock.RUnlock()
 	if value, ok := hb.heartbeat[key]; ok {
@@ -53,8 +53,8 @@ func (hb *ProcessorHeartbeat) Get(key string) int64 {
 	return -1
 }
 
-// GetAll returns all the heartbeat entries in the heartbeat table.
-func (hb *ProcessorHeartbeat) GetAll() map[string]int64 {
+// getAll returns all the heartbeat entries in the heartbeat table.
+func (hb *processorHeartbeat) getAll() map[string]int64 {
 	hb.lock.RLock()
 	defer hb.lock.RUnlock()
 	var all = make(map[string]int64, len(hb.heartbeat))
@@ -64,8 +64,8 @@ func (hb *ProcessorHeartbeat) GetAll() map[string]int64 {
 	return all
 }
 
-// Delete deletes a processor from the ProcessorHeartbeat table.
-func (hb *ProcessorHeartbeat) Delete(key string) {
+// delete deletes a processor from the processorHeartbeat table.
+func (hb *processorHeartbeat) delete(key string) {
 	hb.lock.Lock()
 	defer hb.lock.Unlock()
 	delete(hb.heartbeat, key)

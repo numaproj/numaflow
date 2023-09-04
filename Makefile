@@ -1,5 +1,6 @@
 SHELL:=/bin/bash
 
+PACKAGE=github.com/numaproj/numaflow
 CURRENT_DIR=$(shell pwd)
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
