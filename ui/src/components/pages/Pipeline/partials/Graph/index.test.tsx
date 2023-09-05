@@ -2,9 +2,61 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Position } from "reactflow";
 import Graph from "./index";
 
-global.ResizeObserver = require("resize-observer-polyfill");
+class ResizeObserver {
+  callback: globalThis.ResizeObserverCallback;
+  constructor(callback: globalThis.ResizeObserverCallback) {
+    this.callback = callback;
+  }
+  observe(target: Element) {
+    this.callback([{ target } as globalThis.ResizeObserverEntry], this);
+  }
+  unobserve() {
+    return;
+  }
+  disconnect() {
+    return;
+  }
+}
+
+class DOMMatrixReadOnly {
+  m22: number;
+  constructor(transform: string) {
+    const scale = transform?.match(/scale\(([1-9.])\)/)?.[1];
+    this.m22 = scale !== undefined ? +scale : 1;
+  }
+}
+
+let init = false;
+
+export const mockReactFlow = () => {
+  if (init) return;
+  init = true;
+  global.ResizeObserver = ResizeObserver;
+  global.DOMMatrixReadOnly = DOMMatrixReadOnly;
+  Object.defineProperties(global.HTMLElement.prototype, {
+    offsetHeight: {
+      get() {
+        return parseFloat(this.style.height) || 1;
+      },
+    },
+    offsetWidth: {
+      get() {
+        return parseFloat(this.style.width) || 1;
+      },
+    },
+  });
+  (global.SVGElement as any).prototype.getBBox = () => ({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  });
+};
 
 describe("Graph screen test", () => {
+  beforeEach(() => {
+    mockReactFlow();
+  });
   const data = {
     edges: [
       {
@@ -157,6 +209,7 @@ describe("Graph screen test", () => {
     await waitFor(() => {
       expect(screen.getByTestId("graph")).toBeVisible();
       fireEvent.click(screen.getByTestId("rf__node-in"));
+      fireEvent.click(screen.getByTestId("rf__edge-in-cat"));
       fireEvent.click(container.getElementsByClassName("react-flow__pane")[0]);
     });
     await waitFor(() => expect(screen.getByTestId("card")).toBeVisible());
