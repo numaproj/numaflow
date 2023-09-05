@@ -55,17 +55,18 @@ import (
 
 // DataForward is responsible for reading and forwarding the message from ISB to PBQ.
 type DataForward struct {
-	ctx                   context.Context
-	vertexName            string
-	pipelineName          string
-	vertexReplica         int32
-	fromBufferPartition   isb.BufferReader
-	toBuffers             map[string][]isb.BufferWriter
-	wmFetcher             fetch.Fetcher
-	wmPublishers          map[string]publish.Publisher
-	windower              window.Windower
-	keyed                 bool
-	idleManager           *wmb.IdleManager
+	ctx                 context.Context
+	vertexName          string
+	pipelineName        string
+	vertexReplica       int32
+	fromBufferPartition isb.BufferReader
+	toBuffers           map[string][]isb.BufferWriter
+	wmFetcher           fetch.Fetcher
+	wmPublishers        map[string]publish.Publisher
+	windower            window.Windower
+	keyed               bool
+	idleManager         *wmb.IdleManager
+	// wmbChecker checks if the idle watermark is valid when the len(readMessage) is 0.
 	wmbChecker            wmb.WMBChecker
 	pbqManager            *pbq.Manager
 	whereToDecider        forward.ToWhichStepDecider

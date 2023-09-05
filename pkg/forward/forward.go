@@ -64,7 +64,7 @@ type InterStepDataForward struct {
 	pipelineName string
 	// idleManager manages the idle watermark status.
 	idleManager *wmb.IdleManager
-	// wmbChecker checks if the idle watermark is valid.
+	// wmbChecker checks if the idle watermark is valid when the len(readMessage) is 0.
 	wmbChecker wmb.WMBChecker
 	Shutdown
 }
