@@ -8,7 +8,7 @@ resources:
 
 images:
   - name: quay.io/numaproj/numaflow
-    newTag: v0.9.2
+    newTag: v0.9.3
 
 patchesStrategicMerge:
   - |-
@@ -23,7 +23,7 @@ patchesStrategicMerge:
             - name: controller-manager
               env:
                 - name: NUMAFLOW_IMAGE
-                  value: quay.io/numaproj/numaflow:v0.9.2
+                  value: quay.io/numaproj/numaflow:v0.9.3
   - |-
     apiVersion: apps/v1
     kind: Deployment
