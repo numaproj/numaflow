@@ -36,11 +36,13 @@ func NewIdleManager(length int) *IdleManager {
 	}
 }
 
-// Exists returns true if the given toBuffer partition name exists in the IdleManager map.
-func (im *IdleManager) Exists(toBufferPartitionName string) bool {
+// Validate returns true if the given partition hasn't got any control message and needs to create a new control message
+func (im *IdleManager) Validate(toBufferPartitionName string) bool {
 	im.lock.RLock()
 	defer im.lock.RUnlock()
-	return im.wmbOffset[toBufferPartitionName] != nil
+	// if the given partition doesn't have a control message
+	// the map entry will be empty, return true
+	return im.wmbOffset[toBufferPartitionName] == nil
 }
 
 // Get gets the offset for the given toBuffer partition name.

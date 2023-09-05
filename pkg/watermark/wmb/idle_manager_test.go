@@ -19,8 +19,9 @@ package wmb
 import (
 	"testing"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 func TestNewIdleManager(t *testing.T) {
@@ -32,11 +33,11 @@ func TestNewIdleManager(t *testing.T) {
 	)
 	idleManager := NewIdleManager(10)
 	assert.NotNil(t, idleManager)
-	assert.False(t, idleManager.Exists(toBufferName))
+	assert.True(t, idleManager.Validate(toBufferName))
 	idleManager.Update(toBufferName, o)
 	getOffset := idleManager.Get(toBufferName)
 	assert.Equal(t, o.String(), getOffset.String())
-	assert.True(t, idleManager.Exists(toBufferName))
+	assert.False(t, idleManager.Validate(toBufferName))
 	idleManager.Reset(toBufferName)
-	assert.False(t, idleManager.Exists(toBufferName))
+	assert.True(t, idleManager.Validate(toBufferName))
 }
