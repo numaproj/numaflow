@@ -23,7 +23,6 @@ spec:
             # https://github.com/numaproj/numaflow-go/tree/main/pkg/sink/examples/log
             image: quay.io/numaio/numaflow-go/sink-log:v0.5.0
 
-# TODO: fix it when we have python sdk changes @kohlisid
     - name: python-split
       scale:
         min: 1
@@ -32,7 +31,7 @@ spec:
           args:
             - python
             - example.py
-          # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/function/flatmap
+          # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/map/flatmap
           image: quay.io/numaio/numaflow-python/map-flatmap:v0.5.0
     - name: python-udsink
       scale:
