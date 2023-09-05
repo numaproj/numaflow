@@ -39,33 +39,33 @@ spec:
 
 # TODO: fix it when we have python sdk changes @kohlisid
 
-    #    - name: python-split
-#      partitions: 3
-#      metadata:
-#        annotations:
-#          numaflow.numaproj.io/map-stream: "true"
-#      limits:
-#        readBatchSize: 1
-#      scale:
-#        min: 1
-#      udf:
-#        container:
-#          args:
-#            - python
-#            - example.py
-#          # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/function/flatmap_stream
-#          image: quay.io/numaio/numaflow-python/map-flatmap-stream:latest
-#    - name: python-udsink
-#      scale:
-#        min: 1
-#      sink:
-#        udsink:
-#          container:
-#            args:
-#              - python
-#              - example.py
-#            # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
-#            image: quay.io/numaio/numaflow-python/sink-log:latest
+    - name: python-split
+      partitions: 3
+      metadata:
+        annotations:
+          numaflow.numaproj.io/map-stream: "true"
+      limits:
+        readBatchSize: 1
+      scale:
+        min: 1
+      udf:
+        container:
+          args:
+            - python
+            - example.py
+          # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream
+          image: quay.io/numaio/numaflow-python/map-flatmap-stream:v0.5.0
+    - name: python-udsink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            args:
+              - python
+              - example.py
+            # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
+            image: quay.io/numaio/numaflow-python/sink-log:v0.5.0
     - name: java-split
       partitions: 3
       metadata:
@@ -94,10 +94,10 @@ spec:
       to: go-udsink
     - from: go-split
       to: go-udsink-2
-#    - from: in
-#      to: python-split
-#    - from: python-split
-#      to: python-udsink
+    - from: in
+      to: python-split
+    - from: python-split
+      to: python-udsink
     - from: in
       to: java-split
     - from: java-split
