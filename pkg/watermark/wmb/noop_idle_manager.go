@@ -23,9 +23,7 @@ func (n *NoopIdleManager) Get(string) isb.Offset {
 }
 
 func (n *NoopIdleManager) Update(string, isb.Offset) {
-	return
 }
 
 func (n *NoopIdleManager) Reset(string) {
-	return
 }
