@@ -1,5 +1,76 @@
 # Changelog
 
+## v0.10.0 (2023-09-05)
+
+ * [10d1cfde](https://github.com/numaproj/numaflow/commit/10d1cfde26f168e19dabc797485fc766d117f086) Update manifests to v0.10.0
+ * [6f7c1f4a](https://github.com/numaproj/numaflow/commit/6f7c1f4a950a808a8e3f575a3223b1a0d5d44aaa) fix: seg fault inside controller (#1016)
+ * [c2fdef16](https://github.com/numaproj/numaflow/commit/c2fdef16338e99b6cc26778705a7789937d7b49b) fix: reconcile headless services before pods (#1014)
+ * [7d8b9087](https://github.com/numaproj/numaflow/commit/7d8b90874b37fcf91d4bf04432ece2816a04d513) fix: print version info when starting (#1013)
+ * [247b89ed](https://github.com/numaproj/numaflow/commit/247b89ed9aa5e17142b982f955c01bfe2a6650ed) feat: join vertex UI support (#1010)
+ * [aabb8af0](https://github.com/numaproj/numaflow/commit/aabb8af0a9dee4338c2ece6c35eaee4f4a169a20) feat: scaleUpCooldownSeconds and scaleDownCooldownSeconds to replace cooldownSeconds (#1008)
+ * [ad647ab7](https://github.com/numaproj/numaflow/commit/ad647ab7549efac87160ca0a0f69a34153aaa887) chore(deps): bump @adobe/css-tools from 4.2.0 to 4.3.1 in /ui (#1005)
+ * [92fbf7f1](https://github.com/numaproj/numaflow/commit/92fbf7f15dfd296dcbc20214753fb43550a9d1fd) fix: avoid unwanted watcher creation and reduce being stuck with udf is restarted (#999)
+ * [bac06df0](https://github.com/numaproj/numaflow/commit/bac06df00748f2f1b84be210e2f79c6f280ebb9b) fix: missing edges on UI (#998)
+ * [f90d4fe7](https://github.com/numaproj/numaflow/commit/f90d4fe7bff838cfed3001920965f33c57105f3d) feat: Add side input sdkclient and grpc  (#953)
+ * [d99480a8](https://github.com/numaproj/numaflow/commit/d99480a890d00be99c4d2fc33f2856eae38db4d0) feat: implement user-defined source (#980)
+ * [70685902](https://github.com/numaproj/numaflow/commit/706859025e2baaa1c77b77d9b83ec6bcf32129d0) fix: send keys for udsink (#979)
+ * [8f32b9a3](https://github.com/numaproj/numaflow/commit/8f32b9a3e4ac4a55fb275f0407dc67f1f3523b4a) fix bulleted list (#977)
+ * [1f33bf8b](https://github.com/numaproj/numaflow/commit/1f33bf8b45039ce235b930047ab3b77e0f1d8635) refactor: build wmstore and wmstorewatcher directly, and remove some unnecessary fields  (#970)
+ * [4cea3444](https://github.com/numaproj/numaflow/commit/4cea3444ae1a375d2550ccd7b66e0541fece169c) feat: add vertex template to pipeline spec (#947)
+ * [4a4ed927](https://github.com/numaproj/numaflow/commit/4a4ed9275c6da00588df72434f6e082e0bb0dd99) feat: Add side-input initializer and synchronizer (#912)
+ * [d10f36e6](https://github.com/numaproj/numaflow/commit/d10f36e67581c76516554fd60acd400de45c2607) fix: npe when the ctx is canceled inside kv watcher (#942)
+ * [6b1b3337](https://github.com/numaproj/numaflow/commit/6b1b3337c76bfdbe2a53173f97ce43ee993577ad) fix: retry logic for fetching last updated kv time (#939)
+ * [e3da4a3e](https://github.com/numaproj/numaflow/commit/e3da4a3ef31191f61d75ebeab8ba5f76cfba0e17) fix: close the watermark fetcher and publishers after all the forwarders exit (#921)
+ * [2d6112bf](https://github.com/numaproj/numaflow/commit/2d6112bf0c20baace28da76e6fb0ace3c3be01b5) Pipelines with Cycles: e2e testing, and pipeline validation (#920)
+ * [5e0bf77e](https://github.com/numaproj/numaflow/commit/5e0bf77e6fbbb73ff267271064d7443dcdffac86) docs quick fixes (#919)
+ * [0f8f7a17](https://github.com/numaproj/numaflow/commit/0f8f7a17b0a1e1259e771dafed38c71db3443543) docs updates (#917)
+ * [b55566b8](https://github.com/numaproj/numaflow/commit/b55566b89b568b4211a467e98cb48a0c4b7ea884) feat: watermark delay in tooltip (#910)
+ * [667ada75](https://github.com/numaproj/numaflow/commit/667ada75146ee4594ef6603fa06fb1c93e141a89) fix: removing WIP tag (#914)
+ * [872aa864](https://github.com/numaproj/numaflow/commit/872aa8640c08c776b7cea9da4afa09a1a9098cc3) feat: emit k8s events for controller messages. Fixes #856 (#901)
+ * [0fbdb7ab](https://github.com/numaproj/numaflow/commit/0fbdb7aba3fc6e15f6b81146fdf7a6acdae08868) fix: avoid potential deadlocks when operating UniqueStringList (#905)
+ * [2c85ec43](https://github.com/numaproj/numaflow/commit/2c85ec439098a313f4c33829a0ef8d9db30a0ea0) refactor: avoid exposing internal data structures of pod tracker to the rater (#902)
+ * [7e86306b](https://github.com/numaproj/numaflow/commit/7e86306bcb1c0cc66f08172d668ad5f14c7ca503) feat: Join Vertex (#875)
+ * [85360f65](https://github.com/numaproj/numaflow/commit/85360f6528139721fff37048eccd0e605fc53418) fix: stabilize nats connection (#889)
+ * [d4f8f594](https://github.com/numaproj/numaflow/commit/d4f8f59431e1322ce6a555018efd821801e69a12) doc: Update multi partition doc (#898)
+ * [404672d6](https://github.com/numaproj/numaflow/commit/404672d68ed0777e94ee98ef008461bc5687d101) fix: Reduce idle WM unit test fix (#897)
+ * [a1bbdedf](https://github.com/numaproj/numaflow/commit/a1bbdedf44289efc46773dd1d004b586d8663037) updated default version of Redis used for e2e (#891)
+ * [85ee4b0d](https://github.com/numaproj/numaflow/commit/85ee4b0d8669f4b24fe202e6b9e7389e85826912) fix TestBuiltinEventTimeExtractor (#885)
+ * [f3e1044e](https://github.com/numaproj/numaflow/commit/f3e1044eab7e2372dcdf2779d74e4ce8cb5f7cfb) chore(deps): bump word-wrap from 1.2.3 to 1.2.4 in /ui (#881)
+ * [a02f29a7](https://github.com/numaproj/numaflow/commit/a02f29a710fd482b093193df11387e287d2c7c2e) fix: remove retry when the processor is not found. (#868)
+ * [cfdeaa8a](https://github.com/numaproj/numaflow/commit/cfdeaa8a4b50ffae8edcfd3a940ba194e354f0b6) refactor: create a new data forwarder dedicated for source (#874)
+ * [6d14998a](https://github.com/numaproj/numaflow/commit/6d14998a998e392590a8871da87514f5bffa6a46) feat: controller changes for Side Inputs support (#866)
+ * [92db62a9](https://github.com/numaproj/numaflow/commit/92db62a907cb410a74ef20e066e5ed8aea10bf78) fix: highlight edge when buffer is full (#869)
+ * [9c4e83c0](https://github.com/numaproj/numaflow/commit/9c4e83c0658dd319cf43eced249af965a9e8af18) fix: minor ui bugs (#861)
+ * [b970b4cc](https://github.com/numaproj/numaflow/commit/b970b4cc7dfe90dd01a086a333e654275d5aeb7f) fix: release script for validating webhook (#860)
+ * [7684aada](https://github.com/numaproj/numaflow/commit/7684aada2fb57458c572a088fbfc5c9ffc1a07e5) fix: use windower to fetch next window yet to be closed (#850)
+ * [609d8b3c](https://github.com/numaproj/numaflow/commit/609d8b3ce2233b18f9c6debfc4c8ec65ee067dfa) feat: implement optional validation webhook. Fixes #817. (#832)
+ * [3ae1cedb](https://github.com/numaproj/numaflow/commit/3ae1cedb3918d9936b0f2098b853f1d96d5e6e60) chore(deps): bump semver from 6.3.0 to 6.3.1 in /ui (#845)
+
+### Contributors
+
+ * Derek Wang
+ * Dillen Padhiar
+ * Jason Zesheng Chen
+ * Juanlu Yu
+ * Julie Vogelman
+ * Keran Yang
+ * RohanAshar
+ * Sidhant Kohli
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+ * dependabot[bot]
+
+## v0.9.3 (2023-09-05)
+
+ * [6141719f](https://github.com/numaproj/numaflow/commit/6141719f327e8f8d5b5176c75cd41b179622de96) Update manifests to v0.9.3
+ * [022f8bfa](https://github.com/numaproj/numaflow/commit/022f8bfae8aa7e59abf0c795410f17312586e502) fix: seg fault inside controller (#1016)
+
+### Contributors
+
+ * Derek Wang
+ * Yashash H L
+
 ## v0.9.2 (2023-08-23)
 
  * [6f81361f](https://github.com/numaproj/numaflow/commit/6f81361f8f36fad74208895aab599e63f9436b79) Update manifests to v0.9.2
