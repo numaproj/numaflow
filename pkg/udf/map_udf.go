@@ -21,14 +21,15 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-
-	"go.uber.org/zap"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -69,10 +70,12 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		toVertexWmStores   map[string]store.WatermarkStore
 		mapHandler         *rpc.GRPCBasedMap
 		mapStreamHandler   *rpc.GRPCBasedMapStream
+		idleManager        wmb.IdleManagerInterface
 	)
 
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
+	idleManager = wmb.NewNoopIdleManager()
 
 	// create readers and writers
 	switch u.ISBSvcType {
@@ -114,6 +117,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			idleManager = wmb.NewIdleManager(len(writers))
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
@@ -225,7 +229,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}
 		// create a forwarder for each partition
-		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, opts...)
+		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, idleManager, opts...)
 		if err != nil {
 			return err
 		}

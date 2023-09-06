@@ -28,6 +28,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	mock "github.com/IBM/sarama/mocks"
 	"github.com/stretchr/testify/assert"
@@ -48,7 +49,7 @@ func TestWriteSuccessToKafka(t *testing.T) {
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
 	toSteps := map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}
-	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, getSinkGoWhereDecider(vertex.Spec.Name), applier.Terminal, applier.TerminalMapStream, fetchWatermark, publishWatermark)
+	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, getSinkGoWhereDecider(vertex.Spec.Name), applier.Terminal, applier.TerminalMapStream, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)))
 	assert.NoError(t, err)
 	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
 	toKafka.name = "Test"
@@ -101,7 +102,7 @@ func TestWriteFailureToKafka(t *testing.T) {
 	}}
 	toSteps := map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, getSinkGoWhereDecider(vertex.Spec.Name), applier.Terminal, applier.TerminalMapStream, fetchWatermark, publishWatermark)
+	toKafka.isdf, err = forward.NewInterStepDataForward(vertex, fromStep, toSteps, getSinkGoWhereDecider(vertex.Spec.Name), applier.Terminal, applier.TerminalMapStream, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)))
 	assert.NoError(t, err)
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"
