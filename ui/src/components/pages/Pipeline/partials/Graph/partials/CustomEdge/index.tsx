@@ -40,9 +40,9 @@ const CustomEdge: FC<EdgeProps> = ({
         }
       } else {
         if (sourceY < targetY) {
-          labelY = targetY - 47;
+          labelY = sourceY + 1;
         } else {
-          labelY = targetY + 36;
+          labelY = sourceY - 13;
         }
       }
     }
