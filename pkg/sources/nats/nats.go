@@ -66,6 +66,7 @@ func New(
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
+	idleManager wmb.IdleManagerInterface,
 	opts ...Option) (*natsSource, error) {
 
 	n := &natsSource{
@@ -90,7 +91,7 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, transformerApplier, fetchWM, n, toVertexPublisherStores, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, transformerApplier, fetchWM, n, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

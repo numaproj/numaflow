@@ -49,6 +49,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type SourceProcessor struct {
@@ -66,6 +67,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		sdkClient                sourcetransformer.Client
 		sourcer                  Sourcer
 		readyCheckers            []metrics.HealthChecker
+		idleManager              wmb.IdleManagerInterface
 	)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -81,11 +83,11 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// watermark variables no-op initialization
 	// create a no op fetcher
 	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToBuffers())
-	// create a no op publisher stores
-
+	// create no op publisher stores
 	for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 		toVertexWatermarkStores[e.To], _ = store.BuildNoOpWatermarkStore()
 	}
+	idleManager = wmb.NewNoopIdleManager()
 
 	switch sp.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -111,50 +113,55 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			writersMap[e.To] = bufferWriters
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		// build watermark stores for from vertex
-		sourceWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
-		if err != nil {
-			return fmt.Errorf("failed to build watermark stores: %w", err)
-		}
-
-		// create watermark fetcher using watermark stores of from vertex
-		fetchWatermark = fetch.NewSourceFetcher(ctx, sourceWmStores[sp.VertexInstance.Vertex.Name], fetch.WithIsSource(true))
-
-		// build watermark stores for to-vertex
-		toVertexWatermarkStores, err = jetstream.BuildToVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
-		if err != nil {
-			return err
-		}
-
-		// build watermark stores for source (we publish twice for source)
-		sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
-		if err != nil {
-			return err
-		}
-		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			writeOpts := []jetstreamisb.WriteOption{
-				jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
+		if sp.VertexInstance.Vertex.Spec.Watermark.Disabled {
+			// use default no op sourcePublisherStores, toVertexWatermarkStores, fetcher, idleManager
+		} else {
+			// build watermark stores for from vertex
+			sourceWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return fmt.Errorf("failed to build watermark stores: %w", err)
 			}
-			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
-				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
+
+			// create watermark fetcher using watermark stores of from vertex
+			fetchWatermark = fetch.NewSourceFetcher(ctx, sourceWmStores[sp.VertexInstance.Vertex.Name], fetch.WithIsSource(true))
+
+			// build watermark stores for to-vertex
+			toVertexWatermarkStores, err = jetstream.BuildToVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return err
 			}
-			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
-				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+
+			// build watermark stores for source (we publish twice for source)
+			sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return err
 			}
-			var bufferWriters []isb.BufferWriter
-			partitionedBuffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
-			// create a writer for each partition.
-			for partitionIdx, partition := range partitionedBuffers {
-				streamName := isbsvc.JetStreamName(partition)
-				jetStreamClient := natsClientPool.NextAvailableClient()
-				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, partition, streamName, streamName, int32(partitionIdx), writeOpts...)
-				if err != nil {
-					return err
+			for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
+				writeOpts := []jetstreamisb.WriteOption{
+					jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
 				}
-				bufferWriters = append(bufferWriters, writer)
-			}
+				if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
+					writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
+				}
+				if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
+					writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+				}
+				var bufferWriters []isb.BufferWriter
+				partitionedBuffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
+				// create a writer for each partition.
+				for partitionIdx, partition := range partitionedBuffers {
+					streamName := isbsvc.JetStreamName(partition)
+					jetStreamClient := natsClientPool.NextAvailableClient()
+					writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, partition, streamName, streamName, int32(partitionIdx), writeOpts...)
+					if err != nil {
+						return err
+					}
+					bufferWriters = append(bufferWriters, writer)
+				}
 
-			writersMap[e.To] = bufferWriters
+				writersMap[e.To] = bufferWriters
+			}
+			idleManager = wmb.NewIdleManager(len(writersMap))
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
@@ -219,9 +226,9 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 
 		readyCheckers = append(readyCheckers, transformerGRPCClient)
-		sourcer, err = sp.getSourcer(writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), transformerGRPCClient, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, log)
+		sourcer, err = sp.getSourcer(writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), transformerGRPCClient, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
 	} else {
-		sourcer, err = sp.getSourcer(writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, log)
+		sourcer, err = sp.getSourcer(writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to find a sourcer, error: %w", err)
@@ -277,6 +284,7 @@ func (sp *SourceProcessor) getSourcer(
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
+	idleManager wmb.IdleManagerInterface,
 	logger *zap.SugaredLogger) (Sourcer, error) {
 
 	src := sp.VertexInstance.Vertex.Spec.Source
@@ -287,7 +295,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, udsource.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return udsource.New(sp.VertexInstance, writers, fsd, transformerApplier, udsGRPCClient, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
+		return udsource.New(sp.VertexInstance, writers, fsd, transformerApplier, udsGRPCClient, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
 	} else if x := src.Generator; x != nil {
 		readOptions := []generator.Option{
 			generator.WithLogger(logger),
@@ -295,7 +303,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, generator.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return generator.NewMemGen(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
+		return generator.NewMemGen(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
 	} else if x := src.Kafka; x != nil {
 		readOptions := []kafka.Option{
 			kafka.WithGroupName(x.ConsumerGroupName),
@@ -304,9 +312,9 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, kafka.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return kafka.NewKafkaSource(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
+		return kafka.NewKafkaSource(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
 	} else if x := src.HTTP; x != nil {
-		return http.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, http.WithLogger(logger))
+		return http.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, http.WithLogger(logger))
 	} else if x := src.Nats; x != nil {
 		readOptions := []nats.Option{
 			nats.WithLogger(logger),
@@ -314,7 +322,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
 		}
-		return nats.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
+		return nats.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
 	} else if x := src.RedisStreams; x != nil {
 		readOptions := []redisstreams.Option{
 			redisstreams.WithLogger(logger),
@@ -322,7 +330,7 @@ func (sp *SourceProcessor) getSourcer(
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, redisstreams.WithReadTimeOut(l.ReadTimeout.Duration))
 		}
-		return redisstreams.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, readOptions...)
+		return redisstreams.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }

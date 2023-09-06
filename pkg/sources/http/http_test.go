@@ -24,6 +24,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -85,7 +86,7 @@ func Test_NewHTTP(t *testing.T) {
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"test": publishWMStores,
 	}
-	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores)
+	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, wmb.NewIdleManager(len(toBuffers)))
 	assert.NoError(t, err)
 	assert.False(t, h.ready)
 	assert.Equal(t, v.Spec.Name, h.GetName())

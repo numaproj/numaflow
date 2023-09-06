@@ -91,8 +91,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		// https://github.com/nats-io/nats.go/issues/241
 
 		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
-			names := u.VertexInstance.Vertex.GetToBuffers()
-			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
+			// use default no op fetcher, publisher, idleManager
 		} else {
 			// create from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())

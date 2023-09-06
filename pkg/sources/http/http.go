@@ -94,6 +94,7 @@ func New(
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
+	idleManager wmb.IdleManagerInterface,
 	opts ...Option) (*httpSource, error) {
 
 	h := &httpSource{
@@ -199,7 +200,7 @@ func New(
 		}
 	}
 
-	h.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, h, writers, fsd, transformerApplier, fetchWM, h, toVertexPublisherStores, forwardOpts...)
+	h.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, h, writers, fsd, transformerApplier, fetchWM, h, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

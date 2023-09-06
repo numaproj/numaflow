@@ -34,6 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type myForwardToAllTest struct {
@@ -81,7 +82,7 @@ func TestMessageHandling(t *testing.T) {
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"test": publishWMStore,
 	}
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, WithLogger(logging.NewLogger()),
+	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, wmb.NewIdleManager(len(toBuffers)), WithLogger(logging.NewLogger()),
 		WithBufferSize(100), WithReadTimeOut(100*time.Millisecond))
 
 	msg := &sarama.ConsumerMessage{

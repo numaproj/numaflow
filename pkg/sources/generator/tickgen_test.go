@@ -28,6 +28,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,7 +76,7 @@ func TestRead(t *testing.T) {
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"writer": publishWMStore,
 	}
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, wmb.NewIdleManager(len(toBuffers)))
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -134,7 +135,7 @@ func TestStop(t *testing.T) {
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"writer": publishWMStore,
 	}
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, wmb.NewIdleManager(len(toBuffers)))
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
