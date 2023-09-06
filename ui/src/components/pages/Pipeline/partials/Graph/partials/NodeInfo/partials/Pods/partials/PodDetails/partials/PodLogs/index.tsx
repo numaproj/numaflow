@@ -10,6 +10,7 @@ import ArrowUpward from "@mui/icons-material/ArrowUpward";
 import ArrowDownward from "@mui/icons-material/ArrowDownward";
 import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
+import Tooltip from "@mui/material/Tooltip";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
 import Highlighter from "react-highlight-words";
@@ -220,15 +221,45 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           }
           label="Negate search"
         />
-        <IconButton data-testid="pause-button" onClick={handlePause}>
-          {paused ? <PlayArrowIcon /> : <PauseIcon />}
-        </IconButton>
-        <IconButton data-testid="color-mode-button" onClick={handleColorMode}>
-          {colorMode === "light" ? <DarkMode /> : <LightMode />}
-        </IconButton>
-        <IconButton data-testid="order-button" onClick={handleOrder}>
-          {logsOrder === "asc" ? <ArrowDownward /> : <ArrowUpward />}
-        </IconButton>
+        <Tooltip
+          title={
+            <div className={"icon-tooltip"}>
+              {paused ? "Play" : "Pause"} logs
+            </div>
+          }
+          placement={"top"}
+          arrow
+        >
+          <IconButton data-testid="pause-button" onClick={handlePause}>
+            {paused ? <PlayArrowIcon /> : <PauseIcon />}
+          </IconButton>
+        </Tooltip>
+        <Tooltip
+          title={
+            <div className={"icon-tooltip"}>
+              {colorMode === "light" ? "Dark" : "Light"} mode
+            </div>
+          }
+          placement={"top"}
+          arrow
+        >
+          <IconButton data-testid="color-mode-button" onClick={handleColorMode}>
+            {colorMode === "light" ? <DarkMode /> : <LightMode />}
+          </IconButton>
+        </Tooltip>
+        <Tooltip
+          title={
+            <div className={"icon-tooltip"}>
+              {logsOrder === "asc" ? "Descending" : "Ascending"} order
+            </div>
+          }
+          placement={"top"}
+          arrow
+        >
+          <IconButton data-testid="order-button" onClick={handleOrder}>
+            {logsOrder === "asc" ? <ArrowDownward /> : <ArrowUpward />}
+          </IconButton>
+        </Tooltip>
       </Box>
       <Box
         sx={{
