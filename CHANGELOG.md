@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9.3 (2023-09-05)
+
+ * [6141719f](https://github.com/numaproj/numaflow/commit/6141719f327e8f8d5b5176c75cd41b179622de96) Update manifests to v0.9.3
+ * [022f8bfa](https://github.com/numaproj/numaflow/commit/022f8bfae8aa7e59abf0c795410f17312586e502) fix: seg fault inside controller (#1016)
+
+### Contributors
+
+ * Derek Wang
+ * Yashash H L
+
 ## v0.9.2 (2023-08-23)
 
  * [6f81361f](https://github.com/numaproj/numaflow/commit/6f81361f8f36fad74208895aab599e63f9436b79) Update manifests to v0.9.2
