@@ -45,18 +45,17 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
 		VertexPodLogContains("go-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
-	// TODO: fix it when we have python sdk changes @kohlisid
-	//VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-	//VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
 
 	w.Expect().
 		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
-		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
-	//VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
+		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
+		VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
 }
 
 func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
@@ -70,10 +69,9 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
 		VertexPodLogContains("go-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
-	// TODO: fix it when we have python sdk changes @kohlisid
-	//VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-	//VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello,hello"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
@@ -82,9 +80,8 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
 	w.Expect().
 		VertexPodLogContains("go-udsink-2", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
-	// TODO: fix it when we have python sdk changes @kohlisid
-	//w.Expect().
-	//	VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
+	w.Expect().
+		VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
 	w.Expect().
 		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
 }
@@ -127,9 +124,9 @@ func (s *SDKsSuite) TestReduceSDK() {
 }
 
 // TODO fix it when we have python sdk changes.
-//func (s *SDKsSuite) TestSourceTransformerPython() {
-//s.testSourceTransformer("python")
-//}
+func (s *SDKsSuite) TestSourceTransformerPython() {
+	s.testSourceTransformer("python")
+}
 
 func (s *SDKsSuite) TestSourceTransformerJava() {
 	s.testSourceTransformer("java")
