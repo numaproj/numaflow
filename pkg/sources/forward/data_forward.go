@@ -557,6 +557,7 @@ func (isdf *DataForward) createToVertexWatermarkPublisher(toVertexName string, p
 	entityName := fmt.Sprintf("%s-%s-%d", isdf.pipelineName, isdf.vertexName, partition)
 	processorEntity := entity.NewProcessorEntity(entityName)
 
+	// if watermark is disabled, wmStore here is a no op store
 	publisher := publish.NewPublish(isdf.ctx, processorEntity, wmStore, int32(len(isdf.toBuffers[toVertexName])))
 	isdf.toVertexWMPublishers[toVertexName][partition] = publisher
 	return publisher
