@@ -25,15 +25,13 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
+	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // ToKafka produce the output to a kafka sinks.
@@ -43,7 +41,7 @@ type ToKafka struct {
 	producer     sarama.AsyncProducer
 	connected    bool
 	topic        string
-	isdf         *forward.InterStepDataForward
+	isdf         *sinkforward.DataForward
 	kafkaSink    *dfv1.KafkaSink
 	log          *zap.SugaredLogger
 }
@@ -61,8 +59,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 func NewToKafka(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
-	whereToDecider forward.GoWhere,
+	publishWatermark publish.Publisher,
 	opts ...Option) (*ToKafka, error) {
 
 	kafkaSink := vertex.Spec.Sink.Kafka
@@ -84,14 +81,14 @@ func NewToKafka(vertex *dfv1.Vertex,
 	toKafka.topic = kafkaSink.Topic
 	toKafka.kafkaSink = kafkaSink
 
-	forwardOpts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeSink), forward.WithLogger(toKafka.log)}
+	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(toKafka.log)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}, whereToDecider, applier.Terminal, applier.TerminalMapStream, fetchWatermark, publishWatermark, wmb.NewIdleManager(1), forwardOpts...)
+	f, err := sinkforward.NewDataForward(vertex, fromBuffer, toKafka, fetchWatermark, publishWatermark, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

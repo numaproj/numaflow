@@ -219,7 +219,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			return result, nil
 		})
 
-		opts := []forward.Option{forward.WithVertexType(dfv1.VertexTypeMapUDF), forward.WithLogger(log),
+		opts := []forward.Option{forward.WithLogger(log),
 			forward.WithUDFStreaming(enableMapUdfStream)}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 			if x.ReadBatchSize != nil {
