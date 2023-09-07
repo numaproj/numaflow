@@ -30,6 +30,7 @@ import (
 	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type UserDefinedSink struct {
@@ -54,6 +55,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
+	idleManager wmb.IdleManagerInterface,
 	udsink SinkApplier,
 	opts ...Option) (*UserDefinedSink, error) {
 
@@ -77,7 +79,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 		}
 	}
 	s.udsink = udsink
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
