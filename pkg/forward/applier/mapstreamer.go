@@ -34,16 +34,3 @@ type ApplyMapStreamFunc func(context.Context, *isb.ReadMessage, chan<- isb.Write
 func (f ApplyMapStreamFunc) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
 	return f(ctx, message, writeMessageCh)
 }
-
-var (
-	// TerminalMapStream Applier do not make any change to the message
-	TerminalMapStream = ApplyMapStreamFunc(func(ctx context.Context, msg *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-		defer close(writeMessageCh)
-		writeMessage := &isb.WriteMessage{
-			Message: msg.Message,
-		}
-
-		writeMessageCh <- *writeMessage
-		return nil
-	})
-)
