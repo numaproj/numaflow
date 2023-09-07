@@ -79,12 +79,6 @@ func TestClient_MapStreamFn(t *testing.T) {
 		Tags:  nil,
 	}}, io.EOF)
 
-	mockStreamClient.EXPECT().Recv().Return(&mapstreampb.MapStreamResponse{Result: &mapstreampb.MapStreamResponse_Result{
-		Keys:  []string{"temp-key"},
-		Value: []byte("mock result"),
-		Tags:  nil,
-	}}, fmt.Errorf("mock connection refused"))
-
 	mockStreamClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 
 	mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockStreamClient, nil)
