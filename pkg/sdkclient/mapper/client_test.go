@@ -95,7 +95,7 @@ func TestClient_MapFn(t *testing.T) {
 	}}, result)
 	assert.NoError(t, err)
 
-	result, err = testClient.MapFn(ctx, &mappb.MapRequest{})
+	_, err = testClient.MapFn(ctx, &mappb.MapRequest{})
 	assert.EqualError(t, err, "NonRetryable: mock connection refused")
 }
 
