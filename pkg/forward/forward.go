@@ -118,10 +118,6 @@ func NewInterStepDataForward(
 		return nil, fmt.Errorf("batch size is not 1 with map UDF streaming")
 	}
 
-	if isdf.opts.vertexType == dfv1.VertexTypeSource {
-		return nil, fmt.Errorf("source vertex is not supported by inter-step forwarder, please use source forwarder instead")
-	}
-
 	return &isdf, nil
 }
 
@@ -228,7 +224,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		for toVertexName, toVertexBuffer := range isdf.toBuffers {
 			for _, partition := range toVertexBuffer {
 				if p, ok := isdf.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, partition, p, isdf.idleManager, isdf.opts.logger, isdf.opts.vertexType, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					idlehandler.PublishIdleWatermark(ctx, partition, p, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeMapUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 				}
 			}
 		}
@@ -350,20 +346,13 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
 		if publisher, ok := isdf.wmPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
-				if isdf.opts.vertexType == dfv1.VertexTypeMapUDF || isdf.opts.vertexType == dfv1.VertexTypeReduceUDF {
-					if len(offsets) > 0 {
-						publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
-						activeWatermarkBuffers[toVertexName][index] = true
-						// reset because the toBuffer partition is no longer idling
-						isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
-					}
-					// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
-				} else { // For Sink vertex, and it does not care about the offset during watermark publishing
-					publisher.PublishWatermark(processorWM, nil, int32(index))
+				if len(offsets) > 0 {
+					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is no longer idling
 					isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
 				}
+				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 			}
 		}
 	}
@@ -383,7 +372,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 					// use the watermark of the current read batch for the idle watermark
 					// same as read len==0 because there's no event published to the buffer
 					if p, ok := isdf.wmPublishers[bufferName]; ok {
-						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName][index], p, isdf.idleManager, isdf.opts.logger, isdf.opts.vertexType, processorWM)
+						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName][index], p, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeMapUDF, processorWM)
 					}
 				}
 			}
@@ -395,7 +384,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	err = isdf.ackFromBuffer(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
-		isdf.opts.logger.Errorw("failed to ack from buffer", zap.Error(err))
+		isdf.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
 		ackMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
 		return
 	}

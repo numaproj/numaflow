@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	natslib "github.com/nats-io/nats.go"
 )
 
@@ -61,7 +60,7 @@ func init() {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.WriteHeader(200)
 
-		opts := []nats.Option{natslib.Token(testingToken)}
+		opts := []natslib.Option{natslib.Token(testingToken)}
 		nc, err := natslib.Connect(url, opts...)
 		if err != nil {
 			log.Println(err)

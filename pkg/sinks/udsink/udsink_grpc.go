@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"time"
 
-	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
-
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // SinkApplier applies the sink on the read message and gives back a response. Any UserError will be retried here, while
