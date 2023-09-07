@@ -53,12 +53,12 @@ func (n NoOpWMProgressor) GetLatestWatermark() wmb.Watermark {
 	return wmb.Watermark{}
 }
 
-// GetHeadWatermark returns the default head watermark.
+// ComputeHeadWatermark returns the default head watermark.
 func (n NoOpWMProgressor) ComputeHeadWatermark(int32) wmb.Watermark {
 	return wmb.Watermark{}
 }
 
-// GetHeadWMB returns the default WMB.
+// ComputeHeadIdleWMB returns the default WMB.
 func (n NoOpWMProgressor) ComputeHeadIdleWMB(int32) wmb.WMB {
 	return wmb.WMB{}
 }
