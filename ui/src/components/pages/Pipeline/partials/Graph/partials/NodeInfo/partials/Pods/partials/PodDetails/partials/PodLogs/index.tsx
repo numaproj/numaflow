@@ -6,6 +6,11 @@ import IconButton from "@mui/material/IconButton";
 import ClearIcon from "@mui/icons-material/Clear";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import ArrowUpward from "@mui/icons-material/ArrowUpward";
+import ArrowDownward from "@mui/icons-material/ArrowDownward";
+import LightMode from "@mui/icons-material/LightMode";
+import DarkMode from "@mui/icons-material/DarkMode";
+import Tooltip from "@mui/material/Tooltip";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
 import Highlighter from "react-highlight-words";
@@ -23,9 +28,6 @@ const parsePodLogs = (value: string): string[] => {
     try {
       const obj = JSON.parse(raw);
       let msg = ``;
-      if (obj?.level) {
-        msg = `${msg}${obj.level.toUpperCase()} `;
-      }
       if (obj?.ts) {
         const date = obj.ts.split(/[-T:.Z]/);
         const ds =
@@ -40,7 +42,10 @@ const parsePodLogs = (value: string): string[] => {
           date[4] +
           ":" +
           date[5];
-        msg = `${msg}${ds} `;
+        msg = `${msg}${ds} | `;
+      }
+      if (obj?.level) {
+        msg = `${msg}${obj.level.toUpperCase()} | `;
       }
       msg = `${msg}${raw}`;
       return msg;
@@ -48,6 +53,19 @@ const parsePodLogs = (value: string): string[] => {
       return raw;
     }
   });
+};
+
+const logColor = (log: string, colorMode: string): string => {
+  if (log.startsWith("ERROR", 22)) {
+    return "#B80000";
+  }
+  if (log.startsWith("WARN", 22)) {
+    return "#FFAD00";
+  }
+  if (log.startsWith("DEBUG", 22)) {
+    return "#81b8ef";
+  }
+  return colorMode === "light" ? "black" : "white";
 };
 
 export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
@@ -60,6 +78,8 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
   const [search, setSearch] = useState<string>("");
   const [negateSearch, setNegateSearch] = useState<boolean>(false);
   const [paused, setPaused] = useState<boolean>(false);
+  const [colorMode, setColorMode] = useState<string>("light");
+  const [logsOrder, setLogsOrder] = useState<string>("asc");
 
   useEffect(() => {
     // reset logs in memory on any log source change
@@ -102,10 +122,10 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
             }
             if (value) {
               setLogs((logs) => {
-                const latestLogs = parsePodLogs(value).reverse();
-                let updated = [...latestLogs, ...logs];
+                const latestLogs = parsePodLogs(value);
+                let updated = [...logs, ...latestLogs];
                 if (updated.length > MAX_LOGS) {
-                  updated = updated.slice(0, MAX_LOGS);
+                  updated = updated.slice(updated.length - MAX_LOGS);
                 }
                 return updated;
               });
@@ -160,6 +180,14 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
     }
   }, [paused, reader]);
 
+  const handleColorMode = useCallback(() => {
+    setColorMode(colorMode === "light" ? "dark" : "light");
+  }, [colorMode]);
+
+  const handleOrder = useCallback(() => {
+    setLogsOrder(logsOrder === "asc" ? "desc" : "asc");
+  }, [logsOrder]);
+
   return (
     <Box>
       <Box sx={{ display: "flex", flexDirection: "row" }}>
@@ -193,14 +221,50 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           }
           label="Negate search"
         />
-        <IconButton data-testid="pause-button" onClick={handlePause}>
-          {paused ? <PlayArrowIcon /> : <PauseIcon />}
-        </IconButton>
+        <Tooltip
+          title={
+            <div className={"icon-tooltip"}>
+              {paused ? "Play" : "Pause"} logs
+            </div>
+          }
+          placement={"top"}
+          arrow
+        >
+          <IconButton data-testid="pause-button" onClick={handlePause}>
+            {paused ? <PlayArrowIcon /> : <PauseIcon />}
+          </IconButton>
+        </Tooltip>
+        <Tooltip
+          title={
+            <div className={"icon-tooltip"}>
+              {colorMode === "light" ? "Dark" : "Light"} mode
+            </div>
+          }
+          placement={"top"}
+          arrow
+        >
+          <IconButton data-testid="color-mode-button" onClick={handleColorMode}>
+            {colorMode === "light" ? <DarkMode /> : <LightMode />}
+          </IconButton>
+        </Tooltip>
+        <Tooltip
+          title={
+            <div className={"icon-tooltip"}>
+              {logsOrder === "asc" ? "Descending" : "Ascending"} order
+            </div>
+          }
+          placement={"top"}
+          arrow
+        >
+          <IconButton data-testid="order-button" onClick={handleOrder}>
+            {logsOrder === "asc" ? <ArrowDownward /> : <ArrowUpward />}
+          </IconButton>
+        </Tooltip>
       </Box>
       <Box
         sx={{
-          backgroundColor: "#000",
-          color: "#fff",
+          backgroundColor: `${colorMode === "light" ? "whitesmoke" : "black"}`,
+          fontWeight: 600,
           overflow: "scroll",
           display: "flex",
           flexDirection: "column",
@@ -210,22 +274,55 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           height: "25rem",
         }}
       >
-        {filteredLogs.map((l: string, idx) => (
-          <Box
-            key={`${idx}-${podName}-logs`}
-            component="span"
-            sx={{
-              whiteSpace: "nowrap",
-              width: "200px",
-            }}
-          >
-            <Highlighter
-              searchWords={[search]}
-              autoEscape={true}
-              textToHighlight={l}
-            />
-          </Box>
-        ))}
+        {logsOrder === "asc" &&
+          filteredLogs.map((l: string, idx) => (
+            <Box
+              key={`${idx}-${podName}-logs`}
+              component="span"
+              sx={{
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Highlighter
+                searchWords={[search]}
+                autoEscape={true}
+                textToHighlight={l}
+                style={{ color: logColor(l, colorMode) }}
+                highlightStyle={{
+                  color: `${colorMode === "light" ? "white" : "black"}`,
+                  backgroundColor: `${
+                    colorMode === "light" ? "black" : "white"
+                  }`,
+                }}
+              />
+            </Box>
+          ))}
+        {logsOrder === "desc" &&
+          filteredLogs
+            .slice()
+            .reverse()
+            .map((l: string, idx) => (
+              <Box
+                key={`${idx}-${podName}-logs`}
+                component="span"
+                sx={{
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Highlighter
+                  searchWords={[search]}
+                  autoEscape={true}
+                  textToHighlight={l}
+                  style={{ color: logColor(l, colorMode) }}
+                  highlightStyle={{
+                    color: `${colorMode === "light" ? "white" : "black"}`,
+                    backgroundColor: `${
+                      colorMode === "light" ? "black" : "white"
+                    }`,
+                  }}
+                />
+              </Box>
+            ))}
       </Box>
     </Box>
   );
