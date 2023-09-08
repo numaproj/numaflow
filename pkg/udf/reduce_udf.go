@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
@@ -198,7 +199,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	log = log.With("protocol", "uds-grpc-reduce-udf")
 
-	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	sdkClient, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)

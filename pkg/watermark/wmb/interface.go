@@ -14,3 +14,4 @@ type IdleManagement interface {
 	// Reset resets the idle status for the given partition.
 	Reset(toBufferPartitionName string)
 }
+m

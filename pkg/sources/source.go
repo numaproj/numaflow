@@ -30,6 +30,7 @@ import (
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -203,7 +204,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}()
 		readyCheckers = append(readyCheckers, udsGRPCClient)
 	}
-	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		sdkClient, err = sourcetransformer.New(sourcetransformer.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
