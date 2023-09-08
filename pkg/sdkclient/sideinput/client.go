@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 )
 
@@ -26,7 +25,7 @@ var _ Client = (*client)(nil)
 func New(inputOptions ...Option) (*client, error) {
 	var opts = &options{
 		sockAddr:       sdkclient.SideInputAddr,
-		maxMessageSize: v1alpha1.DefaultGRPCMaxMessageSize, // 64 MB
+		maxMessageSize: sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
 	}
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

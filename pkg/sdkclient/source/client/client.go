@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -46,8 +45,8 @@ func New(inputOptions ...Option) (Client, error) {
 	var opts = &options{
 		sockAddr:                   sdkclient.SourceAddr,
 		serverInfoFilePath:         sdkclient.ServerInfoFilePath,
-		serverInfoReadinessTimeout: 120 * time.Second,                  // Default timeout is 120 seconds
-		maxMessageSize:             v1alpha1.DefaultGRPCMaxMessageSize, // 64 MB
+		serverInfoReadinessTimeout: 120 * time.Second,                   // Default timeout is 120 seconds
+		maxMessageSize:             sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
 	}
 
 	for _, inputOption := range inputOptions {

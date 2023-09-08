@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -39,7 +38,7 @@ type client struct {
 // New creates a new client object.
 func New(inputOptions ...Option) (Client, error) {
 	var opts = &options{
-		maxMessageSize:             v1alpha1.DefaultGRPCMaxMessageSize, // 64 MB
+		maxMessageSize:             sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
 		serverInfoFilePath:         sdkclient.ServerInfoFilePath,
 		tcpSockAddr:                sdkclient.TcpAddr,
 		udsSockAddr:                sdkclient.MapAddr,
