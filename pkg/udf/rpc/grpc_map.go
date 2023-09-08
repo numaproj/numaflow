@@ -111,7 +111,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 			if !success {
 				return nil, ApplyUDFErr{
 					UserUDFErr: false,
-					Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
+					Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 					InternalErr: InternalErr{
 						Flag:        true,
 						MainCarDown: false,
@@ -121,7 +121,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 		case sdkerr.NonRetryable:
 			return nil, ApplyUDFErr{
 				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
+				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
@@ -130,7 +130,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 		default:
 			return nil, ApplyUDFErr{
 				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
+				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,

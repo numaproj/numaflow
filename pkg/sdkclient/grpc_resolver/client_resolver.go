@@ -22,8 +22,9 @@ import (
 	"strings"
 
 	"github.com/numaproj/numaflow-go/pkg/info"
-	"github.com/numaproj/numaflow-go/pkg/shared"
 	"google.golang.org/grpc/resolver"
+
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 )
 
 const (
@@ -85,7 +86,7 @@ func (*multiProcResolver) Resolve(target resolver.Target)          {}
 func BuildConnAddrs(numCpu int) []string {
 	var conn = make([]string, numCpu)
 	for i := 0; i < numCpu; i++ {
-		conn[i] = ConnAddr + shared.TcpAddr + "," + strconv.Itoa(i+1)
+		conn[i] = ConnAddr + sdkclient.TcpAddr + "," + strconv.Itoa(i+1)
 	}
 	return conn
 }
