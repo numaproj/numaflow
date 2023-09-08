@@ -7,20 +7,13 @@ Numaflow now supports `Side Inputs`, which allow for passing extra information i
 `Side inputs` in a data processing pipeline are useful for enriching original
 data or providing additional context to the pipeline.
 
-With a centralized strategy that allows for continuous updates to one
-or more configurations, Numaflow broadcasts these changes to all
-vertices requiring the input(s) for data processing.
-It's particularly useful for users needing extra information during processing,
-ensuring this additional data remains most-up-to-date
-and synchronized across all vertices.
-
 This allows accesses to slow updated data or configuration without needing 
 to retrieve it during each message processing.
 
 
 ### How to Use Side Inputs in My Pipeline
 The Side Inputs are updated based on a cron-like schedule, 
-specified in the pipeline spec with a trigger field. 
+specified in the pipeline spec with a trigger field.
 Multiple side inputs are supported as well. 
 Below is an example of pipeline spec with side inputs.
 
@@ -52,9 +45,6 @@ vertices:
       - s3
       - redis 
 ```
-The Side Input Manager in Numaflow will automatically run the
-image based on the schedule defined in the pipeline spec and
-update the file in a centralized data storage.
 
 ### Implementing User Defined Side Inputs
 
@@ -68,6 +58,9 @@ User Defined Side Input image which implements the
 Side Inputs Update.
 
 Here is an example of how to write a User Defined Side Input:
+
+As a platform, numaflow has no idea about the data format of the Side Inputs,
+instead, the pipeline owner (programmer) is responsible for parsing the data.
 
 ```go
 // handle is the side input handler function.
