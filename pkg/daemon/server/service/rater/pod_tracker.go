@@ -93,6 +93,8 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 						vType = "reduce"
 					} else if v.IsASource() {
 						vType = "source"
+					} else if v.IsASink() {
+						vType = "sink"
 					} else {
 						vType = "other"
 					}
