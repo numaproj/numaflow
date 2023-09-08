@@ -23,14 +23,12 @@ import (
 	"time"
 
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
-	"github.com/numaproj/numaflow-go/pkg/shared"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/numaproj/numaflow-go/pkg/info"
-
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -43,10 +41,10 @@ type client struct {
 // New creates a new client object.
 func New(inputOptions ...Option) (Client, error) {
 	var opts = &options{
-		maxMessageSize:             1024 * 1024 * 64, // 64 MB
-		serverInfoFilePath:         info.ServerInfoFilePath,
-		tcpSockAddr:                shared.TcpAddr,
-		udsSockAddr:                shared.ReduceAddr,
+		maxMessageSize:             sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
+		serverInfoFilePath:         sdkclient.ServerInfoFilePath,
+		tcpSockAddr:                sdkclient.TcpAddr,
+		udsSockAddr:                sdkclient.ReduceAddr,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 	}
 

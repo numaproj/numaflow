@@ -23,6 +23,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -133,7 +134,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", u.ISBSvcType)
 	}
-	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
 		sdkClient, err = sinkclient.New(sinkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {

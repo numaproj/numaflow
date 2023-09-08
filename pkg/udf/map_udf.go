@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -124,7 +125,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to parse UDF map streaming metadata, %w", err)
 	}
 
-	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if enableMapUdfStream {
 		mapStreamClient, err := mapstreamer.New(mapstreamer.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
