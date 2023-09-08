@@ -99,7 +99,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 // MapFn applies a function to each datum element.
 func (c *client) MapFn(ctx context.Context, request *mappb.MapRequest) (*mappb.MapResponse, error) {
 	mapResponse, err := c.grpcClt.MapFn(ctx, request)
-	err = util.ToUDFErr("c.grpcClt.SourceTransformFn", err)
+	err = util.ToUDFErr("c.grpcClt.MapFn", err)
 	if err != nil {
 		return nil, err
 	}
