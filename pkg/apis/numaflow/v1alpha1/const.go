@@ -160,8 +160,6 @@ const (
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 
-	// Default gRPC max message size
-
 	// UDF map streaming
 	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
 )
