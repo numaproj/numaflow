@@ -12,7 +12,7 @@ func NewNoOpIdleManager() *NoOpIdleManager {
 	return &NoOpIdleManager{}
 }
 
-func (n *NoOpIdleManager) Validate(string) bool {
+func (n *NoOpIdleManager) NeedToSendCtrlMsg(string) bool {
 	// no op idle manager won't write any ctrl message
 	// so always return false
 	return false

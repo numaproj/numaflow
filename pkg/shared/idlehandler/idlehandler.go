@@ -34,7 +34,7 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 	var toPartitionName = toBufferPartition.GetName()
 	var toVertexPartition = toBufferPartition.GetPartitionIdx()
 
-	if idleManager.Validate(toPartitionName) {
+	if idleManager.NeedToSendCtrlMsg(toPartitionName) {
 		if vertexType == dfv1.VertexTypeSink {
 			// for Sink vertex, we don't need to write any ctrl message
 			// and because when we publish the watermark, offset is not important for sink
