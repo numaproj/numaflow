@@ -74,7 +74,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
-	idleManager = wmb.NewNoopIdleManager()
+	idleManager = wmb.NewNoOpIdleManager()
 
 	// create readers and writers
 	switch u.ISBSvcType {

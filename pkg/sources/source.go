@@ -87,7 +87,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 		toVertexWatermarkStores[e.To], _ = store.BuildNoOpWatermarkStore()
 	}
-	idleManager = wmb.NewNoopIdleManager()
+	idleManager = wmb.NewNoOpIdleManager()
 
 	switch sp.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:

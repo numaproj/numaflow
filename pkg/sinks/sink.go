@@ -76,7 +76,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	// For sinks, the buffer name is the vertex name
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{u.VertexInstance.Vertex.Spec.Name})
-	idleManager = wmb.NewNoopIdleManager()
+	idleManager = wmb.NewNoOpIdleManager()
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:

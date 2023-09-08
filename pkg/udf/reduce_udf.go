@@ -104,7 +104,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
-	idleManager = wmb.NewNoopIdleManager()
+	idleManager = wmb.NewNoOpIdleManager()
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		readers, writers, err = buildRedisBufferIO(ctx, u.VertexInstance)

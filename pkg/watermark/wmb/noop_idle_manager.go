@@ -4,26 +4,26 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-type NoopIdleManager struct {
+type NoOpIdleManager struct {
 }
 
-// NewNoopIdleManager returns an no op IdleManager object
-func NewNoopIdleManager() *NoopIdleManager {
-	return &NoopIdleManager{}
+// NewNoOpIdleManager returns an no op IdleManager object
+func NewNoOpIdleManager() *NoOpIdleManager {
+	return &NoOpIdleManager{}
 }
 
-func (n *NoopIdleManager) Validate(string) bool {
+func (n *NoOpIdleManager) Validate(string) bool {
 	// no op idle manager won't write any ctrl message
 	// so always return false
 	return false
 }
 
-func (n *NoopIdleManager) Get(string) isb.Offset {
+func (n *NoOpIdleManager) Get(string) isb.Offset {
 	return isb.SimpleIntOffset(func() int64 { return int64(-1) })
 }
 
-func (n *NoopIdleManager) Update(string, isb.Offset) {
+func (n *NoOpIdleManager) Update(string, isb.Offset) {
 }
 
-func (n *NoopIdleManager) Reset(string) {
+func (n *NoOpIdleManager) Reset(string) {
 }
