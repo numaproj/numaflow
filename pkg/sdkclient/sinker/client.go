@@ -23,12 +23,11 @@ import (
 	"time"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
-	"github.com/numaproj/numaflow-go/pkg/shared"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -43,10 +42,10 @@ var _ Client = (*client)(nil)
 // New creates a new client object.
 func New(inputOptions ...Option) (Client, error) {
 	var opts = &options{
-		sockAddr:                   shared.SinkAddr,
-		serverInfoFilePath:         info.ServerInfoFilePath,
-		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
-		maxMessageSize:             1024 * 1024 * 64,  // 64 MB
+		sockAddr:                   sdkclient.SinkAddr,
+		serverInfoFilePath:         sdkclient.ServerInfoFilePath,
+		serverInfoReadinessTimeout: 120 * time.Second,                   // Default timeout is 120 seconds
+		maxMessageSize:             sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
 	}
 
 	for _, inputOption := range inputOptions {
@@ -65,7 +64,7 @@ func New(inputOptions ...Option) (Client, error) {
 
 	// connect to the server
 	c := new(client)
-	sockAddr := fmt.Sprintf("%s:%s", shared.UDS, opts.sockAddr)
+	sockAddr := fmt.Sprintf("%s:%s", sdkclient.UDS, opts.sockAddr)
 	conn, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.maxMessageSize), grpc.MaxCallSendMsgSize(opts.maxMessageSize)))
 	if err != nil {

@@ -23,13 +23,13 @@ import (
 	"time"
 
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
-	"github.com/numaproj/numaflow-go/pkg/shared"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -84,8 +84,8 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 
 	// pass key and window information inside the context
 	mdMap := map[string]string{
-		shared.WinStartTime: strconv.FormatInt(partitionID.Start.UnixMilli(), 10),
-		shared.WinEndTime:   strconv.FormatInt(partitionID.End.UnixMilli(), 10),
+		sdkclient.WinStartTime: strconv.FormatInt(partitionID.Start.UnixMilli(), 10),
+		sdkclient.WinEndTime:   strconv.FormatInt(partitionID.End.UnixMilli(), 10),
 	}
 
 	ctx, cancel := context.WithCancel(ctx)

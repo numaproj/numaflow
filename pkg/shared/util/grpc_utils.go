@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/numaproj/numaflow-go/pkg/info"
-	"github.com/numaproj/numaflow-go/pkg/shared"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -119,5 +118,5 @@ func getTcpSockAddr(tcpSock string) string {
 }
 
 func getUdsSockAddr(udsSock string) string {
-	return fmt.Sprintf("%s:%s", shared.UDS, udsSock)
+	return fmt.Sprintf("%s:%s", "unix", udsSock)
 }
