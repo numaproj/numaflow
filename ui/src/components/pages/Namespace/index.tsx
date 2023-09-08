@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
+import { AppContext, AppContextProps } from "../../../App";
 import { NamespaceRowContent } from "./partials/NamespaceRowContent";
 import {
   TableBody,
@@ -18,7 +19,6 @@ import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import SearchIcon from "@mui/icons-material/Search";
 import { notifyError } from "../../../utils/error";
-import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
 import { useNamespaceListFetch } from "../../../utils/fetchWrappers/namespaceListFetch";
 import { SetNamespaceList, SetStore } from "../../../localStore/SetStore";
 import { GetStore } from "../../../localStore/GetStore";
@@ -35,21 +35,9 @@ export function Namespaces() {
   const [namespace, setNamespace] = useState("");
   const [value, setValue] = useState("");
   const [disableSearch, setDisableSearch] = useState(false);
-  const { systemInfo, error: systemInfoError } = useSystemInfoFetch();
+  const { systemInfo } = useContext<AppContextProps>(AppContext);
   const { namespaceList: clusterNamespaces, error: namespaceListError } =
     useNamespaceListFetch();
-
-  // check system info error
-  useEffect(() => {
-    if (systemInfoError) {
-      notifyError([
-        {
-          error: "Failed to fetch the system info",
-          options: { toastId: "ns-scope", autoClose: false },
-        },
-      ]);
-    }
-  }, [systemInfoError]);
 
   // check cluster namespace fetching error
   useEffect(() => {
