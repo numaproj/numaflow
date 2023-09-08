@@ -62,7 +62,7 @@ type DataForward struct {
 	vertexName     string
 	pipelineName   string
 	// idleManager manages the idle watermark status.
-	idleManager wmb.IdleManagerInterface
+	idleManager wmb.IdleManagement
 	Shutdown
 }
 
@@ -76,7 +76,7 @@ func NewDataForward(
 	fetchWatermark fetch.Fetcher,
 	srcWMPublisher isb.SourceWatermarkPublisher,
 	toVertexWmStores map[string]store.WatermarkStore,
-	idleManager wmb.IdleManagerInterface,
+	idleManager wmb.IdleManagement,
 	opts ...Option) (*DataForward, error) {
 	options := DefaultOptions()
 	for _, o := range opts {

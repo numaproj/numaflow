@@ -67,7 +67,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		sdkClient                sourcetransformer.Client
 		sourcer                  Sourcer
 		readyCheckers            []metrics.HealthChecker
-		idleManager              wmb.IdleManagerInterface
+		idleManager              wmb.IdleManagement
 	)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -284,7 +284,7 @@ func (sp *SourceProcessor) getSourcer(
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
-	idleManager wmb.IdleManagerInterface,
+	idleManager wmb.IdleManagement,
 	logger *zap.SugaredLogger) (Sourcer, error) {
 
 	src := sp.VertexInstance.Vertex.Spec.Source

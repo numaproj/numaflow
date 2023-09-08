@@ -59,7 +59,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		err                error
 		fromVertexWmStores map[string]store.WatermarkStore
 		sinkWmStores       map[string]store.WatermarkStore
-		idleManager        wmb.IdleManagerInterface
+		idleManager        wmb.IdleManagement
 		sdkClient          sinkclient.Client
 		sinkHandler        *udsink.UDSgRPCBasedUDSink
 	)
@@ -229,7 +229,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 }
 
 // getSinker takes in the logger from the parent context
-func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM publish.Publisher, idleManager wmb.IdleManagerInterface, sinkHandler udsink.SinkApplier) (Sinker, error) {
+func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM publish.Publisher, idleManager wmb.IdleManagement, sinkHandler udsink.SinkApplier) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	if x := sink.Log; x != nil {
 		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, idleManager, logsink.WithLogger(logger))

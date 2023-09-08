@@ -69,7 +69,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		toVertexWmStores   map[string]store.WatermarkStore
 		mapHandler         *rpc.GRPCBasedMap
 		mapStreamHandler   *rpc.GRPCBasedMapStream
-		idleManager        wmb.IdleManagerInterface
+		idleManager        wmb.IdleManagement
 	)
 
 	// watermark variables

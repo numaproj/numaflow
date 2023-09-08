@@ -54,7 +54,7 @@ func NewToLog(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
-	idleManager wmb.IdleManagerInterface,
+	idleManager wmb.IdleManagement,
 	opts ...Option) (*ToLog, error) {
 
 	toLog := new(ToLog)

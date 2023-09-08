@@ -94,7 +94,7 @@ func New(
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
-	idleManager wmb.IdleManagerInterface,
+	idleManager wmb.IdleManagement,
 	opts ...Option) (*httpSource, error) {
 
 	h := &httpSource{

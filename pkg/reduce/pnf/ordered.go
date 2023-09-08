@@ -62,7 +62,7 @@ type OrderedProcessor struct {
 	toBuffers           map[string][]isb.BufferWriter
 	whereToDecider      forward.ToWhichStepDecider
 	watermarkPublishers map[string]publish.Publisher
-	idleManager         wmb.IdleManagerInterface
+	idleManager         wmb.IdleManagement
 	log                 *zap.SugaredLogger
 }
 
@@ -74,7 +74,7 @@ func NewOrderedProcessor(ctx context.Context,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,
-	idleManager wmb.IdleManagerInterface) *OrderedProcessor {
+	idleManager wmb.IdleManagement) *OrderedProcessor {
 
 	of := &OrderedProcessor{
 		vertexName:          vertexInstance.Vertex.Spec.Name,

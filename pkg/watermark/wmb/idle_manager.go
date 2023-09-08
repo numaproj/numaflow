@@ -36,7 +36,7 @@ func NewIdleManager(length int) *IdleManager {
 	}
 }
 
-// Validate returns true if the given partition hasn't got any control message and needs to create a new control message
+// NeedToSendCtrlMsg returns true if the given partition hasn't got any control message and needs to create a new control message
 func (im *IdleManager) NeedToSendCtrlMsg(toBufferPartitionName string) bool {
 	im.lock.RLock()
 	defer im.lock.RUnlock()

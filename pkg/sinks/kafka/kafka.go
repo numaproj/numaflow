@@ -61,7 +61,7 @@ func NewToKafka(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
-	idleManager wmb.IdleManagerInterface,
+	idleManager wmb.IdleManagement,
 	opts ...Option) (*ToKafka, error) {
 
 	kafkaSink := vertex.Spec.Sink.Kafka

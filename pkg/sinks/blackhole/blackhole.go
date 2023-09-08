@@ -53,7 +53,7 @@ func NewBlackhole(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
-	idleManager wmb.IdleManagerInterface,
+	idleManager wmb.IdleManagement,
 	opts ...Option) (*Blackhole, error) {
 
 	bh := new(Blackhole)

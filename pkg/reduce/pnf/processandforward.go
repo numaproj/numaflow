@@ -58,7 +58,7 @@ type processAndForward struct {
 	toBuffers      map[string][]isb.BufferWriter
 	whereToDecider forward.ToWhichStepDecider
 	wmPublishers   map[string]publish.Publisher
-	idleManager    wmb.IdleManagerInterface
+	idleManager    wmb.IdleManagement
 }
 
 // newProcessAndForward will return a new processAndForward instance
@@ -72,7 +72,7 @@ func newProcessAndForward(ctx context.Context,
 	toBuffers map[string][]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
-	idleManager wmb.IdleManagerInterface) *processAndForward {
+	idleManager wmb.IdleManagement) *processAndForward {
 
 	return &processAndForward{
 		vertexName:     vertexName,
