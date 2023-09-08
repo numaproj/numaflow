@@ -1,10 +1,8 @@
 # Side Inputs
 
-`Side inputs` in a data processing pipeline are useful for enriching original
-data or providing additional context to the pipeline.
+For an unbounded pipeline in Numaflow that never terminates, there are many cases where users want to update a configuration of the UDF without restarting the pipeline. `Side input` allows this key feature in Numaflow where we can broadcast changes to vertices.
 
-This allows accesses to slow updated data or configuration without needing
-to retrieve it during each message processing.
+`Side input` achieves this by allowing users to write custom UDFs to broadcast changes to the vertices that are listening in for updates.
 
 
 
@@ -12,7 +10,8 @@ to retrieve it during each message processing.
 The Side Inputs are updated based on a cron-like schedule, 
 specified in the pipeline spec with a trigger field.
 Multiple side inputs are supported as well. 
-Below is an example of pipeline spec with side inputs.
+
+Below is an example of pipeline spec with side inputs, which runs the custom UDFs every 15 mins and broadcasts the changes if there is any change to be broadcasted.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -45,7 +44,7 @@ spec:
 
 ### Implementing User Defined Side Inputs
 
-To use Side Inputs feature, a User Defined function implementing an interface defined in the  Numaflow SDK
+To use the Side Input feature, a User-defined function implementing an interface defined in the  Numaflow SDK
 ([Go](https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/), 
 [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sideinput/), 
 [Java](https://github.com/numaproj/numaflow-java/tree/main/src/main/java/io/numaproj/numaflow/sideinput)) 
@@ -55,7 +54,8 @@ You can choose the SDK of your choice to create a
 User Defined Side Input image which implements the
 Side Inputs Update.
 
-Here is an example of how to write a User Defined Side Input in Go:
+#### Example in Golang
+Here is an example of how to write a User Defined Side Input in Golang,
 
 ```go
 // handle is the side input handler function.
@@ -68,7 +68,7 @@ func handle(_ context.Context) sideinputsdk.Message {
     // broadcast it to other side input vertices.
     counter = (counter + 1) % 10
     if counter%2 == 0 {
-    return sideinputsdk.NoBroadcastMessage()
+        return sideinputsdk.NoBroadcastMessage()
     }
     // BroadcastMessage() is used to broadcast the message with the given value to other side input vertices.
     // val must be converted to []byte.
