@@ -23,23 +23,22 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
-	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
-	"github.com/numaproj/numaflow/pkg/udf/rpc"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
+	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
+	"github.com/numaproj/numaflow/pkg/udf/rpc"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type MapUDFProcessor struct {

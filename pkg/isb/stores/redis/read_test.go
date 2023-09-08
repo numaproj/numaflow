@@ -25,19 +25,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-
 	"github.com/montanaflynn/stats"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 var (
