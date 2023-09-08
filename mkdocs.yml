@@ -86,6 +86,7 @@ nav:
           - user-guide/reference/conditional-forwarding.md
           - user-guide/reference/join-vertex.md
           - user-guide/reference/multi-partition.md
+          - user-guide/reference/sideinputs.md
           - Configuration:              
             - user-guide/reference/configuration/container-resources.md
             - user-guide/reference/configuration/volumes.md
