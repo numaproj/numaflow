@@ -24,16 +24,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 func TestRedisQWrite_Write(t *testing.T) {
@@ -403,7 +403,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 
@@ -447,7 +447,7 @@ func TestReadTimeout(t *testing.T) {
 	}}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark)
+	f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written

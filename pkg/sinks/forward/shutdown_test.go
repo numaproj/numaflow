@@ -28,6 +28,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 func TestShutDown(t *testing.T) {
@@ -66,7 +67,7 @@ func TestShutDown(t *testing.T) {
 			}}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark["to1"], WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1), WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data but buffer is not full even though we are not reading
@@ -99,7 +100,7 @@ func TestShutDown(t *testing.T) {
 			}}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark["to1"], WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1), WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data such that the fromBufferPartition can be empty, that is toBuffer gets full

@@ -62,7 +62,7 @@ type DataForward struct {
 	vertexName     string
 	pipelineName   string
 	// idleManager manages the idle watermark status.
-	idleManager *wmb.IdleManager
+	idleManager wmb.IdleManager
 	Shutdown
 }
 
@@ -76,6 +76,7 @@ func NewDataForward(
 	fetchWatermark fetch.Fetcher,
 	srcWMPublisher isb.SourceWatermarkPublisher,
 	toVertexWmStores map[string]store.WatermarkStore,
+	idleManager wmb.IdleManager,
 	opts ...Option) (*DataForward, error) {
 	options := DefaultOptions()
 	for _, o := range opts {
@@ -104,7 +105,7 @@ func NewDataForward(
 		srcWMPublisher:       srcWMPublisher,
 		vertexName:           vertex.Spec.Name,
 		pipelineName:         vertex.Spec.PipelineName,
-		idleManager:          wmb.NewIdleManager(len(toSteps)),
+		idleManager:          idleManager,
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
@@ -556,6 +557,7 @@ func (isdf *DataForward) createToVertexWatermarkPublisher(toVertexName string, p
 	entityName := fmt.Sprintf("%s-%s-%d", isdf.pipelineName, isdf.vertexName, partition)
 	processorEntity := entity.NewProcessorEntity(entityName)
 
+	// if watermark is disabled, wmStore here is a no op store
 	publisher := publish.NewPublish(isdf.ctx, processorEntity, wmStore, int32(len(isdf.toBuffers[toVertexName])))
 	isdf.toVertexWMPublishers[toVertexName][partition] = publisher
 	return publisher

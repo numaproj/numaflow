@@ -21,25 +21,25 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
-	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
-	"github.com/numaproj/numaflow/pkg/udf/rpc"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
+	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
+	"github.com/numaproj/numaflow/pkg/udf/rpc"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type MapUDFProcessor struct {
@@ -70,10 +70,12 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		toVertexWmStores   map[string]store.WatermarkStore
 		mapHandler         *rpc.GRPCBasedMap
 		mapStreamHandler   *rpc.GRPCBasedMapStream
+		idleManager        wmb.IdleManager
 	)
 
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
+	idleManager = wmb.NewNoOpIdleManager()
 
 	// create readers and writers
 	switch u.ISBSvcType {
@@ -89,8 +91,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		// https://github.com/nats-io/nats.go/issues/241
 
 		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
-			names := u.VertexInstance.Vertex.GetToBuffers()
-			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
+			// use default no op fetcher, publisher, idleManager
 		} else {
 			// create from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
@@ -115,6 +116,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			idleManager = wmb.NewIdleManager(len(writers))
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
@@ -226,7 +228,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}
 		// create a forwarder for each partition
-		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, opts...)
+		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, idleManager, opts...)
 		if err != nil {
 			return err
 		}
