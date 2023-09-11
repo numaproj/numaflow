@@ -1,5 +1,6 @@
 .Breadcrumbs {
   margin: 0.5rem 1.25rem !important;
+  overflow: hidden !important;
 }
 
 .Breadcrumbs-typ {
