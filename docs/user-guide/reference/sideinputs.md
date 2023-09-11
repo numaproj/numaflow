@@ -105,3 +105,8 @@ The directory is fixed and can be accessed through a sideinput constant and the 
 sideinput.DirPath -> "/var/numaflow/side-inputs"
 sideInputFileName -> "/var/numaflow/side-inputs/sideInputName"
 ```
+
+Here are some examples of watching the side input filesystem for changes in 
+[Golang](https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/examples/simple-sideinput/udf/main.go), 
+[Python](https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple-sideinput/udf/example.py) and 
+[Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sideinput/udf).
