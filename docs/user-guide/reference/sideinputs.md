@@ -43,7 +43,7 @@ spec:
 
 ### Implementing User Defined Side Inputs
 
-To use the `Side Inputs` feature, a User-defined function implementing an interface defined in the  Numaflow SDK
+To use the `Side Inputs` feature, a User-defined function implementing an interface defined in the Numaflow SDK
 ([Go](https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/), 
 [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sideinput/), 
 [Java](https://github.com/numaproj/numaflow-java/tree/main/src/main/java/io/numaproj/numaflow/sideinput)) 
