@@ -172,7 +172,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		df.opts.logger.Warnw("failed to read fromBufferPartition", zap.Error(err))
 		readMessagesError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Inc()
 	}
-	readMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
 
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
 	// reading, and we are not able to proceed.
@@ -209,6 +208,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			dataMessages = append(dataMessages, m)
 		}
 	}
+	readMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(dataMessages)))
 
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
