@@ -65,7 +65,7 @@ type DataForward struct {
 	wmPublishers        map[string]publish.Publisher
 	windower            window.Windower
 	keyed               bool
-	idleManager         wmb.IdleManagement
+	idleManager         wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid when the len(readMessage) is 0.
 	wmbChecker            wmb.WMBChecker
 	pbqManager            *pbq.Manager
@@ -86,7 +86,7 @@ func NewDataForward(ctx context.Context,
 	fw fetch.Fetcher,
 	watermarkPublishers map[string]publish.Publisher,
 	windowingStrategy window.Windower,
-	idleManager wmb.IdleManagement,
+	idleManager wmb.IdleManager,
 	of *pnf.OrderedProcessor,
 	opts ...Option) (*DataForward, error) {
 

@@ -156,7 +156,7 @@ func NewMemGen(
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
-	idleManager wmb.IdleManagement,
+	idleManager wmb.IdleManager,
 	opts ...Option) (*memgen, error) {
 
 	// minimal CRDs don't have defaults

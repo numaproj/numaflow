@@ -2,8 +2,8 @@ package wmb
 
 import "github.com/numaproj/numaflow/pkg/isb"
 
-// IdleManagement decides when to send a control message and also keeps track of idle watermark's offset.
-type IdleManagement interface {
+// IdleManager decides when to send a control message and also keeps track of idle watermark's offset.
+type IdleManager interface {
 	// NeedToSendCtrlMsg validates whether to send a control message for the given partition or not.
 	NeedToSendCtrlMsg(toBufferPartitionName string) bool
 	// Get gets the isb.Offset from the given partition.

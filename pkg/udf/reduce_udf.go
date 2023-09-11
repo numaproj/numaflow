@@ -65,7 +65,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		windower           window.Windower
 		fromVertexWmStores map[string]store.WatermarkStore
 		toVertexWmStores   map[string]store.WatermarkStore
-		idleManager        wmb.IdleManagement
+		idleManager        wmb.IdleManager
 	)
 
 	log := logging.FromContext(ctx)

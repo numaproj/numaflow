@@ -55,7 +55,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
-	idleManager wmb.IdleManagement,
+	idleManager wmb.IdleManager,
 	udsink SinkApplier,
 	opts ...Option) (*UserDefinedSink, error) {
 

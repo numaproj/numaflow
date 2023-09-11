@@ -63,7 +63,7 @@ type InterStepDataForward struct {
 	vertexName   string
 	pipelineName string
 	// idleManager manages the idle watermark status.
-	idleManager wmb.IdleManagement
+	idleManager wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid when the len(readMessage) is 0.
 	wmbChecker wmb.WMBChecker
 	Shutdown
@@ -79,7 +79,7 @@ func NewInterStepDataForward(
 	applyUDFStream applier.MapStreamApplier,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark map[string]publish.Publisher,
-	idleManager wmb.IdleManagement,
+	idleManager wmb.IdleManager,
 	opts ...Option) (*InterStepDataForward, error) {
 
 	options := DefaultOptions()
