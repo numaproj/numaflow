@@ -29,7 +29,7 @@ type idleManager struct {
 	lock      sync.RWMutex
 }
 
-// NewIdleManager returns an idleManager object to track the watermark idle status.
+// NewIdleManager returns an idleManager object as the IdleManager interface type to track the watermark idle status.
 func NewIdleManager(length int) IdleManager {
 	return &idleManager{
 		wmbOffset: make(map[string]isb.Offset, length),
