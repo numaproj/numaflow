@@ -82,6 +82,7 @@ nav:
               - Examples: "user-guide/user-defined-functions/reduce/examples.md"
       - Reference:
           - user-guide/reference/pipeline-tuning.md
+          - user-guide/reference/edge-tuning.md
           - user-guide/reference/autoscaling.md
           - user-guide/reference/conditional-forwarding.md
           - user-guide/reference/join-vertex.md
