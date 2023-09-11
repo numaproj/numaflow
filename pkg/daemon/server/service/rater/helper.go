@@ -22,7 +22,20 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
-const IndexNotFound = -1
+const (
+	IndexNotFound = -1
+
+	// The following string set is used to identify the vertex type of pod
+
+	// KeyVertexTypeReduce is the vertex type string for reduce vertex
+	KeyVertexTypeReduce = "reduce"
+	// KeyVertexTypeSource is the vertex type string for a source vertex
+	KeyVertexTypeSource = "source"
+	// KeyVertexTypeSink is the vertex type string for a sink vertex
+	KeyVertexTypeSink = "sink"
+	// KeyVertexTypeOther is the vertex type string for other vertices
+	KeyVertexTypeOther = "other"
+)
 
 // UpdateCount updates the count of processed messages for a pod at a given time
 func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodReadCount) {
