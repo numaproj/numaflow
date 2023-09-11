@@ -1,8 +1,7 @@
 # Side Inputs
 
-For an unbounded pipeline in Numaflow that never terminates, there are many cases where users want to update a configuration of the UDF without restarting the pipeline. `Side input` allows this key feature in Numaflow where we can broadcast changes to vertices.
-
-`Side input` achieves this by allowing users to write custom UDFs to broadcast changes to the vertices that are listening in for updates.
+For an unbounded pipeline in Numaflow that never terminates, there are many cases where users want to update a configuration of the UDF without restarting the pipeline. Numaflow enables it by the `Side Inputs` feature where we can broadcast changes to vertices automatically.
+The `Side Inputs` feature achieves this by allowing users to write custom UDFs to broadcast changes to the vertices that are listening in for updates.
 
 
 
@@ -44,7 +43,7 @@ spec:
 
 ### Implementing User Defined Side Inputs
 
-To use the Side Input feature, a User-defined function implementing an interface defined in the  Numaflow SDK
+To use the `Side Inputs` feature, a User-defined function implementing an interface defined in the  Numaflow SDK
 ([Go](https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/), 
 [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sideinput/), 
 [Java](https://github.com/numaproj/numaflow-java/tree/main/src/main/java/io/numaproj/numaflow/sideinput)) 
