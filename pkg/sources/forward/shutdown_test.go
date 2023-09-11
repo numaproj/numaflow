@@ -29,20 +29,17 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type myShutdownTest struct {
 }
 
-func (s myShutdownTest) WaitUntilReady(ctx context.Context) error {
+func (s myShutdownTest) IsHealthy(context.Context) error {
 	return nil
 }
 
-func (s myShutdownTest) IsHealthy(ctx context.Context) error {
-	return nil
-}
-
-func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+func (s myShutdownTest) WhereTo([]string, []string) ([]forward.VertexBuffer, error) {
 	return []forward.VertexBuffer{}, nil
 }
 
@@ -87,7 +84,7 @@ func TestInterStepDataForward(t *testing.T) {
 
 			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexWmStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data but buffer is not full even though we are not reading
@@ -121,7 +118,7 @@ func TestInterStepDataForward(t *testing.T) {
 
 			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexWmStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertex, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data such that the reader can be empty, that is toBuffer gets full

@@ -89,6 +89,7 @@ func New(
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
+	idleManager wmb.IdleManager,
 	opts ...Option) (*userDefinedSource, error) {
 
 	u := &userDefinedSource{
@@ -113,7 +114,7 @@ func New(
 		}
 	}
 	var err error
-	u.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, u, writers, fsd, transformer, fetchWM, u, toVertexPublisherStores, forwardOpts...)
+	u.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, u, writers, fsd, transformer, fetchWM, u, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		u.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -141,7 +142,7 @@ func (u *userDefinedSource) Read(ctx context.Context, count int64) ([]*isb.ReadM
 }
 
 // Ack acknowledges the messages from the user-defined source
-// If there is an error, it is returned in the error array
+// If there is an error, return the error using an error array
 func (u *userDefinedSource) Ack(ctx context.Context, offsets []isb.Offset) []error {
 	return []error{u.sourceApplier.ApplyAckFn(ctx, offsets)}
 }

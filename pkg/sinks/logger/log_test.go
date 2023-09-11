@@ -21,14 +21,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-
-	"github.com/stretchr/testify/assert"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 var (
@@ -52,7 +53,7 @@ func TestToLog_Start(t *testing.T) {
 		},
 	}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	s, err := NewToLog(vertex, fromStep, fetchWatermark, publishWatermark[vertex.Spec.Name])
+	s, err := NewToLog(vertex, fromStep, fetchWatermark, publishWatermark[vertex.Spec.Name], wmb.NewIdleManager(1))
 	assert.NoError(t, err)
 
 	stopped := s.Start()
@@ -103,7 +104,7 @@ func TestToLog_Forward(t *testing.T) {
 			}}
 
 			fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex1.Spec.Name})
-			logger1, _ := NewToLog(vertex1, to1, fetchWatermark1, publishWatermark1[vertex1.Spec.Name])
+			logger1, _ := NewToLog(vertex1, to1, fetchWatermark1, publishWatermark1[vertex1.Spec.Name], wmb.NewIdleManager(1))
 			logger1Stopped := logger1.Start()
 
 			toSteps := map[string][]isb.BufferWriter{
@@ -113,7 +114,7 @@ func TestToLog_Forward(t *testing.T) {
 			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := sinkforward.NewDataForward(vertex1, fromStep, to1, fetchWatermark, publishWatermark["sinks.logger1"], sinkforward.WithReadBatchSize(batchSize))
+			f, err := sinkforward.NewDataForward(vertex1, fromStep, to1, fetchWatermark, publishWatermark["sinks.logger1"], wmb.NewIdleManager(1), sinkforward.WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 
 			stopped := f.Start()
