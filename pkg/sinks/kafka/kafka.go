@@ -32,6 +32,7 @@ import (
 	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // ToKafka produce the output to a kafka sinks.
@@ -60,6 +61,7 @@ func NewToKafka(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
+	idleManager wmb.IdleManager,
 	opts ...Option) (*ToKafka, error) {
 
 	kafkaSink := vertex.Spec.Sink.Kafka
@@ -88,7 +90,7 @@ func NewToKafka(vertex *dfv1.Vertex,
 		}
 	}
 
-	f, err := sinkforward.NewDataForward(vertex, fromBuffer, toKafka, fetchWatermark, publishWatermark, forwardOpts...)
+	f, err := sinkforward.NewDataForward(vertex, fromBuffer, toKafka, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

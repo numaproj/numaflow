@@ -18,29 +18,23 @@ package idlehandler
 
 import (
 	"context"
-	"reflect"
 
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // PublishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
-// we see a new WMB; later we only update the WMB without a ctrl message.
-func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager *wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
-	if reflect.TypeOf(wmPublisher) == reflect.TypeOf(&generic.NoOpWMProgressor{}) {
-		// TODO(idleWatermark): simplest fix as of now, need to design a better fix
-		// watermark disabled, no need to proceed
-		return
-	}
+
+func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
+
 	var toPartitionName = toBufferPartition.GetName()
 	var toVertexPartition = toBufferPartition.GetPartitionIdx()
 
-	if !idleManager.Exists(toPartitionName) {
+	if idleManager.NeedToSendCtrlMsg(toPartitionName) {
 		if vertexType == dfv1.VertexTypeSink {
 			// for Sink vertex, we don't need to write any ctrl message
 			// and because when we publish the watermark, offset is not important for sink

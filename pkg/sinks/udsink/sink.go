@@ -20,10 +20,9 @@ import (
 	"context"
 	"time"
 
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
-
-	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -31,6 +30,7 @@ import (
 	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type UserDefinedSink struct {
@@ -55,6 +55,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
+	idleManager wmb.IdleManager,
 	udsink SinkApplier,
 	opts ...Option) (*UserDefinedSink, error) {
 
@@ -78,8 +79,7 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 		}
 	}
 	s.udsink = udsink
-
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark, forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
