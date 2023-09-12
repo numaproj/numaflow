@@ -242,12 +242,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 		return
 	}
-	readMessagesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
-	}).Add(float64(len(readMessages)))
+
 	// fetch watermark using the first element's watermark, because we assign the watermark to all other
 	// elements in the batch based on the watermark we fetch from 0th offset.
 	// get the watermark for the partition from which we read the messages
@@ -321,6 +316,18 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			ctrlMessages = append(ctrlMessages, message)
 		}
 	}
+	readMessagesCount.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
+	}).Add(float64(len(dataMessages)))
+	controlMessagesCount.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
+	}).Add(float64(len(ctrlMessages)))
 
 	// write messages to windows based by PBQs.
 	successfullyWrittenMessages, err := df.writeMessagesToWindows(ctx, dataMessages)
