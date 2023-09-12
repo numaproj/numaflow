@@ -1,7 +1,5 @@
 # Side Inputs
 
-![Proposal](../assets/proposal.svg)
-
 Side Inputs allow the user defined functions (including UDF, UDSink, Transformer, etc.) to access slow updated data or configuration (such as database, file system, etc.) without needing to load it during each message processing. Side Inputs are read-only and can be used in both batch and streaming jobs.
 
 ## Requirements
