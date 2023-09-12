@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"io"
 	"reflect"
 	"sync"
 	"testing"
@@ -85,7 +86,6 @@ func TestReadFn(t *testing.T) {
 	mockClient := sourcemock.NewMockSourceClient(ctrl)
 	mockStreamClient := sourcemock.NewMockSource_ReadFnClient(ctrl)
 
-	numOfMsgs := 5
 	var TestEventTime = time.Unix(1661169600, 0).UTC()
 	mockStreamClient.EXPECT().Recv().Return(&sourcepb.ReadResponse{
 		Result: &sourcepb.ReadResponse_Result{
@@ -94,33 +94,38 @@ func TestReadFn(t *testing.T) {
 			EventTime: timestamppb.New(TestEventTime),
 			Keys:      []string{"test_key"},
 		},
-	}, nil).Times(numOfMsgs + 1)
+	}, nil)
 
-	/*
-		mockStreamClient.EXPECT().Recv().Return(&sourcepb.ReadResponse{
-			Result: &sourcepb.ReadResponse_Result{
-				Payload:   []byte(`test_payload`),
-				Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
-				EventTime: timestamppb.New(TestEventTime),
-				Keys:      []string{"test_key"},
-			},
-		}, io.EOF)
+	mockStreamClient.EXPECT().Recv().Return(&sourcepb.ReadResponse{
+		Result: &sourcepb.ReadResponse_Result{
+			Payload:   []byte(`test_payload`),
+			Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
+			EventTime: timestamppb.New(TestEventTime),
+			Keys:      []string{"test_key"},
+		},
+	}, nil)
 
-	*/
+	mockStreamClient.EXPECT().Recv().Return(&sourcepb.ReadResponse{
+		Result: &sourcepb.ReadResponse_Result{
+			Payload:   []byte(`test_payload`),
+			Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
+			EventTime: timestamppb.New(TestEventTime),
+			Keys:      []string{"test_key"},
+		},
+	}, io.EOF)
 
 	mockStreamClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 	mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(mockStreamClient, nil)
 
 	testClient, err := NewFromClient(mockClient)
 	assert.NoError(t, err)
-	reflect.DeepEqual(testClient, &client{
+	assert.True(t, reflect.DeepEqual(testClient, &client{
 		grpcClt: mockClient,
-	})
+	}))
 
 	responseCh := make(chan *sourcepb.ReadResponse)
 
 	go func() {
-		checkCount := numOfMsgs
 		for {
 			select {
 			case <-ctx.Done():
@@ -130,8 +135,6 @@ func TestReadFn(t *testing.T) {
 					// channel closed
 					return
 				}
-				print("keran")
-				// print(resp.GetResult().GetKeys()[0])
 				assert.True(t, reflect.DeepEqual(resp, &sourcepb.ReadResponse{
 					Result: &sourcepb.ReadResponse_Result{
 						Payload:   []byte(`test_payload`),
@@ -140,10 +143,6 @@ func TestReadFn(t *testing.T) {
 						Keys:      []string{"test_key"},
 					},
 				}))
-				checkCount--
-				if checkCount == 0 {
-					return
-				}
 			}
 		}
 	}()
@@ -154,7 +153,7 @@ func TestReadFn(t *testing.T) {
 		defer wg.Done()
 		err = testClient.ReadFn(ctx, &sourcepb.ReadRequest{
 			Request: &sourcepb.ReadRequest_Request{
-				NumRecords: uint64(numOfMsgs),
+				NumRecords: uint64(2),
 			},
 		}, responseCh)
 		assert.NoError(t, err)
