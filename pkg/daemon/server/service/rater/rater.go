@@ -61,7 +61,9 @@ type Rater struct {
 	podTracker *PodTracker
 	// timestampedPodCounts is a map between vertex name and a queue of timestamped counts for that vertex
 	timestampedPodCounts map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]
-	options              *options
+	// userSpecifiedLookBackSeconds is a map between vertex name and the user-specified lookback seconds for that vertex
+	userSpecifiedLookBackSeconds map[string]int64
+	options                      *options
 }
 
 // PodReadCount is a struct to maintain count of messages read from each partition by a pod
@@ -89,15 +91,17 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 			},
 			Timeout: time.Second * 1,
 		},
-		log:                  logging.FromContext(ctx).Named("Rater"),
-		timestampedPodCounts: make(map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]),
-		options:              defaultOptions(),
+		log:                          logging.FromContext(ctx).Named("Rater"),
+		timestampedPodCounts:         make(map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]),
+		userSpecifiedLookBackSeconds: make(map[string]int64),
+		options:                      defaultOptions(),
 	}
 
 	rater.podTracker = NewPodTracker(ctx, p)
 	for _, v := range p.Spec.Vertices {
 		// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
 		rater.timestampedPodCounts[v.Name] = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
+		rater.userSpecifiedLookBackSeconds[v.Name] = int64(v.Scale.GetLookbackSeconds())
 	}
 
 	for _, opt := range opts {
@@ -213,6 +217,17 @@ func sleep(ctx context.Context, duration time.Duration) {
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodReadCount {
+	metricNames := map[string]string{
+		keyVertexTypeReduce: "reduce_isb_reader_read_total",
+		keyVertexTypeSource: "source_forwarder_read_total",
+		keyVertexTypeSink:   "sink_forwarder_read_total",
+	}
+
+	readTotalMetricName, ok := metricNames[vertexType]
+	if !ok {
+		readTotalMetricName = "forwarder_read_total"
+	}
+
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
@@ -228,27 +243,22 @@ func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodRea
 		r.log.Errorf("failed parsing to prometheus metric families, %v", err.Error())
 		return nil
 	}
-	var readTotalMetricName string
-	if vertexType == "reduce" {
-		readTotalMetricName = "reduce_isb_reader_read_total"
-	} else if vertexType == "source" {
-		readTotalMetricName = "source_forwarder_read_total"
-	} else if vertexType == "sink" {
-		readTotalMetricName = "sink_forwarder_read_total"
-	} else {
-		readTotalMetricName = "forwarder_read_total"
-	}
 	if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
 		partitionReadCount := make(map[string]float64)
 		for _, ele := range metricsList {
-			partitionName := ""
+			var partitionName string
 			for _, label := range ele.Label {
 				if label.GetName() == "partition_name" {
 					partitionName = label.GetValue()
+					break
 				}
 			}
-			partitionReadCount[partitionName] = ele.Counter.GetValue()
+			if partitionName == "" {
+				r.log.Warnf("Partition name is not found for metric %s", readTotalMetricName)
+			} else {
+				partitionReadCount[partitionName] = ele.Counter.GetValue()
+			}
 		}
 		podReadCount := &PodReadCount{podName, partitionReadCount}
 		return podReadCount
@@ -273,15 +283,7 @@ func (r *Rater) GetRates(vertexName, partitionName string) map[string]float64 {
 }
 
 func (r *Rater) buildLookbackSecondsMap(vertexName string) map[string]int64 {
-	// get the user-specified lookback seconds from the pipeline spec
-	var userSpecifiedLookBackSeconds int64
-	// TODO - we can keep a local copy of vertex to lookback seconds mapping to avoid iterating the pipeline spec all the time.
-	for _, v := range r.pipeline.Spec.Vertices {
-		if v.Name == vertexName {
-			userSpecifiedLookBackSeconds = int64(v.Scale.GetLookbackSeconds())
-		}
-	}
-	lookbackSecondsMap := map[string]int64{"default": userSpecifiedLookBackSeconds}
+	lookbackSecondsMap := map[string]int64{"default": r.userSpecifiedLookBackSeconds[vertexName]}
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}

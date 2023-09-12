@@ -46,7 +46,7 @@ type PodTracker struct {
 }
 
 func NewPodTracker(ctx context.Context, p *v1alpha1.Pipeline, opts ...PodTrackerOption) *PodTracker {
-	pt := PodTracker{
+	pt := &PodTracker{
 		pipeline: p,
 		log:      logging.FromContext(ctx).Named("PodTracker"),
 		httpClient: &http.Client{
@@ -61,10 +61,10 @@ func NewPodTracker(ctx context.Context, p *v1alpha1.Pipeline, opts ...PodTracker
 
 	for _, opt := range opts {
 		if opt != nil {
-			opt(&pt)
+			opt(pt)
 		}
 	}
-	return &pt
+	return pt
 }
 
 type PodTrackerOption func(*PodTracker)
@@ -78,42 +78,51 @@ func WithRefreshInterval(d time.Duration) PodTrackerOption {
 
 func (pt *PodTracker) Start(ctx context.Context) error {
 	pt.log.Debugf("Starting tracking active pods for pipeline %s...", pt.pipeline.Name)
-	go func() {
-		ticker := time.NewTicker(pt.refreshInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				pt.log.Infof("Context is cancelled. Stopping tracking active pods for pipeline %s...", pt.pipeline.Name)
-				return
-			case <-ticker.C:
-				for _, v := range pt.pipeline.Spec.Vertices {
-					var vType string
-					if v.IsReduceUDF() {
-						vType = "reduce"
-					} else if v.IsASource() {
-						vType = "source"
-					} else if v.IsASink() {
-						vType = "sink"
-					} else {
-						vType = "other"
-					}
-					for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
-						podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
-						podKey := pt.getPodKey(i, v.Name, vType)
-						if pt.isActive(v.Name, podName) {
-							pt.activePods.PushBack(podKey)
-						} else {
-							// if the pod is not active, remove it from the active pod list
-							pt.activePods.Remove(podKey)
-						}
-					}
-				}
-				pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
+	go pt.trackActivePods(ctx)
+	return nil
+}
+
+func (pt *PodTracker) trackActivePods(ctx context.Context) {
+	ticker := time.NewTicker(pt.refreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			pt.log.Infof("Context is cancelled. Stopping tracking active pods for pipeline %s...", pt.pipeline.Name)
+			return
+		case <-ticker.C:
+			pt.updateActivePods()
+		}
+	}
+}
+
+func (pt *PodTracker) updateActivePods() {
+	for _, v := range pt.pipeline.Spec.Vertices {
+		vType := getVertexType(v)
+		for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
+			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
+			podKey := pt.getPodKey(i, v.Name, vType)
+			if pt.isActive(v.Name, podName) {
+				pt.activePods.PushBack(podKey)
+			} else {
+				pt.activePods.Remove(podKey)
 			}
 		}
-	}()
-	return nil
+	}
+	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
+}
+
+func getVertexType(v v1alpha1.AbstractVertex) string {
+	switch {
+	case v.IsReduceUDF():
+		return keyVertexTypeReduce
+	case v.IsASource():
+		return keyVertexTypeSource
+	case v.IsASink():
+		return keyVertexTypeSink
+	default:
+		return keyVertexTypeOther
+	}
 }
 
 // LeastRecentlyUsed returns the least recently used pod from the active pod list.
