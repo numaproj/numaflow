@@ -87,32 +87,19 @@ func TestReadFn(t *testing.T) {
 	mockStreamClient := sourcemock.NewMockSource_ReadFnClient(ctrl)
 
 	var TestEventTime = time.Unix(1661169600, 0).UTC()
-	mockStreamClient.EXPECT().Recv().Return(&sourcepb.ReadResponse{
+	expectedResp := &sourcepb.ReadResponse{
 		Result: &sourcepb.ReadResponse_Result{
 			Payload:   []byte(`test_payload`),
 			Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
 			EventTime: timestamppb.New(TestEventTime),
 			Keys:      []string{"test_key"},
 		},
-	}, nil)
+	}
 
-	mockStreamClient.EXPECT().Recv().Return(&sourcepb.ReadResponse{
-		Result: &sourcepb.ReadResponse_Result{
-			Payload:   []byte(`test_payload`),
-			Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
-			EventTime: timestamppb.New(TestEventTime),
-			Keys:      []string{"test_key"},
-		},
-	}, nil)
-
-	mockStreamClient.EXPECT().Recv().Return(&sourcepb.ReadResponse{
-		Result: &sourcepb.ReadResponse_Result{
-			Payload:   []byte(`test_payload`),
-			Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
-			EventTime: timestamppb.New(TestEventTime),
-			Keys:      []string{"test_key"},
-		},
-	}, io.EOF)
+	for i := 0; i < 2; i++ {
+		mockStreamClient.EXPECT().Recv().Return(expectedResp, nil)
+	}
+	mockStreamClient.EXPECT().Recv().Return(expectedResp, io.EOF)
 
 	mockStreamClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 	mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(mockStreamClient, nil)
@@ -132,17 +119,9 @@ func TestReadFn(t *testing.T) {
 				return
 			case resp, ok := <-responseCh:
 				if !ok {
-					// channel closed
 					return
 				}
-				assert.True(t, reflect.DeepEqual(resp, &sourcepb.ReadResponse{
-					Result: &sourcepb.ReadResponse_Result{
-						Payload:   []byte(`test_payload`),
-						Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
-						EventTime: timestamppb.New(TestEventTime),
-						Keys:      []string{"test_key"},
-					},
-				}))
+				assert.True(t, reflect.DeepEqual(resp, expectedResp))
 			}
 		}
 	}()
