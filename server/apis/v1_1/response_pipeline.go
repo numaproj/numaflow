@@ -6,9 +6,7 @@ import "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 type Pipelines []struct {
 	Name string `json:"name"`
 	// HealthyStatus shows whether the pipeline is healthy, warning, or critical.
-	// TODO: should we use v1alpha1.PipelineStatus
 	HealthyStatus string `json:"healthyStatus"`
 	// Pipeline contains the detailed pipeline spec.
-	// TODO: v1alpha1.Pipeline or v1alpha1.PipelineSpec
 	Pipeline v1alpha1.Pipeline `json:"pipeline"`
 }

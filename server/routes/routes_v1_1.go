@@ -25,7 +25,7 @@ func v1_1Routes(r gin.IRouter) {
 	r.PUT("/namespaces/:namespace/pipelines/:pipeline")
 	// Delete a Pipeline.
 	r.DELETE("/namespaces/:namespace/pipelines/:pipeline")
-	// Patch the pipeline spec to achieve operations such as “pause” and “resume”.
+	// Patch the pipeline spec to achieve operations such as "pause" and "resume".
 	r.PATCH("/namespaces/:namespace/pipelines/:pipeline")
 	// Create an InterStepBufferService object.
 	r.POST("/namespaces/:namespace/isb-services")
