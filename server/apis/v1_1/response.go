@@ -17,3 +17,11 @@ type NumaflowAPIResponse struct {
 	// Data is the response body.
 	Data interface{} `json:"data"`
 }
+
+func NewNumaflowAPIResponse(code StatusCode, errMessage *string, data interface{}) NumaflowAPIResponse {
+	return NumaflowAPIResponse{
+		StatusCode: code,
+		ErrMessage: errMessage,
+		Data:       data,
+	}
+}

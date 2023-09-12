@@ -79,6 +79,29 @@ func NewHandler() (*handler, error) {
 	}, nil
 }
 
+// ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
+func (h *handler) ListNamespaces(c *gin.Context) {
+	l, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	m := make(map[string]bool)
+	for _, pl := range l.Items {
+		m[pl.Namespace] = true
+	}
+	var namespaces []string
+	for k := range m {
+		namespaces = append(namespaces, k)
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(Success, nil, namespaces))
+}
+
+// GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
+func (h *handler) GetClusterSummary(c *gin.Context) {
+	panic("To be implemented")
+}
+
 // ListPipelines is used to provide all the numaflow pipelines in a given namespace
 func (h *handler) ListPipelines(c *gin.Context) {
 	plList, err := h.numaflowClient.Pipelines(c.Param("namespace")).List(context.Background(), metav1.ListOptions{})
@@ -320,24 +343,6 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, l)
-}
-
-// ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
-func (h *handler) ListNamespaces(c *gin.Context) {
-	l, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	m := make(map[string]bool)
-	for _, pl := range l.Items {
-		m[pl.Namespace] = true
-	}
-	var namespaces []string
-	for k := range m {
-		namespaces = append(namespaces, k)
-	}
-	c.JSON(http.StatusOK, namespaces)
 }
 
 func daemonSvcAddress(ns, pipeline string) string {

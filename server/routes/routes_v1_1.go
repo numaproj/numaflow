@@ -12,15 +12,15 @@ func v1_1Routes(r gin.IRouter) {
 		panic(err)
 	}
 	// List all namespaces that have Pipeline or InterStepBufferService objects.
-	r.GET("/namespaces")
+	r.GET("/namespaces", handler.ListNamespaces)
 	// Summarized information of all the namespaces in a cluster wrapped in a list.
 	r.GET("/cluster-summary")
 	// Create a Pipeline.
 	r.POST("/namespaces/:namespace/pipelines")
 	// All pipelines for a given namespace.
-	r.GET("/namespaces/:namespace/pipelines", handler.ListPipelines)
+	r.GET("/namespaces/:namespace/pipelines")
 	// Get a Pipeline information.
-	r.GET("/namespaces/:namespace/pipelines/:pipeline", handler.GetPipeline)
+	r.GET("/namespaces/:namespace/pipelines/:pipeline")
 	// Update a Pipeline.
 	r.PUT("/namespaces/:namespace/pipelines/:pipeline")
 	// Delete a Pipeline.
@@ -32,7 +32,7 @@ func v1_1Routes(r gin.IRouter) {
 	// List all the InterStepBufferService objects for a given namespace.
 	r.GET("/namespaces/:namespace/isbsvcs")
 	// Get an InterStepBufferService object.
-	r.GET("/namespaces/:namespace/isbsvcs/:isbsvc", handler.GetInterStepBufferService)
+	r.GET("/namespaces/:namespace/isbsvcs/:isbsvc")
 	// Update an InterStepBufferService object.
 	r.PUT("/namespaces/:namespace/isbsvcs/:isbsvc")
 	// Delete an InterStepBufferService object.
