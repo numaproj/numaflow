@@ -6,7 +6,7 @@ type StatusCode string
 // TODO: finalize on the types of status code
 const (
 	Success StatusCode = "success"
-	Failure            = "failure"
+	Failure StatusCode = "failure"
 )
 
 type NumaflowAPIResponse struct {
