@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
@@ -64,6 +65,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		windower           window.Windower
 		fromVertexWmStores map[string]store.WatermarkStore
 		toVertexWmStores   map[string]store.WatermarkStore
+		idleManager        wmb.IdleManager
 	)
 
 	log := logging.FromContext(ctx)
@@ -103,6 +105,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 	// watermark variables
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
+	idleManager = wmb.NewNoOpIdleManager()
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		readers, writers, err = buildRedisBufferIO(ctx, u.VertexInstance)
@@ -112,8 +115,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	case dfv1.ISBSvcTypeJetStream:
 		// build watermark progressors
 		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
-			names := u.VertexInstance.Vertex.GetToBuffers()
-			fetchWatermark, publishWatermark = generic.BuildNoOpWatermarkProgressorsFromBufferList(names)
+			// use　default no op fetcher, publisher, idleManager
 		} else {
 			// create from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
@@ -138,6 +140,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			idleManager = wmb.NewIdleManager(len(writers))
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
@@ -196,7 +199,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	log = log.With("protocol", "uds-grpc-reduce-udf")
 
-	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, dfv1.DefaultGRPCMaxMessageSize)
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	sdkClient, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
@@ -244,7 +247,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if allowedLateness := u.VertexInstance.Vertex.Spec.UDF.GroupBy.AllowedLateness; allowedLateness != nil {
 		opts = append(opts, reduce.WithAllowedLateness(allowedLateness.Duration))
 	}
-	idleManager := wmb.NewIdleManager(len(writers))
 
 	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, reduceHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager)
 

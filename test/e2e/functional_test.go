@@ -117,13 +117,20 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	waitInterval := 10 * time.Second
 	succeedChan := make(chan struct{})
 	go func() {
+		vertexNames := []string{"input", "p1", "output"}
 		for {
-			m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
-			assert.NoError(s.T(), err)
-			assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
-			oneMinRate := m[0].ProcessingRates["1m"]
-			// the rate should be around 5
-			if oneMinRate < 4 || oneMinRate > 6 {
+			accurateCount := 0
+			for _, vertexName := range vertexNames {
+				m, err := client.GetVertexMetrics(context.Background(), pipelineName, vertexName)
+				assert.NoError(s.T(), err)
+				assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+				oneMinRate := m[0].ProcessingRates["1m"]
+				// the rate should be around 5
+				if oneMinRate > 4 || oneMinRate < 6 {
+					accurateCount++
+				}
+			}
+			if accurateCount != len(vertexNames) {
 				time.Sleep(waitInterval)
 			} else {
 				succeedChan <- struct{}{}

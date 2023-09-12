@@ -22,12 +22,10 @@ import (
 	"time"
 
 	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
-	"github.com/numaproj/numaflow-go/pkg/shared"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/numaproj/numaflow-go/pkg/info"
-
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -40,10 +38,10 @@ type client struct {
 // New creates a new client object.
 func New(inputOptions ...Option) (Client, error) {
 	var opts = &options{
-		maxMessageSize:             1024 * 1024 * 64, // 64 MB
-		serverInfoFilePath:         info.ServerInfoFilePath,
-		tcpSockAddr:                shared.TcpAddr,
-		udsSockAddr:                shared.MapAddr,
+		maxMessageSize:             sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
+		serverInfoFilePath:         sdkclient.ServerInfoFilePath,
+		tcpSockAddr:                sdkclient.TcpAddr,
+		udsSockAddr:                sdkclient.MapAddr,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 	}
 
@@ -100,7 +98,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 // MapFn applies a function to each datum element.
 func (c *client) MapFn(ctx context.Context, request *mappb.MapRequest) (*mappb.MapResponse, error) {
 	mapResponse, err := c.grpcClt.MapFn(ctx, request)
-	err = util.ToUDFErr("c.grpcClt.SourceTransformFn", err)
+	err = util.ToUDFErr("c.grpcClt.MapFn", err)
 	if err != nil {
 		return nil, err
 	}

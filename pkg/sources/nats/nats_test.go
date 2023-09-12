@@ -33,6 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type myForwardToAllTest struct {
@@ -81,7 +82,7 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"testVertex": publishWMStores,
 	}
-	return New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, WithReadTimeout(1*time.Second))
+	return New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, wmb.NewIdleManager(len(toBuffers)), WithReadTimeout(1*time.Second))
 }
 
 func Test_Single(t *testing.T) {

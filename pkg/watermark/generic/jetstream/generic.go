@@ -115,9 +115,6 @@ func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.Ve
 	if !vertexInstance.Vertex.IsASource() {
 		return nil, fmt.Errorf("not a source vertex")
 	}
-	if vertexInstance.Vertex.Spec.Watermark.Disabled {
-		return store.BuildNoOpWatermarkStore()
-	}
 	bucketName := vertexInstance.Vertex.GetFromBuckets()[0]
 	wmStore, err := store.BuildJetStreamWatermarkStore(ctx, bucketName, client)
 	if err != nil {
