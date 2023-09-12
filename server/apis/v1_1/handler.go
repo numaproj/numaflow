@@ -94,7 +94,7 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 	for k := range m {
 		namespaces = append(namespaces, k)
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(Success, nil, namespaces))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
 }
 
 // GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.

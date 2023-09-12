@@ -45,7 +45,7 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	r1_1Group := r.Group("/api/v1_1")
 	v1_1Routes(r1_1Group)
 	r1_1Group.GET("/sysinfo", func(c *gin.Context) {
-		c.JSON(http.StatusOK, v1_1.NewNumaflowAPIResponse(v1_1.Success, nil, sysinfo))
+		c.JSON(http.StatusOK, v1_1.NewNumaflowAPIResponse(nil, sysinfo))
 	})
 }
 
