@@ -28,15 +28,15 @@ func v1_1Routes(r gin.IRouter) {
 	// Patch the pipeline spec to achieve operations such as “pause” and “resume”.
 	r.PATCH("/namespaces/:namespace/pipelines/:pipeline")
 	// Create an InterStepBufferService object.
-	r.POST("/namespaces/:namespace/isbsvcs")
+	r.POST("/namespaces/:namespace/isb-services")
 	// List all the InterStepBufferService objects for a given namespace.
-	r.GET("/namespaces/:namespace/isbsvcs")
+	r.GET("/namespaces/:namespace/isb-services")
 	// Get an InterStepBufferService object.
-	r.GET("/namespaces/:namespace/isbsvcs/:isbsvc")
+	r.GET("/namespaces/:namespace/isb-services/:isb-services")
 	// Update an InterStepBufferService object.
-	r.PUT("/namespaces/:namespace/isbsvcs/:isbsvc")
+	r.PUT("/namespaces/:namespace/isb-services/:isb-services")
 	// Delete an InterStepBufferService object.
-	r.DELETE("/namespaces/:namespace/isbsvcs/:isbsvc")
+	r.DELETE("/namespaces/:namespace/isb-services/:isb-services")
 	// Get all the Inter-Step Buffers of a pipeline.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs")
 	// Get all the watermarks information of a pipeline.
