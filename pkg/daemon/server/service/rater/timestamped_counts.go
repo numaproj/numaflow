@@ -23,9 +23,9 @@ import (
 
 // TimestampedCounts track the total count of processed messages for a list of pods at a given timestamp
 type TimestampedCounts struct {
-	// timestamp in seconds, is the time when the count is recorded
+	// timestamp in seconds is the time when the count is recorded
 	timestamp int64
-	// the key of podPartitionCount represents the pod name, the value represents partition counts map for the pod
+	// the key of podPartitionCount represents the pod name, the value represents a partition counts map for the pod
 	// partition counts map holds mappings between partition name and the count of messages processed by the partition
 	podPartitionCount map[string]map[string]float64
 	lock              *sync.RWMutex
