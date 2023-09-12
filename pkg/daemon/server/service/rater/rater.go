@@ -218,9 +218,9 @@ func sleep(ctx context.Context, duration time.Duration) {
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodReadCount {
 	metricNames := map[string]string{
-		KeyVertexTypeReduce: "reduce_isb_reader_read_total",
-		KeyVertexTypeSource: "source_forwarder_read_total",
-		KeyVertexTypeSink:   "sink_forwarder_read_total",
+		keyVertexTypeReduce: "reduce_isb_reader_read_total",
+		keyVertexTypeSource: "source_forwarder_read_total",
+		keyVertexTypeSink:   "sink_forwarder_read_total",
 	}
 
 	readTotalMetricName, ok := metricNames[vertexType]

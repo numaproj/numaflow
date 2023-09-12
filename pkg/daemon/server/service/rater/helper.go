@@ -23,18 +23,18 @@ import (
 )
 
 const (
-	IndexNotFound = -1
+	indexNotFound = -1
 
 	// The following string set is used to identify the vertex type of pod
 
-	// KeyVertexTypeReduce is the vertex type string for reduce vertex
-	KeyVertexTypeReduce = "reduce"
-	// KeyVertexTypeSource is the vertex type string for a source vertex
-	KeyVertexTypeSource = "source"
-	// KeyVertexTypeSink is the vertex type string for a sink vertex
-	KeyVertexTypeSink = "sink"
-	// KeyVertexTypeOther is the vertex type string for other vertices
-	KeyVertexTypeOther = "other"
+	// keyVertexTypeReduce is the vertex type string for reduce vertex
+	keyVertexTypeReduce = "reduce"
+	// keyVertexTypeSource is the vertex type string for a source vertex
+	keyVertexTypeSource = "source"
+	// keyVertexTypeSink is the vertex type string for a sink vertex
+	keyVertexTypeSink = "sink"
+	// keyVertexTypeOther is the vertex type string for other vertices
+	keyVertexTypeOther = "other"
 )
 
 // UpdateCount updates the count of processed messages for a pod at a given time
@@ -65,7 +65,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	// we consider the last but one element as the end index because the last element might be incomplete
 	// we can be sure that the last but one element in the queue is complete.
 	endIndex := len(counts) - 2
-	if startIndex == IndexNotFound {
+	if startIndex == indexNotFound {
 		return 0
 	}
 
@@ -111,8 +111,8 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
 	now := time.Now().Truncate(CountWindow).Unix()
 	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {
-		// if the second last element is already outside the lookback window, we return IndexNotFound
-		return IndexNotFound
+		// if the second last element is already outside the lookback window, we return indexNotFound
+		return indexNotFound
 	}
 
 	startIndex := n - 2

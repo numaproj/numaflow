@@ -115,13 +115,13 @@ func (pt *PodTracker) updateActivePods() {
 func getVertexType(v v1alpha1.AbstractVertex) string {
 	switch {
 	case v.IsReduceUDF():
-		return KeyVertexTypeReduce
+		return keyVertexTypeReduce
 	case v.IsASource():
-		return KeyVertexTypeSource
+		return keyVertexTypeSource
 	case v.IsASink():
-		return KeyVertexTypeSink
+		return keyVertexTypeSink
 	default:
-		return KeyVertexTypeOther
+		return keyVertexTypeOther
 	}
 }
 
