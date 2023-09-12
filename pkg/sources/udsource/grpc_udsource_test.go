@@ -115,7 +115,7 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 		assert.Equal(t, int64(123), count)
 	})
 
-	t.Run("test success - pending is not available", func(t *testing.T) {
+	t.Run("test success - pending is not available - negative count", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 

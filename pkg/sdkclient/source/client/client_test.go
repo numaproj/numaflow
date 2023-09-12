@@ -96,7 +96,8 @@ func TestReadFn(t *testing.T) {
 		},
 	}
 
-	for i := 0; i < 2; i++ {
+	const numRecords = 5
+	for i := 0; i < numRecords; i++ {
 		mockStreamClient.EXPECT().Recv().Return(expectedResp, nil)
 	}
 	mockStreamClient.EXPECT().Recv().Return(expectedResp, io.EOF)
@@ -132,7 +133,7 @@ func TestReadFn(t *testing.T) {
 		defer wg.Done()
 		err = testClient.ReadFn(ctx, &sourcepb.ReadRequest{
 			Request: &sourcepb.ReadRequest_Request{
-				NumRecords: uint64(2),
+				NumRecords: uint64(numRecords),
 			},
 		}, responseCh)
 		assert.NoError(t, err)
