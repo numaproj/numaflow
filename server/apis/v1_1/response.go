@@ -18,6 +18,7 @@ type NumaflowAPIResponse struct {
 	Data interface{} `json:"data"`
 }
 
+// NewNumaflowAPIResponse creates a new NumaflowAPIResponse.
 func NewNumaflowAPIResponse(code StatusCode, errMessage *string, data interface{}) NumaflowAPIResponse {
 	return NumaflowAPIResponse{
 		StatusCode: code,
