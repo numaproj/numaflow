@@ -9,6 +9,7 @@ import { notifyError } from "../../../utils/error";
 import "./style.css";
 
 export function Pipeline() {
+  // TODO needs to be able to be given namespaceId from parent for NS only install
   const { namespaceId, pipelineId } = useParams();
   const {
     pipeline,
