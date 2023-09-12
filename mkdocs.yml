@@ -87,6 +87,7 @@ nav:
           - user-guide/reference/conditional-forwarding.md
           - user-guide/reference/join-vertex.md
           - user-guide/reference/multi-partition.md
+          - user-guide/reference/side-inputs.md
           - Configuration:              
             - user-guide/reference/configuration/container-resources.md
             - user-guide/reference/configuration/volumes.md
@@ -118,7 +119,7 @@ nav:
           - specifications/controllers.md
           - specifications/autoscaling.md
           - Edges, Buffers and Buckets: "specifications/edges-buffers-buckets.md"
-          - Side Inputes: "specifications/side-inputs.md"
+          - Side Inputs: "specifications/side-inputs.md"
       - development/debugging.md
       - development/static-code-analysis.md
       - development/releasing.md
