@@ -16262,38 +16262,88 @@ rules:
   - vertices/status
   - vertices/scale
   verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
   - get
   - list
   - watch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - ""
   resources:
   - pods
   - pods/exec
-  - pods/log
   - configmaps
   - services
+  - persistentvolumeclaims
   verbs:
+  - create
   - get
   - list
   - watch
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - patch
+  - delete
 - apiGroups:
   - apps
   resources:
   - deployments
   - statefulsets
   verbs:
+  - create
   - get
   - list
   - watch
+  - update
+  - patch
+  - delete
 - apiGroups:
-  - metrics.k8s.io
+  - batch
   resources:
-  - pods
+  - jobs
   verbs:
+  - create
   - get
   - list
   - watch
+  - update
+  - patch
+  - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
