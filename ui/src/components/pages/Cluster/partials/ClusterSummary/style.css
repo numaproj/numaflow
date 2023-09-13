@@ -1,0 +1,38 @@
+.cluster-summary-title {
+  color: #393A3D;
+  font-size: 0.8125rem;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.cluster-summary-large-count {
+  color: #3C4348;
+  font-size: 2.25rem;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.cluster-summary-small-count {
+  color: #3C4348;
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.cluster-summary-separator {
+  width: 0.0625rem;
+  height: 4.8125rem;
+  background: #DAE3E8;
+}
+
+.cluster-summary-active-logo {
+  width: 1.5rem;
+}
+
+.cluster-summary-active-text {
+  color: #3C4348;
+  font-size: 0.875rem;
+  font-style: normal;
+  font-weight: 400;
+  margin-top: 0.125rem;
+}

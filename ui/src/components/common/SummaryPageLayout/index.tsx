@@ -67,7 +67,7 @@ export function SummaryPageLayout({
           display: "flex",
           flexDirection: "row",
           width: "100%",
-          height: SUMMARY_HEIGHT,
+          minHeight: SUMMARY_HEIGHT,
           background: "#F8F8FB",
           boxShadow: "0px 3px 11px rgba(39, 76, 119, 0.16)",
           zIndex: 999,
