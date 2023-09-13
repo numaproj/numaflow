@@ -322,12 +322,12 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 	}).Add(float64(len(dataMessages)))
-	controlMessagesCount.With(map[string]string{
+	totalMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
-	}).Add(float64(len(ctrlMessages)))
+	}).Add(float64(len(messages)))
 
 	// write messages to windows based by PBQs.
 	successfullyWrittenMessages, err := df.writeMessagesToWindows(ctx, dataMessages)
