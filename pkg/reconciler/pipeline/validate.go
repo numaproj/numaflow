@@ -89,6 +89,17 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("pipeline has no sink, at least one vertex with 'sink' defined is required")
 	}
 
+	for _, v := range pl.Spec.Vertices {
+		if len(pl.GetToEdges(v.Name)) == 0 {
+			if len(pl.GetFromEdges(v.Name)) == 0 {
+				return fmt.Errorf("not all the vertex names are defined in edges")
+			}
+			if v.Sink == nil {
+				return fmt.Errorf("invalid vertex %q, last vertex of pipeline must be sink", v.Name)
+			}
+		}
+	}
+
 	for k, s := range sources {
 		if s.IsUDSource() {
 			if s.Source.UDSource.Container == nil || s.Source.UDSource.Container.Image == "" {
@@ -140,6 +151,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 
 	namesInEdges := make(map[string]bool)
+	toFromEdge := make(map[string]bool)
 	for _, e := range pl.Spec.Edges {
 		if e.From == "" || e.To == "" {
 			return fmt.Errorf("invalid edge: both from and to need to be specified")
@@ -158,7 +170,14 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		}
 		namesInEdges[e.From] = true
 		namesInEdges[e.To] = true
+		// check for redundant edges
+		if _, existing := toFromEdge[e.From+e.To]; existing {
+			return fmt.Errorf("cannot define multiple edges from vertex %q to vertex %q", e.From, e.To)
+		} else {
+			toFromEdge[e.From+e.To] = true
+		}
 	}
+
 	if len(namesInEdges) != len(names) {
 		return fmt.Errorf("not all the vertex names are defined in edges")
 	}
