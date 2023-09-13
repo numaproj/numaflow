@@ -51,6 +51,7 @@ rules:
       - ""
     resources:
       - pods
+      - pods/log
       - pods/exec
       - configmaps
       - services
@@ -99,3 +100,11 @@ rules:
       - update
       - patch
       - delete
+  - apiGroups:
+      - metrics.k8s.io
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch

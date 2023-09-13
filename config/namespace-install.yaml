@@ -16209,6 +16209,7 @@ rules:
   - ""
   resources:
   - pods
+  - pods/log
   - pods/exec
   - configmaps
   - services
@@ -16257,6 +16258,14 @@ rules:
   - update
   - patch
   - delete
+- apiGroups:
+  - metrics.k8s.io
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
