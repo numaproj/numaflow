@@ -255,7 +255,8 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	pipeline := c.Param("pipeline")
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %v", c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	defer func() {
@@ -263,10 +264,11 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	}()
 	l, err := client.ListPipelineBuffers(context.Background(), pipeline)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %v", c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, l)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, l))
 }
 
 // GetVertexBuffers is used to provide buffer information about a single pipeline vertex
@@ -317,7 +319,8 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	pipeline := c.Param("pipeline")
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to get the watermarks for pipeline %q: %v", c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	defer func() {
@@ -325,10 +328,11 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	}()
 	l, err := client.GetPipelineWatermarks(context.Background(), pipeline)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to get the watermarks for pipeline %q: %v", c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, l)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, l))
 }
 
 // GetPipelineStatus is used to provide status check for a given pipeline

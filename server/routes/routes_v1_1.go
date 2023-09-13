@@ -38,9 +38,9 @@ func v1_1Routes(r gin.IRouter) {
 	// Delete an InterStepBufferService object.
 	r.DELETE("/namespaces/:namespace/isb-services/:isb-services")
 	// Get all the Inter-Step Buffers of a pipeline.
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs")
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs", handler.ListPipelineBuffers)
 	// Get all the watermarks information of a pipeline.
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks")
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks", handler.GetPipelineWatermarks)
 	// All vertices for the given pipeline. TODO: Not in the API docs, but I assume it's needed?
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices", handler.ListVertices)
 	// Get a vertex information of a pipeline. TODO: do we need it?
