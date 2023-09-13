@@ -146,40 +146,6 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, isbsvc)
 }
 
-// ListVertices is used to provide all the vertices of a pipeline
-func (h *handler) ListVertices(c *gin.Context) {
-	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	vertices, err := h.numaflowClient.Vertices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyPipelineName, c.Param("pipeline")),
-		Limit:         limit,
-		Continue:      c.Query("continue"),
-	})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to list vertices for namespace %q, pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, vertices.Items))
-}
-
-// GetVertex is used to provide the vertex spec
-func (h *handler) GetVertex(c *gin.Context) {
-	vertices, err := h.numaflowClient.Vertices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, c.Param("pipeline"), dfv1.KeyVertexName, c.Param("vertex")),
-	})
-	if err != nil {
-		errMsg := fmt.Sprintf("failed to get the vertex")
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	if len(vertices.Items) == 0 {
-		errMsg := fmt.Sprintf("Vertex %q not found", c.Param("vertex"))
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, vertices.Items[0]))
-}
-
 // ListVertexPods is used to provide all the pods of a vertex
 func (h *handler) ListVertexPods(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)

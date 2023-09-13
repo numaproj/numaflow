@@ -41,10 +41,6 @@ func v1_1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs", handler.ListPipelineBuffers)
 	// Get all the watermarks information of a pipeline.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks", handler.GetPipelineWatermarks)
-	// All vertices for the given pipeline. TODO: Not in the API docs, but I assume it's needed?
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices", handler.ListVertices)
-	// Get a vertex information of a pipeline. TODO: do we need it?
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex", handler.GetVertex)
 	// Update a vertex spec.
 	r.PUT("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex")
 	// Get all the vertex metrics of a pipeline. TODO: to be finalized
