@@ -41,18 +41,20 @@ func v1_1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs")
 	// Get all the watermarks information of a pipeline.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks")
+	// All vertices for the given pipeline. TODO: Not in the API docs, but I assume it's needed?
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices", handler.ListVertices)
 	// Get a vertex information of a pipeline. TODO: do we need it?
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex")
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex", handler.GetVertex)
 	// Update a vertex spec.
 	r.PUT("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex")
 	// Get all the vertex metrics of a pipeline. TODO: to be finalized
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics")
 	// Get all the pods of a vertex.
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods")
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.ListVertexPods)
 	// Get the metrics such as cpu, memory usage for a pod.
-	r.GET("/metrics/namespaces/:namespace/pods/:pod")
+	r.GET("/metrics/namespaces/:namespace/pods/:pod", handler.GetPodMetrics)
 	// Get pod logs.
-	r.GET("/namespaces/:namespace/pods/:pod/logs")
+	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events")
 

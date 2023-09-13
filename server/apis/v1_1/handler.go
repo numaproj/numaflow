@@ -155,10 +155,11 @@ func (h *handler) ListVertices(c *gin.Context) {
 		Continue:      c.Query("continue"),
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to list vertices for namespace %q, pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, vertices.Items)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, vertices.Items))
 }
 
 // GetVertex is used to provide the vertex spec
@@ -167,14 +168,16 @@ func (h *handler) GetVertex(c *gin.Context) {
 		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, c.Param("pipeline"), dfv1.KeyVertexName, c.Param("vertex")),
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("failed to get the vertex")
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	if len(vertices.Items) == 0 {
-		c.JSON(http.StatusNotFound, fmt.Sprintf("Vertex %q not found", c.Param("vertex")))
+		errMsg := fmt.Sprintf("Vertex %q not found", c.Param("vertex"))
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, vertices.Items[0])
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, vertices.Items[0]))
 }
 
 // ListVertexPods is used to provide all the pods of a vertex
@@ -186,10 +189,11 @@ func (h *handler) ListVertexPods(c *gin.Context) {
 		Continue:      c.Query("continue"),
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to get a list of pods: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), c.Param("vertex"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, pods.Items)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pods.Items))
 }
 
 // ListPodsMetrics is used to provide a list of all metrics in all the pods
@@ -210,10 +214,11 @@ func (h *handler) ListPodsMetrics(c *gin.Context) {
 func (h *handler) GetPodMetrics(c *gin.Context) {
 	m, err := h.metricsClient.MetricsV1beta1().PodMetricses(c.Param("namespace")).Get(context.Background(), c.Param("pod"), metav1.GetOptions{})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to get pod metrics in namespace %q: %v", c.Param("namespace"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, m)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, m))
 }
 
 // PodLogs is used to provide the logs of a given container in pod
@@ -231,7 +236,8 @@ func (h *handler) PodLogs(c *gin.Context) {
 			TailLines: tailLines,
 		}).Stream(c)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to get pod logs: %v", err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	defer stream.Close()
