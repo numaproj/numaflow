@@ -311,7 +311,7 @@ func Test_buildISBBatchJob(t *testing.T) {
 		j := buildISBBatchJob(testPipeline, testFlowImage, fakeIsbSvcConfig, "subcmd", []string{"sss"}, "test")
 		assert.Equal(t, 1, len(j.Spec.Template.Spec.Containers))
 		assert.True(t, len(j.Spec.Template.Spec.Containers[0].Args) > 0)
-		assert.Contains(t, j.Name, testPipeline.Name+"-buffer-bucket-test-")
+		assert.Contains(t, j.Name, testPipeline.Name+"-test-")
 		envNames := []string{}
 		for _, e := range j.Spec.Template.Spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
@@ -436,7 +436,7 @@ func Test_cleanupBuffers(t *testing.T) {
 		err = r.client.List(ctx, jobs, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(jobs.Items))
-		assert.Contains(t, jobs.Items[0].Name, "cleanup")
+		assert.Contains(t, jobs.Items[0].Name, "cln")
 		assert.Equal(t, 0, len(jobs.Items[0].OwnerReferences))
 	})
 }
