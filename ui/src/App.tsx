@@ -7,6 +7,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import { Slide, ToastContainer } from "react-toastify";
 import { Routes, Route } from "react-router-dom";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
+import { Cluster } from "./components/pages/Cluster";
 import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
@@ -77,7 +78,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Namespaces />} />
           <Route
-            path="/pipeline/:pipelineId"
+            path="/pipelines/:pipelineId"
             element={<Pipeline />}
           />
           <Route
@@ -94,13 +95,13 @@ function App() {
     // Cluster installation routing
     return (
       <Routes>
-        <Route path="/" element={<div>TODO Cluster Summary</div>} />
+        <Route path="/" element={<Cluster />} />
         <Route
-          path="/namespace/:namespaceId"
+          path="/namespaces/:namespaceId"
           element={<Namespaces />}
         />
         <Route
-          path="/namespace/:namespaceId/pipeline/:pipelineId"
+          path="/namespaces/:namespaceId/pipelines/:pipelineId"
           element={<Pipeline />}
         />
         <Route
@@ -154,9 +155,24 @@ function App() {
                 flexDirection: "column",
                 width: "100%",
                 overflow: "auto",
+                height: "2rem",
+                background: "#F8F8FB",
+                zIndex: 999,
+                position: "fixed",
+                top: "3.75rem",
               }}
             >
               <Breadcrumbs />
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+                overflow: "auto",
+                marginTop: "2rem",
+              }}
+            >
               {routes}
             </Box>
           </Box>

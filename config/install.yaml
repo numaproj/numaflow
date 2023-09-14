@@ -16262,17 +16262,23 @@ rules:
   - vertices/status
   - vertices/scale
   verbs:
+  - create
+  - delete
+  - deletecollection
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - ""
   resources:
+  - events
   - pods
   - pods/exec
-  - pods/log
   - configmaps
   - services
+  - persistentvolumeclaims
   verbs:
   - get
   - list
