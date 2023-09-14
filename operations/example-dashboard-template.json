@@ -125,7 +125,7 @@
             "uid": "eF7wTnc4k"
           },
           "editorMode": "builder",
-          "expr": "rate(forwarder_read_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
+          "expr": "rate(forwarder_data_read{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
