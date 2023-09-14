@@ -76,10 +76,7 @@ function App() {
       return (
         <Routes>
           <Route path="/" element={<Namespaces />} />
-          <Route
-            path="/pipeline/:pipelineId"
-            element={<Pipeline />}
-          />
+          <Route path="/pipeline/:pipelineId" element={<Pipeline />} />
           <Route
             path="*"
             element={
@@ -95,10 +92,7 @@ function App() {
     return (
       <Routes>
         <Route path="/" element={<div>TODO Cluster Summary</div>} />
-        <Route
-          path="/namespace/:namespaceId"
-          element={<Namespaces />}
-        />
+        <Route path="/namespace/:namespaceId" element={<Namespaces />} />
         <Route
           path="/namespace/:namespaceId/pipeline/:pipelineId"
           element={<Pipeline />}
@@ -129,6 +123,7 @@ function App() {
               display: "flex",
               flexDirection: "column",
               width: "100% ",
+              height: "100%",
             }}
           >
             <Box
@@ -153,6 +148,7 @@ function App() {
                 display: "flex",
                 flexDirection: "column",
                 width: "100%",
+                height: "100%",
                 overflow: "auto",
               }}
             >

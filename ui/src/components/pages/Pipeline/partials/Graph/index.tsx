@@ -12,16 +12,27 @@ import ReactFlow, {
   NodeTypes,
   EdgeTypes,
   Position,
-  Controls,
+  Panel,
+  useReactFlow,
+  useViewport,
+  ReactFlowProvider,
 } from "reactflow";
-import { Card } from "@mui/material";
+import Card from "@mui/material/Card";
+import IconButton from "@mui/material/IconButton";
 import { graphlib, layout } from "dagre";
 import EdgeInfo from "./partials/EdgeInfo";
 import NodeInfo from "./partials/NodeInfo";
 import Spec from "./partials/Spec";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
-import { GraphProps } from "../../../../../types/declarations/graph";
+import { FlowProps, GraphProps } from "../../../../../types/declarations/graph";
+import lock from "../../../../../images/lock.svg";
+import unlock from "../../../../../images/unlock.svg";
+import scrollToggle from "../../../../../images/move-arrows.svg";
+import fullscreen from "../../../../../images/fullscreen.svg";
+import sidePanel from "../../../../../images/side-panel.svg";
+import zoomInIcon from "../../../../../images/zoom-in.svg";
+import zoomOutIcon from "../../../../../images/zoom-out.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -72,6 +83,101 @@ const getLayoutedElements = (
   });
 
   return { nodes, edges };
+};
+
+const Flow = (props: FlowProps) => {
+  const zoomLevel = useViewport().zoom;
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const [isLocked, setIsLocked] = useState(false);
+  const [isScrollLocked, setIsScrollLocked] = useState(false);
+  const {
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    handleNodeClick,
+    handleEdgeClick,
+    handlePaneClick,
+  } = props;
+
+  return (
+    <ReactFlow
+      nodeTypes={defaultNodeTypes}
+      edgeTypes={defaultEdgeTypes}
+      nodes={nodes}
+      edges={edges}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      onConnect={onConnect}
+      onEdgeClick={handleEdgeClick}
+      onNodeClick={handleNodeClick}
+      onPaneClick={handlePaneClick}
+      fitView
+      preventScrolling={isScrollLocked}
+      panOnDrag={!isLocked}
+    >
+      <Panel position="bottom-left">
+        <IconButton onClick={() => setIsLocked((prevState) => !prevState)}>
+          <img src={isLocked ? lock : unlock} alt={"lock"} />
+        </IconButton>
+        <IconButton
+          onClick={() => setIsScrollLocked((prevState) => !prevState)}
+        >
+          <img src={scrollToggle} alt={"scrollLock"} />
+        </IconButton>
+        <div className={"divider"} />
+        <IconButton onClick={() => fitView()}>
+          <img src={fullscreen} alt={"fullscreen"} />
+        </IconButton>
+        <IconButton
+          onClick={() => {
+            //TODO add single panel logic
+            alert("sidePanel");
+          }}
+        >
+          <img src={sidePanel} alt={"sidePanel"} />
+        </IconButton>
+        <div className={"divider"} />
+        <IconButton
+          onClick={() => {
+            zoomIn({ duration: 500 });
+          }}
+        >
+          <img src={zoomInIcon} alt="zoom-in" />
+        </IconButton>
+        <IconButton
+          onClick={() => {
+            zoomOut({ duration: 500 });
+          }}
+        >
+          <img src={zoomOutIcon} alt="zoom-out" />
+        </IconButton>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="54"
+          height="30"
+          viewBox="0 0 54 30"
+          fill="none"
+        >
+          <g>
+            <rect
+              x="0.5"
+              y="0.5"
+              width="53"
+              height="29"
+              rx="3.5"
+              fill="white"
+              stroke="#D4D7DC"
+            />
+            <text x="50%" y="50%" className={"zoom-percent-text"}>
+              {(((zoomLevel - 0.5) / 1.5) * 100).toFixed(0)}%
+            </text>
+          </g>
+        </svg>
+      </Panel>
+    </ReactFlow>
+  );
 };
 
 export default function Graph(props: GraphProps) {
@@ -166,28 +272,24 @@ export default function Graph(props: GraphProps) {
   const [showSpec, setShowSpec] = useState(true);
 
   return (
-    <div>
+    <div style={{ height: "100%" }}>
       <div className="Graph" data-testid="graph">
-        <ReactFlow
-          preventScrolling={false}
-          nodeTypes={defaultNodeTypes}
-          edgeTypes={defaultEdgeTypes}
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onEdgeClick={handleEdgeClick}
-          onNodeClick={handleNodeClick}
-          onPaneClick={handlePaneClick}
-          fitView
-          zoomOnScroll={true}
-          panOnDrag={true}
-        >
-          <Controls />
-        </ReactFlow>
+        <ReactFlowProvider>
+          <Flow
+            {...{
+              nodes,
+              edges,
+              onNodesChange,
+              onEdgesChange,
+              onConnect,
+              handleNodeClick,
+              handleEdgeClick,
+              handlePaneClick,
+            }}
+          />
+        </ReactFlowProvider>
       </div>
-
+      //TODO move this to side panel
       <Card
         sx={{ borderBottom: 1, borderColor: "divider", boxShadow: 1 }}
         data-testid={"card"}
