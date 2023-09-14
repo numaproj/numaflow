@@ -201,6 +201,29 @@ func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
 
+// UpdateVertex is used to provide the vertex spec
+// TODO
+func (h *handler) UpdateVertex(c *gin.Context) {
+	// vertices, err := h.numaflowClient.Vertices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
+	// 	LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, c.Param("pipeline"), dfv1.KeyVertexName, c.Param("vertex")),
+	// })
+	// if err != nil {
+	// 	c.JSON(http.StatusInternalServerError, err.Error())
+	// 	return
+	// }
+	// if len(vertices.Items) == 0 {
+	// 	c.JSON(http.StatusNotFound, fmt.Sprintf("Vertex %q not found", c.Param("vertex")))
+	// 	return
+	// }
+	// c.JSON(http.StatusOK, vertices.Items[0])
+	pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pl.Spec))
+}
+
 // ListVertexPods is used to provide all the pods of a vertex
 func (h *handler) ListVertexPods(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
