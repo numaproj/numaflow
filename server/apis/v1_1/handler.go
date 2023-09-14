@@ -19,13 +19,13 @@ package v1_1
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -149,20 +149,45 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 
 // UpdateInterStepBufferService is used to update the spec of the interstep buffer service
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
-	isbsvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isb-services"), metav1.GetOptions{})
+	isbSVC, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isb-services"), metav1.GetOptions{})
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	// TODO: c.Request.Body => string
-	_, err = h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Update(context.Background(), isbsvc, metav1.UpdateOptions{})
+	var requestBody dfv1.InterStepBufferServiceSpec
+	err = json.NewDecoder(c.Request.Body).Decode(&requestBody)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+
+	if requestBody.Redis != nil {
+		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: updating redis isbSVC is not supported.", c.Param("namespace"), c.Param("isb-services"))
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	} else if requestBody.JetStream != nil {
+		if *(isbSVC.Spec.JetStream.Replicas) < 3 {
+			errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: minimum number of replicas is 3.", c.Param("namespace"), c.Param("isb-services"))
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		if *(isbSVC.Spec.JetStream.Replicas) > 5 {
+			errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: maximum number of replicas is 5.", c.Param("namespace"), c.Param("isb-services"))
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		// TODO: currently we can only update the replica
+		isbSVC.Spec.JetStream.Replicas = requestBody.JetStream.Replicas
+	}
+	updatedISBSvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Update(context.Background(), isbSVC, metav1.UpdateOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, updatedISBSvc))
 }
 
 // DeleteInterStepBufferService is used to update the spec of the interstep buffer service

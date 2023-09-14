@@ -42,7 +42,7 @@ func v1_1Routes(r gin.IRouter) {
 	// Get all the watermarks information of a pipeline.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks", handler.GetPipelineWatermarks)
 	// Update a vertex spec.
-	r.PUT("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex")
+	r.PUT("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex", handler.UpdateVertex)
 	// Get all the vertex metrics of a pipeline. TODO: to be finalized
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics")
 	// Get all the pods of a vertex.
