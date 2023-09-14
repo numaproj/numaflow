@@ -294,7 +294,7 @@ func TestValidatePipeline(t *testing.T) {
 		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "p1", To: "input"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "source must have at least 1 to edge and 0 from edges")
+		assert.Contains(t, err.Error(), "source must have 0 from edges and at least 1 to edge")
 	})
 
 	t.Run("edge - sink as from", func(t *testing.T) {
@@ -302,7 +302,7 @@ func TestValidatePipeline(t *testing.T) {
 		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "output", To: "p1"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "sink must have at least 1 from edge and 0 from edges")
+		assert.Contains(t, err.Error(), "sink must have 0 to edges and at least 1 from edge")
 	})
 
 	t.Run("edge - duplicate", func(t *testing.T) {
@@ -348,7 +348,7 @@ func TestValidatePipeline(t *testing.T) {
 		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "bad-output", To: "p1"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "sink must have at least 1 from edge and 0 from edges")
+		assert.Contains(t, err.Error(), "sink must have 0 to edges and at least 1 from edge")
 	})
 
 	t.Run("or conditional forwarding", func(t *testing.T) {

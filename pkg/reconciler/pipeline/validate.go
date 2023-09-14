@@ -59,7 +59,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
 			}
 			if len(pl.GetToEdges(v.Name)) == 0 || len(pl.GetFromEdges(v.Name)) > 0 {
-				return fmt.Errorf("invalid vertex %q, source must have at least 1 to edge and 0 from edges", v.Name)
+				return fmt.Errorf("invalid vertex %q, source must have 0 from edges and at least 1 to edge", v.Name)
 			}
 			sources[v.Name] = v
 			if v.Source.UDTransformer != nil {
@@ -71,7 +71,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
 			}
 			if len(pl.GetFromEdges(v.Name)) == 0 || len(pl.GetToEdges(v.Name)) > 0 {
-				return fmt.Errorf("invalid vertex %q, sink must have at least 1 from edge and 0 to edges", v.Name)
+				return fmt.Errorf("invalid vertex %q, sink must have 0 to edges and at least 1 from edge", v.Name)
 			}
 			sinks[v.Name] = v
 		}
