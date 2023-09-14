@@ -58,6 +58,9 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			if v.Sink != nil || v.UDF != nil {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
 			}
+			if len(pl.GetToEdges(v.Name)) == 0 || len(pl.GetFromEdges(v.Name)) > 0 {
+				return fmt.Errorf("invalid vertex %q, source must have at least 1 to edge and 0 from edges", v.Name)
+			}
 			sources[v.Name] = v
 			if v.Source.UDTransformer != nil {
 				udTransformers[v.Name] = v
@@ -67,11 +70,17 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			if v.Source != nil || v.UDF != nil {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
 			}
+			if len(pl.GetFromEdges(v.Name)) == 0 || len(pl.GetToEdges(v.Name)) > 0 {
+				return fmt.Errorf("invalid vertex %q, sink must have at least 1 from edge and 0 from edges", v.Name)
+			}
 			sinks[v.Name] = v
 		}
 		if v.UDF != nil {
 			if v.Source != nil || v.Sink != nil {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
+			}
+			if len(pl.GetToEdges(v.Name)) == 0 || len(pl.GetFromEdges(v.Name)) == 0 {
+				return fmt.Errorf("invalid vertex %q, UDF must have to and from edges", v.Name)
 			}
 			if v.UDF.GroupBy != nil {
 				reduceUdfs[v.Name] = v
@@ -87,17 +96,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 
 	if len(sinks) == 0 {
 		return fmt.Errorf("pipeline has no sink, at least one vertex with 'sink' defined is required")
-	}
-
-	for _, v := range pl.Spec.Vertices {
-		if len(pl.GetToEdges(v.Name)) == 0 {
-			if len(pl.GetFromEdges(v.Name)) == 0 {
-				return fmt.Errorf("not all the vertex names are defined in edges")
-			}
-			if v.Sink == nil {
-				return fmt.Errorf("invalid vertex %q, last vertex of pipeline must be sink", v.Name)
-			}
-		}
 	}
 
 	for k, s := range sources {
@@ -161,12 +159,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		}
 		if !names[e.To] {
 			return fmt.Errorf("invalid edge: no vertex named %q", e.To)
-		}
-		if _, existing := sources[e.To]; existing {
-			return fmt.Errorf("source vertex %q can not be define as 'to'", e.To)
-		}
-		if _, existing := sinks[e.From]; existing {
-			return fmt.Errorf("sink vertex %q can not be define as 'from'", e.To)
 		}
 		namesInEdges[e.From] = true
 		namesInEdges[e.To] = true
