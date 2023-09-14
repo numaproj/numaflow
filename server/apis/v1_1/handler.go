@@ -170,21 +170,11 @@ func (h *handler) ListPodsMetrics(c *gin.Context) {
 		Continue: c.Query("continue"),
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, l.Items)
-}
-
-// GetPodMetrics is used to provide the metrics like CPU/Memory utilization for a pod
-func (h *handler) GetPodMetrics(c *gin.Context) {
-	m, err := h.metricsClient.MetricsV1beta1().PodMetricses(c.Param("namespace")).Get(context.Background(), c.Param("pod"), metav1.GetOptions{})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get pod metrics in namespace %q: %v", c.Param("namespace"), err.Error())
+		errMsg := fmt.Sprintf("Failed to get a list of pod metrics in namespace %q: %v", c.Param("namespace"), err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, m))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, l.Items))
 }
 
 // PodLogs is used to provide the logs of a given container in pod
