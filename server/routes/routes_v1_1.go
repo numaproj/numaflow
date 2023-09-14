@@ -34,7 +34,7 @@ func v1_1Routes(r gin.IRouter) {
 	// Get an InterStepBufferService object.
 	r.GET("/namespaces/:namespace/isb-services/:isb-services", handler.GetInterStepBufferService)
 	// Update an InterStepBufferService object.
-	r.PUT("/namespaces/:namespace/isb-services/:isb-services")
+	r.PUT("/namespaces/:namespace/isb-services/:isb-services", handler.UpdateInterStepBufferService)
 	// Delete an InterStepBufferService object.
 	r.DELETE("/namespaces/:namespace/isb-services/:isb-services")
 	// Get all the Inter-Step Buffers of a pipeline.

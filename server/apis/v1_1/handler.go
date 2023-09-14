@@ -147,6 +147,23 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, isbsvc))
 }
 
+// UpdateInterStepBufferService is used to update the spec of the interstep buffer service
+func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
+	isbsvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isbsvc"), metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isbsvc %q: %v", c.Param("namespace"), c.Param("isbsvc"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	_, err = h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Update(context.Background(), isbsvc, metav1.UpdateOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isbsvc %q: %v", c.Param("namespace"), c.Param("isbsvc"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
 // ListVertexPods is used to provide all the pods of a vertex
 func (h *handler) ListVertexPods(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
