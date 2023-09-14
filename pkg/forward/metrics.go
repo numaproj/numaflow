@@ -23,11 +23,18 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
-// readMessagesCount is used to indicate the number of messages read
+// totalMessagesCount is used to indicate the number of total messages read
+var totalMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "forwarder",
+	Name:      "total_read",
+	Help:      "Total number of Messages Read",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
+
+// readMessagesCount is used to indicate the number of data messages read
 var readMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "forwarder",
-	Name:      "read_total",
-	Help:      "Total number of Messages Read",
+	Name:      "data_read",
+	Help:      "Total number of Data Messages Read",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
 // readBytesCount is to indicate the number of bytes read
