@@ -168,12 +168,12 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	} else if requestBody.JetStream != nil {
-		if *(isbSVC.Spec.JetStream.Replicas) < 3 {
+		if *(requestBody.JetStream.Replicas) < 3 {
 			errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: minimum number of replicas is 3.", c.Param("namespace"), c.Param("isb-services"))
 			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 			return
 		}
-		if *(isbSVC.Spec.JetStream.Replicas) > 5 {
+		if *(requestBody.JetStream.Replicas) > 5 {
 			errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: maximum number of replicas is 5.", c.Param("namespace"), c.Param("isb-services"))
 			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 			return
