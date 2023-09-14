@@ -140,10 +140,11 @@ func (h *handler) ListInterStepBufferServices(c *gin.Context) {
 func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	isbsvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isbsvc"), metav1.GetOptions{})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isbsvc %q: %v", c.Param("namespace"), c.Param("isbsvc"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, isbsvc)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, isbsvc))
 }
 
 // ListVertexPods is used to provide all the pods of a vertex
