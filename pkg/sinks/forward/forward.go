@@ -51,7 +51,7 @@ type DataForward struct {
 	vertexName          string
 	pipelineName        string
 	// idleManager manages the idle watermark status.
-	idleManager *wmb.IdleManager
+	idleManager wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid.
 	wmbChecker wmb.WMBChecker
 	Shutdown
@@ -64,6 +64,7 @@ func NewDataForward(
 	toStep isb.BufferWriter,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
+	idleManager wmb.IdleManager,
 	opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
@@ -85,7 +86,7 @@ func NewDataForward(
 		// should we do a check here for the values not being null?
 		vertexName:   vertex.Spec.Name,
 		pipelineName: vertex.Spec.PipelineName,
-		idleManager:  wmb.NewIdleManager(1),
+		idleManager:  idleManager,
 		wmbChecker:   wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),

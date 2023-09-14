@@ -156,6 +156,7 @@ func NewMemGen(
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
+	idleManager wmb.IdleManager,
 	opts ...Option) (*memgen, error) {
 
 	// minimal CRDs don't have defaults
@@ -220,7 +221,7 @@ func NewMemGen(
 	genSrc.sourcePublishWM = genSrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancelFn the context
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, genSrc, writers, fsd, transformerApplier, fetchWM, genSrc, toVertexPublisherStores, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, genSrc, writers, fsd, transformerApplier, fetchWM, genSrc, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

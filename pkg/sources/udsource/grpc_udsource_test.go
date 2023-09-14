@@ -87,7 +87,7 @@ func Test_gRPCBasedUDSource_WaitUntilReadyWithMockClient(t *testing.T) {
 }
 
 func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
-	t.Run("test success", func(t *testing.T) {
+	t.Run("test success - positive pending count", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -113,6 +113,34 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 		count, err := u.ApplyPendingFn(ctx)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(123), count)
+	})
+
+	t.Run("test success - pending is not available - negative count", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		testResponse := &sourcepb.PendingResponse{
+			Result: &sourcepb.PendingResponse_Result{
+				Count: -123,
+			},
+		}
+
+		mockSourceClient := sourcemock.NewMockSourceClient(ctrl)
+		mockSourceClient.EXPECT().PendingFn(gomock.Any(), gomock.Any()).Return(testResponse, nil).AnyTimes()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		go func() {
+			<-ctx.Done()
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				t.Log(t.Name(), "test timeout")
+			}
+		}()
+
+		u := NewMockUDSgRPCBasedUDSource(mockSourceClient)
+		count, err := u.ApplyPendingFn(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, isb.PendingNotAvailable, count)
 	})
 
 	t.Run("test err", func(t *testing.T) {

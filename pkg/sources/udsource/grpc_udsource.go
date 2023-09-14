@@ -73,7 +73,10 @@ func (u *GRPCBasedUDSource) WaitUntilReady(ctx context.Context) error {
 // ApplyPendingFn returns the number of pending messages in the source.
 func (u *GRPCBasedUDSource) ApplyPendingFn(ctx context.Context) (int64, error) {
 	if resp, err := u.client.PendingFn(ctx, &emptypb.Empty{}); err == nil {
-		return int64(resp.Result.Count), nil
+		if resp.Result.Count < 0 {
+			return isb.PendingNotAvailable, nil
+		}
+		return resp.Result.Count, nil
 	} else {
 		return isb.PendingNotAvailable, err
 	}
