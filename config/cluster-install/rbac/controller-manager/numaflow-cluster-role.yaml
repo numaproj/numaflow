@@ -26,27 +26,9 @@ rules:
       - vertices/status
       - vertices/scale
   - apiGroups:
-    - ""
-    resources:
-    - "events"
-    verbs:
-      - "create"
-      - "patch"
-  - apiGroups:
-      - coordination.k8s.io
-    resources:
-      - leases
-    verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
-  - apiGroups:
       - ""
     resources:
+      - events
       - pods
       - pods/log
       - pods/exec
@@ -54,49 +36,18 @@ rules:
       - services
       - persistentvolumeclaims
     verbs:
-      - create
       - get
       - list
       - watch
-      - update
-      - patch
-      - delete
-  - apiGroups:
-      - ""
-    resources:
-      - secrets
-    verbs:
-      - create
-      - get
-      - list
-      - update
-      - patch
-      - delete
   - apiGroups:
       - apps
     resources:
       - deployments
       - statefulsets
     verbs:
-      - create
       - get
       - list
       - watch
-      - update
-      - patch
-      - delete
-  - apiGroups:
-      - batch
-    resources:
-      - jobs
-    verbs:
-      - create
-      - get
-      - list
-      - watch
-      - update
-      - patch
-      - delete
   - apiGroups:
       - metrics.k8s.io
     resources:
