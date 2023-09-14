@@ -218,14 +218,14 @@ func sleep(ctx context.Context, duration time.Duration) {
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodReadCount {
 	metricNames := map[string]string{
-		keyVertexTypeReduce: "reduce_isb_reader_read_total",
+		keyVertexTypeReduce: "reduce_isb_reader_data_read",
 		keyVertexTypeSource: "source_forwarder_read_total",
-		keyVertexTypeSink:   "sink_forwarder_read_total",
+		keyVertexTypeSink:   "sink_forwarder_data_read",
 	}
 
 	readTotalMetricName, ok := metricNames[vertexType]
 	if !ok {
-		readTotalMetricName = "forwarder_read_total"
+		readTotalMetricName = "forwarder_data_read"
 	}
 
 	// scrape the read total metric from pod metric port
@@ -243,6 +243,7 @@ func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodRea
 		r.log.Errorf("failed parsing to prometheus metric families, %v", err.Error())
 		return nil
 	}
+
 	if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
 		partitionReadCount := make(map[string]float64)
