@@ -155,6 +155,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
+	// TODO: c.Request.Body => string
 	_, err = h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Update(context.Background(), isbsvc, metav1.UpdateOptions{})
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
