@@ -230,13 +230,13 @@ func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodRea
 	}
 	var readTotalMetricName string
 	if vertexType == "reduce" {
-		readTotalMetricName = "reduce_isb_reader_read_total"
+		readTotalMetricName = "reduce_isb_reader_data_read"
 	} else if vertexType == "source" {
 		readTotalMetricName = "source_forwarder_read_total"
 	} else if vertexType == "sink" {
-		readTotalMetricName = "sink_forwarder_read_total"
+		readTotalMetricName = "sink_forwarder_data_read"
 	} else {
-		readTotalMetricName = "forwarder_read_total"
+		readTotalMetricName = "forwarder_data_read"
 	}
 	if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()

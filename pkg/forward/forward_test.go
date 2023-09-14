@@ -1585,14 +1585,14 @@ func (f myForwardApplyUDFErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadM
 
 func validateMetrics(t *testing.T, batchSize int64) {
 	metadata := `
-		# HELP forwarder_read_total Total number of Messages Read
-		# TYPE forwarder_read_total counter
+		# HELP forwarder_data_read Total number of Data Messages Read
+		# TYPE forwarder_data_read counter
 		`
 	expected := `
-		forwarder_read_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		forwarder_data_read{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
-	err := testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
+	err := testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "forwarder_data_read")
 	if err != nil {
 		t.Errorf("unexpected collecting result:\n%s", err)
 	}

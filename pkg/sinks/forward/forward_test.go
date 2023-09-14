@@ -348,14 +348,14 @@ func TestWriteToBuffer(t *testing.T) {
 
 func validateMetrics(batchSize int64) (err error) {
 	metadata := `
-		# HELP sink_forwarder_read_total Total number of Messages Read
-		# TYPE sink_forwarder_read_total counter
+		# HELP sink_forwarder_data_read Total number of Data Messages Read
+		# TYPE sink_forwarder_data_read counter
 		`
 	expected := `
-		sink_forwarder_read_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		sink_forwarder_data_read{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
-	err = testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "sink_forwarder_read_total")
+	err = testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "sink_forwarder_data_read")
 	if err != nil {
 		return err
 	}

@@ -73,15 +73,15 @@ var ackMessageError = promauto.NewCounterVec(prometheus.CounterOpts{
 // totalMessagesCount is used to indicate the number of total messages read
 var totalMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_reader",
-	Name:      "data_control_total",
-	Help:      "Total number of Data and Control Messages Read",
+	Name:      "total_read",
+	Help:      "Total number of Messages Read",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // readMessagesCount is used to indicate the number of data messages read
 var readMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "reduce_isb_reader",
-	Name:      "read_total",
-	Help:      "Total number of Messages Read",
+	Name:      "data_read",
+	Help:      "Total number of Data Messages Read",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
 
 // readBytesCount is to indicate the number of bytes read
