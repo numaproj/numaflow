@@ -79,7 +79,7 @@ func (br *RedisStreamsRead) GetGroupName() string {
 // we need to replace `>` with `0-0` during restarts. We might run into data loss otherwise.
 func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	var messages = make([]*isb.ReadMessage, 0, count)
-	var xstreams []redis.XStream
+	xstreams := []redis.XStream{}
 	var err error
 
 	// start with 0-0 if CheckBackLog is true
@@ -99,10 +99,10 @@ func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMes
 	}
 	if !br.Options.CheckBackLog {
 		streams, err := br.processXReadResult(">", count)
+		xstreams = append(xstreams, streams...)
 		if err != nil {
 			return br.processReadError(xstreams, messages, err)
 		}
-		xstreams = append(xstreams, streams...)
 	}
 
 	// Update metric for number of messages read in
