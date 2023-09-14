@@ -324,3 +324,18 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 func daemonSvcAddress(ns, pipeline string) string {
 	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
 }
+
+// GetNamespaceEvents gets a list of events for the given namespace.
+func (h *handler) GetNamespaceEvents(c *gin.Context) {
+	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
+	events, err := h.kubeClient.CoreV1().Events(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
+		Limit:    limit,
+		Continue: c.Query("continue"),
+	})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get a list of events: namespace %q: %v", c.Param("namespace"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, events.Items))
+}

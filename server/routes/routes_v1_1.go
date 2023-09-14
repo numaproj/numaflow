@@ -52,6 +52,6 @@ func v1_1Routes(r gin.IRouter) {
 	// Get pod logs.
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
-	r.GET("/namespaces/:namespace/events")
+	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
 
 }
