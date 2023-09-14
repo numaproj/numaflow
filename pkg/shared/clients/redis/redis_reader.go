@@ -98,10 +98,11 @@ func (br *RedisStreamsRead) Read(_ context.Context, count int64) ([]*isb.ReadMes
 		}
 	}
 	if !br.Options.CheckBackLog {
-		xstreams, err = br.processXReadResult(">", count)
+		streams, err := br.processXReadResult(">", count)
 		if err != nil {
 			return br.processReadError(xstreams, messages, err)
 		}
+		xstreams = append(xstreams, streams...)
 	}
 
 	// Update metric for number of messages read in
