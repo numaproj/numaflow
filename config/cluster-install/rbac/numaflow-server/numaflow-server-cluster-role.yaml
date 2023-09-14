@@ -26,16 +26,9 @@ rules:
       - vertices/status
       - vertices/scale
   - apiGroups:
-    - ""
-    resources:
-    - events
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
       - ""
     resources:
+      - events
       - pods
       - pods/exec
       - configmaps

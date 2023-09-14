@@ -35,13 +35,6 @@ rules:
   - ""
   resources:
   - events
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - pods
   - pods/exec
   - configmaps
