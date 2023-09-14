@@ -1,0 +1,19 @@
+.summary-collapse-button {
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: pointer;
+}
+
+.summary-expand-button {
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: pointer;
+  margin-left: 0.625rem;
+}
+
+.summary-collapsed-text {
+  color: #393A3D;
+  font-size: 0.8125rem;
+  font-style: normal;
+  font-weight: 600;
+}
