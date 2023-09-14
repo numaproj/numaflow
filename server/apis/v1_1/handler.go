@@ -138,9 +138,9 @@ func (h *handler) ListInterStepBufferServices(c *gin.Context) {
 
 // GetInterStepBufferService is used to provide the spec of the interstep buffer service
 func (h *handler) GetInterStepBufferService(c *gin.Context) {
-	isbsvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isbsvc"), metav1.GetOptions{})
+	isbsvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isb-services"), metav1.GetOptions{})
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isbsvc %q: %v", c.Param("namespace"), c.Param("isbsvc"), err.Error())
+		errMsg := fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
@@ -149,15 +149,26 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 
 // UpdateInterStepBufferService is used to update the spec of the interstep buffer service
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
-	isbsvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isbsvc"), metav1.GetOptions{})
+	isbsvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isb-services"), metav1.GetOptions{})
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isbsvc %q: %v", c.Param("namespace"), c.Param("isbsvc"), err.Error())
+		errMsg := fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	_, err = h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Update(context.Background(), isbsvc, metav1.UpdateOptions{})
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isbsvc %q: %v", c.Param("namespace"), c.Param("isbsvc"), err.Error())
+		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
+// DeleteInterStepBufferService is used to update the spec of the interstep buffer service
+func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
+	err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Delete(context.Background(), c.Param("isb-services"), metav1.DeleteOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to delete the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
