@@ -101,6 +101,18 @@ const Flow = (props: FlowProps) => {
     handlePaneClick,
   } = props;
 
+  const onIsLockedChange = useCallback(
+    () => setIsLocked((prevState) => !prevState),
+    []
+  );
+  const onIsScrollLockedChange = useCallback(
+    () => setIsScrollLocked((prevState) => !prevState),
+    []
+  );
+  const onFullScreen = useCallback(() => fitView(), [zoomLevel]);
+  const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomLevel]);
+  const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomLevel]);
+
   return (
     <ReactFlow
       nodeTypes={defaultNodeTypes}
@@ -118,16 +130,14 @@ const Flow = (props: FlowProps) => {
       panOnDrag={!isLocked}
     >
       <Panel position="bottom-left">
-        <IconButton onClick={() => setIsLocked((prevState) => !prevState)}>
-          <img src={isLocked ? lock : unlock} alt={"lock"} />
+        <IconButton onClick={onIsLockedChange}>
+          <img src={isLocked ? lock : unlock} alt={"lock-unlock"} />
         </IconButton>
-        <IconButton
-          onClick={() => setIsScrollLocked((prevState) => !prevState)}
-        >
+        <IconButton onClick={onIsScrollLockedChange}>
           <img src={scrollToggle} alt={"scrollLock"} />
         </IconButton>
         <div className={"divider"} />
-        <IconButton onClick={() => fitView()}>
+        <IconButton onClick={onFullScreen}>
           <img src={fullscreen} alt={"fullscreen"} />
         </IconButton>
         <IconButton
@@ -139,18 +149,10 @@ const Flow = (props: FlowProps) => {
           <img src={sidePanel} alt={"sidePanel"} />
         </IconButton>
         <div className={"divider"} />
-        <IconButton
-          onClick={() => {
-            zoomIn({ duration: 500 });
-          }}
-        >
+        <IconButton onClick={onZoomIn}>
           <img src={zoomInIcon} alt="zoom-in" />
         </IconButton>
-        <IconButton
-          onClick={() => {
-            zoomOut({ duration: 500 });
-          }}
-        >
+        <IconButton onClick={onZoomOut}>
           <img src={zoomOutIcon} alt="zoom-out" />
         </IconButton>
         <svg
@@ -289,7 +291,7 @@ export default function Graph(props: GraphProps) {
           />
         </ReactFlowProvider>
       </div>
-      //TODO move this to side panel
+
       <Card
         sx={{ borderBottom: 1, borderColor: "divider", boxShadow: 1 }}
         data-testid={"card"}
