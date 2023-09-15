@@ -34,6 +34,7 @@ import (
 var (
 	rewritePathPrefixes = []string{
 		"/namespaces",
+		"/pipelines",
 	}
 )
 

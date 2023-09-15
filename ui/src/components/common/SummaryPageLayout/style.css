@@ -1,0 +1,25 @@
+.summary-page-layout-collapse-button {
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: pointer;
+}
+
+.summary-page-layout-expand-button {
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: pointer;
+  margin-left: 0.625rem;
+}
+
+.summary-page-layout-collapsed-text {
+  color: #393A3D;
+  font-size: 0.8125rem;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.summary-page-layout-separator {
+  width: 0.0625rem;
+  height: 4.8125rem;
+  background: #DAE3E8;
+}

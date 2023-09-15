@@ -81,7 +81,7 @@ export function Breadcrumbs() {
             </Link>,
             <Link
               key={"pipeline-view"}
-              to={`/namespace/${pathParts[2]}`}
+              to={`/namespaces/${pathParts[2]}`}
               className="Breadcrumbs-link"
             >
               {pathParts[2]}

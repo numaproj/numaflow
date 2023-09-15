@@ -7,6 +7,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import { Slide, ToastContainer } from "react-toastify";
 import { Routes, Route } from "react-router-dom";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
+import { Cluster } from "./components/pages/Cluster";
 import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
@@ -76,7 +77,7 @@ function App() {
       return (
         <Routes>
           <Route path="/" element={<Namespaces />} />
-          <Route path="/pipeline/:pipelineId" element={<Pipeline />} />
+          <Route path="/pipelines/:pipelineId" element={<Pipeline />} />
           <Route
             path="*"
             element={
@@ -91,10 +92,10 @@ function App() {
     // Cluster installation routing
     return (
       <Routes>
-        <Route path="/" element={<div>TODO Cluster Summary</div>} />
-        <Route path="/namespace/:namespaceId" element={<Namespaces />} />
+        <Route path="/" element={<Cluster />} />
+        <Route path="/namespaces/:namespaceId" element={<Namespaces />} />
         <Route
-          path="/namespace/:namespaceId/pipeline/:pipelineId"
+          path="/namespaces/:namespaceId/pipelines/:pipelineId"
           element={<Pipeline />}
         />
         <Route
@@ -148,11 +149,26 @@ function App() {
                 display: "flex",
                 flexDirection: "column",
                 width: "100%",
-                height: "100%",
                 overflow: "auto",
+                height: "2rem",
+                background: "#F8F8FB",
+                zIndex: 999,
+                position: "fixed",
+                top: "3.75rem",
               }}
             >
               <Breadcrumbs />
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+                height: "100%",
+                overflow: "auto",
+                marginTop: "2rem",
+              }}
+            >
               {routes}
             </Box>
           </Box>
