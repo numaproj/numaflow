@@ -53,7 +53,10 @@ export function Pipeline() {
   }
 
   return (
-    <div data-testid={"pipeline"} style={{ overflow: "scroll !important" }}>
+    <div
+      data-testid={"pipeline"}
+      style={{ overflow: "scroll !important", height: "100%" }}
+    >
       {!loading && (
         <Graph
           data={{

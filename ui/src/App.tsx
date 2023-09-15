@@ -124,6 +124,7 @@ function App() {
               display: "flex",
               flexDirection: "column",
               width: "100% ",
+              height: "100%",
             }}
           >
             <Box
@@ -163,6 +164,7 @@ function App() {
                 display: "flex",
                 flexDirection: "column",
                 width: "100%",
+                height: "100%",
                 overflow: "auto",
                 marginTop: "2rem",
               }}
