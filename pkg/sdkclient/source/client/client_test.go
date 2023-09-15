@@ -19,8 +19,11 @@ package client
 import (
 	"context"
 	"fmt"
+	"io"
 	"reflect"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
@@ -28,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type rpcMsg struct {
@@ -72,8 +76,70 @@ func TestIsReady(t *testing.T) {
 	assert.EqualError(t, err, "mock connection refused")
 }
 
-// TODO(udsource) - Add test for ReadFn
 func TestReadFn(t *testing.T) {
+	var ctx = context.Background()
+	LintCleanCall()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := sourcemock.NewMockSourceClient(ctrl)
+	mockStreamClient := sourcemock.NewMockSource_ReadFnClient(ctrl)
+
+	var TestEventTime = time.Unix(1661169600, 0).UTC()
+	expectedResp := &sourcepb.ReadResponse{
+		Result: &sourcepb.ReadResponse_Result{
+			Payload:   []byte(`test_payload`),
+			Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
+			EventTime: timestamppb.New(TestEventTime),
+			Keys:      []string{"test_key"},
+		},
+	}
+
+	const numRecords = 5
+	for i := 0; i < numRecords; i++ {
+		mockStreamClient.EXPECT().Recv().Return(expectedResp, nil)
+	}
+	mockStreamClient.EXPECT().Recv().Return(expectedResp, io.EOF)
+
+	mockStreamClient.EXPECT().CloseSend().Return(nil).AnyTimes()
+	mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(mockStreamClient, nil)
+
+	testClient, err := NewFromClient(mockClient)
+	assert.NoError(t, err)
+	assert.True(t, reflect.DeepEqual(testClient, &client{
+		grpcClt: mockClient,
+	}))
+
+	responseCh := make(chan *sourcepb.ReadResponse)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case resp, ok := <-responseCh:
+				if !ok {
+					return
+				}
+				assert.True(t, reflect.DeepEqual(resp, expectedResp))
+			}
+		}
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err = testClient.ReadFn(ctx, &sourcepb.ReadRequest{
+			Request: &sourcepb.ReadRequest_Request{
+				NumRecords: uint64(numRecords),
+			},
+		}, responseCh)
+		assert.NoError(t, err)
+	}()
+	wg.Wait()
+	close(responseCh)
 }
 
 func TestAckFn(t *testing.T) {

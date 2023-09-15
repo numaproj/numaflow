@@ -20,3 +20,14 @@ export interface NodeInfoProps {
   namespaceId: string | undefined;
   pipelineId: string | undefined;
 }
+
+export interface FlowProps {
+  nodes: Node[];
+  edges: Edge[];
+  onNodesChange: any;
+  onEdgesChange: any;
+  onConnect: (params: any) => void;
+  handleNodeClick: (e: Element | EventType, node: Node) => void;
+  handleEdgeClick: (e: Element | EventType, edge: Edge) => void;
+  handlePaneClick: () => void;
+}

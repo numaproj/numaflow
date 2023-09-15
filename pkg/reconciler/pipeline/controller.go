@@ -288,7 +288,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
-		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "create")
+		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc creating job, err: %w", err)
@@ -306,7 +306,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 			bks = append(bks, k)
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
-		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "delete")
+		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "del")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			pl.Status.MarkDeployFailed("CreateISBSvcDeletingJobFailed", err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc deleting job, err: %w", err)
@@ -517,7 +517,7 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		args = append(args, fmt.Sprintf("--buckets=%s", strings.Join(allBuckets, ",")))
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
 
-		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cleanup")
+		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cln")
 		batchJob.OwnerReferences = []metav1.OwnerReference{}
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create buffer clean up job, err: %w", err)
@@ -697,8 +697,9 @@ func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferS
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: pl.Namespace,
-			Name:      fmt.Sprintf("%s-buffer-bucket-%s-%v", pl.Name, jobType, randomStr),
-			Labels:    l,
+			// The name won't be over length limit, because we have validated "{pipeline}-{vertex}-headless" is no longer than 63.
+			Name:   fmt.Sprintf("%s-%s-%v", pl.Name, jobType, randomStr),
+			Labels: l,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(pl.GetObjectMeta(), dfv1.PipelineGroupVersionKind),
 			},
