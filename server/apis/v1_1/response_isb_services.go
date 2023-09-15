@@ -6,6 +6,7 @@ const (
 	ISBServiceStatusHealthy  = "healthy"
 	ISBServiceStatusCritical = "critical"
 	ISBServiceStatusWarning  = "warning"
+	ISBServiceStatusInactive = "inactive"
 )
 
 // ISBServices is a list of InterStepBufferServices
