@@ -18,7 +18,7 @@ spec:
 
 ## Available Environment Variables
 
-Some environment variables are available in the user defined sink Pods:
+Some environment variables are available in the user defined sink container:
 
 - `NUMAFLOW_NAMESPACE` - Namespace.
 - `NUMAFLOW_POD` - Pod name.
