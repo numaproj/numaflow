@@ -41,10 +41,10 @@ func v1_1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs", handler.ListPipelineBuffers)
 	// Get all the watermarks information of a pipeline.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks", handler.GetPipelineWatermarks)
-	// Update a vertex spec.
-	r.PUT("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex", handler.UpdateVertex)
-	// Get all the vertex metrics of a pipeline.
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics", handler.GetVerticesMetrics)
+	// Update a vertex spec. // TODO
+	r.PUT("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex")
+	// Get all the vertex metrics of a pipeline. // TODO
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics")
 	// Get all the pods of a vertex.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.ListVertexPods)
 	// Get the metrics such as cpu, memory usage for a pod.
