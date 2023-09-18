@@ -202,23 +202,49 @@ func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 }
 
 // UpdateVertex is used to provide the vertex spec
-// TODO
 func (h *handler) UpdateVertex(c *gin.Context) {
-	// vertices, err := h.numaflowClient.Vertices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
-	// 	LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, c.Param("pipeline"), dfv1.KeyVertexName, c.Param("vertex")),
-	// })
-	// if err != nil {
-	// 	c.JSON(http.StatusInternalServerError, err.Error())
-	// 	return
-	// }
-	// if len(vertices.Items) == 0 {
-	// 	c.JSON(http.StatusNotFound, fmt.Sprintf("Vertex %q not found", c.Param("vertex")))
-	// 	return
-	// }
-	// c.JSON(http.StatusOK, vertices.Items[0])
 	pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var (
+		requestBody     dfv1.AbstractVertex
+		inputVertexName = c.Param("vertex")
+	)
+	err = json.NewDecoder(c.Request.Body).Decode(&requestBody)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	if requestBody.Name != inputVertexName {
+		errMsg := fmt.Sprintf("Failed to update the vertex: vertex name %q is immutable", inputVertexName)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	for index, vertex := range pl.Spec.Vertices {
+		if vertex.Name == inputVertexName {
+			if vertex.IsASource() && requestBody.IsASource() {
+			} else if vertex.IsMapUDF() && requestBody.IsMapUDF() {
+			} else if vertex.IsReduceUDF() && requestBody.IsReduceUDF() {
+			} else if vertex.IsASink() && requestBody.IsASink() {
+			} else if vertex.IsUDSource() && requestBody.IsUDSource() {
+			} else if vertex.IsUDSource() && requestBody.IsUDSink() {
+			} else {
+				errMsg := fmt.Sprintf("Failed to update the vertex: vertex type is immutable")
+				c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+				return
+			}
+			pl.Spec.Vertices[index] = requestBody
+			break
+		}
+	}
+	_, err = h.numaflowClient.Pipelines(c.Param("namespace")).Update(context.Background(), pl, metav1.UpdateOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pl.Spec))
