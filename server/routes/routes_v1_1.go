@@ -14,25 +14,25 @@ func v1_1Routes(r gin.IRouter) {
 	// List all namespaces that have Pipeline or InterStepBufferService objects.
 	r.GET("/namespaces", handler.ListNamespaces)
 	// Summarized information of all the namespaces in a cluster wrapped in a list.
-	r.GET("/cluster-summary")
+	r.GET("/cluster-summary", handler.GetClusterSummary)
 	// Create a Pipeline.
-	r.POST("/namespaces/:namespace/pipelines")
+	r.POST("/namespaces/:namespace/pipelines", handler.CreatePipeline)
 	// All pipelines for a given namespace.
-	r.GET("/namespaces/:namespace/pipelines")
+	r.GET("/namespaces/:namespace/pipelines", handler.ListPipelines)
 	// Get a Pipeline information.
-	r.GET("/namespaces/:namespace/pipelines/:pipeline")
+	r.GET("/namespaces/:namespace/pipelines/:pipeline", handler.GetPipeline)
 	// Update a Pipeline.
-	r.PUT("/namespaces/:namespace/pipelines/:pipeline")
+	r.PUT("/namespaces/:namespace/pipelines/:pipeline", handler.UpdatePipeline)
 	// Delete a Pipeline.
-	r.DELETE("/namespaces/:namespace/pipelines/:pipeline")
+	r.DELETE("/namespaces/:namespace/pipelines/:pipeline", handler.DeletePipeline)
 	// Patch the pipeline spec to achieve operations such as "pause" and "resume".
-	r.PATCH("/namespaces/:namespace/pipelines/:pipeline")
+	r.PATCH("/namespaces/:namespace/pipelines/:pipeline", handler.PatchPipeline)
 	// Create an InterStepBufferService object.
-	r.POST("/namespaces/:namespace/isb-services")
+	r.POST("/namespaces/:namespace/isb-services", handler.CreateInterStepBufferService)
 	// List all the InterStepBufferService objects for a given namespace.
-	r.GET("/namespaces/:namespace/isb-services")
+	r.GET("/namespaces/:namespace/isb-services", handler.ListInterStepBufferServices)
 	// Get an InterStepBufferService object.
-	r.GET("/namespaces/:namespace/isb-services/:isb-services")
+	r.GET("/namespaces/:namespace/isb-services/:isb-services", handler.GetInterStepBufferService)
 	// Update an InterStepBufferService object.
 	r.PUT("/namespaces/:namespace/isb-services/:isb-services")
 	// Delete an InterStepBufferService object.
