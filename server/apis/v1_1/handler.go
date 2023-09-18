@@ -100,346 +100,6 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
 }
 
-// ListPipelines is used to provide all the numaflow pipelines in a given namespace
-func (h *handler) ListPipelines(c *gin.Context) {
-	ns := c.Param("namespace")
-	plList, err := getPipelines(h, ns)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to fetch all pipelines for namespace %q, %v",
-			c.Param("namespace"), err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, plList))
-}
-
-// GetPipeline is used to provide the spec of a given numaflow pipeline
-func (h *handler) GetPipeline(c *gin.Context) {
-	ns := c.Param("namespace")
-	pipeline := c.Param("pipeline")
-	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(),
-		pipeline, metav1.GetOptions{})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %v",
-			pipeline,
-			ns,
-			err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	status, err := getPipelineStatus(pl)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %v",
-			pipeline,
-			ns,
-			err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	pipelineResp := NewPipelineInfo(status, pl)
-	c.JSON(http.StatusOK, pipelineResp)
-}
-
-// ListInterStepBufferServices is used to provide all the interstepbuffer services in a namespace
-func (h *handler) ListInterStepBufferServices(c *gin.Context) {
-	ns := c.Param("namespace")
-	isbList, err := getIsbServices(h, ns)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to fetch all interstepbuffer services for namespace %q, %v", ns, err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, isbList))
-}
-
-// GetInterStepBufferService is used to provide the spec of the interstep buffer service
-func (h *handler) GetInterStepBufferService(c *gin.Context) {
-	isbName := c.Param("isb-services")
-	ns := c.Param("namespace")
-	isbsvc, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbName, metav1.GetOptions{})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %v",
-			isbName,
-			ns, err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	status := ISBServiceStatusHealthy
-	// TODO(API) : Get the current status of the ISB service
-	//status, err := getISBServiceStatus(isb.Namespace, isb.Name)
-	//if err != nil {
-	//	errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %v", isb.Name, isb.Namespace, err.Error())
-	//	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	//	return
-	//}
-	resp := NewISBService(status, isbsvc)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, resp))
-}
-
-// ListVertices is used to provide all the vertices of a pipeline
-func (h *handler) ListVertices(c *gin.Context) {
-	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	vertices, err := h.numaflowClient.Vertices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyPipelineName, c.Param("pipeline")),
-		Limit:         limit,
-		Continue:      c.Query("continue"),
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, vertices.Items)
-}
-
-// GetVertex is used to provide the vertex spec
-func (h *handler) GetVertex(c *gin.Context) {
-	vertices, err := h.numaflowClient.Vertices(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, c.Param("pipeline"), dfv1.KeyVertexName, c.Param("vertex")),
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	if len(vertices.Items) == 0 {
-		c.JSON(http.StatusNotFound, fmt.Sprintf("Vertex %q not found", c.Param("vertex")))
-		return
-	}
-	c.JSON(http.StatusOK, vertices.Items[0])
-}
-
-// ListVertexPods is used to provide all the pods of a vertex
-func (h *handler) ListVertexPods(c *gin.Context) {
-	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	pods, err := h.kubeClient.CoreV1().Pods(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, c.Param("pipeline"), dfv1.KeyVertexName, c.Param("vertex")),
-		Limit:         limit,
-		Continue:      c.Query("continue"),
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, pods.Items)
-}
-
-// ListPodsMetrics is used to provide a list of all metrics in all the pods
-func (h *handler) ListPodsMetrics(c *gin.Context) {
-	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	l, err := h.metricsClient.MetricsV1beta1().PodMetricses(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
-		Limit:    limit,
-		Continue: c.Query("continue"),
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, l.Items)
-}
-
-// GetPodMetrics is used to provide the metrics like CPU/Memory utilization for a pod
-func (h *handler) GetPodMetrics(c *gin.Context) {
-	m, err := h.metricsClient.MetricsV1beta1().PodMetricses(c.Param("namespace")).Get(context.Background(), c.Param("pod"), metav1.GetOptions{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, m)
-}
-
-// PodLogs is used to provide the logs of a given container in pod
-func (h *handler) PodLogs(c *gin.Context) {
-	var tailLines *int64
-	if v := c.Query("tailLines"); v != "" {
-		x, _ := strconv.ParseInt(v, 10, 64)
-		tailLines = pointer.Int64(x)
-	}
-	stream, err := h.kubeClient.CoreV1().
-		Pods(c.Param("namespace")).
-		GetLogs(c.Param("pod"), &corev1.PodLogOptions{
-			Container: c.Query("container"),
-			Follow:    c.Query("follow") == "true",
-			TailLines: tailLines,
-		}).Stream(c)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer stream.Close()
-	scanner := bufio.NewScanner(stream)
-	for scanner.Scan() {
-		_, _ = c.Writer.Write(scanner.Bytes())
-		_, _ = c.Writer.WriteString("\n")
-		c.Writer.Flush()
-	}
-}
-
-// ListPipelineBuffers is used to provide buffer information about all the pipeline vertices
-func (h *handler) ListPipelineBuffers(c *gin.Context) {
-	ns := c.Param("namespace")
-	pipeline := c.Param("pipeline")
-	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer func() {
-		_ = client.Close()
-	}()
-	l, err := client.ListPipelineBuffers(context.Background(), pipeline)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, l)
-}
-
-// GetVertexBuffers is used to provide buffer information about a single pipeline vertex
-func (h *handler) GetVertexBuffers(c *gin.Context) {
-	ns := c.Param("namespace")
-	pipeline := c.Param("pipeline")
-	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer func() {
-		_ = client.Close()
-	}()
-	// Assume edge is the buffer name
-	i, err := client.GetPipelineBuffer(context.Background(), pipeline, c.Param("vertex"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, i)
-}
-
-// GetVertexMetrics is used to provide information about the vertex including processing rates.
-func (h *handler) GetVertexMetrics(c *gin.Context) {
-	ns := c.Param("namespace")
-	pipeline := c.Param("pipeline")
-	vertex := c.Param("vertex")
-	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer func() {
-		_ = client.Close()
-	}()
-	l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, l)
-}
-
-// GetPipelineWatermarks is used to provide the head watermarks for a given pipeline
-func (h *handler) GetPipelineWatermarks(c *gin.Context) {
-	ns := c.Param("namespace")
-	pipeline := c.Param("pipeline")
-	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer func() {
-		_ = client.Close()
-	}()
-	l, err := client.GetPipelineWatermarks(context.Background(), pipeline)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, l)
-}
-
-// DeletePipeline is used to delete a given pipeline
-func (h *handler) DeletePipeline(c *gin.Context) {
-	ns := c.Param("namespace")
-	pipeline := c.Param("pipeline")
-	err := h.numaflowClient.Pipelines(ns).Delete(context.Background(), pipeline, metav1.DeleteOptions{})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to delete pipeline %q, %v", pipeline, err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
-}
-
-// CreatePipeline is used to create a given pipeline
-func (h *handler) CreatePipeline(c *gin.Context) {
-	ns := c.Param("namespace")
-	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
-		return
-	}
-	// Convert reqBody to pipeline spec
-	var pipelineSpec = reqBody.(*dfv1.Pipeline)
-
-	_, err = h.numaflowClient.Pipelines(ns).Create(context.Background(), pipelineSpec, metav1.CreateOptions{})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to create pipeline %q, %v", pipelineSpec.Name, err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
-}
-
-// UpdatePipeline is used to update a given pipeline
-func (h *handler) UpdatePipeline(c *gin.Context) {
-	ns := c.Param("namespace")
-	pipeline := c.Param("pipeline")
-	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
-		return
-	}
-	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(),
-		pipeline, metav1.GetOptions{})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to patch pipeline %q namespace %q, %v",
-			pipeline,
-			ns,
-			err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	var pipelineSpec = reqBody.(*dfv1.Pipeline)
-	pl.Spec = pipelineSpec.Spec
-	fmt.Println("DEBUG", pl.ResourceVersion)
-	_, err = h.numaflowClient.Pipelines(ns).Update(context.Background(), pl, metav1.UpdateOptions{})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to update pipeline %q, %v", pipeline, err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
-}
-
-// CreateInterStepBufferService is used to create a given interstep buffer service
-func (h *handler) CreateInterStepBufferService(c *gin.Context) {
-	ns := c.Param("namespace")
-	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
-		return
-	}
-	var isbSpec = reqBody.(*dfv1.InterStepBufferService)
-	_, err = h.numaflowClient.InterStepBufferServices(ns).Create(context.Background(), isbSpec, metav1.CreateOptions{})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to create interstepbuffer service %q, %v", isbSpec.Name, err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
-}
-
 // GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
 func (h *handler) GetClusterSummary(c *gin.Context) {
 	namespaces, err := getAllNamespaces(h)
@@ -495,6 +155,112 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 
 }
 
+// CreatePipeline is used to create a given pipeline
+func (h *handler) CreatePipeline(c *gin.Context) {
+	ns := c.Param("namespace")
+	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
+		c.JSON(http.StatusOK, errMsg)
+		return
+	}
+	// Convert reqBody to pipeline spec
+	var pipelineSpec = reqBody.(*dfv1.Pipeline)
+
+	_, err = h.numaflowClient.Pipelines(ns).Create(context.Background(), pipelineSpec, metav1.CreateOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to create pipeline %q, %v", pipelineSpec.Name, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
+// ListPipelines is used to provide all the numaflow pipelines in a given namespace
+func (h *handler) ListPipelines(c *gin.Context) {
+	ns := c.Param("namespace")
+	plList, err := getPipelines(h, ns)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to fetch all pipelines for namespace %q, %v",
+			c.Param("namespace"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, plList))
+}
+
+// GetPipeline is used to provide the spec of a given numaflow pipeline
+func (h *handler) GetPipeline(c *gin.Context) {
+	ns := c.Param("namespace")
+	pipeline := c.Param("pipeline")
+	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(),
+		pipeline, metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %v",
+			pipeline,
+			ns,
+			err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	status, err := getPipelineStatus(pl)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %v",
+			pipeline,
+			ns,
+			err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	pipelineResp := NewPipelineInfo(status, pl)
+	c.JSON(http.StatusOK, pipelineResp)
+}
+
+// UpdatePipeline is used to update a given pipeline
+func (h *handler) UpdatePipeline(c *gin.Context) {
+	ns := c.Param("namespace")
+	pipeline := c.Param("pipeline")
+	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
+		c.JSON(http.StatusOK, errMsg)
+		return
+	}
+	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(),
+		pipeline, metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to patch pipeline %q namespace %q, %v",
+			pipeline,
+			ns,
+			err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	var pipelineSpec = reqBody.(*dfv1.Pipeline)
+	pl.Spec = pipelineSpec.Spec
+	fmt.Println("DEBUG", pl.ResourceVersion)
+	_, err = h.numaflowClient.Pipelines(ns).Update(context.Background(), pl, metav1.UpdateOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update pipeline %q, %v", pipeline, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
+// DeletePipeline is used to delete a given pipeline
+func (h *handler) DeletePipeline(c *gin.Context) {
+	ns := c.Param("namespace")
+	pipeline := c.Param("pipeline")
+	err := h.numaflowClient.Pipelines(ns).Delete(context.Background(), pipeline, metav1.DeleteOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to delete pipeline %q, %v", pipeline, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
 // PatchPipeline is used to patch the pipeline spec to achieve operations such as "pause" and "resume"
 func (h *handler) PatchPipeline(c *gin.Context) {
 	ns := c.Param("namespace")
@@ -516,8 +282,316 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
 
-func daemonSvcAddress(ns, pipeline string) string {
-	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
+// CreateInterStepBufferService is used to create a given interstep buffer service
+func (h *handler) CreateInterStepBufferService(c *gin.Context) {
+	ns := c.Param("namespace")
+	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
+		c.JSON(http.StatusOK, errMsg)
+		return
+	}
+	var isbSpec = reqBody.(*dfv1.InterStepBufferService)
+	_, err = h.numaflowClient.InterStepBufferServices(ns).Create(context.Background(), isbSpec, metav1.CreateOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to create interstepbuffer service %q, %v", isbSpec.Name, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
+// ListInterStepBufferServices is used to provide all the interstepbuffer services in a namespace
+func (h *handler) ListInterStepBufferServices(c *gin.Context) {
+	ns := c.Param("namespace")
+	isbList, err := getIsbServices(h, ns)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to fetch all interstepbuffer services for namespace %q, %v", ns, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, isbList))
+}
+
+// GetInterStepBufferService is used to provide the spec of the interstep buffer service
+func (h *handler) GetInterStepBufferService(c *gin.Context) {
+	isbName := c.Param("isb-services")
+	ns := c.Param("namespace")
+	isbsvc, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbName, metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %v",
+			isbName,
+			ns, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	status := ISBServiceStatusHealthy
+	// TODO(API) : Get the current status of the ISB service
+	// status, err := getISBServiceStatus(isb.Namespace, isb.Name)
+	// if err != nil {
+	//	errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %v", isb.Name, isb.Namespace, err.Error())
+	//	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	//	return
+	// }
+	resp := NewISBService(status, isbsvc)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, resp))
+}
+
+// UpdateInterStepBufferService is used to update the spec of the interstep buffer service
+func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
+	isbSVC, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isb-services"), metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	var requestBody dfv1.InterStepBufferServiceSpec
+	err = json.NewDecoder(c.Request.Body).Decode(&requestBody)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
+	if requestBody.Redis != nil {
+		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: updating redis isbSVC is not supported.", c.Param("namespace"), c.Param("isb-services"))
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	} else if requestBody.JetStream != nil {
+		if *(requestBody.JetStream.Replicas) < 3 {
+			errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: minimum number of replicas is 3.", c.Param("namespace"), c.Param("isb-services"))
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		if *(requestBody.JetStream.Replicas) > 5 {
+			errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: maximum number of replicas is 5.", c.Param("namespace"), c.Param("isb-services"))
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		// TODO: currently we can only update the replica
+		isbSVC.Spec.JetStream.Replicas = requestBody.JetStream.Replicas
+	}
+	updatedISBSvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Update(context.Background(), isbSVC, metav1.UpdateOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, updatedISBSvc))
+}
+
+// DeleteInterStepBufferService is used to update the spec of the interstep buffer service
+func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
+	err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Delete(context.Background(), c.Param("isb-services"), metav1.DeleteOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to delete the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
+// ListPipelineBuffers is used to provide buffer information about all the pipeline vertices
+func (h *handler) ListPipelineBuffers(c *gin.Context) {
+	ns := c.Param("namespace")
+	pipeline := c.Param("pipeline")
+	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %v", c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+	l, err := client.ListPipelineBuffers(context.Background(), pipeline)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %v", c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, l))
+}
+
+// GetPipelineWatermarks is used to provide the head watermarks for a given pipeline
+func (h *handler) GetPipelineWatermarks(c *gin.Context) {
+	ns := c.Param("namespace")
+	pipeline := c.Param("pipeline")
+	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get the watermarks for pipeline %q: %v", c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+	l, err := client.GetPipelineWatermarks(context.Background(), pipeline)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get the watermarks for pipeline %q: %v", c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, l))
+}
+
+// UpdateVertex is used to provide the vertex spec
+func (h *handler) UpdateVertex(c *gin.Context) {
+	// TODO
+	// var (
+	// 	requestBody     dfv1.AbstractVertex
+	// 	inputVertexName = c.Param("vertex")
+	// )
+	// pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
+	// if err != nil {
+	// 	errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
+	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	// 	return
+	// }
+	// err = json.NewDecoder(c.Request.Body).Decode(&requestBody)
+	// if err != nil {
+	// 	errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
+	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	// 	return
+	// }
+	// if requestBody.Name != inputVertexName {
+	// 	errMsg := fmt.Sprintf("Failed to update the vertex: vertex name %q is immutable", inputVertexName)
+	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	// 	return
+	// }
+	// for index, vertex := range pl.Spec.Vertices {
+	// 	if vertex.Name == inputVertexName {
+	// 		if vertex.IsASource() && requestBody.IsASource() {
+	// 		} else if vertex.IsMapUDF() && requestBody.IsMapUDF() {
+	// 		} else if vertex.IsReduceUDF() && requestBody.IsReduceUDF() {
+	// 		} else if vertex.IsASink() && requestBody.IsASink() {
+	// 		} else if vertex.IsUDSource() && requestBody.IsUDSource() {
+	// 		} else if vertex.IsUDSource() && requestBody.IsUDSink() {
+	// 		} else {
+	// 			errMsg := fmt.Sprintf("Failed to update the vertex: vertex type is immutable")
+	// 			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	// 			return
+	// 		}
+	// 		pl.Spec.Vertices[index] = requestBody
+	// 		break
+	// 	}
+	// }
+	// _, err = h.numaflowClient.Pipelines(c.Param("namespace")).Update(context.Background(), pl, metav1.UpdateOptions{})
+	// if err != nil {
+	// 	errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
+	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	// 	return
+	// }
+	// c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pl.Spec))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
+// GetVerticesMetrics is used to provide information about all the vertices for the given pipeline including processing rates.
+func (h *handler) GetVerticesMetrics(c *gin.Context) {
+	// TODO
+	// ns := c.Param("namespace")
+	// pipeline := c.Param("pipeline")
+	// pl, err := h.numaflowClient.Pipelines(pipeline).Get(context.Background(), pipeline, metav1.GetOptions{})
+	// if err != nil {
+	// 	errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
+	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	// 	return
+	// }
+	// client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	// if err != nil {
+	// 	errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
+	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	// 	return
+	// }
+	// defer func() {
+	// 	_ = client.Close()
+	// }()
+	// var results [][]*daemon.VertexMetrics
+	// for _, vertex := range pl.Spec.Vertices {
+	// 	l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex.Name)
+	// 	if err != nil {
+	// 		errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), vertex.Name, err.Error())
+	// 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	// 		return
+	// 	}
+	// 	results = append(results, l)
+	// }
+	// c.JSON(http.StatusOK, results)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
+// ListVertexPods is used to provide all the pods of a vertex
+func (h *handler) ListVertexPods(c *gin.Context) {
+	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
+	pods, err := h.kubeClient.CoreV1().Pods(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, c.Param("pipeline"), dfv1.KeyVertexName, c.Param("vertex")),
+		Limit:         limit,
+		Continue:      c.Query("continue"),
+	})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get a list of pods: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), c.Param("vertex"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pods.Items))
+}
+
+// ListPodsMetrics is used to provide a list of all metrics in all the pods
+func (h *handler) ListPodsMetrics(c *gin.Context) {
+	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
+	l, err := h.metricsClient.MetricsV1beta1().PodMetricses(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
+		Limit:    limit,
+		Continue: c.Query("continue"),
+	})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get a list of pod metrics in namespace %q: %v", c.Param("namespace"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, l.Items))
+}
+
+// PodLogs is used to provide the logs of a given container in pod
+func (h *handler) PodLogs(c *gin.Context) {
+	var tailLines *int64
+	if v := c.Query("tailLines"); v != "" {
+		x, _ := strconv.ParseInt(v, 10, 64)
+		tailLines = pointer.Int64(x)
+	}
+	stream, err := h.kubeClient.CoreV1().
+		Pods(c.Param("namespace")).
+		GetLogs(c.Param("pod"), &corev1.PodLogOptions{
+			Container: c.Query("container"),
+			Follow:    c.Query("follow") == "true",
+			TailLines: tailLines,
+		}).Stream(c)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get pod logs: %v", err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	defer stream.Close()
+	scanner := bufio.NewScanner(stream)
+	for scanner.Scan() {
+		_, _ = c.Writer.Write(scanner.Bytes())
+		_, _ = c.Writer.WriteString("\n")
+		c.Writer.Flush()
+	}
+}
+
+// GetNamespaceEvents gets a list of events for the given namespace.
+func (h *handler) GetNamespaceEvents(c *gin.Context) {
+	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
+	events, err := h.kubeClient.CoreV1().Events(c.Param("namespace")).List(context.Background(), metav1.ListOptions{
+		Limit:    limit,
+		Continue: c.Query("continue"),
+	})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get a list of events: namespace %q: %v", c.Param("namespace"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, events.Items))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
@@ -573,12 +647,12 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 	for _, isb := range isbSvcs.Items {
 		status := ISBServiceStatusHealthy
 		// TODO(API) : Get the current status of the ISB service
-		//status, err := getISBServiceStatus(isb.Namespace, isb.Name)
-		//if err != nil {
+		// status, err := getISBServiceStatus(isb.Namespace, isb.Name)
+		// if err != nil {
 		//	errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %v", isb.Name, isb.Namespace, err.Error())
 		//	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		//	return
-		//}
+		// }
 		resp := NewISBService(status, &isb)
 		isbList = append(isbList, resp)
 	}
@@ -621,27 +695,31 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
 		retStatus = PipelineStatusCritical
 	}
-	//ns := pipeline.Namespace
-	//pipeName := pipeline.Name
-	//client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeName))
-	//if err != nil {
+	// ns := pipeline.Namespace
+	// pipeName := pipeline.Name
+	// client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeName))
+	// if err != nil {
 	//	return "", err
-	//}
-	//defer func() {
+	// }
+	// defer func() {
 	//	_ = client.Close()
-	//}()
-	//l, err := client.GetPipelineStatus(context.Background(), pipeName)
-	//if err != nil {
+	// }()
+	// l, err := client.GetPipelineStatus(context.Background(), pipeName)
+	// if err != nil {
 	//	return "", err
-	//}
-	//retStatus := PipelineStatusHealthy
-	//// TODO(API) : Check for warning status?
-	//if *l.Status != "OK" {
+	// }
+	// retStatus := PipelineStatusHealthy
+	// // TODO(API) : Check for warning status?
+	// if *l.Status != "OK" {
 	//	retStatus = PipelineStatusCritical
-	//}
-	//// Check if the pipeline is paused, if so, return inactive status
-	//if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
+	// }
+	// // Check if the pipeline is paused, if so, return inactive status
+	// if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
 	//	retStatus = PipelineStatusInactive
-	//}
+	// }
 	return retStatus, nil
+}
+
+func daemonSvcAddress(ns, pipeline string) string {
+	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
 }

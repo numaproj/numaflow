@@ -34,26 +34,24 @@ func v1_1Routes(r gin.IRouter) {
 	// Get an InterStepBufferService object.
 	r.GET("/namespaces/:namespace/isb-services/:isb-services", handler.GetInterStepBufferService)
 	// Update an InterStepBufferService object.
-	r.PUT("/namespaces/:namespace/isb-services/:isb-services")
+	r.PUT("/namespaces/:namespace/isb-services/:isb-services", handler.UpdateInterStepBufferService)
 	// Delete an InterStepBufferService object.
-	r.DELETE("/namespaces/:namespace/isb-services/:isb-services")
+	r.DELETE("/namespaces/:namespace/isb-services/:isb-services", handler.DeleteInterStepBufferService)
 	// Get all the Inter-Step Buffers of a pipeline.
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs")
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs", handler.ListPipelineBuffers)
 	// Get all the watermarks information of a pipeline.
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks")
-	// Get a vertex information of a pipeline. TODO: do we need it?
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex")
-	// Update a vertex spec.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks", handler.GetPipelineWatermarks)
+	// Update a vertex spec. // TODO
 	r.PUT("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex")
-	// Get all the vertex metrics of a pipeline. TODO: to be finalized
+	// Get all the vertex metrics of a pipeline. // TODO
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics")
 	// Get all the pods of a vertex.
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods")
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.ListVertexPods)
 	// Get the metrics such as cpu, memory usage for a pod.
-	r.GET("/metrics/namespaces/:namespace/pods/:pod")
+	r.GET("/metrics/namespaces/:namespace/pods/", handler.ListPodsMetrics)
 	// Get pod logs.
-	r.GET("/namespaces/:namespace/pods/:pod/logs")
+	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
-	r.GET("/namespaces/:namespace/events")
+	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
 
 }
