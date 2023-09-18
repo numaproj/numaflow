@@ -37,6 +37,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	dfv1versiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
@@ -437,87 +438,83 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 
 // UpdateVertex is used to provide the vertex spec
 func (h *handler) UpdateVertex(c *gin.Context) {
-	// TODO
-	// var (
-	// 	requestBody     dfv1.AbstractVertex
-	// 	inputVertexName = c.Param("vertex")
-	// )
-	// pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
-	// if err != nil {
-	// 	errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
-	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	// 	return
-	// }
-	// err = json.NewDecoder(c.Request.Body).Decode(&requestBody)
-	// if err != nil {
-	// 	errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
-	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	// 	return
-	// }
-	// if requestBody.Name != inputVertexName {
-	// 	errMsg := fmt.Sprintf("Failed to update the vertex: vertex name %q is immutable", inputVertexName)
-	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	// 	return
-	// }
-	// for index, vertex := range pl.Spec.Vertices {
-	// 	if vertex.Name == inputVertexName {
-	// 		if vertex.IsASource() && requestBody.IsASource() {
-	// 		} else if vertex.IsMapUDF() && requestBody.IsMapUDF() {
-	// 		} else if vertex.IsReduceUDF() && requestBody.IsReduceUDF() {
-	// 		} else if vertex.IsASink() && requestBody.IsASink() {
-	// 		} else if vertex.IsUDSource() && requestBody.IsUDSource() {
-	// 		} else if vertex.IsUDSource() && requestBody.IsUDSink() {
-	// 		} else {
-	// 			errMsg := fmt.Sprintf("Failed to update the vertex: vertex type is immutable")
-	// 			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	// 			return
-	// 		}
-	// 		pl.Spec.Vertices[index] = requestBody
-	// 		break
-	// 	}
-	// }
-	// _, err = h.numaflowClient.Pipelines(c.Param("namespace")).Update(context.Background(), pl, metav1.UpdateOptions{})
-	// if err != nil {
-	// 	errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
-	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	// 	return
-	// }
-	// c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pl.Spec))
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+	var (
+		requestBody     dfv1.AbstractVertex
+		inputVertexName = c.Param("vertex")
+	)
+	pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	err = json.NewDecoder(c.Request.Body).Decode(&requestBody)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	if requestBody.Name != inputVertexName {
+		errMsg := fmt.Sprintf("Failed to update the vertex: vertex name %q is immutable", inputVertexName)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	for index, vertex := range pl.Spec.Vertices {
+		if vertex.Name == inputVertexName {
+			if vertex.IsASource() && requestBody.IsASource() {
+			} else if vertex.IsMapUDF() && requestBody.IsMapUDF() {
+			} else if vertex.IsReduceUDF() && requestBody.IsReduceUDF() {
+			} else if vertex.IsASink() && requestBody.IsASink() {
+			} else if vertex.IsUDSource() && requestBody.IsUDSource() {
+			} else if vertex.IsUDSource() && requestBody.IsUDSink() {
+			} else {
+				errMsg := fmt.Sprintf("Failed to update the vertex: vertex type is immutable")
+				c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+				return
+			}
+			pl.Spec.Vertices[index] = requestBody
+			break
+		}
+	}
+	_, err = h.numaflowClient.Pipelines(c.Param("namespace")).Update(context.Background(), pl, metav1.UpdateOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pl.Spec))
 }
 
 // GetVerticesMetrics is used to provide information about all the vertices for the given pipeline including processing rates.
 func (h *handler) GetVerticesMetrics(c *gin.Context) {
-	// TODO
-	// ns := c.Param("namespace")
-	// pipeline := c.Param("pipeline")
-	// pl, err := h.numaflowClient.Pipelines(pipeline).Get(context.Background(), pipeline, metav1.GetOptions{})
-	// if err != nil {
-	// 	errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
-	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	// 	return
-	// }
-	// client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-	// if err != nil {
-	// 	errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
-	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	// 	return
-	// }
-	// defer func() {
-	// 	_ = client.Close()
-	// }()
-	// var results [][]*daemon.VertexMetrics
-	// for _, vertex := range pl.Spec.Vertices {
-	// 	l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex.Name)
-	// 	if err != nil {
-	// 		errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), vertex.Name, err.Error())
-	// 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	// 		return
-	// 	}
-	// 	results = append(results, l)
-	// }
-	// c.JSON(http.StatusOK, results)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+	ns := c.Param("namespace")
+	pipeline := c.Param("pipeline")
+	pl, err := h.numaflowClient.Pipelines(pipeline).Get(context.Background(), pipeline, metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+	var results [][]*daemon.VertexMetrics
+	for _, vertex := range pl.Spec.Vertices {
+		l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex.Name)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), vertex.Name, err.Error())
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		results = append(results, l)
+	}
+	c.JSON(http.StatusOK, results)
 }
 
 // ListVertexPods is used to provide all the pods of a vertex
