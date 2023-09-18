@@ -23,7 +23,7 @@ spec:
     ...
 ```
 
-If you want to apply same configuration to all the vertices, use [Vertex Template](./pipeline-customization.md#vertices) configuration:
+If you want to apply same configuration to all the vertices, use [Vertex Template](./pipeline-customization.md#vertices):
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
