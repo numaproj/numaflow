@@ -489,15 +489,15 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 func (h *handler) GetVerticesMetrics(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
-	pl, err := h.numaflowClient.Pipelines(pipeline).Get(context.Background(), pipeline, metav1.GetOptions{})
+	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
+		errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", ns, pipeline, err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
+		errMsg := fmt.Sprintf("Failed to get the vertices metrics: failed to get demon service client for namespace %q pipeline %q: %v", ns, pipeline, err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
