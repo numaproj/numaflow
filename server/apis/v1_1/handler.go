@@ -35,6 +35,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	dfv1versiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
@@ -203,16 +204,16 @@ func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 
 // UpdateVertex is used to provide the vertex spec
 func (h *handler) UpdateVertex(c *gin.Context) {
-	pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	var (
 		requestBody     dfv1.AbstractVertex
 		inputVertexName = c.Param("vertex")
 	)
+	pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 	err = json.NewDecoder(c.Request.Body).Decode(&requestBody)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error())
@@ -352,25 +353,36 @@ func (h *handler) GetVertexBuffers(c *gin.Context) {
 	c.JSON(http.StatusOK, i)
 }
 
-// GetVertexMetrics is used to provide information about the vertex including processing rates.
-func (h *handler) GetVertexMetrics(c *gin.Context) {
+// GetVerticesMetrics is used to provide information about all the vertices for the given pipeline including processing rates.
+func (h *handler) GetVerticesMetrics(c *gin.Context) {
 	ns := c.Param("namespace")
 	pipeline := c.Param("pipeline")
-	vertex := c.Param("vertex")
+	pl, err := h.numaflowClient.Pipelines(pipeline).Get(context.Background(), pipeline, metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
+		errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", c.Param("namespace"), c.Param("pipeline"), err.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	defer func() {
 		_ = client.Close()
 	}()
-	l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
+	var results [][]*daemon.VertexMetrics
+	for _, vertex := range pl.Spec.Vertices {
+		l, err := client.GetVertexMetrics(context.Background(), pipeline, vertex.Name)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"), c.Param("pipeline"), vertex.Name, err.Error())
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		results = append(results, l)
 	}
-	c.JSON(http.StatusOK, l)
+	c.JSON(http.StatusOK, results)
 }
 
 // GetPipelineWatermarks is used to provide the head watermarks for a given pipeline

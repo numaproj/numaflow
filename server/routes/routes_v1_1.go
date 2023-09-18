@@ -44,7 +44,7 @@ func v1_1Routes(r gin.IRouter) {
 	// Update a vertex spec.
 	r.PUT("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex", handler.UpdateVertex)
 	// Get all the vertex metrics of a pipeline. TODO: to be finalized
-	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics")
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics", handler.GetVerticesMetrics)
 	// Get all the pods of a vertex.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.ListVertexPods)
 	// Get the metrics such as cpu, memory usage for a pod.
