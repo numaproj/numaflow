@@ -13,7 +13,7 @@
     
     
       
-        <title>Pipeline Operations - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Running on Istio - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pipeline-operations" class="md-skip">
+        <a href="#running-on-istio" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Pipeline Operations
+              Running on Istio
             
           </span>
         </div>
@@ -1286,6 +1286,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../../pipeline-operations/" class="md-nav__link">
+        Pipeline Operations
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../join-vertex/" class="md-nav__link">
         Joins and Cycles
       </a>
@@ -1333,18 +1347,18 @@
     <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_5_8" type="checkbox" id="__nav_3_5_8" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_5_9" type="checkbox" id="__nav_3_5_9" checked>
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_5_8">
+        <label class="md-nav__link" for="__nav_3_5_9">
           Configuration
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Configuration" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_5_8">
+        <label class="md-nav__title" for="__nav_3_5_9">
           <span class="md-nav__icon md-icon"></span>
           Configuration
         </label>
@@ -1463,61 +1477,9 @@
         
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Pipeline Operations
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="./" class="md-nav__link md-nav__link--active">
-        Pipeline Operations
+        Running on Istio
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#update-a-pipeline" class="md-nav__link">
-    Update a Pipeline
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pause-a-pipeline" class="md-nav__link">
-    Pause a Pipeline
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#resume-a-pipeline" class="md-nav__link">
-    Resume a Pipeline
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#delete-a-pipeline" class="md-nav__link">
-    Delete a Pipeline
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
       
     </li>
   
@@ -2040,42 +2002,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#update-a-pipeline" class="md-nav__link">
-    Update a Pipeline
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pause-a-pipeline" class="md-nav__link">
-    Pause a Pipeline
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#resume-a-pipeline" class="md-nav__link">
-    Resume a Pipeline
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#delete-a-pipeline" class="md-nav__link">
-    Delete a Pipeline
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2086,35 +2012,56 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/reference/configuration/pipeline-operations.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/reference/configuration/istio.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="pipeline-operations">Pipeline Operations<a class="headerlink" href="#pipeline-operations" title="Permanent link">&para;</a></h1>
-<h2 id="update-a-pipeline">Update a Pipeline<a class="headerlink" href="#update-a-pipeline" title="Permanent link">&para;</a></h2>
-<p>You might want to make some changes to an existing pipeline, for example, updating request CPU, or changing the minimal replicas for a vertex. Updating a pipeline is as simple as applying the new pipeline spec to the existing one. But there are some scenarios that you'd better not update the pipeline, instead, you should delete and recreate it.</p>
-<p>The scenarios include but are not limited to:</p>
-<ul>
-<li>Topology changes such as adding or removing vertices, or updating the edges between vertices.</li>
-<li>Updating the <a href="../../multi-partition/">partitions</a> for a <a href="../../../user-defined-functions/reduce/windowing/windowing/#keyed">keyed</a> reduce vertex.</li>
-<li>Updating the user-defined container image for a vertex, while the new image can not properly handle the unprocessed data in its backlog.</li>
-</ul>
-<p>To summarize, if there are unprocessed messages in the pipeline, and the new pipeline spec will change the way how the messages are processed, then you should delete and recreate the pipeline.</p>
-<h2 id="pause-a-pipeline">Pause a Pipeline<a class="headerlink" href="#pause-a-pipeline" title="Permanent link">&para;</a></h2>
-<p>To pause a pipeline, use the command below, it will bring the pipeline to <code>Paused</code> status, and terminate all the running vertex pods.</p>
-<div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>pl<span class="w"> </span>my-pipeline<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Paused&quot;}}}&#39;</span>
+<h1 id="running-on-istio">Running on Istio<a class="headerlink" href="#running-on-istio" title="Permanent link">&para;</a></h1>
+<p>If you want to get pipeline vertices running on Istio, so that they are able to talk to other services with Istio enabled, one approach is to whitelist the ports that Numaflow uses.</p>
+<p>To whitelist the ports, add <code>traffic.sidecar.istio.io/excludeInboundPorts</code> and <code>traffic.sidecar.istio.io/excludeOutboundPorts</code> annotations to your vertex configuration:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">sidecar.istio.io/inject</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">          </span><span class="nt">traffic.sidecar.istio.io/excludeOutboundPorts</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4222&quot;</span><span class="w"> </span><span class="c1"># Nats JetStream port</span>
+<span class="w">          </span><span class="nt">traffic.sidecar.istio.io/excludeInboundPorts</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2469&quot;</span><span class="w"> </span><span class="c1"># Numaflow vertex metrics port</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-image:latest</span>
+<span class="w">    </span><span class="l l-Scalar l-Scalar-Plain">...</span>
 </code></pre></div>
-<p>Pausing a pipeline will not cause data loss. It does not clean up the unprocessed data in the pipeline, but just terminates the running pods. When the pipeline is resumed, the pods will be restarted and continue processing the unprocessed data.</p>
-<p>When pausing a pipeline, it will shutdown the source vertex pods first, and then wait for the other vertices to finish the backlog before terminating them.</p>
-<p>If there's a <a href="../../../user-defined-functions/reduce/reduce/">reduce</a> vertex in the pipeline, please make sure it uses <a href="../../../user-defined-functions/reduce/reduce/#persistent-volume-claim-pvc">Persistent Volume Claim</a> for storage, otherwise the data will be lost.</p>
-<h2 id="resume-a-pipeline">Resume a Pipeline<a class="headerlink" href="#resume-a-pipeline" title="Permanent link">&para;</a></h2>
-<p>The command below will bring the pipeline back to <code>Running</code> status.</p>
-<div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>pl<span class="w"> </span>my-pipeline<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Running&quot;}}}&#39;</span>
+<p>If you want to apply same configuration to all the vertices, use <a href="../pipeline-customization/#vertices">Vertex Template</a>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">templates</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">vertex</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">sidecar.istio.io/inject</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">          </span><span class="nt">traffic.sidecar.istio.io/excludeOutboundPorts</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4222&quot;</span><span class="w"> </span><span class="c1"># Nats JetStream port</span>
+<span class="w">          </span><span class="nt">traffic.sidecar.istio.io/excludeInboundPorts</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2469&quot;</span><span class="w"> </span><span class="c1"># Numaflow vertex metrics port</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex-1</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-1-image:latest</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex-2</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-2-image:latest</span>
+<span class="w">    </span><span class="l l-Scalar l-Scalar-Plain">...</span>
 </code></pre></div>
-<h2 id="delete-a-pipeline">Delete a Pipeline<a class="headerlink" href="#delete-a-pipeline" title="Permanent link">&para;</a></h2>
-<p>When deleting a pipeline, before terminating all the pods, it will try to wait for all the backlog messages that have already been ingested into the pipeline to be processed. However, it will not wait forever, if the backlog is too large, it will terminate the pods after <code>terminationGracePeriodSeconds</code>, which defaults to 30, and can be customized by setting <code>spec.lifecycle.terminationGracePeriodSeconds</code>.</p>
 
               
             </article>

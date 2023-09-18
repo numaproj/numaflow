@@ -1363,6 +1363,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../reference/pipeline-operations/" class="md-nav__link">
+        Pipeline Operations
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../reference/join-vertex/" class="md-nav__link">
         Joins and Cycles
       </a>
@@ -1408,18 +1422,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_5_8" type="checkbox" id="__nav_3_5_8" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_5_9" type="checkbox" id="__nav_3_5_9" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_5_8">
+        <label class="md-nav__link" for="__nav_3_5_9">
           Configuration
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Configuration" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_5_8">
+        <label class="md-nav__title" for="__nav_3_5_9">
           <span class="md-nav__icon md-icon"></span>
           Configuration
         </label>
@@ -1529,8 +1543,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/configuration/pipeline-operations/" class="md-nav__link">
-        Pipeline Operations
+      <a href="../../../reference/configuration/istio/" class="md-nav__link">
+        Running on Istio
       </a>
     </li>
   
@@ -2163,8 +2177,9 @@ In streaming mode, the messages will be pushed to the downstream vertices once g
 instead of in a batch at the end. The streaming mode can be enabled by setting the annotation
 <code>numaflow.numaproj.io/map-stream</code> to <code>true</code> in the vertex spec.</p>
 <p>Note that to maintain data orderliness, we restrict the read batch size to be <code>1</code>.</p>
-<div class="highlight"><pre><span></span><code><span class="nn">...</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
 <span class="w">      </span><span class="nt">metadata</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">numaflow.numaproj.io/map-stream</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
@@ -2176,7 +2191,7 @@ instead of in a batch at the end. The streaming mode can be enabled by setting t
 <li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/map/flatmapstream">Java</a></li>
 </ul>
 <h3 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h3>
-<p>Some environment variables are available in the user defined function Pods, they might be useful in you own UDF implementation.</p>
+<p>Some environment variables are available in the user defined function container, they might be useful in you own UDF implementation.</p>
 <ul>
 <li><code>NUMAFLOW_NAMESPACE</code> - Namespace.</li>
 <li><code>NUMAFLOW_POD</code> - Pod name.</li>
