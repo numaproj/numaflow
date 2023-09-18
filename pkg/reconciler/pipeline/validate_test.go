@@ -337,7 +337,7 @@ func TestValidatePipeline(t *testing.T) {
 		testObj.Spec.Vertices[5].UDF = &dfv1.UDF{}
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid pipeline")
+		assert.Contains(t, err.Error(), "invalid vertex")
 	})
 
 	t.Run("forest - two pipelines with multiple sources/sinks", func(t *testing.T) {
