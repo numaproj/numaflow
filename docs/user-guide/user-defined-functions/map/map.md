@@ -58,12 +58,12 @@ instead of in a batch at the end. The streaming mode can be enabled by setting t
 Note that to maintain data orderliness, we restrict the read batch size to be `1`.
 
 ```yaml
-
----
-- name: my-vertex
-  metadata:
-    annotations:
-      numaflow.numaproj.io/map-stream: "true"
+spec:
+  vertices:
+    - name: my-vertex
+      metadata:
+        annotations:
+          numaflow.numaproj.io/map-stream: "true"
 ```
 
 Check the links below to see the UDF examples in streaming mode for different languages.
