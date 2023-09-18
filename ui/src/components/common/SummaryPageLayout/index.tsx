@@ -1,4 +1,10 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, {
+  useMemo,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 import Box from "@mui/material/Box";
 import {
   SummaryTitledValueProps,
@@ -19,7 +25,7 @@ const COLLAPSED_HEIGHT = "2.25rem";
 const getSummaryComponent = (summarySections: SummarySection[]) => {
   // Build sections from props
   const components: React.ReactNode[] = [];
-  let key;
+  let key: string;
   summarySections.forEach((section, index) => {
     switch (section.type) {
       case SummarySectionType.TITLED_VALUE:
@@ -113,6 +119,22 @@ export function SummaryPageLayout({
   contentComponent,
 }: SummaryPageLayoutProps) {
   const [collapsed, setCollapsed] = useState(collapsable && defaultCollapsed);
+  const sumaryRef = useRef<any>();
+  const [summaryHeight, setSummaryHeight] = useState(0);
+
+  // Resize observer to update content margin when summary height changes
+  useEffect(() => {
+    if (!sumaryRef.current) {
+      return;
+    }
+    const resizeObserver = new ResizeObserver(() => {
+      setSummaryHeight(sumaryRef.current.offsetHeight);
+    });
+    resizeObserver.observe(sumaryRef.current);
+    return function cleanup() {
+      resizeObserver.disconnect();
+    };
+  }, [sumaryRef.current]);
 
   const toggleCollapsed = useCallback(() => {
     if (!collapsable) {
@@ -125,6 +147,7 @@ export function SummaryPageLayout({
     if (collapsed) {
       return (
         <Box
+          ref={sumaryRef}
           sx={{
             display: "flex",
             flexDirection: "row",
@@ -152,6 +175,7 @@ export function SummaryPageLayout({
     }
     return (
       <Box
+        ref={sumaryRef}
         sx={{
           display: "flex",
           flexDirection: "row",
@@ -183,14 +207,21 @@ export function SummaryPageLayout({
         )}
       </Box>
     );
-  }, [summarySections, collapsed, collapsable, toggleCollapsed, collapsedText]);
+  }, [
+    summarySections,
+    collapsed,
+    collapsable,
+    toggleCollapsed,
+    collapsedText,
+    sumaryRef,
+  ]);
 
   const contentMargin = useMemo(() => {
     if (collapsed) {
-      return offsetOnCollapse ? COLLAPSED_HEIGHT : undefined;
+      return offsetOnCollapse ? `${summaryHeight}px` : undefined;
     }
-    return SUMMARY_HEIGHT;
-  }, [collapsed, offsetOnCollapse]);
+    return `${summaryHeight}px`;
+  }, [summaryHeight, collapsed, offsetOnCollapse]);
 
   return (
     <Box>
