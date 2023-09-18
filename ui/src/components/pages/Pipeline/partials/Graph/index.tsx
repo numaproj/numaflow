@@ -1,4 +1,11 @@
-import { MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import ReactFlow, {
   addEdge,
@@ -29,16 +36,23 @@ import { FlowProps, GraphProps } from "../../../../../types/declarations/graph";
 import lock from "../../../../../images/lock.svg";
 import unlock from "../../../../../images/unlock.svg";
 import scrollToggle from "../../../../../images/move-arrows.svg";
+import closedHand from "../../../../../images/closed.svg";
 import fullscreen from "../../../../../images/fullscreen.svg";
 import sidePanel from "../../../../../images/side-panel.svg";
 import zoomInIcon from "../../../../../images/zoom-in.svg";
 import zoomOutIcon from "../../../../../images/zoom-out.svg";
+import source from "../../../../../images/source.svg";
+import map from "../../../../../images/map.svg";
+import reduce from "../../../../../images/reduce.svg";
+import sink from "../../../../../images/sink.svg";
+import input from "../../../../../images/input.svg";
+import generator from "../../../../../images/generator.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
 
-const nodeWidth = 230;
-const nodeHeight = 48;
+const nodeWidth = 252;
+const nodeHeight = 72;
 const graphDirection = "LR";
 
 const defaultNodeTypes: NodeTypes = {
@@ -49,6 +63,9 @@ const defaultEdgeTypes: EdgeTypes = {
   custom: CustomEdge,
 };
 
+//sets borders for selected node in the graph
+export const HighlightContext = createContext<any>(null);
+
 const getLayoutedElements = (
   nodes: Node[],
   edges: Edge[],
@@ -57,7 +74,7 @@ const getLayoutedElements = (
   const dagreGraph = new graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   const isHorizontal = direction === "LR";
-  dagreGraph.setGraph({ rankdir: direction, ranksep: 80 });
+  dagreGraph.setGraph({ rankdir: direction, ranksep: 106 });
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
@@ -89,7 +106,7 @@ const Flow = (props: FlowProps) => {
   const zoomLevel = useViewport().zoom;
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const [isLocked, setIsLocked] = useState(false);
-  const [isScrollLocked, setIsScrollLocked] = useState(false);
+  const [isPanOnScrollLocked, setIsPanOnScrollLocked] = useState(false);
   const {
     nodes,
     edges,
@@ -105,8 +122,8 @@ const Flow = (props: FlowProps) => {
     () => setIsLocked((prevState) => !prevState),
     []
   );
-  const onIsScrollLockedChange = useCallback(
-    () => setIsScrollLocked((prevState) => !prevState),
+  const onIsPanOnScrollLockedChange = useCallback(
+    () => setIsPanOnScrollLocked((prevState) => !prevState),
     []
   );
   const onFullScreen = useCallback(() => fitView(), [zoomLevel]);
@@ -126,15 +143,20 @@ const Flow = (props: FlowProps) => {
       onNodeClick={handleNodeClick}
       onPaneClick={handlePaneClick}
       fitView
-      preventScrolling={isScrollLocked}
+      preventScrolling={!isLocked}
       panOnDrag={!isLocked}
+      panOnScroll={isPanOnScrollLocked}
+      maxZoom={2.75}
     >
-      <Panel position="bottom-left">
+      <Panel position="bottom-left" className={"interaction"}>
         <IconButton onClick={onIsLockedChange}>
           <img src={isLocked ? lock : unlock} alt={"lock-unlock"} />
         </IconButton>
-        <IconButton onClick={onIsScrollLockedChange}>
-          <img src={scrollToggle} alt={"scrollLock"} />
+        <IconButton onClick={onIsPanOnScrollLockedChange}>
+          <img
+            src={isPanOnScrollLocked ? closedHand : scrollToggle}
+            alt={"panOnScrollLock"}
+          />
         </IconButton>
         <div className={"divider"} />
         <IconButton onClick={onFullScreen}>
@@ -177,6 +199,32 @@ const Flow = (props: FlowProps) => {
             </text>
           </g>
         </svg>
+      </Panel>
+      <Panel position="bottom-left" className={"legend"}>
+        <div className={"legend-title"}>
+          <img src={source} alt={"source"} />
+          <div className={"legend-text"}>Source</div>
+        </div>
+        <div className={"legend-title"}>
+          <img src={map} alt={"map"} />
+          <div className={"legend-text"}>Map</div>
+        </div>
+        <div className={"legend-title"}>
+          <img src={reduce} alt={"reduce"} />
+          <div className={"legend-text"}>Reduce</div>
+        </div>
+        <div className={"legend-title"}>
+          <img src={sink} alt={"sink"} />
+          <div className={"legend-text"}>Sink</div>
+        </div>
+        <div className={"legend-title"}>
+          <img src={input} width={22} height={24} alt={"input"} />
+          <div className={"legend-text"}>Input</div>
+        </div>
+        <div className={"legend-title"}>
+          <img src={generator} width={22} height={24} alt={"generator"} />
+          <div className={"legend-text"}>Generator</div>
+        </div>
       </Panel>
     </ReactFlow>
   );
@@ -265,10 +313,13 @@ export default function Graph(props: GraphProps) {
     });
   }, [nodes, nodeId]);
 
+  const [nodeHighlightValues, setNodeHighlightValues] = useState<any>({});
+
   const handlePaneClick = () => {
     setShowSpec(true);
     setEdgeOpen(false);
     setNodeOpen(false);
+    setNodeHighlightValues({});
   };
 
   const [showSpec, setShowSpec] = useState(true);
@@ -276,20 +327,24 @@ export default function Graph(props: GraphProps) {
   return (
     <div style={{ height: "100%" }}>
       <div className="Graph" data-testid="graph">
-        <ReactFlowProvider>
-          <Flow
-            {...{
-              nodes,
-              edges,
-              onNodesChange,
-              onEdgesChange,
-              onConnect,
-              handleNodeClick,
-              handleEdgeClick,
-              handlePaneClick,
-            }}
-          />
-        </ReactFlowProvider>
+        <HighlightContext.Provider
+          value={{ nodeHighlightValues, setNodeHighlightValues }}
+        >
+          <ReactFlowProvider>
+            <Flow
+              {...{
+                nodes,
+                edges,
+                onNodesChange,
+                onEdgesChange,
+                onConnect,
+                handleNodeClick,
+                handleEdgeClick,
+                handlePaneClick,
+              }}
+            />
+          </ReactFlowProvider>
+        </HighlightContext.Provider>
       </div>
 
       <Card
