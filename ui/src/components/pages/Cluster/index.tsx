@@ -6,6 +6,7 @@ import {
   SummarySection,
   SummarySectionType,
 } from "../../common/SummaryPageLayout";
+import { ClusterNamespaceListing } from "./partials/ClusterNamespaceListing";
 import { useClusterSummaryFetch } from "../../../utils/fetchWrappers/clusterSummaryFetch";
 
 import "./style.css";
@@ -91,11 +92,11 @@ export function Cluster() {
     return <div>{`Error loading cluster summary: no data returned.`}</div>;
   }
   return (
-    <div>
+    <Box>
       <SummaryPageLayout
         summarySections={summarySections}
-        contentComponent={<div>TODO Content</div>}
+        contentComponent={<ClusterNamespaceListing data={data} />}
       />
-    </div>
+    </Box>
   );
 }
