@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import {
@@ -11,21 +11,10 @@ import { useClusterSummaryFetch } from "../../../utils/fetchWrappers/clusterSumm
 
 import "./style.css";
 
-const DATA_REFRESH_INTERVAL = 15000; // ms
-
 export function Cluster() {
-  const [refreshKey, setRefreshKey] = useState(0);
   const { data, loading, error } = useClusterSummaryFetch({
-    refreshKey,
     loadOnRefresh: false,
   });
-
-  // Refresh data periodically
-  useEffect(() => {
-    setInterval(() => {
-      setRefreshKey((prev) => prev + 1);
-    }, DATA_REFRESH_INTERVAL);
-  }, [refreshKey]);
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (!data) {
@@ -39,41 +28,55 @@ export function Cluster() {
           value: data.namespacesCount,
         },
       },
+      // Pipelines collection
       {
-        type: SummarySectionType.TITLED_VALUE,
-        titledValueProps: {
-          title: "Pipelines",
-          value: data.pipelinesCount,
-        },
+        type: SummarySectionType.COLLECTION,
+        collectionSections: [
+          {
+            type: SummarySectionType.TITLED_VALUE,
+            titledValueProps: {
+              title: "Pipelines",
+              value: data.pipelinesCount,
+            },
+          },
+          {
+            type: SummarySectionType.STATUSES,
+            statusesProps: {
+              title: "Pipelines Status",
+              active: data.pipelinesActiveCount,
+              inActive: data.pipelinesInactiveCount,
+              healthy: data.pipelinesHealthyCount,
+              warning: data.pipelinesWarningCount,
+              critical: data.pipelinesCriticalCount,
+            },
+          },
+        ],
       },
+      // ISBs collection
       {
-        type: SummarySectionType.STATUSES,
-        statusesProps: {
-          title: "Pipelines Status",
-          active: data.pipelinesActiveCount,
-          inActive: data.pipelinesInactiveCount,
-          healthy: data.pipelinesHealthyCount,
-          warning: data.pipelinesWarningCount,
-          critical: data.pipelinesCriticalCount,
-        },
-      },
-      {
-        type: SummarySectionType.TITLED_VALUE,
-        titledValueProps: {
-          title: "ISB Services",
-          value: data.isbsCount,
-        },
-      },
-      {
-        type: SummarySectionType.STATUSES,
-        statusesProps: {
-          title: "ISB Services Status",
-          active: data.isbsActiveCount,
-          inActive: data.isbsInactiveCount,
-          healthy: data.isbsHealthyCount,
-          warning: data.isbsWarningCount,
-          critical: data.isbsCriticalCount,
-        },
+        type: SummarySectionType.COLLECTION,
+        collectionSections: [
+          {
+            type: SummarySectionType.TITLED_VALUE,
+            titledValueProps: {
+              title: "ISB Services",
+              value: data.isbsCount,
+            },
+          },
+          {
+            type: SummarySectionType.STATUSES,
+            statusesProps: {
+              title: "ISB Services Status",
+              active: data.isbsActiveCount,
+              inActive: data.isbsInactiveCount,
+              healthy: data.isbsHealthyCount,
+              warning: data.isbsWarningCount,
+              critical: data.isbsCriticalCount,
+              activeText: "Live",
+              inAcitveText: "Not-Live",
+            },
+          },
+        ],
       },
     ];
   }, [data]);
@@ -89,7 +92,7 @@ export function Cluster() {
     return <div>{`Error loading cluster summary: ${error}`}</div>;
   }
   if (!data) {
-    return <div>{`Error loading cluster summary: no data returned.`}</div>;
+    return <div>{`No resources found.`}</div>;
   }
   return (
     <Box>

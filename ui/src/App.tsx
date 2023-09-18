@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ScopedCssBaseline from "@mui/material/ScopedCssBaseline";
 import Box from "@mui/material/Box";
+import Drawer from "@mui/material/Drawer";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -12,20 +13,14 @@ import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
+import { SideBarContent } from "./components/common/SideBarContent";
+import { AppContextProps } from "./types/declarations/app";
+import { SideBarProps } from "./types/declarations/shared";
 import logo from "./images/icon.png";
 import textLogo from "./images/text-icon.png";
 
 import "./App.css";
 import "react-toastify/dist/ReactToastify.css";
-
-export interface SystemInfo {
-  namespaced: boolean;
-  managedNamespace: string | undefined;
-}
-export interface AppContextProps {
-  systemInfo: SystemInfo | undefined;
-  systemInfoError: any | undefined;
-}
 
 export const AppContext = React.createContext<AppContextProps>({
   systemInfo: undefined,
@@ -41,6 +36,7 @@ function App() {
   //   },
   //   error: undefined,
   // };
+  const [sideBarProps, setSideBarProps] = useState<SideBarProps | undefined>();
   const { systemInfo, error: systemInfoError } = useSystemInfoFetch();
 
   // Notify if error loading system info
@@ -54,6 +50,10 @@ function App() {
       ]);
     }
   }, [systemInfoError]);
+
+  const handleSideBarClose = useCallback(() => {
+    setSideBarProps(undefined);
+  }, []);
 
   const routes = useMemo(() => {
     if (!systemInfo && !systemInfoError) {
@@ -116,6 +116,8 @@ function App() {
         value={{
           systemInfo,
           systemInfoError,
+          sideBarProps,
+          setSideBarProps,
         }}
       >
         <ScopedCssBaseline>
@@ -150,9 +152,9 @@ function App() {
                 flexDirection: "column",
                 width: "100%",
                 overflow: "auto",
-                height: "2rem",
+                height: "2.0625rem",
                 background: "#F8F8FB",
-                zIndex: 999,
+                zIndex: (theme) => theme.zIndex.drawer + 1,
                 position: "fixed",
                 top: "3.75rem",
               }}
@@ -185,6 +187,13 @@ function App() {
           transition={Slide}
           theme="light"
         />
+        <Drawer
+          anchor="right"
+          open={!!sideBarProps}
+          onClose={handleSideBarClose}
+        >
+          {sideBarProps && <SideBarContent {...sideBarProps} />}
+        </Drawer>
       </AppContext.Provider>
     </>
   );

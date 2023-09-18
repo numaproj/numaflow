@@ -1,17 +1,7 @@
-.Namespaces {
-}
-
-.Namespace-table-head {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-}
-
-.Namespace-btn {
-    cursor: pointer;
-    color: #0077C5;
-}
-
-.Namespace-table-body {
-    margin: 0 1rem;
+.namespace-k8s-events {
+  color: #393A3D;
+  font-size: 0.8125rem;
+  font-style: normal;
+  font-weight: 600;
+  text-decoration: underline;
 }

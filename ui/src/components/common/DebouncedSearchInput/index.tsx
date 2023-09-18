@@ -6,6 +6,12 @@ import SearchIcon from "@mui/icons-material/Search";
 
 import "./style.css";
 
+export interface DebouncedSearchInputProps {
+  disabled?: boolean;
+  placeHolder?: string;
+  onChange: (value: string) => void;
+}
+
 const CssTextField = styled(TextField)({
   background: "#FFFFFF !important",
   border:
@@ -29,12 +35,6 @@ const CssTextField = styled(TextField)({
   },
 });
 
-export interface DebouncedSearchInputProps {
-  disabled?: boolean;
-  placeHolder?: string;
-  onChange: (value: string) => void;
-}
-
 export function DebouncedSearchInput({
   disabled = false,
   placeHolder,
@@ -42,12 +42,15 @@ export function DebouncedSearchInput({
 }: DebouncedSearchInputProps) {
   const [timerId, setTimerId] = useState<number | undefined>();
 
-  const debounceValue = useCallback((updatedValue: string) => {
-    if (timerId) { 
-      clearTimeout(timerId);
-    }
-    setTimerId(setTimeout(() => onChange(updatedValue), 500));
-  }, [onChange, timerId]);
+  const debounceValue = useCallback(
+    (updatedValue: string) => {
+      if (timerId) {
+        clearTimeout(timerId);
+      }
+      setTimerId(setTimeout(() => onChange(updatedValue), 500));
+    },
+    [onChange, timerId]
+  );
 
   const handleInputChange = useCallback(
     (event: { target: { value: string } }) => {
@@ -58,7 +61,7 @@ export function DebouncedSearchInput({
 
   useEffect(() => {
     // Clear timer on dismount
-    return () =>{
+    return () => {
       if (timerId) {
         clearTimeout(timerId);
       }
