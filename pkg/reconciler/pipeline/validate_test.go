@@ -381,7 +381,7 @@ func TestValidatePipeline(t *testing.T) {
 		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "p1", To: "input"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "can not be define as 'to'")
+		assert.Contains(t, err.Error(), "source must have 0 from edges and at least 1 to edge")
 	})
 
 	t.Run("edge - sink as from", func(t *testing.T) {
@@ -389,21 +389,30 @@ func TestValidatePipeline(t *testing.T) {
 		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "output", To: "p1"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "can not be define as 'from'")
+		assert.Contains(t, err.Error(), "sink must have 0 to edges and at least 1 from edge")
 	})
 
-	t.Run("vertex not in edges", func(t *testing.T) {
+	t.Run("edge - duplicate", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input1", Source: &dfv1.Source{}})
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "input", To: "p1"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not all the vertex names are defined")
+		assert.Contains(t, err.Error(), "cannot define multiple edges")
+	})
+
+	t.Run("UDF not connected to pipeline", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input1", UDF: &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}})
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "UDF must have to and from edges")
 	})
 
 	t.Run("pipeline has not source", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[0].Source = nil
 		testObj.Spec.Vertices[0].UDF = &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "input", To: "input"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "pipeline has no source")
@@ -413,9 +422,20 @@ func TestValidatePipeline(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[2].Sink = nil
 		testObj.Spec.Vertices[2].UDF = &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "output", To: "output"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "pipeline has no sink")
+	})
+
+	t.Run("last vertex is not sink", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "bad-output", UDF: &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}})
+		testObj.Spec.Edges[1] = dfv1.Edge{From: "p1", To: "bad-output"}
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "bad-output", To: "p1"})
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "sink must have 0 to edges and at least 1 from edge")
 	})
 
 	t.Run("or conditional forwarding", func(t *testing.T) {

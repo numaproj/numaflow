@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.10.1 (2023-09-14)
+
+ * [e5e2b619](https://github.com/numaproj/numaflow/commit/e5e2b6191a386a2e6fdb546e2d57b5ee69fb18ef) Update manifests to v0.10.1
+ * [4702849c](https://github.com/numaproj/numaflow/commit/4702849c298b17f908b7de47d96ce94699661cc7) feat: implement pipeline validation for unsupported states (#1043)
+ * [e36b3c6c](https://github.com/numaproj/numaflow/commit/e36b3c6ceb08e1c9a48cccce484643dadea630ff) fix: message count read in forwarder (#1030)
+ * [01d9abee](https://github.com/numaproj/numaflow/commit/01d9abee0ba1faf2636f7dff4b5601be19c35bb6) fix: allow udsource pending api to return negative count to indicate PendingNotAvailable (#1040)
+ * [8cbb4d67](https://github.com/numaproj/numaflow/commit/8cbb4d67331bc0ef8db5d52157ec7e2270b02711) refactor: re-arrange some of the rater implementations (#1036)
+ * [b511effc](https://github.com/numaproj/numaflow/commit/b511effc2a85608ee3b372b0cb36ee77385afb7e) fix(docs): file names and links for side inputs (#1037)
+ * [5b083c2d](https://github.com/numaproj/numaflow/commit/5b083c2d29fbb4740d3aadfc8622cadadfbe1d00) doc: Add side input docs (#1029)
+ * [8d5c56f8](https://github.com/numaproj/numaflow/commit/8d5c56f8968eadc04c87cc0db308bc05ac418d87) doc: kill-switch when buffer is full (#1034)
+ * [73db23a3](https://github.com/numaproj/numaflow/commit/73db23a3f834de99e9c9456d978692a3a8f55c71) fix: Idle handler refactor (#1021)
+ * [7119ed96](https://github.com/numaproj/numaflow/commit/7119ed965723e3b55d1ac8484dcb7bc2e091c6bf) fix: calculate processing rate for sink vertices (#1025)
+ * [6408137d](https://github.com/numaproj/numaflow/commit/6408137dad05d24690394a1143548da2bc618ccb) feat: colored logs for UI with toggle for logs order (#1022)
+ * [2311260c](https://github.com/numaproj/numaflow/commit/2311260cce0aebf32552a1c55c890f7e5e606c6d) fix(ci): Wrong test pod image tag used for running CI on release branch (#1041)
+
+### Contributors
+
+ * Derek Wang
+ * Dillen Padhiar
+ * Juanlu Yu
+ * Keran Yang
+ * Sidhant Kohli
+ * Vedant Gupta
+ * Vigith Maurice
+
 ## v0.10.0 (2023-09-05)
 
  * [10d1cfde](https://github.com/numaproj/numaflow/commit/10d1cfde26f168e19dabc797485fc766d117f086) Update manifests to v0.10.0

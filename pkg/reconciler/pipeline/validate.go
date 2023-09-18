@@ -58,6 +58,9 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			if v.Sink != nil || v.UDF != nil {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
 			}
+			if len(pl.GetToEdges(v.Name)) == 0 || len(pl.GetFromEdges(v.Name)) > 0 {
+				return fmt.Errorf("invalid vertex %q, source must have 0 from edges and at least 1 to edge", v.Name)
+			}
 			sources[v.Name] = v
 			if v.Source.UDTransformer != nil {
 				udTransformers[v.Name] = v
@@ -67,11 +70,17 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			if v.Source != nil || v.UDF != nil {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
 			}
+			if len(pl.GetFromEdges(v.Name)) == 0 || len(pl.GetToEdges(v.Name)) > 0 {
+				return fmt.Errorf("invalid vertex %q, sink must have 0 to edges and at least 1 from edge", v.Name)
+			}
 			sinks[v.Name] = v
 		}
 		if v.UDF != nil {
 			if v.Source != nil || v.Sink != nil {
 				return fmt.Errorf("invalid vertex %q, only one of 'source', 'sink' and 'udf' can be specified", v.Name)
+			}
+			if len(pl.GetToEdges(v.Name)) == 0 || len(pl.GetFromEdges(v.Name)) == 0 {
+				return fmt.Errorf("invalid vertex %q, UDF must have to and from edges", v.Name)
 			}
 			if v.UDF.GroupBy != nil {
 				reduceUdfs[v.Name] = v
@@ -144,6 +153,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 
 	namesInEdges := make(map[string]bool)
+	toFromEdge := make(map[string]bool)
 	for _, e := range pl.Spec.Edges {
 		if e.From == "" || e.To == "" {
 			return fmt.Errorf("invalid edge: both from and to need to be specified")
@@ -154,15 +164,16 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		if !names[e.To] {
 			return fmt.Errorf("invalid edge: no vertex named %q", e.To)
 		}
-		if _, existing := sources[e.To]; existing {
-			return fmt.Errorf("source vertex %q can not be define as 'to'", e.To)
-		}
-		if _, existing := sinks[e.From]; existing {
-			return fmt.Errorf("sink vertex %q can not be define as 'from'", e.To)
-		}
 		namesInEdges[e.From] = true
 		namesInEdges[e.To] = true
+		// check for redundant edges
+		if _, existing := toFromEdge[e.From+e.To]; existing {
+			return fmt.Errorf("cannot define multiple edges from vertex %q to vertex %q", e.From, e.To)
+		} else {
+			toFromEdge[e.From+e.To] = true
+		}
 	}
+
 	if len(namesInEdges) != len(names) {
 		return fmt.Errorf("not all the vertex names are defined in edges")
 	}
