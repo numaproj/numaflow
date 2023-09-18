@@ -163,6 +163,57 @@ var (
 			},
 		},
 	}
+
+	testForestPipeline = &dfv1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pl",
+			Namespace: "test-ns",
+		},
+		Spec: dfv1.PipelineSpec{
+			Vertices: []dfv1.AbstractVertex{
+				{
+					Name: "input",
+					Source: &dfv1.Source{
+						UDTransformer: &dfv1.UDTransformer{
+							Builtin: &dfv1.Transformer{Name: "filter"},
+						}},
+				},
+				{
+					Name: "input-1",
+					Source: &dfv1.Source{
+						UDTransformer: &dfv1.UDTransformer{
+							Builtin: &dfv1.Transformer{Name: "filter"},
+						}},
+				},
+				{
+					Name: "p1",
+					UDF: &dfv1.UDF{
+						Builtin: &dfv1.Function{Name: "cat"},
+					},
+				},
+				{
+					Name: "p2",
+					UDF: &dfv1.UDF{
+						Builtin: &dfv1.Function{Name: "cat"},
+					},
+				},
+				{
+					Name: "output",
+					Sink: &dfv1.Sink{},
+				},
+				{
+					Name: "output-1",
+					Sink: &dfv1.Sink{},
+				},
+			},
+			Edges: []dfv1.Edge{
+				{From: "input", To: "p1"},
+				{From: "p1", To: "output"},
+				{From: "input-1", To: "p2"},
+				{From: "p2", To: "output-1"},
+			},
+		},
+	}
 )
 
 func TestValidatePipeline(t *testing.T) {
@@ -271,6 +322,42 @@ func TestValidatePipeline(t *testing.T) {
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "can not specify both builtin function, and a customized image")
+	})
+
+	t.Run("forest - two pipelines with 1 source/sink", func(t *testing.T) {
+		testObj := testForestPipeline.DeepCopy()
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid pipeline")
+	})
+
+	t.Run("forest - second pipeline has no sink", func(t *testing.T) {
+		testObj := testForestPipeline.DeepCopy()
+		testObj.Spec.Vertices[5].Sink = nil
+		testObj.Spec.Vertices[5].UDF = &dfv1.UDF{}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid pipeline")
+	})
+
+	t.Run("forest - two pipelines with multiple sources/sinks", func(t *testing.T) {
+		testObj := testForestPipeline.DeepCopy()
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input-2", Source: &dfv1.Source{}})
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "output-2", Sink: &dfv1.Sink{}})
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "input-2", To: "p1"})
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "p2", To: "output-2"})
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid pipeline")
+	})
+
+	t.Run("forest - pipelines have cycles", func(t *testing.T) {
+		testObj := testForestPipeline.DeepCopy()
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "p1", To: "p1"})
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "p2", To: "p2"})
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid pipeline")
 	})
 
 	t.Run("edge - invalid vertex name", func(t *testing.T) {

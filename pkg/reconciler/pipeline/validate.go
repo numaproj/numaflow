@@ -98,6 +98,10 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 				return fmt.Errorf("invalid user-defined source vertex %q, only one of 'http', 'kafka', 'nats', 'redisStreams', 'generator' and 'udSource' can be specified", k)
 			}
 		}
+
+		if findForests(s, pl) {
+			return fmt.Errorf("invalid pipeline, cannot be disjointed")
+		}
 	}
 
 	for k, t := range udTransformers {
@@ -460,4 +464,38 @@ func toVerticesMappedByFrom(edges []dfv1.Edge, verticesByName map[string]*dfv1.A
 		mappedEdges[edge.From] = append(mappedEdges[edge.From], toVertex)
 	}
 	return mappedEdges, nil
+}
+
+func findForests(vtx dfv1.AbstractVertex, pl *dfv1.Pipeline) bool {
+
+	visited := map[string]struct{}{}
+	findForestHelper(vtx.Name, visited, pl)
+
+	// true if forest is found
+	return len(visited) != len(pl.Spec.Vertices)
+
+}
+
+func findForestHelper(vtxName string, visited map[string]struct{}, pl *dfv1.Pipeline) {
+
+	visited[vtxName] = struct{}{}
+
+	// construct list all to and from vertices
+	neighbors := make(map[string]string)
+	toEdges := pl.GetToEdges(vtxName)
+	fromEdges := pl.GetFromEdges(vtxName)
+	for _, e := range toEdges {
+		neighbors[e.To] = e.To
+	}
+	for _, e := range fromEdges {
+		neighbors[e.From] = e.From
+	}
+
+	// visit all to and from vertices
+	for _, v := range neighbors {
+		if _, alreadyVisited := visited[v]; !alreadyVisited {
+			findForestHelper(v, visited, pl)
+		}
+	}
+
 }
