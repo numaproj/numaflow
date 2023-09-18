@@ -137,17 +137,6 @@ func (h *handler) ListInterStepBufferServices(c *gin.Context) {
 	c.JSON(http.StatusOK, isbSvcs.Items)
 }
 
-// GetInterStepBufferService is used to provide the spec of the interstep buffer service
-func (h *handler) GetInterStepBufferService(c *gin.Context) {
-	isbsvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isb-services"), metav1.GetOptions{})
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, isbsvc))
-}
-
 // UpdateInterStepBufferService is used to update the spec of the interstep buffer service
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	isbSVC, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Get(context.Background(), c.Param("isb-services"), metav1.GetOptions{})
