@@ -19,7 +19,7 @@ func (as *ActiveStatus) increment(status string) {
 
 // PipelineSummary summarizes the number of active and inactive pipelines.
 type PipelineSummary struct {
-	Active   ActiveStatus `json:"active "`
+	Active   ActiveStatus `json:"active"`
 	Inactive int          `json:"inactive"`
 }
 
@@ -29,10 +29,12 @@ type IsbServiceSummary struct {
 	Inactive int          `json:"inactive"`
 }
 
+// ClusterSummaryResponse is a list of ClusterSummary
+// of all the namespaces in a cluster wrapped in a list.
 type ClusterSummaryResponse []ClusterSummary
 
-// ClusterSummary summarizes information of all the namespaces in a cluster wrapped in a list.
-type ClusterSummary []struct {
+// ClusterSummary summarizes information for a given namespace
+type ClusterSummary struct {
 	Namespace         string            `json:"namespace"`
 	PipelineSummary   PipelineSummary   `json:"pipelineSummary"`
 	IsbServiceSummary IsbServiceSummary `json:"isbServiceSummary"`
@@ -42,10 +44,8 @@ type ClusterSummary []struct {
 func NewClusterSummary(namespace string, pipelineSummary PipelineSummary,
 	isbSummary IsbServiceSummary) ClusterSummary {
 	return ClusterSummary{
-		{
-			Namespace:         namespace,
-			PipelineSummary:   pipelineSummary,
-			IsbServiceSummary: isbSummary,
-		},
+		Namespace:         namespace,
+		PipelineSummary:   pipelineSummary,
+		IsbServiceSummary: isbSummary,
 	}
 }
