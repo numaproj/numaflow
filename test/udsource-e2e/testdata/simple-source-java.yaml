@@ -1,0 +1,21 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-source
+spec:
+  vertices:
+    - name: in
+      source:
+        udsource:
+          container:
+            # A simple user-defined source for e2e testing
+            # See https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/source/simple
+            image: quay.io/numaio/numaflow-java/source-simple-source:v0.5.1
+      limits:
+        readBatchSize: 2
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out

@@ -19,6 +19,7 @@ limitations under the License.
 package e2e
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -30,8 +31,16 @@ type UserDefinedSourceSuite struct {
 	E2ESuite
 }
 
-func (s *UserDefinedSourceSuite) TestSimpleSource() {
-	w := s.Given().Pipeline("@testdata/simple-source.yaml").
+func (s *UserDefinedSourceSuite) TestSimpleSourceGo() {
+	s.testSimpleSource("go")
+}
+
+func (s *UserDefinedSourceSuite) TestSimpleSourceJava() {
+	s.testSimpleSource("java")
+}
+
+func (s *UserDefinedSourceSuite) testSimpleSource(lang string) {
+	w := s.Given().Pipeline(fmt.Sprintf("@testdata/simple-source-%s.yaml", lang)).
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
