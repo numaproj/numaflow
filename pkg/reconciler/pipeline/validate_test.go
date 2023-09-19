@@ -360,6 +360,16 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid pipeline")
 	})
 
+	t.Run("valid pipeline with multiple sinks/sources", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input-1", Source: &dfv1.Source{}})
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "output-1", Sink: &dfv1.Sink{}})
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "input-1", To: "p1"})
+		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "p1", To: "output-1"})
+		err := ValidatePipeline(testObj)
+		assert.NoError(t, err)
+	})
+
 	t.Run("edge - invalid vertex name", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "a", To: "b"})
