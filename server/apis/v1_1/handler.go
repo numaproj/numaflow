@@ -41,6 +41,7 @@ import (
 	dfv1versiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
+	"github.com/numaproj/numaflow/webhook/validator"
 )
 
 // SpecType is used to provide the type of the spec of the resource
@@ -591,6 +592,43 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, events.Items))
 }
 
+// ValidatePipeline is used to validate the pipeline spec
+func (h *handler) ValidatePipeline(c *gin.Context) {
+	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
+		c.JSON(http.StatusOK, errMsg)
+		return
+	}
+	// Convert reqBody to pipeline spec
+	var pipelineSpec = reqBody.(*dfv1.Pipeline)
+	isValid := validatePipelineSpec(h, pipelineSpec)
+	if isValid != nil {
+		errMsg := fmt.Sprintf("Failed to validate pipeline spec, %v", isValid.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
+func (h *handler) ValidateInterStepBufferService(c *gin.Context) {
+	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
+		c.JSON(http.StatusOK, errMsg)
+		return
+	}
+	// Convert reqBody to pipeline spec
+	var isbSpec = reqBody.(*dfv1.InterStepBufferService)
+	isValid := validateISBSpec(h, isbSpec)
+	if isValid != nil {
+		errMsg := fmt.Sprintf("Failed to validate interstepbuffer service spec, %v", isValid.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
 func getAllNamespaces(h *handler) ([]string, error) {
 	l, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
@@ -715,6 +753,32 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 	//	retStatus = PipelineStatusInactive
 	// }
 	return retStatus, nil
+}
+
+// validatePipelineSpec is used to validate the pipeline spec
+func validatePipelineSpec(h *handler, pipeline *dfv1.Pipeline) error {
+	ns := pipeline.Namespace
+	pipeClient := h.numaflowClient.Pipelines(ns)
+	valid := validator.NewPipelineValidator(h.kubeClient, pipeClient, nil, pipeline)
+	resp := valid.ValidateCreate(context.Background())
+	if !resp.Allowed {
+		errMsg := fmt.Errorf("%v", resp.Result.Message)
+		return errMsg
+	}
+	return nil
+}
+
+// validateISBSpec is used to validate the ISB service spec
+func validateISBSpec(h *handler, isb *dfv1.InterStepBufferService) error {
+	ns := isb.Namespace
+	isbClient := h.numaflowClient.InterStepBufferServices(ns)
+	valid := validator.NewISBServiceValidator(h.kubeClient, isbClient, nil, isb)
+	resp := valid.ValidateCreate(context.Background())
+	if !resp.Allowed {
+		errMsg := fmt.Errorf("%v", resp.Result.Message)
+		return errMsg
+	}
+	return nil
 }
 
 func daemonSvcAddress(ns, pipeline string) string {
