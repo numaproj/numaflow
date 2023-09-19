@@ -27,6 +27,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -50,6 +51,11 @@ const (
 	SpecTypePipeline = "pipeline"
 	SpecTypeISB      = "isb"
 	SpecTypePatch    = "patch"
+)
+
+const (
+	ValidTypeCreate = "valid-create"
+	ValidTypeUpdate = "valid-update"
 )
 
 type handler struct {
@@ -169,6 +175,13 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 	// Convert reqBody to pipeline spec
 	var pipelineSpec = reqBody.(*dfv1.Pipeline)
 
+	isValid := validatePipelineSpec(h, nil, pipelineSpec, ValidTypeCreate)
+	if isValid != nil {
+		errMsg := fmt.Sprintf("Failed to create pipeline, %v", isValid.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	_, err = h.numaflowClient.Pipelines(ns).Create(context.Background(), pipelineSpec, metav1.CreateOptions{})
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to create pipeline %q, %v", pipelineSpec.Name, err.Error())
@@ -228,20 +241,26 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 		NewNumaflowAPIResponse(&errMsg, nil)
 		return
 	}
-	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(),
+	pipeSpec, err := h.numaflowClient.Pipelines(ns).Get(context.Background(),
 		pipeline, metav1.GetOptions{})
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to patch pipeline %q namespace %q, %v",
+		errMsg := fmt.Sprintf("Failed to update pipeline %q namespace %q, %v",
 			pipeline,
 			ns,
 			err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	var pipelineSpec = reqBody.(*dfv1.Pipeline)
-	pl.Spec = pipelineSpec.Spec
-	fmt.Println("DEBUG", pl.ResourceVersion)
-	_, err = h.numaflowClient.Pipelines(ns).Update(context.Background(), pl, metav1.UpdateOptions{})
+	var updatedSpec = reqBody.(*dfv1.Pipeline)
+	pipeSpec.Spec = updatedSpec.Spec
+
+	isValid := validatePipelineSpec(h, pipeSpec, updatedSpec, ValidTypeUpdate)
+	if isValid != nil {
+		errMsg := fmt.Sprintf("Failed to update pipeline, %v", isValid.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	_, err = h.numaflowClient.Pipelines(ns).Update(context.Background(), pipeSpec, metav1.UpdateOptions{})
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to update pipeline %q, %v", pipeline, err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -294,6 +313,12 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 		return
 	}
 	var isbSpec = reqBody.(*dfv1.InterStepBufferService)
+	isValid := validateISBSpec(h, nil, isbSpec, ValidTypeCreate)
+	if isValid != nil {
+		errMsg := fmt.Sprintf("Failed to create interstepbuffer service spec, %v", isValid.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 	_, err = h.numaflowClient.InterStepBufferServices(ns).Create(context.Background(), isbSpec, metav1.CreateOptions{})
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to create interstepbuffer service %q, %v", isbSpec.Name, err.Error())
@@ -347,31 +372,38 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	var requestBody dfv1.InterStepBufferServiceSpec
-	err = json.NewDecoder(c.Request.Body).Decode(&requestBody)
+	//var requestBody dfv1.InterStepBufferServiceSpec
+	//err = json.NewDecoder(c.Request.Body).Decode(&requestBody)
+	requestBody, err := parseSpecFromReq(c, SpecTypeISB)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %v", c.Param("namespace"), c.Param("isb-services"), err.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-
-	if requestBody.Redis != nil {
+	var updatedSpec = requestBody.(*dfv1.InterStepBufferService)
+	isValid := validateISBSpec(h, isbSVC, updatedSpec, ValidTypeUpdate)
+	if isValid != nil {
+		errMsg := fmt.Sprintf("Failed to validate interstepbuffer service spec, %v", isValid.Error())
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	if updatedSpec.Spec.Redis != nil {
 		errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: updating redis isbSVC is not supported.", c.Param("namespace"), c.Param("isb-services"))
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
-	} else if requestBody.JetStream != nil {
-		if *(requestBody.JetStream.Replicas) < 3 {
+	} else if updatedSpec.Spec.JetStream != nil {
+		if *(updatedSpec.Spec.JetStream.Replicas) < 3 {
 			errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: minimum number of replicas is 3.", c.Param("namespace"), c.Param("isb-services"))
 			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 			return
 		}
-		if *(requestBody.JetStream.Replicas) > 5 {
+		if *(updatedSpec.Spec.JetStream.Replicas) > 5 {
 			errMsg := fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: maximum number of replicas is 5.", c.Param("namespace"), c.Param("isb-services"))
 			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 			return
 		}
 		// TODO: currently we can only update the replica
-		isbSVC.Spec.JetStream.Replicas = requestBody.JetStream.Replicas
+		isbSVC.Spec.JetStream.Replicas = updatedSpec.Spec.JetStream.Replicas
 	}
 	updatedISBSvc, err := h.numaflowClient.InterStepBufferServices(c.Param("namespace")).Update(context.Background(), isbSVC, metav1.UpdateOptions{})
 	if err != nil {
@@ -602,7 +634,7 @@ func (h *handler) ValidatePipeline(c *gin.Context) {
 	}
 	// Convert reqBody to pipeline spec
 	var pipelineSpec = reqBody.(*dfv1.Pipeline)
-	isValid := validatePipelineSpec(h, pipelineSpec)
+	isValid := validatePipelineSpec(h, nil, pipelineSpec, ValidTypeCreate)
 	if isValid != nil {
 		errMsg := fmt.Sprintf("Failed to validate pipeline spec, %v", isValid.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -620,7 +652,7 @@ func (h *handler) ValidateInterStepBufferService(c *gin.Context) {
 	}
 	// Convert reqBody to pipeline spec
 	var isbSpec = reqBody.(*dfv1.InterStepBufferService)
-	isValid := validateISBSpec(h, isbSpec)
+	isValid := validateISBSpec(h, nil, isbSpec, ValidTypeCreate)
 	if isValid != nil {
 		errMsg := fmt.Sprintf("Failed to validate interstepbuffer service spec, %v", isValid.Error())
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -769,12 +801,18 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 	return retStatus, nil
 }
 
-// validatePipelineSpec is used to validate the pipeline spec
-func validatePipelineSpec(h *handler, pipeline *dfv1.Pipeline) error {
-	ns := pipeline.Namespace
+// validatePipelineSpec is used to validate the pipeline spec during create and update
+func validatePipelineSpec(h *handler, oldPipeline *dfv1.Pipeline, newPipeline *dfv1.Pipeline, validType string) error {
+	ns := newPipeline.Namespace
 	pipeClient := h.numaflowClient.Pipelines(ns)
-	valid := validator.NewPipelineValidator(h.kubeClient, pipeClient, nil, pipeline)
-	resp := valid.ValidateCreate(context.Background())
+	valid := validator.NewPipelineValidator(h.kubeClient, pipeClient, oldPipeline, newPipeline)
+	var resp *admissionv1.AdmissionResponse
+	switch validType {
+	case ValidTypeCreate:
+		resp = valid.ValidateCreate(context.Background())
+	case ValidTypeUpdate:
+		resp = valid.ValidateUpdate(context.Background())
+	}
 	if !resp.Allowed {
 		errMsg := fmt.Errorf("%v", resp.Result.Message)
 		return errMsg
@@ -783,11 +821,18 @@ func validatePipelineSpec(h *handler, pipeline *dfv1.Pipeline) error {
 }
 
 // validateISBSpec is used to validate the ISB service spec
-func validateISBSpec(h *handler, isb *dfv1.InterStepBufferService) error {
-	ns := isb.Namespace
+func validateISBSpec(h *handler, prevSpec *dfv1.InterStepBufferService,
+	newSpec *dfv1.InterStepBufferService, validType string) error {
+	ns := newSpec.Namespace
 	isbClient := h.numaflowClient.InterStepBufferServices(ns)
-	valid := validator.NewISBServiceValidator(h.kubeClient, isbClient, nil, isb)
-	resp := valid.ValidateCreate(context.Background())
+	valid := validator.NewISBServiceValidator(h.kubeClient, isbClient, prevSpec, newSpec)
+	var resp *admissionv1.AdmissionResponse
+	switch validType {
+	case ValidTypeCreate:
+		resp = valid.ValidateCreate(context.Background())
+	case ValidTypeUpdate:
+		resp = valid.ValidateUpdate(context.Background())
+	}
 	if !resp.Allowed {
 		errMsg := fmt.Errorf("%v", resp.Result.Message)
 		return errMsg
