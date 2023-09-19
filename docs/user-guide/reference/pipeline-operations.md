@@ -7,7 +7,7 @@ You might want to make some changes to an existing pipeline, for example, updati
 The scenarios include but are not limited to:
 
 - Topology changes such as adding or removing vertices, or updating the edges between vertices.
-- Updating the [partitions](../multi-partition.md) for a [keyed](../../user-defined-functions/reduce/windowing/windowing.md#keyed) reduce vertex.
+- Updating the [partitions](multi-partition.md) for a [keyed](../user-defined-functions/reduce/windowing/windowing.md#keyed) reduce vertex.
 - Updating the user-defined container image for a vertex, while the new image can not properly handle the unprocessed data in its backlog.
 
 To summarize, if there are unprocessed messages in the pipeline, and the new pipeline spec will change the way how the messages are processed, then you should delete and recreate the pipeline.
@@ -24,7 +24,7 @@ Pausing a pipeline will not cause data loss. It does not clean up the unprocesse
 
 When pausing a pipeline, it will shutdown the source vertex pods first, and then wait for the other vertices to finish the backlog before terminating them.
 
-If there's a [reduce](../../user-defined-functions/reduce/reduce.md) vertex in the pipeline, please make sure it uses [Persistent Volume Claim](../../user-defined-functions/reduce/reduce.md#persistent-volume-claim-pvc) for storage, otherwise the data will be lost.
+If there's a [reduce](../user-defined-functions/reduce/reduce.md) vertex in the pipeline, please make sure it uses [Persistent Volume Claim](../user-defined-functions/reduce/reduce.md#persistent-volume-claim-pvc) for storage, otherwise the data will be lost.
 
 ## Resume a Pipeline
 
