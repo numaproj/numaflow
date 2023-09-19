@@ -15,6 +15,20 @@ body,
 }
 
 .logo {
-  margin-left: -15px;
-  margin-top: 5px;
+  width: 2.6875rem;
+}
+
+.text-logo {
+  margin-left: 0.81rem;
+  width: 9.125rem;
+}
+
+.MuiAppBar-root {
+  height: 3.75rem;
+  background: linear-gradient(90deg, #00254A 2.77%, #3492EF 105.54%) !important;
+}
+
+.MuiToolbar-root {
+  padding-left: 1.25rem !important;
+  min-height: 3.75rem !important;
 }

@@ -35,7 +35,7 @@ type isbsvcValidator struct {
 	newISBService *dfv1.InterStepBufferService
 }
 
-// returns ISBService validator
+// NewISBServiceValidator returns ISBService validator
 func NewISBServiceValidator(client kubernetes.Interface, isbsvc v1alpha1.InterStepBufferServiceInterface, old, new *dfv1.InterStepBufferService) Validator {
 	return &isbsvcValidator{client: client, isbscv: isbsvc, oldISBService: old, newISBService: new}
 }

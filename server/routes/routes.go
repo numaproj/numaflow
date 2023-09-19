@@ -22,11 +22,14 @@ import (
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	"github.com/numaproj/numaflow/server/apis/v1_1"
 )
 
 type SystemInfo struct {
 	ManagedNamespace string `json:"managedNamespace"`
 	Namespaced       bool   `json:"namespaced"`
+	// TODO: Get the version of the current Numaflow
+	Version string `json:"version"`
 }
 
 func Routes(r *gin.Engine, sysinfo SystemInfo) {
@@ -37,6 +40,12 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	v1Routes(rGroup)
 	rGroup.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, sysinfo)
+	})
+
+	r1_1Group := r.Group("/api/v1_1")
+	v1_1Routes(r1_1Group)
+	r1_1Group.GET("/sysinfo", func(c *gin.Context) {
+		c.JSON(http.StatusOK, v1_1.NewNumaflowAPIResponse(nil, sysinfo))
 	})
 }
 
