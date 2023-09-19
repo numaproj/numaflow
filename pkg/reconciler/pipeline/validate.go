@@ -174,6 +174,10 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("not all the vertex names are defined in edges")
 	}
 
+	if isAForest(pl) {
+		return fmt.Errorf("invalid pipeline, cannot be disjointed")
+	}
+
 	// Prevent pipelines with Cycles in the case that there is a Reduce Vertex at the point of the cycle or to the right of it.
 	// Whenever there's a cycle, there will inherently be "late data", and we don't want late data for a Reduce Vertex, which may
 	// have already "closed the book" on the data's time window.
@@ -471,4 +475,41 @@ func toVerticesMappedByFrom(edges []dfv1.Edge, verticesByName map[string]*dfv1.A
 		mappedEdges[edge.From] = append(mappedEdges[edge.From], toVertex)
 	}
 	return mappedEdges, nil
+}
+
+// isAForest determines if the pipeline is a disjointed graph ie. multiple pipelines defined in the spec
+func isAForest(pl *dfv1.Pipeline) bool {
+
+	visited := map[string]struct{}{}
+	buildVisitedMap(pl.Spec.Vertices[0].Name, visited, pl)
+
+	// if we have not visited every vertex in the graph, it is a forest
+	return len(visited) != len(pl.Spec.Vertices)
+
+}
+
+// buildVisitedMap is a helper function that traverses the pipeline using DFS
+// This is a recursive function. Each iteration we are building our visited map to check in the parent function.
+func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipeline) {
+
+	visited[vtxName] = struct{}{}
+
+	// construct list of all to and from vertices
+	neighbors := make(map[string]string)
+	toEdges := pl.GetToEdges(vtxName)
+	fromEdges := pl.GetFromEdges(vtxName)
+	for _, e := range toEdges {
+		neighbors[e.To] = e.To
+	}
+	for _, e := range fromEdges {
+		neighbors[e.From] = e.From
+	}
+
+	// visit all to and from vertices
+	for _, v := range neighbors {
+		if _, alreadyVisited := visited[v]; !alreadyVisited {
+			buildVisitedMap(v, visited, pl)
+		}
+	}
+
 }
