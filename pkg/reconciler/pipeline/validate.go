@@ -107,10 +107,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 				return fmt.Errorf("invalid user-defined source vertex %q, only one of 'http', 'kafka', 'nats', 'redisStreams', 'generator' and 'udSource' can be specified", k)
 			}
 		}
-
-		if findForests(s, pl) {
-			return fmt.Errorf("invalid pipeline, cannot be disjointed")
-		}
 	}
 
 	for k, t := range udTransformers {
@@ -176,6 +172,10 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 
 	if len(namesInEdges) != len(names) {
 		return fmt.Errorf("not all the vertex names are defined in edges")
+	}
+
+	if isAForest(pl) {
+		return fmt.Errorf("invalid pipeline, cannot be disjointed")
 	}
 
 	// Prevent pipelines with Cycles in the case that there is a Reduce Vertex at the point of the cycle or to the right of it.
@@ -477,21 +477,24 @@ func toVerticesMappedByFrom(edges []dfv1.Edge, verticesByName map[string]*dfv1.A
 	return mappedEdges, nil
 }
 
-func findForests(vtx dfv1.AbstractVertex, pl *dfv1.Pipeline) bool {
+// isAForest determines if the pipeline is a disjointed graph ie. multiple pipelines defined in the spec
+func isAForest(pl *dfv1.Pipeline) bool {
 
 	visited := map[string]struct{}{}
-	findForestHelper(vtx.Name, visited, pl)
+	buildVisitedMap(pl.Spec.Vertices[0].Name, visited, pl)
 
-	// true if forest is found
+	// if we have not visited every vertex in the graph, it is a forest
 	return len(visited) != len(pl.Spec.Vertices)
 
 }
 
-func findForestHelper(vtxName string, visited map[string]struct{}, pl *dfv1.Pipeline) {
+// buildVisitedMap is a helper function that traverses the pipeline using DFS
+// This is a recursive function. Each iteration we are building our visited map to check in the parent function.
+func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipeline) {
 
 	visited[vtxName] = struct{}{}
 
-	// construct list all to and from vertices
+	// construct list of all to and from vertices
 	neighbors := make(map[string]string)
 	toEdges := pl.GetToEdges(vtxName)
 	fromEdges := pl.GetFromEdges(vtxName)
@@ -505,7 +508,7 @@ func findForestHelper(vtxName string, visited map[string]struct{}, pl *dfv1.Pipe
 	// visit all to and from vertices
 	for _, v := range neighbors {
 		if _, alreadyVisited := visited[v]; !alreadyVisited {
-			findForestHelper(v, visited, pl)
+			buildVisitedMap(v, visited, pl)
 		}
 	}
 
