@@ -63,7 +63,7 @@ const defaultEdgeTypes: EdgeTypes = {
   custom: CustomEdge,
 };
 
-//sets borders for selected node in the graph
+//sets nodes and edges to highlight in the graph
 export const HighlightContext = createContext<any>(null);
 
 const getLayoutedElements = (
@@ -74,7 +74,7 @@ const getLayoutedElements = (
   const dagreGraph = new graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   const isHorizontal = direction === "LR";
-  dagreGraph.setGraph({ rankdir: direction, ranksep: 106 });
+  dagreGraph.setGraph({ rankdir: direction, ranksep: 240, edgesep: 180 });
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
@@ -313,13 +313,13 @@ export default function Graph(props: GraphProps) {
     });
   }, [nodes, nodeId]);
 
-  const [nodeHighlightValues, setNodeHighlightValues] = useState<any>({});
+  const [highlightValues, setHighlightValues] = useState<any>({});
 
   const handlePaneClick = () => {
     setShowSpec(true);
     setEdgeOpen(false);
     setNodeOpen(false);
-    setNodeHighlightValues({});
+    setHighlightValues({});
   };
 
   const [showSpec, setShowSpec] = useState(true);
@@ -328,7 +328,7 @@ export default function Graph(props: GraphProps) {
     <div style={{ height: "100%" }}>
       <div className="Graph" data-testid="graph">
         <HighlightContext.Provider
-          value={{ nodeHighlightValues, setNodeHighlightValues }}
+          value={{ highlightValues, setHighlightValues }}
         >
           <ReactFlowProvider>
             <Flow

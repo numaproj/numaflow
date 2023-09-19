@@ -1,13 +1,13 @@
-import { FC, memo, useContext } from "react";
+import { FC, memo, useCallback, useContext } from "react";
 import { Tooltip } from "@mui/material";
 import { Handle, NodeProps, Position } from "reactflow";
+import { HighlightContext } from "../../index";
 import healthy from "../../../../../../../images/heart-fill.svg";
 import unhealthy from "../../../../../../../images/unhealthy.svg";
 import source from "../../../../../../../images/source.svg";
 import map from "../../../../../../../images/map.svg";
 import reduce from "../../../../../../../images/reduce.svg";
 import sink from "../../../../../../../images/sink.svg";
-import { HighlightContext } from "../../index";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -21,7 +21,7 @@ const getBorderColor = (nodeType: string) => {
 };
 
 const isSelected = (selected: boolean) => {
-  return selected ? "3px solid" : "1px solid";
+  return selected ? "0.1875rem solid" : "0.0625rem solid";
 };
 
 const CustomNode: FC<NodeProps> = ({
@@ -32,22 +32,24 @@ const CustomNode: FC<NodeProps> = ({
 }: NodeProps) => {
   //TODO add check for healthy/unhealthy node and update imported images accordingly
 
-  const { nodeHighlightValues, setNodeHighlightValues } =
+  const { highlightValues, setHighlightValues } =
     useContext<any>(HighlightContext);
+
+  const handleClick = useCallback(() => {
+    const updatedNodeHighlightValues = {};
+    updatedNodeHighlightValues[data?.name] = true;
+    setHighlightValues(updatedNodeHighlightValues);
+  }, []);
 
   return (
     <div data-testid={data?.name}>
       <div
         className={"react-flow__node-input"}
-        onClick={() => {
-          const updatedNodeHighlightValues = {};
-          if (data?.name) updatedNodeHighlightValues[data.name] = true;
-          setNodeHighlightValues(updatedNodeHighlightValues);
-        }}
+        onClick={handleClick}
         style={{
-          border: `${isSelected(
-            nodeHighlightValues[data?.name]
-          )} ${getBorderColor(data?.type)}`,
+          border: `${isSelected(highlightValues[data?.name])} ${getBorderColor(
+            data?.type
+          )}`,
         }}
       >
         <div className="node-info">{data?.name}</div>

@@ -36,7 +36,7 @@
     align-items: center;
     position: absolute;
     top: -13.5%;
-    left: 12%;
+    left: 10%;
     text-transform: lowercase;
 }
 
@@ -63,9 +63,9 @@
     height: 4.875rem;
     flex-shrink: 0;
     border-radius: 1.25rem;
-    border: 1px solid #009EAC;
+    border: 0.0625rem solid #009EAC;
     background: var(--boxes, #F8F8FB);
-    box-shadow: 0 24px 48px -8px rgba(39, 76, 119, 0.16);
+    box-shadow: 0 1.5rem 3rem -0.5rem rgba(39, 76, 119, 0.16);
     cursor: pointer;
 }
 
@@ -83,8 +83,9 @@
     font-style: normal;
     font-weight: 500;
     line-height: normal;
-    overflow-wrap: break-word;
-    overflow: scroll;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .node-icon {
