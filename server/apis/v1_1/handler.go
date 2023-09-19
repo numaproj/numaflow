@@ -144,10 +144,10 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		var isbActiveSummary ActiveStatus
 		// Loop over the ISB services and get the status
 		for _, isb := range isbSvcs {
-			if isb.HealthyStatus == ISBServiceStatusInactive {
+			if isb.Status == ISBServiceStatusInactive {
 				isbSummary.Inactive++
 			} else {
-				isbActiveSummary.increment(isb.HealthyStatus)
+				isbActiveSummary.increment(isb.Status)
 			}
 		}
 		isbSummary.Active = isbActiveSummary
