@@ -1,0 +1,10 @@
+.sidebar-drag-icon {
+  margin-left: -1.25rem;
+  width: 60px;
+  height: 60px;
+  background: aquamarine;
+}
+
+.sidebar-drawer > .MuiDrawer-paper {
+  overflow-y: visible !important;
+}

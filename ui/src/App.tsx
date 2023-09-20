@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import ScopedCssBaseline from "@mui/material/ScopedCssBaseline";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
@@ -13,9 +19,8 @@ import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
-import { SideBarContent } from "./components/common/SideBarContent";
+import { SideBarContent, SideBarProps } from "./components/common/SideBarContent";
 import { AppContextProps } from "./types/declarations/app";
-import { SideBarProps } from "./types/declarations/shared";
 import logo from "./images/icon.png";
 import textLogo from "./images/text-icon.png";
 
@@ -36,8 +41,24 @@ function App() {
   //   },
   //   error: undefined,
   // };
+  const pageRef = useRef<any>();
+  const [pageWidth, setPageWidth] = useState(0);
   const [sideBarProps, setSideBarProps] = useState<SideBarProps | undefined>();
   const { systemInfo, error: systemInfoError } = useSystemInfoFetch();
+
+  // Resize observer to keep page width in state. To be used by other dependent components.
+  useEffect(() => {
+    if (!pageRef.current) {
+      return;
+    }
+    const resizeObserver = new ResizeObserver(() => {
+      setPageWidth(pageRef.current.offsetWidth);
+    });
+    resizeObserver.observe(pageRef.current);
+    return function cleanup() {
+      resizeObserver.disconnect();
+    };
+  }, [pageRef.current]);
 
   // Notify if error loading system info
   useEffect(() => {
@@ -111,7 +132,7 @@ function App() {
   }, [systemInfo, systemInfoError]);
 
   return (
-    <>
+    <div ref={pageRef}>
       <AppContext.Provider
         value={{
           systemInfo,
@@ -191,11 +212,12 @@ function App() {
           anchor="right"
           open={!!sideBarProps}
           onClose={handleSideBarClose}
+          className="sidebar-drawer"
         >
-          {sideBarProps && <SideBarContent {...sideBarProps} />}
+          {sideBarProps && <SideBarContent {...sideBarProps} pageWidth={pageWidth} />}
         </Drawer>
       </AppContext.Provider>
-    </>
+    </div>
   );
 }
 
