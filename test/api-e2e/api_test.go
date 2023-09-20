@@ -70,6 +70,12 @@ func (s *APISuite) TestAPI() {
 	assert.Contains(s.T(), listPipelineBody, testPipeline1Name)
 	assert.Contains(s.T(), listPipelineBody, testPipeline2Name)
 
+	getPipelineBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
+		Expect().
+		Status(200).Body().Raw()
+	assert.Contains(s.T(), getPipelineBody, fmt.Sprintf(`"name":"%s"`, testPipeline1Name))
+	assert.Contains(s.T(), getPipelineBody, `"status":"healthy"`)
+
 	deletePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
 		Expect().
 		Status(200).Body().Raw()
