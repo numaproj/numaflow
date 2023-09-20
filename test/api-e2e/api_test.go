@@ -1,11 +1,14 @@
 package api_e2e
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
@@ -13,7 +16,7 @@ type APISuite struct {
 	E2ESuite
 }
 
-func (s *APISuite) TestAPI() {
+func (s *APISuite) TestGetSysInfo() {
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
 		panic("failed to find the nuamflow-server pod")
@@ -25,6 +28,46 @@ func (s *APISuite) TestAPI() {
 		Status(200).Body().Raw()
 	var sysinfoExpect = `{"data":{"managedNamespace":"numaflow-system","namespaced":false,"version":""}}`
 	assert.Contains(s.T(), sysinfoBody, sysinfoExpect)
+	stopPortForward()
+}
+
+func (s *APISuite) TestAPI() {
+	numaflowServerPodName := s.GetNumaflowServerPodName()
+	if numaflowServerPodName == "" {
+		panic("failed to find the nuamflow-server pod")
+	}
+	stopPortForward := s.StartPortForward(numaflowServerPodName, 8443)
+
+	namespaceBody := HTTPExpect(s.T(), "https://localhost:8443").GET("/api/v1_1/namespaces").
+		Expect().
+		Status(200).Body().Raw()
+	var namespaceExpect = `numaflow-system`
+	assert.Contains(s.T(), namespaceBody, namespaceExpect)
+
+	var pl1 v1alpha1.Pipeline
+	json.Unmarshal(testPipeline1, &pl1)
+	createPipeline1 := HTTPExpect(s.T(), "https://localhost:8443").POST(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines", Namespace)).WithJSON(pl1).
+		Expect().
+		Status(200).Body().Raw()
+	var pl2 v1alpha1.Pipeline
+	json.Unmarshal(testPipeline2, &pl2)
+	createPipeline2 := HTTPExpect(s.T(), "https://localhost:8443").POST(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines", Namespace)).WithJSON(pl2).
+		Expect().
+		Status(200).Body().Raw()
+	var createPipelineSuccessExpect = ``
+	assert.Contains(s.T(), createPipeline1, createPipelineSuccessExpect)
+	assert.Contains(s.T(), createPipeline2, createPipelineSuccessExpect)
+
+	deletePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
+		Expect().
+		Status(200).Body().Raw()
+	deletePipeline2 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline2Name)).
+		Expect().
+		Status(200).Body().Raw()
+	var deletePipelineSuccessExpect = ``
+	assert.Contains(s.T(), deletePipeline1, deletePipelineSuccessExpect)
+	assert.Contains(s.T(), deletePipeline2, deletePipelineSuccessExpect)
+
 	stopPortForward()
 }
 
