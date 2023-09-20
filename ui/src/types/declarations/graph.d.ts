@@ -1,3 +1,4 @@
+import { Dispatch, SetStateAction } from "react";
 import { Edge, Node } from "reactflow";
 import { GraphData, Pipeline } from "./pipeline";
 
@@ -30,4 +31,9 @@ export interface FlowProps {
   handleNodeClick: (e: Element | EventType, node: Node) => void;
   handleEdgeClick: (e: Element | EventType, edge: Edge) => void;
   handlePaneClick: () => void;
+}
+
+export interface HighlightContextProps {
+  highlightValues: { [key: string]: boolean };
+  setHighlightValues: Dispatch<SetStateAction<{ [key: string]: boolean }>>;
 }

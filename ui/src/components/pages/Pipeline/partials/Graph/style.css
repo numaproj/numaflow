@@ -7,7 +7,7 @@
     background-size: cover;
 }
 
-.react-flow__panel {
+.interaction {
     display: flex;
     flex-direction: row;
     width: 21.375rem;
@@ -22,6 +22,35 @@
     margin-bottom: 3rem;
     margin-left: 3rem;
     padding: 0 0.5rem;
+}
+
+.legend {
+    display: flex;
+    flex-direction: column;
+    height: 12rem;
+    width: 5rem;
+    justify-content: space-between;
+    flex-shrink: 0;
+    margin-bottom: 6rem;
+    margin-left: 4rem;
+}
+
+.legend-title {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    color: var(--badge-pending, #6B6C72);
+    font-family: AvenirNext forINTUIT, "IBM Plex Sans";
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: normal;
+    /*justify-content: space-between;*/
+}
+
+.legend-text {
+    margin-top: 0.15rem;
+    margin-left: 0.75rem;
 }
 
 .zoom-percent-text {

@@ -485,7 +485,7 @@ export const usePipelineViewFetch = (
           type: MarkerType.Arrow,
           width: 15,
           height: 15,
-          color: "black",
+          color: edgeIsFull.get(edge?.to) ? "#DB334D" : "#8D9096",
         };
         const pipelineEdge = {
           id,

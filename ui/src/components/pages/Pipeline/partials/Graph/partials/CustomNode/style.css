@@ -1,20 +1,104 @@
 .node-rate {
-    width: fit-content;
-    height: 0.625rem;
-    background: #ccd6dd;
-    border: 0.0625rem solid #8fa4b1;
+    display: flex;
+    width: 5.625rem;
+    height: 1.375rem;
+    flex-shrink: 0;
+    border-radius: 1.25rem;
+    background: #D1DEE9;
+    color: #274C77;
+    font-family: AvenirNext forINTUIT, "IBM Plex Sans";
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 500;
+    line-height: normal;
+    justify-content: center;
+    align-items: center;
     position: absolute;
-    bottom: -0.3125rem;
-    right: 0.625rem;
-    border-radius: 0.3125rem;
-    padding: 0 0.3125rem;
-    font-size: 0.4rem;
+    bottom: -11%;
+    right: 8%;
     text-transform: lowercase;
-    margin-right: 0.0625rem;
-    text-align: center;
-    font-family: "IBM Plex Sans", sans-serif;
+}
+
+.node-pods {
+    display: flex;
+    width: 6.25rem;
+    height: 1.375rem;
+    flex-shrink: 0;
+    border-radius: 1.25rem;
+    background: #D1DEE9;
+    color: #274C77;
+    font-family: AvenirNext forINTUIT, "IBM Plex Sans";
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 700;
+    line-height: normal;
+    justify-content: space-evenly;
+    align-items: center;
+    position: absolute;
+    top: -13.5%;
+    left: 10%;
+    text-transform: lowercase;
+}
+
+.node-status {
+    width: 1.375rem;
+    height: 1.375rem;
+    flex-shrink: 0;
+    border-radius: 1.25rem;
+    background: #D1DEE9;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
+    bottom: -11%;
+    left: 8%;
 }
 
 .node-tooltip {
     font-size: 0.8125rem;
+}
+
+.react-flow__node-input {
+    width: 15.75rem;
+    height: 4.875rem;
+    flex-shrink: 0;
+    border-radius: 1.25rem;
+    border: 0.0625rem solid #009EAC;
+    background: var(--boxes, #F8F8FB);
+    box-shadow: 0 1.5rem 3rem -0.5rem rgba(39, 76, 119, 0.16);
+    cursor: pointer;
+}
+
+.node-info {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #274C77;
+    text-align: center;
+    font-family: AvenirNext forINTUIT, "IBM Plex Sans";
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 500;
+    line-height: normal;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.node-icon {
+    width: 0.715rem;
+    height: 0.715rem;
+    display: inline-block;
+    vertical-align: middle;
+    position: relative;
+    margin-left: 0.0625rem;
+    margin-right: 0.0625rem;
+    padding-bottom: 0.03125rem;
+}
+
+.node-podnum {
+    font-weight: bold;
 }
