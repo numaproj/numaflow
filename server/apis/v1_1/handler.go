@@ -215,7 +215,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		return
 	}
 	pipelineResp := NewPipelineInfo(status, pl)
-	c.JSON(http.StatusOK, pipelineResp)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pipelineResp))
 }
 
 // UpdatePipeline is used to update a given pipeline
