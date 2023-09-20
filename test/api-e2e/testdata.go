@@ -99,4 +99,23 @@ var (
         ]
     }
 }`)
+	testISBSVCName = "test-isbsvc"
+	testISBSVCSpec = []byte(`
+{
+    "apiVersion": "numaflow.numaproj.io/v1alpha1",
+    "kind": "InterStepBufferService",
+    "metadata": {
+        "name": "test-isbsvc"
+    },
+    "spec": {
+        "jetstream": {
+            "persistence": {
+                "volumeSize": "3Gi"
+            },
+            "replicas": 3,
+            "version": "latest"
+        }
+    }
+}
+`)
 )
