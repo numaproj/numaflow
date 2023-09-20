@@ -515,7 +515,7 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 		}
 		results = append(results, l)
 	}
-	c.JSON(http.StatusOK, results)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, results))
 }
 
 // ListVertexPods is used to provide all the pods of a vertex
@@ -597,7 +597,7 @@ func (h *handler) ValidatePipeline(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	// Convert reqBody to pipeline spec
@@ -615,7 +615,7 @@ func (h *handler) ValidateInterStepBufferService(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	// Convert reqBody to pipeline spec
