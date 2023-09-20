@@ -40,6 +40,120 @@ const MOCK_DATA = [
       inactive: 1,
     },
   },
+  {
+    namespace: "my-other-ns1",
+    pipelineSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 1,
+        Critical: 1,
+      },
+      inactive: 1,
+    },
+    isbServiceSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 2,
+        Critical: 2,
+      },
+      inactive: 1,
+    },
+  },
+  {
+    namespace: "my-other-ns2",
+    pipelineSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 1,
+        Critical: 1,
+      },
+      inactive: 1,
+    },
+    isbServiceSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 2,
+        Critical: 2,
+      },
+      inactive: 1,
+    },
+  },
+  {
+    namespace: "my-other-ns3",
+    pipelineSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 1,
+        Critical: 1,
+      },
+      inactive: 1,
+    },
+    isbServiceSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 2,
+        Critical: 2,
+      },
+      inactive: 1,
+    },
+  },
+  {
+    namespace: "my-other-ns4",
+    pipelineSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 1,
+        Critical: 1,
+      },
+      inactive: 1,
+    },
+    isbServiceSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 2,
+        Critical: 2,
+      },
+      inactive: 1,
+    },
+  },
+  {
+    namespace: "my-other-ns5",
+    pipelineSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 1,
+        Critical: 1,
+      },
+      inactive: 1,
+    },
+    isbServiceSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 2,
+        Critical: 2,
+      },
+      inactive: 1,
+    },
+  },
+  {
+    namespace: "my-other-ns6",
+    pipelineSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 1,
+        Critical: 1,
+      },
+      inactive: 1,
+    },
+    isbServiceSummary: {
+      active: {
+        Healthy: 5,
+        Warning: 2,
+        Critical: 2,
+      },
+      inactive: 1,
+    },
+  },
 ];
 
 const DEFAULT_NS_NAME = "default";

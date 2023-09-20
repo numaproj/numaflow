@@ -85,7 +85,7 @@ spec:
 
 ### Available Environment Variables
 
-Some environment variables are available in the source vertex Pods, they might be useful in you own source data transformer implementation.
+Some environment variables are available in the source transformer container, they might be useful in you own source data transformer implementation.
 
 - `NUMAFLOW_NAMESPACE` - Namespace.
 - `NUMAFLOW_POD` - Pod name.
