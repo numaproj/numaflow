@@ -58,6 +58,12 @@ func (s *APISuite) TestAPI() {
 	assert.Contains(s.T(), createPipeline1, createPipelineSuccessExpect)
 	assert.Contains(s.T(), createPipeline2, createPipelineSuccessExpect)
 
+	clusterSummaryBody := HTTPExpect(s.T(), "https://localhost:8443").GET("/api/v1_1/cluster-summary").
+		Expect().
+		Status(200).Body().Raw()
+	var clusterSummaryExpect = `{"namespace":"numaflow-system","pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
+	assert.Contains(s.T(), clusterSummaryBody, clusterSummaryExpect)
+
 	deletePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
 		Expect().
 		Status(200).Body().Raw()
