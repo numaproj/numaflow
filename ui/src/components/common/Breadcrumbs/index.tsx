@@ -2,7 +2,8 @@ import React, { useMemo, useContext } from "react";
 import { Link, useLocation } from "react-router-dom";
 import MUIBreadcrumbs from "@mui/material/Breadcrumbs";
 import Typography from "@mui/material/Typography";
-import { AppContext, AppContextProps } from "../../../App";
+import { AppContext } from "../../../App";
+import { AppContextProps } from "../../../types/declarations/app";
 import chevron from "../../../images/chevron-sm-right.png";
 
 import "./style.css";
@@ -100,10 +101,7 @@ export function Breadcrumbs() {
     }
     // Unsupported path
     return (
-      <Typography
-        data-testid="unknown-breadcrumb"
-        className="Breadcrumbs-typ"
-      >
+      <Typography data-testid="unknown-breadcrumb" className="Breadcrumbs-typ">
         Unknown
       </Typography>
     );

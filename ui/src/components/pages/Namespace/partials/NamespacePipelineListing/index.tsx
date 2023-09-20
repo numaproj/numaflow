@@ -3,39 +3,40 @@ import Box from "@mui/material/Box";
 import Pagination from "@mui/material/Pagination";
 import Grid from "@mui/material/Grid";
 import { DebouncedSearchInput } from "../../../../common/DebouncedSearchInput";
-import { NamespaceCard } from "../NamespaceCard";
+import { PipelineCard } from "../PipelineCard";
 import {
-  ClusterNamespaceListingProps,
-  ClusterNamespaceSummary,
-} from "../../../../../types/declarations/cluster";
+  NamespacePipelineListingProps,
+  NamespacePipelineSummary,
+} from "../../../../../types/declarations/namespace";
 
 import "./style.css";
 
-const MAX_PAGE_SIZE = 6;
+const MAX_PAGE_SIZE = 4;
 
-export function ClusterNamespaceListing({
+export function NamespacePipelineListing({
+  namespace,
   data,
-}: ClusterNamespaceListingProps) {
+}: NamespacePipelineListingProps) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(
-    Math.ceil(data.namespacesCount / MAX_PAGE_SIZE)
+    Math.ceil(data.pipelinesCount / MAX_PAGE_SIZE)
   );
-  const [filteredNamespaces, setFilteredNamespaces] = useState<
-    ClusterNamespaceSummary[]
+  const [filteredPipelines, setFilteredPipelines] = useState<
+    NamespacePipelineSummary[]
   >([]);
 
-  // Update filtered namespaces based on search and page selected
+  // Update filtered pipelines based on search and page selected
   useEffect(() => {
-    let filtered: ClusterNamespaceSummary[] = data.nameSpaceSummaries;
+    let filtered: NamespacePipelineSummary[] = data.pipelineSummaries;
     if (search) {
       // Filter by search
-      filtered = data.nameSpaceSummaries.filter((ns) =>
-        ns.name.includes(search)
+      filtered = data.pipelineSummaries.filter((p) =>
+        p.name.includes(search)
       );
     }
     // Sort by name
-    filtered.sort((a, b) => (a.name > b.name ? 1 : -1));
+    filtered.sort((a, b) => (a.name > b.name ? 1 : -1)); // TODO take sorting options into account
 
     // Break list into pages
     const pages = filtered.reduce((resultArray: any[], item, index) => {
@@ -51,8 +52,8 @@ export function ClusterNamespaceListing({
       // Reset to page 1 if current page is greater than total pages after filterting
       setPage(1);
     }
-    // Set filtered namespaces with current page of namespaces
-    setFilteredNamespaces(pages[page - 1] || []);
+    // Set filtered namespaces with current page of pipelines
+    setFilteredPipelines(pages[page - 1] || []);
     setTotalPages(pages.length);
   }, [data, search, page]);
 
@@ -64,7 +65,7 @@ export function ClusterNamespaceListing({
   );
 
   const listing = useMemo(() => {
-    if (!filteredNamespaces.length) {
+    if (!filteredPipelines.length) {
       return (
         <Box
           sx={{
@@ -74,8 +75,8 @@ export function ClusterNamespaceListing({
             margin: "0.5rem 0 1.5rem 0",
           }}
         >
-          <span className="cluster-ns-listing-table-title">
-            No namespaces found
+          <span className="ns-pipeline-listing-table-title">
+            No pipelines found
           </span>
         </Box>
       );
@@ -90,24 +91,20 @@ export function ClusterNamespaceListing({
           margin: "0.5rem 0 1.5rem 0",
         }}
       >
-        {filteredNamespaces.map((ns: ClusterNamespaceSummary) => {
+        {filteredPipelines.map((p: NamespacePipelineSummary) => {
           return (
             <Grid
-              key={`ns-${ns.name}`}
+              key={`pipeline-${p.name}`}
               item
-              xl={3}
-              lg={4}
-              md={6}
-              sm={12}
               xs={12}
             >
-              <NamespaceCard data={ns} />
+              <PipelineCard namespace={namespace} data={p} />
             </Grid>
           );
         })}
       </Grid>
     );
-  }, [filteredNamespaces]);
+  }, [filteredPipelines, namespace]);
 
   return (
     <Box
@@ -115,12 +112,12 @@ export function ClusterNamespaceListing({
     >
       <Box sx={{ display: "flex", flexDirection: "row" }}>
         <DebouncedSearchInput
-          placeHolder="Search for namespace"
+          placeHolder="Search for pipeline"
           onChange={setSearch}
         />
       </Box>
       <Box sx={{ display: "flex", flexDirection: "row", marginTop: "2rem" }}>
-        <span className="cluster-ns-listing-table-title">Namespaces</span>
+        <span className="ns-pipeline-listing-table-title">Pipelines</span>
       </Box>
       {listing}
       <Box

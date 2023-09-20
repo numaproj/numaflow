@@ -14,7 +14,9 @@ export function SummaryTitledValue({ title, value }: SummaryTitledValueProps) {
       sx={{
         display: "flex",
         flexDirection: "column",
-        alignSelf: "flex-start",
+        alignItems: "center",
+        flexGrow: 1,
+        justifyContent: "center",
       }}
     >
       <span className="summary-titled-value-title">{title}</span>

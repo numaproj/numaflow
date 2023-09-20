@@ -13,6 +13,15 @@ const root = ReactDOM.createRoot(
 );
 
 const theme = createTheme({
+  breakpoints: {
+    values: {
+      xs: 0,
+      sm: 600,
+      md: 960,
+      lg: 1400,
+      xl: 1840,
+    },
+  },
   typography: {
     fontFamily: ["IBM Plex Sans"].join(","),
   },

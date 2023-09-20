@@ -7,8 +7,8 @@ import React, {
 } from "react";
 import Box from "@mui/material/Box";
 import {
-  SummaryTitledValueProps,
   SummaryTitledValue,
+  SummaryTitledValueProps,
 } from "./partials/SummaryTitledValue";
 import {
   SummaryStatuses,
@@ -19,50 +19,138 @@ import chevronRight from "../../../images/chevron-m-right.png";
 
 import "./style.css";
 
+export enum SummarySectionType {
+  TITLED_VALUE,
+  STATUSES,
+  CUSTOM,
+  COLLECTION,
+}
+
+export interface SummarySection {
+  type: SummarySectionType;
+  titledValueProps?: SummaryTitledValueProps;
+  statusesProps?: SummaryStatusesProps;
+  customComponent?: React.ReactNode;
+  collectionSections?: SummarySection[];
+}
+
+export interface SummaryPageLayoutProps {
+  collapsable?: boolean;
+  defaultCollapsed?: boolean;
+  offsetOnCollapse?: boolean; // Add top margin to content when collapsed to avoid content overlap
+  collapsedText?: string;
+  summarySections: SummarySection[];
+  contentComponent: React.ReactNode;
+}
+
 const SUMMARY_HEIGHT = "6.5625rem";
 const COLLAPSED_HEIGHT = "2.25rem";
+
+const getSectionComponentAndKey = (
+  section: SummarySection,
+  sectionIndex: number
+) => {
+  let key: string;
+  const collectionComponents: React.ReactNode[] = [];
+  switch (section.type) {
+    case SummarySectionType.TITLED_VALUE:
+      if (!section.titledValueProps) {
+        key = "titled-value-missing";
+        return {
+          key,
+          component: <div key={key}>Missing props</div>,
+        };
+      }
+      key = `titled-value-${section.titledValueProps.title}`;
+      return {
+        key,
+        component: (
+          <SummaryTitledValue key={key} {...section.titledValueProps} />
+        ),
+      };
+    case SummarySectionType.STATUSES:
+      if (!section.statusesProps) {
+        key = "statuses-missing";
+        return {
+          key,
+          component: <div key={key}>Missing props</div>,
+        };
+      }
+      key = `statuses-${section.statusesProps.title}`;
+      return {
+        key,
+        component: <SummaryStatuses key={key} {...section.statusesProps} />,
+      };
+    case SummarySectionType.CUSTOM:
+      if (!section.customComponent) {
+        key = "custom-missing";
+        return {
+          key,
+          component: <div key={key}>Missing props</div>,
+        };
+      }
+      return {
+        component: section.customComponent,
+      };
+    case SummarySectionType.COLLECTION:
+      if (!section.collectionSections || !section.collectionSections.length) {
+        key = "collection-missing";
+        return {
+          key,
+          component: <div key={key}>Missing props</div>,
+        };
+      }
+      section.collectionSections.forEach((collectionSection, index) => {
+        if (!section.collectionSections?.length) {
+          // Added for undefined TS check
+          return;
+        }
+        const { key: collectionKey, component } = getSectionComponentAndKey(
+          collectionSection,
+          index
+        );
+        collectionComponents.push(component);
+        // Add separator if not last section
+        if (index < section.collectionSections.length - 1) {
+          collectionComponents.push(
+            <div
+              key={`${collectionKey}-separator`}
+              className="summary-page-layout-separator"
+            />
+          );
+        }
+      });
+      key = `collection-${sectionIndex}}`;
+      return {
+        key,
+        component: (
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              flexGrow: 1,
+              justifyContent: "space-around",
+            }}
+          >
+            {collectionComponents}
+          </Box>
+        ),
+      };
+    default:
+      key = "unknown";
+      return {
+        key,
+        component: <div key={key}>Missing props</div>,
+      };
+  }
+};
 
 const getSummaryComponent = (summarySections: SummarySection[]) => {
   // Build sections from props
   const components: React.ReactNode[] = [];
-  let key: string;
   summarySections.forEach((section, index) => {
-    switch (section.type) {
-      case SummarySectionType.TITLED_VALUE:
-        if (!section.titledValueProps) {
-          key = "titled-value-missing";
-          components.push(<div key={key}>Missing props</div>);
-          break;
-        }
-        key = `titled-value-${section.titledValueProps.title}`;
-        components.push(
-          <SummaryTitledValue key={key} {...section.titledValueProps} />
-        );
-        break;
-      case SummarySectionType.STATUSES:
-        if (!section.statusesProps) {
-          key = "statuses-missing";
-          components.push(<div key={key}>Missing props</div>);
-          break;
-        }
-        key = `statuses-${section.statusesProps.title}`;
-        components.push(
-          <SummaryStatuses key={key} {...section.statusesProps} />
-        );
-        break;
-      case SummarySectionType.CUSTOM:
-        if (!section.customComponent) {
-          key = "custom-missing";
-          components.push(<div key={key}>Missing props</div>);
-          break;
-        }
-        components.push(section.customComponent);
-        break;
-      default:
-        key = "unknown";
-        components.push(<div key={key}>Missing props</div>);
-        break;
-    }
+    const { key, component } = getSectionComponentAndKey(section, index);
+    components.push(component);
     // Add separator if not last section
     if (index !== summarySections.length - 1) {
       components.push(
@@ -80,7 +168,6 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
         flexDirection: "row",
         alignItems: "center",
         width: "100%",
-        marginLeft: "2rem",
         flexWrap: "wrap",
         justifyContent: "space-around",
       }}
@@ -89,26 +176,6 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
     </Box>
   );
 };
-
-export enum SummarySectionType {
-  TITLED_VALUE,
-  STATUSES,
-  CUSTOM,
-}
-export interface SummarySection {
-  type: SummarySectionType;
-  titledValueProps?: SummaryTitledValueProps;
-  statusesProps?: SummaryStatusesProps;
-  customComponent?: React.ReactNode;
-}
-export interface SummaryPageLayoutProps {
-  collapsable?: boolean;
-  defaultCollapsed?: boolean;
-  offsetOnCollapse?: boolean; // Add top margin to content when collapsed to avoid content overlap
-  collapsedText?: string;
-  summarySections: SummarySection[];
-  contentComponent: React.ReactNode;
-}
 
 export function SummaryPageLayout({
   collapsable = false,
@@ -154,7 +221,7 @@ export function SummaryPageLayout({
             height: COLLAPSED_HEIGHT,
             background: "#F8F8FB",
             boxShadow: "0px 4px 6px rgba(39, 76, 119, 0.16)",
-            zIndex: 999,
+            zIndex: (theme) => theme.zIndex.drawer - 1,
             position: "fixed",
             top: "5.75rem",
             padding: "0 1.25rem",
@@ -183,7 +250,7 @@ export function SummaryPageLayout({
           minHeight: SUMMARY_HEIGHT,
           background: "#F8F8FB",
           boxShadow: "0px 3px 11px rgba(39, 76, 119, 0.16)",
-          zIndex: 999,
+          zIndex: (theme) => theme.zIndex.drawer - 1,
           position: "fixed",
           top: "5.75rem",
           padding: "0.5rem",

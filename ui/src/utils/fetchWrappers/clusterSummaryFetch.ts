@@ -1,164 +1,208 @@
 import { useEffect, useState } from "react";
-import { useFetch } from "./fetch";
+import { useFetch, Options } from "./fetch";
+import {
+  ClusterNamespaceSummary,
+  ClusterSummaryData,
+  ClusterSummaryFetchProps,
+  ClusterSummaryFetchResult,
+} from "../../types/declarations/cluster";
 
-const MOCK_DATA = [
-  {
-    namespace: "my-ns",
-    pipelineSummary: {
-      active: {
-        Healthy: 1,
-        Warning: 1,
-        Critical: 1,
-      },
-      inactive: 2,
-    },
-    isbServiceSummary: {
-      active: {
-        Healthy: 2,
-        Warning: 2,
-        Critical: 2,
-      },
-      inactive: 2,
-    },
-  },
-  {
-    namespace: "my-other-ns",
-    pipelineSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 1,
-        Critical: 1,
-      },
-      inactive: 1,
-    },
-    isbServiceSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 2,
-        Critical: 2,
-      },
-      inactive: 1,
-    },
-  },
-  {
-    namespace: "my-other-ns1",
-    pipelineSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 1,
-        Critical: 1,
-      },
-      inactive: 1,
-    },
-    isbServiceSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 2,
-        Critical: 2,
-      },
-      inactive: 1,
-    },
-  },
-  {
-    namespace: "my-other-ns2",
-    pipelineSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 1,
-        Critical: 1,
-      },
-      inactive: 1,
-    },
-    isbServiceSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 2,
-        Critical: 2,
-      },
-      inactive: 1,
-    },
-  },
-  {
-    namespace: "my-other-ns3",
-    pipelineSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 1,
-        Critical: 1,
-      },
-      inactive: 1,
-    },
-    isbServiceSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 2,
-        Critical: 2,
-      },
-      inactive: 1,
-    },
-  },
-  {
-    namespace: "my-other-ns4",
-    pipelineSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 1,
-        Critical: 1,
-      },
-      inactive: 1,
-    },
-    isbServiceSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 2,
-        Critical: 2,
-      },
-      inactive: 1,
-    },
-  },
-  {
-    namespace: "my-other-ns5",
-    pipelineSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 1,
-        Critical: 1,
-      },
-      inactive: 1,
-    },
-    isbServiceSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 2,
-        Critical: 2,
-      },
-      inactive: 1,
-    },
-  },
-  {
-    namespace: "my-other-ns6",
-    pipelineSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 1,
-        Critical: 1,
-      },
-      inactive: 1,
-    },
-    isbServiceSummary: {
-      active: {
-        Healthy: 5,
-        Warning: 2,
-        Critical: 2,
-      },
-      inactive: 1,
-    },
-  },
-];
+// const MOCK_DATA = [
+//   {
+//     namespace: "my-ns",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 1,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 2,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 2,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 2,
+//     },
+//   },
+//   {
+//     namespace: "my-other-ns",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 1,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 1,
+//     },
+//   },
+//   {
+//     namespace: "my-other-ns1",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 1,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 1,
+//     },
+//   },
+//   {
+//     namespace: "my-other-ns2",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 1,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 1,
+//     },
+//   },
+//   {
+//     namespace: "my-other-ns3",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 1,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 1,
+//     },
+//   },
+//   {
+//     namespace: "my-other-ns4",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 1,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 1,
+//     },
+//   },
+//   {
+//     namespace: "my-other-ns5",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 1,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 1,
+//     },
+//   },
+//   {
+//     namespace: "my-other-ns6",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 1,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 1,
+//     },
+//   },
+//   {
+//     namespace: "my-other-ns7",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 1,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 1,
+//     },
+//   },
+//   {
+//     namespace: "my-other-ns8",
+//     pipelineSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 1,
+//         Critical: 1,
+//       },
+//       inactive: 1,
+//     },
+//     isbServiceSummary: {
+//       active: {
+//         Healthy: 5,
+//         Warning: 2,
+//         Critical: 2,
+//       },
+//       inactive: 1,
+//     },
+//   },
+// ];
 
-const DEFAULT_NS_NAME = "default";
-
-const rawDataToClusterSummary = (rawData: any): ClusterSummaryData | undefined => {
+const rawDataToClusterSummary = (
+  rawData: any[]
+): ClusterSummaryData | undefined => {
   if (!rawData || !Array.isArray(rawData)) {
     return undefined;
   }
@@ -244,52 +288,10 @@ const rawDataToClusterSummary = (rawData: any): ClusterSummaryData | undefined =
   };
 };
 
-export interface ClusterNamespaceSummary {
-  name: string;
-  pipelinesCount: number;
-  pipelinesActiveCount: number;
-  pipelinesInactiveCount: number;
-  pipelinesHealthyCount: number;
-  pipelinesWarningCount: number;
-  pipelinesCriticalCount: number;
-  isbsCount: number;
-  isbsActiveCount: number;
-  isbsInactiveCount: number;
-  isbsHealthyCount: number;
-  isbsWarningCount: number;
-  isbsCriticalCount: number;
-}
-
-export interface ClusterSummaryData {
-  namespacesCount: number;
-  pipelinesCount: number;
-  pipelinesActiveCount: number;
-  pipelinesInactiveCount: number;
-  pipelinesHealthyCount: number;
-  pipelinesWarningCount: number;
-  pipelinesCriticalCount: number;
-  isbsCount: number;
-  isbsActiveCount: number;
-  isbsInactiveCount: number;
-  isbsHealthyCount: number;
-  isbsWarningCount: number;
-  isbsCriticalCount: number;
-  nameSpaceSummaries: ClusterNamespaceSummary[];
-}
-
-export interface ClusterSummaryFetchResult {
-  data?: ClusterSummaryData;
-  loading: boolean;
-  error: any;
-}
-
-export interface ClusterSummaryFetchProps {
-  refreshKey?: number;
-  loadOnRefresh?: boolean;
-}
+const DEFAULT_NS_NAME = "default";
+const DATA_REFRESH_INTERVAL = 60000; // ms
 
 export const useClusterSummaryFetch = ({
-  refreshKey = 0,
   loadOnRefresh = false,
 }: ClusterSummaryFetchProps) => {
   const [results, setResults] = useState<ClusterSummaryFetchResult>({
@@ -297,23 +299,64 @@ export const useClusterSummaryFetch = ({
     loading: true,
     error: undefined,
   });
-
-  // TODO get data from actual API
-  // const {
-  //   data: fetchData,
-  //   loading: fetchLoading,
-  //   error: fetchError,
-  // } = useFetch(`/api/v1/namespaces/${namespaceId}/pipelines`);
+  const [options, setOptions] = useState<Options>({
+    skip: false,
+    requestKey: "",
+  });
+  const {
+    data: fetchData,
+    loading: fetchLoading,
+    error: fetchError,
+  } = useFetch("/api/v1_1/cluster-summary", undefined, options);
 
   useEffect(() => {
-    if (loadOnRefresh) {
-      setResults((results) => ({ ...results, loading: true, error: undefined }));
+    setInterval(() => {
+      setOptions({
+        skip: false,
+        requestKey: "id" + Math.random().toString(16).slice(2),
+      });
+    }, DATA_REFRESH_INTERVAL);
+  }, []);
+
+  useEffect(() => {
+    if (fetchLoading) {
+      if (options?.requestKey === "" || loadOnRefresh) {
+        // Only set loading true when first load or when loadOnRefresh is true
+        setResults({
+          data: undefined,
+          loading: true,
+          error: undefined,
+        });
+      }
+      return;
     }
-    // TODO replace with actual API results
-    setTimeout(() => {
-      setResults({ data: rawDataToClusterSummary(MOCK_DATA), loading: false, error: undefined });
-    }, 2000);
-  }, [refreshKey]);
+    if (fetchError) {
+      setResults({
+        data: undefined,
+        loading: false,
+        error: fetchError,
+      });
+      return;
+    }
+    if (fetchData && fetchData.errMsg) {
+      setResults({
+        data: undefined,
+        loading: false,
+        error: fetchData.errMsg,
+      });
+      return;
+    }
+    if (fetchData) {
+      // const clusterSummary = rawDataToClusterSummary(MOCK_DATA); // TODO REMOVE MOCK
+      const clusterSummary = rawDataToClusterSummary(fetchData.data);
+      setResults({
+        data: clusterSummary,
+        loading: false,
+        error: undefined,
+      });
+      return;
+    }
+  }, [fetchData, fetchLoading, fetchError, loadOnRefresh, options]);
 
   return results;
 };

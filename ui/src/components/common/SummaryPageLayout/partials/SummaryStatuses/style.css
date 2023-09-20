@@ -23,3 +23,10 @@
   font-weight: 400;
   margin-top: 0.125rem;
 }
+
+.summary-statuses-link {
+  color: #393A3D;
+  font-size: 0.8125rem;
+  font-style: normal;
+  font-weight: 600;
+}
