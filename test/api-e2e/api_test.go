@@ -32,6 +32,7 @@ func (s *APISuite) TestGetSysInfo() {
 }
 
 func (s *APISuite) TestAPI() {
+	var err error
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
 		panic("failed to find the nuamflow-server pod")
@@ -45,12 +46,14 @@ func (s *APISuite) TestAPI() {
 	assert.Contains(s.T(), namespaceBody, namespaceExpect)
 
 	var pl1 v1alpha1.Pipeline
-	json.Unmarshal(testPipeline1, &pl1)
+	err = json.Unmarshal(testPipeline1, &pl1)
+	assert.NoError(s.T(), err)
 	createPipeline1 := HTTPExpect(s.T(), "https://localhost:8443").POST(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines", Namespace)).WithJSON(pl1).
 		Expect().
 		Status(200).Body().Raw()
 	var pl2 v1alpha1.Pipeline
-	json.Unmarshal(testPipeline2, &pl2)
+	err = json.Unmarshal(testPipeline2, &pl2)
+	assert.NoError(s.T(), err)
 	createPipeline2 := HTTPExpect(s.T(), "https://localhost:8443").POST(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines", Namespace)).WithJSON(pl2).
 		Expect().
 		Status(200).Body().Raw()
@@ -77,7 +80,8 @@ func (s *APISuite) TestAPI() {
 	assert.Contains(s.T(), getPipelineBody, `"status":"healthy"`)
 
 	var testISBSVC v1alpha1.InterStepBufferService
-	json.Unmarshal(testISBSVCSpec, &testISBSVC)
+	err = json.Unmarshal(testISBSVCSpec, &testISBSVC)
+	assert.NoError(s.T(), err)
 	createISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").POST(fmt.Sprintf("/api/v1_1/namespaces/%s/isb-services", Namespace)).WithJSON(testISBSVC).
 		Expect().
 		Status(200).Body().Raw()
@@ -88,6 +92,12 @@ func (s *APISuite) TestAPI() {
 		Expect().
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), listISBSVCBody, testISBSVCName)
+
+	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
+		Expect().
+		Status(200).Body().Raw()
+	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCName))
+	assert.Contains(s.T(), getISBSVCBody, `"status":"healthy"`)
 
 	deletePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
 		Expect().
