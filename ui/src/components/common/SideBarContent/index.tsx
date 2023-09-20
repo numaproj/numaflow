@@ -1,14 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Box from "@mui/material/Box";
 
 import "./style.css";
+import { NamespaceK8s, NamespaceK8sProps } from "./partials/NamespaceK8s";
 
 export enum SideBarType {
   NAMESPACE_K8s,
-}
-
-export interface NamespaceK8sProps {
-  namespaceId: string;
 }
 
 export interface SideBarProps {
@@ -48,6 +45,19 @@ export function SideBarContent({
     [width]
   );
 
+  const content = useMemo(() => {
+    switch (type) {
+      case SideBarType.NAMESPACE_K8s:
+        if (!namespaceK8sProps) {
+          break;
+        }
+        return <NamespaceK8s namespaceId={namespaceK8sProps.namespaceId} />;
+      default:
+        break;
+    }
+    return <div>Missing Props</div>;
+  }, [type, namespaceK8sProps]);
+
   return (
     <Box
       sx={{
@@ -75,7 +85,7 @@ export function SideBarContent({
           paddingTop: "5.8125rem",
         }}
       >
-        TODO CONTENT
+        {content}
       </Box>
     </Box>
   );
