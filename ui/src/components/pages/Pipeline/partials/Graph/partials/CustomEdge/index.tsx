@@ -1,8 +1,9 @@
-import { FC, memo, useCallback, useContext, useEffect } from "react";
+import { FC, memo, useCallback, useContext, useEffect, useMemo } from "react";
 import { Tooltip } from "@mui/material";
 import { EdgeProps, EdgeLabelRenderer, getSmoothStepPath } from "reactflow";
 import { duration } from "moment";
 import { HighlightContext } from "../../index";
+import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
 import error from "../../../../../../../images/error.svg";
 
 import "reactflow/dist/style.css";
@@ -74,9 +75,12 @@ const CustomEdge: FC<EdgeProps> = ({
   }
 
   const { highlightValues, setHighlightValues } =
-    useContext<any>(HighlightContext);
+    useContext<HighlightContextProps>(HighlightContext);
 
-  const color = data?.isFull ? "#DB334D" : "#8D9096";
+  const getColor = useMemo(() => {
+    return data?.isFull ? "#DB334D" : "#8D9096";
+  }, [data]);
+
   useEffect(() => {
     const handles = Array.from(
       document.getElementsByClassName(
@@ -84,34 +88,42 @@ const CustomEdge: FC<EdgeProps> = ({
       ) as HTMLCollectionOf<HTMLElement>
     );
     handles.forEach((handle) => {
-      handle.style.background = color;
+      handle.style.background = getColor;
     });
-  }, [color]);
+  }, [getColor]);
 
-  const edgeStyle = {
-    stroke: highlightValues[id] ? "black" : color,
-    strokeWidth: 2,
-  };
-  const wmStyle = {
-    color: color,
-  };
-  const pendingStyle = {
-    color: color,
-    fontWeight: data?.isFull ? 700 : 400,
-  };
+  const edgeStyle = useMemo(() => {
+    return {
+      stroke: highlightValues[id] ? "black" : getColor,
+      strokeWidth: 2,
+    };
+  }, [highlightValues, getColor]);
 
-  const getMinWM = () => {
+  const wmStyle = useMemo(() => {
+    return {
+      color: getColor,
+    };
+  }, [getColor]);
+
+  const pendingStyle = useMemo(() => {
+    return {
+      color: getColor,
+      fontWeight: data?.isFull ? 700 : 400,
+    };
+  }, [data, getColor]);
+
+  const getMinWM = useMemo(() => {
     if (data?.edgeWatermark?.watermarks) {
       return Math.min.apply(null, data?.edgeWatermark?.watermarks);
     } else {
       return -1;
     }
-  };
+  }, [data]);
 
-  const getDelay = () => {
+  const getDelay = useMemo(() => {
     const str = " behind now";
     const fetchWMTime = data?.edgeWatermark?.WMFetchTime;
-    const minWM = getMinWM();
+    const minWM = getMinWM;
     const startTime = minWM === -1 ? 0 : minWM;
     const endTime = fetchWMTime || Date.now();
     const diff = duration(endTime - startTime);
@@ -139,7 +151,7 @@ const CustomEdge: FC<EdgeProps> = ({
     } else {
       return `${milliseconds}ms` + str;
     }
-  };
+  }, [data, getMinWM]);
 
   const handleClick = useCallback(() => {
     const updatedNodeHighlightValues = {};
@@ -173,15 +185,15 @@ const CustomEdge: FC<EdgeProps> = ({
               title={
                 <div className={"edge-tooltip"}>
                   <div>Watermark</div>
-                  <div>{new Date(getMinWM()).toISOString()}</div>
-                  <div>{getDelay()}</div>
+                  <div>{new Date(getMinWM).toISOString()}</div>
+                  <div>{getDelay}</div>
                 </div>
               }
               arrow
               placement={"top"}
             >
               <div className={"edge-watermark-label"} style={wmStyle}>
-                {getMinWM()}
+                {getMinWM}
               </div>
             </Tooltip>
           )}

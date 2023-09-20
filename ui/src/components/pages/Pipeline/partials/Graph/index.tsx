@@ -32,7 +32,11 @@ import NodeInfo from "./partials/NodeInfo";
 import Spec from "./partials/Spec";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
-import { FlowProps, GraphProps } from "../../../../../types/declarations/graph";
+import {
+  FlowProps,
+  GraphProps,
+  HighlightContextProps,
+} from "../../../../../types/declarations/graph";
 import lock from "../../../../../images/lock.svg";
 import unlock from "../../../../../images/unlock.svg";
 import scrollToggle from "../../../../../images/move-arrows.svg";
@@ -64,7 +68,7 @@ const defaultEdgeTypes: EdgeTypes = {
 };
 
 //sets nodes and edges to highlight in the graph
-export const HighlightContext = createContext<any>(null);
+export const HighlightContext = createContext<HighlightContextProps>(undefined);
 
 const getLayoutedElements = (
   nodes: Node[],
@@ -313,7 +317,9 @@ export default function Graph(props: GraphProps) {
     });
   }, [nodes, nodeId]);
 
-  const [highlightValues, setHighlightValues] = useState<any>({});
+  const [highlightValues, setHighlightValues] = useState<{
+    [key: string]: boolean;
+  }>({});
 
   const handlePaneClick = () => {
     setShowSpec(true);

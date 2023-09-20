@@ -1,7 +1,8 @@
-import { FC, memo, useCallback, useContext } from "react";
+import { FC, memo, useCallback, useContext, useMemo } from "react";
 import { Tooltip } from "@mui/material";
 import { Handle, NodeProps, Position } from "reactflow";
 import { HighlightContext } from "../../index";
+import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
 import healthy from "../../../../../../../images/heart-fill.svg";
 import unhealthy from "../../../../../../../images/unhealthy.svg";
 import source from "../../../../../../../images/source.svg";
@@ -33,7 +34,7 @@ const CustomNode: FC<NodeProps> = ({
   //TODO add check for healthy/unhealthy node and update imported images accordingly
 
   const { highlightValues, setHighlightValues } =
-    useContext<any>(HighlightContext);
+    useContext<HighlightContextProps>(HighlightContext);
 
   const handleClick = useCallback(() => {
     const updatedNodeHighlightValues = {};
@@ -41,38 +42,50 @@ const CustomNode: FC<NodeProps> = ({
     setHighlightValues(updatedNodeHighlightValues);
   }, []);
 
+  const nodeStyle = useMemo(() => {
+    return {
+      border: `${isSelected(highlightValues[data?.name])} ${getBorderColor(
+        data?.type
+      )}`,
+    };
+  }, [highlightValues, data]);
+
   return (
     <div data-testid={data?.name}>
       <div
         className={"react-flow__node-input"}
         onClick={handleClick}
-        style={{
-          border: `${isSelected(highlightValues[data?.name])} ${getBorderColor(
-            data?.type
-          )}`,
-        }}
+        style={nodeStyle}
       >
         <div className="node-info">{data?.name}</div>
 
-        <div className={"node-pods"}>
-          {data?.type === "source" && (
-            <img src={source} alt={"source-vertex"} />
-          )}
-          {data?.type === "udf" && data?.nodeInfo?.udf?.groupBy === null && (
-            <img src={map} alt={"map-vertex"} />
-          )}
-          {data?.type === "udf" && data?.nodeInfo?.udf?.groupBy && (
-            <img src={reduce} alt={"reduce-vertex"} />
-          )}
-          {data?.type === "sink" && <img src={sink} alt={"sink-vertex"} />}
-          {data?.podnum} {data?.podnum <= 1 ? "pod" : "pods"}
-        </div>
-
-        {data?.type !== "source" && (
-          <div className={"node-status"}>
-            <img src={healthy} alt={"healthy"} />
+        <Tooltip
+          title={
+            <div className={"node-tooltip"}>
+              {data?.podnum <= 1 ? "pod" : "pods"}
+            </div>
+          }
+          placement={"top-end"}
+          arrow
+        >
+          <div className={"node-pods"}>
+            {data?.type === "source" && (
+              <img src={source} alt={"source-vertex"} />
+            )}
+            {data?.type === "udf" && data?.nodeInfo?.udf?.groupBy === null && (
+              <img src={map} alt={"map-vertex"} />
+            )}
+            {data?.type === "udf" && data?.nodeInfo?.udf?.groupBy && (
+              <img src={reduce} alt={"reduce-vertex"} />
+            )}
+            {data?.type === "sink" && <img src={sink} alt={"sink-vertex"} />}
+            {data?.podnum}
           </div>
-        )}
+        </Tooltip>
+
+        <div className={"node-status"}>
+          <img src={healthy} alt={"healthy"} />
+        </div>
 
         <Tooltip
           title={
