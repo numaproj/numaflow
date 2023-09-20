@@ -163,7 +163,7 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	// Convert reqBody to pipeline spec
@@ -215,7 +215,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		return
 	}
 	pipelineResp := NewPipelineInfo(status, pl)
-	c.JSON(http.StatusOK, pipelineResp)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pipelineResp))
 }
 
 // UpdatePipeline is used to update a given pipeline
@@ -225,7 +225,7 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
+		NewNumaflowAPIResponse(&errMsg, nil)
 		return
 	}
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(),
@@ -270,7 +270,7 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypePatch)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
+		NewNumaflowAPIResponse(&errMsg, nil)
 		return
 	}
 	patchSpec := reqBody.([]byte)
@@ -290,7 +290,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	var isbSpec = reqBody.(*dfv1.InterStepBufferService)
@@ -515,7 +515,7 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 		}
 		results = append(results, l)
 	}
-	c.JSON(http.StatusOK, results)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, results))
 }
 
 // ListVertexPods is used to provide all the pods of a vertex
@@ -597,7 +597,7 @@ func (h *handler) ValidatePipeline(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	// Convert reqBody to pipeline spec
@@ -615,7 +615,7 @@ func (h *handler) ValidateInterStepBufferService(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body, %v", err.Error())
-		c.JSON(http.StatusOK, errMsg)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	// Convert reqBody to pipeline spec
