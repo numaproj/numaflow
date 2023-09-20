@@ -84,15 +84,26 @@ func (s *APISuite) TestAPI() {
 	var createISBSVCSuccessExpect = `{"data":null}`
 	assert.Contains(s.T(), createISBSVCBody, createISBSVCSuccessExpect)
 
+	listISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/isb-services", Namespace)).
+		Expect().
+		Status(200).Body().Raw()
+	assert.Contains(s.T(), listISBSVCBody, testISBSVCName)
+
 	deletePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
 		Expect().
 		Status(200).Body().Raw()
 	deletePipeline2 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline2Name)).
 		Expect().
 		Status(200).Body().Raw()
-	var deletePipelineSuccessExpect = ``
+	var deletePipelineSuccessExpect = `{"data":null}`
 	assert.Contains(s.T(), deletePipeline1, deletePipelineSuccessExpect)
 	assert.Contains(s.T(), deletePipeline2, deletePipelineSuccessExpect)
+
+	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
+		Expect().
+		Status(200).Body().Raw()
+	var deleteISBSVCSuccessExpect = `{"data":null}`
+	assert.Contains(s.T(), deleteISBSVC, deleteISBSVCSuccessExpect)
 
 	stopPortForward()
 }
