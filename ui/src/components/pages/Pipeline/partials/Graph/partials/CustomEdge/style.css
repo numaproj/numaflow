@@ -1,30 +1,51 @@
 .edge {
     position: absolute;
     cursor: pointer;
-    font-family: "IBM Plex Sans", sans-serif;
-    font-weight: 400;
-    font-size: 0.6rem;
-    width: fit-content;
+    pointer-events: all;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
 }
 
 .edge-tooltip {
-    font-size: 1.2em;
+    font-size: 0.8rem;
     text-align: center;
 
 }
 
-.edge-label {
-    width: fit-content;
-    background: white;
-    position: absolute;
-    border-radius: 0.125rem;
-    padding: 0 0.3rem;
-    font-size: 0.48rem;
-    text-transform: lowercase;
-    text-align: center;
-    font-family: "IBM Plex Sans", sans-serif;
-    pointer-events: all;
-    align-content: center;
+.edge-watermark-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    height: 1.5rem;
+    width: 6.625rem;
+    color: #8D9096;
+    font-family: AvenirNext forINTUIT, "IBM Plex Sans", sans-serif;
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: normal;
+}
+
+.edge-pending-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    height: 1.5rem;
+    width: 6.625rem;
+    color: #8D9096;
+    font-family: AvenirNext forINTUIT, "IBM Plex Sans", sans-serif;
+    font-size: 1rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: normal;
+}
+
+.react-flow__handle {
+    background : #8D9096;
+    z-index: -1;
+    margin: -0.2rem;
+    height: 1rem;
+    width: 1rem;
 }
