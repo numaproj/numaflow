@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Box from "@mui/material/Box";
+import { NamespaceK8s, NamespaceK8sProps } from "./partials/NamespaceK8s";
+import slider from "../../../images/slider.png";
 
 import "./style.css";
-import { NamespaceK8s, NamespaceK8sProps } from "./partials/NamespaceK8s";
 
 export enum SideBarType {
   NAMESPACE_K8s,
@@ -76,7 +77,13 @@ export function SideBarContent({
           height: "100vh",
         }}
       >
-        <div onMouseDown={dragHandler} className="sidebar-drag-icon"></div>
+        <img
+          onMouseDown={dragHandler}
+          src={slider}
+          alt="slider"
+          className={"sidebar-drag-icon"}
+          draggable={false}
+        />
       </Box>
       <Box
         sx={{
