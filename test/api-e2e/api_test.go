@@ -172,6 +172,9 @@ func (s *APISuite) TestAPI() {
 		}
 	}
 
+	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-p1-0"`)
+	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-output-0"`)
+
 	getPipelineWatermarksBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/watermarks", Namespace, pipelineName)).
 		Expect().
 		Status(200).Body().Raw()
@@ -179,8 +182,12 @@ func (s *APISuite) TestAPI() {
 	assert.Contains(s.T(), getPipelineWatermarksBody, `"edge":"input-p1"`)
 	assert.Contains(s.T(), getPipelineWatermarksBody, `"edge":"p1-output"`)
 
-	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-p1-0"`)
-	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-output-0"`)
+	getVerticesMetricsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/vertices/metrics", Namespace, pipelineName)).
+		Expect().
+		Status(200).Body().Raw()
+	assert.Contains(s.T(), getVerticesMetricsBody, `"vertex":"input","processingRates"`)
+	assert.Contains(s.T(), getVerticesMetricsBody, `"vertex":"p1","processingRates"`)
+	assert.Contains(s.T(), getVerticesMetricsBody, `"vertex":"output","processingRates"`)
 
 	stopPortForward()
 }
