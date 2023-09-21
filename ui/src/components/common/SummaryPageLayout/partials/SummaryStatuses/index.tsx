@@ -13,6 +13,9 @@ export interface SummaryStatusesProps {
   healthy: number;
   warning: number;
   critical: number;
+  activeText?: string;
+  inAcitveText?: string;
+  linkComponent?: React.ReactNode;
 }
 
 export function SummaryStatuses({
@@ -22,60 +25,85 @@ export function SummaryStatuses({
   healthy,
   warning,
   critical,
+  activeText = "Active",
+  inAcitveText = "Non-Active",
+  linkComponent,
 }: SummaryStatusesProps) {
   return (
     <Box
       sx={{
         display: "flex",
         flexDirection: "column",
-        alignSelf: "flex-start",
+        marginTop: "0.375rem",
+        alignItems: "center",
+        flexGrow: 1,
+        justifyContent: "center",
       }}
     >
-      <span className="summary-statuses-title">{title}</span>
-      <Box
-        sx={{ display: "flex", flexDirection: "row", marginTop: "0.3125rem" }}
-      >
-        <Box sx={{ display: "flex", flexDirection: "row" }}>
-          <Box sx={{ display: "flex", flexDirection: "column" }}>
-            <img
-              src={circleCheck}
-              alt="active"
-              className={"summary-statuses-active-logo"}
-            />
-            <img
-              src={circleDash}
-              alt="inactive"
-              className={"summary-statuses-active-logo"}
-            />
-          </Box>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              marginLeft: "0.3125rem",
-            }}
-          >
-            <span className="summary-statuses-count">{active}</span>
-            <span className="summary-statuses-count">{inActive}</span>
-          </Box>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              marginLeft: "0.3125rem",
-            }}
-          >
-            <span className="summary-statuses-active-text">Active</span>
-            <span className="summary-statuses-active-text">Non-Active</span>
-          </Box>
-        </Box>
+      <Box sx={{ width: "fit-content" }}>
+        <span className="summary-statuses-title">{title}</span>
         <Box
-          sx={{
-            marginTop: "0.3125rem",
-            marginLeft: "1rem",
-          }}
+          sx={{ display: "flex", flexDirection: "row", marginTop: "0.3125rem" }}
         >
-          <StatusBar healthy={healthy} warning={warning} critical={critical} />
+          <Box sx={{ display: "flex", flexDirection: "row" }}>
+            <Box sx={{ display: "flex", flexDirection: "column" }}>
+              <img
+                src={circleCheck}
+                alt="active"
+                className={"summary-statuses-active-logo"}
+              />
+              <img
+                src={circleDash}
+                alt="inactive"
+                className={"summary-statuses-active-logo"}
+              />
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                marginLeft: "0.3125rem",
+              }}
+            >
+              <span className="summary-statuses-count">{active}</span>
+              <span className="summary-statuses-count">{inActive}</span>
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                marginLeft: "0.3125rem",
+              }}
+            >
+              <span className="summary-statuses-active-text">{activeText}</span>
+              <span className="summary-statuses-active-text">
+                {inAcitveText}
+              </span>
+            </Box>
+          </Box>
+          <Box
+            sx={{
+              marginTop: "0.3125rem",
+              marginLeft: "1rem",
+            }}
+          >
+            <StatusBar
+              healthy={healthy}
+              warning={warning}
+              critical={critical}
+            />
+          </Box>
+          {linkComponent && (
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                marginLeft: "1.5rem",
+              }}
+            >
+              {linkComponent}
+            </Box>
+          )}
         </Box>
       </Box>
     </Box>

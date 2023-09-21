@@ -1,5 +1,6 @@
-.cluster-ns-listing-table-title {
+.pipeline-card-name {
   font-size: 1.25rem;
   font-style: normal;
   font-weight: 400;
+  color: #000;
 }

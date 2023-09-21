@@ -32,3 +32,7 @@ body,
   padding-left: 1.25rem !important;
   min-height: 3.75rem !important;
 }
+
+.MuiBackdrop-root {
+  opacity: 0 !important;
+}
