@@ -121,7 +121,7 @@ func (s *APISuite) TestAPI() {
 	assert.Contains(s.T(), getPipelineBody, fmt.Sprintf(`"name":"%s"`, testPipeline1Name))
 	assert.Contains(s.T(), getPipelineBody, `"status":"healthy"`)
 
-	getPipelineISBsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/isbs", Namespace, pipelineName)).
+	getPipelineISBsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/isbs", Namespace, testPipeline1Name)).
 		Expect().
 		Status(200).Body().Raw()
 	for strings.Contains(getPipelineISBsBody, "errMessage") {
@@ -132,7 +132,7 @@ func (s *APISuite) TestAPI() {
 			}
 		default:
 			time.Sleep(100 * time.Millisecond)
-			getPipelineISBsBody = HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/isbs", Namespace, pipelineName)).
+			getPipelineISBsBody = HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/isbs", Namespace, testPipeline1Name)).
 				Expect().
 				Status(200).Body().Raw()
 		}
