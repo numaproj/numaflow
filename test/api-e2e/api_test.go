@@ -71,7 +71,7 @@ func (s *APISuite) TestISBSVC() {
 	stopPortForward()
 }
 
-func (s *APISuite) TestPipeline() {
+func (s *APISuite) TestPipeline0() {
 	var err error
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
@@ -132,7 +132,7 @@ func (s *APISuite) TestPipeline() {
 	stopPortForward()
 }
 
-func (s *APISuite) TestAPI() {
+func (s *APISuite) TestPipeline1() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	numaflowServerPodName := s.GetNumaflowServerPodName()
@@ -188,6 +188,41 @@ func (s *APISuite) TestAPI() {
 	assert.Contains(s.T(), getVerticesMetricsBody, `"vertex":"input","processingRates"`)
 	assert.Contains(s.T(), getVerticesMetricsBody, `"vertex":"p1","processingRates"`)
 	assert.Contains(s.T(), getVerticesMetricsBody, `"vertex":"output","processingRates"`)
+
+	getVerticesPodsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/vertices/input/pods", Namespace, pipelineName)).
+		Expect().
+		Status(200).Body().Raw()
+	assert.Contains(s.T(), getVerticesPodsBody, `simple-pipeline-input-0`)
+
+	stopPortForward()
+}
+
+func (s *APISuite) TestAPI() {
+	numaflowServerPodName := s.GetNumaflowServerPodName()
+	if numaflowServerPodName == "" {
+		panic("failed to find the nuamflow-server pod")
+	}
+	stopPortForward := s.StartPortForward(numaflowServerPodName, 8443)
+
+	// TODO: metrics test
+	// namespacePodsMetricsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/metrics/namespaces/%s/pods", Namespace)).
+	// 	Expect().
+	// 	Status(200).Body().Raw()
+	// var namespacePodsMetricsExpect = `{"namespace":"numaflow-system","pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
+	// assert.Contains(s.T(), namespacePodsMetricsBody, namespacePodsMetricsExpect)
+
+	// TODO: logs test
+	// params := url.Values{}
+	// params.Add("container", "main")
+	// params.Add("following", "false")
+	// params.Add("tailLines", "3")
+	// namespacePodLogsURL := fmt.Sprintf("/api/v1_1/namespaces/%s/pods/%s/logs?%s", Namespace, numaflowServerPodName, params.Encode())
+	//
+	// namespacePodLogsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(namespacePodLogsURL).
+	// 	Expect().
+	// 	Status(200).Body().Raw()
+	// var namespacePodLogsBodyExpect = `{"namespace":"numaflow-system","pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
+	// assert.Contains(s.T(), namespacePodLogsBody, namespacePodLogsBodyExpect)
 
 	stopPortForward()
 }
