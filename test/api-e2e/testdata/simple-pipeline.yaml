@@ -7,7 +7,7 @@ spec:
     - name: input
       source:
         generator:
-          rpu: 5
+          rpu: 10
           duration: 1s
     - name: p1
       udf:
