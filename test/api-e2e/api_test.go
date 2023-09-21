@@ -71,10 +71,8 @@ func (s *APISuite) TestISBSVC() {
 	stopPortForward()
 }
 
-func (s *APISuite) TestAPI() {
+func (s *APISuite) TestPipeline() {
 	var err error
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
 		panic("failed to find the nuamflow-server pod")
@@ -121,7 +119,43 @@ func (s *APISuite) TestAPI() {
 	assert.Contains(s.T(), getPipelineBody, fmt.Sprintf(`"name":"%s"`, testPipeline1Name))
 	assert.Contains(s.T(), getPipelineBody, `"status":"healthy"`)
 
-	getPipelineISBsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/isbs", Namespace, testPipeline1Name)).
+	deletePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
+		Expect().
+		Status(200).Body().Raw()
+	deletePipeline2 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline2Name)).
+		Expect().
+		Status(200).Body().Raw()
+	var deletePipelineSuccessExpect = `{"data":null}`
+	assert.Contains(s.T(), deletePipeline1, deletePipelineSuccessExpect)
+	assert.Contains(s.T(), deletePipeline2, deletePipelineSuccessExpect)
+
+	stopPortForward()
+}
+
+func (s *APISuite) TestAPI() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	numaflowServerPodName := s.GetNumaflowServerPodName()
+	if numaflowServerPodName == "" {
+		panic("failed to find the nuamflow-server pod")
+	}
+	stopPortForward := s.StartPortForward(numaflowServerPodName, 8443)
+
+	w := s.Given().Pipeline("@testdata/simple-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "simple-pipeline"
+
+	w.Expect().
+		VertexPodsRunning().DaemonPodsRunning().
+		VertexPodLogContains("input", LogSourceVertexStarted).
+		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("output", SinkVertexStarted).
+		DaemonPodLogContains(pipelineName, LogDaemonStarted).
+		VertexPodLogContains("output", `"Data":.*,"Createdts":.*`)
+
+	getPipelineISBsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/isbs", Namespace, pipelineName)).
 		Expect().
 		Status(200).Body().Raw()
 	for strings.Contains(getPipelineISBsBody, "errMessage") {
@@ -132,23 +166,19 @@ func (s *APISuite) TestAPI() {
 			}
 		default:
 			time.Sleep(100 * time.Millisecond)
-			getPipelineISBsBody = HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/isbs", Namespace, testPipeline1Name)).
+			getPipelineISBsBody = HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/isbs", Namespace, pipelineName)).
 				Expect().
 				Status(200).Body().Raw()
 		}
 	}
+
+	getPipelineWatermarksBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s/watermarks", Namespace, pipelineName)).
+		Expect().
+		Status(200).Body().Raw()
+	assert.Contains(s.T(), getPipelineWatermarksBody, `lisa`)
+
 	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-p1-0"`)
 	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-output-0"`)
-
-	deletePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
-		Expect().
-		Status(200).Body().Raw()
-	deletePipeline2 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1_1/namespaces/%s/pipelines/%s", Namespace, testPipeline2Name)).
-		Expect().
-		Status(200).Body().Raw()
-	var deletePipelineSuccessExpect = `{"data":null}`
-	assert.Contains(s.T(), deletePipeline1, deletePipelineSuccessExpect)
-	assert.Contains(s.T(), deletePipeline2, deletePipelineSuccessExpect)
 
 	stopPortForward()
 }
