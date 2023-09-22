@@ -6,6 +6,6 @@ export interface SystemInfo {
 export interface AppContextProps {
   systemInfo: SystemInfo | undefined;
   systemInfoError: any | undefined;
-  sideBarProps?: SideBarProps;
-  setSideBarProps?: (props: SideBarProps | undefined) => void;
+  sidebarProps?: SlidingSideBarProps;
+  setSidebarProps?: (props: SlidingSideBarProps | undefined) => void;
 }
