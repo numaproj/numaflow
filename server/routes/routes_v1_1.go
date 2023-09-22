@@ -21,6 +21,8 @@ func v1_1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pipelines", handler.ListPipelines)
 	// Get a Pipeline information.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline", handler.GetPipeline)
+	// Get a Pipeline health information.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/health", handler.GetPipelineStatus)
 	// Update a Pipeline.
 	r.PUT("/namespaces/:namespace/pipelines/:pipeline", handler.UpdatePipeline)
 	// Delete a Pipeline.
