@@ -125,6 +125,7 @@ const getSectionComponentAndKey = (
         key,
         component: (
           <Box
+            key={key}
             sx={{
               display: "flex",
               flexDirection: "row",

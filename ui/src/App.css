@@ -3,6 +3,7 @@ body,
 #root,
 .MuiScopedCssBaseline-root {
   height: 100%;
+  font-family: Avenir !important;
 }
 
 .App-side-nav-link {
@@ -21,6 +22,10 @@ body,
 .text-logo {
   margin-left: 0.81rem;
   width: 9.125rem;
+}
+
+.app-container {
+  height: 100%;
 }
 
 .MuiAppBar-root {

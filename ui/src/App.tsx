@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import ScopedCssBaseline from "@mui/material/ScopedCssBaseline";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
@@ -13,9 +19,8 @@ import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
-import { SideBarContent } from "./components/common/SideBarContent";
+import { SlidingSidebar, SlidingSidebarProps } from "./components/common/SlidingSidebar";
 import { AppContextProps } from "./types/declarations/app";
-import { SideBarProps } from "./types/declarations/shared";
 import logo from "./images/icon.png";
 import textLogo from "./images/text-icon.png";
 
@@ -36,8 +41,24 @@ function App() {
   //   },
   //   error: undefined,
   // };
-  const [sideBarProps, setSideBarProps] = useState<SideBarProps | undefined>();
+  const pageRef = useRef<any>();
+  const [pageWidth, setPageWidth] = useState(0);
+  const [sidebarProps, setSidebarProps] = useState<SlidingSidebarProps | undefined>();
   const { systemInfo, error: systemInfoError } = useSystemInfoFetch();
+
+  // Resize observer to keep page width in state. To be used by other dependent components.
+  useEffect(() => {
+    if (!pageRef.current) {
+      return;
+    }
+    const resizeObserver = new ResizeObserver(() => {
+      setPageWidth(pageRef.current.offsetWidth);
+    });
+    resizeObserver.observe(pageRef.current);
+    return function cleanup() {
+      resizeObserver.disconnect();
+    };
+  }, [pageRef.current]);
 
   // Notify if error loading system info
   useEffect(() => {
@@ -52,7 +73,7 @@ function App() {
   }, [systemInfoError]);
 
   const handleSideBarClose = useCallback(() => {
-    setSideBarProps(undefined);
+    setSidebarProps(undefined);
   }, []);
 
   const routes = useMemo(() => {
@@ -111,13 +132,13 @@ function App() {
   }, [systemInfo, systemInfoError]);
 
   return (
-    <>
+    <div ref={pageRef} className="app-container">
       <AppContext.Provider
         value={{
           systemInfo,
           systemInfoError,
-          sideBarProps,
-          setSideBarProps,
+          sidebarProps,
+          setSidebarProps,
         }}
       >
         <ScopedCssBaseline>
@@ -154,7 +175,7 @@ function App() {
                 overflow: "auto",
                 height: "2.0625rem",
                 background: "#F8F8FB",
-                zIndex: (theme) => theme.zIndex.drawer + 1,
+                zIndex: (theme) => theme.zIndex.drawer - 1,
                 position: "fixed",
                 top: "3.75rem",
               }}
@@ -189,13 +210,14 @@ function App() {
         />
         <Drawer
           anchor="right"
-          open={!!sideBarProps}
+          open={!!sidebarProps}
           onClose={handleSideBarClose}
+          className="sidebar-drawer"
         >
-          {sideBarProps && <SideBarContent {...sideBarProps} />}
+          {sidebarProps && <SlidingSidebar {...sidebarProps} pageWidth={pageWidth} onClose={handleSideBarClose} />}
         </Drawer>
       </AppContext.Provider>
-    </>
+    </div>
   );
 }
 
