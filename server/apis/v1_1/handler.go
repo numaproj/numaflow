@@ -95,7 +95,7 @@ func NewHandler() (*handler, error) {
 func (h *handler) ListNamespaces(c *gin.Context) {
 	namespaces, err := getAllNamespaces(h)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %v", err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
 		return
 	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
@@ -105,7 +105,7 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 func (h *handler) GetClusterSummary(c *gin.Context) {
 	namespaces, err := getAllNamespaces(h)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %v", err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
 		return
 	}
 	var clusterSummary ClusterSummaryResponse
@@ -114,7 +114,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		// Fetch pipeline summary
 		pipelines, err := getPipelines(h, ns)
 		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %v", err.Error()))
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
 			return
 		}
 
@@ -134,7 +134,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		// Fetch ISB service summary
 		isbSvcs, err := getIsbServices(h, ns)
 		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %v", err.Error()))
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
 			return
 		}
 
@@ -161,7 +161,7 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 
 	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
 
@@ -172,7 +172,7 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 	}
 
 	if _, err := h.numaflowClient.Pipelines(ns).Create(context.Background(), pipelineSpec, metav1.CreateOptions{}); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to create pipeline %q, %v", pipelineSpec.Name, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to create pipeline %q, %s", pipelineSpec.Name, err.Error()))
 		return
 	}
 
@@ -185,7 +185,7 @@ func (h *handler) ListPipelines(c *gin.Context) {
 	plList, err := getPipelines(h, ns)
 
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch all pipelines for namespace %q, %v", ns, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all pipelines for namespace %q, %s", ns, err.Error()))
 		return
 	}
 
@@ -198,13 +198,13 @@ func (h *handler) GetPipeline(c *gin.Context) {
 
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %v", pipeline, ns, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
 
 	status, err := getPipelineStatus(pl)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %v", pipeline, ns, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
 
@@ -218,13 +218,13 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 
 	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
 
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q namespace %q, %v", pipeline, ns, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
 
@@ -237,7 +237,7 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 	pl.Spec = pipelineSpec.Spec
 
 	if _, err := h.numaflowClient.Pipelines(ns).Update(context.Background(), pl, metav1.UpdateOptions{}); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update pipeline %q, %v", pipeline, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to update pipeline %q, %s", pipeline, err.Error()))
 		return
 	}
 
@@ -249,7 +249,7 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	if err := h.numaflowClient.Pipelines(ns).Delete(context.Background(), pipeline, metav1.DeleteOptions{}); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to delete pipeline %q, %v", pipeline, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to delete pipeline %q, %s", pipeline, err.Error()))
 		return
 	}
 
@@ -262,7 +262,7 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 
 	reqBody, err := parseSpecFromReq(c, SpecTypePatch)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
 
@@ -273,7 +273,7 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 	}
 
 	if _, err := h.numaflowClient.Pipelines(ns).Patch(context.Background(), pipeline, types.MergePatchType, patchSpec, metav1.PatchOptions{}); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q, %v", pipeline, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q, %s", pipeline, err.Error()))
 		return
 	}
 
@@ -286,7 +286,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 
 	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
 
@@ -297,7 +297,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	}
 
 	if _, err := h.numaflowClient.InterStepBufferServices(ns).Create(context.Background(), isbSpec, metav1.CreateOptions{}); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service %q, %v", isbSpec.Name, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service %q, %s", isbSpec.Name, err.Error()))
 		return
 	}
 
@@ -309,7 +309,7 @@ func (h *handler) ListInterStepBufferServices(c *gin.Context) {
 	ns := c.Param("namespace")
 	isbList, err := getIsbServices(h, ns)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch all interstepbuffer services for namespace %q, %v", ns, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all interstepbuffer services for namespace %q, %s", ns, err.Error()))
 		return
 	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, isbList))
@@ -321,7 +321,7 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 
 	isbsvc, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbName, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %v", isbName, ns, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isbName, ns, err.Error()))
 		return
 	}
 
@@ -329,7 +329,7 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	// TODO(API) : Get the current status of the ISB service
 	// status, err := getISBServiceStatus(isb.Namespace, isb.Name)
 	// if err != nil {
-	//	errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %v", isb.Name, isb.Namespace, err.Error())
+	//	errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isb.Name, isb.Namespace, err.Error())
 	//	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 	//	return
 	// }
@@ -344,13 +344,13 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 
 	isbSVC, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbServices, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isb-services %q: %v", ns, isbServices, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isb-services %q: %s", ns, isbServices, err.Error()))
 		return
 	}
 
 	var requestBody dfv1.InterStepBufferServiceSpec
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %v", ns, isbServices, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %s", ns, isbServices, err.Error()))
 		return
 	}
 
@@ -373,7 +373,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 
 	updatedISBSvc, err := h.numaflowClient.InterStepBufferServices(ns).Update(context.Background(), isbSVC, metav1.UpdateOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %v", ns, isbServices, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %s", ns, isbServices, err.Error()))
 		return
 	}
 
@@ -386,8 +386,8 @@ func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 
 	err := h.numaflowClient.InterStepBufferServices(ns).Delete(context.Background(), isbServices, metav1.DeleteOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to delete the interstep buffer service: namespace %q isb-services %q: %v",
-			ns, isbServices, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to delete the interstep buffer service: namespace %q isb-services %q: %s",
+			ns, isbServices, err.Error()))
 		return
 	}
 
@@ -400,14 +400,14 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %v", pipeline, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
 	defer client.Close()
 
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipeline)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %v", pipeline, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
 
@@ -420,14 +420,14 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the watermarks for pipeline %q: %v", pipeline, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the watermarks for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
 	defer client.Close()
 
 	watermarks, err := client.GetPipelineWatermarks(context.Background(), pipeline)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the watermarks for pipeline %q: %v", pipeline, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the watermarks for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
 
@@ -447,13 +447,13 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 
 	pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"),
+		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", c.Param("namespace"),
 			c.Param("pipeline"), inputVertexName, err.Error()))
 		return
 	}
 
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v", c.Param("namespace"),
+		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", c.Param("namespace"),
 			c.Param("pipeline"), inputVertexName, err.Error()))
 		return
 	}
@@ -477,7 +477,7 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 	}
 
 	if _, err := h.numaflowClient.Pipelines(c.Param("namespace")).Update(context.Background(), pl, metav1.UpdateOptions{}); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %v",
+		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s",
 			c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error()))
 		return
 	}
@@ -491,13 +491,13 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %v", ns, pipeline, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q: %s", ns, pipeline, err.Error()))
 		return
 	}
 
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the vertices metrics: failed to get demon service client for namespace %q pipeline %q: %v", ns, pipeline, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the vertices metrics: failed to get demon service client for namespace %q pipeline %q: %s", ns, pipeline, err.Error()))
 		return
 	}
 	defer client.Close()
@@ -506,7 +506,7 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 	for _, vertex := range pl.Spec.Vertices {
 		metrics, err := client.GetVertexMetrics(context.Background(), pipeline, vertex.Name)
 		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q vertex %q: %v", ns, pipeline, vertex.Name, err))
+			h.respondWithError(c, fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q vertex %q: %s", ns, pipeline, vertex.Name, err.Error()))
 			return
 		}
 		results = append(results, metrics)
@@ -526,8 +526,8 @@ func (h *handler) ListVertexPods(c *gin.Context) {
 		Continue:      c.Query("continue"),
 	})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get a list of pods: namespace %q pipeline %q vertex %q: %v",
-			ns, pipeline, vertex, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get a list of pods: namespace %q pipeline %q vertex %q: %s",
+			ns, pipeline, vertex, err.Error()))
 		return
 	}
 
@@ -544,7 +544,7 @@ func (h *handler) ListPodsMetrics(c *gin.Context) {
 		Continue: c.Query("continue"),
 	})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get a list of pod metrics in namespace %q: %v", ns, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get a list of pod metrics in namespace %q: %s", ns, err.Error()))
 		return
 	}
 
@@ -565,7 +565,7 @@ func (h *handler) PodLogs(c *gin.Context) {
 
 	stream, err := h.kubeClient.CoreV1().Pods(ns).GetLogs(pod, logOptions).Stream(c)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get pod logs: %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get pod logs: %s", err.Error()))
 		return
 	}
 	defer stream.Close()
@@ -602,7 +602,7 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		Continue: c.Query("continue"),
 	})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: %v", ns, err))
+		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: %s", ns, err.Error()))
 		return
 	}
 
@@ -613,7 +613,7 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 func (h *handler) ValidatePipeline(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
 
@@ -625,7 +625,7 @@ func (h *handler) ValidatePipeline(c *gin.Context) {
 	}
 
 	if err := validatePipelineSpec(h, pipelineSpec); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", err.Error()))
 		return
 	}
 
@@ -636,7 +636,7 @@ func (h *handler) ValidatePipeline(c *gin.Context) {
 func (h *handler) ValidateInterStepBufferService(c *gin.Context) {
 	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
 
@@ -647,7 +647,7 @@ func (h *handler) ValidateInterStepBufferService(c *gin.Context) {
 	}
 
 	if err := validateISBSpec(h, isbSpec); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to validate interstepbuffer service spec, %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to validate interstepbuffer service spec, %s", err.Error()))
 		return
 	}
 
@@ -723,7 +723,7 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 		// TODO(API) : Get the current status of the ISB service
 		// status, err := getISBServiceStatus(isb.Namespace, isb.Name)
 		// if err != nil {
-		//	errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %v", isb.Name, isb.Namespace, err.Error())
+		//	errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isb.Name, isb.Namespace, err.Error())
 		//	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		//	return
 		// }
