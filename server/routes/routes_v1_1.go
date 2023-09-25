@@ -21,6 +21,8 @@ func v1_1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pipelines", handler.ListPipelines)
 	// Get a Pipeline information.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline", handler.GetPipeline)
+	// Get a Pipeline health information.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/health", handler.GetPipelineStatus)
 	// Update a Pipeline.
 	r.PUT("/namespaces/:namespace/pipelines/:pipeline", handler.UpdatePipeline)
 	// Delete a Pipeline.
@@ -48,7 +50,7 @@ func v1_1Routes(r gin.IRouter) {
 	// Get all the pods of a vertex.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.ListVertexPods)
 	// Get the metrics such as cpu, memory usage for a pod.
-	r.GET("/metrics/namespaces/:namespace/pods/", handler.ListPodsMetrics)
+	r.GET("/metrics/namespaces/:namespace/pods", handler.ListPodsMetrics)
 	// Get pod logs.
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.

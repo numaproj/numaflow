@@ -629,6 +629,20 @@ func (h *handler) ValidateInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
 
+// GetPipelineStatus returns the pipeline status. It is based on Health and Criticality.
+// Health can be "healthy (0) | unhealthy (1) | paused (3) | unknown (4)".
+// Health here indicates pipeline's ability to process messages.
+// A backlogged pipeline can be healthy even though it has an increasing back-pressure. Health purely means it is up and running.
+// Pipelines health will be the max(health) based of each vertex's health
+// Criticality on the other end shows whether the pipeline is working as expected.
+// It represents the pending messages, lags, etc.
+// Criticality can be "ok (0) | warning (1) | critical (2)".
+// Health and Criticality are different because ...?
+func (h *handler) GetPipelineStatus(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, "working on it")
+	return
+}
+
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
 func getAllNamespaces(h *handler) ([]string, error) {
 	l, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
