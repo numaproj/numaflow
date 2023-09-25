@@ -785,7 +785,14 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 	isVertexPatched := false
 	for _, vertex := range existingVertices {
 		if origin := *vertex.Spec.Replicas; origin != replicas && filter(vertex) {
-			vertex.Spec.Replicas = pointer.Int32(replicas)
+			scaleTo := replicas
+			// if vtx does not support autoscaling and min is set, scale up to min
+			if replicas == 1 {
+				if !vertex.Scalable() && vertex.Spec.Scale.Min != nil && *vertex.Spec.Scale.Min > 1 {
+					scaleTo = *vertex.Spec.Scale.Min
+				}
+			}
+			vertex.Spec.Replicas = pointer.Int32(scaleTo)
 			body, err := json.Marshal(vertex)
 			if err != nil {
 				return false, err
@@ -794,8 +801,8 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 			if err != nil && !apierrors.IsNotFound(err) {
 				return false, err
 			}
-			log.Infow("Scaled vertex", zap.Int32("from", origin), zap.Int32("to", replicas), zap.String("vertex", vertex.Name))
-			r.recorder.Eventf(pl, corev1.EventTypeNormal, "ScalingVertex", "Scaled vertex %s from %d to %d replicas", vertex.Name, origin, replicas)
+			log.Infow("Scaled vertex", zap.Int32("from", origin), zap.Int32("to", scaleTo), zap.String("vertex", vertex.Name))
+			r.recorder.Eventf(pl, corev1.EventTypeNormal, "ScalingVertex", "Scaled vertex %s from %d to %d replicas", vertex.Name, origin, scaleTo)
 			isVertexPatched = true
 		}
 	}
