@@ -105,7 +105,7 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 func (h *handler) GetClusterSummary(c *gin.Context) {
 	namespaces, err := getAllNamespaces(h)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
 		return
 	}
 	var clusterSummary ClusterSummaryResponse
@@ -443,24 +443,26 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 	var (
 		requestBody     dfv1.AbstractVertex
 		inputVertexName = c.Param("vertex")
+		pipeline        = c.Param("pipeline")
+		ns              = c.Param("namespace")
 	)
 
-	pl, err := h.numaflowClient.Pipelines(c.Param("namespace")).Get(context.Background(), c.Param("pipeline"), metav1.GetOptions{})
+	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", c.Param("namespace"),
-			c.Param("pipeline"), inputVertexName, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", ns,
+			pipeline, inputVertexName, err.Error()))
 		return
 	}
 
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", c.Param("namespace"),
-			c.Param("pipeline"), inputVertexName, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", ns,
+			pipeline, inputVertexName, err.Error()))
 		return
 	}
 
 	if requestBody.Name != inputVertexName {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: vertex name %q is immutable",
-			c.Param("namespace"), c.Param("pipeline"), inputVertexName, requestBody.Name))
+			ns, pipeline, inputVertexName, requestBody.Name))
 		return
 	}
 
@@ -468,7 +470,7 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 		if vertex.Name == inputVertexName {
 			if vertex.GetVertexType() != requestBody.GetVertexType() {
 				h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: vertex type is immutable",
-					c.Param("namespace"), c.Param("pipeline"), inputVertexName))
+					ns, pipeline, inputVertexName))
 				return
 			}
 			pl.Spec.Vertices[index] = requestBody
@@ -476,9 +478,9 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 		}
 	}
 
-	if _, err := h.numaflowClient.Pipelines(c.Param("namespace")).Update(context.Background(), pl, metav1.UpdateOptions{}); err != nil {
+	if _, err := h.numaflowClient.Pipelines(ns).Update(context.Background(), pl, metav1.UpdateOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s",
-			c.Param("namespace"), c.Param("pipeline"), inputVertexName, err.Error()))
+			ns, pipeline, inputVertexName, err.Error()))
 		return
 	}
 
