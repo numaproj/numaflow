@@ -366,10 +366,6 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: minimum number of replicas is 3.", ns, isbServices))
 			return
 		}
-		if *requestBody.JetStream.Replicas > 5 {
-			h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: maximum number of replicas is 5.", ns, isbServices))
-			return
-		}
 		isbSVC.Spec.JetStream.Replicas = requestBody.JetStream.Replicas
 	}
 
