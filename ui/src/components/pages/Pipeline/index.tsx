@@ -7,6 +7,7 @@ import Graph from "./partials/Graph";
 import { notifyError } from "../../../utils/error";
 
 import "./style.css";
+import React from "react";
 
 export function Pipeline() {
   // TODO needs to be able to be given namespaceId from parent for NS only install
