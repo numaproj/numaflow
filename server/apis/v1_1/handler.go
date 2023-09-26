@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -614,6 +615,12 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
 		response = append(response, newEvent)
 	}
+
+	// sort the events by timestamp
+	// from most recent events to older events
+	sort.Slice(response, func(i int, j int) bool {
+		return response[i].TimeStamp >= response[j].TimeStamp
+	})
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
