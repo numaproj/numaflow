@@ -608,7 +608,14 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, events.Items))
+	var response []K8sEventsResponse
+
+	for _, event := range events.Items {
+		var newEvent = NewK8sEventsResponse(event.LastTimestamp.String(), event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+		response = append(response, newEvent)
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
 // ValidatePipeline is used to validate the pipeline spec
