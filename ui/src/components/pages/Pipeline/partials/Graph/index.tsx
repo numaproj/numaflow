@@ -353,22 +353,22 @@ export default function Graph(props: GraphProps) {
         </HighlightContext.Provider>
       </div>
 
-      <Card
-        sx={{ borderBottom: 1, borderColor: "divider", boxShadow: 1 }}
-        data-testid={"card"}
-        variant={"outlined"}
-      >
-        {showSpec && <Spec pipeline={data.pipeline} />}
-        {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} />}
-        {nodeOpen && (
-          <NodeInfo
-            data-testid="node-info"
-            node={node}
-            namespaceId={namespaceId}
-            pipelineId={pipelineId}
-          />
-        )}
-      </Card>
+      {/*<Card*/}
+      {/*  sx={{ borderBottom: 1, borderColor: "divider", boxShadow: 1 }}*/}
+      {/*  data-testid={"card"}*/}
+      {/*  variant={"outlined"}*/}
+      {/*>*/}
+      {/*  {showSpec && <Spec pipeline={data.pipeline} />}*/}
+      {/*  {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} />}*/}
+      {/*  {nodeOpen && (*/}
+      {/*    <NodeInfo*/}
+      {/*      data-testid="node-info"*/}
+      {/*      node={node}*/}
+      {/*      namespaceId={namespaceId}*/}
+      {/*      pipelineId={pipelineId}*/}
+      {/*    />*/}
+      {/*  )}*/}
+      {/*</Card>*/}
     </div>
   );
 }

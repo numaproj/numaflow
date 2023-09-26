@@ -89,6 +89,7 @@ const getSectionComponentAndKey = (
           component: <div key={key}>Missing props</div>,
         };
       }
+      console.log("section.customComponent", section.customComponent)
       return {
         component: section.customComponent,
       };
@@ -147,6 +148,7 @@ const getSectionComponentAndKey = (
 };
 
 const getSummaryComponent = (summarySections: SummarySection[]) => {
+  console.log(summarySections)
   // Build sections from props
   const components: React.ReactNode[] = [];
   summarySections.forEach((section, index) => {
@@ -298,6 +300,7 @@ export function SummaryPageLayout({
         sx={{
           marginTop: contentMargin,
           paddingTop: "1.25rem",
+          height: "100%",
         }}
       >
         {contentComponent}
