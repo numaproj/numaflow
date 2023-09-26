@@ -145,6 +145,8 @@ export const useNamespaceSummaryFetch = ({
     loading: true,
     error: undefined,
   });
+  const [pipelineRawData, setPipelineRawData] = useState<any>();
+  const [isbRawData, setIsbRawData] = useState<any>();
   const [options, setOptions] = useState<Options>({
     skip: false,
     requestKey: "",
@@ -189,39 +191,51 @@ export const useNamespaceSummaryFetch = ({
       }
       return;
     }
-    // if (pipelineError || isbError) {
-    //   setResults({
-    //     data: undefined,
-    //     loading: false,
-    //     error: pipelineError || isbError,
-    //   });
-    //   return;
-    // }
-    // if (pipelineData?.errMsg || isbData?.errMsg) {
-    //   setResults({
-    //     data: undefined,
-    //     loading: false,
-    //     error: pipelineData?.errMsg || isbData?.errMsg,
-    //   });
-    //   return;
-    // }
-    // if (pipelineData && isbData) {
-    const nsSummary = rawDataToNamespaceSummary(
-      // TODO REMOVE MOCK
-      MOCK_PIPELINE_DATA,
-      MOCK_ISB_DATA
-    );
-    // const nsSummary = rawDataToNamespaceSummary(
-    //   pipelineData.data,
-    //   isbData.data
-    // );
-    setResults({
-      data: nsSummary,
-      loading: false,
-      error: undefined,
-    });
-    //   return;
-    // }
+    if (pipelineError || isbError) {
+      setResults({
+        data: undefined,
+        loading: false,
+        error: pipelineError || isbError,
+      });
+      return;
+    }
+    if (pipelineData?.errMsg || isbData?.errMsg) {
+      setResults({
+        data: undefined,
+        loading: false,
+        error: pipelineData?.errMsg || isbData?.errMsg,
+      });
+      return;
+    }
+    if (pipelineData && isbData) {
+      const pipeLineMap = pipelineData.data.reduce((map: any, obj: any) => {
+        map[obj.name] = obj;
+        return map;
+      }, {});
+      const isbMap = isbData.data.reduce((map: any, obj: any) => {
+        map[obj.name] = obj;
+        return map;
+      }, {});
+      setPipelineRawData(pipeLineMap);
+      setIsbRawData(isbMap);
+      // const nsSummary = rawDataToNamespaceSummary(
+      //   // TODO REMOVE MOCK
+      //   MOCK_PIPELINE_DATA,
+      //   MOCK_ISB_DATA
+      // );
+      const nsSummary = rawDataToNamespaceSummary(
+        pipelineData.data,
+        isbData.data
+      );
+      setResults({
+        data: nsSummary,
+        pipelineRawData,
+        isbRawData,
+        loading: false,
+        error: undefined,
+      });
+      return;
+    }
   }, [
     pipelineData,
     isbData,

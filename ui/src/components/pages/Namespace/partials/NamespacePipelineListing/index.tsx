@@ -16,7 +16,6 @@ import {
   MenuItem,
   Select,
   TableCell,
-  TableRow,
   TableSortLabel,
 } from "@mui/material";
 
@@ -62,6 +61,8 @@ const PlusIcon = createSvgIcon(
 export function NamespacePipelineListing({
   namespace,
   data,
+  pipelineData,
+  isbData,
 }: NamespacePipelineListingProps) {
   const [search, setSearch] = useState("");
   const [health, setHealth] = useState(HEALTH[0]);
@@ -75,7 +76,6 @@ export function NamespacePipelineListing({
   const [filteredPipelines, setFilteredPipelines] = useState<
     NamespacePipelineSummary[]
   >([]);
-
   // Update filtered pipelines based on search and page selected
   useEffect(() => {
     let filtered: NamespacePipelineSummary[] = data.pipelineSummaries;
@@ -138,7 +138,8 @@ export function NamespacePipelineListing({
         </Box>
       );
     }
-
+    console.log("isbData", isbData);
+    console.log("pipelineData", pipelineData);
     return (
       <Grid
         container
@@ -152,7 +153,18 @@ export function NamespacePipelineListing({
         {filteredPipelines.map((p: NamespacePipelineSummary) => {
           return (
             <Grid key={`pipeline-${p.name}`} item xs={12}>
-              <PipelineCard namespace={namespace} data={p} />
+              <PipelineCard
+                namespace={namespace}
+                data={p}
+                statusData={pipelineData ? pipelineData[p.name] : {}}
+                isbData={
+                  isbData
+                    ? isbData[
+                        pipelineData[p.name]?.pipeline?.metadata?.namespace
+                      ]
+                    : {}
+                }
+              />
             </Grid>
           );
         })}
@@ -264,25 +276,23 @@ export function NamespacePipelineListing({
             flexGrow: 1,
           }}
         >
-          <TableRow>
-            {sortOptions.map((option) => {
-              return (
-                <TableCell key={option.value} padding="normal">
-                  <TableSortLabel
-                    active={orderBy === option.value}
-                    onClick={(event) => handleSortChange(event, option.value)}
-                    direction={
-                      orderBy === option.value
-                        ? (order as "desc" | "asc" | undefined)
-                        : "asc"
-                    }
-                  >
-                    <span>{option.label}</span>
-                  </TableSortLabel>
-                </TableCell>
-              );
-            })}
-          </TableRow>
+          {sortOptions.map((option) => {
+            return (
+              <TableCell key={option.value} padding="normal">
+                <TableSortLabel
+                  active={orderBy === option.value}
+                  onClick={(event) => handleSortChange(event, option.value)}
+                  direction={
+                    orderBy === option.value
+                      ? (order as "desc" | "asc" | undefined)
+                      : "asc"
+                  }
+                >
+                  <span>{option.label}</span>
+                </TableSortLabel>
+              </TableCell>
+            );
+          })}
         </Box>
         <Box
           sx={{

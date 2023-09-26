@@ -18,10 +18,11 @@ import "./style.css";
 export function Namespaces() {
   const { namespaceId } = useParams();
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
-  const { data, loading, error } = useNamespaceSummaryFetch({
-    namespace: namespaceId || "",
-    loadOnRefresh: false,
-  });
+  const { data, pipelineRawData, isbRawData, loading, error } =
+    useNamespaceSummaryFetch({
+      namespace: namespaceId || "",
+      loadOnRefresh: false,
+    });
 
   const handleK8sEventsClick = useCallback(() => {
     if (!namespaceId || !setSidebarProps) {
@@ -117,7 +118,12 @@ export function Namespaces() {
       <SummaryPageLayout
         summarySections={summarySections}
         contentComponent={
-          <NamespacePipelineListing namespace={namespaceId || ""} data={data} />
+          <NamespacePipelineListing
+            namespace={namespaceId || ""}
+            data={data}
+            pipelineData={pipelineRawData}
+            isbData={isbRawData}
+          />
         }
       />
     </Box>
