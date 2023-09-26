@@ -49,7 +49,7 @@ rules:
   - patch
   - watch
 - apiGroups:
-  - numaproj.io
+  - numaflow.numaproj.io
   resources:
   - interstepbufferservices
   - pipelines
