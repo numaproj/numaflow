@@ -221,6 +221,39 @@ func Test_buildReducesVertices(t *testing.T) {
 	assert.Equal(t, int32(2), *r[pl.Name+"-"+pl.Spec.Vertices[1].Name].Spec.Replicas)
 }
 
+func Test_pauseAndResumePipeline(t *testing.T) {
+	cl := fake.NewClientBuilder().Build()
+	ctx := context.TODO()
+	testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+	testIsbSvc.Status.MarkConfigured()
+	testIsbSvc.Status.MarkDeployed()
+	err := cl.Create(ctx, testIsbSvc)
+	assert.Nil(t, err)
+	r := &pipelineReconciler{
+		client:   cl,
+		scheme:   scheme.Scheme,
+		config:   fakeConfig,
+		image:    testFlowImage,
+		logger:   zaptest.NewLogger(t).Sugar(),
+		recorder: record.NewFakeRecorder(64),
+	}
+	testObj := testPipeline.DeepCopy()
+	testObj.Spec.Vertices[0].Scale.Min = pointer.Int32(3)
+	_, err = r.reconcile(ctx, testObj)
+	assert.NoError(t, err)
+	_, err = r.pausePipeline(ctx, testObj)
+	assert.NoError(t, err)
+	v, err := r.findExistingVertices(ctx, testObj)
+	assert.NoError(t, err)
+	assert.Equal(t, int32(0), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+	_, err = r.resumePipeline(ctx, testObj)
+	assert.NoError(t, err)
+	v, err = r.findExistingVertices(ctx, testObj)
+	assert.NoError(t, err)
+	assert.Equal(t, int32(3), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+	assert.NoError(t, err)
+}
+
 func Test_copyVertexLimits(t *testing.T) {
 	pl := testPipeline.DeepCopy()
 	v := pl.Spec.Vertices[0].DeepCopy()
