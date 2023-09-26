@@ -18,8 +18,10 @@ package validator
 
 import (
 	"context"
+	"fmt"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -28,20 +30,38 @@ import (
 )
 
 type pipelineValidator struct {
-	client   kubernetes.Interface
-	pipeline v1alpha1.PipelineInterface
+	client    kubernetes.Interface
+	pipeline  v1alpha1.PipelineInterface
+	isbClient v1alpha1.InterStepBufferServiceInterface
 
 	oldPipeline *dfv1.Pipeline
 	newPipeline *dfv1.Pipeline
 }
 
-// return PipelineValidator
-func NewPipelineValidator(client kubernetes.Interface, pipeline v1alpha1.PipelineInterface, old, new *dfv1.Pipeline) Validator {
-	return &pipelineValidator{client: client, pipeline: pipeline, oldPipeline: old, newPipeline: new}
+// NewPipelineValidator returns a new PipelineValidator
+func NewPipelineValidator(client kubernetes.Interface, pipeline v1alpha1.PipelineInterface, isbClient v1alpha1.InterStepBufferServiceInterface, old, new *dfv1.Pipeline) Validator {
+	return &pipelineValidator{
+		client:      client,
+		pipeline:    pipeline,
+		isbClient:   isbClient,
+		oldPipeline: old,
+		newPipeline: new,
+	}
 }
 
 func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.AdmissionResponse {
 	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
+		return DeniedResponse(err.Error())
+	}
+	// Check that the ISB service exists
+	var isbName string
+	if v.newPipeline.Spec.InterStepBufferServiceName != "" {
+		isbName = v.newPipeline.Spec.InterStepBufferServiceName
+	} else {
+		isbName = dfv1.DefaultISBSvcName
+	}
+	fmt.Println("isbNameNew: ", isbName)
+	if err := v.checkIsbExists(ctx, isbName); err != nil {
 		return DeniedResponse(err.Error())
 	}
 	return AllowedResponse()
@@ -58,6 +78,29 @@ func (v *pipelineValidator) ValidateUpdate(ctx context.Context) *admissionv1.Adm
 	if v.newPipeline.Spec.InterStepBufferServiceName != v.oldPipeline.Spec.InterStepBufferServiceName {
 		return DeniedResponse("Cannot update pipeline with different interStepBufferServiceName")
 	}
+	// Check that the ISB service exists
+	var isbName string
+	if v.newPipeline.Spec.InterStepBufferServiceName != "" {
+		isbName = v.newPipeline.Spec.InterStepBufferServiceName
+	} else {
+		isbName = dfv1.DefaultISBSvcName
+	}
+	if err := v.checkIsbExists(ctx, isbName); err != nil {
+		return DeniedResponse(err.Error())
+	}
 
 	return AllowedResponse()
+}
+
+// checkIsbExists checks that the ISB service exists in the given namespace and is valid
+func (v *pipelineValidator) checkIsbExists(ctx context.Context, isbSvcName string) error {
+	spec, err := v.isbClient.Get(ctx, isbSvcName, metav1.GetOptions{})
+	if err != nil {
+		fmt.Println("error found: ", err)
+		return err
+	}
+	if spec.Name != isbSvcName {
+		return fmt.Errorf("ISB service doesn't exist %s", isbSvcName)
+	}
+	return nil
 }

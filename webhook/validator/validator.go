@@ -75,7 +75,7 @@ func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient
 				return nil, err
 			}
 		}
-		return NewPipelineValidator(client, PipelineClient, old, new), nil
+		return NewPipelineValidator(client, PipelineClient, ISBSVCClient, old, new), nil
 	default:
 		return nil, fmt.Errorf("unrecognized kind: %v", kind)
 	}

@@ -174,6 +174,7 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 	}
 	// Convert reqBody to pipeline spec
 	var pipelineSpec = reqBody.(*dfv1.Pipeline)
+	pipelineSpec.Namespace = ns
 
 	isValid := validatePipelineSpec(h, nil, pipelineSpec, ValidTypeCreate)
 	if isValid != nil {
@@ -181,7 +182,6 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-
 	_, err = h.numaflowClient.Pipelines(ns).Create(context.Background(), pipelineSpec, metav1.CreateOptions{})
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to create pipeline %q, %v", pipelineSpec.Name, err.Error())
@@ -805,7 +805,11 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 func validatePipelineSpec(h *handler, oldPipeline *dfv1.Pipeline, newPipeline *dfv1.Pipeline, validType string) error {
 	ns := newPipeline.Namespace
 	pipeClient := h.numaflowClient.Pipelines(ns)
-	valid := validator.NewPipelineValidator(h.kubeClient, pipeClient, oldPipeline, newPipeline)
+	if ns == "" {
+		ns = "default"
+	}
+	isbClient := h.numaflowClient.InterStepBufferServices(ns)
+	valid := validator.NewPipelineValidator(h.kubeClient, pipeClient, isbClient, oldPipeline, newPipeline)
 	var resp *admissionv1.AdmissionResponse
 	switch validType {
 	case ValidTypeCreate:
