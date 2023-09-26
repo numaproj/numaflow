@@ -43,7 +43,7 @@ rules:
       - patch
       - watch
   - apiGroups:
-      - numaproj.io
+      - numaflow.numaproj.io
     verbs:
       - get
       - list
