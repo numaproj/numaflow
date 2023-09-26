@@ -60,7 +60,6 @@ func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.Adm
 	} else {
 		isbName = dfv1.DefaultISBSvcName
 	}
-	fmt.Println("isbNameNew: ", isbName)
 	if err := v.checkIsbExists(ctx, isbName); err != nil {
 		return DeniedResponse(err.Error())
 	}
@@ -96,7 +95,6 @@ func (v *pipelineValidator) ValidateUpdate(ctx context.Context) *admissionv1.Adm
 func (v *pipelineValidator) checkIsbExists(ctx context.Context, isbSvcName string) error {
 	spec, err := v.isbClient.Get(ctx, isbSvcName, metav1.GetOptions{})
 	if err != nil {
-		fmt.Println("error found: ", err)
 		return err
 	}
 	if spec.Name != isbSvcName {
