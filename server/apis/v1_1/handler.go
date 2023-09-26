@@ -26,6 +26,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	corev1 "k8s.io/api/core/v1"
@@ -609,9 +610,15 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		return
 	}
 
-	var response []K8sEventsResponse
+	var (
+		response          []K8sEventsResponse
+		defaultTimeObject time.Time
+	)
 
 	for _, event := range events.Items {
+		if event.LastTimestamp.Time == defaultTimeObject {
+			continue
+		}
 		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
 		response = append(response, newEvent)
 	}
