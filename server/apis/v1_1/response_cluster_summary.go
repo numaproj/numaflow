@@ -33,14 +33,14 @@ type IsbServiceSummary struct {
 // of all the namespaces in a cluster wrapped in a list.
 type ClusterSummaryResponse []ClusterSummary
 
-// ClusterSummary summarizes information for a given namespace
+// ClusterSummary summarizes information for a given namespace.
 type ClusterSummary struct {
 	Namespace         string            `json:"namespace"`
 	PipelineSummary   PipelineSummary   `json:"pipelineSummary"`
 	IsbServiceSummary IsbServiceSummary `json:"isbServiceSummary"`
 }
 
-// NewClusterSummary creates a new ClusterSummary object with the given specifications
+// NewClusterSummary creates a new ClusterSummary object with the given specifications.
 func NewClusterSummary(namespace string, pipelineSummary PipelineSummary,
 	isbSummary IsbServiceSummary) ClusterSummary {
 	return ClusterSummary{
