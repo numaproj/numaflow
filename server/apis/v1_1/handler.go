@@ -619,7 +619,7 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		if event.LastTimestamp.Time == defaultTimeObject {
 			continue
 		}
-		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
 		response = append(response, newEvent)
 	}
 
