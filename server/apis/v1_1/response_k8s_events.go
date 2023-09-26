@@ -6,14 +6,14 @@ type K8sEventsObject struct {
 }
 
 type K8sEventsResponse struct {
-	TimeStamp string          `json:"timestamp"`
+	TimeStamp int64           `json:"timestamp"`
 	Object    K8sEventsObject `json:"object"`
 	Reason    string          `json:"reason"`
 	Message   string          `json:"message"`
 }
 
 // NewK8sEventsResponse creates a new K8sEventsResponse object with the given inputs.
-func NewK8sEventsResponse(timestamp, objectKind, objectName, reason, message string) K8sEventsResponse {
+func NewK8sEventsResponse(timestamp int64, objectKind, objectName, reason, message string) K8sEventsResponse {
 
 	return K8sEventsResponse{
 		TimeStamp: timestamp,

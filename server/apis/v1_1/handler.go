@@ -611,7 +611,7 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	var response []K8sEventsResponse
 
 	for _, event := range events.Items {
-		var newEvent = NewK8sEventsResponse(event.LastTimestamp.String(), event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UTC().UnixMilli(), event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
 		response = append(response, newEvent)
 	}
 
