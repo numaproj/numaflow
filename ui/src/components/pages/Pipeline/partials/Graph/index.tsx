@@ -1,10 +1,11 @@
-import {
+import React, {
   createContext,
   MouseEvent,
   useCallback,
   useEffect,
   useMemo,
   useState,
+  useContext,
 } from "react";
 
 import ReactFlow, {
@@ -32,6 +33,9 @@ import NodeInfo from "./partials/NodeInfo";
 import Spec from "./partials/Spec";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
+import { AppContext } from "../../../../../App";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { SidebarType } from "../../../../common/SlidingSidebar";
 import {
   FlowProps,
   GraphProps,
@@ -236,6 +240,7 @@ const Flow = (props: FlowProps) => {
 
 export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId } = props;
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
     return getLayoutedElements(data.vertices, data.edges, graphDirection);
@@ -269,13 +274,13 @@ export default function Graph(props: GraphProps) {
   const [edgeId, setEdgeId] = useState<string>();
   const [edge, setEdge] = useState<Edge>();
 
-  const handleEdgeClick = (event: MouseEvent, edge: Edge) => {
+  const handleEdgeClick = useCallback((event: MouseEvent, edge: Edge) => {
     setEdge(edge);
     setEdgeId(edge.id);
     setEdgeOpen(true);
     setShowSpec(false);
     setNodeOpen(false);
-  };
+  }, []);
 
   // This has been added to make sure that edge container refreshes on edges being refreshed
   useEffect(() => {
@@ -297,13 +302,25 @@ export default function Graph(props: GraphProps) {
   const [nodeId, setNodeId] = useState<string>();
   const [node, setNode] = useState<Node>();
 
-  const handleNodeClick = (event: MouseEvent, node: Node) => {
-    setNode(node);
-    setNodeId(node.id);
-    setNodeOpen(true);
-    setShowSpec(false);
-    setEdgeOpen(false);
-  };
+  const handleNodeClick = useCallback(
+    (event: MouseEvent, node: Node) => {
+      setNode(node);
+      setNodeId(node.id);
+      setNodeOpen(true);
+      setShowSpec(false);
+      setEdgeOpen(false);
+      if (setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.VERTEX_DETAILS,
+          vertexDetailsProps: {
+            vertexId: node.id,
+            vertexSpecs: data.pipeline?.spec?.vertices || [],
+          },
+        });
+      }
+    },
+    [setSidebarProps, namespaceId, pipelineId, data.pipeline]
+  );
 
   // This has been added to make sure that node container refreshes on nodes being refreshed
   useEffect(() => {

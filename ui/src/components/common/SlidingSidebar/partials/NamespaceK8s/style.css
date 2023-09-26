@@ -23,6 +23,11 @@
   background-color: #FB0;
 }
 
+.namespace-k8s-type-count-text {
+  text-transform: none;
+  font-family: Avenir;
+}
+
 .MuiTableCell-root {
   background-color: #FFF !important;
   border-bottom: 1px solid #DCDCDC !important;
