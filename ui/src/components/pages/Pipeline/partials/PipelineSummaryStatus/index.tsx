@@ -16,7 +16,7 @@ export function PipelineSummaryStatus({ pipeline }) {
     }
     setSidebarProps({
       type: SidebarType.NAMESPACE_K8s,
-      namespaceK8sProps: { namespaceId },
+      k8sEventsProps: { namespaceId },
     });
   }, [namespaceId, setSidebarProps]);
 
@@ -25,8 +25,8 @@ export function PipelineSummaryStatus({ pipeline }) {
       return;
     }
     setSidebarProps({
-      type: SidebarType.SPECS,
-      namespaceK8sProps: { namespaceId },
+      type: SidebarType.PIPELINE_SPECS,
+      pipelineSpecsProps: { namespaceId },
     });
   }, [namespaceId, setSidebarProps]);
   return (

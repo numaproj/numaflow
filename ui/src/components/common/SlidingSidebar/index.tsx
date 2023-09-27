@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Box from "@mui/material/Box";
-import { NamespaceK8s, NamespaceK8sProps } from "./partials/NamespaceK8s";
+import { K8sEvents, K8sEventsProps } from "./partials/K8sEvents";
 import { VertexDetails, VertexDetailsProps } from "./partials/VertexDetails";
+import { PiplineSpecs, PiplineSpecsProps } from "./partials/PipelineSpecs";
+import { EdgeDetails, EdgeDetailsProps } from "./partials/EdgeDetails";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import slider from "../../../images/slider.png";
@@ -10,27 +12,37 @@ import "./style.css";
 
 export enum SidebarType {
   NAMESPACE_K8s,
+  PIPELINE_K8s,
   VERTEX_DETAILS,
+  EDGE_DETAILS,
+  PIPELINE_SPECS,
 }
 
 const MIN_WIDTH_BY_TYPE = {
   [SidebarType.NAMESPACE_K8s]: 750,
+  [SidebarType.PIPELINE_K8s]: 750,
   [SidebarType.VERTEX_DETAILS]: 750,
+  [SidebarType.EDGE_DETAILS]: 750,
+  [SidebarType.PIPELINE_SPECS]: 750,
 };
 
 export interface SlidingSidebarProps {
   pageWidth: number;
   type: SidebarType;
-  namespaceK8sProps?: NamespaceK8sProps;
+  k8sEventsProps?: K8sEventsProps;
   vertexDetailsProps?: VertexDetailsProps;
+  edgeDetailsProps?: EdgeDetailsProps;
+  pipelineSpecsProps?: PiplineSpecsProps;
   onClose: () => void;
 }
 
 export function SlidingSidebar({
   pageWidth,
   type,
-  namespaceK8sProps,
+  k8sEventsProps,
   vertexDetailsProps,
+  edgeDetailsProps,
+  pipelineSpecsProps,
   onClose,
 }: SlidingSidebarProps) {
   const [width, setWidth] = useState<number>(pageWidth ? pageWidth / 2 : 0);
@@ -70,20 +82,31 @@ export function SlidingSidebar({
   const content = useMemo(() => {
     switch (type) {
       case SidebarType.NAMESPACE_K8s:
-        if (!namespaceK8sProps) {
+      case SidebarType.PIPELINE_K8s:
+        if (!k8sEventsProps) {
           break;
         }
-        return <NamespaceK8s {...namespaceK8sProps} />;
+        return <K8sEvents {...k8sEventsProps} />;
       case SidebarType.VERTEX_DETAILS:
         if (!vertexDetailsProps) {
           break;
         }
         return <VertexDetails {...vertexDetailsProps} />;
+      case SidebarType.EDGE_DETAILS:
+        if (!edgeDetailsProps) {
+          break;
+        }
+        return <EdgeDetails {...edgeDetailsProps} />;
+      case SidebarType.PIPELINE_SPECS:
+        if (!pipelineSpecsProps) {
+          break;
+        }
+        return <PiplineSpecs {...pipelineSpecsProps} />;
       default:
         break;
     }
     return <div>Missing Props</div>;
-  }, [type, namespaceK8sProps]);
+  }, [type, k8sEventsProps]);
 
   return (
     <Box
