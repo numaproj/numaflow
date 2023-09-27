@@ -4,6 +4,8 @@ import {PipelineSummaryFetchResult} from "../../types/declarations/pipeline";
 
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
+
+// fetch pipeline summary and ISB summary
 export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
   const [results, setResults] = useState<PipelineSummaryFetchResult>({
     data: undefined,
@@ -47,7 +49,6 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
   useEffect(() => {
     if (pipelineLoading || isbLoading) {
       if (options?.requestKey === "") {
-        // Only set loading true when first load or when loadOnRefresh is true
         setResults({
           data: undefined,
           loading: true,
