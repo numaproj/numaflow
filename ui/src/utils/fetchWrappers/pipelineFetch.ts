@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Options, useFetch } from "./fetch";
-import { PipelineSummaryFetchResult } from "../../types/declarations/pipeline";
+import {PipelineSummaryFetchResult} from "../../types/declarations/pipeline";
+
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
@@ -82,8 +83,8 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
     }
     if (pipelineData && isbData) {
       const pipelineSummary = {
-        pipelineData: pipelineData.data,
-        isbData: isbData.data,
+        pipelineData: pipelineData?.data,
+        isbData: isbData?.data,
       };
       setResults({
         data: pipelineSummary,

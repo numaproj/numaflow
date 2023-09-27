@@ -49,38 +49,55 @@ export function PipelineSummaryStatus({ pipeline }) {
             sx={{
               display: "flex",
               flexDirection: "column",
-              marginRight: "5rem",
+              marginRight: "1rem",
             }}
           >
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
-                Created Timestamp:{" "}
+                Created On:{" "}
               </span>
-              {pipeline?.metadata?.creationTimestamp}
             </div>
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
-                Last Updated Timestamp:{" "}
+                Last Updated On:{" "}
               </span>
-              {pipeline?.status?.lastUpdated}
             </div>
             <div className="pipeline-summary-text">
-              <span className="pipeline-summary-subtitle">Last Refresh: </span>
-              2023-12-07T02:02:00Z
+              <span className="pipeline-summary-subtitle">Maximum lag: </span>
             </div>
+            {/*<div className="pipeline-summary-text">*/}
+            {/*  <span className="pipeline-summary-subtitle">Last Refresh: </span>*/}
+            {/*  2023-12-07T02:02:00Z*/}
+            {/*</div>*/}
+          </Box>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              marginRight: "4rem",
+            }}
+          >
+            <div className="pipeline-summary-text">
+              <span>{pipeline?.metadata?.creationTimestamp}</span>
+            </div>
+            <div className="pipeline-summary-text">
+              <span>{pipeline?.status?.lastUpdated}</span>
+            </div>
+            <div className="pipeline-summary-text">
+              <span>10 sec.</span>
+            </div>
+            {/*<div className="pipeline-summary-text">*/}
+            {/*  2023-12-07T02:02:00Z*/}
+            {/*</div>*/}
           </Box>
           <Box sx={{ display: "flex", flexDirection: "column" }}>
-            <div className="pipeline-summary-text">
-              <span className="pipeline-summary-subtitle">Maximum lag: </span>{" "}
-              10 sec.
-            </div>
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
                 <div
                   className="pipeline-onclick-events"
                   onClick={handleK8sEventsClick}
                 >
-                  K8s Event Logs
+                  K8s Events
                 </div>
               </span>
             </div>

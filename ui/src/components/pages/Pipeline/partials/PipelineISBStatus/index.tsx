@@ -1,11 +1,11 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
-import {IconsStatusMap} from "../../../../../utils";
+import { IconsStatusMap } from "../../../../../utils";
 
-import './style.css'
+import "./style.css";
 
-export function PipelineISBStatus({isbData}) {
+export function PipelineISBStatus({ isbData }) {
   return (
     <Box
       sx={{
@@ -40,10 +40,10 @@ export function PipelineISBStatus({isbData}) {
                 marginLeft: "0.3125rem",
               }}
             >
-              <span className="pipeline-logo-text">{isbData?.isbService?.status?.phase}</span>
               <span className="pipeline-logo-text">
-                    {isbData?.status}
-                  </span>
+                {isbData?.isbService?.status?.phase}
+              </span>
+              <span className="pipeline-logo-text">{isbData?.status}</span>
             </Box>
           </Box>
         </Box>
@@ -57,13 +57,17 @@ export function PipelineISBStatus({isbData}) {
                 marginLeft: "0.3125rem",
               }}
             >
-              <span className="isb-status-subtitle">ISB Type: </span>
-              <span className="isb-status-subtitle">
-                    ISB Size:
-                  </span>
-              <span className="isb-status-subtitle">
-                    ISB Services:
-                  </span>
+              <div className="pipeline-summary-text">
+                <span className="pipeline-summary-subtitle">ISB Type: </span>
+              </div>
+              <div className="pipeline-summary-text">
+                <span className="pipeline-summary-subtitle">ISB Size: </span>
+              </div>
+              <div className="pipeline-summary-text">
+                <span className="pipeline-summary-subtitle">
+                  ISB Services:{" "}
+                </span>
+              </div>
             </Box>
             <Box
               sx={{
@@ -72,13 +76,27 @@ export function PipelineISBStatus({isbData}) {
                 marginLeft: "0.3125rem",
               }}
             >
-              <div className="isb-status-text"><Chip label={isbData?.isbService?.status?.type} /></div>
-              <span className="isb-status-text">{isbData?.isbService?.spec[isbData?.isbService?.status?.type]?.replicas}</span>
-              <span className="isb-status-text">{isbData?.name}</span>
+              <div className="isb-status-text">
+                <Chip
+                  label={isbData?.isbService?.status?.type}
+                  sx={{ height: "20px" }}
+                />
+              </div>
+              <div className="isb-status-text">
+                <span>
+                  {
+                    isbData?.isbService?.spec[isbData?.isbService?.status?.type]
+                      ?.replicas
+                  }
+                </span>
+              </div>
+              <div className="isb-status-text">
+                <span>{isbData?.name}</span>
+              </div>
             </Box>
           </Box>
         </Box>
       </Box>
     </Box>
-  )
+  );
 }
