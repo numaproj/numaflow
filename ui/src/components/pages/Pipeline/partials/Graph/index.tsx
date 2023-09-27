@@ -323,13 +323,14 @@ export default function Graph(props: GraphProps) {
           type: SidebarType.VERTEX_DETAILS,
           vertexDetailsProps: {
             namespaceId,
+            pipelineId,
             vertexId: node.id,
             vertexSpecs: data.pipeline?.spec?.vertices || [],
           },
         });
       }
     },
-    [setSidebarProps, namespaceId, data.pipeline]
+    [setSidebarProps, namespaceId, pipelineId, data.pipeline]
   );
 
   // This has been added to make sure that node container refreshes on nodes being refreshed

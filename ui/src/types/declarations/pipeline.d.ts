@@ -97,3 +97,27 @@ export interface PipelineSummaryFetchResult {
   loading: boolean;
   error: any;
 }
+
+export interface PipelineVertexMetric {
+  partition: number;
+  oneM: number;
+  fiveM: number;
+  fifteenM: number;
+}
+
+export interface PipelineVertexMetrics {
+  vertexId: string;
+  metrics: PipelineVertexMetric[];
+}
+
+export interface PipelineVertexMetricsFetchResult {
+  data?: PipelineVertexMetrics[];
+  loading: boolean;
+  error: any;
+}
+
+export interface PiplelineVertexMetricsFetchProps {
+  namespace: string;
+  pipeline: string;
+  loadOnRefresh?: boolean;
+}
