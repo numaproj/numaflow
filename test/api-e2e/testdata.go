@@ -10,6 +10,7 @@ var (
         "name": "test-pipeline-1"
     },
     "spec": {
+		"interStepBufferServiceName": "numaflow-e2e",
         "vertices": [
             {
                 "name": "in",
@@ -59,6 +60,7 @@ var (
         "name": "test-pipeline-2"
     },
     "spec": {
+		"interStepBufferServiceName": "numaflow-e2e",
         "vertices": [
             {
                 "name": "in",

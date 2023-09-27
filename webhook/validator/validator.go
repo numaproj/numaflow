@@ -37,7 +37,7 @@ type Validator interface {
 }
 
 // GetValidator returns a Validator instance
-func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient v1alpha1.InterStepBufferServiceInterface, PipelineClient v1alpha1.PipelineInterface, kind metav1.GroupVersionKind, oldBytes []byte, newBytes []byte) (Validator, error) {
+func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient v1alpha1.InterStepBufferServiceInterface, PipelineClient v1alpha1.PipelineInterface, NumaClient v1alpha1.NumaflowV1alpha1Interface, kind metav1.GroupVersionKind, oldBytes []byte, newBytes []byte) (Validator, error) {
 	log := logging.FromContext(ctx)
 	switch kind.Kind {
 	case dfv1.ISBGroupVersionKind.Kind:
@@ -75,7 +75,10 @@ func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient
 				return nil, err
 			}
 		}
-		return NewPipelineValidator(client, PipelineClient, old, new), nil
+		isbClient := NumaClient.InterStepBufferServices(new.Namespace)
+		//list, _ := isbClient.List(ctx, metav1.ListOptions{})
+		//fmt.Println("DEBUG list: ", list)
+		return NewPipelineValidator(client, PipelineClient, isbClient, old, new), nil
 	default:
 		return nil, fmt.Errorf("unrecognized kind: %v", kind)
 	}

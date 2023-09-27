@@ -55,8 +55,8 @@ func v1_1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
-	// Validate a given pipeline spec.
-	r.POST("/validation/pipeline", handler.ValidatePipeline)
-	// Validate a given InterStepBufferService spec.
-	r.POST("/validation/isb-service", handler.ValidateInterStepBufferService)
+	//// Validate a given pipeline spec.
+	//r.POST("/validation/pipeline", handler.ValidatePipeline)
+	//// Validate a given InterStepBufferService spec.
+	//r.POST("/validation/isb-service", handler.ValidateInterStepBufferService)
 }

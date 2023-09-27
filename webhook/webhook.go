@@ -71,6 +71,7 @@ type Options struct {
 // Controller for validation webhook
 type AdmissionController struct {
 	Client         kubernetes.Interface
+	NumaClient     v1alpha1.NumaflowV1alpha1Interface
 	ISBSVCClient   v1alpha1.InterStepBufferServiceInterface
 	PipelineClient v1alpha1.PipelineInterface
 
@@ -258,7 +259,7 @@ func (ac *AdmissionController) admit(ctx context.Context, request *admissionv1.A
 		log.Infof("Operation not interested: %v %v", request.Kind, request.Operation)
 		return &admissionv1.AdmissionResponse{Allowed: true}
 	}
-	v, err := validator.GetValidator(ctx, ac.Client, ac.ISBSVCClient, ac.PipelineClient, request.Kind, request.OldObject.Raw, request.Object.Raw)
+	v, err := validator.GetValidator(ctx, ac.Client, ac.ISBSVCClient, ac.PipelineClient, ac.NumaClient, request.Kind, request.OldObject.Raw, request.Object.Raw)
 	if err != nil {
 		return validator.DeniedResponse("failed to get a validator: %v", err)
 	}
