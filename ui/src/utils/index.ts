@@ -1,4 +1,17 @@
 import { Pod, PodDetail, ResourceUsage } from "../types/declarations/pods";
+import circleCheck from "../../src/images/checkmark-circle.png";
+import circleDash from "../../src/images/circle-dash.png";
+import heartFill from "../../src/images/heart-fill.png";
+import warning from "../../src/images/warning-circle.png";
+import critical from "../../src/images/critical.png";
+
+// global constants
+export const RUNNING = "Running"
+export const ACTIVE = "active"
+export const INACTIVE = "inactive"
+export const HEALTHY = "healthy"
+export const WARNING = "warning"
+export const CRITICAL = "critical"
 
 export function getBaseHref(): string {
   if (window.__RUNTIME_CONFIG__?.BASE_HREF) {
@@ -144,3 +157,13 @@ export function a11yProps(index: number) {
     "aria-controls": `info-tabpanel-${index}`,
   };
 }
+
+// icon maps for each status
+export const IconsStatusMap = {
+  [RUNNING]: circleCheck,
+  [ACTIVE]: circleCheck,
+  [INACTIVE]: circleDash,
+  [HEALTHY]: heartFill,
+  [WARNING]: warning,
+  [CRITICAL]: critical,
+};

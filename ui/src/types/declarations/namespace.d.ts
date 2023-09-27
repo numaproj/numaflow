@@ -40,12 +40,13 @@ export interface NamespacePipelineListingProps {
 }
 
 export interface K8sEvent {
+  eventKey: number;
   namespace: string;
-  name: string;
-  component: string;
+  timestamp: string;
+  type: string;
+  object: string;
   reason: string;
   message: string;
-  timestamp: string;
 }
 
 export interface K8sEventSummary {

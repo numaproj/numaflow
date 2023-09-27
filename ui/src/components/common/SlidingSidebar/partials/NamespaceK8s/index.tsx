@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useEffect } from "react";
+import React, { useCallback, useMemo, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import TableContainer from "@mui/material/TableContainer";
@@ -8,27 +8,30 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Pagination from "@mui/material/Pagination";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import ToggleButton from "@mui/material/ToggleButton";
 import CircularProgress from "@mui/material/CircularProgress";
 import { K8sEvent } from "../../../../../types/declarations/namespace";
 import { useNamespaceK8sEventsFetch } from "../../../../../utils/fetchWrappers/namespaceK8sEventsFetch";
 
 import "./style.css";
 
-const MAX_PAGE_SIZE = 7;
+const MAX_PAGE_SIZE = 6;
 
 export interface NamespaceK8sProps {
   namespaceId: string;
 }
 
 export function NamespaceK8s({ namespaceId }: NamespaceK8sProps) {
-  const [page, setPage] = React.useState(1);
-  const [totalPages, setTotalPages] = React.useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [typeFilter, setTypeFilter] = useState<string | undefined>();
   const [filteredEvents, setFilteredEvents] = React.useState<K8sEvent[]>([]);
   const { data, loading, error } = useNamespaceK8sEventsFetch({
     namespace: namespaceId,
   });
 
-  // Update filtered events based on page selected
+  // Update filtered events based on page selected and filter
   useEffect(() => {
     if (!data) {
       setFilteredEvents([]);
@@ -36,9 +39,12 @@ export function NamespaceK8s({ namespaceId }: NamespaceK8sProps) {
       setTotalPages(0);
       return;
     }
-    const filtered: K8sEvent[] = data.events;
-    // Sort by timestamp (server gives in oldest to newest)
-    filtered.reverse();
+    let filtered: K8sEvent[] = data.events;
+    if (typeFilter) {
+      filtered = filtered.filter(
+        (event) => event.type.toLowerCase() === typeFilter
+      );
+    }
 
     // Break list into pages
     const pages = filtered.reduce((resultArray: any[], item, index) => {
@@ -57,7 +63,7 @@ export function NamespaceK8s({ namespaceId }: NamespaceK8sProps) {
     // Set filtered namespaces with current page of namespaces
     setFilteredEvents(pages[page - 1] || []);
     setTotalPages(pages.length);
-  }, [data, page]);
+  }, [data, page, typeFilter]);
 
   const handlePageChange = useCallback(
     (event: React.ChangeEvent<unknown>, value: number) => {
@@ -66,46 +72,55 @@ export function NamespaceK8s({ namespaceId }: NamespaceK8sProps) {
     []
   );
 
+  const handleTypeFilterChange = useCallback(
+    (event: React.MouseEvent<HTMLElement>, value: string | undefined) => {
+      setTypeFilter(value);
+    },
+    []
+  );
+
   const typeCounts = useMemo(() => {
     if (!data) {
       return undefined;
     }
+
     return (
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-        }}
+      <ToggleButtonGroup
+        value={typeFilter}
+        exclusive
+        onChange={handleTypeFilterChange}
       >
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-          }}
-        >
-          <span className="namespace-k8s-type-count-text">Normal</span>
-          <div className="namespace-k8s-type-count-badge normal">
-            {data.normalCount}
-          </div>
-        </Box>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-            marginLeft: "1rem",
-          }}
-        >
-          <span className="namespace-k8s-type-count-text">Warning</span>
-          <div className="namespace-k8s-type-count-badge warn">
-            {data.warningCount}
-          </div>
-        </Box>
-      </Box>
+        <ToggleButton value="normal" aria-label="normal events filter">
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+            }}
+          >
+            <span className="namespace-k8s-type-count-text">Normal</span>
+            <div className="namespace-k8s-type-count-badge normal">
+              {data.normalCount}
+            </div>
+          </Box>
+        </ToggleButton>
+        <ToggleButton value="warning" aria-label="warning events filter">
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+            }}
+          >
+            <span className="namespace-k8s-type-count-text">Warning</span>
+            <div className="namespace-k8s-type-count-badge warn">
+              {data.warningCount}
+            </div>
+          </Box>
+        </ToggleButton>
+      </ToggleButtonGroup>
     );
-  }, [data]);
+  }, [data, typeFilter, handleTypeFilterChange]);
 
   const table = useMemo(() => {
     if (!data) {
@@ -121,12 +136,13 @@ export function NamespaceK8s({ namespaceId }: NamespaceK8sProps) {
           height: "100%",
         }}
       >
-        <TableContainer sx={{ height: "100%", backgroundColor: "#FFF" }}>
+        <TableContainer sx={{ maxHeight: "37.5rem", backgroundColor: "#FFF" }}>
           <Table stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Component</TableCell>
+                <TableCell>Timestamp</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Object</TableCell>
                 <TableCell>Reason</TableCell>
                 <TableCell>Message</TableCell>
               </TableRow>
@@ -141,9 +157,10 @@ export function NamespaceK8s({ namespaceId }: NamespaceK8sProps) {
               )}
               {!!filteredEvents.length &&
                 filteredEvents.map((event) => (
-                  <TableRow key={event.name}>
-                    <TableCell>{event.name}</TableCell>
-                    <TableCell>{event.component}</TableCell>
+                  <TableRow key={event.eventKey}>
+                    <TableCell>{event.timestamp}</TableCell>
+                    <TableCell>{event.type}</TableCell>
+                    <TableCell>{event.object}</TableCell>
                     <TableCell>{event.reason}</TableCell>
                     <TableCell>{event.message}</TableCell>
                   </TableRow>
