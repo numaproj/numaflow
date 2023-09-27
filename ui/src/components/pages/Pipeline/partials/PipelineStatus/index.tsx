@@ -1,11 +1,10 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import circleCheck from "../../../../../images/checkmark-circle.png";
-import heartFill from "../../../../../images/heart-fill.png";
+import {IconsStatusMap} from "../../../../../utils";
 
-import "./style.css"
+import "./style.css";
 
-export function PipelineStatus({status, healthStatus}) {
+export function PipelineStatus({ status, healthStatus }) {
   return (
     <Box
       sx={{
@@ -25,14 +24,14 @@ export function PipelineStatus({status, healthStatus}) {
           <Box sx={{ display: "flex", flexDirection: "row" }}>
             <Box sx={{ display: "flex", flexDirection: "column" }}>
               <img
-                src={circleCheck}
-                alt="active"
-                className={"summary-statuses-active-logo"}
+                src={IconsStatusMap[status]}
+                alt={status}
+                className={"pipeline-logo"}
               />
               <img
-                src={heartFill}
-                alt="healthy"
-                className={"summary-statuses-active-logo"}
+                src={IconsStatusMap[healthStatus]}
+                alt={healthStatus}
+                className={"pipeline-logo"}
               />
             </Box>
             <Box
@@ -42,8 +41,8 @@ export function PipelineStatus({status, healthStatus}) {
                 marginLeft: "0.3125rem",
               }}
             >
-              <span className="summary-statuses-active-text">{status}</span>
-              <span className="summary-statuses-active-text">
+              <span className="pipeline-logo-text">{status}</span>
+              <span className="pipeline-logo-text">
                 {healthStatus}
               </span>
             </Box>
@@ -51,5 +50,5 @@ export function PipelineStatus({status, healthStatus}) {
         </Box>
       </Box>
     </Box>
-  )
+  );
 }

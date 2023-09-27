@@ -1,12 +1,11 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
-import circleCheck from "../../../../../images/checkmark-circle.png";
-import heartFill from "../../../../../images/heart-fill.png";
+import {IconsStatusMap} from "../../../../../utils";
 
 import './style.css'
 
-export function PipelineISBStatus() {
+export function PipelineISBStatus({isbData}) {
   return (
     <Box
       sx={{
@@ -24,14 +23,14 @@ export function PipelineISBStatus() {
           <Box sx={{ display: "flex", flexDirection: "row" }}>
             <Box sx={{ display: "flex", flexDirection: "column" }}>
               <img
-                src={circleCheck}
-                alt="active"
-                className={"summary-statuses-active-logo"}
+                src={IconsStatusMap[isbData?.isbService?.status?.phase]}
+                alt={IconsStatusMap[isbData?.isbService?.status?.phase]}
+                className={"pipeline-logo"}
               />
               <img
-                src={heartFill}
-                alt="healthy"
-                className={"summary-statuses-active-logo"}
+                src={IconsStatusMap[isbData?.status]}
+                alt={isbData?.status}
+                className={"pipeline-logo"}
               />
             </Box>
             <Box
@@ -41,15 +40,15 @@ export function PipelineISBStatus() {
                 marginLeft: "0.3125rem",
               }}
             >
-              <span className="summary-statuses-active-text">Running</span>
-              <span className="summary-statuses-active-text">
-                    Warning
+              <span className="pipeline-logo-text">{isbData?.isbService?.status?.phase}</span>
+              <span className="pipeline-logo-text">
+                    {isbData?.status}
                   </span>
             </Box>
           </Box>
         </Box>
         <Box sx={{ width: "fit-content" }}>
-          <span className="pipeline-status-title">ISB SUMMARY</span>
+          <span className="pipeline-status-title">ISB Summary</span>
           <Box sx={{ display: "flex", flexDirection: "row" }}>
             <Box
               sx={{
@@ -73,9 +72,9 @@ export function PipelineISBStatus() {
                 marginLeft: "0.3125rem",
               }}
             >
-              <div className="isb-status-text"><Chip label="Chip Filled" /></div>
-              <span className="isb-status-text">Large</span>
-              <span className="isb-status-text">Service name</span>
+              <div className="isb-status-text"><Chip label={isbData?.isbService?.status?.type} /></div>
+              <span className="isb-status-text">{isbData?.isbService?.spec[isbData?.isbService?.status?.type]?.replicas}</span>
+              <span className="isb-status-text">{isbData?.name}</span>
             </Box>
           </Box>
         </Box>
