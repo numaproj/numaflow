@@ -18,11 +18,17 @@ import "./style.css";
 
 const MAX_PAGE_SIZE = 6;
 
-export interface NamespaceK8sProps {
+export interface K8sEventsProps {
   namespaceId: string;
+  excludeHeader?: boolean;
+  square?: boolean;
 }
 
-export function NamespaceK8s({ namespaceId }: NamespaceK8sProps) {
+export function K8sEvents({
+  namespaceId,
+  excludeHeader = false,
+  square = false,
+}: K8sEventsProps) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
@@ -60,7 +66,7 @@ export function NamespaceK8s({ namespaceId }: NamespaceK8sProps) {
       // Reset to page 1 if current page is greater than total pages after filtering
       setPage(1);
     }
-    // Set filtered namespaces with current page of namespaces
+    // Set filtered namespaces with current page
     setFilteredEvents(pages[page - 1] || []);
     setTotalPages(pages.length);
   }, [data, page, typeFilter]);
@@ -195,14 +201,17 @@ export function NamespaceK8s({ namespaceId }: NamespaceK8sProps) {
         height: "100%",
       }}
     >
-      <span className="namespace-k8s-title">Namespace K8s Event Logs</span>
+      {!excludeHeader && (
+        <span className="namespace-k8s-title">K8s Events</span>
+      )}
       <Paper
         sx={{
           display: "flex",
           flexDirection: "column",
           padding: "1rem",
-          marginTop: "2rem",
+          marginTop: excludeHeader ? "0" : "2rem",
         }}
+        square={square}
         elevation={0}
       >
         {loading && (
