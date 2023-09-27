@@ -8,10 +8,8 @@ import {
 } from "react";
 
 import ReactFlow, {
-  addEdge,
   applyEdgeChanges,
   applyNodeChanges,
-  Connection,
   Edge,
   EdgeChange,
   Node,
@@ -68,7 +66,7 @@ const defaultEdgeTypes: EdgeTypes = {
 };
 
 //sets nodes and edges to highlight in the graph
-export const HighlightContext = createContext<HighlightContextProps>(undefined);
+export const HighlightContext = createContext<HighlightContextProps>(null);
 
 const getLayoutedElements = (
   nodes: Node[],
@@ -85,13 +83,28 @@ const getLayoutedElements = (
   });
 
   edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
+    // skipping the side input edges to ensure graph alignment without the sideInputs
+    if (!edge?.data?.sideInputEdge)
+      dagreGraph.setEdge(edge.source, edge.target);
   });
 
   layout(dagreGraph);
-
+  // setting nodes excepts generators and assigning generator height after remaining nodes are laid out
+  let max_pos = 0;
+  nodes.forEach((node) => {
+    if (node?.data?.type !== "sideInput") {
+      const nodeWithPosition = dagreGraph.node(node.id);
+      max_pos = Math.max(max_pos, nodeWithPosition.y);
+    }
+  });
+  let cnt = 2;
   nodes.forEach((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
+    if (node?.data?.type === "sideInput") {
+      nodeWithPosition.x = nodeWidth;
+      nodeWithPosition.y = max_pos + nodeHeight * cnt;
+      cnt++;
+    }
     node.targetPosition = isHorizontal ? Position.Left : Position.Top;
     node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
 
@@ -116,7 +129,6 @@ const Flow = (props: FlowProps) => {
     edges,
     onNodesChange,
     onEdgesChange,
-    onConnect,
     handleNodeClick,
     handleEdgeClick,
     handlePaneClick,
@@ -142,7 +154,6 @@ const Flow = (props: FlowProps) => {
       edges={edges}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
-      onConnect={onConnect}
       onEdgeClick={handleEdgeClick}
       onNodeClick={handleNodeClick}
       onPaneClick={handlePaneClick}
@@ -234,6 +245,22 @@ const Flow = (props: FlowProps) => {
   );
 };
 
+// hides the side input edges
+const hide = (hidden: { [x: string]: any }) => (edge: Edge) => {
+  edge.hidden = hidden[edge?.data?.source];
+  return edge;
+};
+
+const getHiddenValue = (edges: Edge[]) => {
+  const hiddenEdges = {};
+  edges?.forEach((edge) => {
+    if (edge?.data?.sideInputEdge) {
+      hiddenEdges[edge?.data?.source] = true;
+    }
+  });
+  return hiddenEdges;
+};
+
 export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId } = props;
 
@@ -243,6 +270,30 @@ export default function Graph(props: GraphProps) {
 
   const [nodes, setNodes] = useState<Node[]>(layoutedNodes);
   const [edges, setEdges] = useState<Edge[]>(layoutedEdges);
+  const [sideNodes, setSideNodes] = useState<Map<string, Node>>(new Map());
+  const [sideEdges, setSideEdges] = useState<Map<string, string>>(new Map());
+  const initialHiddenValue = getHiddenValue(layoutedEdges);
+  const [hidden, setHidden] = useState(initialHiddenValue);
+
+  useEffect(() => {
+    const nodeSet = new Map();
+    layoutedNodes.forEach((node) => {
+      if (node?.data?.sideHandle) {
+        nodeSet.set(node?.data?.name, node);
+      }
+    });
+    setSideNodes(nodeSet);
+  }, [layoutedNodes]);
+
+  useEffect(() => {
+    const edgeSet: Map<string, string> = new Map();
+    layoutedEdges.forEach((edge) => {
+      if (edge?.data?.sideInputEdge) {
+        edgeSet.set(edge?.id, edge?.targetHandle);
+      }
+    });
+    setSideEdges(edgeSet);
+  }, [layoutedEdges]);
 
   useEffect(() => {
     setNodes(layoutedNodes);
@@ -257,10 +308,6 @@ export default function Graph(props: GraphProps) {
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) =>
       setEdges((eds) => applyEdgeChanges(changes, eds)),
-    [setEdges]
-  );
-  const onConnect = useCallback(
-    (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
     [setEdges]
   );
 
@@ -297,12 +344,24 @@ export default function Graph(props: GraphProps) {
   const [nodeId, setNodeId] = useState<string>();
   const [node, setNode] = useState<Node>();
 
+  useEffect(() => {
+    setEdges((eds) => eds.map(hide(hidden)));
+  }, [hidden, data]);
+
   const handleNodeClick = (event: MouseEvent, node: Node) => {
     setNode(node);
     setNodeId(node.id);
     setNodeOpen(true);
     setShowSpec(false);
     setEdgeOpen(false);
+    setHidden((prevState) => {
+      const updatedState = {};
+      Object.keys(prevState).forEach((key) => {
+        updatedState[key] =
+          node?.data?.type === "sideInput" ? !(key === node.id) : true;
+      });
+      return updatedState;
+    });
   };
 
   // This has been added to make sure that node container refreshes on nodes being refreshed
@@ -326,6 +385,13 @@ export default function Graph(props: GraphProps) {
     setEdgeOpen(false);
     setNodeOpen(false);
     setHighlightValues({});
+    setHidden((prevState) => {
+      const updatedState = {};
+      Object.keys(prevState).forEach((key) => {
+        updatedState[key] = true;
+      });
+      return updatedState;
+    });
   };
 
   const [showSpec, setShowSpec] = useState(true);
@@ -334,7 +400,14 @@ export default function Graph(props: GraphProps) {
     <div style={{ height: "100%" }}>
       <div className="Graph" data-testid="graph">
         <HighlightContext.Provider
-          value={{ highlightValues, setHighlightValues }}
+          value={{
+            highlightValues,
+            setHighlightValues,
+            setHidden,
+            handleNodeClick,
+            sideInputNodes: sideNodes,
+            sideInputEdges: sideEdges,
+          }}
         >
           <ReactFlowProvider>
             <Flow
@@ -343,7 +416,6 @@ export default function Graph(props: GraphProps) {
                 edges,
                 onNodesChange,
                 onEdgesChange,
-                onConnect,
                 handleNodeClick,
                 handleEdgeClick,
                 handlePaneClick,

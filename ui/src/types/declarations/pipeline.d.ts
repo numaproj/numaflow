@@ -44,6 +44,7 @@ export interface Pipeline {
 export interface Spec {
   vertices: PipelineVertex[];
   edges: PipelineEdge[];
+  sideInputs?: SideInput[];
   watermark: any;
 }
 
@@ -52,10 +53,17 @@ export interface PipelineVertex {
   source?: any;
   udf?: any;
   sink?: any;
+  sideInputs?: any[];
 }
 
 export interface PipelineEdge {
   from: string;
   to: string;
   conditions?: Conditions;
+}
+
+export interface SideInput {
+  name: string;
+  container: any;
+  trigger: any;
 }

@@ -14,7 +14,6 @@
     height: 2.5rem;
     justify-content: space-between;
     align-items: center;
-    flex-shrink: 0;
     border-radius: 0.25rem;
     border: 1px solid var(--base-gray-gray-05, #D4D7DC);
     background: var(--primitives-white, #FFF);
@@ -30,7 +29,6 @@
     height: 12rem;
     width: 5rem;
     justify-content: space-between;
-    flex-shrink: 0;
     margin-bottom: 6rem;
     margin-left: 4rem;
 }
