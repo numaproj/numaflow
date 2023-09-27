@@ -3,6 +3,7 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
 import { SpecEditor } from "./partials/SpecEditor";
+import { ProcessingRates } from "./partials/ProcessingRates";
 import { K8sEvents } from "../K8sEvents";
 
 import "./style.css";
@@ -20,12 +21,14 @@ export enum VertexType {
 
 export interface VertexDetailsProps {
   namespaceId: string;
+  pipelineId: string;
   vertexId: string;
   vertexSpecs: any[];
 }
 
 export function VertexDetails({
   namespaceId,
+  pipelineId,
   vertexId,
   vertexSpecs,
 }: VertexDetailsProps) {
@@ -160,7 +163,11 @@ export function VertexDetails({
         hidden={tabValue !== PROCESSING_RATES_TAB_INDEX}
       >
         {tabValue === PROCESSING_RATES_TAB_INDEX && (
-          <div>TODO PROCESSING RATES</div>
+          <ProcessingRates
+            namespaceId={namespaceId}
+            vertexId={vertexId}
+            pipelineId={pipelineId}
+          />
         )}
       </div>
       <div

@@ -3,6 +3,7 @@ import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import YAML from "yaml";
 import Editor from "@monaco-editor/react";
+import CircularProgress from "@mui/material/CircularProgress";
 
 import "./style.css";
 
@@ -25,6 +26,11 @@ export function SpecEditor({ vertexId, vertexSpec }: SpecEditorProps) {
           value={YAML.stringify(vertexSpec)}
           theme="github"
           options={{ domReadOnly: true }}
+          loading={
+            <Box sx={{ display: "flex", justifyContent: "center" }}>
+              <CircularProgress />
+            </Box>
+          }
         />
       </Paper>
     );
