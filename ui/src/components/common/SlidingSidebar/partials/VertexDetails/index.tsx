@@ -3,6 +3,7 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
 import { SpecEditor } from "./partials/SpecEditor";
+import { K8sEvents } from "../K8sEvents";
 
 import "./style.css";
 
@@ -18,11 +19,16 @@ export enum VertexType {
 }
 
 export interface VertexDetailsProps {
+  namespaceId: string;
   vertexId: string;
   vertexSpecs: any[];
 }
 
-export function VertexDetails({ vertexId, vertexSpecs }: VertexDetailsProps) {
+export function VertexDetails({
+  namespaceId,
+  vertexId,
+  vertexSpecs,
+}: VertexDetailsProps) {
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
   const [tabValue, setTabValue] = useState(PODS_VIEW_TAB_INDEX);
@@ -91,7 +97,11 @@ export function VertexDetails({ vertexId, vertexSpecs }: VertexDetailsProps) {
     >
       {header}
       <Box sx={{ marginTop: "1rem", borderBottom: 1, borderColor: "divider" }}>
-        <Tabs className="vertex-details-tabs" value={tabValue} onChange={handleTabChange}>
+        <Tabs
+          className="vertex-details-tabs"
+          value={tabValue}
+          onChange={handleTabChange}
+        >
           <Tab
             className={
               tabValue === PODS_VIEW_TAB_INDEX
@@ -158,7 +168,9 @@ export function VertexDetails({ vertexId, vertexSpecs }: VertexDetailsProps) {
         role="tabpanel"
         hidden={tabValue !== K8S_EVENTS_TAB_INDEX}
       >
-        {tabValue === K8S_EVENTS_TAB_INDEX && <div>TODO K8s Events</div>}
+        {tabValue === K8S_EVENTS_TAB_INDEX && (
+          <K8sEvents namespaceId={namespaceId} excludeHeader square />
+        )}
       </div>
     </Box>
   );

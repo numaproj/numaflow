@@ -29,7 +29,7 @@ export function Namespaces() {
     }
     setSidebarProps({
       type: SidebarType.NAMESPACE_K8s,
-      namespaceK8sProps: { namespaceId },
+      k8sEventsProps: { namespaceId },
     });
   }, [namespaceId, setSidebarProps]);
 
