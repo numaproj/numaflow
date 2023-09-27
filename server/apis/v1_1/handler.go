@@ -24,7 +24,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	corev1 "k8s.io/api/core/v1"
@@ -364,10 +366,6 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: minimum number of replicas is 3.", ns, isbServices))
 			return
 		}
-		if *requestBody.JetStream.Replicas > 5 {
-			h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: maximum number of replicas is 5.", ns, isbServices))
-			return
-		}
 		isbSVC.Spec.JetStream.Replicas = requestBody.JetStream.Replicas
 	}
 
@@ -608,7 +606,26 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, events.Items))
+	var (
+		response          []K8sEventsResponse
+		defaultTimeObject time.Time
+	)
+
+	for _, event := range events.Items {
+		if event.LastTimestamp.Time == defaultTimeObject {
+			continue
+		}
+		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+		response = append(response, newEvent)
+	}
+
+	// sort the events by timestamp
+	// from most recent events to older events
+	sort.Slice(response, func(i int, j int) bool {
+		return response[i].TimeStamp >= response[j].TimeStamp
+	})
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
 // ValidatePipeline is used to validate the pipeline spec

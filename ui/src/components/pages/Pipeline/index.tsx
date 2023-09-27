@@ -15,6 +15,7 @@ import { PipelineSummaryStatus } from "./partials/PipelineSummaryStatus";
 import { PipelineISBStatus } from "./partials/PipelineISBStatus";
 
 import "./style.css";
+import React from "react";
 
 export function Pipeline() {
   // TODO needs to be able to be given namespaceId from parent for NS only install

@@ -4,21 +4,71 @@ import Pagination from "@mui/material/Pagination";
 import Grid from "@mui/material/Grid";
 import { DebouncedSearchInput } from "../../../../common/DebouncedSearchInput";
 import { PipelineCard } from "../PipelineCard";
+import { createSvgIcon } from "@mui/material/utils";
 import {
   NamespacePipelineListingProps,
   NamespacePipelineSummary,
 } from "../../../../../types/declarations/namespace";
 
 import "./style.css";
+import {
+  Button,
+  MenuItem,
+  Select,
+  TableCell,
+  TableRow,
+  TableSortLabel,
+} from "@mui/material";
 
 const MAX_PAGE_SIZE = 4;
+export const HEALTH = ["All", "Healthy", "Warning", "Critical"];
+export const STATUS = ["All", "Running", "Stopped", "Paused"];
+export const sortOptions = [
+  {
+    label: "Last Updated",
+    value: "lastUpdated",
+    sortOrder: "desc",
+  },
+  {
+    label: "Last Created",
+    value: "lastCreated",
+    sortOrder: "desc",
+  },
+  {
+    label: "A-Z",
+    value: "alphabeltical",
+    sortOrder: "asc",
+  },
+];
+
+const PlusIcon = createSvgIcon(
+  // credit: plus icon from https://heroicons.com/
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={1.5}
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M12 4.5v15m7.5-7.5h-15"
+    />
+  </svg>,
+  "Plus"
+);
 
 export function NamespacePipelineListing({
   namespace,
   data,
 }: NamespacePipelineListingProps) {
   const [search, setSearch] = useState("");
+  const [health, setHealth] = useState(HEALTH[0]);
+  const [status, setStatus] = useState(STATUS[0]);
   const [page, setPage] = useState(1);
+  const [orderBy, setOrderBy] = useState("lastUpdated");
+  const [order, setOrder] = useState("desc");
   const [totalPages, setTotalPages] = useState(
     Math.ceil(data.pipelinesCount / MAX_PAGE_SIZE)
   );
@@ -31,9 +81,7 @@ export function NamespacePipelineListing({
     let filtered: NamespacePipelineSummary[] = data.pipelineSummaries;
     if (search) {
       // Filter by search
-      filtered = data.pipelineSummaries.filter((p) =>
-        p.name.includes(search)
-      );
+      filtered = data.pipelineSummaries.filter((p) => p.name.includes(search));
     }
     // Sort by name
     filtered.sort((a, b) => (a.name > b.name ? 1 : -1)); // TODO take sorting options into account
@@ -63,7 +111,16 @@ export function NamespacePipelineListing({
     },
     []
   );
-
+  const handleSortChange = useCallback(
+    (
+      event: React.MouseEvent<HTMLAnchorElement | HTMLSpanElement>,
+      value: string
+    ) => {
+      setOrderBy(value);
+      setOrder(order === "asc" ? "desc" : "asc");
+    },
+    [order]
+  );
   const listing = useMemo(() => {
     if (!filteredPipelines.length) {
       return (
@@ -81,6 +138,7 @@ export function NamespacePipelineListing({
         </Box>
       );
     }
+
     return (
       <Grid
         container
@@ -93,11 +151,7 @@ export function NamespacePipelineListing({
       >
         {filteredPipelines.map((p: NamespacePipelineSummary) => {
           return (
-            <Grid
-              key={`pipeline-${p.name}`}
-              item
-              xs={12}
-            >
+            <Grid key={`pipeline-${p.name}`} item xs={12}>
               <PipelineCard namespace={namespace} data={p} />
             </Grid>
           );
@@ -108,16 +162,148 @@ export function NamespacePipelineListing({
 
   return (
     <Box
-      sx={{ display: "flex", flexDirection: "column", padding: "0 2.625rem" }}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        padding: "0 2.625rem",
+      }}
     >
-      <Box sx={{ display: "flex", flexDirection: "row" }}>
-        <DebouncedSearchInput
-          placeHolder="Search for pipeline"
-          onChange={setSearch}
-        />
+      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "end" }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            flexGrow: 1,
+            height: "44px",
+            justifyItems: "end",
+          }}
+        >
+          <DebouncedSearchInput
+            placeHolder="Search for pipeline"
+            onChange={setSearch}
+          />
+        </Box>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            flexGrow: 1,
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              flexGrow: 1,
+            }}
+          >
+            <label style={{ color: "#6B6C72" }}>Health</label>
+            <Select
+              label="Health"
+              defaultValue="All"
+              inputProps={{
+                name: "Health",
+                id: "health",
+              }}
+              style={{
+                width: "224px",
+                background: "#fff",
+                border: "1px solid #6B6C72",
+                height: "34px",
+              }}
+              onChange={(e) => setHealth(e.target.value)}
+            >
+              {HEALTH.map((health) => (
+                <MenuItem key={health} value={health}>
+                  {health}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              flexGrow: 1,
+            }}
+          >
+            <label style={{ color: "#6B6C72" }}>Status</label>
+            <Select
+              label="Status"
+              defaultValue="All"
+              inputProps={{
+                name: "Status",
+                id: "health",
+              }}
+              style={{
+                width: "224px",
+                background: "#fff",
+                border: "1px solid #6B6C72",
+                height: "34px",
+              }}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              {STATUS.map((status) => (
+                <MenuItem key={status} value={status}>
+                  {status}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
+        </Box>
       </Box>
       <Box sx={{ display: "flex", flexDirection: "row", marginTop: "2rem" }}>
-        <span className="ns-pipeline-listing-table-title">Pipelines</span>
+        <Box sx={{ display: "flex", flexDirection: "row", flexGrow: 1 }}>
+          <span className="ns-pipeline-listing-table-title">Pipelines</span>
+        </Box>
+
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            flexGrow: 1,
+          }}
+        >
+          <TableRow>
+            {sortOptions.map((option) => {
+              return (
+                <TableCell key={option.value} padding="normal">
+                  <TableSortLabel
+                    active={orderBy === option.value}
+                    onClick={(event) => handleSortChange(event, option.value)}
+                    direction={
+                      orderBy === option.value
+                        ? (order as "desc" | "asc" | undefined)
+                        : "asc"
+                    }
+                  >
+                    <span>{option.label}</span>
+                  </TableSortLabel>
+                </TableCell>
+              );
+            })}
+          </TableRow>
+        </Box>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            flexGrow: 1,
+            justifyContent: "flex-end",
+          }}
+        >
+          <Button
+            variant="outlined"
+            startIcon={<PlusIcon />}
+            size="small"
+            sx={{ marginRight: "10px" }}
+          >
+            Create Pipeline
+          </Button>
+          <Button variant="outlined" startIcon={<PlusIcon />} size="small">
+            Create ISB
+          </Button>
+        </Box>
       </Box>
       {listing}
       <Box

@@ -7,42 +7,42 @@ import {
   NamespaceSummaryFetchResult,
 } from "../../types/declarations/namespace";
 
-// const MOCK_PIPELINE_DATA: any[] = [
-//   {
-//     name: "pipeline1",
-//     status: "healthy",
-//   },
-//   {
-//     name: "pipeline2",
-//     status: "warning",
-//   },
-//   {
-//     name: "pipeline3",
-//     status: "critical",
-//   },
-//   {
-//     name: "pipeline4",
-//     status: "inactive",
-//   },
-// ];
-// const MOCK_ISB_DATA: any[] = [
-//   {
-//     name: "isb1",
-//     status: "healthy",
-//   },
-//   {
-//     name: "isb2",
-//     status: "warning",
-//   },
-//   {
-//     name: "isb3",
-//     status: "critical",
-//   },
-//   {
-//     name: "isb4",
-//     status: "inactive",
-//   },
-// ];
+const MOCK_PIPELINE_DATA: any[] = [
+  {
+    name: "pipeline1",
+    status: "healthy",
+  },
+  {
+    name: "pipeline2",
+    status: "warning",
+  },
+  {
+    name: "pipeline3",
+    status: "critical",
+  },
+  {
+    name: "pipeline4",
+    status: "inactive",
+  },
+];
+const MOCK_ISB_DATA: any[] = [
+  {
+    name: "isb1",
+    status: "healthy",
+  },
+  {
+    name: "isb2",
+    status: "warning",
+  },
+  {
+    name: "isb3",
+    status: "critical",
+  },
+  {
+    name: "isb4",
+    status: "inactive",
+  },
+];
 
 const rawDataToNamespaceSummary = (
   rawPipelineData: any[],
@@ -189,39 +189,39 @@ export const useNamespaceSummaryFetch = ({
       }
       return;
     }
-    if (pipelineError || isbError) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineError || isbError,
-      });
-      return;
-    }
-    if (pipelineData?.errMsg || isbData?.errMsg) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineData?.errMsg || isbData?.errMsg,
-      });
-      return;
-    }
-    if (pipelineData && isbData) {
-      // const nsSummary = rawDataToNamespaceSummary(
-      //   // TODO REMOVE MOCK
-      //   MOCK_PIPELINE_DATA,
-      //   MOCK_ISB_DATA
-      // );
-      const nsSummary = rawDataToNamespaceSummary(
-        pipelineData.data,
-        isbData.data
-      );
-      setResults({
-        data: nsSummary,
-        loading: false,
-        error: undefined,
-      });
-      return;
-    }
+    // if (pipelineError || isbError) {
+    //   setResults({
+    //     data: undefined,
+    //     loading: false,
+    //     error: pipelineError || isbError,
+    //   });
+    //   return;
+    // }
+    // if (pipelineData?.errMsg || isbData?.errMsg) {
+    //   setResults({
+    //     data: undefined,
+    //     loading: false,
+    //     error: pipelineData?.errMsg || isbData?.errMsg,
+    //   });
+    //   return;
+    // }
+    // if (pipelineData && isbData) {
+    const nsSummary = rawDataToNamespaceSummary(
+      // TODO REMOVE MOCK
+      MOCK_PIPELINE_DATA,
+      MOCK_ISB_DATA
+    );
+    // const nsSummary = rawDataToNamespaceSummary(
+    //   pipelineData.data,
+    //   isbData.data
+    // );
+    setResults({
+      data: nsSummary,
+      loading: false,
+      error: undefined,
+    });
+    //   return;
+    // }
   }, [
     pipelineData,
     isbData,
