@@ -1,4 +1,9 @@
 import { Pod, PodDetail, ResourceUsage } from "../types/declarations/pods";
+import circleCheck from "../../src/images/checkmark-circle.png";
+import circleDash from "../../src/images/circle-dash.png";
+import heartFill from "../../src/images/heart-fill.png";
+import warning from "../../src/images/warning-circle.png";
+import critical from "../../src/images/critical.png";
 
 export function getBaseHref(): string {
   if (window.__RUNTIME_CONFIG__?.BASE_HREF) {
@@ -144,3 +149,12 @@ export function a11yProps(index: number) {
     "aria-controls": `info-tabpanel-${index}`,
   };
 }
+
+export const IconsStatusMap = {
+  Running: circleCheck,
+  active: circleCheck,
+  inactive: circleDash,
+  healthy: heartFill,
+  warning: warning,
+  critical: critical,
+};

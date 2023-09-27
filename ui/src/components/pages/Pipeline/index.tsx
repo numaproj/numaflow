@@ -1,43 +1,60 @@
-import React, {useEffect, useMemo} from "react";
+import React, { useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
 import Graph from "./partials/Graph";
 import { notifyError } from "../../../utils/error";
+import {
+  SummaryPageLayout,
+  SummarySection,
+  SummarySectionType,
+} from "../../common/SummaryPageLayout";
+import { usePipelineSummaryFetch } from "../../../utils/fetchWrappers/pipelineFetch";
+import { PipelineStatus } from "./partials/PipelineStatus";
+import { PipelineSummaryStatus } from "./partials/PipelineSummaryStatus";
+import { PipelineISBStatus } from "./partials/PipelineISBStatus";
 
 import "./style.css";
-import {SummaryPageLayout, SummarySection, SummarySectionType} from "../../common/SummaryPageLayout";
-import Box from "@mui/material/Box";
-import {usePipelineSummaryFetch} from "../../../utils/fetchWrappers/pipelineFetch";
-import {PipelineStatus} from "./partials/PipelineStatus";
-import {PipelineSummaryStatus} from "./partials/PipelineSummaryStatus";
-import {PipelineISBStatus} from "./partials/PipelineISBStatus";
 
 export function Pipeline() {
   // TODO needs to be able to be given namespaceId from parent for NS only install
   const { namespaceId, pipelineId } = useParams();
-  const { data, loading: loadingNew, error } = usePipelineSummaryFetch({namespaceId,  pipelineId})
+  // TODO loading and error handling
+  const {
+    data,
+    loading: pipelineSummaryLoading,
+    error,
+  } = usePipelineSummaryFetch({ namespaceId, pipelineId });
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (!data) {
       return [];
     }
+    const pipelineData = data?.pipelineData;
+    const isbData = data?.isbData;
     return [
-      // Pipelines collection
+      // pipeline collection
       {
         type: SummarySectionType.COLLECTION,
         collectionSections: [
           {
             type: SummarySectionType.CUSTOM,
-            customComponent: <PipelineStatus status={data?.data?.pipeline?.status?.phase} healthStatus={data?.data?.status}/>,
+            customComponent: (
+              <PipelineStatus
+                status={pipelineData?.pipeline?.status?.phase}
+                healthStatus={pipelineData?.status}
+              />
+            ),
           },
           {
             type: SummarySectionType.CUSTOM,
-            customComponent: <PipelineSummaryStatus pipeline={data?.data?.pipeline} />,
+            customComponent: (
+              <PipelineSummaryStatus pipeline={pipelineData?.pipeline} />
+            ),
           },
           {
             type: SummarySectionType.CUSTOM,
-            customComponent: <PipelineISBStatus />,
+            customComponent: <PipelineISBStatus isbData={isbData} />,
           },
         ],
       },
@@ -86,31 +103,29 @@ export function Pipeline() {
   }
 
   return (
-    <Box>
-      <SummaryPageLayout
-        summarySections={summarySections}
-        contentComponent={
-          (
-          <div
-            data-testid={"pipeline"}
-            style={{ overflow: "scroll !important", height: "650px" }}
-          >
-            {!loading && (
-              <Graph
-                data={{
-                  edges: edges,
-                  vertices: vertices,
-                  pipeline: pipeline,
-                }}
-                namespaceId={namespaceId}
-                pipelineId={pipelineId}
-              />
-            )}
-            {loading && <CircularProgress size={60} sx={{ mx: "47%", my: "15%" }} />}
-          </div>
-          )
-        }
-      />
-    </Box>
+    <SummaryPageLayout
+      summarySections={summarySections}
+      contentComponent={
+        <div
+          data-testid={"pipeline"}
+          style={{ overflow: "scroll !important", height: "100%" }}
+        >
+          {!loading && (
+            <Graph
+              data={{
+                edges: edges,
+                vertices: vertices,
+                pipeline: pipeline,
+              }}
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+            />
+          )}
+          {loading && (
+            <CircularProgress size={60} sx={{ mx: "47%", my: "15%" }} />
+          )}
+        </div>
+      }
+    />
   );
 }

@@ -59,3 +59,41 @@ export interface PipelineEdge {
   to: string;
   conditions?: Conditions;
 }
+
+export interface IsbSummary {
+  name: string;
+  status: string;
+  isbService: IsbService;
+}
+
+export interface IsbService {
+  metadata: any;
+  spec: IsbServiceSpec;
+  status: IsbServiceStatus;
+}
+
+export interface IsbServiceStatus {
+  conditions: any;
+  phase: string;
+}
+
+export interface IsbServiceSpec {
+  jetstream?: Jetstream;
+}
+
+export interface PipelineSummary {
+  name: string;
+  status: string;
+  pipeline: Pipeline;
+}
+
+export interface PipelineMergeSummaryData {
+  pipelineData: PipelineSummary;
+  isbData: IsbSummary;
+}
+
+export interface PipelineSummaryFetchResult {
+  data?: PipelineMergeSummaryData;
+  loading: boolean;
+  error: any;
+}

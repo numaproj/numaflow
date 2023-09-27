@@ -9,3 +9,12 @@
 .pipeline-summary-subtitle {
     font-weight: 600;
 }
+
+.pipeline-onclick-events {
+    color: #393A3D;
+    font-size: 1rem;
+    font-style: normal;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+}
