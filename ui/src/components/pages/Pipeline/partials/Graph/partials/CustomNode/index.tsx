@@ -66,14 +66,13 @@ const CustomNode: FC<NodeProps> = ({
     const sourceVertex = Object.keys(highlightValues)[0];
     if (sideInputNodes.has(sourceVertex)) {
       const edgeId = sourceVertex + "-" + data?.name;
-      if (sideInputEdges.has(edgeId))
-        if (!sideInputEdges.has(edgeId)) {
+      if (!sideInputEdges.has(edgeId)) {
+        style["opacity"] = 0.5;
+      } else {
+        if (sideInputEdges.get(edgeId) !== id) {
           style["opacity"] = 0.5;
-        } else {
-          if (sideInputEdges.get(edgeId) !== id) {
-            style["opacity"] = 0.5;
-          }
         }
+      }
     }
     return style;
   };
