@@ -280,7 +280,16 @@ export default function Graph(props: GraphProps) {
     setEdgeOpen(true);
     setShowSpec(false);
     setNodeOpen(false);
-  }, []);
+    if (setSidebarProps) {
+      setSidebarProps({
+        type: SidebarType.EDGE_DETAILS,
+        edgeDetailsProps: {
+          namespaceId,
+          edgeId: edge.id,
+        },
+      });
+    }
+  }, [setSidebarProps, namespaceId]);
 
   // This has been added to make sure that edge container refreshes on edges being refreshed
   useEffect(() => {
@@ -313,13 +322,14 @@ export default function Graph(props: GraphProps) {
         setSidebarProps({
           type: SidebarType.VERTEX_DETAILS,
           vertexDetailsProps: {
+            namespaceId,
             vertexId: node.id,
             vertexSpecs: data.pipeline?.spec?.vertices || [],
           },
         });
       }
     },
-    [setSidebarProps, namespaceId, pipelineId, data.pipeline]
+    [setSidebarProps, namespaceId, data.pipeline]
   );
 
   // This has been added to make sure that node container refreshes on nodes being refreshed
