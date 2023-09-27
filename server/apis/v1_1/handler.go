@@ -26,6 +26,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -60,6 +61,8 @@ const (
 	ValidTypeCreate = "valid-create"
 	ValidTypeUpdate = "valid-update"
 )
+
+const DefaultNamespace = "default"
 
 type handler struct {
 	kubeClient     kubernetes.Interface
@@ -168,7 +171,8 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 func (h *handler) CreatePipeline(c *gin.Context) {
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual update
-	dryRun := c.DefaultQuery("dry-run", "False")
+	dryRun := c.DefaultQuery("dry-run", "false")
+	dryRun = strings.ToLower(dryRun)
 
 	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
 	if err != nil {
@@ -176,18 +180,23 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 		return
 	}
 	pipelineSpec, ok := reqBody.(*dfv1.Pipeline)
-	pipelineSpec.Namespace = ns
 	if !ok {
 		h.respondWithError(c, "Failed to convert request body to pipeline spec")
 		return
 	}
+	err = validateNamespace(h, pipelineSpec, ns)
+	if err != nil {
+		h.respondWithError(c, err.Error())
+		return
+	}
+	pipelineSpec.Namespace = ns
 	isValid := validatePipelineSpec(h, nil, pipelineSpec, ValidTypeCreate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", isValid.Error()))
 		return
 	}
 	// If Validation flag is set to true, return without creating the pipeline
-	if dryRun == "True" {
+	if dryRun == "true" {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
@@ -237,7 +246,8 @@ func (h *handler) GetPipeline(c *gin.Context) {
 func (h *handler) UpdatePipeline(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 	// dryRun is used to check if the operation is just a validation or an actual update
-	dryRun := c.DefaultQuery("dry-run", "False")
+	dryRun := c.DefaultQuery("dry-run", "false")
+	dryRun = strings.ToLower(dryRun)
 
 	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
 	if err != nil {
@@ -256,6 +266,25 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 		h.respondWithError(c, "Failed to convert request body to pipeline spec")
 		return
 	}
+	// Validate the namespace of the request
+	err = validateNamespace(h, updatedSpec, ns)
+	if err != nil {
+		h.respondWithError(c, err.Error())
+		return
+	}
+
+	// pipeline name in the URL should be same as spec name
+	if pipeline != updatedSpec.Name {
+		h.respondWithError(c, fmt.Sprintf("pipeline name %q is immutable", pipeline))
+		return
+	}
+
+	// Update should not allow to change the name of the pipeline
+	if oldSpec.Name != updatedSpec.Name {
+		h.respondWithError(c, fmt.Sprintf("pipeline name %q is immutable", oldSpec.Name))
+		return
+	}
+
 	oldSpec.Spec = updatedSpec.Spec
 	updatedSpec.Namespace = ns
 	isValid := validatePipelineSpec(h, oldSpec, updatedSpec, ValidTypeUpdate)
@@ -264,7 +293,7 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 		return
 	}
 	// If Validation flag is set to true, return without updating the pipeline
-	if dryRun == "True" {
+	if dryRun == "true" {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
@@ -317,7 +346,8 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual update
-	dryRun := c.DefaultQuery("dry-run", "False")
+	dryRun := c.DefaultQuery("dry-run", "false")
+	dryRun = strings.ToLower(dryRun)
 
 	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
 	if err != nil {
@@ -336,7 +366,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 		return
 	}
 	// If Validation flag is set to true, return without creating the ISB
-	if dryRun == "True" {
+	if dryRun == "true" {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
@@ -387,7 +417,8 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	ns, isbServices := c.Param("namespace"), c.Param("isb-services")
 	// dryRun is used to check if the operation is just a validation or an actual update
-	dryRun := c.DefaultQuery("dry-run", "False")
+	dryRun := c.DefaultQuery("dry-run", "false")
+	dryRun = strings.ToLower(dryRun)
 
 	isbSVC, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbServices, metav1.GetOptions{})
 	if err != nil {
@@ -425,7 +456,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	}
 
 	// If Validation flag is set to true, return without updating the ISB service
-	if dryRun == "True" {
+	if dryRun == "true" {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
@@ -867,6 +898,20 @@ func validateISBSpec(h *handler, prevSpec *dfv1.InterStepBufferService,
 		return errMsg
 	}
 	return nil
+}
+
+// validateNamespace is used to validate the namespace for a pipeline spec
+// For a request, the namespace provided as parameter should be same as the namespace in the pipeline spec
+// if the namespace is not provided in the pipeline spec, the default namespace will be used
+func validateNamespace(h *handler, pipeline *dfv1.Pipeline, ns string) error {
+	var errMsg error
+	errMsg = nil
+	if pipeline.Namespace == "" && ns != DefaultNamespace {
+		errMsg = fmt.Errorf("incorrect namespace provided")
+	} else if pipeline.Namespace != ns {
+		errMsg = fmt.Errorf("incorrect namespace provided")
+	}
+	return errMsg
 }
 
 func daemonSvcAddress(ns, pipeline string) string {
