@@ -1,6 +1,6 @@
 .pipeline-summary-text {
     color: #393A3D;
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-style: normal;
     font-weight: 400;
     line-height: 1.46875rem;
@@ -12,7 +12,7 @@
 
 .pipeline-onclick-events {
     color: #393A3D;
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-style: normal;
     font-weight: 600;
     text-decoration: underline;
