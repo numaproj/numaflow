@@ -502,14 +502,14 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 	}
 	defer client.Close()
 
-	var results [][]*daemon.VertexMetrics
+	var results = make(map[string][]*daemon.VertexMetrics)
 	for _, vertex := range pl.Spec.Vertices {
 		metrics, err := client.GetVertexMetrics(context.Background(), pipeline, vertex.Name)
 		if err != nil {
 			h.respondWithError(c, fmt.Sprintf("Failed to get the vertices metrics: namespace %q pipeline %q vertex %q: %s", ns, pipeline, vertex.Name, err.Error()))
 			return
 		}
-		results = append(results, metrics)
+		results[vertex.Name] = metrics
 	}
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, results))
