@@ -1,27 +1,28 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Box from "@mui/material/Box";
 import { NamespaceK8s, NamespaceK8sProps } from "./partials/NamespaceK8s";
+import { VertexDetails, VertexDetailsProps } from "./partials/VertexDetails";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
-import {Specs} from "./partials/Specs";
 import slider from "../../../images/slider.png";
 
 import "./style.css";
 
 export enum SidebarType {
   NAMESPACE_K8s,
-  SPECS,
+  VERTEX_DETAILS,
 }
 
 const MIN_WIDTH_BY_TYPE = {
   [SidebarType.NAMESPACE_K8s]: 750,
-  [SidebarType.SPECS]: 750,
+  [SidebarType.VERTEX_DETAILS]: 750,
 };
 
 export interface SlidingSidebarProps {
   pageWidth: number;
   type: SidebarType;
   namespaceK8sProps?: NamespaceK8sProps;
+  vertexDetailsProps?: VertexDetailsProps;
   onClose: () => void;
 }
 
@@ -29,6 +30,7 @@ export function SlidingSidebar({
   pageWidth,
   type,
   namespaceK8sProps,
+  vertexDetailsProps,
   onClose,
 }: SlidingSidebarProps) {
   const [width, setWidth] = useState<number>(pageWidth ? pageWidth / 2 : 0);
@@ -71,12 +73,12 @@ export function SlidingSidebar({
         if (!namespaceK8sProps) {
           break;
         }
-        return <NamespaceK8s namespaceId={namespaceK8sProps.namespaceId} />;
-      case SidebarType.SPECS:
-        if (!namespaceK8sProps) {
+        return <NamespaceK8s {...namespaceK8sProps} />;
+      case SidebarType.VERTEX_DETAILS:
+        if (!vertexDetailsProps) {
           break;
         }
-        return <Specs />;
+        return <VertexDetails {...vertexDetailsProps} />;
       default:
         break;
     }
