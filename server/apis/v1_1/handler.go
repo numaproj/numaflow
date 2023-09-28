@@ -264,7 +264,6 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		minWM = 0
 	}
 	lag = maxWM - minWM
-	_ = watermarks
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
 		return
