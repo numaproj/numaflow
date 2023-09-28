@@ -109,6 +109,7 @@ export function Pipeline() {
       errorsProps: {
         errors: true,
       },
+      slide: false,
     });
   }, [setSidebarProps]);
 

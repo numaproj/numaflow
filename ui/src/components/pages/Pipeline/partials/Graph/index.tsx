@@ -159,6 +159,7 @@ const Flow = (props: FlowProps) => {
       errorsProps: {
         errors: true,
       },
+      slide: false,
     });
   }, [setSidebarProps]);
   // TODO error panel icon color change

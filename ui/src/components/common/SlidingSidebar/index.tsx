@@ -37,6 +37,7 @@ const MIN_WIDTH_BY_TYPE = {
 
 export interface SlidingSidebarProps {
   pageWidth: number;
+  slide?: boolean;
   type: SidebarType;
   k8sEventsProps?: K8sEventsProps;
   vertexDetailsProps?: VertexDetailsProps;
@@ -49,6 +50,7 @@ export interface SlidingSidebarProps {
 
 export function SlidingSidebar({
   pageWidth,
+  slide = true,
   type,
   k8sEventsProps,
   vertexDetailsProps,
@@ -59,7 +61,11 @@ export function SlidingSidebar({
   onClose,
 }: SlidingSidebarProps) {
   const [width, setWidth] = useState<number>(
-    errorsProps ? 350 : pageWidth ? pageWidth / 2 : 0
+    errorsProps
+      ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
+      : pageWidth
+      ? pageWidth / 2
+      : 0
   );
   const [minWidth, setMinWidth] = useState<number>(0);
 
@@ -144,7 +150,7 @@ export function SlidingSidebar({
         height: "100%",
       }}
     >
-      {!errorsProps && (
+      {slide && (
         <Box
           sx={{
             display: "flex",

@@ -48,7 +48,7 @@ export const usePipelineViewFetch = (
 
   const BASE_API = `/api/v1_1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
 
-  // call to get pipeline
+  // Call to get pipeline
   useEffect(() => {
     const fetchPipeline = async () => {
       try {
@@ -56,13 +56,17 @@ export const usePipelineViewFetch = (
         if (response.ok) {
           const json = await response.json();
           if (json?.data) {
+            // Update pipeline state with data from the response
             setPipeline(json.data?.pipeline);
+            // Update NS_PL state with metadata from the pipeline
             setNS_PL(
               `${json.data?.pipeline?.metadata?.namespace}-${json.data.pipeline?.metadata?.name}-`
             );
+            // Update spec state if it is not equal to the spec from the response
             if (!isEqual(spec, json.data?.pipeline?.spec))
               setSpec(json.data?.pipeline?.spec);
           } else if (json?.errMsg) {
+            // pipeline API call returns an error message
             setPipelineErr([
               {
                 error: json.errMsg,
@@ -71,6 +75,7 @@ export const usePipelineViewFetch = (
             ]);
           }
         } else {
+          // Handle the case when the response is not OK
           setPipelineErr([
             {
               error: "Failed to fetch the pipeline details",
@@ -79,6 +84,7 @@ export const usePipelineViewFetch = (
           ]);
         }
       } catch {
+        // Handle any errors that occur during the fetch request
         setPipelineErr([
           {
             error: "Failed to fetch the pipeline details",
@@ -91,7 +97,7 @@ export const usePipelineViewFetch = (
     fetchPipeline();
   }, [requestKey]);
 
-  // call to get buffers
+  // Call to get buffers
   useEffect(() => {
     const fetchBuffers = async () => {
       try {
@@ -100,15 +106,20 @@ export const usePipelineViewFetch = (
         );
         if (response.ok) {
           const json = await response.json();
-          if (json?.data) setBuffers(json.data);
-          else if (json?.errMsg)
+          if (json?.data) {
+            // Update buffers state with data from the response
+            setBuffers(json.data);
+          } else if (json?.errMsg) {
+            // Buffer API call returns an error message
             setBuffersErr([
               {
                 error: json.errMsg,
                 options: { toastId: "isb-fetch-error", autoClose: 5000 },
               },
             ]);
+          }
         } else {
+          // Handle the case when the response is not OK
           setBuffersErr([
             {
               error: "Failed to fetch the pipeline buffers",
@@ -117,6 +128,7 @@ export const usePipelineViewFetch = (
           ]);
         }
       } catch {
+        // Handle any errors that occur during the fetch request
         setBuffersErr([
           {
             error: "Failed to fetch the pipeline buffers",
@@ -143,6 +155,7 @@ export const usePipelineViewFetch = (
     const podsErr: any[] = [];
 
     if (spec?.vertices) {
+      // Fetch pods count for each vertex in parallel
       Promise.allSettled(
         spec.vertices.map((vertex: any) => {
           return fetch(`${BASE_API}/vertices/${vertex.name}/pods`)
@@ -154,9 +167,11 @@ export const usePipelineViewFetch = (
               }
             })
             .then((json) => {
-              if (json?.data)
+              if (json?.data) {
+                // Update vertexToPodsMap with the number of pods for the current vertex
                 vertexToPodsMap.set(vertex.name, json.data.length);
-              else if (json?.errMsg)
+              } else if (json?.errMsg) {
+                // Pods API call returns an error message
                 podsErr.push({
                   error: json.errMsg,
                   options: {
@@ -164,12 +179,14 @@ export const usePipelineViewFetch = (
                     autoClose: 5000,
                   },
                 });
+              }
             });
         })
       )
         .then((results) => {
           results.forEach((result) => {
             if (result && result?.status === "rejected") {
+              // Handle rejected promises and add error messages to podsErr
               podsErr.push({
                 error: `${result.reason.response.status}: Failed to get pods count for ${result.reason.vertex} vertex`,
                 options: {
@@ -179,10 +196,14 @@ export const usePipelineViewFetch = (
               });
             }
           });
-          if (podsErr.length > 0) setPodsErr(podsErr);
+          if (podsErr.length > 0) {
+            // Update podsErr state if there are any errors
+            setPodsErr(podsErr);
+          }
         })
         .then(() => {
           if (!isEqual(vertexPods, vertexToPodsMap)) {
+            // Update vertexPods state if it is not equal to vertexToPodsMap
             setVertexPods(vertexToPodsMap);
           }
         })
@@ -195,6 +216,7 @@ export const usePipelineViewFetch = (
     const metricsErr: any[] = [];
 
     if (spec?.vertices && vertexPods.size > 0) {
+      // Fetch metrics for all vertices together
       Promise.allSettled([
         fetch(`${BASE_API}/vertices/metrics`)
           .then((response) => {
@@ -219,7 +241,7 @@ export const usePipelineViewFetch = (
                 let ratePerMin = 0.0,
                   ratePerFiveMin = 0.0,
                   ratePerFifteenMin = 0.0;
-                // keeping processing rates as summation of pod values
+                // Calculate processing rates as summation of pod values
                 vertex.forEach((pod: any) => {
                   if ("processingRates" in pod) {
                     if ("1m" in pod["processingRates"]) {
@@ -236,6 +258,7 @@ export const usePipelineViewFetch = (
                       vertexPods.has(vertexName) &&
                       vertexPods.get(vertexName) !== 0
                     ) {
+                      // Handle case when processingRates are not available for a vertex
                       vertexMetrics.error = true;
                       metricsErr.push({
                         error: `Failed to get metrics for ${vertexName} vertex`,
@@ -259,6 +282,7 @@ export const usePipelineViewFetch = (
                 vertexToMetricsMap.set(vertexName, vertexMetrics);
               });
             } else if (json?.errMsg) {
+              // Metrics API call returns an error message
               metricsErr.push({
                 error: json.errMsg,
                 options: {
@@ -272,13 +296,17 @@ export const usePipelineViewFetch = (
         .then((results) => {
           results.forEach((result) => {
             if (result && result?.status === "rejected") {
+              // Handle rejected promises and add error messages to metricsErr
               metricsErr.push({
                 error: `${result.reason.response.status}: Failed to get metrics for some vertices`,
                 options: { toastId: `vertex-metrics-fetch`, autoClose: 5000 },
               });
             }
           });
-          if (metricsErr.length > 0) setMetricsErr(metricsErr);
+          if (metricsErr.length > 0) {
+            // Update metricsErr state if there are any errors
+            setMetricsErr(metricsErr);
+          }
         })
         .then(() => setVertexMetrics(vertexToMetricsMap))
         .catch(console.error);
@@ -301,8 +329,10 @@ export const usePipelineViewFetch = (
 
     if (spec?.edges) {
       if (spec?.watermark?.disabled === true) {
+        // Set edgeWatermark to empty map if watermark is disabled
         setEdgeWatermark(edgeToWatermarkMap);
       } else {
+        // Fetch watermarks for each edge together
         Promise.allSettled([
           fetch(`${BASE_API}/watermarks`)
             .then((response) => {
@@ -322,6 +352,7 @@ export const usePipelineViewFetch = (
                   edgeToWatermarkMap.set(edge.edge, edgeWatermark);
                 });
               } else if (json?.errMsg) {
+                // Watermarks API call returns an error message
                 watermarkErr.push({
                   error: json.errMsg,
                   options: {
@@ -335,6 +366,7 @@ export const usePipelineViewFetch = (
           .then((results) => {
             results.forEach((result) => {
               if (result && result?.status === "rejected") {
+                // Handle rejected promises and add error messages to watermarkErr
                 watermarkErr.push({
                   error: `${result.reason.status}: Failed to get watermarks for some vertices`,
                   options: { toastId: "watermarks-fetch", autoClose: 5000 },
