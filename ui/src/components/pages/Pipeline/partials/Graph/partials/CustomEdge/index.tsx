@@ -74,43 +74,74 @@ const CustomEdge: FC<EdgeProps> = ({
     }px)`;
   }
 
-  const { highlightValues, setHighlightValues } =
-    useContext<HighlightContextProps>(HighlightContext);
+  const {
+    highlightValues,
+    setHighlightValues,
+    sideInputNodes,
+    sideInputEdges,
+  } = useContext<HighlightContextProps>(HighlightContext);
 
   const getColor = useMemo(() => {
     return data?.isFull ? "#DB334D" : "#8D9096";
   }, [data]);
 
   useEffect(() => {
-    const handles = Array.from(
-      document.getElementsByClassName(
-        "react-flow__handle"
-      ) as HTMLCollectionOf<HTMLElement>
-    );
-    handles.forEach((handle) => {
+    if (data?.sideInputEdge) return;
+    let sourceClass = `source-handle-${data?.source}`;
+    let targetClass = `target-handle-${data?.target}`;
+    if (data?.backEdge) {
+      sourceClass = `center-${sourceClass}`;
+      targetClass = `center-${targetClass}`;
+    } else if (data?.selfEdge) {
+      sourceClass = `quad-${sourceClass}`;
+      targetClass = `quad-${targetClass}`;
+    }
+    const handleElements = Array.from(
+      document.querySelectorAll(`.${targetClass}, .${sourceClass}`)
+    ) as HTMLElement[];
+
+    handleElements.forEach((handle) => {
       handle.style.background = getColor;
     });
-  }, [getColor]);
+  }, [data, getColor]);
+
+  const commonStyle = useMemo(() => {
+    const style = {};
+    if (
+      !sideInputEdges.has(id) &&
+      sideInputNodes.has(Object.keys(highlightValues)[0])
+    ) {
+      style["opacity"] = 0.5;
+    }
+    return style;
+  }, [highlightValues, sideInputNodes, sideInputEdges]);
 
   const edgeStyle = useMemo(() => {
     return {
-      stroke: highlightValues[id] ? "black" : getColor,
+      stroke: highlightValues[id]
+        ? "black"
+        : data?.sideInputEdge
+        ? "#274C77"
+        : getColor,
       strokeWidth: 2,
+      ...commonStyle,
     };
-  }, [highlightValues, getColor]);
+  }, [highlightValues, getColor, data, commonStyle]);
 
   const wmStyle = useMemo(() => {
     return {
       color: getColor,
+      ...commonStyle,
     };
-  }, [getColor]);
+  }, [getColor, commonStyle]);
 
   const pendingStyle = useMemo(() => {
     return {
       color: getColor,
       fontWeight: data?.isFull ? 700 : 400,
+      ...commonStyle,
     };
-  }, [data, getColor]);
+  }, [data, getColor, commonStyle]);
 
   const getMinWM = useMemo(() => {
     if (data?.edgeWatermark?.watermarks) {
@@ -154,10 +185,10 @@ const CustomEdge: FC<EdgeProps> = ({
   }, [data, getMinWM]);
 
   const handleClick = useCallback(() => {
-    const updatedNodeHighlightValues = {};
-    updatedNodeHighlightValues[id] = true;
-    setHighlightValues(updatedNodeHighlightValues);
-  }, []);
+    const updatedEdgeHighlightValues = {};
+    updatedEdgeHighlightValues[id] = true;
+    setHighlightValues(updatedEdgeHighlightValues);
+  }, [setHighlightValues]);
 
   return (
     <>

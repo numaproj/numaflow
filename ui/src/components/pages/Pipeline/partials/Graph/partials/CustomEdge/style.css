@@ -16,11 +16,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
     height: 1.5rem;
     width: 6.625rem;
     color: #8D9096;
-    font-family: AvenirNext forINTUIT, "IBM Plex Sans", sans-serif;
+    font-family: "IBM Plex Sans", sans-serif;
     font-size: 0.75rem;
     font-style: normal;
     font-weight: 400;
@@ -31,21 +30,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
     height: 1.5rem;
     width: 6.625rem;
     color: #8D9096;
-    font-family: AvenirNext forINTUIT, "IBM Plex Sans", sans-serif;
+    font-family: "IBM Plex Sans", sans-serif;
     font-size: 1rem;
     font-style: normal;
     font-weight: 400;
     line-height: normal;
-}
-
-.react-flow__handle {
-    background : #8D9096;
-    z-index: -1;
-    margin: -0.2rem;
-    height: 1rem;
-    width: 1rem;
 }

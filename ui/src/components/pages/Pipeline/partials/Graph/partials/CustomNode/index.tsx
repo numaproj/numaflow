@@ -9,6 +9,8 @@ import source from "../../../../../../../images/source.svg";
 import map from "../../../../../../../images/map.svg";
 import reduce from "../../../../../../../images/reduce.svg";
 import sink from "../../../../../../../images/sink.svg";
+import input from "../../../../../../../images/input.svg";
+import generator from "../../../../../../../images/generator.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -33,22 +35,135 @@ const CustomNode: FC<NodeProps> = ({
 }: NodeProps) => {
   //TODO add check for healthy/unhealthy node and update imported images accordingly
 
-  const { highlightValues, setHighlightValues } =
-    useContext<HighlightContextProps>(HighlightContext);
+  const {
+    highlightValues,
+    setHighlightValues,
+    setHidden,
+    sideInputNodes,
+    handleNodeClick,
+    sideInputEdges,
+  } = useContext<HighlightContextProps>(HighlightContext);
 
   const handleClick = useCallback(() => {
     const updatedNodeHighlightValues = {};
     updatedNodeHighlightValues[data?.name] = true;
     setHighlightValues(updatedNodeHighlightValues);
-  }, []);
+  }, [data, setHighlightValues]);
+
+  const commonStyle = useMemo(() => {
+    const style = {};
+    if (
+      !sideInputNodes.has(data?.name) &&
+      sideInputNodes.has(Object.keys(highlightValues)[0])
+    ) {
+      style["opacity"] = 0.5;
+    }
+    return style;
+  }, [highlightValues, sideInputNodes, data]);
+
+  const blurHandle = (id: string) => {
+    const style = {};
+    const sourceVertex = Object.keys(highlightValues)[0];
+    if (sideInputNodes.has(sourceVertex)) {
+      const edgeId = sourceVertex + "-" + data?.name;
+      if (!sideInputEdges.has(edgeId)) {
+        style["opacity"] = 0.5;
+      } else {
+        if (sideInputEdges.get(edgeId) !== id) {
+          style["opacity"] = 0.5;
+        }
+      }
+    }
+    return style;
+  };
 
   const nodeStyle = useMemo(() => {
     return {
       border: `${isSelected(highlightValues[data?.name])} ${getBorderColor(
         data?.type
       )}`,
+      ...commonStyle,
     };
   }, [highlightValues, data]);
+
+  if (data?.type === "sideInput") {
+    return (
+      <Tooltip
+        title={<div className={"node-tooltip"}>{data?.name}</div>}
+        arrow
+        placement={"top-end"}
+      >
+        <div className={"sideInput_node"} onClick={handleClick}>
+          <img src={generator} alt={"generator"} width={22} height={24} />
+          <Handle
+            type="source"
+            id="2"
+            position={Position.Right}
+            style={{ top: "60%", left: "35%" }}
+          />
+        </div>
+      </Tooltip>
+    );
+  }
+
+  const handleInputClick = useCallback(
+    (e) => {
+      e.stopPropagation();
+      const targetId = e.target.id;
+      let source: string;
+      sideInputNodes.forEach((_, node) => {
+        const possibleEdge = `${node}-${data?.name}`;
+        if (
+          sideInputEdges.has(possibleEdge) &&
+          sideInputEdges.get(possibleEdge) === targetId
+        ) {
+          source = node;
+        }
+      });
+      handleNodeClick(e, sideInputNodes.get(source));
+    },
+    [sideInputEdges, data, sideInputNodes, handleNodeClick]
+  );
+
+  const handleMouseOver = useCallback(
+    (e) => {
+      const targetId = e.target.id;
+      let source: string;
+
+      sideInputNodes.forEach((_, node) => {
+        const possibleEdge = `${node}-${data?.name}`;
+        if (
+          sideInputEdges.has(possibleEdge) &&
+          sideInputEdges.get(possibleEdge) === targetId
+        ) {
+          source = node;
+        }
+      });
+      setHidden((prevState) => {
+        const updatedState = {};
+        Object.keys(prevState).forEach((key) => {
+          updatedState[key] = true;
+        });
+        updatedState[source] = false;
+        return updatedState;
+      });
+      const updatedHighlightedState = {};
+      updatedHighlightedState[source] = true;
+      setHighlightValues(updatedHighlightedState);
+    },
+    [data, sideInputNodes, sideInputEdges, setHidden, setHighlightValues]
+  );
+
+  const handleMouseOut = useCallback(() => {
+    setHidden((prevState) => {
+      const updatedState = {};
+      Object.keys(prevState).forEach((key) => {
+        updatedState[key] = true;
+      });
+      return updatedState;
+    });
+    setHighlightValues({});
+  }, [setHidden, setHighlightValues]);
 
   return (
     <div data-testid={data?.name}>
@@ -108,6 +223,7 @@ const CustomNode: FC<NodeProps> = ({
           <Handle
             type="target"
             id="0"
+            className={`target-handle-${data?.name}`}
             position={targetPosition}
             isConnectable={isConnectable}
           />
@@ -116,21 +232,33 @@ const CustomNode: FC<NodeProps> = ({
           <Handle
             type="source"
             id="0"
+            className={`source-handle-${data?.name}`}
             position={sourcePosition}
             isConnectable={isConnectable}
           />
         )}
         {data?.centerSourceHandle && (
-          <Handle type="source" id="1" position={Position.Top} />
+          <Handle
+            type="source"
+            id="1"
+            className={`center-source-handle-${data?.name}`}
+            position={Position.Top}
+          />
         )}
         {data?.centerTargetHandle && (
-          <Handle type="target" id="1" position={Position.Top} />
+          <Handle
+            type="target"
+            id="1"
+            className={`center-target-handle-${data?.name}`}
+            position={Position.Top}
+          />
         )}
         {data?.quadHandle && (
           <>
             <Handle
               type="source"
               id="2"
+              className={`quad-source-handle-${data?.name}`}
               position={Position.Top}
               style={{
                 left: "75%",
@@ -139,6 +267,7 @@ const CustomNode: FC<NodeProps> = ({
             <Handle
               type="target"
               id="2"
+              className={`quad-target-handle-${data?.name}`}
               position={Position.Top}
               style={{
                 left: "25%",
@@ -146,7 +275,38 @@ const CustomNode: FC<NodeProps> = ({
             />
           </>
         )}
+        {data?.nodeInfo?.sideInputs?.map((_, idx) => {
+          return (
+            <Handle
+              key={idx}
+              type="target"
+              id={`3-${idx}`}
+              position={Position.Bottom}
+              style={{
+                left: `${50 - idx * 10}%`,
+              }}
+            />
+          );
+        })}
       </div>
+      {data?.nodeInfo?.sideInputs?.map((_, idx) => {
+        return (
+          <img
+            key={idx}
+            src={input}
+            alt={"input"}
+            id={`3-${idx}`}
+            className={"sideInput_handle"}
+            style={{
+              left: `${44.2 - idx * 10}%`,
+              ...blurHandle(`3-${idx}`),
+            }}
+            onMouseOver={handleMouseOver}
+            onMouseOut={handleMouseOut}
+            onClick={handleInputClick}
+          />
+        );
+      })}
     </div>
   );
 };
