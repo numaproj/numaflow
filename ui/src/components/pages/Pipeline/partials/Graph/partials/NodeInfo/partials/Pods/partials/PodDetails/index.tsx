@@ -21,7 +21,14 @@ export function PodDetail({
       data-testid="podDetail"
       sx={{ display: "flex", flexDirection: "column", mb: 2 }}
     >
-      <Box sx={{ display: "flex", flexDirection: "column", width: "100%" }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+          marginTop: "1rem",
+        }}
+      >
         <Box sx={headerSx}>Pod Info</Box>
         <PodInfo
           pod={pod}
@@ -29,7 +36,14 @@ export function PodDetail({
           containerName={containerName}
         />
       </Box>
-      <Box sx={{ display: "flex", flexDirection: "column", width: "100%" }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+          marginTop: "1rem",
+        }}
+      >
         <Box sx={headerSx}>Pod Logs</Box>
         <PodLogs
           namespaceId={namespaceId}
