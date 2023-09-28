@@ -10,6 +10,8 @@ import {
   SearchablePodsHeatMapProps,
 } from "../../../../../../../../../../../types/declarations/pods";
 
+import "./style.css";
+
 export const SearchablePodsHeatMap = ({
   pods,
   podsDetailsMap,
@@ -57,14 +59,6 @@ export const SearchablePodsHeatMap = ({
       data-testid={"searchable-pods"}
       sx={{ display: "flex", flexDirection: "column", mb: 2 }}
     >
-      <Box
-        sx={{
-          mb: "0.625rem",
-          fontWeight: "bold",
-        }}
-      >
-        Pods
-      </Box>
       <Box sx={{ display: "flex", flexDirection: "row", mb: "1rem" }}>
         <Paper
           className="Pods-search"
@@ -88,6 +82,10 @@ export const SearchablePodsHeatMap = ({
           </IconButton>
         </Paper>
       </Box>
+      <div className="pod-exp-text">
+        Click on different hexagons under CPU/MEM display to switch to different
+        Pods{" "}
+      </div>
       {filteredPods?.length > 0 && (
         <PodsHeatMap
           pods={filteredPods}

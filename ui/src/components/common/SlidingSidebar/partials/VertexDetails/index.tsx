@@ -5,6 +5,7 @@ import Box from "@mui/material/Box";
 import { SpecEditor } from "./partials/SpecEditor";
 import { ProcessingRates } from "./partials/ProcessingRates";
 import { K8sEvents } from "../K8sEvents";
+import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
 
 import "./style.css";
 
@@ -144,7 +145,13 @@ export function VertexDetails({
         role="tabpanel"
         hidden={tabValue !== PODS_VIEW_TAB_INDEX}
       >
-        {tabValue === PODS_VIEW_TAB_INDEX && <div>TODO PODS VIEW</div>}
+        {tabValue === PODS_VIEW_TAB_INDEX && (
+          <Pods
+            namespaceId={namespaceId}
+            pipelineId={pipelineId}
+            vertexId={vertexId}
+          />
+        )}
       </div>
       <div
         className="vertex-details-tab-panel"

@@ -1,4 +1,5 @@
 import HexagonHeatMap from "./partials/HexagonHeatMap";
+import Box from "@mui/material/Box";
 import { fill } from "../../../../../../../../../../../../../utils/gradients";
 import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
 import {
@@ -160,27 +161,60 @@ export const PodsHeatMap = ({
   };
 
   return (
-    <div data-testid="podHeatMap" className="heatmap-graph">
-      <div className="heatmap-graph-wrapper">
-        <span>CPU</span>
-        <HexagonHeatMap
-          data={cpuData}
-          handleClick={onPodClick}
-          tooltipComponent={tooltipComponent}
-          tooltipClass="hexagon-tooltip"
-          selected={selectedPod?.name}
-        />
-      </div>
-      <div className="heatmap-graph-wrapper">
-        <span>MEM</span>
-        <HexagonHeatMap
-          data={memData}
-          handleClick={onPodClick}
-          tooltipComponent={tooltipComponent}
-          tooltipClass="hexagon-tooltip"
-          selected={selectedPod?.name}
-        />
-      </div>
-    </div>
+    <Box
+      sx={{
+        marginTop: "0.5rem",
+        border: "1px solid #E0E0E0",
+        padding: "0.5rem"
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          padding: "0.5rem",
+          borderBottom: "1px solid #E0E0E0",
+        }}
+      >
+        <div className="heatmap-graph-title">CPU</div>
+        <div className="heatmap-graph-title">MEM</div>
+      </Box>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          marginTop: "1rem",
+        }}
+      >
+        <Box
+          sx={{
+            flexGrow: 1,
+            alignItems: "center",
+          }}
+        >
+          <HexagonHeatMap
+            data={cpuData}
+            handleClick={onPodClick}
+            tooltipComponent={tooltipComponent}
+            tooltipClass="hexagon-tooltip"
+            selected={selectedPod?.name}
+          />
+        </Box>
+        <Box
+          sx={{
+            flexGrow: 1,
+            alignItems: "center",
+          }}
+        >
+          <HexagonHeatMap
+            data={memData}
+            handleClick={onPodClick}
+            tooltipComponent={tooltipComponent}
+            tooltipClass="hexagon-tooltip"
+            selected={selectedPod?.name}
+          />
+        </Box>
+      </Box>
+    </Box>
   );
 };
