@@ -49,6 +49,8 @@ import reduce from "../../../../../images/reduce.svg";
 import sink from "../../../../../images/sink.svg";
 import input from "../../../../../images/input.svg";
 import generator from "../../../../../images/generator.svg";
+import error from "../../../../../images/error.svg";
+import noError from "../../../../../images/no-error.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -132,6 +134,7 @@ const Flow = (props: FlowProps) => {
     handleNodeClick,
     handleEdgeClick,
     handlePaneClick,
+    setSidebarProps,
   } = props;
 
   const onIsLockedChange = useCallback(
@@ -146,6 +149,16 @@ const Flow = (props: FlowProps) => {
   const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomLevel]);
   const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomLevel]);
 
+  const handleError = useCallback(() => {
+    setSidebarProps({
+      type: SidebarType.ERRORS,
+      errorsProps: {
+        errors: true,
+      },
+      slide: false,
+    });
+  }, [setSidebarProps]);
+  // TODO error panel icon color change
   return (
     <ReactFlow
       nodeTypes={defaultNodeTypes}
@@ -241,6 +254,11 @@ const Flow = (props: FlowProps) => {
           <div className={"legend-text"}>Generator</div>
         </div>
       </Panel>
+      <Panel position="top-right">
+        <div onClick={handleError} style={{ cursor: "pointer" }}>
+          <img src={noError} width={22} height={24} alt={"error-status"} />
+        </div>
+      </Panel>
     </ReactFlow>
   );
 };
@@ -317,22 +335,25 @@ export default function Graph(props: GraphProps) {
   const [edgeId, setEdgeId] = useState<string>();
   const [edge, setEdge] = useState<Edge>();
 
-  const handleEdgeClick = useCallback((event: MouseEvent, edge: Edge) => {
-    setEdge(edge);
-    setEdgeId(edge.id);
-    setEdgeOpen(true);
-    setShowSpec(false);
-    setNodeOpen(false);
-    if (setSidebarProps) {
-      setSidebarProps({
-        type: SidebarType.EDGE_DETAILS,
-        edgeDetailsProps: {
-          namespaceId,
-          edgeId: edge.id,
-        },
-      });
-    }
-  }, [setSidebarProps, namespaceId]);
+  const handleEdgeClick = useCallback(
+    (event: MouseEvent, edge: Edge) => {
+      setEdge(edge);
+      setEdgeId(edge.id);
+      setEdgeOpen(true);
+      setShowSpec(false);
+      setNodeOpen(false);
+      if (setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.EDGE_DETAILS,
+          edgeDetailsProps: {
+            namespaceId,
+            edgeId: edge.id,
+          },
+        });
+      }
+    },
+    [setSidebarProps, namespaceId]
+  );
 
   // This has been added to make sure that edge container refreshes on edges being refreshed
   useEffect(() => {
@@ -374,18 +395,37 @@ export default function Graph(props: GraphProps) {
         return updatedState;
       });
       if (setSidebarProps) {
-        setSidebarProps({
-          type: SidebarType.VERTEX_DETAILS,
-          vertexDetailsProps: {
-            namespaceId,
-            pipelineId,
-            vertexId: node.id,
-            vertexSpecs: data.pipeline?.spec?.vertices || [],
-          },
-        });
+        if (node?.data?.type === "sideInput") {
+          setSidebarProps({
+            type: SidebarType.GENERATOR_DETAILS,
+            generatorDetailsProps: {
+              namespaceId,
+              pipelineId,
+              vertexId: node.id,
+              generatorDetails: sideNodes.get(node.id) || {},
+            },
+          });
+        } else {
+          setSidebarProps({
+            type: SidebarType.VERTEX_DETAILS,
+            vertexDetailsProps: {
+              namespaceId,
+              pipelineId,
+              vertexId: node.id,
+              vertexSpecs: data.pipeline?.spec?.vertices || [],
+            },
+          });
+        }
       }
     },
-    [setSidebarProps, namespaceId, pipelineId, data.pipeline, setHidden]
+    [
+      setSidebarProps,
+      namespaceId,
+      pipelineId,
+      data.pipeline,
+      setHidden,
+      sideNodes,
+    ]
   );
 
   // This has been added to make sure that node container refreshes on nodes being refreshed
@@ -421,7 +461,7 @@ export default function Graph(props: GraphProps) {
   const [showSpec, setShowSpec] = useState(true);
 
   return (
-    <div style={{ height: "100%" }}>
+    <div style={{ height: "90%" }}>
       <div className="Graph" data-testid="graph">
         <HighlightContext.Provider
           value={{
@@ -443,6 +483,7 @@ export default function Graph(props: GraphProps) {
                 handleNodeClick,
                 handleEdgeClick,
                 handlePaneClick,
+                setSidebarProps,
               }}
             />
           </ReactFlowProvider>

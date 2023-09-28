@@ -46,31 +46,49 @@ export const usePipelineViewFetch = (
   );
   const [loading, setLoading] = useState(true);
 
-  const BASE_API = `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
+  const BASE_API = `/api/v1_1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
 
-  // call to get pipeline
+  // Call to get pipeline
   useEffect(() => {
     const fetchPipeline = async () => {
       try {
         const response = await fetch(`${BASE_API}?refreshKey=${requestKey}`);
         if (response.ok) {
-          const data = await response.json();
-          setPipeline(data);
-          setNS_PL(`${data?.metadata?.namespace}-${data?.metadata?.name}-`);
-          if (!isEqual(spec, data?.spec)) setSpec(data?.spec);
+          const json = await response.json();
+          if (json?.data) {
+            // Update pipeline state with data from the response
+            setPipeline(json.data?.pipeline);
+            // Update NS_PL state with metadata from the pipeline
+            setNS_PL(
+              `${json.data?.pipeline?.metadata?.namespace}-${json.data.pipeline?.metadata?.name}-`
+            );
+            // Update spec state if it is not equal to the spec from the response
+            if (!isEqual(spec, json.data?.pipeline?.spec))
+              setSpec(json.data?.pipeline?.spec);
+          } else if (json?.errMsg) {
+            // pipeline API call returns an error message
+            setPipelineErr([
+              {
+                error: json.errMsg,
+                options: { toastId: "pipeline-fetch-error", autoClose: 5000 },
+              },
+            ]);
+          }
         } else {
+          // Handle the case when the response is not OK
           setPipelineErr([
             {
               error: "Failed to fetch the pipeline details",
-              options: { toastId: "pl-details", autoClose: false },
+              options: { toastId: "pipeline-fetch", autoClose: 5000 },
             },
           ]);
         }
       } catch {
+        // Handle any errors that occur during the fetch request
         setPipelineErr([
           {
             error: "Failed to fetch the pipeline details",
-            options: { toastId: "pl-details", autoClose: false },
+            options: { toastId: "pipeline-fetch", autoClose: 5000 },
           },
         ]);
       }
@@ -79,29 +97,42 @@ export const usePipelineViewFetch = (
     fetchPipeline();
   }, [requestKey]);
 
-  // call to get buffers
+  // Call to get buffers
   useEffect(() => {
     const fetchBuffers = async () => {
       try {
         const response = await fetch(
-          `${BASE_API}/buffers?refreshKey=${requestKey}`
+          `${BASE_API}/isbs?refreshKey=${requestKey}`
         );
         if (response.ok) {
-          const data = await response.json();
-          setBuffers(data);
+          const json = await response.json();
+          if (json?.data) {
+            // Update buffers state with data from the response
+            setBuffers(json.data);
+          } else if (json?.errMsg) {
+            // Buffer API call returns an error message
+            setBuffersErr([
+              {
+                error: json.errMsg,
+                options: { toastId: "isb-fetch-error", autoClose: 5000 },
+              },
+            ]);
+          }
         } else {
+          // Handle the case when the response is not OK
           setBuffersErr([
             {
               error: "Failed to fetch the pipeline buffers",
-              options: { toastId: "pl-buffer", autoClose: false },
+              options: { toastId: "isb-fetch", autoClose: 5000 },
             },
           ]);
         }
-      } catch (e: any) {
+      } catch {
+        // Handle any errors that occur during the fetch request
         setBuffersErr([
           {
             error: "Failed to fetch the pipeline buffers",
-            options: { toastId: "pl-buffer", autoClose: false },
+            options: { toastId: "isb-fetch", autoClose: 5000 },
           },
         ]);
       }
@@ -124,6 +155,7 @@ export const usePipelineViewFetch = (
     const podsErr: any[] = [];
 
     if (spec?.vertices) {
+      // Fetch pods count for each vertex in parallel
       Promise.allSettled(
         spec.vertices.map((vertex: any) => {
           return fetch(`${BASE_API}/vertices/${vertex.name}/pods`)
@@ -135,26 +167,43 @@ export const usePipelineViewFetch = (
               }
             })
             .then((json) => {
-              vertexToPodsMap.set(vertex.name, json.length);
+              if (json?.data) {
+                // Update vertexToPodsMap with the number of pods for the current vertex
+                vertexToPodsMap.set(vertex.name, json.data.length);
+              } else if (json?.errMsg) {
+                // Pods API call returns an error message
+                podsErr.push({
+                  error: json.errMsg,
+                  options: {
+                    toastId: `${vertex.name}-pods-fetch-error`,
+                    autoClose: 5000,
+                  },
+                });
+              }
             });
         })
       )
         .then((results) => {
           results.forEach((result) => {
             if (result && result?.status === "rejected") {
+              // Handle rejected promises and add error messages to podsErr
               podsErr.push({
                 error: `${result.reason.response.status}: Failed to get pods count for ${result.reason.vertex} vertex`,
                 options: {
-                  toastId: `${result.reason.vertex}-pods`,
+                  toastId: `${result.reason.vertex}-pods-fetch`,
                   autoClose: 5000,
                 },
               });
             }
           });
-          if (podsErr.length > 0) setPodsErr(podsErr);
+          if (podsErr.length > 0) {
+            // Update podsErr state if there are any errors
+            setPodsErr(podsErr);
+          }
         })
         .then(() => {
           if (!isEqual(vertexPods, vertexToPodsMap)) {
+            // Update vertexPods state if it is not equal to vertexToPodsMap
             setVertexPods(vertexToPodsMap);
           }
         })
@@ -167,81 +216,97 @@ export const usePipelineViewFetch = (
     const metricsErr: any[] = [];
 
     if (spec?.vertices && vertexPods.size > 0) {
-      Promise.allSettled(
-        spec.vertices.map((vertex: any) => {
-          return fetch(`${BASE_API}/vertices/${vertex.name}/metrics`)
-            .then((response) => {
-              if (response.ok) {
-                return response.json();
-              } else {
-                return Promise.reject({ response, vertex: vertex.name });
-              }
-            })
-            .then((json) => {
-              const vertexMetrics = {
-                ratePerMin: "0.00",
-                ratePerFiveMin: "0.00",
-                ratePerFifteenMin: "0.00",
-                podMetrics: [],
-                error: false,
-              } as VertexMetrics;
-              let ratePerMin = 0.0,
-                ratePerFiveMin = 0.0,
-                ratePerFifteenMin = 0.0;
-              // keeping processing rates as summation of pod values
-              json.forEach((pod: any) => {
-                if ("processingRates" in pod) {
-                  if ("1m" in pod["processingRates"]) {
-                    ratePerMin += pod["processingRates"]["1m"];
+      // Fetch metrics for all vertices together
+      Promise.allSettled([
+        fetch(`${BASE_API}/vertices/metrics`)
+          .then((response) => {
+            if (response.ok) {
+              return response.json();
+            } else {
+              return Promise.reject(response);
+            }
+          })
+          .then((json) => {
+            if (json?.data) {
+              const vertices = json.data;
+              Object.values(vertices).forEach((vertex: any) => {
+                const vertexName = vertex[0].vertex;
+                const vertexMetrics = {
+                  ratePerMin: "0.00",
+                  ratePerFiveMin: "0.00",
+                  ratePerFifteenMin: "0.00",
+                  podMetrics: [],
+                  error: false,
+                } as VertexMetrics;
+                let ratePerMin = 0.0,
+                  ratePerFiveMin = 0.0,
+                  ratePerFifteenMin = 0.0;
+                // Calculate processing rates as summation of pod values
+                vertex.forEach((pod: any) => {
+                  if ("processingRates" in pod) {
+                    if ("1m" in pod["processingRates"]) {
+                      ratePerMin += pod["processingRates"]["1m"];
+                    }
+                    if ("5m" in pod["processingRates"]) {
+                      ratePerFiveMin += pod["processingRates"]["5m"];
+                    }
+                    if ("15m" in pod["processingRates"]) {
+                      ratePerFifteenMin += pod["processingRates"]["15m"];
+                    }
+                  } else {
+                    if (
+                      vertexPods.has(vertexName) &&
+                      vertexPods.get(vertexName) !== 0
+                    ) {
+                      // Handle case when processingRates are not available for a vertex
+                      vertexMetrics.error = true;
+                      metricsErr.push({
+                        error: `Failed to get metrics for ${vertexName} vertex`,
+                        options: {
+                          toastId: `${vertexName}-metrics`,
+                          autoClose: 5000,
+                        },
+                      });
+                    }
                   }
-                  if ("5m" in pod["processingRates"]) {
-                    ratePerFiveMin += pod["processingRates"]["5m"];
-                  }
-                  if ("15m" in pod["processingRates"]) {
-                    ratePerFifteenMin += pod["processingRates"]["15m"];
-                  }
-                } else {
-                  if (
-                    vertexPods.has(vertex.name) &&
-                    vertexPods.get(vertex.name) !== 0
-                  ) {
-                    vertexMetrics.error = true;
-                    metricsErr.push({
-                      error: `404: Failed to get metrics for ${vertex.name} vertex`,
-                      options: {
-                        toastId: `${vertex.name}-metrics`,
-                        autoClose: 5000,
-                      },
-                    });
-                  }
+                });
+                vertexMetrics.ratePerMin = ratePerMin.toFixed(2);
+                vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
+                vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
+                if (
+                  vertexPods.has(vertexName) &&
+                  vertexPods.get(vertexName) !== 0
+                ) {
+                  vertexMetrics.podMetrics = json;
                 }
+                vertexToMetricsMap.set(vertexName, vertexMetrics);
               });
-              vertexMetrics.ratePerMin = ratePerMin.toFixed(2);
-              vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
-              vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
-              if (
-                vertexPods.has(vertex.name) &&
-                vertexPods.get(vertex.name) !== 0
-              ) {
-                vertexMetrics.podMetrics = json;
-              }
-              vertexToMetricsMap.set(vertex.name, vertexMetrics);
-            });
-        })
-      )
-        .then((results) => {
-          results.forEach((result) => {
-            if (result && result?.status === "rejected") {
+            } else if (json?.errMsg) {
+              // Metrics API call returns an error message
               metricsErr.push({
-                error: `${result.reason.response.status}: Failed to get metrics for ${result.reason.vertex} vertex`,
+                error: json.errMsg,
                 options: {
-                  toastId: `${result.reason.vertex}-metrics`,
+                  toastId: "vertex-metrics-fetch-error",
                   autoClose: 5000,
                 },
               });
             }
+          }),
+      ])
+        .then((results) => {
+          results.forEach((result) => {
+            if (result && result?.status === "rejected") {
+              // Handle rejected promises and add error messages to metricsErr
+              metricsErr.push({
+                error: `${result.reason.response.status}: Failed to get metrics for some vertices`,
+                options: { toastId: `vertex-metrics-fetch`, autoClose: 5000 },
+              });
+            }
           });
-          if (metricsErr.length > 0) setMetricsErr(metricsErr);
+          if (metricsErr.length > 0) {
+            // Update metricsErr state if there are any errors
+            setMetricsErr(metricsErr);
+          }
         })
         .then(() => setVertexMetrics(vertexToMetricsMap))
         .catch(console.error);
@@ -264,8 +329,10 @@ export const usePipelineViewFetch = (
 
     if (spec?.edges) {
       if (spec?.watermark?.disabled === true) {
+        // Set edgeWatermark to empty map if watermark is disabled
         setEdgeWatermark(edgeToWatermarkMap);
       } else {
+        // Fetch watermarks for each edge together
         Promise.allSettled([
           fetch(`${BASE_API}/watermarks`)
             .then((response) => {
@@ -276,21 +343,33 @@ export const usePipelineViewFetch = (
               }
             })
             .then((json) => {
-              json.forEach((edge: any) => {
-                const edgeWatermark = {} as EdgeWatermark;
-                edgeWatermark.isWaterMarkEnabled = edge["isWatermarkEnabled"];
-                edgeWatermark.watermarks = edge["watermarks"];
-                edgeWatermark.WMFetchTime = Date.now();
-                edgeToWatermarkMap.set(edge.edge, edgeWatermark);
-              });
+              if (json?.data) {
+                json.data.forEach((edge: any) => {
+                  const edgeWatermark = {} as EdgeWatermark;
+                  edgeWatermark.isWaterMarkEnabled = edge["isWatermarkEnabled"];
+                  edgeWatermark.watermarks = edge["watermarks"];
+                  edgeWatermark.WMFetchTime = Date.now();
+                  edgeToWatermarkMap.set(edge.edge, edgeWatermark);
+                });
+              } else if (json?.errMsg) {
+                // Watermarks API call returns an error message
+                watermarkErr.push({
+                  error: json.errMsg,
+                  options: {
+                    toastId: "watermarks-fetch-error",
+                    autoClose: 5000,
+                  },
+                });
+              }
             }),
         ])
           .then((results) => {
             results.forEach((result) => {
               if (result && result?.status === "rejected") {
+                // Handle rejected promises and add error messages to watermarkErr
                 watermarkErr.push({
                   error: `${result.reason.status}: Failed to get watermarks for some vertices`,
-                  options: { toastId: "vertex-watermarks", autoClose: 5000 },
+                  options: { toastId: "watermarks-fetch", autoClose: 5000 },
                 });
               }
             });
