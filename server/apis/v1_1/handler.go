@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"sort"
@@ -196,21 +197,79 @@ func (h *handler) ListPipelines(c *gin.Context) {
 
 // GetPipeline is used to provide the spec of a given numaflow pipeline
 func (h *handler) GetPipeline(c *gin.Context) {
+	var lag int64
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
+	// get general pipeline info
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
 
+	// get pipeline source and sink vertex
+	var (
+		source = make(map[string]bool)
+		sink   = make(map[string]bool)
+	)
+	for _, vertex := range pl.Spec.Vertices {
+		if vertex.IsASource() {
+			source[vertex.Name] = true
+		} else if vertex.IsASink() {
+			sink[vertex.Name] = true
+		}
+	}
+
+	// get pipeline status
 	status, err := getPipelineStatus(pl)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
 
-	pipelineResp := NewPipelineInfo(status, pl)
+	// get pipeline lag
+	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+	defer client.Close()
+
+	var (
+		minWM int64 = math.MaxInt64
+		maxWM int64 = math.MinInt64
+	)
+	watermarks, err := client.GetPipelineWatermarks(context.Background(), pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+	for _, watermark := range watermarks {
+		// find the largest source vertex watermark
+		if _, ok := source[*watermark.From]; ok {
+			for _, wm := range watermark.Watermarks {
+				if wm > maxWM {
+					maxWM = wm
+				}
+			}
+		}
+		// find the smallest sink vertex watermark
+		if _, ok := sink[*watermark.To]; ok {
+			for _, wm := range watermark.Watermarks {
+				if wm < minWM {
+					minWM = wm
+				}
+			}
+		}
+	}
+	// if the data hasn't arrived the sink vertex
+	// use 0 instead of the initial watermark value -1
+	if minWM == -1 {
+		minWM = 0
+	}
+	lag = maxWM - minWM
+
+	pipelineResp := NewPipelineInfo(status, &lag, pl)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pipelineResp))
 }
 
@@ -724,7 +783,9 @@ func getPipelines(h *handler, namespace string) (Pipelines, error) {
 		if err != nil {
 			return nil, err
 		}
-		resp := NewPipelineInfo(status, &pl)
+		// NOTE: we only calculate pipeline lag for get single pipeline API
+		// to avoid massive gRPC calls
+		resp := NewPipelineInfo(status, nil, &pl)
 		pipelineList = append(pipelineList, resp)
 	}
 	return pipelineList, nil
