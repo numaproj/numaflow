@@ -138,8 +138,6 @@ export function NamespacePipelineListing({
         </Box>
       );
     }
-    console.log("isbData", isbData);
-    console.log("pipelineData", pipelineData);
     return (
       <Grid
         container
@@ -179,32 +177,23 @@ export function NamespacePipelineListing({
       }}
     >
       <Box sx={{ display: "flex", flexDirection: "row", alignItems: "end" }}>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            flexGrow: 1,
-            height: "44px",
-            justifyItems: "end",
-          }}
-        >
           <DebouncedSearchInput
             placeHolder="Search for pipeline"
             onChange={setSearch}
           />
-        </Box>
         <Box
           sx={{
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
+            marginLeft: "2rem",
           }}
         >
           <Box
             sx={{
               display: "flex",
               flexDirection: "column",
-              flexGrow: 1,
+              flexGrow: 0.15,
             }}
           >
             <label style={{ color: "#6B6C72" }}>Health</label>
@@ -234,7 +223,8 @@ export function NamespacePipelineListing({
             sx={{
               display: "flex",
               flexDirection: "column",
-              flexGrow: 1,
+              flexGrow: 0.15,
+              marginRight: "20rem",
             }}
           >
             <label style={{ color: "#6B6C72" }}>Status</label>
