@@ -4,6 +4,10 @@ import { K8sEvents, K8sEventsProps } from "./partials/K8sEvents";
 import { VertexDetails, VertexDetailsProps } from "./partials/VertexDetails";
 import { PiplineSpecs, PiplineSpecsProps } from "./partials/PipelineSpecs";
 import { EdgeDetails, EdgeDetailsProps } from "./partials/EdgeDetails";
+import {
+  GeneratorDetails,
+  GeneratorDetailsProps,
+} from "./partials/GeneratorDetails";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import slider from "../../../images/slider.png";
@@ -16,6 +20,8 @@ export enum SidebarType {
   VERTEX_DETAILS,
   EDGE_DETAILS,
   PIPELINE_SPECS,
+  GENERATOR_DETAILS,
+  // add error comp
 }
 
 const MIN_WIDTH_BY_TYPE = {
@@ -24,6 +30,7 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.VERTEX_DETAILS]: 750,
   [SidebarType.EDGE_DETAILS]: 750,
   [SidebarType.PIPELINE_SPECS]: 750,
+  [SidebarType.GENERATOR_DETAILS]: 750,
 };
 
 export interface SlidingSidebarProps {
@@ -33,6 +40,7 @@ export interface SlidingSidebarProps {
   vertexDetailsProps?: VertexDetailsProps;
   edgeDetailsProps?: EdgeDetailsProps;
   pipelineSpecsProps?: PiplineSpecsProps;
+  generatorDetailsProps?: GeneratorDetailsProps;
   onClose: () => void;
 }
 
@@ -43,6 +51,7 @@ export function SlidingSidebar({
   vertexDetailsProps,
   edgeDetailsProps,
   pipelineSpecsProps,
+  generatorDetailsProps,
   onClose,
 }: SlidingSidebarProps) {
   const [width, setWidth] = useState<number>(pageWidth ? pageWidth / 2 : 0);
@@ -102,6 +111,11 @@ export function SlidingSidebar({
           break;
         }
         return <PiplineSpecs {...pipelineSpecsProps} />;
+      case SidebarType.GENERATOR_DETAILS:
+        if (!generatorDetailsProps) {
+          break;
+        }
+        return <GeneratorDetails {...generatorDetailsProps} />;
       default:
         break;
     }

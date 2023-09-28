@@ -321,22 +321,25 @@ export default function Graph(props: GraphProps) {
   const [edgeId, setEdgeId] = useState<string>();
   const [edge, setEdge] = useState<Edge>();
 
-  const handleEdgeClick = useCallback((event: MouseEvent, edge: Edge) => {
-    setEdge(edge);
-    setEdgeId(edge.id);
-    setEdgeOpen(true);
-    setShowSpec(false);
-    setNodeOpen(false);
-    if (setSidebarProps) {
-      setSidebarProps({
-        type: SidebarType.EDGE_DETAILS,
-        edgeDetailsProps: {
-          namespaceId,
-          edgeId: edge.id,
-        },
-      });
-    }
-  }, [setSidebarProps, namespaceId]);
+  const handleEdgeClick = useCallback(
+    (event: MouseEvent, edge: Edge) => {
+      setEdge(edge);
+      setEdgeId(edge.id);
+      setEdgeOpen(true);
+      setShowSpec(false);
+      setNodeOpen(false);
+      if (setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.EDGE_DETAILS,
+          edgeDetailsProps: {
+            namespaceId,
+            edgeId: edge.id,
+          },
+        });
+      }
+    },
+    [setSidebarProps, namespaceId]
+  );
 
   // This has been added to make sure that edge container refreshes on edges being refreshed
   useEffect(() => {
@@ -378,18 +381,37 @@ export default function Graph(props: GraphProps) {
         return updatedState;
       });
       if (setSidebarProps) {
-        setSidebarProps({
-          type: SidebarType.VERTEX_DETAILS,
-          vertexDetailsProps: {
-            namespaceId,
-            pipelineId,
-            vertexId: node.id,
-            vertexSpecs: data.pipeline?.spec?.vertices || [],
-          },
-        });
+        if (node?.data?.type === "sideInput") {
+          setSidebarProps({
+            type: SidebarType.GENERATOR_DETAILS,
+            generatorDetailsProps: {
+              namespaceId,
+              pipelineId,
+              vertexId: node.id,
+              generatorDetails: sideNodes.get(node.id) || {},
+            },
+          });
+        } else {
+          setSidebarProps({
+            type: SidebarType.VERTEX_DETAILS,
+            vertexDetailsProps: {
+              namespaceId,
+              pipelineId,
+              vertexId: node.id,
+              vertexSpecs: data.pipeline?.spec?.vertices || [],
+            },
+          });
+        }
       }
     },
-    [setSidebarProps, namespaceId, pipelineId, data.pipeline, setHidden]
+    [
+      setSidebarProps,
+      namespaceId,
+      pipelineId,
+      data.pipeline,
+      setHidden,
+      sideNodes,
+    ]
   );
 
   // This has been added to make sure that node container refreshes on nodes being refreshed
@@ -425,7 +447,7 @@ export default function Graph(props: GraphProps) {
   const [showSpec, setShowSpec] = useState(true);
 
   return (
-    <div style={{ height: "100%" }}>
+    <div style={{ height: "90%" }}>
       <div className="Graph" data-testid="graph">
         <HighlightContext.Provider
           value={{
