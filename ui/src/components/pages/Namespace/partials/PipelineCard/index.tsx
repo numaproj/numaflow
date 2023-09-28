@@ -15,6 +15,7 @@ import {
   IndicatorStatus,
   StatusIndicator,
 } from "../../../../common/StatusIndicator/StatusIndicator";
+import { IconsStatusMap } from "../../../../../utils";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
@@ -107,78 +108,138 @@ export function PipelineCard({
           <Grid
             container
             spacing={2}
-            sx={{ background: "#F9F9F9", marginTop: "10px" }}
+            sx={{ background: "#F9F9F9", marginTop: "10px", flexWrap: "no-wrap" }}
           >
-            <Grid item xs={6} md={8}>
-              <Box>
-                Status :{" "}
-                <StatusIndicator
-                  status={statusData?.pipeline?.status?.phase.toUpperCase()}
-                />{" "}
-                {statusData?.pipeline?.status?.phase}
-              </Box>
-            </Grid>
-            {/* <Grid item xs={5} md={5}>
-              <Box>Maximum Lag : 10 s</Box>
-            </Grid> */}
-            <Grid item xs={6} md={8}>
-              <Box>
-                Health :{" "}
-                <StatusIndicator status={statusData?.status?.toUpperCase()} />{" "}
-                {statusData?.status}
-              </Box>
-            </Grid>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>Status:</span>
+              <span>Health:</span>
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <img
+                src={IconsStatusMap[statusData?.pipeline?.status?.phase]}
+                alt={statusData?.pipeline?.status?.phase}
+                className={"pipeline-logo"}
+              />
+              <img
+                src={IconsStatusMap[statusData?.status]}
+                alt={statusData?.status}
+                className={"pipeline-logo"}
+              />
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>{statusData?.pipeline?.status?.phase}</span>
+              <span>{statusData?.status}</span>
+            </Box>
           </Grid>
 
           <Grid
             container
             spacing={2}
-            sx={{ background: "#F9F9F9", marginTop: "10px" }}
+            sx={{ background: "#F9F9F9", marginTop: "10px", flexWrap: "no-wrap" }}
           >
-            <Grid item xs={12}>
-              <Box>ISB Services : {isbData?.name}</Box>
-            </Grid>
-            <Grid item xs={12}>
-              <Box>
-                ISB Type :{" "}
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>ISB Services:</span>
+              <span>ISB Type:</span>
+              <span>ISB Size:</span>
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>{isbData.name}</span>
+              <span>
                 <Chip
                   label={isbData?.isbService?.status?.type}
-                  sx={{ background: "#B3F3F3" }}
-                />{" "}
-              </Box>
-            </Grid>
-            <Grid item xs={12}>
-              <Box>
-                ISB Size :{" "}
+                  sx={{ background: "#B3F3F3", height: "20px" }}
+                />
+              </span>
+              <span>
                 {
                   isbData?.isbService?.spec[isbData?.isbService.status?.type]
                     .replicas
                 }
-              </Box>
-            </Grid>
+              </span>
+            </Box>
           </Grid>
 
           <Grid
             container
             spacing={2}
-            sx={{ background: "#F9F9F9", marginTop: "10px" }}
+            sx={{ background: "#F9F9F9", marginTop: "10px", flexWrap: "no-wrap" }}
           >
-            <Grid item xs={12}>
-              <Box>
-                Status :{" "}
-                <StatusIndicator
-                  status={isbData?.isbService?.status?.phase.toUpperCase()}
-                />{" "}
-                {isbData?.isbService?.status?.phase}
-              </Box>
-            </Grid>
-            <Grid item xs={12}>
-              <Box>
-                Health :{" "}
-                <StatusIndicator status={isbData?.status?.toUpperCase()} />{" "}
-                {isbData?.status}
-              </Box>
-            </Grid>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>Status:</span>
+              <span>Health:</span>
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <img
+                src={IconsStatusMap[isbData?.isbService?.status?.phase]}
+                alt={isbData?.isbService?.status?.phase}
+                className={"pipeline-logo"}
+              />
+              <img
+                src={IconsStatusMap[isbData?.status]}
+                alt={isbData?.status}
+                className={"pipeline-logo"}
+              />
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>{isbData?.isbService?.status?.phase}</span>
+              <span>{isbData?.status}</span>
+            </Box>
           </Grid>
           <Grid
             container

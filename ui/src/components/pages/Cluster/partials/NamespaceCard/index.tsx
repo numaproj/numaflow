@@ -56,7 +56,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
               }}
             >
               <span className="namespace-card-section-text-16-bold">
-                {data.pipelinesActiveCount}
+                {data?.pipelinesActiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
                 Active
@@ -66,7 +66,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           <Grid item xs={4}>
             <Box sx={{ display: "flex", flexDirection: "row" }}>
               <span className="namespace-card-section-text-16-bold">
-                {data.pipelinesInactiveCount}
+                {data?.pipelinesInactiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
                 Non-Active
@@ -90,9 +90,9 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           </Grid>
           <Grid item xs={8} sx={{ padding: "0.3125rem 0" }}>
             <StatusBar
-              healthy={data.pipelinesHealthyCount}
-              warning={data.pipelinesWarningCount}
-              critical={data.pipelinesCriticalCount}
+              healthy={data?.pipelinesHealthyCount}
+              warning={data?.pipelinesWarningCount}
+              critical={data?.pipelinesCriticalCount}
             />
           </Grid>
         </Grid>
@@ -132,7 +132,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
               }}
             >
               <span className="namespace-card-section-text-16-bold">
-                {data.isbsActiveCount}
+                {data?.isbsActiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
                 Live
@@ -142,7 +142,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           <Grid item xs={4}>
             <Box sx={{ display: "flex", flexDirection: "row" }}>
               <span className="namespace-card-section-text-16-bold">
-                {data.isbsInactiveCount}
+                {data?.isbsInactiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
                 Not-Live
@@ -165,9 +165,9 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           </Grid>
           <Grid item xs={8} sx={{ padding: "0.3125rem 0" }}>
             <StatusBar
-              healthy={data.isbsHealthyCount}
-              warning={data.isbsWarningCount}
-              critical={data.isbsCriticalCount}
+              healthy={data?.isbsHealthyCount}
+              warning={data?.isbsWarningCount}
+              critical={data?.isbsCriticalCount}
             />
           </Grid>
         </Grid>
