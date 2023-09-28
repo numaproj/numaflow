@@ -196,21 +196,47 @@ func (h *handler) ListPipelines(c *gin.Context) {
 
 // GetPipeline is used to provide the spec of a given numaflow pipeline
 func (h *handler) GetPipeline(c *gin.Context) {
+	var lag int64
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
+	// get general pipeline info
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
 
+	// get pipeline source and sink
+	for _, vertex := range pl.Spec.Vertices {
+		if vertex.IsASource() {
+			// TODO
+		}
+	}
+
+	// get pipeline status
 	status, err := getPipelineStatus(pl)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
 
-	pipelineResp := NewPipelineInfo(status, pl)
+	// get pipeline lag
+	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+	defer client.Close()
+
+	watermarks, err := client.GetPipelineWatermarks(context.Background(), pipeline)
+	// TODO
+	_ = watermarks
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+
+	pipelineResp := NewPipelineInfo(status, lag, pl)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pipelineResp))
 }
 
@@ -724,7 +750,9 @@ func getPipelines(h *handler, namespace string) (Pipelines, error) {
 		if err != nil {
 			return nil, err
 		}
-		resp := NewPipelineInfo(status, &pl)
+		// NOTE: we only calculate pipeline lag for get single pipeline API
+		// to avoid massive gRPC calls
+		resp := NewPipelineInfo(status, 0, &pl)
 		pipelineList = append(pipelineList, resp)
 	}
 	return pipelineList, nil
