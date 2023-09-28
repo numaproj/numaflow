@@ -67,3 +67,65 @@ export interface SideInput {
   container: any;
   trigger: any;
 }
+
+export interface IsbSummary {
+  name: string;
+  status: string;
+  isbService: IsbService;
+}
+
+export interface IsbService {
+  metadata: any;
+  spec: IsbServiceSpec;
+  status: IsbServiceStatus;
+}
+
+export interface IsbServiceStatus {
+  conditions: any;
+  phase: string;
+}
+
+export interface IsbServiceSpec {
+  jetstream?: Jetstream;
+}
+
+export interface PipelineSummary {
+  name: string;
+  status: string;
+  pipeline: Pipeline;
+}
+
+export interface PipelineMergeSummaryData {
+  pipelineData: PipelineSummary;
+  isbData: IsbSummary;
+}
+
+export interface PipelineSummaryFetchResult {
+  data?: PipelineMergeSummaryData;
+  loading: boolean;
+  error: any;
+}
+
+export interface PipelineVertexMetric {
+  partition: number;
+  oneM: number;
+  fiveM: number;
+  fifteenM: number;
+}
+
+export interface PipelineVertexMetrics {
+  vertexId: string;
+  metrics: PipelineVertexMetric[];
+}
+
+export interface PipelineVertexMetricsFetchResult {
+  data?: PipelineVertexMetrics[];
+  loading: boolean;
+  error: any;
+}
+
+export interface PiplelineVertexMetricsFetchProps {
+  namespace: string;
+  pipeline: string;
+  loadOnRefresh?: boolean;
+}

@@ -38,3 +38,27 @@ export interface NamespacePipelineListingProps {
   namespace: string;
   data: NamespaceSummaryData;
 }
+
+export interface K8sEvent {
+  eventKey: number;
+  namespace: string;
+  timestamp: string;
+  type: string;
+  object: string;
+  reason: string;
+  message: string;
+}
+
+export interface K8sEventSummary {
+  normalCount: number;
+  warningCount: number;
+  events: K8sEvent[];
+}
+export interface NamespaceK8sEventsFetchProps {
+  namespace: string;
+}
+export interface NamespaceK8sEventsFetchResult {
+  data?: K8sEventSummary;
+  loading: boolean;
+  error: any;
+}

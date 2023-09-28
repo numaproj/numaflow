@@ -10,28 +10,28 @@ import {
 } from "../../common/SummaryPageLayout";
 import { AppContext } from "../../../App";
 import { AppContextProps } from "../../../types/declarations/app";
-import { SideBarType } from "../../common/SideBarContent";
+import { SidebarType } from "../../common/SlidingSidebar";
 import { NamespacePipelineListing } from "./partials/NamespacePipelineListing";
 
 import "./style.css";
 
 export function Namespaces() {
   const { namespaceId } = useParams();
-  const { setSideBarProps } = useContext<AppContextProps>(AppContext);
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const { data, loading, error } = useNamespaceSummaryFetch({
     namespace: namespaceId || "",
     loadOnRefresh: false,
   });
 
   const handleK8sEventsClick = useCallback(() => {
-    if (!namespaceId || !setSideBarProps) {
+    if (!namespaceId || !setSidebarProps) {
       return;
     }
-    setSideBarProps({
-      type: SideBarType.NAMESPACE_K8s,
-      namespaceK8sProps: { namespaceId },
+    setSidebarProps({
+      type: SidebarType.NAMESPACE_K8s,
+      k8sEventsProps: { namespaceId },
     });
-  }, [namespaceId, setSideBarProps]);
+  }, [namespaceId, setSidebarProps]);
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (!data) {

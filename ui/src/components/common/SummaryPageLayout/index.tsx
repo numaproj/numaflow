@@ -125,6 +125,7 @@ const getSectionComponentAndKey = (
         key,
         component: (
           <Box
+            key={key}
             sx={{
               display: "flex",
               flexDirection: "row",
@@ -291,12 +292,13 @@ export function SummaryPageLayout({
   }, [summaryHeight, collapsed, offsetOnCollapse]);
 
   return (
-    <Box>
+    <Box sx={{ height: "100%" }}>
       {summary}
       <Box
         sx={{
           marginTop: contentMargin,
           paddingTop: "1.25rem",
+          height: "100%",
         }}
       >
         {contentComponent}

@@ -1,10 +1,11 @@
-import {
+import React, {
   createContext,
   MouseEvent,
   useCallback,
   useEffect,
   useMemo,
   useState,
+  useContext,
 } from "react";
 
 import ReactFlow, {
@@ -30,6 +31,9 @@ import NodeInfo from "./partials/NodeInfo";
 import Spec from "./partials/Spec";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
+import { AppContext } from "../../../../../App";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { SidebarType } from "../../../../common/SlidingSidebar";
 import {
   FlowProps,
   GraphProps,
@@ -263,6 +267,7 @@ const getHiddenValue = (edges: Edge[]) => {
 
 export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId } = props;
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
     return getLayoutedElements(data.vertices, data.edges, graphDirection);
@@ -316,13 +321,22 @@ export default function Graph(props: GraphProps) {
   const [edgeId, setEdgeId] = useState<string>();
   const [edge, setEdge] = useState<Edge>();
 
-  const handleEdgeClick = (event: MouseEvent, edge: Edge) => {
+  const handleEdgeClick = useCallback((event: MouseEvent, edge: Edge) => {
     setEdge(edge);
     setEdgeId(edge.id);
     setEdgeOpen(true);
     setShowSpec(false);
     setNodeOpen(false);
-  };
+    if (setSidebarProps) {
+      setSidebarProps({
+        type: SidebarType.EDGE_DETAILS,
+        edgeDetailsProps: {
+          namespaceId,
+          edgeId: edge.id,
+        },
+      });
+    }
+  }, [setSidebarProps, namespaceId]);
 
   // This has been added to make sure that edge container refreshes on edges being refreshed
   useEffect(() => {
@@ -348,21 +362,35 @@ export default function Graph(props: GraphProps) {
     setEdges((eds) => eds.map(hide(hidden)));
   }, [hidden, data]);
 
-  const handleNodeClick = (event: MouseEvent, node: Node) => {
-    setNode(node);
-    setNodeId(node.id);
-    setNodeOpen(true);
-    setShowSpec(false);
-    setEdgeOpen(false);
-    setHidden((prevState) => {
-      const updatedState = {};
-      Object.keys(prevState).forEach((key) => {
-        updatedState[key] =
-          node?.data?.type === "sideInput" ? !(key === node.id) : true;
+  const handleNodeClick = useCallback(
+    (event: MouseEvent, node: Node) => {
+      setNode(node);
+      setNodeId(node.id);
+      setNodeOpen(true);
+      setShowSpec(false);
+      setEdgeOpen(false);
+      setHidden((prevState) => {
+        const updatedState = {};
+        Object.keys(prevState).forEach((key) => {
+          updatedState[key] =
+            node?.data?.type === "sideInput" ? !(key === node.id) : true;
+        });
+        return updatedState;
       });
-      return updatedState;
-    });
-  };
+      if (setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.VERTEX_DETAILS,
+          vertexDetailsProps: {
+            namespaceId,
+            pipelineId,
+            vertexId: node.id,
+            vertexSpecs: data.pipeline?.spec?.vertices || [],
+          },
+        });
+      }
+    },
+    [setSidebarProps, namespaceId, pipelineId, data.pipeline, setHidden]
+  );
 
   // This has been added to make sure that node container refreshes on nodes being refreshed
   useEffect(() => {
@@ -425,22 +453,22 @@ export default function Graph(props: GraphProps) {
         </HighlightContext.Provider>
       </div>
 
-      <Card
-        sx={{ borderBottom: 1, borderColor: "divider", boxShadow: 1 }}
-        data-testid={"card"}
-        variant={"outlined"}
-      >
-        {showSpec && <Spec pipeline={data.pipeline} />}
-        {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} />}
-        {nodeOpen && (
-          <NodeInfo
-            data-testid="node-info"
-            node={node}
-            namespaceId={namespaceId}
-            pipelineId={pipelineId}
-          />
-        )}
-      </Card>
+      {/*<Card*/}
+      {/*  sx={{ borderBottom: 1, borderColor: "divider", boxShadow: 1 }}*/}
+      {/*  data-testid={"card"}*/}
+      {/*  variant={"outlined"}*/}
+      {/*>*/}
+      {/*  {showSpec && <Spec pipeline={data.pipeline} />}*/}
+      {/*  {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} />}*/}
+      {/*  {nodeOpen && (*/}
+      {/*    <NodeInfo*/}
+      {/*      data-testid="node-info"*/}
+      {/*      node={node}*/}
+      {/*      namespaceId={namespaceId}*/}
+      {/*      pipelineId={pipelineId}*/}
+      {/*    />*/}
+      {/*  )}*/}
+      {/*</Card>*/}
     </div>
   );
 }
