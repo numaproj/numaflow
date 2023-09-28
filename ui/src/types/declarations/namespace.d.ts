@@ -18,10 +18,14 @@ export interface NamespaceSummaryData {
   isbsWarningCount: number;
   isbsCriticalCount: number;
   pipelineSummaries: NamespacePipelineSummary[];
+  pipelineRawData?: any;
+  isbRawData?: any;
 }
 
 export interface NamespaceSummaryFetchResult {
   data?: NamespaceSummaryData;
+  pipelineRawData?: any;
+  isbRawData?: any;
   loading: boolean;
   error: any;
 }
@@ -33,10 +37,14 @@ export interface NamespaceSummaryFetchProps {
 export interface PipelineCardProps {
   namespace: string;
   data: NamespacePipelineSummary;
+  statusData?: any;
+  isbData?: any;
 }
 export interface NamespacePipelineListingProps {
   namespace: string;
   data: NamespaceSummaryData;
+  pipelineData?: any;
+  isbData?: any;
 }
 
 export interface K8sEvent {
