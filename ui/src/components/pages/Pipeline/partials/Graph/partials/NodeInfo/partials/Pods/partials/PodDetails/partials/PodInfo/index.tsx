@@ -8,28 +8,6 @@ import TableContainer from "@mui/material/TableContainer";
 import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
 
-const podInfoSx = {
-  display: "flex",
-  flexDirection: "row",
-};
-
-const podDataRowSx = {
-  display: "flex",
-  flexDirection: "row",
-  paddingBottom: "0.625rem",
-};
-
-const podDataColumnSx = {
-  display: "flex",
-  flexDirection: "column",
-  paddingBottom: "0.625rem",
-  width: "30%",
-};
-
-const podDataRowTagSx = {
-  width: "25%",
-};
-
 export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
   const resourceUsage = getPodContainerUsePercentages(
     pod,
