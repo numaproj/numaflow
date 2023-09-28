@@ -269,7 +269,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		return
 	}
 
-	pipelineResp := NewPipelineInfo(status, lag, pl)
+	pipelineResp := NewPipelineInfo(status, &lag, pl)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pipelineResp))
 }
 
@@ -785,7 +785,7 @@ func getPipelines(h *handler, namespace string) (Pipelines, error) {
 		}
 		// NOTE: we only calculate pipeline lag for get single pipeline API
 		// to avoid massive gRPC calls
-		resp := NewPipelineInfo(status, 0, &pl)
+		resp := NewPipelineInfo(status, nil, &pl)
 		pipelineList = append(pipelineList, resp)
 	}
 	return pipelineList, nil
