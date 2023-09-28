@@ -9,8 +9,6 @@ import {
   NamespacePipelineListingProps,
   NamespacePipelineSummary,
 } from "../../../../../types/declarations/namespace";
-
-import "./style.css";
 import {
   Button,
   MenuItem,
@@ -18,6 +16,8 @@ import {
   TableCell,
   TableSortLabel,
 } from "@mui/material";
+
+import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
 export const HEALTH = ["All", "Healthy", "Warning", "Critical"];
@@ -151,26 +151,24 @@ export function NamespacePipelineListing({
         }}
       >
         {filteredPipelines.map((p: NamespacePipelineSummary) => {
+          const isbName = pipelineData
+            ? pipelineData[p.name]?.pipeline?.spec
+                ?.interStepBufferServiceName || "default"
+            : "default";
           return (
             <Grid key={`pipeline-${p.name}`} item xs={12}>
               <PipelineCard
                 namespace={namespace}
                 data={p}
                 statusData={pipelineData ? pipelineData[p.name] : {}}
-                isbData={
-                  isbData
-                    ? isbData[
-                        pipelineData[p.name]?.pipeline?.metadata?.namespace
-                      ]
-                    : {}
-                }
+                isbData={isbData ? isbData[isbName] : {}}
               />
             </Grid>
           );
         })}
       </Grid>
     );
-  }, [filteredPipelines, namespace]);
+  }, [filteredPipelines, namespace, isbData, pipelineData]);
 
   return (
     <Box

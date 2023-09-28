@@ -1,9 +1,7 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useContext } from "react";
 import Paper from "@mui/material/Paper";
 import { Link } from "react-router-dom";
 import { PipelineCardProps } from "../../../../../types/declarations/namespace";
-
-import "./style.css";
 import {
   Box,
   Button,
@@ -17,6 +15,11 @@ import {
   IndicatorStatus,
   StatusIndicator,
 } from "../../../../common/StatusIndicator/StatusIndicator";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { AppContext } from "../../../../../App";
+import { SidebarType } from "../../../../common/SlidingSidebar";
+
+import "./style.css";
 
 export function PipelineCard({
   namespace,
@@ -24,12 +27,26 @@ export function PipelineCard({
   statusData,
   isbData,
 }: PipelineCardProps) {
-  const [editOption, setEditOption] = React.useState("Edit");
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const [editOption] = React.useState("edit");
   const [deleteOption, setDeleteOption] = React.useState("Delete");
 
-  const handleEditChange = useCallback((event: SelectChangeEvent<string>) => {
-    setEditOption(event.target.value);
-  }, []);
+  const handleEditChange = useCallback(
+    (event: SelectChangeEvent<string>) => {
+      if (event.target.value === "pipeline" && setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.PIPELINE_SPEC,
+          pipelineSpecProps: { spec: statusData?.pipeline?.spec },
+        });
+      } else if (event.target.value === "isb" && setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.PIPELINE_SPEC,
+          pipelineSpecProps: { spec: isbData?.isbService?.spec, titleOverride: "ISB Spec" },
+        });
+      }
+    },
+    [setSidebarProps, statusData, isbData]
+  );
 
   const handleDeleteChange = useCallback((event: SelectChangeEvent<string>) => {
     setDeleteOption(event.target.value);
@@ -119,7 +136,7 @@ export function PipelineCard({
             sx={{ background: "#F9F9F9", marginTop: "10px" }}
           >
             <Grid item xs={12}>
-              <Box>ISB Services : {isbData.name}</Box>
+              <Box>ISB Services : {isbData?.name}</Box>
             </Grid>
             <Grid item xs={12}>
               <Box>
@@ -177,6 +194,7 @@ export function PipelineCard({
               <Select
                 defaultValue="edit"
                 onChange={handleEditChange}
+                value={editOption}
                 sx={{
                   color: "#0077C5",
                   border: "1px solid #0077C5",
@@ -184,7 +202,9 @@ export function PipelineCard({
                   background: "#fff",
                 }}
               >
-                <MenuItem value="edit">Edit</MenuItem>
+                <MenuItem sx={{ display: "none" }} hidden value="edit">
+                  Edit
+                </MenuItem>
                 <MenuItem value="pipeline">Pipeline</MenuItem>
                 <MenuItem value="isb">ISB</MenuItem>
               </Select>
