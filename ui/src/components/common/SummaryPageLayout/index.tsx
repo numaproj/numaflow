@@ -41,6 +41,7 @@ export interface SummaryPageLayoutProps {
   collapsedText?: string;
   summarySections: SummarySection[];
   contentComponent: React.ReactNode;
+  contentPadding?: boolean;
 }
 
 const SUMMARY_HEIGHT = "6.5625rem";
@@ -185,6 +186,7 @@ export function SummaryPageLayout({
   collapsedText = "Details",
   summarySections,
   contentComponent,
+  contentPadding = true,
 }: SummaryPageLayoutProps) {
   const [collapsed, setCollapsed] = useState(collapsable && defaultCollapsed);
   const sumaryRef = useRef<any>();
@@ -297,7 +299,7 @@ export function SummaryPageLayout({
       <Box
         sx={{
           marginTop: contentMargin,
-          paddingTop: "1.25rem",
+          paddingTop: contentPadding ? "1.25rem" : "0",
           height: "100%",
         }}
       >

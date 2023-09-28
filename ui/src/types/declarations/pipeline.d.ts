@@ -129,3 +129,26 @@ export interface PiplelineVertexMetricsFetchProps {
   pipeline: string;
   loadOnRefresh?: boolean;
 }
+
+export interface PipelineWatermark {
+  partition: number;
+  watermark: number;
+  formattedWatermark: string;
+}
+
+export interface PipelineWatermarks {
+  edgeId: string;
+  watermarks: PipelineWatermark[];
+}
+
+export interface PipelineWatermarksFetchResult {
+  data?: PipelineWatermarks[];
+  loading: boolean;
+  error: any;
+}
+
+export interface PipelineWatermarksFetchProps {
+  namespace: string;
+  pipeline: string;
+  loadOnRefresh?: boolean;
+}

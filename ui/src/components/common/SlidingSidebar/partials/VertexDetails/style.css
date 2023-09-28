@@ -2,6 +2,11 @@
   font-size: 1.25rem;
   font-style: normal;
   font-weight: 500;
+  margin-left: 1rem;
+}
+
+.vertex-details-header-icon {
+  width: 2.25rem;
 }
 
 .vertex-details-tab-panel {
