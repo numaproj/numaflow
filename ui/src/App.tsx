@@ -11,7 +11,6 @@ import Drawer from "@mui/material/Drawer";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Slide, ToastContainer } from "react-toastify";
 import { Routes, Route } from "react-router-dom";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Cluster } from "./components/pages/Cluster";
@@ -19,7 +18,10 @@ import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
-import { SlidingSidebar, SlidingSidebarProps } from "./components/common/SlidingSidebar";
+import {
+  SlidingSidebar,
+  SlidingSidebarProps,
+} from "./components/common/SlidingSidebar";
 import { AppContextProps } from "./types/declarations/app";
 import logo from "./images/icon.png";
 import textLogo from "./images/text-icon.png";
@@ -43,7 +45,9 @@ function App() {
   // };
   const pageRef = useRef<any>();
   const [pageWidth, setPageWidth] = useState(0);
-  const [sidebarProps, setSidebarProps] = useState<SlidingSidebarProps | undefined>();
+  const [sidebarProps, setSidebarProps] = useState<
+    SlidingSidebarProps | undefined
+  >();
   const { systemInfo, error: systemInfoError } = useSystemInfoFetch();
 
   // Resize observer to keep page width in state. To be used by other dependent components.
@@ -66,7 +70,7 @@ function App() {
       notifyError([
         {
           error: "Failed to fetch the system info",
-          options: { toastId: "ns-scope", autoClose: false },
+          options: { toastId: "system-info", autoClose: 5000 },
         },
       ]);
     }
@@ -196,25 +200,20 @@ function App() {
             </Box>
           </Box>
         </ScopedCssBaseline>
-        <ToastContainer
-          position="bottom-right"
-          autoClose={6000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick={false}
-          rtl={false}
-          draggable={true}
-          pauseOnHover={true}
-          transition={Slide}
-          theme="light"
-        />
+
         <Drawer
           anchor="right"
           open={!!sidebarProps}
           onClose={handleSideBarClose}
           className="sidebar-drawer"
         >
-          {sidebarProps && <SlidingSidebar {...sidebarProps} pageWidth={pageWidth} onClose={handleSideBarClose} />}
+          {sidebarProps && (
+            <SlidingSidebar
+              {...sidebarProps}
+              pageWidth={pageWidth}
+              onClose={handleSideBarClose}
+            />
+          )}
         </Drawer>
       </AppContext.Provider>
     </div>
