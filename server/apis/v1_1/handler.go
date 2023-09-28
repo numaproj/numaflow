@@ -250,7 +250,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 			}
 		}
 		// find the smallest sink vertex watermark
-		if _, ok := sink[*watermark.From]; ok {
+		if _, ok := sink[*watermark.To]; ok {
 			for _, wm := range watermark.Watermarks {
 				if wm < minWM {
 					minWM = wm
