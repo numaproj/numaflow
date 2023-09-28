@@ -20,15 +20,15 @@ export function PipelineSummaryStatus({ pipeline }) {
     });
   }, [namespaceId, setSidebarProps]);
 
-  const handleSpecsClick = useCallback(() => {
+  const handleSpecClick = useCallback(() => {
     if (!namespaceId || !setSidebarProps) {
       return;
     }
     setSidebarProps({
-      type: SidebarType.PIPELINE_SPECS,
-      pipelineSpecsProps: { namespaceId },
+      type: SidebarType.PIPELINE_SPEC,
+      pipelineSpecProps: { spec: pipeline.spec },
     });
-  }, [namespaceId, setSidebarProps]);
+  }, [namespaceId, setSidebarProps, pipeline]);
   return (
     <Box
       sx={{
@@ -53,9 +53,7 @@ export function PipelineSummaryStatus({ pipeline }) {
             }}
           >
             <div className="pipeline-summary-text">
-              <span className="pipeline-summary-subtitle">
-                Created On:{" "}
-              </span>
+              <span className="pipeline-summary-subtitle">Created On: </span>
             </div>
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
@@ -102,12 +100,14 @@ export function PipelineSummaryStatus({ pipeline }) {
               </span>
             </div>
             <div className="pipeline-summary-text">
-              <span className="pipeline-summary-subtitle"><div
-                className="pipeline-onclick-events"
-                onClick={handleSpecsClick}
-              >
-                  Specs
-                </div></span>
+              <span className="pipeline-summary-subtitle">
+                <div
+                  className="pipeline-onclick-events"
+                  onClick={handleSpecClick}
+                >
+                  Spec
+                </div>
+              </span>
             </div>
           </Box>
         </Box>

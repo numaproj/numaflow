@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Box from "@mui/material/Box";
 import { K8sEvents, K8sEventsProps } from "./partials/K8sEvents";
 import { VertexDetails, VertexDetailsProps } from "./partials/VertexDetails";
-import { PiplineSpecs, PiplineSpecsProps } from "./partials/PipelineSpecs";
+import { PiplineSpec, PiplineSpecProps } from "./partials/PipelineSpec";
 import { EdgeDetails, EdgeDetailsProps } from "./partials/EdgeDetails";
 import {
   GeneratorDetails,
@@ -20,7 +20,7 @@ export enum SidebarType {
   PIPELINE_K8s,
   VERTEX_DETAILS,
   EDGE_DETAILS,
-  PIPELINE_SPECS,
+  PIPELINE_SPEC,
   GENERATOR_DETAILS,
   ERRORS,
 }
@@ -30,7 +30,7 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.PIPELINE_K8s]: 750,
   [SidebarType.VERTEX_DETAILS]: 750,
   [SidebarType.EDGE_DETAILS]: 750,
-  [SidebarType.PIPELINE_SPECS]: 750,
+  [SidebarType.PIPELINE_SPEC]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,
   [SidebarType.ERRORS]: 350,
 };
@@ -42,7 +42,7 @@ export interface SlidingSidebarProps {
   k8sEventsProps?: K8sEventsProps;
   vertexDetailsProps?: VertexDetailsProps;
   edgeDetailsProps?: EdgeDetailsProps;
-  pipelineSpecsProps?: PiplineSpecsProps;
+  pipelineSpecProps?: PiplineSpecProps;
   generatorDetailsProps?: GeneratorDetailsProps;
   errorsProps?: ErrorsProps;
   onClose: () => void;
@@ -55,7 +55,7 @@ export function SlidingSidebar({
   k8sEventsProps,
   vertexDetailsProps,
   edgeDetailsProps,
-  pipelineSpecsProps,
+  pipelineSpecProps,
   generatorDetailsProps,
   errorsProps,
   onClose,
@@ -118,11 +118,11 @@ export function SlidingSidebar({
           break;
         }
         return <EdgeDetails {...edgeDetailsProps} />;
-      case SidebarType.PIPELINE_SPECS:
-        if (!pipelineSpecsProps) {
+      case SidebarType.PIPELINE_SPEC:
+        if (!pipelineSpecProps) {
           break;
         }
-        return <PiplineSpecs {...pipelineSpecsProps} />;
+        return <PiplineSpec {...pipelineSpecProps} />;
       case SidebarType.GENERATOR_DETAILS:
         if (!generatorDetailsProps) {
           break;

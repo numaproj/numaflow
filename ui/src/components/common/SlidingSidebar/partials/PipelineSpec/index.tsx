@@ -7,23 +7,22 @@ import CircularProgress from "@mui/material/CircularProgress";
 
 import "./style.css";
 
-export interface SpecEditorProps {
-  vertexId: string;
-  vertexSpec: any;
+export interface PiplineSpecProps {
+  spec: any;
 }
 
-export function SpecEditor({ vertexId, vertexSpec }: SpecEditorProps) {
+export function PiplineSpec({ spec }: PiplineSpecProps) {
   const editor = useMemo(() => {
-    if (!vertexSpec) {
-      return <Box>Vertex spec not found</Box>;
+    if (!spec) {
+      return <Box>Pipeline spec not found</Box>;
     }
     return (
-      <Paper square elevation={0} sx={{ height: "100%" }}>
+      <Paper square elevation={0} sx={{ height: "100%", marginTop: "1rem" }}>
         <Editor
           height="100%"
           defaultLanguage="yaml"
-          defaultValue={YAML.stringify(vertexSpec)}
-          value={YAML.stringify(vertexSpec)}
+          defaultValue={YAML.stringify(spec)}
+          value={YAML.stringify(spec)}
           theme="github"
           options={{ domReadOnly: true, readOnly: true }}
           loading={
@@ -34,7 +33,7 @@ export function SpecEditor({ vertexId, vertexSpec }: SpecEditorProps) {
         />
       </Paper>
     );
-  }, [vertexId, vertexSpec]);
+  }, [spec]);
 
   return (
     <Box
@@ -44,6 +43,14 @@ export function SpecEditor({ vertexId, vertexSpec }: SpecEditorProps) {
         height: "100%",
       }}
     >
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+        }}
+      >
+        <span className="pipeline-spec-header-text">Pipeline Spec</span>
+      </Box>
       {editor}
     </Box>
   );
