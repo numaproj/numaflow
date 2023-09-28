@@ -6,6 +6,10 @@ import { SpecEditor } from "./partials/SpecEditor";
 import { ProcessingRates } from "./partials/ProcessingRates";
 import { K8sEvents } from "../K8sEvents";
 import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
+import sourceIcon from "../../../../../images/source_vertex.png";
+import sinkIcon from "../../../../../images/sink_vertex.png";
+import mapIcon from "../../../../../images/map_vertex.png";
+import reducIcon from "../../../../../images/reduce_vertex.png";
 
 import "./style.css";
 
@@ -17,7 +21,8 @@ const K8S_EVENTS_TAB_INDEX = 3;
 export enum VertexType {
   SOURCE,
   SINK,
-  PROCESSOR,
+  MAP,
+  REDUCE,
 }
 
 export interface VertexDetailsProps {
@@ -42,8 +47,10 @@ export function VertexDetails({
     const foundSpec = vertexSpecs.find((spec) => spec.name === vertexId);
     if (foundSpec.source) {
       setVertexType(VertexType.SOURCE);
+    } else if (foundSpec.udf && foundSpec.groupBy) {
+      setVertexType(VertexType.REDUCE);
     } else if (foundSpec.udf) {
-      setVertexType(VertexType.PROCESSOR);
+      setVertexType(VertexType.MAP);
     } else if (foundSpec.sink) {
       setVertexType(VertexType.SINK);
     }
@@ -61,24 +68,51 @@ export function VertexDetails({
     const headerContainerStyle = {
       display: "flex",
       flexDirection: "row",
+      alignItems: "center",
     };
     const textClass = "vertex-details-header-text";
     switch (vertexType) {
       case VertexType.SOURCE:
         return (
           <Box sx={headerContainerStyle}>
+            <img
+              src={sourceIcon}
+              alt="source vertex"
+              className={"vertex-details-header-icon"}
+            />
             <span className={textClass}>Input Vertex</span>
           </Box>
         );
-      case VertexType.PROCESSOR:
+      case VertexType.REDUCE:
         return (
           <Box sx={headerContainerStyle}>
+            <img
+              src={reducIcon}
+              alt="reduce vertex"
+              className={"vertex-details-header-icon"}
+            />
+            <span className={textClass}>Processor Vertex</span>
+          </Box>
+        );
+      case VertexType.MAP:
+        return (
+          <Box sx={headerContainerStyle}>
+            <img
+              src={mapIcon}
+              alt="map vertex"
+              className={"vertex-details-header-icon"}
+            />
             <span className={textClass}>Processor Vertex</span>
           </Box>
         );
       case VertexType.SINK:
         return (
           <Box sx={headerContainerStyle}>
+            <img
+              src={sinkIcon}
+              alt="sink vertex"
+              className={"vertex-details-header-icon"}
+            />
             <span className={textClass}>Sink Vertex</span>
           </Box>
         );

@@ -351,12 +351,13 @@ export default function Graph(props: GraphProps) {
           type: SidebarType.EDGE_DETAILS,
           edgeDetailsProps: {
             namespaceId,
+            pipelineId,
             edgeId: edge.id,
           },
         });
       }
     },
-    [setSidebarProps, namespaceId]
+    [setSidebarProps, namespaceId, pipelineId]
   );
 
   // This has been added to make sure that edge container refreshes on edges being refreshed
