@@ -27,13 +27,16 @@ export interface FlowProps {
   edges: Edge[];
   onNodesChange: any;
   onEdgesChange: any;
-  onConnect: (params: any) => void;
   handleNodeClick: (e: Element | EventType, node: Node) => void;
   handleEdgeClick: (e: Element | EventType, edge: Edge) => void;
   handlePaneClick: () => void;
 }
 
 export interface HighlightContextProps {
+  sideInputNodes: Map<string, Node>;
+  sideInputEdges: Map<string, string>;
   highlightValues: { [key: string]: boolean };
   setHighlightValues: Dispatch<SetStateAction<{ [key: string]: boolean }>>;
+  setHidden: Dispatch<SetStateAction<{ [key: string]: boolean }>>;
+  handleNodeClick: (e: any, node: Node<any, string>) => void;
 }

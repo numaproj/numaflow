@@ -2,11 +2,10 @@
     display: flex;
     width: 5.625rem;
     height: 1.375rem;
-    flex-shrink: 0;
     border-radius: 1.25rem;
     background: #D1DEE9;
     color: #274C77;
-    font-family: AvenirNext forINTUIT, "IBM Plex Sans";
+    font-family: "IBM Plex Sans", serif;
     font-size: 0.75rem;
     font-style: normal;
     font-weight: 500;
@@ -14,7 +13,7 @@
     justify-content: center;
     align-items: center;
     position: absolute;
-    bottom: -11%;
+    bottom: -12.5%;
     right: 8%;
     text-transform: lowercase;
 }
@@ -23,11 +22,10 @@
     display: flex;
     width: 6.25rem;
     height: 1.375rem;
-    flex-shrink: 0;
     border-radius: 1.25rem;
     background: #D1DEE9;
     color: #274C77;
-    font-family: AvenirNext forINTUIT, "IBM Plex Sans";
+    font-family: "IBM Plex Sans", serif;
     font-size: 0.75rem;
     font-style: normal;
     font-weight: 700;
@@ -43,14 +41,13 @@
 .node-status {
     width: 1.375rem;
     height: 1.375rem;
-    flex-shrink: 0;
     border-radius: 1.25rem;
     background: #D1DEE9;
     display: flex;
     justify-content: center;
     align-items: center;
     position: absolute;
-    bottom: -11%;
+    bottom: -12.5%;
     left: 8%;
 }
 
@@ -61,7 +58,6 @@
 .react-flow__node-input {
     width: 15.75rem;
     height: 4.875rem;
-    flex-shrink: 0;
     border-radius: 1.25rem;
     border: 0.0625rem solid #009EAC;
     background: var(--boxes, #F8F8FB);
@@ -75,10 +71,9 @@
     height: 100%;
     flex-direction: column;
     justify-content: center;
-    flex-shrink: 0;
     color: #274C77;
     text-align: center;
-    font-family: AvenirNext forINTUIT, "IBM Plex Sans";
+    font-family: "IBM Plex Sans", serif;
     font-size: 0.875rem;
     font-style: normal;
     font-weight: 500;
@@ -101,4 +96,37 @@
 
 .node-podnum {
     font-weight: bold;
+}
+
+.react-flow__handle {
+    /*background : #8D9096;*/
+    z-index: -1;
+    margin: -0.2rem;
+    height: 1rem;
+    width: 1rem;
+}
+
+.sideInput_node {
+    width: 1.875rem;
+    height: 1.875rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+.react-flow__handle-bottom {
+    z-index: -1;
+    margin: -0.2rem;
+    height: 1rem;
+    width: 1rem;
+    border: none;
+    bottom: -15%;
+    background: none !important;
+}
+
+.sideInput_handle {
+    bottom: -22% ;
+    position: absolute;
+    cursor: pointer;
 }

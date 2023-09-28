@@ -441,6 +441,21 @@ export const usePipelineViewFetch = (
         newVertices.push(newNode);
       });
     }
+    //creating side input nodes
+    if (spec?.sideInputs) {
+      spec.sideInputs.forEach((sideInput) => {
+        const newNode = {} as Node;
+        newNode.id = sideInput?.name;
+        newNode.data = { name: sideInput?.name };
+        newNode.position = { x: 0, y: 0 };
+        newNode.draggable = false;
+        newNode.type = "custom";
+        newNode.data.nodeInfo = sideInput;
+        newNode.data.type = "sideInput";
+        newNode.data.sideHandle = true;
+        newVertices.push(newNode);
+      });
+    }
     return newVertices;
   }, [
     spec,
@@ -522,6 +537,50 @@ export const usePipelineViewFetch = (
           pipelineEdge.targetHandle = "0";
         }
         newEdges.push(pipelineEdge);
+      });
+    }
+    //creating side input edges
+    if (spec?.sideInputs && spec?.vertices) {
+      const generatorToVertexMap: { [key: string]: string[] } = {};
+      const vertexToHandleMap: { [key: string]: string } = {};
+
+      spec.vertices.forEach((vertex) => {
+        if (vertex?.sideInputs) {
+          vertex?.sideInputs.forEach((sideInput) => {
+            if (!generatorToVertexMap[sideInput]) {
+              generatorToVertexMap[sideInput] = [];
+            }
+            generatorToVertexMap[sideInput].push(vertex?.name);
+          });
+        }
+      });
+
+      spec.sideInputs.forEach((sideInput) => {
+        generatorToVertexMap[sideInput?.name]?.forEach((vertex) => {
+          const id = `${sideInput.name}-${vertex}`;
+          const pipelineEdge = {
+            id,
+            source: sideInput.name,
+            target: vertex,
+            data: {
+              source: sideInput.name,
+              target: vertex,
+              sideInputEdge: true,
+            },
+          } as Edge;
+          pipelineEdge.animated = true;
+          pipelineEdge.type = "custom";
+          pipelineEdge.sourceHandle = "2";
+          if (vertex in vertexToHandleMap) {
+            const handleID = vertexToHandleMap[vertex];
+            const idSplit = handleID.split("-");
+            vertexToHandleMap[vertex] = "3-" + (Number(idSplit[1]) + 1);
+          } else {
+            vertexToHandleMap[vertex] = "3-0";
+          }
+          pipelineEdge.targetHandle = vertexToHandleMap[vertex];
+          newEdges.push(pipelineEdge);
+        });
       });
     }
     return newEdges;
