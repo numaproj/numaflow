@@ -240,6 +240,10 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		maxWM int64 = math.MinInt64
 	)
 	watermarks, err := client.GetPipelineWatermarks(context.Background(), pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
 	for _, watermark := range watermarks {
 		// find the largest source vertex watermark
 		if _, ok := source[*watermark.From]; ok {
@@ -264,10 +268,6 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		minWM = 0
 	}
 	lag = maxWM - minWM
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
-		return
-	}
 
 	pipelineResp := NewPipelineInfo(status, &lag, pl)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pipelineResp))
