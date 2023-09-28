@@ -133,6 +133,8 @@ export function Pipeline() {
 
   return (
     <SummaryPageLayout
+      contentPadding={false}
+      collapsable
       summarySections={summarySections}
       contentComponent={
         <div
