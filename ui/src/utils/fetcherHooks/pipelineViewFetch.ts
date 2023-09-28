@@ -46,7 +46,7 @@ export const usePipelineViewFetch = (
   );
   const [loading, setLoading] = useState(true);
 
-  const BASE_API = `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
+  const BASE_API = `/api/v1_1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
 
   // call to get pipeline
   useEffect(() => {
@@ -54,10 +54,13 @@ export const usePipelineViewFetch = (
       try {
         const response = await fetch(`${BASE_API}?refreshKey=${requestKey}`);
         if (response.ok) {
-          const data = await response.json();
-          setPipeline(data);
-          setNS_PL(`${data?.metadata?.namespace}-${data?.metadata?.name}-`);
-          if (!isEqual(spec, data?.spec)) setSpec(data?.spec);
+          const json = await response.json();
+          setPipeline(json?.data?.pipeline);
+          setNS_PL(
+            `${json?.data?.pipeline?.metadata?.namespace}-${json?.data?.pipeline?.metadata?.name}-`
+          );
+          if (!isEqual(spec, json?.data?.pipeline?.spec))
+            setSpec(json?.data?.pipeline?.spec);
         } else {
           setPipelineErr([
             {
@@ -84,11 +87,11 @@ export const usePipelineViewFetch = (
     const fetchBuffers = async () => {
       try {
         const response = await fetch(
-          `${BASE_API}/buffers?refreshKey=${requestKey}`
+          `${BASE_API}/isbs?refreshKey=${requestKey}`
         );
         if (response.ok) {
-          const data = await response.json();
-          setBuffers(data);
+          const json = await response.json();
+          setBuffers(json?.data);
         } else {
           setBuffersErr([
             {
@@ -135,7 +138,7 @@ export const usePipelineViewFetch = (
               }
             })
             .then((json) => {
-              vertexToPodsMap.set(vertex.name, json.length);
+              vertexToPodsMap.set(vertex.name, json?.data.length);
             });
         })
       )
@@ -167,17 +170,19 @@ export const usePipelineViewFetch = (
     const metricsErr: any[] = [];
 
     if (spec?.vertices && vertexPods.size > 0) {
-      Promise.allSettled(
-        spec.vertices.map((vertex: any) => {
-          return fetch(`${BASE_API}/vertices/${vertex.name}/metrics`)
-            .then((response) => {
-              if (response.ok) {
-                return response.json();
-              } else {
-                return Promise.reject({ response, vertex: vertex.name });
-              }
-            })
-            .then((json) => {
+      Promise.allSettled([
+        fetch(`${BASE_API}/vertices/metrics`)
+          .then((response) => {
+            if (response.ok) {
+              return response.json();
+            } else {
+              return Promise.reject(response);
+            }
+          })
+          .then((json) => {
+            const vertices = json?.data || {};
+            Object.values(vertices).forEach((vertex: any) => {
+              const vertexName = vertex[0].vertex;
               const vertexMetrics = {
                 ratePerMin: "0.00",
                 ratePerFiveMin: "0.00",
@@ -189,7 +194,7 @@ export const usePipelineViewFetch = (
                 ratePerFiveMin = 0.0,
                 ratePerFifteenMin = 0.0;
               // keeping processing rates as summation of pod values
-              json.forEach((pod: any) => {
+              vertex.forEach((pod: any) => {
                 if ("processingRates" in pod) {
                   if ("1m" in pod["processingRates"]) {
                     ratePerMin += pod["processingRates"]["1m"];
@@ -202,14 +207,14 @@ export const usePipelineViewFetch = (
                   }
                 } else {
                   if (
-                    vertexPods.has(vertex.name) &&
-                    vertexPods.get(vertex.name) !== 0
+                    vertexPods.has(vertexName) &&
+                    vertexPods.get(vertexName) !== 0
                   ) {
                     vertexMetrics.error = true;
                     metricsErr.push({
-                      error: `404: Failed to get metrics for ${vertex.name} vertex`,
+                      error: `404: Failed to get metrics for ${vertexName} vertex`,
                       options: {
-                        toastId: `${vertex.name}-metrics`,
+                        toastId: `${vertexName}-metrics`,
                         autoClose: 5000,
                       },
                     });
@@ -220,24 +225,21 @@ export const usePipelineViewFetch = (
               vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
               vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
               if (
-                vertexPods.has(vertex.name) &&
-                vertexPods.get(vertex.name) !== 0
+                vertexPods.has(vertexName) &&
+                vertexPods.get(vertexName) !== 0
               ) {
                 vertexMetrics.podMetrics = json;
               }
-              vertexToMetricsMap.set(vertex.name, vertexMetrics);
+              vertexToMetricsMap.set(vertexName, vertexMetrics);
             });
-        })
-      )
+          }),
+      ])
         .then((results) => {
           results.forEach((result) => {
             if (result && result?.status === "rejected") {
               metricsErr.push({
-                error: `${result.reason.response.status}: Failed to get metrics for ${result.reason.vertex} vertex`,
-                options: {
-                  toastId: `${result.reason.vertex}-metrics`,
-                  autoClose: 5000,
-                },
+                error: `${result.reason.response.status}: Failed to get metrics for some vertices`,
+                options: { toastId: `vertex-metrics`, autoClose: 5000 },
               });
             }
           });
@@ -276,7 +278,7 @@ export const usePipelineViewFetch = (
               }
             })
             .then((json) => {
-              json.forEach((edge: any) => {
+              json?.data?.forEach((edge: any) => {
                 const edgeWatermark = {} as EdgeWatermark;
                 edgeWatermark.isWaterMarkEnabled = edge["isWatermarkEnabled"];
                 edgeWatermark.watermarks = edge["watermarks"];
