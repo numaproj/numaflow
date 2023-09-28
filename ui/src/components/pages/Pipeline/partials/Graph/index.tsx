@@ -23,12 +23,8 @@ import ReactFlow, {
   useViewport,
   ReactFlowProvider,
 } from "reactflow";
-import Card from "@mui/material/Card";
 import IconButton from "@mui/material/IconButton";
 import { graphlib, layout } from "dagre";
-import EdgeInfo from "./partials/EdgeInfo";
-import NodeInfo from "./partials/NodeInfo";
-import Spec from "./partials/Spec";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
 import { AppContext } from "../../../../../App";

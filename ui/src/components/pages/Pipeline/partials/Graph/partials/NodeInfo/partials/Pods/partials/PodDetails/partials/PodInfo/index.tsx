@@ -1,28 +1,12 @@
+import React from "react";
 import Box from "@mui/material/Box";
+import Table from "@mui/material/Table";
+import TableRow from "@mui/material/TableRow";
+import TableCell from "@mui/material/TableCell";
+import TableBody from "@mui/material/TableBody";
+import TableContainer from "@mui/material/TableContainer";
 import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
-
-const podInfoSx = {
-  display: "flex",
-  flexDirection: "row",
-};
-
-const podDataRowSx = {
-  display: "flex",
-  flexDirection: "row",
-  paddingBottom: "0.625rem",
-};
-
-const podDataColumnSx = {
-  display: "flex",
-  flexDirection: "column",
-  paddingBottom: "0.625rem",
-  width: "30%",
-};
-
-const podDataRowTagSx = {
-  width: "25%",
-};
 
 export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
   const resourceUsage = getPodContainerUsePercentages(
@@ -64,33 +48,37 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
   const podName = pod?.name?.slice(0, pod?.name?.lastIndexOf("-"));
 
   return (
-    <Box data-testid="podInfo" sx={podInfoSx}>
-      <Box sx={podDataColumnSx}>
-        <Box sx={podDataRowSx}>
-          <Box sx={podDataRowTagSx}>Name:</Box>
-          <Box>{podName}</Box>
-        </Box>
-      </Box>
-      <Box sx={podDataColumnSx}>
-        <Box sx={podDataRowSx}>
-          <Box sx={podDataRowTagSx}>CPU %:</Box>
-          <Box>{cpuPercent}</Box>
-        </Box>
-        <Box sx={podDataRowSx}>
-          <Box sx={podDataRowTagSx}>CPU:</Box>
-          <Box>{`${usedCPU} / ${specCPU}`}</Box>
-        </Box>
-      </Box>
-      <Box sx={podDataColumnSx}>
-        <Box sx={podDataRowSx}>
-          <Box sx={podDataRowTagSx}>Memory %:</Box>
-          <Box>{memPercent}</Box>
-        </Box>
-        <Box sx={podDataRowSx}>
-          <Box sx={podDataRowTagSx}>Memory:</Box>
-          <Box>{`${usedMem} / ${specMem}`}</Box>
-        </Box>
-      </Box>
+    <Box
+      data-testid="podInfo"
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        color: "#DCDCDC"
+      }}
+    >
+      <TableContainer sx={{ maxHeight: "37.5rem", backgroundColor: "#FFF" }}>
+        <Table stickyHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+              <TableCell>{podName}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>CPU %</TableCell>
+              <TableCell>{cpuPercent}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>MEMORY %</TableCell>
+              <TableCell>{memPercent}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>MEMORY</TableCell>
+              <TableCell>{`${usedMem} / ${specMem}`}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Box>
   );
 }
