@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 
 import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
 import CircularProgress from "@mui/material/CircularProgress";
 import { EventType } from "@visx/event/lib/types";
 import { Containers } from "./partials/Containers";
@@ -103,7 +104,7 @@ export function Pods(props: PodsProps) {
   }
 
   return (
-    <Box>
+    <Paper square elevation={0} sx={{ padding: "1rem" }}>
       <Box data-testid={"pods-searchablePodsHeatMap"} sx={{ mt: 2 }}>
         <SearchablePodsHeatMap
           pods={pods}
@@ -115,6 +116,6 @@ export function Pods(props: PodsProps) {
       </Box>
       {containerSelector}
       {podDetail}
-    </Box>
+    </Paper>
   );
 }
