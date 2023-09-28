@@ -207,7 +207,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		return
 	}
 
-	// get pipeline source and sink
+	// get pipeline source and sink vertex
 	var (
 		source = make(map[string]bool)
 		sink   = make(map[string]bool)
