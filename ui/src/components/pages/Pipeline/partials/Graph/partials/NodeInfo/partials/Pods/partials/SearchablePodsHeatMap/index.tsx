@@ -84,7 +84,7 @@ export const SearchablePodsHeatMap = ({
       </Box>
       <div className="pod-exp-text">
         Click on different hexagons under CPU/MEM display to switch to different
-        Pods{" "}
+        Pods
       </div>
       {filteredPods?.length > 0 && (
         <PodsHeatMap
