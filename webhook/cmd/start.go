@@ -25,8 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	"github.com/numaproj/numaflow"
@@ -47,21 +45,7 @@ const (
 
 func Start() {
 	logger := logging.NewLogger().Named("webhook")
-	var restConfig *rest.Config
-	var err error
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if kubeconfig == "" {
-		home, _ := os.UserHomeDir()
-		kubeconfig = home + "/.kube/config"
-		if _, err := os.Stat(kubeconfig); err != nil && os.IsNotExist(err) {
-			kubeconfig = ""
-		}
-	}
-	if kubeconfig != "" {
-		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-	} else {
-		restConfig, err = rest.InClusterConfig()
-	}
+	restConfig, err := sharedutil.K8sRestConfig()
 	if err != nil {
 		logger.Fatalw("Failed to get kubeconfig", zap.Error(err))
 	}
