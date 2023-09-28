@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"sort"
@@ -207,9 +208,15 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	}
 
 	// get pipeline source and sink
+	var (
+		source = make(map[string]bool)
+		sink   = make(map[string]bool)
+	)
 	for _, vertex := range pl.Spec.Vertices {
 		if vertex.IsASource() {
-			// TODO
+			source[vertex.Name] = true
+		} else if vertex.IsASink() {
+			sink[vertex.Name] = true
 		}
 	}
 
@@ -228,8 +235,35 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	}
 	defer client.Close()
 
+	var (
+		minWM int64 = math.MaxInt64
+		maxWM int64 = math.MinInt64
+	)
 	watermarks, err := client.GetPipelineWatermarks(context.Background(), pipeline)
-	// TODO
+	for _, watermark := range watermarks {
+		// find the largest source vertex watermark
+		if _, ok := source[*watermark.From]; ok {
+			for _, wm := range watermark.Watermarks {
+				if wm > maxWM {
+					maxWM = wm
+				}
+			}
+		}
+		// find the smallest sink vertex watermark
+		if _, ok := sink[*watermark.From]; ok {
+			for _, wm := range watermark.Watermarks {
+				if wm < minWM {
+					minWM = wm
+				}
+			}
+		}
+	}
+	// if the data hasn't arrived the sink vertex
+	// use 0 instead of the initial watermark value -1
+	if minWM == -1 {
+		minWM = 0
+	}
+	lag = maxWM - minWM
 	_ = watermarks
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
