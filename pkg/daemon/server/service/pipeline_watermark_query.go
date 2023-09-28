@@ -121,6 +121,8 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 			Edge:               &edgeName,
 			Watermarks:         latestWatermarks,
 			IsWatermarkEnabled: &isWatermarkEnabled,
+			From:               &k.From,
+			To:                 &k.To,
 		}
 		i++
 	}
