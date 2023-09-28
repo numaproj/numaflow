@@ -1767,14 +1767,14 @@
 
 "@monaco-editor/loader@^1.3.3":
   version "1.3.3"
-  resolved "https://registry.npmjs.intuit.com:443/artifactory/api/npm/npm-intuit/@monaco-editor/loader/-/loader-1.3.3.tgz#7f1742bd3cc21c0362a46a4056317f6e5215cfca"
+  resolved "https://registry.npmjs.org/@monaco-editor/loader/-/loader-1.3.3.tgz#7f1742bd3cc21c0362a46a4056317f6e5215cfca"
   integrity sha512-6KKF4CTzcJiS8BJwtxtfyYt9shBiEv32ateQ9T4UVogwn4HM/uPo9iJd2Dmbkpz8CM6Y0PDUpjnZzCwC+eYo2Q==
   dependencies:
     state-local "^1.0.6"
 
 "@monaco-editor/react@^4.5.2":
   version "4.5.2"
-  resolved "https://registry.npmjs.intuit.com:443/artifactory/api/npm/npm-intuit/@monaco-editor/react/-/react-4.5.2.tgz#e8cc802203f729b423a998ea6fcb466604d61258"
+  resolved "https://registry.npmjs.org/@monaco-editor/react/-/react-4.5.2.tgz#e8cc802203f729b423a998ea6fcb466604d61258"
   integrity sha512-emcWu6vg1OpXPiYll4aPOaXe8bwYB4UaaNTwtArFLgMoNGBzRZb2Xn0Bra2HMIFM7QLgs7fCGunHO5LkfT2LBA==
   dependencies:
     "@monaco-editor/loader" "^1.3.3"
@@ -9997,7 +9997,7 @@ stackframe@^1.3.4:
 
 state-local@^1.0.6:
   version "1.0.7"
-  resolved "https://registry.npmjs.intuit.com:443/artifactory/api/npm/npm-intuit/state-local/-/state-local-1.0.7.tgz#da50211d07f05748d53009bee46307a37db386d5"
+  resolved "https://registry.npmjs.org/state-local/-/state-local-1.0.7.tgz#da50211d07f05748d53009bee46307a37db386d5"
   integrity sha512-HTEHMNieakEnoe33shBYcZ7NX83ACUjCu8c40iOGEZsngj9zRnkqS9j1pqQPXwobB0ZcVTk27REb7COQ0UR59w==
 
 statuses@2.0.1, statuses@^2.0.0:
@@ -11295,7 +11295,7 @@ yaml@^2.1.1:
 
 yaml@^2.3.2:
   version "2.3.2"
-  resolved "https://registry.npmjs.intuit.com:443/artifactory/api/npm/npm-intuit/yaml/-/yaml-2.3.2.tgz#f522db4313c671a0ca963a75670f1c12ea909144"
+  resolved "https://registry.npmjs.org/yaml/-/yaml-2.3.2.tgz#f522db4313c671a0ca963a75670f1c12ea909144"
   integrity sha512-N/lyzTPaJasoDmfV7YTrYCI0G/3ivm/9wdG0aHuheKowWQwGTsK0Eoiw6utmzAnI6pkJa0DUVygvp3spqqEKXg==
 
 yargs-parser@^20.2.2:

@@ -1,47 +1,37 @@
 import { useEffect, useState } from "react";
 import { useFetch, Options } from "./fetch";
 import {
-  PipelineVertexMetrics,
-  PipelineVertexMetricsFetchResult,
-  PiplelineVertexMetricsFetchProps,
+  PipelineWatermarks,
+  PipelineWatermarksFetchResult,
+  PipelineWatermarksFetchProps,
 } from "../../types/declarations/pipeline";
 
-const rawDataToVertexMetrics = (
+const rawDataToWatermarks = (
   rawData: any
-): PipelineVertexMetrics[] | undefined => {
+): PipelineWatermarks[] | undefined => {
   if (!rawData) {
     return undefined;
   }
-  return Object.keys(rawData).map((vertexId: string) => {
+  return rawData.map((item: any) => {
     return {
-      vertexId,
-      metrics: rawData[vertexId].map((item: any, index: number) => {
+      edgeId: item.edge,
+      watermarks: item.watermarks.map((watermark: number, index: number) => {
         return {
           partition: index,
-          oneM:
-            item.processingRates && item.processingRates["1m"]
-              ?item.processingRates["1m"].toFixed(2)
-              : 0,
-          fiveM:
-            item.processingRates && item.processingRates["5m"]
-              ? item.processingRates["5m"].toFixed(2)
-              : 0,
-          fifteenM:
-            item.processingRates && item.processingRates["15m"]
-              ? item.processingRates["15m"].toFixed(2)
-              : 0,
-        };
+          watermark,
+          formattedWatermark: new Date(watermark).toISOString(),
+        }
       }),
     };
   });
 };
 
-export const usePiplelineVertexMetricsFetch = ({
+export const usePiplelineWatermarksFetch = ({
   namespace,
   pipeline,
   loadOnRefresh = false,
-}: PiplelineVertexMetricsFetchProps) => {
-  const [results, setResults] = useState<PipelineVertexMetricsFetchResult>({
+}: PipelineWatermarksFetchProps) => {
+  const [results, setResults] = useState<PipelineWatermarksFetchResult>({
     data: undefined,
     loading: true,
     error: undefined,
@@ -51,7 +41,7 @@ export const usePiplelineVertexMetricsFetch = ({
     requestKey: "",
   });
   const { data, loading, error } = useFetch(
-    `/api/v1_1/namespaces/${namespace}/pipelines/${pipeline}/vertices/metrics`,
+    `/api/v1_1/namespaces/${namespace}/pipelines/${pipeline}/watermarks`,
     undefined,
     options
   );
@@ -85,7 +75,7 @@ export const usePiplelineVertexMetricsFetch = ({
       return;
     }
     if (data) {
-      const result = rawDataToVertexMetrics(data.data);
+      const result = rawDataToWatermarks(data.data);
       setResults({
         data: result,
         loading: false,
