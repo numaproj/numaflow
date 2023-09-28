@@ -743,7 +743,6 @@ func (h *handler) ValidateInterStepBufferService(c *gin.Context) {
 // Health and Criticality are different because ...?
 func (h *handler) GetPipelineStatus(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, "working on it")
-	return
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
