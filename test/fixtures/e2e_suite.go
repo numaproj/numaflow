@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
 
@@ -41,6 +40,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	flowversiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
@@ -92,19 +92,7 @@ type E2ESuite struct {
 
 func (s *E2ESuite) SetupSuite() {
 	var err error
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if kubeconfig == "" {
-		home, _ := os.UserHomeDir()
-		kubeconfig = home + "/.kube/config"
-		if _, err := os.Stat(kubeconfig); err != nil && os.IsNotExist(err) {
-			kubeconfig = ""
-		}
-	}
-	if kubeconfig != "" {
-		s.restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-	} else {
-		s.restConfig, err = rest.InClusterConfig()
-	}
+	s.restConfig, err = sharedutil.K8sRestConfig()
 	s.stopch = make(chan struct{})
 	s.CheckError(err)
 	s.kubeClient, err = kubernetes.NewForConfig(s.restConfig)

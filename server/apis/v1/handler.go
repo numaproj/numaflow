@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -29,8 +28,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	metricsversiond "k8s.io/metrics/pkg/client/clientset/versioned"
 	"k8s.io/utils/pointer"
 
@@ -38,6 +35,7 @@ import (
 	dfv1versiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 type handler struct {
@@ -48,21 +46,7 @@ type handler struct {
 
 // NewHandler is used to provide a new instance of the handler type
 func NewHandler() (*handler, error) {
-	var restConfig *rest.Config
-	var err error
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if kubeconfig == "" {
-		home, _ := os.UserHomeDir()
-		kubeconfig = home + "/.kube/config"
-		if _, err := os.Stat(kubeconfig); err != nil && os.IsNotExist(err) {
-			kubeconfig = ""
-		}
-	}
-	if kubeconfig != "" {
-		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-	} else {
-		restConfig, err = rest.InClusterConfig()
-	}
+	restConfig, err := sharedutil.K8sRestConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubeconfig, %w", err)
 	}
