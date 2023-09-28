@@ -9,9 +9,10 @@ import "./style.css";
 
 export interface PiplineSpecProps {
   spec: any;
+  titleOverride?: string;
 }
 
-export function PiplineSpec({ spec }: PiplineSpecProps) {
+export function PiplineSpec({ spec, titleOverride }: PiplineSpecProps) {
   const editor = useMemo(() => {
     if (!spec) {
       return <Box>Pipeline spec not found</Box>;
@@ -49,7 +50,7 @@ export function PiplineSpec({ spec }: PiplineSpecProps) {
           flexDirection: "row",
         }}
       >
-        <span className="pipeline-spec-header-text">Pipeline Spec</span>
+        <span className="pipeline-spec-header-text">{titleOverride || "Pipeline Spec"}</span>
       </Box>
       {editor}
     </Box>
