@@ -8,6 +8,7 @@ import {
   GeneratorDetails,
   GeneratorDetailsProps,
 } from "./partials/GeneratorDetails";
+import { Errors, ErrorsProps } from "./partials/Errors";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import slider from "../../../images/slider.png";
@@ -21,7 +22,7 @@ export enum SidebarType {
   EDGE_DETAILS,
   PIPELINE_SPECS,
   GENERATOR_DETAILS,
-  // add error comp
+  ERRORS,
 }
 
 const MIN_WIDTH_BY_TYPE = {
@@ -31,6 +32,7 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.EDGE_DETAILS]: 750,
   [SidebarType.PIPELINE_SPECS]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,
+  [SidebarType.ERRORS]: 350,
 };
 
 export interface SlidingSidebarProps {
@@ -41,6 +43,7 @@ export interface SlidingSidebarProps {
   edgeDetailsProps?: EdgeDetailsProps;
   pipelineSpecsProps?: PiplineSpecsProps;
   generatorDetailsProps?: GeneratorDetailsProps;
+  errorsProps?: ErrorsProps;
   onClose: () => void;
 }
 
@@ -52,9 +55,12 @@ export function SlidingSidebar({
   edgeDetailsProps,
   pipelineSpecsProps,
   generatorDetailsProps,
+  errorsProps,
   onClose,
 }: SlidingSidebarProps) {
-  const [width, setWidth] = useState<number>(pageWidth ? pageWidth / 2 : 0);
+  const [width, setWidth] = useState<number>(
+    errorsProps ? 350 : pageWidth ? pageWidth / 2 : 0
+  );
   const [minWidth, setMinWidth] = useState<number>(0);
 
   // Set min width by type
@@ -116,6 +122,11 @@ export function SlidingSidebar({
           break;
         }
         return <GeneratorDetails {...generatorDetailsProps} />;
+      case SidebarType.ERRORS:
+        if (!errorsProps) {
+          break;
+        }
+        return <Errors {...errorsProps} />;
       default:
         break;
     }
@@ -133,22 +144,24 @@ export function SlidingSidebar({
         height: "100%",
       }}
     >
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          height: "100vh",
-        }}
-      >
-        <img
-          onMouseDown={dragHandler}
-          src={slider}
-          alt="slider"
-          className={"sidebar-drag-icon"}
-          draggable={false}
-        />
-      </Box>
+      {!errorsProps && (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            height: "100vh",
+          }}
+        >
+          <img
+            onMouseDown={dragHandler}
+            src={slider}
+            alt="slider"
+            className={"sidebar-drag-icon"}
+            draggable={false}
+          />
+        </Box>
+      )}
       <Box
         sx={{
           display: "flex",

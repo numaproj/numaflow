@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useCallback, useContext, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
@@ -13,6 +13,10 @@ import { usePipelineSummaryFetch } from "../../../utils/fetchWrappers/pipelineFe
 import { PipelineStatus } from "./partials/PipelineStatus";
 import { PipelineSummaryStatus } from "./partials/PipelineSummaryStatus";
 import { PipelineISBStatus } from "./partials/PipelineISBStatus";
+import { SidebarType } from "../../common/SlidingSidebar";
+import { AppContextProps } from "../../../types/declarations/app";
+import { AppContext } from "../../../App";
+import noError from "../../../images/no-error.svg";
 
 import "./style.css";
 
@@ -98,8 +102,32 @@ export function Pipeline() {
     if (watermarkErr) notifyError(watermarkErr);
   }, [watermarkErr]);
 
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const handleError = useCallback(() => {
+    setSidebarProps({
+      type: SidebarType.ERRORS,
+      errorsProps: {
+        errors: true,
+      },
+    });
+  }, [setSidebarProps]);
+
   if (pipelineErr || buffersErr) {
-    return <div>Error</div>;
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "space-between",
+          margin: "0 1rem",
+        }}
+      >
+        <div>Error</div>
+        <div onClick={handleError} style={{ cursor: "pointer" }}>
+          <img src={noError} width={22} height={24} alt={"error-status"} />
+        </div>
+      </div>
+    );
   }
 
   return (

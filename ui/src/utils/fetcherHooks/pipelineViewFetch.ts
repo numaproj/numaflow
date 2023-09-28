@@ -55,17 +55,26 @@ export const usePipelineViewFetch = (
         const response = await fetch(`${BASE_API}?refreshKey=${requestKey}`);
         if (response.ok) {
           const json = await response.json();
-          setPipeline(json?.data?.pipeline);
-          setNS_PL(
-            `${json?.data?.pipeline?.metadata?.namespace}-${json?.data?.pipeline?.metadata?.name}-`
-          );
-          if (!isEqual(spec, json?.data?.pipeline?.spec))
-            setSpec(json?.data?.pipeline?.spec);
+          if (json?.data) {
+            setPipeline(json.data?.pipeline);
+            setNS_PL(
+              `${json.data?.pipeline?.metadata?.namespace}-${json.data.pipeline?.metadata?.name}-`
+            );
+            if (!isEqual(spec, json.data?.pipeline?.spec))
+              setSpec(json.data?.pipeline?.spec);
+          } else if (json?.errMsg) {
+            setPipelineErr([
+              {
+                error: json.errMsg,
+                options: { toastId: "pipeline-fetch-error", autoClose: 5000 },
+              },
+            ]);
+          }
         } else {
           setPipelineErr([
             {
               error: "Failed to fetch the pipeline details",
-              options: { toastId: "pl-details", autoClose: false },
+              options: { toastId: "pipeline-fetch", autoClose: 5000 },
             },
           ]);
         }
@@ -73,7 +82,7 @@ export const usePipelineViewFetch = (
         setPipelineErr([
           {
             error: "Failed to fetch the pipeline details",
-            options: { toastId: "pl-details", autoClose: false },
+            options: { toastId: "pipeline-fetch", autoClose: 5000 },
           },
         ]);
       }
@@ -91,20 +100,27 @@ export const usePipelineViewFetch = (
         );
         if (response.ok) {
           const json = await response.json();
-          setBuffers(json?.data);
+          if (json?.data) setBuffers(json.data);
+          else if (json?.errMsg)
+            setBuffersErr([
+              {
+                error: json.errMsg,
+                options: { toastId: "isb-fetch-error", autoClose: 5000 },
+              },
+            ]);
         } else {
           setBuffersErr([
             {
               error: "Failed to fetch the pipeline buffers",
-              options: { toastId: "pl-buffer", autoClose: false },
+              options: { toastId: "isb-fetch", autoClose: 5000 },
             },
           ]);
         }
-      } catch (e: any) {
+      } catch {
         setBuffersErr([
           {
             error: "Failed to fetch the pipeline buffers",
-            options: { toastId: "pl-buffer", autoClose: false },
+            options: { toastId: "isb-fetch", autoClose: 5000 },
           },
         ]);
       }
@@ -138,7 +154,16 @@ export const usePipelineViewFetch = (
               }
             })
             .then((json) => {
-              vertexToPodsMap.set(vertex.name, json?.data.length);
+              if (json?.data)
+                vertexToPodsMap.set(vertex.name, json.data.length);
+              else if (json?.errMsg)
+                podsErr.push({
+                  error: json.errMsg,
+                  options: {
+                    toastId: `${vertex.name}-pods-fetch-error`,
+                    autoClose: 5000,
+                  },
+                });
             });
         })
       )
@@ -148,7 +173,7 @@ export const usePipelineViewFetch = (
               podsErr.push({
                 error: `${result.reason.response.status}: Failed to get pods count for ${result.reason.vertex} vertex`,
                 options: {
-                  toastId: `${result.reason.vertex}-pods`,
+                  toastId: `${result.reason.vertex}-pods-fetch`,
                   autoClose: 5000,
                 },
               });
@@ -180,58 +205,68 @@ export const usePipelineViewFetch = (
             }
           })
           .then((json) => {
-            const vertices = json?.data || {};
-            Object.values(vertices).forEach((vertex: any) => {
-              const vertexName = vertex[0].vertex;
-              const vertexMetrics = {
-                ratePerMin: "0.00",
-                ratePerFiveMin: "0.00",
-                ratePerFifteenMin: "0.00",
-                podMetrics: [],
-                error: false,
-              } as VertexMetrics;
-              let ratePerMin = 0.0,
-                ratePerFiveMin = 0.0,
-                ratePerFifteenMin = 0.0;
-              // keeping processing rates as summation of pod values
-              vertex.forEach((pod: any) => {
-                if ("processingRates" in pod) {
-                  if ("1m" in pod["processingRates"]) {
-                    ratePerMin += pod["processingRates"]["1m"];
+            if (json?.data) {
+              const vertices = json.data;
+              Object.values(vertices).forEach((vertex: any) => {
+                const vertexName = vertex[0].vertex;
+                const vertexMetrics = {
+                  ratePerMin: "0.00",
+                  ratePerFiveMin: "0.00",
+                  ratePerFifteenMin: "0.00",
+                  podMetrics: [],
+                  error: false,
+                } as VertexMetrics;
+                let ratePerMin = 0.0,
+                  ratePerFiveMin = 0.0,
+                  ratePerFifteenMin = 0.0;
+                // keeping processing rates as summation of pod values
+                vertex.forEach((pod: any) => {
+                  if ("processingRates" in pod) {
+                    if ("1m" in pod["processingRates"]) {
+                      ratePerMin += pod["processingRates"]["1m"];
+                    }
+                    if ("5m" in pod["processingRates"]) {
+                      ratePerFiveMin += pod["processingRates"]["5m"];
+                    }
+                    if ("15m" in pod["processingRates"]) {
+                      ratePerFifteenMin += pod["processingRates"]["15m"];
+                    }
+                  } else {
+                    if (
+                      vertexPods.has(vertexName) &&
+                      vertexPods.get(vertexName) !== 0
+                    ) {
+                      vertexMetrics.error = true;
+                      metricsErr.push({
+                        error: `Failed to get metrics for ${vertexName} vertex`,
+                        options: {
+                          toastId: `${vertexName}-metrics`,
+                          autoClose: 5000,
+                        },
+                      });
+                    }
                   }
-                  if ("5m" in pod["processingRates"]) {
-                    ratePerFiveMin += pod["processingRates"]["5m"];
-                  }
-                  if ("15m" in pod["processingRates"]) {
-                    ratePerFifteenMin += pod["processingRates"]["15m"];
-                  }
-                } else {
-                  if (
-                    vertexPods.has(vertexName) &&
-                    vertexPods.get(vertexName) !== 0
-                  ) {
-                    vertexMetrics.error = true;
-                    metricsErr.push({
-                      error: `404: Failed to get metrics for ${vertexName} vertex`,
-                      options: {
-                        toastId: `${vertexName}-metrics`,
-                        autoClose: 5000,
-                      },
-                    });
-                  }
+                });
+                vertexMetrics.ratePerMin = ratePerMin.toFixed(2);
+                vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
+                vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
+                if (
+                  vertexPods.has(vertexName) &&
+                  vertexPods.get(vertexName) !== 0
+                ) {
+                  vertexMetrics.podMetrics = json;
                 }
+                vertexToMetricsMap.set(vertexName, vertexMetrics);
               });
-              vertexMetrics.ratePerMin = ratePerMin.toFixed(2);
-              vertexMetrics.ratePerFiveMin = ratePerFiveMin.toFixed(2);
-              vertexMetrics.ratePerFifteenMin = ratePerFifteenMin.toFixed(2);
-              if (
-                vertexPods.has(vertexName) &&
-                vertexPods.get(vertexName) !== 0
-              ) {
-                vertexMetrics.podMetrics = json;
-              }
-              vertexToMetricsMap.set(vertexName, vertexMetrics);
-            });
+            } else if (json?.errMsg) {
+              metricsErr.push({
+                error: json.errMsg,
+                options: {
+                  toastId: "vertex-metrics-fetch-error",
+                  autoClose: 5000,
+                },
+              });
+            }
           }),
       ])
         .then((results) => {
@@ -239,7 +274,7 @@ export const usePipelineViewFetch = (
             if (result && result?.status === "rejected") {
               metricsErr.push({
                 error: `${result.reason.response.status}: Failed to get metrics for some vertices`,
-                options: { toastId: `vertex-metrics`, autoClose: 5000 },
+                options: { toastId: `vertex-metrics-fetch`, autoClose: 5000 },
               });
             }
           });
@@ -278,13 +313,23 @@ export const usePipelineViewFetch = (
               }
             })
             .then((json) => {
-              json?.data?.forEach((edge: any) => {
-                const edgeWatermark = {} as EdgeWatermark;
-                edgeWatermark.isWaterMarkEnabled = edge["isWatermarkEnabled"];
-                edgeWatermark.watermarks = edge["watermarks"];
-                edgeWatermark.WMFetchTime = Date.now();
-                edgeToWatermarkMap.set(edge.edge, edgeWatermark);
-              });
+              if (json?.data) {
+                json.data.forEach((edge: any) => {
+                  const edgeWatermark = {} as EdgeWatermark;
+                  edgeWatermark.isWaterMarkEnabled = edge["isWatermarkEnabled"];
+                  edgeWatermark.watermarks = edge["watermarks"];
+                  edgeWatermark.WMFetchTime = Date.now();
+                  edgeToWatermarkMap.set(edge.edge, edgeWatermark);
+                });
+              } else if (json?.errMsg) {
+                watermarkErr.push({
+                  error: json.errMsg,
+                  options: {
+                    toastId: "watermarks-fetch-error",
+                    autoClose: 5000,
+                  },
+                });
+              }
             }),
         ])
           .then((results) => {
@@ -292,7 +337,7 @@ export const usePipelineViewFetch = (
               if (result && result?.status === "rejected") {
                 watermarkErr.push({
                   error: `${result.reason.status}: Failed to get watermarks for some vertices`,
-                  options: { toastId: "vertex-watermarks", autoClose: 5000 },
+                  options: { toastId: "watermarks-fetch", autoClose: 5000 },
                 });
               }
             });

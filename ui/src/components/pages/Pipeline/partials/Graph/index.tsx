@@ -53,6 +53,8 @@ import reduce from "../../../../../images/reduce.svg";
 import sink from "../../../../../images/sink.svg";
 import input from "../../../../../images/input.svg";
 import generator from "../../../../../images/generator.svg";
+import error from "../../../../../images/error.svg";
+import noError from "../../../../../images/no-error.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -136,6 +138,7 @@ const Flow = (props: FlowProps) => {
     handleNodeClick,
     handleEdgeClick,
     handlePaneClick,
+    setSidebarProps,
   } = props;
 
   const onIsLockedChange = useCallback(
@@ -150,6 +153,15 @@ const Flow = (props: FlowProps) => {
   const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomLevel]);
   const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomLevel]);
 
+  const handleError = useCallback(() => {
+    setSidebarProps({
+      type: SidebarType.ERRORS,
+      errorsProps: {
+        errors: true,
+      },
+    });
+  }, [setSidebarProps]);
+  // TODO error panel icon color change
   return (
     <ReactFlow
       nodeTypes={defaultNodeTypes}
@@ -243,6 +255,11 @@ const Flow = (props: FlowProps) => {
         <div className={"legend-title"}>
           <img src={generator} width={22} height={24} alt={"generator"} />
           <div className={"legend-text"}>Generator</div>
+        </div>
+      </Panel>
+      <Panel position="top-right">
+        <div onClick={handleError} style={{ cursor: "pointer" }}>
+          <img src={noError} width={22} height={24} alt={"error-status"} />
         </div>
       </Panel>
     </ReactFlow>
@@ -469,6 +486,7 @@ export default function Graph(props: GraphProps) {
                 handleNodeClick,
                 handleEdgeClick,
                 handlePaneClick,
+                setSidebarProps,
               }}
             />
           </ReactFlowProvider>

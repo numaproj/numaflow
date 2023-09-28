@@ -25,7 +25,6 @@ export function GeneratorDetails({
   vertexId,
   generatorDetails,
 }: GeneratorDetailsProps) {
-  console.log(generatorDetails);
   const [generatorSpec, setGeneratorSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
   const [tabValue, setTabValue] = useState(SPEC_TAB_INDEX);
