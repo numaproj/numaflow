@@ -32,6 +32,7 @@ export interface VertexDetailsProps {
   pipelineId: string;
   vertexId: string;
   vertexSpecs: any;
+  vertexMetrics: any;
   buffers: any[];
   type: string;
 }
@@ -41,6 +42,7 @@ export function VertexDetails({
   pipelineId,
   vertexId,
   vertexSpecs,
+  vertexMetrics,
   buffers,
   type,
 }: VertexDetailsProps) {
@@ -220,9 +222,9 @@ export function VertexDetails({
       >
         {tabValue === PROCESSING_RATES_TAB_INDEX && (
           <ProcessingRates
-            namespaceId={namespaceId}
             vertexId={vertexId}
             pipelineId={pipelineId}
+            vertexMetrics={vertexMetrics}
           />
         )}
       </div>
