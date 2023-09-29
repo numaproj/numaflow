@@ -23,7 +23,6 @@ export function Namespaces() {
       namespace: namespaceId || "",
       loadOnRefresh: false,
     });
-
   const handleK8sEventsClick = useCallback(() => {
     if (!namespaceId || !setSidebarProps) {
       return;

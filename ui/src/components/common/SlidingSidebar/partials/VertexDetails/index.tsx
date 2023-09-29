@@ -5,6 +5,7 @@ import Box from "@mui/material/Box";
 import { SpecEditor } from "./partials/SpecEditor";
 import { ProcessingRates } from "./partials/ProcessingRates";
 import { K8sEvents } from "../K8sEvents";
+import { Buffers } from "./partials/Buffers";
 import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
 import sourceIcon from "../../../../../images/source_vertex.png";
 import sinkIcon from "../../../../../images/sink_vertex.png";
@@ -17,6 +18,7 @@ const PODS_VIEW_TAB_INDEX = 0;
 const SPEC_TAB_INDEX = 1;
 const PROCESSING_RATES_TAB_INDEX = 2;
 const K8S_EVENTS_TAB_INDEX = 3;
+const BUFFERS_TAB_INDEX = 4;
 
 export enum VertexType {
   SOURCE,
@@ -29,7 +31,9 @@ export interface VertexDetailsProps {
   namespaceId: string;
   pipelineId: string;
   vertexId: string;
-  vertexSpecs: any[];
+  vertexSpecs: any;
+  buffers: any[];
+  type: string;
 }
 
 export function VertexDetails({
@@ -37,6 +41,8 @@ export function VertexDetails({
   pipelineId,
   vertexId,
   vertexSpecs,
+  buffers,
+  type,
 }: VertexDetailsProps) {
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
@@ -44,18 +50,17 @@ export function VertexDetails({
 
   // Find the vertex spec by id
   useEffect(() => {
-    const foundSpec = vertexSpecs.find((spec) => spec.name === vertexId);
-    if (foundSpec.source) {
+    if (type === "source") {
       setVertexType(VertexType.SOURCE);
-    } else if (foundSpec.udf && foundSpec.groupBy) {
+    } else if (type === "udf" && vertexSpecs?.udf?.groupBy) {
       setVertexType(VertexType.REDUCE);
-    } else if (foundSpec.udf) {
+    } else if (type === "udf") {
       setVertexType(VertexType.MAP);
-    } else if (foundSpec.sink) {
+    } else if (type === "sink") {
       setVertexType(VertexType.SINK);
     }
-    setVertexSpec(foundSpec);
-  }, [vertexId, vertexSpecs]);
+    setVertexSpec(vertexSpecs);
+  }, [vertexSpecs, type]);
 
   const handleTabChange = useCallback(
     (event: React.SyntheticEvent, newValue: number) => {
@@ -172,6 +177,16 @@ export function VertexDetails({
             }
             label="K8s Events"
           />
+          {buffers && (
+            <Tab
+              className={
+                tabValue === BUFFERS_TAB_INDEX
+                  ? "vertex-details-tab-selected"
+                  : "vertex-details-tab"
+              }
+              label="Buffers"
+            />
+          )}
         </Tabs>
       </Box>
       <div
@@ -220,6 +235,15 @@ export function VertexDetails({
           <K8sEvents namespaceId={namespaceId} excludeHeader square />
         )}
       </div>
+      {buffers && (
+        <div
+          className="vertex-details-tab-panel"
+          role="tabpanel"
+          hidden={tabValue !== BUFFERS_TAB_INDEX}
+        >
+          {tabValue === BUFFERS_TAB_INDEX && <Buffers buffers={buffers} />}
+        </div>
+      )}
     </Box>
   );
 }

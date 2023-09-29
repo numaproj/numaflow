@@ -1,3 +1,5 @@
+import { PipelineData } from "../../components/pages/Namespace/partials/NamespacePipelineListing/PipelinesTypes";
+
 export interface NamespacePipelineSummary {
   name: string;
   status: string;
@@ -43,7 +45,7 @@ export interface PipelineCardProps {
 export interface NamespacePipelineListingProps {
   namespace: string;
   data: NamespaceSummaryData;
-  pipelineData?: any;
+  pipelineData?: Map<string, PipelineData>;
   isbData?: any;
 }
 

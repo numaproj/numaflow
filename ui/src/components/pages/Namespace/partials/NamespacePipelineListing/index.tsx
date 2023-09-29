@@ -5,10 +5,9 @@ import Grid from "@mui/material/Grid";
 import { DebouncedSearchInput } from "../../../../common/DebouncedSearchInput";
 import { PipelineCard } from "../PipelineCard";
 import { createSvgIcon } from "@mui/material/utils";
-import {
-  NamespacePipelineListingProps,
-  NamespacePipelineSummary,
-} from "../../../../../types/declarations/namespace";
+import { NamespacePipelineListingProps } from "../../../../../types/declarations/namespace";
+import { PipelineData } from "./PipelinesTypes";
+import "./style.css";
 import {
   Button,
   MenuItem,
@@ -35,7 +34,7 @@ export const sortOptions = [
   },
   {
     label: "A-Z",
-    value: "alphabeltical",
+    value: "alphabetical",
     sortOrder: "asc",
   },
 ];
@@ -68,24 +67,49 @@ export function NamespacePipelineListing({
   const [health, setHealth] = useState(HEALTH[0]);
   const [status, setStatus] = useState(STATUS[0]);
   const [page, setPage] = useState(1);
-  const [orderBy, setOrderBy] = useState("lastUpdated");
-  const [order, setOrder] = useState("desc");
+  const [orderBy, setOrderBy] = useState("alphabetical");
+  const [order, setOrder] = useState("asc");
   const [totalPages, setTotalPages] = useState(
     Math.ceil(data.pipelinesCount / MAX_PAGE_SIZE)
   );
-  const [filteredPipelines, setFilteredPipelines] = useState<
-    NamespacePipelineSummary[]
-  >([]);
+  const [filteredPipelines, setFilteredPipelines] = useState<PipelineData[]>(
+    []
+  );
   // Update filtered pipelines based on search and page selected
   useEffect(() => {
-    let filtered: NamespacePipelineSummary[] = data.pipelineSummaries;
+    let filtered: PipelineData[] = Object.values(
+      pipelineData ? pipelineData : {}
+    );
     if (search) {
       // Filter by search
-      filtered = data.pipelineSummaries.filter((p) => p.name.includes(search));
+      filtered = data.pipelineRawData.filter((p: PipelineData) =>
+        p.name.includes(search)
+      );
     }
     // Sort by name
     filtered.sort((a, b) => (a.name > b.name ? 1 : -1)); // TODO take sorting options into account
 
+    //Filter by health
+    if (health !== "All") {
+      filtered = filtered.filter((p) => {
+        if (p.status === health.toLowerCase()) {
+          return true;
+        } else {
+          return false;
+        }
+      });
+    }
+
+    //Filter by status
+    if (status !== "All") {
+      filtered = filtered.filter((p) => {
+        if (p.pipeline.status.phase === status.toLowerCase()) {
+          return true;
+        } else {
+          return false;
+        }
+      });
+    }
     // Break list into pages
     const pages = filtered.reduce((resultArray: any[], item, index) => {
       const chunkIndex = Math.floor(index / MAX_PAGE_SIZE);
@@ -103,7 +127,7 @@ export function NamespacePipelineListing({
     // Set filtered namespaces with current page of pipelines
     setFilteredPipelines(pages[page - 1] || []);
     setTotalPages(pages.length);
-  }, [data, search, page]);
+  }, [data, search, page, pipelineData, isbData]);
 
   const handlePageChange = useCallback(
     (event: React.ChangeEvent<unknown>, value: number) => {
@@ -117,7 +141,43 @@ export function NamespacePipelineListing({
       value: string
     ) => {
       setOrderBy(value);
-      setOrder(order === "asc" ? "desc" : "asc");
+      const orderBy = order === "asc" ? "desc" : "asc";
+      setOrder(orderBy);
+      if (value === "alphabeltical") {
+        filteredPipelines.sort((a: PipelineData, b: PipelineData) => {
+          if (orderBy === "asc") {
+            return a.name > b.name ? 1 : -1;
+          } else {
+            return a.name < b.name ? -1 : 1;
+          }
+        });
+      } else if (value === "lastUpdated") {
+        filteredPipelines.sort((a: PipelineData, b: PipelineData) => {
+          if (orderBy === "asc") {
+            return a.pipeline.status.lastUpdated > b.pipeline.status.lastUpdated
+              ? 1
+              : -1;
+          } else {
+            return a.pipeline.status.lastUpdated < b.pipeline.status.lastUpdated
+              ? -1
+              : 1;
+          }
+        });
+      } else {
+        filteredPipelines.sort((a: PipelineData, b: PipelineData) => {
+          if (orderBy === "asc") {
+            return Date.parse(a.pipeline.metadata.creationTimestamp) >
+              Date.parse(b.pipeline.metadata.creationTimestamp)
+              ? 1
+              : -1;
+          } else {
+            return Date.parse(a.pipeline.metadata.creationTimestamp) <
+              Date.parse(b.pipeline.metadata.creationTimestamp)
+              ? -1
+              : 1;
+          }
+        });
+      }
     },
     [order]
   );
@@ -148,25 +208,64 @@ export function NamespacePipelineListing({
           margin: "0.5rem 0 1.5rem 0",
         }}
       >
-        {filteredPipelines.map((p: NamespacePipelineSummary) => {
-          const isbName = pipelineData
-            ? pipelineData[p.name]?.pipeline?.spec
-                ?.interStepBufferServiceName || "default"
-            : "default";
-          return (
-            <Grid key={`pipeline-${p.name}`} item xs={12}>
-              <PipelineCard
-                namespace={namespace}
-                data={p}
-                statusData={pipelineData ? pipelineData[p.name] : {}}
-                isbData={isbData ? isbData[isbName] : {}}
-              />
-            </Grid>
-          );
-        })}
+        {pipelineData &&
+          filteredPipelines.map((p: PipelineData) => {
+            return (
+              <Grid key={`pipeline-${p.name}`} item xs={12}>
+                <PipelineCard
+                  namespace={namespace}
+                  data={p}
+                  statusData={pipelineData ? pipelineData[p.name] : {}}
+                  isbData={
+                    isbData
+                      ? isbData[
+                          pipelineData[p.name]?.pipeline?.metadata?.namespace
+                        ]
+                      : {}
+                  }
+                />
+              </Grid>
+            );
+          })}
       </Grid>
     );
-  }, [filteredPipelines, namespace, isbData, pipelineData]);
+  }, [filteredPipelines, namespace]);
+
+  const handleHealthFilterChange = useCallback(
+    (e) => {
+      setHealth(e.target.value);
+      const filtered = Object.values(pipelineData || {}).filter((p) => {
+        if (
+          e.target.value === "All" ||
+          p.status === e.target.value.toLowerCase()
+        ) {
+          return true;
+        } else {
+          return false;
+        }
+      });
+      setFilteredPipelines(filtered);
+    },
+    [health]
+  );
+
+  const handleStatusFilterChange = useCallback(
+    (e) => {
+      setStatus(e.target.value);
+      const filtered = Object.values(pipelineData || {}).filter((p) => {
+        if (
+          e.target.value === "All" ||
+          p?.pipeline?.status?.phase === e.target.value.toLowerCase()
+        ) {
+          return true;
+        } else {
+          return false;
+        }
+      });
+      setFilteredPipelines(filtered);
+    },
+    [status]
+  );
 
   return (
     <Box
@@ -177,10 +276,10 @@ export function NamespacePipelineListing({
       }}
     >
       <Box sx={{ display: "flex", flexDirection: "row", alignItems: "end" }}>
-          <DebouncedSearchInput
-            placeHolder="Search for pipeline"
-            onChange={setSearch}
-          />
+        <DebouncedSearchInput
+          placeHolder="Search for pipeline"
+          onChange={setSearch}
+        />
         <Box
           sx={{
             display: "flex",
@@ -210,7 +309,7 @@ export function NamespacePipelineListing({
                 border: "1px solid #6B6C72",
                 height: "34px",
               }}
-              onChange={(e) => setHealth(e.target.value)}
+              onChange={handleHealthFilterChange}
             >
               {HEALTH.map((health) => (
                 <MenuItem key={health} value={health}>
@@ -241,7 +340,7 @@ export function NamespacePipelineListing({
                 border: "1px solid #6B6C72",
                 height: "34px",
               }}
-              onChange={(e) => setStatus(e.target.value)}
+              onChange={handleStatusFilterChange}
             >
               {STATUS.map((status) => (
                 <MenuItem key={status} value={status}>
