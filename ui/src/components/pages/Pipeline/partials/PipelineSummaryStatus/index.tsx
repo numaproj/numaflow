@@ -41,7 +41,7 @@ export function PipelineSummaryStatus({ pipeline }) {
       }}
     >
       <Box sx={{ width: "fit-content" }}>
-        <span className="pipeline-status-title">Summary</span>
+        <span className="pipeline-status-title">SUMMARY</span>
         <Box
           sx={{ display: "flex", flexDirection: "row", marginTop: "0.3125rem" }}
         >
@@ -59,9 +59,6 @@ export function PipelineSummaryStatus({ pipeline }) {
               <span className="pipeline-summary-subtitle">
                 Last Updated On:{" "}
               </span>
-            </div>
-            <div className="pipeline-summary-text">
-              <span className="pipeline-summary-subtitle">Maximum lag: </span>
             </div>
             {/*<div className="pipeline-summary-text">*/}
             {/*  <span className="pipeline-summary-subtitle">Last Refresh: </span>*/}
@@ -81,14 +78,17 @@ export function PipelineSummaryStatus({ pipeline }) {
             <div className="pipeline-summary-text">
               <span>{pipeline?.status?.lastUpdated}</span>
             </div>
-            <div className="pipeline-summary-text">
-              <span>10 sec.</span>
-            </div>
             {/*<div className="pipeline-summary-text">*/}
             {/*  2023-12-07T02:02:00Z*/}
             {/*</div>*/}
           </Box>
-          <Box sx={{ display: "flex", flexDirection: "column" }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              marginRight: "3rem",
+            }}
+          >
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
                 <div
@@ -105,7 +105,17 @@ export function PipelineSummaryStatus({ pipeline }) {
                   className="pipeline-onclick-events"
                   onClick={handleSpecClick}
                 >
-                  Spec
+                  Pipeline Specs
+                </div>
+              </span>
+            </div>
+          </Box>
+          <Box sx={{ display: "flex", flexDirection: "column" }}>
+            <div className="pipeline-summary-text">
+              <span className="pipeline-summary-subtitle">
+                <div>
+                  <span className="pipeline-summary-subtitle">Max lag:</span>
+                  <span className="pipeline-summary-text"> 10 sec.</span>
                 </div>
               </span>
             </div>

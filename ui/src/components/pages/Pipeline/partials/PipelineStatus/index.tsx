@@ -17,7 +17,7 @@ export function PipelineStatus({ status, healthStatus }) {
       }}
     >
       <Box sx={{ width: "fit-content" }}>
-        <span className="pipeline-status-title">Status</span>
+        <span className={"pipeline-status-title"}>STATUS</span>
         <Box
           sx={{ display: "flex", flexDirection: "row", marginTop: "0.3125rem" }}
         >

@@ -18,9 +18,15 @@ export function PipelineISBStatus({ isbData }) {
       }}
     >
       <Box sx={{ display: "flex", flexDirection: "row" }}>
-        <Box sx={{ width: "fit-content", marginRight: "1em" }}>
-          <span className="pipeline-status-title">ISB Status</span>
-          <Box sx={{ display: "flex", flexDirection: "row" }}>
+        <Box sx={{ width: "fit-content", marginRight: "2em", flexGrow: 1 }}>
+          <span className="pipeline-status-title">ISB STATUS</span>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              marginTop: "0.3125rem",
+            }}
+          >
             <Box sx={{ display: "flex", flexDirection: "column" }}>
               <img
                 src={IconsStatusMap[isbData?.isbService?.status?.phase]}
@@ -47,9 +53,15 @@ export function PipelineISBStatus({ isbData }) {
             </Box>
           </Box>
         </Box>
-        <Box sx={{ width: "fit-content" }}>
-          <span className="pipeline-status-title">ISB Summary</span>
-          <Box sx={{ display: "flex", flexDirection: "row" }}>
+        <Box sx={{ width: "fit-content", marginRight: "2em", flexGrow: 1 }}>
+          <span className="pipeline-status-title">ISB SUMMARY</span>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              marginTop: "0.3125rem",
+            }}
+          >
             <Box
               sx={{
                 display: "flex",
@@ -58,15 +70,10 @@ export function PipelineISBStatus({ isbData }) {
               }}
             >
               <div className="pipeline-summary-text">
-                <span className="pipeline-summary-subtitle">ISB Type: </span>
+                <span className="pipeline-summary-subtitle">Name: </span>
               </div>
               <div className="pipeline-summary-text">
-                <span className="pipeline-summary-subtitle">ISB Size: </span>
-              </div>
-              <div className="pipeline-summary-text">
-                <span className="pipeline-summary-subtitle">
-                  ISB Services:{" "}
-                </span>
+                <span className="pipeline-summary-subtitle">Type: </span>
               </div>
             </Box>
             <Box
@@ -77,21 +84,36 @@ export function PipelineISBStatus({ isbData }) {
               }}
             >
               <div className="isb-status-text">
-                <Chip
-                  label={isbData?.isbService?.status?.type}
-                  sx={{ height: "20px" }}
-                />
-              </div>
-              <div className="isb-status-text">
-                <span>
-                  {
-                    isbData?.isbService?.spec[isbData?.isbService?.status?.type]
-                      ?.replicas
-                  }
-                </span>
-              </div>
-              <div className="isb-status-text">
                 <span>{isbData?.name}</span>
+              </div>
+              <div className="isb-status-text">
+                <span>{isbData?.isbService?.status?.type}</span>
+                {/*<Chip*/}
+                {/*  label={isbData?.isbService?.status?.type}*/}
+                {/*  sx={{ height: "20px" }}*/}
+                {/*/>*/}
+              </div>
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                marginLeft: "2rem"
+              }}
+            >
+              <div className="pipeline-summary-text">
+                <span className="pipeline-summary-subtitle">
+                  <div className="pipeline-summary-text">
+                    <span className="pipeline-summary-subtitle">Size: </span>
+                    <span>
+                      {
+                        isbData?.isbService?.spec[
+                          isbData?.isbService?.status?.type
+                        ]?.replicas
+                      }
+                    </span>
+                  </div>
+                </span>
               </div>
             </Box>
           </Box>
