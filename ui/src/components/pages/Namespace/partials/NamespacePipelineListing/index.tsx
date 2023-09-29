@@ -329,48 +329,48 @@ export function NamespacePipelineListing({
         </Box>
       </Box>
       <Box sx={{ display: "flex", flexDirection: "row", marginTop: "2rem" }}>
-        <Box sx={{ display: "flex", flexDirection: "row", flexGrow: 1 }}>
-          <span className="ns-pipeline-listing-table-title">Pipelines</span>
-        </Box>
-
         <Box
           sx={{
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
-            justifyContent: "center",
+            maxWidth: "8.75rem",
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-            }}
-          >
-            {sortOptions.map((option) => {
-              return (
-                <Button
-                  sx={{ color: "#393A3D" }}
-                  onClick={(e) => {
-                    handleSortChange(e, option.value);
-                  }}
-                  key={option.value}
-                  variant="text"
-                >
-                  {option.label}{" "}
-                  {orderBy.value === option.value ? (
-                    orderBy.sortOrder === ASC ? (
-                      <ArrowUpwardIcon fontSize="small" />
-                    ) : (
-                      <ArrowDownwardIcon fontSize="small" />
-                    )
+          <span className="ns-pipeline-listing-table-title">Pipelines</span>
+        </Box>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            flexGrow: 1,
+            justifyContent: "space-evenly",
+            maxWidth: "35.9375rem",
+          }}
+        >
+          {sortOptions.map((option) => {
+            return (
+              <Button
+                sx={{ color: "#393A3D" }}
+                onClick={(e) => {
+                  handleSortChange(e, option.value);
+                }}
+                key={option.value}
+                variant="text"
+              >
+                {option.label}{" "}
+                {orderBy.value === option.value ? (
+                  orderBy.sortOrder === ASC ? (
+                    <ArrowUpwardIcon fontSize="small" />
                   ) : (
-                    ""
-                  )}
-                </Button>
-              );
-            })}
-          </Box>
+                    <ArrowDownwardIcon fontSize="small" />
+                  )
+                ) : (
+                  ""
+                )}
+              </Button>
+            );
+          })}
         </Box>
         <Box
           sx={{
