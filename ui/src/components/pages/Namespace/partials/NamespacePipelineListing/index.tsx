@@ -128,7 +128,7 @@ export function NamespacePipelineListing({
     //Filter by health
     if (health !== "All") {
       filtered = filtered.filter((p) => {
-        if (p.status === health.toLowerCase()) {
+        if (p.status.toLowerCase() === health.toLowerCase()) {
           return true;
         } else {
           return false;
@@ -139,7 +139,7 @@ export function NamespacePipelineListing({
     //Filter by status
     if (status !== "All") {
       filtered = filtered.filter((p) => {
-        if (p.pipeline.status.phase === status.toLowerCase()) {
+        if (p.pipeline.status.phase.toLowerCase() === status.toLowerCase()) {
           return true;
         } else {
           return false;
