@@ -3618,8 +3618,7 @@ RedisConfig
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">BufferServiceConfig</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RedisBufferService">RedisBufferService</a>)
 </p>
 <p>
 </p>
@@ -3774,78 +3773,6 @@ settings from controller config
 Sentinel settings, will override the global settings from controller
 config
 </p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="numaflow.numaproj.io/v1alpha1.RedisStreamsSource">
-RedisStreamsSource
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
-</p>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>
-Field
-</th>
-<th>
-Description
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>RedisConfig</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisConfig"> RedisConfig </a>
-</em>
-</td>
-<td>
-<p>
-(Members of <code>RedisConfig</code> are embedded into this type.)
-</p>
-<p>
-RedisConfig contains connectivity info
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>stream</code></br> <em> string </em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>consumerGroup</code></br> <em> string </em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>readFromBeginning</code></br> <em> bool </em>
-</td>
-<td>
-<p>
-if true, stream starts being read from the beginning; otherwise, the
-latest
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
-TLS </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
 </td>
 </tr>
 </tbody>
@@ -4469,16 +4396,6 @@ GeneratorSource </a> </em>
 </tr>
 <tr>
 <td>
-<code>redisStreams</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">
-RedisStreamsSource </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
 <code>transformer</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDTransformer"> UDTransformer
 </a> </em>
@@ -4546,8 +4463,7 @@ TLS
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.RedisStreamsSource">RedisStreamsSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>)
 </p>
 <p>
 </p>

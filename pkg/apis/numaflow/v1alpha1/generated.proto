@@ -978,21 +978,6 @@ message RedisSettings {
   optional string sentinel = 4;
 }
 
-message RedisStreamsSource {
-  // RedisConfig contains connectivity info
-  optional RedisConfig redisConfig = 1;
-
-  optional string stream = 2;
-
-  optional string consumerGroup = 3;
-
-  // if true, stream starts being read from the beginning; otherwise, the latest
-  optional bool readFromBeginning = 4;
-
-  // +optional
-  optional TLS tls = 5;
-}
-
 message SASL {
   // SASL mechanism to use
   optional string mechanism = 1;
@@ -1139,9 +1124,6 @@ message Source {
 
   // +optional
   optional NatsSource nats = 4;
-
-  // +optional
-  optional RedisStreamsSource redisStreams = 5;
 
   // +optional
   optional UDTransformer transformer = 6;
