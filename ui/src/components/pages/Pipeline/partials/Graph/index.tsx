@@ -413,20 +413,15 @@ export default function Graph(props: GraphProps) {
               namespaceId,
               pipelineId,
               vertexId: node.id,
-              vertexSpecs: data.pipeline?.spec?.vertices || [],
+              vertexSpecs: node?.data?.nodeInfo,
+              buffers: node?.data?.buffers,
+              type: node?.data?.type,
             },
           });
         }
       }
     },
-    [
-      setSidebarProps,
-      namespaceId,
-      pipelineId,
-      data.pipeline,
-      setHidden,
-      sideNodes,
-    ]
+    [setSidebarProps, namespaceId, pipelineId, setHidden, sideNodes]
   );
 
   // This has been added to make sure that node container refreshes on nodes being refreshed
@@ -437,6 +432,7 @@ export default function Graph(props: GraphProps) {
         node.data = dataNode.data;
         node.id = dataNode.id;
         setNode(node);
+        handleNodeClick(null, node);
       }
     });
   }, [nodes, nodeId]);

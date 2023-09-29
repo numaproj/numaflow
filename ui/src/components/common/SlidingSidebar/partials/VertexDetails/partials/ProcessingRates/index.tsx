@@ -23,7 +23,9 @@ export function ProcessingRates({
   pipelineId,
   vertexId,
 }: ProcessingRatesProps) {
-  const [vertexMetric, setVertexMetric] = useState<PipelineVertexMetrics | undefined>();
+  const [vertexMetric, setVertexMetric] = useState<
+    PipelineVertexMetrics | undefined
+  >();
   const { data, loading, error } = usePiplelineVertexMetricsFetch({
     namespace: namespaceId,
     pipeline: pipelineId,
@@ -38,7 +40,9 @@ export function ProcessingRates({
 
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", marginTop: "1rem" }}>
+      <Box
+        sx={{ display: "flex", justifyContent: "center", marginTop: "1rem" }}
+      >
         <CircularProgress />
       </Box>
     );

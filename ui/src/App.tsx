@@ -18,6 +18,7 @@ import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
+import { toast } from "react-toastify";
 import {
   SlidingSidebar,
   SlidingSidebarProps,
@@ -78,6 +79,8 @@ function App() {
 
   const handleSideBarClose = useCallback(() => {
     setSidebarProps(undefined);
+    // remove all toast when sidebar is closed
+    toast.dismiss();
   }, []);
 
   const routes = useMemo(() => {
