@@ -145,8 +145,6 @@ export const useNamespaceSummaryFetch = ({
     loading: true,
     error: undefined,
   });
-  const [pipelineRawData, setPipelineRawData] = useState<any>();
-  const [isbRawData, setIsbRawData] = useState<any>();
   const [options, setOptions] = useState<Options>({
     skip: false,
     requestKey: "",
@@ -216,8 +214,6 @@ export const useNamespaceSummaryFetch = ({
         map[obj.name] = obj;
         return map;
       }, {});
-      setPipelineRawData(pipeLineMap);
-      setIsbRawData(isbMap);
       // const nsSummary = rawDataToNamespaceSummary(
       //   // TODO REMOVE MOCK
       //   MOCK_PIPELINE_DATA,
@@ -229,8 +225,8 @@ export const useNamespaceSummaryFetch = ({
       );
       setResults({
         data: nsSummary,
-        pipelineRawData,
-        isbRawData,
+        pipelineRawData: pipeLineMap,
+        isbRawData: isbMap,
         loading: false,
         error: undefined,
       });
