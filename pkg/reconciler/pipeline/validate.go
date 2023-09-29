@@ -104,7 +104,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 				return fmt.Errorf("invalid user-defined source vertex %q, a customized image is required", k)
 			}
 			if s.Source.HTTP != nil || s.Source.Kafka != nil || s.Source.Nats != nil || s.Source.Generator != nil {
-				return fmt.Errorf("invalid user-defined source vertex %q, only one of 'http', 'kafka', 'nats', 'redisStreams', 'generator' and 'udSource' can be specified", k)
+				return fmt.Errorf("invalid user-defined source vertex %q, only one of 'http', 'kafka', 'nats', 'generator' and 'udSource' can be specified", k)
 			}
 		}
 	}
