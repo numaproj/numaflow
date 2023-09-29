@@ -15,6 +15,7 @@ import { IconsStatusMap } from "../../../../../utils";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
+import pipelineIcon from "../../../../../images/pipeline.png";
 
 import "./style.css";
 
@@ -69,13 +70,16 @@ export function PipelineCard({
               display: "flex",
               flexDirection: "row",
               flexGrow: 1,
+              alignItems: "center",
             }}
           >
+            <img className="pipeline-card-icon" src={pipelineIcon} alt="pipeline icon" />
             <Box
               sx={{
                 display: "flex",
                 flexDirection: "row",
                 flexGrow: 1,
+                marginLeft: "1rem",
               }}
             >
               <span className="pipeline-card-name">{data.name}</span>
@@ -196,10 +200,7 @@ export function PipelineCard({
             >
               <span>{isbData.name}</span>
               <span>
-                <Chip
-                  label={isbData?.isbService?.status?.type}
-                  sx={{ background: "#B3F3F3", height: "20px" }}
-                />
+                {isbData?.isbService?.status?.type}
               </span>
               <span>
                 {
