@@ -360,7 +360,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 		h.respondWithError(c, "Failed to convert request body to interstepbuffer service spec")
 		return
 	}
-	isValid := validateISBSpec(h, nil, isbSpec, ValidTypeCreate)
+	isValid := validateISBSVCSpec(h, nil, isbSpec, ValidTypeCreate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service spec, %s", isValid.Error()))
 		return
@@ -432,27 +432,10 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		return
 	}
 	var updatedSpec = requestBody.(*dfv1.InterStepBufferService)
-	isValid := validateISBSpec(h, isbSVC, updatedSpec, ValidTypeUpdate)
+	isValid := validateISBSVCSpec(h, isbSVC, updatedSpec, ValidTypeUpdate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate interstepbuffer service spec, %s", isValid.Error()))
 		return
-	}
-
-	if updatedSpec.Spec.Redis != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: updating redis isbSVC is not supported.", ns, isbServices))
-		return
-	}
-
-	if updatedSpec.Spec.JetStream != nil {
-		if *(updatedSpec.Spec.JetStream.Replicas) < 3 {
-			h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: minimum number of replicas is 3.", ns, isbServices))
-			return
-		}
-		if *(updatedSpec.Spec.JetStream.Replicas) > 5 {
-			h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: maximum number of replicas is 5.", ns, isbServices))
-			return
-		}
-		isbSVC.Spec.JetStream.Replicas = updatedSpec.Spec.JetStream.Replicas
 	}
 
 	// If Validation flag is set to true, return without updating the ISB service
@@ -880,8 +863,8 @@ func validatePipelineSpec(h *handler, oldPipeline *dfv1.Pipeline, newPipeline *d
 	return nil
 }
 
-// validateISBSpec is used to validate the ISB service spec
-func validateISBSpec(h *handler, prevSpec *dfv1.InterStepBufferService,
+// validateISBSVCSpec is used to validate the ISB service spec
+func validateISBSVCSpec(h *handler, prevSpec *dfv1.InterStepBufferService,
 	newSpec *dfv1.InterStepBufferService, validType string) error {
 	ns := newSpec.Namespace
 	isbClient := h.numaflowClient.InterStepBufferServices(ns)
