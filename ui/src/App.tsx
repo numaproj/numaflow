@@ -49,7 +49,12 @@ function App() {
   const [sidebarProps, setSidebarProps] = useState<
     SlidingSidebarProps | undefined
   >();
-  const { systemInfo, error: systemInfoError } = useSystemInfoFetch();
+  const {
+    systemInfo,
+    error: systemInfoError,
+    loading,
+    errMsg: systemInfoErrorMsg,
+  } = useSystemInfoFetch();
 
   // Resize observer to keep page width in state. To be used by other dependent components.
   useEffect(() => {
@@ -71,11 +76,20 @@ function App() {
       notifyError([
         {
           error: "Failed to fetch the system info",
-          options: { toastId: "system-info", autoClose: 5000 },
+          options: { toastId: "system-info-fetch", autoClose: 5000 },
         },
       ]);
     }
-  }, [systemInfoError]);
+
+    if (systemInfoErrorMsg) {
+      notifyError([
+        {
+          error: systemInfoErrorMsg,
+          options: { toastId: "system-info-fetch-error", autoClose: 5000 },
+        },
+      ]);
+    }
+  }, [systemInfoError, systemInfoErrorMsg]);
 
   const handleSideBarClose = useCallback(() => {
     setSidebarProps(undefined);
@@ -84,7 +98,7 @@ function App() {
   }, []);
 
   const routes = useMemo(() => {
-    if (!systemInfo && !systemInfoError) {
+    if (loading) {
       // System info loading
       return (
         <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -92,11 +106,19 @@ function App() {
         </Box>
       );
     }
-    if (systemInfoError || !systemInfo) {
+    if (systemInfoError) {
       // System info load error
       return (
         <Box sx={{ display: "flex", justifyContent: "center" }}>
           {`Error loading System Info: ${systemInfoError}`}
+        </Box>
+      );
+    }
+    if (systemInfoErrorMsg) {
+      // System info load error msg
+      return (
+        <Box sx={{ display: "flex", justifyContent: "center" }}>
+          {systemInfoErrorMsg}
         </Box>
       );
     }
@@ -136,7 +158,7 @@ function App() {
         />
       </Routes>
     );
-  }, [systemInfo, systemInfoError]);
+  }, [systemInfo, systemInfoError, loading, systemInfoErrorMsg]);
 
   return (
     <div ref={pageRef} className="app-container">
