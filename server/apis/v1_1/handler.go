@@ -881,7 +881,7 @@ func validateISBSVCSpec(h *handler, prevSpec *dfv1.InterStepBufferService,
 // For a request, the namespace provided as parameter should be same as the namespace in the pipeline spec
 func validateNamespace(h *handler, pipeline *dfv1.Pipeline, ns string) error {
 	if pipeline.Namespace != "" && pipeline.Namespace != ns {
-		errMsg := fmt.Errorf("incorrect namespace provided")
+		errMsg := fmt.Errorf("namespace mismatch, expected %s", ns)
 		return errMsg
 	}
 	return nil
