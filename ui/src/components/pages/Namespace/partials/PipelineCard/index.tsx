@@ -42,7 +42,10 @@ export function PipelineCard({
       } else if (event.target.value === "isb" && setSidebarProps) {
         setSidebarProps({
           type: SidebarType.PIPELINE_SPEC,
-          pipelineSpecProps: { spec: isbData?.isbService?.spec, titleOverride: "ISB Spec" },
+          pipelineSpecProps: {
+            spec: isbData?.isbService?.spec,
+            titleOverride: "ISB Spec",
+          },
         });
       }
     },
@@ -108,7 +111,11 @@ export function PipelineCard({
           <Grid
             container
             spacing={2}
-            sx={{ background: "#F9F9F9", marginTop: "10px", flexWrap: "no-wrap" }}
+            sx={{
+              background: "#F9F9F9",
+              marginTop: "10px",
+              flexWrap: "no-wrap",
+            }}
           >
             <Box
               sx={{
@@ -156,7 +163,11 @@ export function PipelineCard({
           <Grid
             container
             spacing={2}
-            sx={{ background: "#F9F9F9", marginTop: "10px", flexWrap: "no-wrap" }}
+            sx={{
+              background: "#F9F9F9",
+              marginTop: "10px",
+              flexWrap: "no-wrap",
+            }}
           >
             <Box
               sx={{
@@ -197,7 +208,11 @@ export function PipelineCard({
           <Grid
             container
             spacing={2}
-            sx={{ background: "#F9F9F9", marginTop: "10px", flexWrap: "no-wrap" }}
+            sx={{
+              background: "#F9F9F9",
+              marginTop: "10px",
+              flexWrap: "no-wrap",
+            }}
           >
             <Box
               sx={{
@@ -261,6 +276,7 @@ export function PipelineCard({
                   border: "1px solid #0077C5",
                   height: "34px",
                   background: "#fff",
+                  marginRight: "20px",
                 }}
               >
                 <MenuItem sx={{ display: "none" }} hidden value="edit">
@@ -270,7 +286,7 @@ export function PipelineCard({
                 <MenuItem value="isb">ISB</MenuItem>
               </Select>
             </Grid>
-            <Grid item>
+            {/* <Grid item>
               <Select
                 defaultValue="delete"
                 onChange={handleDeleteChange}
@@ -282,11 +298,11 @@ export function PipelineCard({
                   background: "#fff",
                 }}
               >
-                <MenuItem value="delete">Delete</MenuItem>
+                <MenuItem value="delete" sx={{ display: "none" }}>Delete</MenuItem>
                 <MenuItem value="pipeline">Pipeline</MenuItem>
                 <MenuItem value="isb">ISB</MenuItem>
               </Select>
-            </Grid>
+            </Grid> */}
           </Grid>
         </Box>
       </Paper>

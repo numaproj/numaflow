@@ -1,57 +1,58 @@
 import React, { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 import TableContainer from "@mui/material/TableContainer";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-import { PipelineVertexMetric } from "../../../../../../../types/declarations/pipeline";
+import { PipelineVertexMetrics } from "../../../../../../../types/declarations/pipeline";
+import { usePiplelineVertexMetricsFetch } from "../../../../../../../utils/fetchWrappers/piplelineVertexMetricsFetch";
 
 import "./style.css";
 
 export interface ProcessingRatesProps {
-  vertexId: string;
+  namespaceId: string;
   pipelineId: string;
-  vertexMetrics: any[];
+  vertexId: string;
 }
 
 export function ProcessingRates({
-  vertexMetrics,
+  namespaceId,
   pipelineId,
   vertexId,
 }: ProcessingRatesProps) {
-  const [foundRates, setFoundRates] = useState<PipelineVertexMetric[]>([]);
+  const [vertexMetric, setVertexMetric] = useState<
+    PipelineVertexMetrics | undefined
+  >();
+  const { data, loading, error } = usePiplelineVertexMetricsFetch({
+    namespace: namespaceId,
+    pipeline: pipelineId,
+  });
 
   useEffect(() => {
-    if (!vertexMetrics || !pipelineId || !vertexId) {
+    if (!data) {
       return;
     }
-    const vertexData = vertexMetrics[vertexId];
-    if (!vertexData) {
-      return;
-    }
-    const rates: PipelineVertexMetric[] = [];
-    vertexData.forEach((item: any, index: number) => {
-      if (item.pipeline !== pipelineId || !item.processingRates) {
-        return; // continue
-      }
-      rates.push({
-        partition: index,
-        oneM: item.processingRates["1m"]
-          ? item.processingRates["1m"].toFixed(2)
-          : 0,
-        fiveM: item.processingRates["5m"]
-          ? item.processingRates["5m"].toFixed(2)
-          : 0,
-        fifteenM: item.processingRates["15m"]
-          ? item.processingRates["15m"].toFixed(2)
-          : 0,
-      });
-    });
-    setFoundRates(rates);
-  }, [vertexMetrics, pipelineId, vertexId]);
+    setVertexMetric(data.find((metric) => metric.vertexId === vertexId));
+  }, [data, vertexId]);
 
+  if (loading) {
+    return (
+      <Box
+        sx={{ display: "flex", justifyContent: "center", marginTop: "1rem" }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+  if (error) {
+    return <div>{`Error loading processing rates: ${error}`}</div>;
+  }
+  if (!data || !vertexMetric) {
+    return <div>{`No resources found.`}</div>;
+  }
   return (
     <Box
       sx={{
@@ -71,15 +72,15 @@ export function ProcessingRates({
             </TableRow>
           </TableHead>
           <TableBody>
-            {!foundRates.length && (
+            {!vertexMetric.metrics.length && (
               <TableRow>
                 <TableCell colSpan={4} align="center">
                   No metrics found
                 </TableCell>
               </TableRow>
             )}
-            {!!foundRates.length &&
-              foundRates.map((metric) => (
+            {!!vertexMetric.metrics.length &&
+              vertexMetric.metrics.map((metric) => (
                 <TableRow key={metric.partition}>
                   <TableCell>{metric.partition}</TableCell>
                   <TableCell>{metric.oneM}</TableCell>

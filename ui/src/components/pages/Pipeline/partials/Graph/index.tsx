@@ -281,8 +281,7 @@ const getHiddenValue = (edges: Edge[]) => {
 
 export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId } = props;
-  const { sidebarProps, setSidebarProps } =
-    useContext<AppContextProps>(AppContext);
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
     return getLayoutedElements(data.vertices, data.edges, graphDirection);
@@ -336,28 +335,6 @@ export default function Graph(props: GraphProps) {
   const [edgeId, setEdgeId] = useState<string>();
   const [edge, setEdge] = useState<Edge>();
 
-  const openEdgeSidebar = useCallback(
-    (edge: Edge) => {
-      if (!setSidebarProps) {
-        return;
-      }
-      const existingProps = sidebarProps ? JSON.stringify(sidebarProps) : "";
-      const updated = {
-        type: SidebarType.EDGE_DETAILS,
-        edgeDetailsProps: {
-          edgeId: edge.id,
-          watermarks: edge?.data?.edgeWatermark?.watermarks,
-        },
-      };
-      if (existingProps === JSON.stringify(updated)) {
-        // Do not update if no data change. Avoids infinite loop.
-        return;
-      }
-      setSidebarProps(updated);
-    },
-    [setSidebarProps, sidebarProps]
-  );
-
   const handleEdgeClick = useCallback(
     (event: MouseEvent, edge: Edge) => {
       setEdge(edge);
@@ -365,9 +342,18 @@ export default function Graph(props: GraphProps) {
       setEdgeOpen(true);
       setShowSpec(false);
       setNodeOpen(false);
-      openEdgeSidebar(edge);
+      if (setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.EDGE_DETAILS,
+          edgeDetailsProps: {
+            namespaceId,
+            pipelineId,
+            edgeId: edge.id,
+          },
+        });
+      }
     },
-    [setSidebarProps, namespaceId, pipelineId, openEdgeSidebar]
+    [setSidebarProps, namespaceId, pipelineId]
   );
 
   // This has been added to make sure that edge container refreshes on edges being refreshed
@@ -381,13 +367,9 @@ export default function Graph(props: GraphProps) {
         edge.id = dataEdge.id;
         flag = true;
         setEdge(edge);
-        if (sidebarProps && sidebarProps.type === SidebarType.EDGE_DETAILS) {
-          // Update sidebar data if already open
-          openEdgeSidebar(edge);
-        }
       }
     });
-  }, [edges, edgeId, sidebarProps, openEdgeSidebar]);
+  }, [edges, edgeId]);
 
   const [nodeOpen, setNodeOpen] = useState(false);
 
@@ -398,52 +380,8 @@ export default function Graph(props: GraphProps) {
     setEdges((eds) => eds.map(hide(hidden)));
   }, [hidden, data]);
 
-  const openNodeSidebar = useCallback(
-    (node: Node) => {
-      if (!setSidebarProps) {
-        return;
-      }
-      const existingProps = sidebarProps ? JSON.stringify(sidebarProps) : "";
-      if (node?.data?.type === "sideInput") {
-        const updated = {
-          type: SidebarType.GENERATOR_DETAILS,
-          generatorDetailsProps: {
-            namespaceId,
-            pipelineId,
-            vertexId: node.id,
-            generatorDetails: sideNodes.get(node.id) || {},
-          },
-        };
-        if (existingProps === JSON.stringify(updated)) {
-          // Do not update if no data change. Avoids infinite loop.
-          return;
-        }
-        setSidebarProps(updated);
-      } else {
-        const updated = {
-          type: SidebarType.VERTEX_DETAILS,
-          vertexDetailsProps: {
-            namespaceId,
-            pipelineId,
-            vertexId: node.id,
-            vertexSpecs: node?.data?.nodeInfo,
-            vertexMetrics: node?.data?.vertexMetrics?.podMetrics?.data,
-            buffers: node?.data?.buffers,
-            type: node?.data?.type,
-          },
-        };
-        if (existingProps === JSON.stringify(updated)) {
-          // Do not update if no data change. Avoids infinite loop.
-          return;
-        }
-        setSidebarProps(updated);
-      }
-    },
-    [namespaceId, pipelineId, sideNodes, setSidebarProps, sidebarProps]
-  );
-
   const handleNodeClick = useCallback(
-    (event: MouseEvent | undefined, node: Node) => {
+    (event: MouseEvent, node: Node) => {
       setNode(node);
       setNodeId(node.id);
       setNodeOpen(true);
@@ -457,9 +395,33 @@ export default function Graph(props: GraphProps) {
         });
         return updatedState;
       });
-      openNodeSidebar(node);
+      if (setSidebarProps) {
+        if (node?.data?.type === "sideInput") {
+          setSidebarProps({
+            type: SidebarType.GENERATOR_DETAILS,
+            generatorDetailsProps: {
+              namespaceId,
+              pipelineId,
+              vertexId: node.id,
+              generatorDetails: sideNodes.get(node.id) || {},
+            },
+          });
+        } else {
+          setSidebarProps({
+            type: SidebarType.VERTEX_DETAILS,
+            vertexDetailsProps: {
+              namespaceId,
+              pipelineId,
+              vertexId: node.id,
+              vertexSpecs: node?.data?.nodeInfo,
+              buffers: node?.data?.buffers,
+              type: node?.data?.type,
+            },
+          });
+        }
+      }
     },
-    [setHidden, openNodeSidebar]
+    [setSidebarProps, namespaceId, pipelineId, setHidden, sideNodes]
   );
 
   // This has been added to make sure that node container refreshes on nodes being refreshed
@@ -470,17 +432,10 @@ export default function Graph(props: GraphProps) {
         node.data = dataNode.data;
         node.id = dataNode.id;
         setNode(node);
-        if (
-          sidebarProps &&
-          (sidebarProps.type === SidebarType.VERTEX_DETAILS ||
-            sidebarProps.type === SidebarType.GENERATOR_DETAILS)
-        ) {
-          // Update sidebar data if already open
-          openNodeSidebar(node);
-        }
+        handleNodeClick(null, node);
       }
     });
-  }, [nodes, nodeId, sidebarProps, openNodeSidebar]);
+  }, [nodes, nodeId]);
 
   const [highlightValues, setHighlightValues] = useState<{
     [key: string]: boolean;

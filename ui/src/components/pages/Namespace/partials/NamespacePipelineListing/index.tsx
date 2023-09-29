@@ -2,19 +2,15 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Box from "@mui/material/Box";
 import Pagination from "@mui/material/Pagination";
 import Grid from "@mui/material/Grid";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import { DebouncedSearchInput } from "../../../../common/DebouncedSearchInput";
 import { PipelineCard } from "../PipelineCard";
 import { createSvgIcon } from "@mui/material/utils";
 import { NamespacePipelineListingProps } from "../../../../../types/declarations/namespace";
 import { PipelineData } from "./PipelinesTypes";
 import "./style.css";
-import {
-  Button,
-  MenuItem,
-  Select,
-  TableCell,
-  TableSortLabel,
-} from "@mui/material";
+import { Button, MenuItem, Select } from "@mui/material";
 
 import "./style.css";
 
@@ -88,7 +84,7 @@ export function NamespacePipelineListing({
     );
     if (search) {
       // Filter by search
-      filtered = data.pipelineRawData.filter((p: PipelineData) =>
+      filtered = Object.values(pipelineData || {}).filter((p: PipelineData) =>
         p.name.includes(search)
       );
     }
@@ -240,7 +236,7 @@ export function NamespacePipelineListing({
       const filtered = Object.values(pipelineData || {}).filter((p) => {
         if (
           e.target.value === "All" ||
-          p.status === e.target.value.toLowerCase()
+          p.status.toLowerCase() === e.target.value.toLowerCase()
         ) {
           return true;
         } else {
@@ -258,7 +254,8 @@ export function NamespacePipelineListing({
       const filtered = Object.values(pipelineData || {}).filter((p) => {
         if (
           e.target.value === "All" ||
-          p?.pipeline?.status?.phase === e.target.value.toLowerCase()
+          p?.pipeline?.status?.phase.toLowerCase() ===
+            e.target.value.toLowerCase()
         ) {
           return true;
         } else {
@@ -366,25 +363,32 @@ export function NamespacePipelineListing({
             flexGrow: 1,
           }}
         >
-          {sortOptions.map((option) => {
-            return (
-              <TableCell key={option.value} padding="normal">
-                <TableSortLabel
-                  active={orderBy === option.value}
-                  onClick={(event) => handleSortChange(event, option.value)}
-                  direction={
-                    orderBy === option.value
-                      ? (order as "desc" | "asc" | undefined)
-                      : ASC
-                  }
+          <Box sx={{ display: "flex", flexDirection: "row" }}>
+            {sortOptions.map((option) => {
+              return (
+                <Button
+                  sx={{ marginLeft: "1rem", color: "#393A3D" }}
+                  onClick={(e) => {
+                    handleSortChange(e, option.value);
+                  }}
+                  key={option.value}
                 >
-                  <span>{option.label}</span>
-                </TableSortLabel>
-              </TableCell>
-            );
-          })}
+                  {option.label}{" "}
+                  {orderBy === option.value ? (
+                    order === ASC ? (
+                      <ArrowUpwardIcon fontSize="small" />
+                    ) : (
+                      <ArrowDownwardIcon fontSize="small" />
+                    )
+                  ) : (
+                    ""
+                  )}
+                </Button>
+              );
+            })}
+          </Box>
         </Box>
-        <Box
+        {/* <Box
           sx={{
             display: "flex",
             flexDirection: "row",
@@ -403,7 +407,7 @@ export function NamespacePipelineListing({
           <Button variant="outlined" startIcon={<PlusIcon />} size="small">
             Create ISB
           </Button>
-        </Box>
+        </Box> */}
       </Box>
       {listing}
       <Box
