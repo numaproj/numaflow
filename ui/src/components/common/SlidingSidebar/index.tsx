@@ -137,7 +137,7 @@ export function SlidingSidebar({
         break;
     }
     return <div>Missing Props</div>;
-  }, [type, k8sEventsProps]);
+  }, [type, k8sEventsProps, vertexDetailsProps]);
 
   return (
     <Box

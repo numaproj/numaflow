@@ -18,6 +18,7 @@ import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
+import { toast } from "react-toastify";
 import {
   SlidingSidebar,
   SlidingSidebarProps,
@@ -48,7 +49,7 @@ function App() {
   const [sidebarProps, setSidebarProps] = useState<
     SlidingSidebarProps | undefined
   >();
-  const { systemInfo, error: systemInfoError } = useSystemInfoFetch();
+  const { systemInfo, error: systemInfoError, loading } = useSystemInfoFetch();
 
   // Resize observer to keep page width in state. To be used by other dependent components.
   useEffect(() => {
@@ -69,8 +70,8 @@ function App() {
     if (systemInfoError) {
       notifyError([
         {
-          error: "Failed to fetch the system info",
-          options: { toastId: "system-info", autoClose: 5000 },
+          error: systemInfoError,
+          options: { toastId: "system-info-fetch", autoClose: 5000 },
         },
       ]);
     }
@@ -78,10 +79,12 @@ function App() {
 
   const handleSideBarClose = useCallback(() => {
     setSidebarProps(undefined);
+    // remove all toast when sidebar is closed
+    toast.dismiss();
   }, []);
 
   const routes = useMemo(() => {
-    if (!systemInfo && !systemInfoError) {
+    if (loading) {
       // System info loading
       return (
         <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -89,7 +92,7 @@ function App() {
         </Box>
       );
     }
-    if (systemInfoError || !systemInfo) {
+    if (systemInfoError) {
       // System info load error
       return (
         <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -133,7 +136,7 @@ function App() {
         />
       </Routes>
     );
-  }, [systemInfo, systemInfoError]);
+  }, [systemInfo, systemInfoError, loading]);
 
   return (
     <div ref={pageRef} className="app-container">
