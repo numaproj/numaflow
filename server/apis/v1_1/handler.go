@@ -257,7 +257,7 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 
 	oldSpec, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
 
@@ -276,12 +276,6 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 	// pipeline name in the URL should be same as spec name
 	if pipeline != updatedSpec.Name {
 		h.respondWithError(c, fmt.Sprintf("pipeline name %q is immutable", pipeline))
-		return
-	}
-
-	// Update should not allow to change the name of the pipeline
-	if oldSpec.Name != updatedSpec.Name {
-		h.respondWithError(c, fmt.Sprintf("pipeline name %q is immutable", oldSpec.Name))
 		return
 	}
 
@@ -885,16 +879,12 @@ func validateISBSVCSpec(h *handler, prevSpec *dfv1.InterStepBufferService,
 
 // validateNamespace is used to validate the namespace for a pipeline spec
 // For a request, the namespace provided as parameter should be same as the namespace in the pipeline spec
-// if the namespace is not provided in the pipeline spec, the default namespace will be used
 func validateNamespace(h *handler, pipeline *dfv1.Pipeline, ns string) error {
-	var errMsg error
-	errMsg = nil
-	if pipeline.Namespace == "" && ns != DefaultNamespace {
-		errMsg = fmt.Errorf("incorrect namespace provided")
-	} else if pipeline.Namespace != ns {
-		errMsg = fmt.Errorf("incorrect namespace provided")
+	if pipeline.Namespace != "" && pipeline.Namespace != ns {
+		errMsg := fmt.Errorf("incorrect namespace provided")
+		return errMsg
 	}
-	return errMsg
+	return nil
 }
 
 func daemonSvcAddress(ns, pipeline string) string {

@@ -79,28 +79,18 @@ func (v *pipelineValidator) ValidateUpdate(ctx context.Context) *admissionv1.Adm
 	if v.newPipeline.Spec.InterStepBufferServiceName != v.oldPipeline.Spec.InterStepBufferServiceName {
 		return DeniedResponse("Cannot update pipeline with different interStepBufferServiceName")
 	}
-	// Check that the ISB service exists
-	var isbName string
-	if v.newPipeline.Spec.InterStepBufferServiceName != "" {
-		isbName = v.newPipeline.Spec.InterStepBufferServiceName
-	} else {
-		isbName = dfv1.DefaultISBSvcName
-	}
-	if err := v.checkIsbExists(ctx, isbName); err != nil {
-		return DeniedResponse(err.Error())
-	}
 
 	return AllowedResponse()
 }
 
 // checkIsbExists checks that the ISB service exists in the given namespace and is valid
 func (v *pipelineValidator) checkIsbExists(ctx context.Context, isbSvcName string) error {
-	spec, err := v.isbClient.Get(ctx, isbSvcName, metav1.GetOptions{})
+	isb, err := v.isbClient.Get(ctx, isbSvcName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
-	if spec.Name != isbSvcName {
-		return fmt.Errorf("ISB service doesn't exist %s", isbSvcName)
+	if !isb.Status.IsReady() {
+		return fmt.Errorf("ISB service %q is not ready", isbSvcName)
 	}
 	return nil
 }
