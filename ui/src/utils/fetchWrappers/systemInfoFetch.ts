@@ -18,6 +18,7 @@ export const useSystemInfoFetch = () => {
     }
     if (error) {
       setLoading(false);
+      setErrMsg("Failed to fetch the system info");
       return;
     }
     if (data?.errMsg) {
@@ -32,5 +33,5 @@ export const useSystemInfoFetch = () => {
     }
   }, [data, fetchLoading]);
 
-  return { systemInfo, error, loading, errMsg };
+  return { systemInfo, error: errMsg, loading };
 };
