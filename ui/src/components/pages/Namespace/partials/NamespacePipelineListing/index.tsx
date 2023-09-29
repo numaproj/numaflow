@@ -2,19 +2,15 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Box from "@mui/material/Box";
 import Pagination from "@mui/material/Pagination";
 import Grid from "@mui/material/Grid";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import { DebouncedSearchInput } from "../../../../common/DebouncedSearchInput";
 import { PipelineCard } from "../PipelineCard";
 import { createSvgIcon } from "@mui/material/utils";
 import { NamespacePipelineListingProps } from "../../../../../types/declarations/namespace";
 import { PipelineData } from "./PipelinesTypes";
 import "./style.css";
-import {
-  Button,
-  MenuItem,
-  Select,
-  TableCell,
-  TableSortLabel,
-} from "@mui/material";
+import { Button, MenuItem, Select } from "@mui/material";
 
 import "./style.css";
 
@@ -73,8 +69,10 @@ export function NamespacePipelineListing({
   const [health, setHealth] = useState(HEALTH[0]);
   const [status, setStatus] = useState(STATUS[0]);
   const [page, setPage] = useState(1);
-  const [orderBy, setOrderBy] = useState(ALPHABETICAL_SORT);
-  const [order, setOrder] = useState(ASC);
+  const [orderBy, setOrderBy] = useState({
+    value: ALPHABETICAL_SORT,
+    sortOrder: ASC,
+  });
   const [totalPages, setTotalPages] = useState(
     Math.ceil(data.pipelinesCount / MAX_PAGE_SIZE)
   );
@@ -88,12 +86,44 @@ export function NamespacePipelineListing({
     );
     if (search) {
       // Filter by search
-      filtered = data.pipelineRawData.filter((p: PipelineData) =>
-        p.name.includes(search)
-      );
+      filtered = filtered.filter((p: PipelineData) => p.name.includes(search));
     }
-    // Sort by name
-    filtered.sort((a, b) => (a.name > b.name ? 1 : -1)); // TODO take sorting options into account
+    // Sorting
+    if (orderBy.value === ALPHABETICAL_SORT) {
+      filtered.sort((a: PipelineData, b: PipelineData) => {
+        if (orderBy.sortOrder === ASC) {
+          return a.name > b.name ? 1 : -1;
+        } else {
+          return a.name < b.name ? -1 : 1;
+        }
+      });
+    } else if (orderBy.value === LAST_UPDATED_SORT) {
+      filtered.sort((a: PipelineData, b: PipelineData) => {
+        if (orderBy.sortOrder === ASC) {
+          return a.pipeline.status.lastUpdated > b.pipeline.status.lastUpdated
+            ? 1
+            : -1;
+        } else {
+          return a.pipeline.status.lastUpdated < b.pipeline.status.lastUpdated
+            ? -1
+            : 1;
+        }
+      });
+    } else {
+      filtered.sort((a: PipelineData, b: PipelineData) => {
+        if (orderBy.sortOrder === ASC) {
+          return Date.parse(a.pipeline.metadata.creationTimestamp) >
+            Date.parse(b.pipeline.metadata.creationTimestamp)
+            ? 1
+            : -1;
+        } else {
+          return Date.parse(a.pipeline.metadata.creationTimestamp) <
+            Date.parse(b.pipeline.metadata.creationTimestamp)
+            ? -1
+            : 1;
+        }
+      });
+    }
 
     //Filter by health
     if (health !== "All") {
@@ -133,7 +163,7 @@ export function NamespacePipelineListing({
     // Set filtered namespaces with current page of pipelines
     setFilteredPipelines(pages[page - 1] || []);
     setTotalPages(pages.length);
-  }, [data, search, page, pipelineData, isbData]);
+  }, [data, search, page, pipelineData, isbData, orderBy, health, status]);
 
   const handlePageChange = useCallback(
     (event: React.ChangeEvent<unknown>, value: number) => {
@@ -146,46 +176,12 @@ export function NamespacePipelineListing({
       event: React.MouseEvent<HTMLAnchorElement | HTMLSpanElement>,
       value: string
     ) => {
-      setOrderBy(value);
-      const orderBy = order === ASC ? DESC : ASC;
-      setOrder(orderBy);
-      if (value === ALPHABETICAL_SORT) {
-        filteredPipelines.sort((a: PipelineData, b: PipelineData) => {
-          if (orderBy === ASC) {
-            return a.name > b.name ? 1 : -1;
-          } else {
-            return a.name < b.name ? -1 : 1;
-          }
-        });
-      } else if (value === LAST_UPDATED_SORT) {
-        filteredPipelines.sort((a: PipelineData, b: PipelineData) => {
-          if (orderBy === ASC) {
-            return a.pipeline.status.lastUpdated > b.pipeline.status.lastUpdated
-              ? 1
-              : -1;
-          } else {
-            return a.pipeline.status.lastUpdated < b.pipeline.status.lastUpdated
-              ? -1
-              : 1;
-          }
-        });
-      } else {
-        filteredPipelines.sort((a: PipelineData, b: PipelineData) => {
-          if (orderBy === ASC) {
-            return Date.parse(a.pipeline.metadata.creationTimestamp) >
-              Date.parse(b.pipeline.metadata.creationTimestamp)
-              ? 1
-              : -1;
-          } else {
-            return Date.parse(a.pipeline.metadata.creationTimestamp) <
-              Date.parse(b.pipeline.metadata.creationTimestamp)
-              ? -1
-              : 1;
-          }
-        });
-      }
+      setOrderBy({
+        value: value,
+        sortOrder: orderBy.sortOrder === ASC ? DESC : ASC,
+      });
     },
-    [order]
+    [orderBy]
   );
   const listing = useMemo(() => {
     if (!filteredPipelines.length) {
@@ -237,17 +233,6 @@ export function NamespacePipelineListing({
   const handleHealthFilterChange = useCallback(
     (e) => {
       setHealth(e.target.value);
-      const filtered = Object.values(pipelineData || {}).filter((p) => {
-        if (
-          e.target.value === "All" ||
-          p.status === e.target.value.toLowerCase()
-        ) {
-          return true;
-        } else {
-          return false;
-        }
-      });
-      setFilteredPipelines(filtered);
     },
     [health]
   );
@@ -255,17 +240,6 @@ export function NamespacePipelineListing({
   const handleStatusFilterChange = useCallback(
     (e) => {
       setStatus(e.target.value);
-      const filtered = Object.values(pipelineData || {}).filter((p) => {
-        if (
-          e.target.value === "All" ||
-          p?.pipeline?.status?.phase === e.target.value.toLowerCase()
-        ) {
-          return true;
-        } else {
-          return false;
-        }
-      });
-      setFilteredPipelines(filtered);
     },
     [status]
   );
@@ -364,25 +338,39 @@ export function NamespacePipelineListing({
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
+            justifyContent: "center",
           }}
         >
-          {sortOptions.map((option) => {
-            return (
-              <TableCell key={option.value} padding="normal">
-                <TableSortLabel
-                  active={orderBy === option.value}
-                  onClick={(event) => handleSortChange(event, option.value)}
-                  direction={
-                    orderBy === option.value
-                      ? (order as "desc" | "asc" | undefined)
-                      : ASC
-                  }
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+            }}
+          >
+            {sortOptions.map((option) => {
+              return (
+                <Button
+                  sx={{ color: "#393A3D" }}
+                  onClick={(e) => {
+                    handleSortChange(e, option.value);
+                  }}
+                  key={option.value}
+                  variant="text"
                 >
-                  <span>{option.label}</span>
-                </TableSortLabel>
-              </TableCell>
-            );
-          })}
+                  {option.label}{" "}
+                  {orderBy.value === option.value ? (
+                    orderBy.sortOrder === ASC ? (
+                      <ArrowUpwardIcon fontSize="small" />
+                    ) : (
+                      <ArrowDownwardIcon fontSize="small" />
+                    )
+                  ) : (
+                    ""
+                  )}
+                </Button>
+              );
+            })}
+          </Box>
         </Box>
         <Box
           sx={{
@@ -390,17 +378,24 @@ export function NamespacePipelineListing({
             flexDirection: "row",
             flexGrow: 1,
             justifyContent: "flex-end",
+            marginRight: "4px",
           }}
         >
           <Button
             variant="outlined"
             startIcon={<PlusIcon />}
-            size="small"
+            size="medium"
+            disabled
             sx={{ marginRight: "10px" }}
           >
             Create Pipeline
           </Button>
-          <Button variant="outlined" startIcon={<PlusIcon />} size="small">
+          <Button
+            variant="outlined"
+            startIcon={<PlusIcon />}
+            size="small"
+            disabled
+          >
             Create ISB
           </Button>
         </Box>
