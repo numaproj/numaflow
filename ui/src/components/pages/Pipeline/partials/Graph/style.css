@@ -46,6 +46,10 @@
     /*justify-content: space-between;*/
 }
 
+.legend-title > img {
+    width: 1.25rem;
+}
+
 .legend-text {
     margin-top: 0.15rem;
     margin-left: 0.75rem;
