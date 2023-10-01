@@ -36,9 +36,9 @@ type Source struct {
 	// +optional
 	Nats *NatsSource `json:"nats,omitempty" protobuf:"bytes,4,opt,name=nats"`
 	// +optional
-	UDTransformer *UDTransformer `json:"transformer,omitempty" protobuf:"bytes,6,opt,name=transformer"`
+	UDTransformer *UDTransformer `json:"transformer,omitempty" protobuf:"bytes,5,opt,name=transformer"`
 	// +optional
-	UDSource *UDSource `json:"udsource,omitempty" protobuf:"bytes,7,opt,name=udSource"`
+	UDSource *UDSource `json:"udsource,omitempty" protobuf:"bytes,6,opt,name=udSource"`
 }
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
