@@ -7,7 +7,15 @@ In this page, we will guide you through the steps to:
 
 ## Before you begin: prerequisites
 
-To try Numaflow, you will first need to create a local cluster. This can be done simply using [Docker Desktop](https://www.docker.com/blog/how-kubernetes-works-under-the-hood-with-docker-desktop). Follow the steps on [Docker's documentation](https://docs.docker.com/desktop/kubernetes/) to learn how to create a local Kubernetes cluster.
+To try Numaflow, you will first need to setup using one of the following options to run container images:
+- [Docker Desktop](https://www.docker.com/blog/how-kubernetes-works-under-the-hood-with-docker-desktop)
+- [podman](https://podman.io/)
+
+Then use one of the following options to create a local Kubernete Cluster:
+- [Docker Desktop](https://docs.docker.com/desktop/kubernetes/)
+- [k3d](https://k3d.io/)
+- [kind](https://kind.sigs.k8s.io/)
+- [minikube](https://minikube.sigs.k8s.io/docs/start/)
 
 You will also need `kubectl` to manage the cluster. [Follow these steps to install kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/). In case you need a refresher, all the `kubectl` commands used in this quick start guide can be found in the [kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/).
 
