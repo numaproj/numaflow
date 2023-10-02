@@ -713,6 +713,11 @@ message Lifecycle {
   // +kubebuilder:default=Running
   // +optional
   optional string desiredPhase = 2;
+
+  // PauseGracePeriodSeconds used to pause pipeline gracefully
+  // +kubebuilder:default=30
+  // +optional
+  optional int32 pauseGracePeriodSeconds = 3;
 }
 
 message Log {
@@ -886,6 +891,7 @@ message PipelineSpec {
 
   // Lifecycle define the Lifecycle properties
   // +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running}
+  // +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running, "pauseGracePeriodSeconds": 30}
   // +optional
   optional Lifecycle lifecycle = 4;
 

@@ -725,6 +725,15 @@ func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pi
 }
 
 func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
+
+	// reset pause timestamp
+	if pl.GetAnnotations()["pauseTimestamp"] != "" {
+		delete(pl.GetAnnotations(), "pauseTimestamp")
+		if err := r.client.Update(ctx, pl.DeepCopy()); err != nil {
+			return false, err
+		}
+	}
+
 	_, err := r.scaleUpAllVertices(ctx, pl)
 	if err != nil {
 		return false, err
@@ -734,6 +743,14 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 }
 
 func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
+
+	if pl.GetAnnotations() == nil || pl.GetAnnotations()["pauseTimestamp"] == "" {
+		pl.SetAnnotations(map[string]string{"pauseTimestamp": time.Now().Format(time.RFC3339)})
+		if err := r.client.Update(ctx, pl.DeepCopy()); err != nil {
+			return false, err
+		}
+	}
+
 	pl.Status.MarkPhasePausing()
 	updated, err := r.scaleDownSourceVertices(ctx, pl)
 	if err != nil || updated {
@@ -753,7 +770,14 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	if err != nil {
 		return true, err
 	}
-	if drainCompleted {
+
+	pauseTimestamp, err := time.Parse(time.RFC3339, pl.GetAnnotations()["pauseTimestamp"])
+	if err != nil {
+		return true, err
+	}
+
+	// if drain is completed or we have exceed pause deadline, mark pl as paused and scale down
+	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
 		_, err := r.scaleDownAllVertices(ctx, pl)
 		if err != nil {
 			return true, err

@@ -18535,6 +18535,11 @@
         "desiredPhase": {
           "description": "DesiredPhase used to bring the pipeline from current phase to desired phase",
           "type": "string"
+        },
+        "pauseGracePeriodSeconds": {
+          "description": "PauseGracePeriodSeconds used to pause pipeline gracefully",
+          "type": "integer",
+          "format": "int32"
         }
       }
     },
