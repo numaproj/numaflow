@@ -843,18 +843,14 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 // based on the type of request
 func parseSpecFromReq(c *gin.Context, specType string) (interface{}, error) {
 	var reqBody interface{}
-	jsonData, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		return nil, err
-	}
 	if specType == SpecTypePipeline {
 		reqBody = &dfv1.Pipeline{}
 	} else if specType == SpecTypeISB {
 		reqBody = &dfv1.InterStepBufferService{}
 	} else if specType == SpecTypePatch {
-		return jsonData, nil
+		// do nothing
 	}
-	err = c.BindJSON(&reqBody)
+	err := c.BindJSON(&reqBody)
 	if err != nil {
 		return nil, err
 	}
