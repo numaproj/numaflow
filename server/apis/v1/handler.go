@@ -52,8 +52,7 @@ import (
 // This is used to parse different types of specs from the request body
 const (
 	SpecTypePipeline = "pipeline"
-	SpecTypeISB      = "isb"
-	SpecTypePatch    = "patch"
+	SpecTypeISBSVC   = "isbsvc"
 )
 
 // Constants for the validation of the pipeline
@@ -396,7 +395,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry-run", "false")
 	dryRun = strings.ToLower(dryRun)
 
-	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
+	reqBody, err := parseSpecFromReq(c, SpecTypeISBSVC)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
@@ -473,7 +472,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	requestBody, err := parseSpecFromReq(c, SpecTypeISB)
+	requestBody, err := parseSpecFromReq(c, SpecTypeISBSVC)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
@@ -839,7 +838,7 @@ func parseSpecFromReq(c *gin.Context, specType string) (interface{}, error) {
 	var reqBody interface{}
 	if specType == SpecTypePipeline {
 		reqBody = &dfv1.Pipeline{}
-	} else if specType == SpecTypeISB {
+	} else if specType == SpecTypeISBSVC {
 		reqBody = &dfv1.InterStepBufferService{}
 	}
 	err := c.BindJSON(&reqBody)
