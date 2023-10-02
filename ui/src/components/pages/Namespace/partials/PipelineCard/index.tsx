@@ -14,6 +14,7 @@ import {IconsStatusMap, ISBStatusString, StatusString} from "../../../../../util
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
+import { ViewType } from "../../../../common/SpecEditor";
 import pipelineIcon from "../../../../../images/pipeline.png";
 
 import "./style.css";
@@ -23,17 +24,34 @@ export function PipelineCard({
   data,
   statusData,
   isbData,
+  refresh,
 }: PipelineCardProps) {
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const [editOption] = React.useState("view");
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [deleteOption, setDeleteOption] = React.useState("Delete");
+
+  const handleUpdatePipelineComplete = useCallback(() => {
+    refresh();
+    if (!setSidebarProps) {
+      return;
+    }
+    // Close sidebar
+    setSidebarProps(undefined);
+  }, [setSidebarProps, refresh]);
+
   const handleEditChange = useCallback(
     (event: SelectChangeEvent<string>) => {
       if (event.target.value === "pipeline" && setSidebarProps) {
         setSidebarProps({
-          type: SidebarType.PIPELINE_SPEC,
-          pipelineSpecProps: { spec: statusData?.pipeline?.spec },
+          type: SidebarType.PIPELINE_UPDATE,
+          specEditorProps: {
+            initialYaml: statusData?.pipeline,
+            namespaceId: namespace,
+            pipelineId: data?.name,
+            viewType: ViewType.EDIT,
+            onUpdateComplete: handleUpdatePipelineComplete,
+          },
         });
       } else if (event.target.value === "isb" && setSidebarProps) {
         setSidebarProps({
@@ -45,7 +63,7 @@ export function PipelineCard({
         });
       }
     },
-    [setSidebarProps, statusData, isbData]
+    [setSidebarProps, handleUpdatePipelineComplete, isbData, data]
   );
 
   const handleDeleteChange = useCallback((event: SelectChangeEvent<string>) => {
@@ -276,7 +294,7 @@ export function PipelineCard({
           >
             <Grid item>
               <Select
-                defaultValue="view"
+                defaultValue="edit"
                 onChange={handleEditChange}
                 value={editOption}
                 variant="outlined"
@@ -288,7 +306,7 @@ export function PipelineCard({
                 }}
               >
                 <MenuItem sx={{ display: "none" }} hidden value="view">
-                  View
+                  Edit
                 </MenuItem>
                 <MenuItem value="pipeline">Pipeline</MenuItem>
                 <MenuItem value="isb">ISB</MenuItem>

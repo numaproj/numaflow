@@ -198,6 +198,9 @@ export function SummaryPageLayout({
       return;
     }
     const resizeObserver = new ResizeObserver(() => {
+      if (!sumaryRef.current) {
+        return;
+      }
       setSummaryHeight(sumaryRef.current.offsetHeight);
     });
     resizeObserver.observe(sumaryRef.current);

@@ -27,6 +27,32 @@ export function getBaseHref(): string {
   return "/";
 }
 
+export async function getAPIResponseError(response: Response): Promise<string | undefined> {
+  try {
+    if (!response.ok) {
+      let message = `Response code: ${response.status}`;
+      try {
+        const data = await response.json();
+        if (data.errMsg) {
+          message = data.errMsg;
+        }
+      } catch (e) {
+        // Ignore
+      }
+      return message;
+    } else {
+      const data = await response.json();
+      if (data.errMsg) {
+        return `Error: ${data.errMsg}`;
+      } else {
+        return "";
+      }
+    }
+  } catch (e: any) {
+    return `Error: ${e.message}`;
+  }
+}
+
 export function isDev() {
   return !process.env.NODE_ENV || process.env.NODE_ENV === "development";
 }

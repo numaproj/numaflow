@@ -30,6 +30,7 @@ export interface NamespaceSummaryFetchResult {
   isbRawData?: any;
   loading: boolean;
   error: any;
+  refresh: () => void;
 }
 
 export interface NamespaceSummaryFetchProps {
@@ -41,12 +42,14 @@ export interface PipelineCardProps {
   data: NamespacePipelineSummary;
   statusData?: any;
   isbData?: any;
+  refresh: () => void;
 }
 export interface NamespacePipelineListingProps {
   namespace: string;
   data: NamespaceSummaryData;
   pipelineData?: Map<string, PipelineData>;
   isbData?: any;
+  refresh: () => void;
 }
 
 export interface K8sEvent {

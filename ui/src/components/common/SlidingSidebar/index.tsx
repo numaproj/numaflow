@@ -9,6 +9,10 @@ import {
   GeneratorDetailsProps,
 } from "./partials/GeneratorDetails";
 import { Errors, ErrorsProps } from "./partials/Errors";
+import { PiplineCreate } from "./partials/PipelineCreate";
+import { PiplineUpdate } from "./partials/PipelineUpdate";
+import { ISBCreate } from "./partials/ISBCreate";
+import { ViewType } from "../SpecEditor";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import slider from "../../../images/slider.png";
@@ -18,9 +22,13 @@ import "./style.css";
 export enum SidebarType {
   NAMESPACE_K8s,
   PIPELINE_K8s,
+  PIPELINE_CREATE,
+  PIPELINE_UPDATE,
+  PIPELINE_SPEC,
+  ISB_CREATE,
+  ISB_UPDATE,
   VERTEX_DETAILS,
   EDGE_DETAILS,
-  PIPELINE_SPEC,
   GENERATOR_DETAILS,
   ERRORS,
 }
@@ -28,12 +36,23 @@ export enum SidebarType {
 const MIN_WIDTH_BY_TYPE = {
   [SidebarType.NAMESPACE_K8s]: 750,
   [SidebarType.PIPELINE_K8s]: 750,
+  [SidebarType.PIPELINE_CREATE]: 750,
+  [SidebarType.PIPELINE_UPDATE]: 750,
+  [SidebarType.PIPELINE_SPEC]: 750,
+  [SidebarType.ISB_CREATE]: 750,
   [SidebarType.VERTEX_DETAILS]: 750,
   [SidebarType.EDGE_DETAILS]: 750,
-  [SidebarType.PIPELINE_SPEC]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,
   [SidebarType.ERRORS]: 350,
 };
+
+export interface SpecEditorSidebarProps {
+  initialYaml?: any;
+  namespaceId?: string;
+  pipelineId?: string;
+  viewType?: ViewType;
+  onUpdateComplete?: () => void;
+}
 
 export interface SlidingSidebarProps {
   pageWidth: number;
@@ -45,6 +64,7 @@ export interface SlidingSidebarProps {
   pipelineSpecProps?: PiplineSpecProps;
   generatorDetailsProps?: GeneratorDetailsProps;
   errorsProps?: ErrorsProps;
+  specEditorProps?: SpecEditorSidebarProps;
   onClose: () => void;
 }
 
@@ -58,6 +78,7 @@ export function SlidingSidebar({
   pipelineSpecProps,
   generatorDetailsProps,
   errorsProps,
+  specEditorProps,
   onClose,
 }: SlidingSidebarProps) {
   const [width, setWidth] = useState<number>(
@@ -108,6 +129,25 @@ export function SlidingSidebar({
           break;
         }
         return <K8sEvents {...k8sEventsProps} />;
+      case SidebarType.PIPELINE_CREATE:
+        if (!specEditorProps || !specEditorProps.namespaceId) {
+          break;
+        }
+        return <PiplineCreate {...specEditorProps} />;
+      case SidebarType.PIPELINE_UPDATE:
+        if (
+          !specEditorProps ||
+          !specEditorProps.namespaceId ||
+          !specEditorProps.pipelineId
+        ) {
+          break;
+        }
+        return <PiplineUpdate {...specEditorProps} />;
+      case SidebarType.ISB_CREATE:
+        if (!specEditorProps || !specEditorProps.namespaceId) {
+          break;
+        }
+        return <ISBCreate {...specEditorProps} />;
       case SidebarType.VERTEX_DETAILS:
         if (!vertexDetailsProps) {
           break;
@@ -137,7 +177,16 @@ export function SlidingSidebar({
         break;
     }
     return <div>Missing Props</div>;
-  }, [type, k8sEventsProps, vertexDetailsProps]);
+  }, [
+    type,
+    k8sEventsProps,
+    specEditorProps,
+    vertexDetailsProps,
+    edgeDetailsProps,
+    pipelineSpecProps,
+    generatorDetailsProps,
+    errorsProps,
+  ]);
 
   return (
     <Box
