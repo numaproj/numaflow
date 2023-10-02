@@ -86,7 +86,7 @@ export function PipelineCard({
                 marginLeft: "1rem",
               }}
             >
-              <span className="pipeline-card-name">{data.name}</span>
+              <span className="pipeline-card-name">{data?.name}</span>
             </Box>
             <Box
               sx={{
@@ -202,11 +202,11 @@ export function PipelineCard({
                 paddingLeft: "1rem",
               }}
             >
-              <span>{isbData.name}</span>
+              <span>{isbData?.name}</span>
               <span>{isbData?.isbService?.status?.type}</span>
               <span>
                 {
-                  isbData?.isbService?.spec[isbData?.isbService.status?.type]
+                  isbData?.isbService?.spec[isbData?.isbService?.status?.type]
                     .replicas
                 }
               </span>
