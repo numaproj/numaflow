@@ -1,4 +1,4 @@
-package v1_1
+package v1
 
 // ActiveStatus contains the number of objects in healthy, warning, and critical status.
 type ActiveStatus struct {

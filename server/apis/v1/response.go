@@ -1,4 +1,4 @@
-package v1_1
+package v1
 
 type NumaflowAPIResponse struct {
 	// ErrMessage provides more detailed error information. If API call succeeds, the ErrMessage is nil.
