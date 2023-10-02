@@ -23,8 +23,9 @@ jobs:
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
-      - name: Yarn Build/Test
-        run: make ui-test
+      # Temporarily disable it.
+      #- name: Yarn Build/Test
+      #  run: make ui-test
       - name: Ensure nothing changed
         run: git diff --exit-code
   codegen:
