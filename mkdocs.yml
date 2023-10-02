@@ -51,7 +51,6 @@ nav:
           - user-guide/sources/http.md
           - user-guide/sources/kafka.md
           - user-guide/sources/nats.md
-          - user-guide/sources/redis-source.md
           - Data Transformer:
               - Overview: "user-guide/sources/transformer/overview.md"
               - Built-in Transformers:

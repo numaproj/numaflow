@@ -43,7 +43,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
 	"github.com/numaproj/numaflow/pkg/sources/nats"
-	"github.com/numaproj/numaflow/pkg/sources/redisstreams"
 	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/sources/udsource"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
@@ -324,14 +323,6 @@ func (sp *SourceProcessor) getSourcer(
 			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
 		}
 		return nats.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
-	} else if x := src.RedisStreams; x != nil {
-		readOptions := []redisstreams.Option{
-			redisstreams.WithLogger(logger),
-		}
-		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
-			readOptions = append(readOptions, redisstreams.WithReadTimeOut(l.ReadTimeout.Duration))
-		}
-		return redisstreams.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }

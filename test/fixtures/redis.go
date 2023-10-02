@@ -18,10 +18,8 @@ package fixtures
 
 import (
 	"fmt"
-	"log"
 	"net/url"
 	"strconv"
-	"time"
 )
 
 // GetMsgCountContains returns number of occurrences of the targetStr in redis that are written by pipelineName, sinkName.
@@ -32,27 +30,4 @@ func GetMsgCountContains(pipelineName, sinkName, targetStr string) int {
 		panic(fmt.Sprintf("Can't parse string %s to an integer.", str))
 	}
 	return count
-}
-
-// function to invoke Redis Source
-func PumpRedisStream(stream string, n int, opts ...interface{}) {
-	var sleep time.Duration
-	var keysValuesJson string
-	var size int
-	for _, opt := range opts {
-		switch v := opt.(type) {
-		case time.Duration:
-			sleep = v
-		case string:
-			keysValuesJson = v
-		case int:
-			size = v
-		default:
-			panic(fmt.Errorf("unexpected option type %T", opt))
-		}
-	}
-	keysValuesJsonEncoded := url.QueryEscape(keysValuesJson)
-	log.Printf("Pumping Redis stream %q sleeping %v with %d messages sized %d, keys/values=%q\n", stream, sleep, n, size, keysValuesJson)
-	InvokeE2EAPI("/redis/pump-stream?stream=%s&sleep=%v&n=%d&keysvalues=%s&size=%d", stream, sleep, n, keysValuesJsonEncoded, size)
-
 }

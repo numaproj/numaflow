@@ -18972,53 +18972,6 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.RedisStreamsSource": {
-      "properties": {
-        "consumerGroup": {
-          "type": "string"
-        },
-        "masterName": {
-          "description": "Only required when Sentinel is used",
-          "type": "string"
-        },
-        "password": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
-          "description": "Redis password secret selector"
-        },
-        "readFromBeginning": {
-          "description": "if true, stream starts being read from the beginning; otherwise, the latest",
-          "type": "boolean"
-        },
-        "sentinelPassword": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
-          "description": "Sentinel password secret selector"
-        },
-        "sentinelUrl": {
-          "description": "Sentinel URL, will be ignored if Redis URL is provided",
-          "type": "string"
-        },
-        "stream": {
-          "type": "string"
-        },
-        "tls": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS"
-        },
-        "url": {
-          "description": "Redis URL",
-          "type": "string"
-        },
-        "user": {
-          "description": "Redis user",
-          "type": "string"
-        }
-      },
-      "required": [
-        "stream",
-        "consumerGroup",
-        "readFromBeginning"
-      ],
-      "type": "object"
-    },
     "io.numaproj.numaflow.v1alpha1.SASL": {
       "properties": {
         "gssapi": {
@@ -19281,9 +19234,6 @@
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
-        },
-        "redisStreams": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisStreamsSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
