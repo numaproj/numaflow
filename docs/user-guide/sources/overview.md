@@ -6,7 +6,6 @@ In Numaflow, we currently support the following builtin sources
 
 * [Kafka](./kafka.md)
 * [HTTP](./http.md)
-* [Redis Stream](./redis-source.md)
 * [Ticker](./generator.md)
 * [Nats](./nats.md)
 
