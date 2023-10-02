@@ -153,7 +153,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 
 		var isbSummary IsbServiceSummary
 		var isbActiveSummary ActiveStatus
-		// Loop over the ISB services and get the status
+		// loop over the ISB services and get the status
 		for _, isb := range isbSvcs {
 			if isb.Status == ISBServiceStatusInactive {
 				isbSummary.Inactive++
