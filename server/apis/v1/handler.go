@@ -23,7 +23,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	metricsversiond "k8s.io/metrics/pkg/client/clientset/versioned"
 	"k8s.io/utils/pointer"
 
@@ -45,6 +43,7 @@ import (
 	dfv1versiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -61,8 +60,6 @@ const (
 	ValidTypeUpdate = "valid-update"
 )
 
-const DefaultNamespace = "default"
-
 type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
@@ -71,30 +68,20 @@ type handler struct {
 
 // NewHandler is used to provide a new instance of the handler type
 func NewHandler() (*handler, error) {
-	var restConfig *rest.Config
-	var err error
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if kubeconfig == "" {
-		home, _ := os.UserHomeDir()
-		kubeconfig = home + "/.kube/config"
-		if _, err := os.Stat(kubeconfig); err != nil && os.IsNotExist(err) {
-			kubeconfig = ""
-		}
-	}
-	if kubeconfig != "" {
-		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-	} else {
-		restConfig, err = rest.InClusterConfig()
-	}
+	var (
+		k8sRestConfig *rest.Config
+		err           error
+	)
+	k8sRestConfig, err = util.K8sRestConfig()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get kubeconfig, %w", err)
+		return nil, fmt.Errorf("failed to get kubeRestConfig, %w", err)
 	}
-	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	kubeClient, err := kubernetes.NewForConfig(k8sRestConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get kubeclient, %w", err)
+		return nil, fmt.Errorf("failed to get kubeclient, %w", err)
 	}
-	metricsClient := metricsversiond.NewForConfigOrDie(restConfig)
-	numaflowClient := dfv1versiond.NewForConfigOrDie(restConfig).NumaflowV1alpha1()
+	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
+	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
 	return &handler{
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
