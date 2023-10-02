@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useContext,
+} from "react";
 import Box from "@mui/material/Box";
 import Pagination from "@mui/material/Pagination";
 import Grid from "@mui/material/Grid";
@@ -9,7 +15,10 @@ import { PipelineCard } from "../PipelineCard";
 import { createSvgIcon } from "@mui/material/utils";
 import { NamespacePipelineListingProps } from "../../../../../types/declarations/namespace";
 import { PipelineData } from "./PipelinesTypes";
-import "./style.css";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { AppContext } from "../../../../../App";
+import { SidebarType } from "../../../../common/SlidingSidebar";
+import { ViewType } from "../../../../common/SpecEditor";
 import { Button, MenuItem, Select } from "@mui/material";
 
 import "./style.css";
@@ -64,7 +73,10 @@ export function NamespacePipelineListing({
   data,
   pipelineData,
   isbData,
+  refresh,
 }: NamespacePipelineListingProps) {
+  const { sidebarProps, setSidebarProps } =
+    useContext<AppContextProps>(AppContext);
   const [search, setSearch] = useState("");
   const [health, setHealth] = useState(HEALTH[0]);
   const [status, setStatus] = useState(STATUS[0]);
@@ -244,6 +256,60 @@ export function NamespacePipelineListing({
     [status]
   );
 
+  const handleCreatePipelineComplete = useCallback(() => {
+    refresh();
+    if (!setSidebarProps) {
+      return;
+    }
+    // Close sidebar
+    setSidebarProps(undefined);
+    // TODO anything needed after pipeline created
+    setOrderBy({
+      value: LAST_CREATED_SORT,
+      sortOrder: DESC,
+    })
+  }, [setSidebarProps, refresh]);
+
+  const handleCreatePiplineClick = useCallback(() => {
+    if (!setSidebarProps) {
+      return;
+    }
+    setSidebarProps({
+      type: SidebarType.PIPELINE_CREATE,
+      specEditorProps: {
+        namespaceId: namespace,
+        viewType: ViewType.EDIT,
+        onUpdateComplete: handleCreatePipelineComplete,
+      },
+    });
+  }, [setSidebarProps, handleCreatePipelineComplete, namespace]);
+
+  useEffect(() => {
+    // Update sidebar callbacks on any changes
+    if (
+      !setSidebarProps ||
+      !sidebarProps ||
+      sidebarProps.type !== SidebarType.PIPELINE_CREATE
+    ) {
+      // Don't update if not open or if its a different type
+      return;
+    }
+    if (
+      sidebarProps.specEditorProps.onUpdateComplete ==
+      handleCreatePipelineComplete
+    ) {
+      // Callbacks already up to date
+      return;
+    }
+    setSidebarProps({
+      ...sidebarProps,
+      specEditorProps: {
+        ...sidebarProps.specEditorProps,
+        onUpdateComplete: handleCreatePipelineComplete,
+      },
+    });
+  }, [sidebarProps, setSidebarProps, handleCreatePipelineComplete]);
+
   return (
     <Box
       sx={{
@@ -385,8 +451,8 @@ export function NamespacePipelineListing({
             variant="outlined"
             startIcon={<PlusIcon />}
             size="medium"
-            disabled
             sx={{ marginRight: "10px" }}
+            onClick={handleCreatePiplineClick}
           >
             Create Pipeline
           </Button>

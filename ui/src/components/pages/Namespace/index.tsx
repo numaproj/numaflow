@@ -18,7 +18,7 @@ import "./style.css";
 export function Namespaces() {
   const { namespaceId } = useParams();
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
-  const { data, pipelineRawData, isbRawData, loading, error } =
+  const { data, pipelineRawData, isbRawData, loading, error, refresh } =
     useNamespaceSummaryFetch({
       namespace: namespaceId || "",
       loadOnRefresh: false,
@@ -123,6 +123,7 @@ export function Namespaces() {
             data={data}
             pipelineData={pipelineRawData}
             isbData={isbRawData}
+            refresh={refresh}
           />
         }
       />
