@@ -19,12 +19,10 @@ package v1
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	metricsversiond "k8s.io/metrics/pkg/client/clientset/versioned"
 	"k8s.io/utils/pointer"
 
@@ -46,6 +43,7 @@ import (
 	dfv1versiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -53,8 +51,7 @@ import (
 // This is used to parse different types of specs from the request body
 const (
 	SpecTypePipeline = "pipeline"
-	SpecTypeISB      = "isb"
-	SpecTypePatch    = "patch"
+	SpecTypeISBSVC   = "isbsvc"
 )
 
 // Constants for the validation of the pipeline
@@ -62,8 +59,6 @@ const (
 	ValidTypeCreate = "valid-create"
 	ValidTypeUpdate = "valid-update"
 )
-
-const DefaultNamespace = "default"
 
 type handler struct {
 	kubeClient     kubernetes.Interface
@@ -73,30 +68,20 @@ type handler struct {
 
 // NewHandler is used to provide a new instance of the handler type
 func NewHandler() (*handler, error) {
-	var restConfig *rest.Config
-	var err error
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if kubeconfig == "" {
-		home, _ := os.UserHomeDir()
-		kubeconfig = home + "/.kube/config"
-		if _, err := os.Stat(kubeconfig); err != nil && os.IsNotExist(err) {
-			kubeconfig = ""
-		}
-	}
-	if kubeconfig != "" {
-		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-	} else {
-		restConfig, err = rest.InClusterConfig()
-	}
+	var (
+		k8sRestConfig *rest.Config
+		err           error
+	)
+	k8sRestConfig, err = util.K8sRestConfig()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get kubeconfig, %w", err)
+		return nil, fmt.Errorf("failed to get kubeRestConfig, %w", err)
 	}
-	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	kubeClient, err := kubernetes.NewForConfig(k8sRestConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get kubeclient, %w", err)
+		return nil, fmt.Errorf("failed to get kubeclient, %w", err)
 	}
-	metricsClient := metricsversiond.NewForConfigOrDie(restConfig)
-	numaflowClient := dfv1versiond.NewForConfigOrDie(restConfig).NumaflowV1alpha1()
+	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
+	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
 	return &handler{
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
@@ -153,7 +138,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 
 		var isbSummary IsbServiceSummary
 		var isbActiveSummary ActiveStatus
-		// Loop over the ISB services and get the status
+		// loop over the ISB services and get the status
 		for _, isb := range isbSvcs {
 			if isb.Status == ISBServiceStatusInactive {
 				isbSummary.Inactive++
@@ -256,6 +241,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	}
 
 	// get pipeline lag
+	// TODO: the client should be cached.
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
@@ -375,15 +361,9 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 func (h *handler) PatchPipeline(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
-	reqBody, err := parseSpecFromReq(c, SpecTypePatch)
+	patchSpec, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
-		return
-	}
-
-	patchSpec, ok := reqBody.([]byte)
-	if !ok {
-		h.respondWithError(c, "Failed to convert request body to patch spec")
 		return
 	}
 
@@ -402,7 +382,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry-run", "false")
 	dryRun = strings.ToLower(dryRun)
 
-	reqBody, err := parseSpecFromReq(c, SpecTypeISB)
+	reqBody, err := parseSpecFromReq(c, SpecTypeISBSVC)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
@@ -479,7 +459,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	requestBody, err := parseSpecFromReq(c, SpecTypeISB)
+	requestBody, err := parseSpecFromReq(c, SpecTypeISBSVC)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
@@ -496,7 +476,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
-
+	isbSVC.Spec = updatedSpec.Spec
 	updatedISBSvc, err := h.numaflowClient.InterStepBufferServices(ns).Update(context.Background(), isbSVC, metav1.UpdateOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %s", ns, isbServices, err.Error()))
@@ -524,6 +504,7 @@ func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
+	// TODO: the client should be cached.
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %s", pipeline, err.Error()))
@@ -544,6 +525,7 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
+	// TODO: the client should be cached.
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the watermarks for pipeline %q: %s", pipeline, err.Error()))
@@ -623,6 +605,7 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 		return
 	}
 
+	// TODO: the client should be cached.
 	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the vertices metrics: failed to get demon service client for namespace %q pipeline %q: %s", ns, pipeline, err.Error()))
@@ -840,19 +823,12 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 // based on the type of request
 func parseSpecFromReq(c *gin.Context, specType string) (interface{}, error) {
 	var reqBody interface{}
-	jsonData, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		return nil, err
-	}
 	if specType == SpecTypePipeline {
 		reqBody = &dfv1.Pipeline{}
-
-	} else if specType == SpecTypeISB {
+	} else if specType == SpecTypeISBSVC {
 		reqBody = &dfv1.InterStepBufferService{}
-	} else if specType == SpecTypePatch {
-		return jsonData, nil
 	}
-	err = json.Unmarshal(jsonData, &reqBody)
+	err := c.BindJSON(&reqBody)
 	if err != nil {
 		return nil, err
 	}

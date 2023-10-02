@@ -86,11 +86,17 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 			for idx := range watermarks {
 				watermarks[idx] = timeZero
 			}
+			var (
+				from = k.From
+				to   = k.To
+			)
 			watermarkArr[i] = &daemon.EdgeWatermark{
 				Pipeline:           &ps.pipeline.Name,
 				Edge:               &edgeName,
 				Watermarks:         watermarks,
 				IsWatermarkEnabled: &isWatermarkEnabled,
+				From:               &from,
+				To:                 &to,
 			}
 			i++
 		}
