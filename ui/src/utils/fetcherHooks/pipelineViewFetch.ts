@@ -46,7 +46,7 @@ export const usePipelineViewFetch = (
   );
   const [loading, setLoading] = useState(true);
 
-  const BASE_API = `/api/v1_1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
+  const BASE_API = `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
 
   // Call to get pipeline
   useEffect(() => {

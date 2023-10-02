@@ -130,7 +130,7 @@ export function K8sEvents({
 
   const table = useMemo(() => {
     if (!data) {
-      return undefined;
+      return <Box>No Events</Box>;
     }
     return (
       <Box

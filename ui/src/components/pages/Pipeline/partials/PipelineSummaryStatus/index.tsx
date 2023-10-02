@@ -6,8 +6,15 @@ import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 
 import "./style.css";
+import { Pipeline } from "../../../../../types/declarations/pipeline";
+import { DurationString } from "../../../../../utils";
 
-export function PipelineSummaryStatus({ pipeline }) {
+export interface PipelineSummaryStatusProps {
+  pipeline?: Pipeline;
+  lag?: number;
+}
+
+export function PipelineSummaryStatus({ pipeline, lag }) {
   const { namespaceId, pipelineId } = useParams();
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const handleK8sEventsClick = useCallback(() => {
@@ -115,7 +122,10 @@ export function PipelineSummaryStatus({ pipeline }) {
               <span className="pipeline-summary-subtitle">
                 <div>
                   <span className="pipeline-summary-subtitle">Max lag:</span>
-                  <span className="pipeline-summary-text"> 10 sec.</span>
+                  <span className="pipeline-summary-text">
+                    {" "}
+                    {DurationString(lag)}
+                  </span>
                 </div>
               </span>
             </div>

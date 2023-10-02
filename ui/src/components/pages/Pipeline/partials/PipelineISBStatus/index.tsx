@@ -1,7 +1,7 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
-import { IconsStatusMap } from "../../../../../utils";
+import {IconsStatusMap, ISBStatusString} from "../../../../../utils";
 
 import "./style.css";
 
@@ -47,9 +47,9 @@ export function PipelineISBStatus({ isbData }) {
               }}
             >
               <span className="pipeline-logo-text">
-                {isbData?.isbService?.status?.phase}
+                {ISBStatusString[isbData?.isbService?.status?.phase]}
               </span>
-              <span className="pipeline-logo-text">{isbData?.status}</span>
+              <span className="pipeline-logo-text">{ISBStatusString[isbData?.status]}</span>
             </Box>
           </Box>
         </Box>

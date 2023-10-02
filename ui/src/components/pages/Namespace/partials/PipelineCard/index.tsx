@@ -11,7 +11,7 @@ import {
   Select,
   SelectChangeEvent,
 } from "@mui/material";
-import { IconsStatusMap } from "../../../../../utils";
+import {IconsStatusMap, ISBStatusString, StatusString} from "../../../../../utils";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
@@ -73,7 +73,11 @@ export function PipelineCard({
               alignItems: "center",
             }}
           >
-            <img className="pipeline-card-icon" src={pipelineIcon} alt="pipeline icon" />
+            <img
+              className="pipeline-card-icon"
+              src={pipelineIcon}
+              alt="pipeline icon"
+            />
             <Box
               sx={{
                 display: "flex",
@@ -164,8 +168,8 @@ export function PipelineCard({
                 paddingLeft: "1rem",
               }}
             >
-              <span>{statusData?.pipeline?.status?.phase}</span>
-              <span>{statusData?.status}</span>
+              <span>{StatusString[statusData?.pipeline?.status?.phase]}</span>
+              <span>{StatusString[statusData?.status]}</span>
             </Box>
           </Grid>
 
@@ -199,9 +203,7 @@ export function PipelineCard({
               }}
             >
               <span>{isbData.name}</span>
-              <span>
-                {isbData?.isbService?.status?.type}
-              </span>
+              <span>{isbData?.isbService?.status?.type}</span>
               <span>
                 {
                   isbData?.isbService?.spec[isbData?.isbService.status?.type]
@@ -258,8 +260,8 @@ export function PipelineCard({
                 paddingLeft: "1rem",
               }}
             >
-              <span>{isbData?.isbService?.status?.phase}</span>
-              <span>{isbData?.status}</span>
+              <span>{ISBStatusString[isbData?.isbService?.status?.phase]}</span>
+              <span>{ISBStatusString[isbData?.status]}</span>
             </Box>
           </Grid>
           <Grid

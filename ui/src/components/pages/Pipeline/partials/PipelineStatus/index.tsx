@@ -1,6 +1,6 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import {IconsStatusMap} from "../../../../../utils";
+import {IconsStatusMap, StatusString} from "../../../../../utils";
 
 import "./style.css";
 
@@ -41,9 +41,9 @@ export function PipelineStatus({ status, healthStatus }) {
                 marginLeft: "0.3125rem",
               }}
             >
-              <span className="pipeline-logo-text">{status}</span>
+              <span className="pipeline-logo-text">{StatusString[status]}</span>
               <span className="pipeline-logo-text">
-                {healthStatus}
+                {StatusString[healthStatus]}
               </span>
             </Box>
           </Box>

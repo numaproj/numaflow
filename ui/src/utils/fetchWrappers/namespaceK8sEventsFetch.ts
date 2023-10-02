@@ -95,7 +95,7 @@ export const useNamespaceK8sEventsFetch = ({
     data: fetchData,
     loading: fetchLoading,
     error: fetchError,
-  } = useFetch(`/api/v1_1/namespaces/${namespace}/events`, undefined, options);
+  } = useFetch(`/api/v1/namespaces/${namespace}/events`, undefined, options);
 
   useEffect(() => {
     if (fetchLoading) {

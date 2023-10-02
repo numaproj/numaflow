@@ -29,7 +29,7 @@ export const usePodsViewFetch = (
     const fetchPods = async () => {
       try {
         const response = await fetch(
-          `/api/v1_1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods?refreshKey=${requestKey}`
+          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods?refreshKey=${requestKey}`
         );
         if (response.ok) {
           const json = await response.json();
@@ -119,7 +119,7 @@ export const usePodsViewFetch = (
     const fetchPods = async () => {
       try {
         const response = await fetch(
-          `/api/v1_1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
+          `/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
         );
         if (response.ok) {
           const json = await response.json();

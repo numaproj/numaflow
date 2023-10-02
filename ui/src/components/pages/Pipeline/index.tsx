@@ -53,7 +53,7 @@ export function Pipeline() {
           {
             type: SummarySectionType.CUSTOM,
             customComponent: (
-              <PipelineSummaryStatus pipeline={pipelineData?.pipeline} />
+              <PipelineSummaryStatus pipeline={pipelineData?.pipeline} lag={pipelineData?.lag} />
             ),
           },
           {

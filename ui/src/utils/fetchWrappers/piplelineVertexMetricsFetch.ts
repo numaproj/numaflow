@@ -51,7 +51,7 @@ export const usePiplelineVertexMetricsFetch = ({
     requestKey: "",
   });
   const { data, loading, error } = useFetch(
-    `/api/v1_1/namespaces/${namespace}/pipelines/${pipeline}/vertices/metrics`,
+    `/api/v1/namespaces/${namespace}/pipelines/${pipeline}/vertices/metrics`,
     undefined,
     options
   );

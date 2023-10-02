@@ -381,7 +381,7 @@ export default function Graph(props: GraphProps) {
         edge.id = dataEdge.id;
         flag = true;
         setEdge(edge);
-        if (sidebarProps && sidebarProps.type === SidebarType.EDGE_DETAILS) {
+        if (sidebarProps && sidebarProps?.type === SidebarType?.EDGE_DETAILS) {
           // Update sidebar data if already open
           openEdgeSidebar(edge);
         }

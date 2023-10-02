@@ -92,6 +92,7 @@ export interface IsbServiceSpec {
 export interface PipelineSummary {
   name: string;
   status: string;
+  lag?: number;
   pipeline: Pipeline;
 }
 
