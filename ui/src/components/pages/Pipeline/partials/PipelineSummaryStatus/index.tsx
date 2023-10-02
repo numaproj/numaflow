@@ -4,10 +4,10 @@ import { useParams } from "react-router-dom";
 import { SidebarType } from "../../../../common/SlidingSidebar";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
-
-import "./style.css";
 import { Pipeline } from "../../../../../types/declarations/pipeline";
 import { DurationString } from "../../../../../utils";
+
+import "./style.css";
 
 export interface PipelineSummaryStatusProps {
   pipeline?: Pipeline;
