@@ -47,6 +47,9 @@ func ValidateInterStepBufferService(isbs *dfv1.InterStepBufferService) error {
 		if x.Version == "" {
 			return fmt.Errorf(`invalid spec: "spec.jetstream.version" is not defined`)
 		}
+		if *(x.Replicas) < 3 {
+			return fmt.Errorf(`invalid spec: min value for "spec.jetstream.replicas" is 3`)
+		}
 	}
 	return nil
 }
