@@ -19,7 +19,6 @@ package v1
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -856,7 +855,7 @@ func parseSpecFromReq(c *gin.Context, specType string) (interface{}, error) {
 	} else if specType == SpecTypePatch {
 		return jsonData, nil
 	}
-	err = json.Unmarshal(jsonData, &reqBody)
+	err = c.BindJSON(&reqBody)
 	if err != nil {
 		return nil, err
 	}
