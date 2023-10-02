@@ -4,10 +4,17 @@ import { useParams } from "react-router-dom";
 import { SidebarType } from "../../../../common/SlidingSidebar";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
+import { Pipeline } from "../../../../../types/declarations/pipeline";
+import { DurationString } from "../../../../../utils";
 
 import "./style.css";
 
-export function PipelineSummaryStatus({ pipeline }) {
+export interface PipelineSummaryStatusProps {
+  pipeline?: Pipeline;
+  lag?: number;
+}
+
+export function PipelineSummaryStatus({ pipeline, lag }) {
   const { namespaceId, pipelineId } = useParams();
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const handleK8sEventsClick = useCallback(() => {
@@ -115,7 +122,10 @@ export function PipelineSummaryStatus({ pipeline }) {
               <span className="pipeline-summary-subtitle">
                 <div>
                   <span className="pipeline-summary-subtitle">Max lag:</span>
-                  <span className="pipeline-summary-text"> 10 sec.</span>
+                  <span className="pipeline-summary-text">
+                    {" "}
+                    {DurationString(lag)}
+                  </span>
                 </div>
               </span>
             </div>

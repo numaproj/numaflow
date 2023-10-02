@@ -22,7 +22,7 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
     loading: pipelineLoading,
     error: pipelineError,
   } = useFetch(
-    `/api/v1_1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
+    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
     undefined,
     options
   );
@@ -32,7 +32,7 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
     loading: isbLoading,
     error: isbError,
   } = useFetch(
-    `/api/v1_1/namespaces/${namespaceId}/isb-services/${isb}`,
+    `/api/v1/namespaces/${namespaceId}/isb-services/${isb}`,
     undefined,
     isb ? options : { ...options, skip: true }
   );

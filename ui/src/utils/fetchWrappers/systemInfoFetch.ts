@@ -9,7 +9,7 @@ export const useSystemInfoFetch = () => {
   const [errMsg, setErrMsg] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
 
-  const { data, loading: fetchLoading, error } = useFetch(`/api/v1_1/sysinfo`);
+  const { data, loading: fetchLoading, error } = useFetch(`/api/v1/sysinfo`);
 
   useEffect(() => {
     if (fetchLoading) {

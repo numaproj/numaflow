@@ -307,7 +307,7 @@ export const useClusterSummaryFetch = ({
     data: fetchData,
     loading: fetchLoading,
     error: fetchError,
-  } = useFetch("/api/v1_1/cluster-summary", undefined, options);
+  } = useFetch("/api/v1/cluster-summary", undefined, options);
 
   useEffect(() => {
     setInterval(() => {

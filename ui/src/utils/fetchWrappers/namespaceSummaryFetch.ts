@@ -154,7 +154,7 @@ export const useNamespaceSummaryFetch = ({
     loading: pipelineLoading,
     error: pipelineError,
   } = useFetch(
-    `/api/v1_1/namespaces/${namespace}/pipelines`,
+    `/api/v1/namespaces/${namespace}/pipelines`,
     undefined,
     options
   );
@@ -163,7 +163,7 @@ export const useNamespaceSummaryFetch = ({
     loading: isbLoading,
     error: isbError,
   } = useFetch(
-    `/api/v1_1/namespaces/${namespace}/isb-services`,
+    `/api/v1/namespaces/${namespace}/isb-services`,
     undefined,
     options
   );
