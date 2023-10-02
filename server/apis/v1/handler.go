@@ -849,7 +849,6 @@ func parseSpecFromReq(c *gin.Context, specType string) (interface{}, error) {
 	}
 	if specType == SpecTypePipeline {
 		reqBody = &dfv1.Pipeline{}
-
 	} else if specType == SpecTypeISB {
 		reqBody = &dfv1.InterStepBufferService{}
 	} else if specType == SpecTypePatch {
