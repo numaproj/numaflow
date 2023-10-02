@@ -28,7 +28,6 @@ import (
 // NOTE: This is used as a mock for testing purposes only
 type MockInterStepBufferServices struct {
 	Fake *fake.FakeNumaflowV1alpha1
-	ns   string
 }
 
 // Get takes name of the interStepBufferService, and returns the corresponding interStepBufferService object, and an error if there is any.
