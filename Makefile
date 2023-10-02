@@ -227,16 +227,28 @@ endif
 
 /usr/local/bin/mkdocs:
 	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9 mkdocs-embed-external-markdown==2.3.0
+/usr/local/bin/lychee:
+ifeq (, $(shell which lychee))
+ifeq ($(shell uname),Darwin)
+	brew install lychee
+else
+	curl -sSfL https://github.com/lycheeverse/lychee/releases/download/v0.13.0/lychee-v0.13.0-$(shell uname -m)-unknown-linux-gnu.tar.gz | sudo tar xz -C /usr/local/bin/
+endif
+endif
 
 # docs
 
 .PHONY: docs
-docs: /usr/local/bin/mkdocs
+docs: /usr/local/bin/mkdocs docs-linkcheck
 	mkdocs build
 
 .PHONY: docs-serve
 docs-serve: docs
 	mkdocs serve
+
+.PHONY: docs-linkcheck
+docs-linkcheck: /usr/local/bin/lychee
+	lychee --exclude-path=CHANGELOG.md --exclude-mail *.md
 
 # pre-push checks
 
