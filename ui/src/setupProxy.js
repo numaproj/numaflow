@@ -7,5 +7,4 @@ const proxy = {
 };
 module.exports = function (app) {
   app.use("/api/v1", createProxyMiddleware(proxy));
-  app.use("/api/v1_1", createProxyMiddleware(proxy));
 };
