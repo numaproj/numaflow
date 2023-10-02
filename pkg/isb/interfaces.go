@@ -32,8 +32,7 @@ const PendingNotAvailable = int64(math.MinInt64)
 
 // LagReader is the interface that wraps the Pending method.
 type LagReader interface {
-	// Pending returns the number of pending messages.
-	// If the number of pending messages is not available, it returns PendingNotAvailable.
+	// Pending returns the pending messages number.
 	Pending(context.Context) (int64, error)
 }
 
