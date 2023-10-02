@@ -114,7 +114,8 @@ func (v Vertex) Scalable() bool {
 	}
 	if v.IsASource() {
 		src := v.Spec.Source
-		if src.Kafka != nil || src.RedisStreams != nil {
+		if src.Kafka != nil || src.UDSource != nil {
+			// Sources implementing the Pending interface are scalable
 			return true
 		}
 	}

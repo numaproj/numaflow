@@ -535,6 +535,10 @@ func TestScalable(t *testing.T) {
 		Kafka: &KafkaSource{},
 	}
 	assert.True(t, v.Scalable())
+	v.Spec.Source = &Source{
+		UDSource: &UDSource{},
+	}
+	assert.True(t, v.Scalable())
 }
 
 func Test_Scale_Parameters(t *testing.T) {
