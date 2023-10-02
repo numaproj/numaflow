@@ -62,7 +62,7 @@ func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.Adm
 		isbName = dfv1.DefaultISBSvcName
 	}
 
-	if err := v.checkIsbExists(ctx, isbName); err != nil {
+	if err := v.checkISBSVCExists(ctx, isbName); err != nil {
 		return DeniedResponse(err.Error())
 	}
 	return AllowedResponse()
@@ -83,8 +83,8 @@ func (v *pipelineValidator) ValidateUpdate(ctx context.Context) *admissionv1.Adm
 	return AllowedResponse()
 }
 
-// checkIsbExists checks that the ISB service exists in the given namespace and is valid
-func (v *pipelineValidator) checkIsbExists(ctx context.Context, isbSvcName string) error {
+// checkISBSVCExists checks that the ISB service exists in the given namespace and is valid
+func (v *pipelineValidator) checkISBSVCExists(ctx context.Context, isbSvcName string) error {
 	isb, err := v.isbClient.Get(ctx, isbSvcName, metav1.GetOptions{})
 	if err != nil {
 		return err

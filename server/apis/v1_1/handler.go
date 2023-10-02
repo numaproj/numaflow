@@ -170,7 +170,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 // CreatePipeline is used to create a given pipeline
 func (h *handler) CreatePipeline(c *gin.Context) {
 	ns := c.Param("namespace")
-	// dryRun is used to check if the operation is just a validation or an actual update
+	// dryRun is used to check if the operation is just a validation or an actual create
 	dryRun := c.DefaultQuery("dry-run", "false")
 	dryRun = strings.ToLower(dryRun)
 
@@ -195,7 +195,7 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", isValid.Error()))
 		return
 	}
-	// If Validation flag is set to true, return without creating the pipeline
+	// if Validation flag "dryRun" is set to true, return without creating the pipeline
 	if dryRun == "true" {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return

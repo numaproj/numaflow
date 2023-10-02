@@ -76,9 +76,9 @@ func GetValidator(ctx context.Context, client kubernetes.Interface, NumaClient v
 				return nil, err
 			}
 		}
-		isbClient := NumaClient.InterStepBufferServices(newSpec.Namespace)
+		isbSvcClient := NumaClient.InterStepBufferServices(newSpec.Namespace)
 		pipelineClient := NumaClient.Pipelines(newSpec.Namespace)
-		return NewPipelineValidator(client, pipelineClient, isbClient, oldSpec, newSpec), nil
+		return NewPipelineValidator(client, pipelineClient, isbSvcClient, oldSpec, newSpec), nil
 	default:
 		return nil, fmt.Errorf("unrecognized kind: %v", kind)
 	}
