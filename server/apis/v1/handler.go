@@ -375,15 +375,9 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 func (h *handler) PatchPipeline(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
-	reqBody, err := parseSpecFromReq(c, SpecTypePatch)
+	patchSpec, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
-		return
-	}
-
-	patchSpec, ok := reqBody.([]byte)
-	if !ok {
-		h.respondWithError(c, "Failed to convert request body to patch spec")
 		return
 	}
 
@@ -847,8 +841,6 @@ func parseSpecFromReq(c *gin.Context, specType string) (interface{}, error) {
 		reqBody = &dfv1.Pipeline{}
 	} else if specType == SpecTypeISB {
 		reqBody = &dfv1.InterStepBufferService{}
-	} else if specType == SpecTypePatch {
-		// do nothing
 	}
 	err := c.BindJSON(&reqBody)
 	if err != nil {
