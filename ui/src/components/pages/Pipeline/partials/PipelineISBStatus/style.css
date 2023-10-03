@@ -1,0 +1,15 @@
+.isb-status-subtitle {
+    color: #3C4348;
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 1.78125rem;
+}
+
+.isb-status-text {
+    color: #393A3D;
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1.46875rem;
+}

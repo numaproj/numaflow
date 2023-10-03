@@ -6,8 +6,13 @@ rules:
   - apiGroups:
       - numaflow.numaproj.io
     verbs:
+      - create
+      - delete
+      - deletecollection
       - get
       - list
+      - patch
+      - update
       - watch
     resources:
       - interstepbufferservices
@@ -23,11 +28,13 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - events
       - pods
-      - pods/exec
       - pods/log
+      - pods/exec
       - configmaps
       - services
+      - persistentvolumeclaims
     verbs:
       - get
       - list

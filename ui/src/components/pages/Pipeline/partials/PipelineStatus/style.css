@@ -1,0 +1,11 @@
+.pipeline-logo {
+    width: 1.5rem;
+}
+
+.pipeline-logo-text {
+    color: #3C4348;
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 400;
+    margin-top: 0.125rem;
+}
