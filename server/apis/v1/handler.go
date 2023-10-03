@@ -47,13 +47,6 @@ import (
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
-// SpecType is used to provide the type of the spec of the resource
-// This is used to parse different types of specs from the request body
-const (
-	SpecTypePipeline = "pipeline"
-	SpecTypeISBSVC   = "isbsvc"
-)
-
 // Constants for the validation of the pipeline
 const (
 	ValidTypeCreate = "valid-create"
@@ -107,6 +100,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		return
 	}
 	var clusterSummary ClusterSummaryResponse
+	// TODO(API): need a more efficient solution
 	// Loop over the namespaces to get status
 	for _, ns := range namespaces {
 		// Fetch pipeline summary
@@ -160,16 +154,13 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry-run", "false")
 	dryRun = strings.ToLower(dryRun)
 
-	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
+	var pipelineSpec *dfv1.Pipeline
+	err := c.BindJSON(pipelineSpec)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
-	pipelineSpec, ok := reqBody.(*dfv1.Pipeline)
-	if !ok {
-		h.respondWithError(c, "Failed to convert request body to pipeline spec")
-		return
-	}
+
 	err = validateNamespace(h, pipelineSpec, ns)
 	if err != nil {
 		h.respondWithError(c, err.Error())
@@ -294,23 +285,19 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry-run", "false")
 	dryRun = strings.ToLower(dryRun)
 
-	reqBody, err := parseSpecFromReq(c, SpecTypePipeline)
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
-		return
-	}
-
 	oldSpec, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
 
-	updatedSpec, ok := reqBody.(*dfv1.Pipeline)
-	if !ok {
-		h.respondWithError(c, "Failed to convert request body to pipeline spec")
+	var updatedSpec *dfv1.Pipeline
+	err = c.BindJSON(updatedSpec)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
+
 	// Validate the namespace of the request
 	err = validateNamespace(h, updatedSpec, ns)
 	if err != nil {
@@ -382,18 +369,14 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry-run", "false")
 	dryRun = strings.ToLower(dryRun)
 
-	reqBody, err := parseSpecFromReq(c, SpecTypeISBSVC)
+	var isbsvcSpec *dfv1.InterStepBufferService
+	err := c.BindJSON(isbsvcSpec)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
 
-	isbSpec, ok := reqBody.(*dfv1.InterStepBufferService)
-	if !ok {
-		h.respondWithError(c, "Failed to convert request body to interstepbuffer service spec")
-		return
-	}
-	isValid := validateISBSVCSpec(h, nil, isbSpec, ValidTypeCreate)
+	isValid := validateISBSVCSpec(h, nil, isbsvcSpec, ValidTypeCreate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service spec, %s", isValid.Error()))
 		return
@@ -404,8 +387,8 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.numaflowClient.InterStepBufferServices(ns).Create(context.Background(), isbSpec, metav1.CreateOptions{}); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service %q, %s", isbSpec.Name, err.Error()))
+	if _, err := h.numaflowClient.InterStepBufferServices(ns).Create(context.Background(), isbsvcSpec, metav1.CreateOptions{}); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service %q, %s", isbsvcSpec.Name, err.Error()))
 		return
 	}
 
@@ -435,12 +418,6 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 
 	status := ISBServiceStatusHealthy
 	// TODO(API) : Get the current status of the ISB service
-	// status, err := getISBServiceStatus(isb.Namespace, isb.Name)
-	// if err != nil {
-	//	errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isb.Name, isb.Namespace, err.Error())
-	//	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	//	return
-	// }
 
 	resp := NewISBService(status, isbsvc)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, resp))
@@ -459,12 +436,13 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	requestBody, err := parseSpecFromReq(c, SpecTypeISBSVC)
+	var updatedSpec *dfv1.InterStepBufferService
+	err = c.BindJSON(updatedSpec)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
 		return
 	}
-	var updatedSpec = requestBody.(*dfv1.InterStepBufferService)
+
 	isValid := validateISBSVCSpec(h, isbSVC, updatedSpec, ValidTypeUpdate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate interstepbuffer service spec, %s", isValid.Error()))
@@ -811,22 +789,6 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 		isbList = append(isbList, resp)
 	}
 	return isbList, nil
-}
-
-// parseSpecFromReq is used to parse the request body and return the spec
-// based on the type of request
-func parseSpecFromReq(c *gin.Context, specType string) (interface{}, error) {
-	var reqBody interface{}
-	if specType == SpecTypePipeline {
-		reqBody = &dfv1.Pipeline{}
-	} else if specType == SpecTypeISBSVC {
-		reqBody = &dfv1.InterStepBufferService{}
-	}
-	err := c.BindJSON(&reqBody)
-	if err != nil {
-		return nil, err
-	}
-	return reqBody, nil
 }
 
 // GetPipelineStatus is used to provide the status of a given pipeline
