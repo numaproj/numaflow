@@ -112,7 +112,7 @@ var forwardAChunkProcessingTime = promauto.NewHistogramVec(prometheus.HistogramO
 	Subsystem: "source_forwarder",
 	Name:      "forward_chunk_processing_time",
 	Help:      "Processing times of the entire forward a chunk (100 microseconds to 20 minutes)",
-	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 60),
+	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
 // transformerProcessingTime is a histogram to Observe Source Transformer Processing times as a whole
@@ -120,7 +120,7 @@ var transformerProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpt
 	Subsystem: "source_forwarder",
 	Name:      "transformer_processing_time",
 	Help:      "Processing times of source transformer (100 microseconds to 15 minutes)",
-	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 60),
+	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 10),
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
 // concurrentTransformerProcessingTime is a histogram to Observe Source Transformer Processing times as a whole
@@ -128,7 +128,7 @@ var concurrentTransformerProcessingTime = promauto.NewHistogramVec(prometheus.Hi
 	Subsystem: "source_forwarder",
 	Name:      "concurrent_transformer_processing_time",
 	Help:      "Processing times of Concurrent source transformer (100 microseconds to 20 minutes)",
-	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 60),
+	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
 // transformerReadMessagesCount is used to indicate the number of messages read by source transformer
