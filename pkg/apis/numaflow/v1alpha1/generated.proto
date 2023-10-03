@@ -890,7 +890,6 @@ message PipelineSpec {
   repeated Edge edges = 3;
 
   // Lifecycle define the Lifecycle properties
-  // +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running}
   // +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running, "pauseGracePeriodSeconds": 30}
   // +optional
   optional Lifecycle lifecycle = 4;

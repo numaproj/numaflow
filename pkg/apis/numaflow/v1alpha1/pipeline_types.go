@@ -441,7 +441,6 @@ type PipelineSpec struct {
 	// Edges define the relationships between vertices
 	Edges []Edge `json:"edges,omitempty" protobuf:"bytes,3,rep,name=edges"`
 	// Lifecycle define the Lifecycle properties
-	// +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running}
 	// +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running, "pauseGracePeriodSeconds": 30}
 	// +optional
 	Lifecycle Lifecycle `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`

@@ -39,6 +39,7 @@ const (
 	KeyVertexName       = "numaflow.numaproj.io/vertex-name"
 	KeyReplica          = "numaflow.numaproj.io/replica"
 	KeySideInputName    = "numaflow.numaproj.io/side-input-name"
+	KeyPauseTimestamp   = "numaflow.numaproj.io/pause-timestamp"
 	KeyDefaultContainer = "kubectl.kubernetes.io/default-container"
 
 	// ID key in the header of sources like http

@@ -727,8 +727,8 @@ func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pi
 func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
 
 	// reset pause timestamp
-	if pl.GetAnnotations()["pauseTimestamp"] != "" {
-		delete(pl.GetAnnotations(), "pauseTimestamp")
+	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
+		delete(pl.GetAnnotations(), dfv1.KeyPauseTimestamp)
 		if err := r.client.Update(ctx, pl.DeepCopy()); err != nil {
 			return false, err
 		}
@@ -744,8 +744,8 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 
 func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
 
-	if pl.GetAnnotations() == nil || pl.GetAnnotations()["pauseTimestamp"] == "" {
-		pl.SetAnnotations(map[string]string{"pauseTimestamp": time.Now().Format(time.RFC3339)})
+	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
+		pl.SetAnnotations(map[string]string{dfv1.KeyPauseTimestamp: time.Now().Format(time.RFC3339)})
 		if err := r.client.Update(ctx, pl.DeepCopy()); err != nil {
 			return false, err
 		}
@@ -768,10 +768,10 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	}()
 	drainCompleted, err := daemonClient.IsDrained(ctx, pl.Name)
 	if err != nil {
-		return true, err
+		return false, err
 	}
 
-	pauseTimestamp, err := time.Parse(time.RFC3339, pl.GetAnnotations()["pauseTimestamp"])
+	pauseTimestamp, err := time.Parse(time.RFC3339, pl.GetAnnotations()[dfv1.KeyPauseTimestamp])
 	if err != nil {
 		return true, err
 	}
