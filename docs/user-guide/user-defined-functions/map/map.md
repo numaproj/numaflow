@@ -29,8 +29,8 @@ spec:
 
 ### Streaming Mode
 
-In cases the map function generates more than one outputs (e.g. flat map), the UDF can be
-configured to run in a streaming mode instead of batching which is the default mode.
+In cases the map function generates more than one output (e.g., flat map), the UDF can be
+configured to run in a streaming mode instead of batching, which is the default mode.
 In streaming mode, the messages will be pushed to the downstream vertices once generated
 instead of in a batch at the end. The streaming mode can be enabled by setting the annotation
 `numaflow.numaproj.io/map-stream` to `true` in the vertex spec.
@@ -54,7 +54,7 @@ Check the links below to see the UDF examples in streaming mode for different la
 
 ### Available Environment Variables
 
-Some environment variables are available in the user defined function container, they might be useful in you own UDF implementation.
+Some environment variables are available in the user defined function container, they might be useful in your own UDF implementation.
 
 - `NUMAFLOW_NAMESPACE` - Namespace.
 - `NUMAFLOW_POD` - Pod name.

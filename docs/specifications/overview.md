@@ -111,7 +111,7 @@ Logic:
 **Matrix of Operations**
 
 |                | Source           | Processor    | Sink          |
-| -------------- |------------------| ------------ |---------------|
+|----------------|------------------|--------------|---------------|
 | ReadFromBuffer | Read From Source | Generic      | Generic       |
 | CallUDF        | Void             | User Defined | Void          |
 | Forward        | Generic          | Generic      | Write To Sink |
@@ -124,7 +124,7 @@ Logic:
 - Numaflow is restartable if aborted or steps fail while preserving
   exactly-once semantics.
 - Do not generate more output than can be used by the next stage in a
-  reasonable amount of time, i.e. the size of buffers between steps
+  reasonable amount of time, i.e., the size of buffers between steps
   should be limited, (aka backpressure).
 - User code should be isolated from offset management, restart, exactly once, backpressure, etc.
 - Streaming process systems inherently require a concept of time, this
@@ -144,7 +144,7 @@ Logic:
     ![Tree Dag](../assets/tree_dag.png)
   - Diamond (In Future)
     ![Diamond Dag](../assets/diamond_dag.png)
-  - Multiple Sources with same schema (In Future)
+  - Multiple Sources with the same schema (In Future)
     ![Multi Source Dag](../assets/multi_source_dag.png)
 
 ## Non-Requirements
@@ -160,7 +160,7 @@ Logic:
 
 - In order to be able to support various buffering technologies, we
   will persist and manage stream "offsets" rather than relying on
-  the buffering technology (e.g. Kafka)
+  the buffering technology (e.g., Kafka)
 - Each processor may persist state associated with their processing
   no distributed transactions are needed for checkpointing
 - If we have a tree DAG, how will we manage acknowledgments? We
@@ -217,14 +217,14 @@ To detect duplicates, make sure the delivery is Exactly-Once:
 ### Unique Identifier for Message
 
 To detect duplicates, we first need to uniquely identify each message.
-We will be relying on the "identifier" available (eg, "offset" in Kafka)
+We will be relying on the "identifier" available (e.g., "offset" in Kafka)
 in the buffer to uniquely identify each message. If such an identifier
-is not available, we will be creating an unique identifier (sequence
+is not available, we will be creating a unique identifier (sequence
 numbers are tough because there are multiple readers). We can use this
 unique identifier to ensure that we forward only if the message has not
 been forwarded yet. We will only look back for a fixed window of time
 since this is a stream processing application on an unbounded stream of
-data and we do not have infinite resources.
+data, and we do not have infinite resources.
 
 The same offset will not be used across all the steps in Numaflow, but
 we will be using the current offset only while forwarding to the next

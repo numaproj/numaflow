@@ -3,8 +3,6 @@
 For an unbounded pipeline in Numaflow that never terminates, there are many cases where users want to update a configuration of the UDF without restarting the pipeline. Numaflow enables it by the `Side Inputs` feature where we can broadcast changes to vertices automatically.
 The `Side Inputs` feature achieves this by allowing users to write custom UDFs to broadcast changes to the vertices that are listening in for updates.
 
-
-
 ### Using Side Inputs in Numaflow
 The Side Inputs are updated based on a cron-like schedule, 
 specified in the pipeline spec with a trigger field.
@@ -74,7 +72,7 @@ func handle(_ context.Context) sideinputsdk.Message {
     return sideinputsdk.BroadcastMessage([]byte(val))
 }
 ```
-Similarly,  this can be written in [Python](https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple-sideinput/example.py) 
+Similarly, this can be written in [Python](https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple-sideinput/example.py) 
 and [Java](https://github.com/numaproj/numaflow-java/blob/main/examples/src/main/java/io/numaproj/numaflow/examples/sideinput/simple/SimpleSideInput.java) as well.
 
 After performing the retrieval/update, the side input value is then broadcasted to all vertices that use the side input.

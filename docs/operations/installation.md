@@ -74,7 +74,7 @@ To do managed namespace installation, besides `--namespaced`, add `--managed-nam
 
 By default, the Numaflow controller is installed with `Active-Passive` HA strategy enabled, which means you can run the controller with multiple replicas (defaults to 1 in the manifests).
 
-To turn off HA, add following environment variable to the deployment spec.
+To turn off HA, add the following environment variable to the deployment spec.
 
 ```
       name: NUMAFLOW_LEADER_ELECTION_DISABLED
