@@ -169,7 +169,7 @@ func (s *APISuite) TestPipeline1() {
 	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-p1-0"`)
 	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-output-0"`)
 
-	getPipelineBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
+	getPipelineBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, pipelineName)).
 		Expect().
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), getPipelineBody, fmt.Sprintf(`"name":"simple-pipeline"`))
