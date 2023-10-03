@@ -634,22 +634,36 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/user-defined-sources/" class="md-nav__link">
+        User Defined Sources
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
     
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6" type="checkbox" id="__nav_3_2_6" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7" type="checkbox" id="__nav_3_2_7" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6">
+        <label class="md-nav__link" for="__nav_3_2_7">
           Data Transformer
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Data Transformer" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_2_6">
+        <label class="md-nav__title" for="__nav_3_2_7">
           <span class="md-nav__icon md-icon"></span>
           Data Transformer
         </label>
@@ -678,18 +692,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6_2" type="checkbox" id="__nav_3_2_6_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7_2" type="checkbox" id="__nav_3_2_7_2" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6_2">
+        <label class="md-nav__link" for="__nav_3_2_7_2">
           Built-in Transformers
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Built-in Transformers" data-md-level="4">
-        <label class="md-nav__title" for="__nav_3_2_6_2">
+        <label class="md-nav__title" for="__nav_3_2_7_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in Transformers
         </label>
@@ -2342,7 +2356,7 @@ single sink.</p>
 <li>Numaflow is restartable if aborted or steps fail while preserving
   exactly-once semantics.</li>
 <li>Do not generate more output than can be used by the next stage in a
-  reasonable amount of time, i.e. the size of buffers between steps
+  reasonable amount of time, i.e., the size of buffers between steps
   should be limited, (aka backpressure).</li>
 <li>User code should be isolated from offset management, restart, exactly once, backpressure, etc.</li>
 <li>Streaming process systems inherently require a concept of time, this
@@ -2362,7 +2376,7 @@ single sink.</p>
     <img alt="Tree Dag" src="../../assets/tree_dag.png" /></li>
 <li>Diamond (In Future)
     <img alt="Diamond Dag" src="../../assets/diamond_dag.png" /></li>
-<li>Multiple Sources with same schema (In Future)
+<li>Multiple Sources with the same schema (In Future)
     <img alt="Multi Source Dag" src="../../assets/multi_source_dag.png" /></li>
 </ul>
 <h2 id="non-requirements">Non-Requirements<a class="headerlink" href="#non-requirements" title="Permanent link">&para;</a></h2>
@@ -2378,7 +2392,7 @@ single sink.</p>
 <ul>
 <li>In order to be able to support various buffering technologies, we
   will persist and manage stream "offsets" rather than relying on
-  the buffering technology (e.g. Kafka)</li>
+  the buffering technology (e.g., Kafka)</li>
 <li>Each processor may persist state associated with their processing
   no distributed transactions are needed for checkpointing</li>
 <li>If we have a tree DAG, how will we manage acknowledgments? We
@@ -2433,14 +2447,14 @@ two failure mode scenarios where there could be duplicates.</p>
 </ol>
 <h3 id="unique-identifier-for-message">Unique Identifier for Message<a class="headerlink" href="#unique-identifier-for-message" title="Permanent link">&para;</a></h3>
 <p>To detect duplicates, we first need to uniquely identify each message.
-We will be relying on the "identifier" available (eg, "offset" in Kafka)
+We will be relying on the "identifier" available (e.g., "offset" in Kafka)
 in the buffer to uniquely identify each message. If such an identifier
-is not available, we will be creating an unique identifier (sequence
+is not available, we will be creating a unique identifier (sequence
 numbers are tough because there are multiple readers). We can use this
 unique identifier to ensure that we forward only if the message has not
 been forwarded yet. We will only look back for a fixed window of time
 since this is a stream processing application on an unbounded stream of
-data and we do not have infinite resources.</p>
+data, and we do not have infinite resources.</p>
 <p>The same offset will not be used across all the steps in Numaflow, but
 we will be using the current offset only while forwarding to the next
 step. Step N will use step N-1th offset to deduplicate. This requires

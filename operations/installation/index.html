@@ -634,22 +634,36 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/user-defined-sources/" class="md-nav__link">
+        User Defined Sources
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
     
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6" type="checkbox" id="__nav_3_2_6" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7" type="checkbox" id="__nav_3_2_7" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6">
+        <label class="md-nav__link" for="__nav_3_2_7">
           Data Transformer
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Data Transformer" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_2_6">
+        <label class="md-nav__title" for="__nav_3_2_7">
           <span class="md-nav__icon md-icon"></span>
           Data Transformer
         </label>
@@ -678,18 +692,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6_2" type="checkbox" id="__nav_3_2_6_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7_2" type="checkbox" id="__nav_3_2_7_2" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6_2">
+        <label class="md-nav__link" for="__nav_3_2_7_2">
           Built-in Transformers
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Built-in Transformers" data-md-level="4">
-        <label class="md-nav__title" for="__nav_3_2_6_2">
+        <label class="md-nav__title" for="__nav_3_2_7_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in Transformers
         </label>
@@ -2136,7 +2150,7 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 </code></pre></div>
 <h2 id="high-availability">High Availability<a class="headerlink" href="#high-availability" title="Permanent link">&para;</a></h2>
 <p>By default, the Numaflow controller is installed with <code>Active-Passive</code> HA strategy enabled, which means you can run the controller with multiple replicas (defaults to 1 in the manifests).</p>
-<p>To turn off HA, add following environment variable to the deployment spec.</p>
+<p>To turn off HA, add the following environment variable to the deployment spec.</p>
 <div class="highlight"><pre><span></span><code>      name: NUMAFLOW_LEADER_ELECTION_DISABLED
       value: &quot;true&quot;
 </code></pre></div>

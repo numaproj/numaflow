@@ -636,22 +636,36 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../../sources/user-defined-sources/" class="md-nav__link">
+        User Defined Sources
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
     
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6" type="checkbox" id="__nav_3_2_6" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7" type="checkbox" id="__nav_3_2_7" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6">
+        <label class="md-nav__link" for="__nav_3_2_7">
           Data Transformer
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Data Transformer" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_2_6">
+        <label class="md-nav__title" for="__nav_3_2_7">
           <span class="md-nav__icon md-icon"></span>
           Data Transformer
         </label>
@@ -680,18 +694,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6_2" type="checkbox" id="__nav_3_2_6_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7_2" type="checkbox" id="__nav_3_2_7_2" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6_2">
+        <label class="md-nav__link" for="__nav_3_2_7_2">
           Built-in Transformers
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Built-in Transformers" data-md-level="4">
-        <label class="md-nav__title" for="__nav_3_2_6_2">
+        <label class="md-nav__title" for="__nav_3_2_7_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in Transformers
         </label>
@@ -2123,30 +2137,12 @@
 <h2 id="builtin-udf">Builtin UDF<a class="headerlink" href="#builtin-udf" title="Permanent link">&para;</a></h2>
 <p>There are some <a href="../builtin-functions/">Built-in Functions</a> that can be used directly.</p>
 <h2 id="build-your-own-udf">Build Your Own UDF<a class="headerlink" href="#build-your-own-udf" title="Permanent link">&para;</a></h2>
-<p>You can build your own UDF in multiple languages. A User Defined Function could be as simple as below in Golang.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
-
-<span class="kn">import</span><span class="w"> </span><span class="p">(</span>
-<span class="w">    </span><span class="s">&quot;context&quot;</span>
-
-<span class="w">    </span><span class="nx">functionsdk</span><span class="w"> </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/function&quot;</span>
-<span class="w">    </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/function/server&quot;</span>
-<span class="p">)</span>
-
-<span class="kd">func</span><span class="w"> </span><span class="nx">mapHandle</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="c1">// Directly forward the input to the output</span>
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">NewMessage</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">Value</span><span class="p">()).</span><span class="nx">WithKeys</span><span class="p">(</span><span class="nx">keys</span><span class="p">))</span>
-<span class="p">}</span>
-
-<span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nx">server</span><span class="p">.</span><span class="nx">New</span><span class="p">().</span><span class="nx">RegisterMapper</span><span class="p">(</span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MapFunc</span><span class="p">(</span><span class="nx">mapHandle</span><span class="p">)).</span><span class="nx">Start</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">())</span>
-<span class="p">}</span>
-</code></pre></div>
+<p>You can build your own UDF in multiple languages.</p>
 <p>Check the links below to see the UDF examples for different languages.</p>
 <ul>
-<li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/function">Python</a></li>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples">Golang</a></li>
-<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function">Java</a></li>
+<li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/map/">Python</a></li>
+<li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/">Golang</a></li>
+<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/map/">Java</a></li>
 </ul>
 <p>After building a docker image for the written UDF, specify the image as below in the vertex spec.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
@@ -2157,8 +2153,8 @@
 <span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-python-udf-example:latest</span>
 </code></pre></div>
 <h3 id="streaming-mode">Streaming Mode<a class="headerlink" href="#streaming-mode" title="Permanent link">&para;</a></h3>
-<p>In cases the map function generates more than one outputs (e.g. flat map), the UDF can be
-configured to run in a streaming mode instead of batching which is the default mode.
+<p>In cases the map function generates more than one output (e.g., flat map), the UDF can be
+configured to run in a streaming mode instead of batching, which is the default mode.
 In streaming mode, the messages will be pushed to the downstream vertices once generated
 instead of in a batch at the end. The streaming mode can be enabled by setting the annotation
 <code>numaflow.numaproj.io/map-stream</code> to <code>true</code> in the vertex spec.</p>
@@ -2172,12 +2168,12 @@ instead of in a batch at the end. The streaming mode can be enabled by setting t
 </code></pre></div>
 <p>Check the links below to see the UDF examples in streaming mode for different languages.</p>
 <ul>
-<li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/function/flatmap_stream">Python</a></li>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/flatmap_stream">Golang</a></li>
-<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/map/flatmapstream">Java</a></li>
+<li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream/">Python</a></li>
+<li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/mapstreamer/examples/flatmap_stream/">Golang</a></li>
+<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream/">Java</a></li>
 </ul>
 <h3 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h3>
-<p>Some environment variables are available in the user defined function container, they might be useful in you own UDF implementation.</p>
+<p>Some environment variables are available in the user defined function container, they might be useful in your own UDF implementation.</p>
 <ul>
 <li><code>NUMAFLOW_NAMESPACE</code> - Namespace.</li>
 <li><code>NUMAFLOW_POD</code> - Pod name.</li>

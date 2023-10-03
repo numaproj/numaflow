@@ -726,22 +726,36 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/user-defined-sources/" class="md-nav__link">
+        User Defined Sources
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
     
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6" type="checkbox" id="__nav_3_2_6" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7" type="checkbox" id="__nav_3_2_7" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6">
+        <label class="md-nav__link" for="__nav_3_2_7">
           Data Transformer
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Data Transformer" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_2_6">
+        <label class="md-nav__title" for="__nav_3_2_7">
           <span class="md-nav__icon md-icon"></span>
           Data Transformer
         </label>
@@ -770,18 +784,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6_2" type="checkbox" id="__nav_3_2_6_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7_2" type="checkbox" id="__nav_3_2_7_2" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6_2">
+        <label class="md-nav__link" for="__nav_3_2_7_2">
           Built-in Transformers
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Built-in Transformers" data-md-level="4">
-        <label class="md-nav__title" for="__nav_3_2_6_2">
+        <label class="md-nav__title" for="__nav_3_2_7_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in Transformers
         </label>
@@ -2173,9 +2187,9 @@ time duration will be considered as data on-time. This means, the watermark prop
 an API. Watermark API is supported in all our client SDKs.</p>
 <h3 id="example-golang">Example Golang<a class="headerlink" href="#example-golang" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1">// Go</span>
-<span class="kd">func</span><span class="w"> </span><span class="nx">handle</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="w"> </span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">funcsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">()</span><span class="w"> </span><span class="c1">// Event time</span>
-<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">()</span><span class="w"> </span><span class="c1">// Watermark</span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">mapFn</span><span class="p">(</span><span class="nx">context</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">()</span><span class="w"> </span><span class="c1">// Event time</span>
+<span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">()</span><span class="w"> </span><span class="c1">// Watermark</span>
 <span class="w">    </span><span class="o">...</span><span class="w"> </span><span class="o">...</span>
 <span class="p">}</span>
 </code></pre></div>

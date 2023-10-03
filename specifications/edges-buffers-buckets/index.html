@@ -634,22 +634,36 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/user-defined-sources/" class="md-nav__link">
+        User Defined Sources
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
     
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6" type="checkbox" id="__nav_3_2_6" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7" type="checkbox" id="__nav_3_2_7" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6">
+        <label class="md-nav__link" for="__nav_3_2_7">
           Data Transformer
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Data Transformer" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_2_6">
+        <label class="md-nav__title" for="__nav_3_2_7">
           <span class="md-nav__icon md-icon"></span>
           Data Transformer
         </label>
@@ -678,18 +692,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6_2" type="checkbox" id="__nav_3_2_6_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7_2" type="checkbox" id="__nav_3_2_7_2" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6_2">
+        <label class="md-nav__link" for="__nav_3_2_7_2">
           Built-in Transformers
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Built-in Transformers" data-md-level="4">
-        <label class="md-nav__title" for="__nav_3_2_6_2">
+        <label class="md-nav__title" for="__nav_3_2_7_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in Transformers
         </label>
@@ -2096,7 +2110,7 @@
 </blockquote>
 <h2 id="edges">Edges<a class="headerlink" href="#edges" title="Permanent link">&para;</a></h2>
 <p><code>Edge</code> is the connection between the vertices, specifically, <code>edge</code> is defined in the pipeline spec under <code>.spec.edges</code>. No matter if the <code>to</code> vertex is a Map, or a Reduce with multiple partitions, it is considered as one edge.</p>
-<p>In the following pipeline , there are 3 edges defined (<code>in</code> - <code>aoti</code>, <code>aoti</code> - <code>compute-sum</code>, <code>compute-sum</code> - <code>out</code>).</p>
+<p>In the following pipeline, there are 3 edges defined (<code>in</code> - <code>aoti</code>, <code>aoti</code> - <code>compute-sum</code>, <code>compute-sum</code> - <code>out</code>).</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2138,8 +2152,8 @@
 <p>Each <code>edge</code> could have a name for internal usage, the naming convention is <code>{pipeline-name}-{from-vertex-name}-{to-vertex-name}</code>.</p>
 <h2 id="buffers">Buffers<a class="headerlink" href="#buffers" title="Permanent link">&para;</a></h2>
 <p><code>Buffer</code> is <code>InterStepBuffer</code>. Each buffer has an owner, which is the vertex who reads from it. Each <code>udf</code> and <code>sink</code> vertex in a pipeline owns a group of partitioned buffers. Each buffer has a name with the naming convention <code>{pipeline-name}-{vertex-name}-{index}</code>, where the <code>index</code> is the partition index, starting from 0. This naming convention applies to the buffers of both map and reduce udf vertices.</p>
-<p>When multiple vertices connecting to the same vertex, if the <code>to</code> vertex is a Map, the data from all the from vertices will be forwarded to the group of partitoned buffers round-robinly. If the <code>to</code> vertex is a Reduce, the data from all the from vertices will be forwarded to the group of partitoned buffers based on the partitioning key.</p>
-<p>A Source vertex does not have any owned buffers. But a pipeline may have multiple Source vertices, followed by one vertex. Same as above, if the following vertex is a map, the data from all the Source vertices will be forwarded to the group of partitoned buffers round-robinly. If it is a reduce, the data from all the Source vertices will be forwarded to the group of partitoned buffers based on the partitioning key.</p>
+<p>When multiple vertices connecting to the same vertex, if the <code>to</code> vertex is a Map, the data from all the from vertices will be forwarded to the group of partitoned buffers round-robinly. If the <code>to</code> vertex is a Reduce, the data from all the from vertices will be forwarded to the group of partitioned buffers based on the partitioning key.</p>
+<p>A Source vertex does not have any owned buffers. But a pipeline may have multiple Source vertices, followed by one vertex. Same as above, if the following vertex is a map, the data from all the Source vertices will be forwarded to the group of partitioned buffers round-robinly. If it is a reduce, the data from all the Source vertices will be forwarded to the group of partitioned buffers based on the partitioning key.</p>
 <h2 id="buckets">Buckets<a class="headerlink" href="#buckets" title="Permanent link">&para;</a></h2>
 <p><code>Bucket</code> is a K/V store (or a pair of stores) used for watermark propagation.</p>
 <p>There are 3 types of buckets in a pipeline:</p>

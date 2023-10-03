@@ -634,22 +634,36 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/user-defined-sources/" class="md-nav__link">
+        User Defined Sources
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
     
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6" type="checkbox" id="__nav_3_2_6" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7" type="checkbox" id="__nav_3_2_7" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6">
+        <label class="md-nav__link" for="__nav_3_2_7">
           Data Transformer
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Data Transformer" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_2_6">
+        <label class="md-nav__title" for="__nav_3_2_7">
           <span class="md-nav__icon md-icon"></span>
           Data Transformer
         </label>
@@ -678,18 +692,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6_2" type="checkbox" id="__nav_3_2_6_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7_2" type="checkbox" id="__nav_3_2_7_2" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6_2">
+        <label class="md-nav__link" for="__nav_3_2_7_2">
           Built-in Transformers
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Built-in Transformers" data-md-level="4">
-        <label class="md-nav__title" for="__nav_3_2_6_2">
+        <label class="md-nav__title" for="__nav_3_2_7_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in Transformers
         </label>
@@ -2066,11 +2080,11 @@
 <h2 id="release-steps">Release Steps<a class="headerlink" href="#release-steps" title="Permanent link">&para;</a></h2>
 <ol>
 <li>Cherry-pick fixes to the release branch, skip this step if it's the first release in the branch.</li>
-<li>Run <code>make test</code> to make sure all test test cases pass locally.</li>
+<li>Run <code>make test</code> to make sure all test cases pass locally.</li>
 <li>Push to remote branch, and make sure all the CI jobs pass.</li>
 <li>Run <code>make prepare-release VERSION=v{x.y.z}</code> to update version in manifests, where <code>x.y.x</code> is the expected new version.</li>
 <li>Follow the output of last step, to confirm if all the changes are expected, and then run <code>make release VERSION=v{x.y.z}</code>.</li>
-<li>Follow the output, push a new tag to the release branch, Github actions will automatically build and publish the new release, this will take around 10 minutes.</li>
+<li>Follow the output, push a new tag to the release branch, GitHub actions will automatically build and publish the new release, this will take around 10 minutes.</li>
 <li>Test the new release, make sure everything is running as expected, and then recreate a <code>stable</code> tag against the latest release.
    <div class="highlight"><pre><span></span><code>git<span class="w"> </span>tag<span class="w"> </span>-d<span class="w"> </span>stable
 git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>stable<span class="w"> </span>-m<span class="w"> </span>stable

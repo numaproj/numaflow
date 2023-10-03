@@ -648,22 +648,36 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../user-defined-sources/" class="md-nav__link">
+        User Defined Sources
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
     
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6" type="checkbox" id="__nav_3_2_6" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7" type="checkbox" id="__nav_3_2_7" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6">
+        <label class="md-nav__link" for="__nav_3_2_7">
           Data Transformer
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Data Transformer" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_2_6">
+        <label class="md-nav__title" for="__nav_3_2_7">
           <span class="md-nav__icon md-icon"></span>
           Data Transformer
         </label>
@@ -692,18 +706,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_6_2" type="checkbox" id="__nav_3_2_6_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_7_2" type="checkbox" id="__nav_3_2_7_2" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_6_2">
+        <label class="md-nav__link" for="__nav_3_2_7_2">
           Built-in Transformers
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Built-in Transformers" data-md-level="4">
-        <label class="md-nav__title" for="__nav_3_2_6_2">
+        <label class="md-nav__title" for="__nav_3_2_7_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in Transformers
         </label>
@@ -2003,15 +2017,19 @@
 
 
 <h1 id="sources">Sources<a class="headerlink" href="#sources" title="Permanent link">&para;</a></h1>
-<p>Source vertex is responsible for reliable reading data from an unbounded source into Numaflow.</p>
-<p>In Numaflow, we currently support the following builtin sources</p>
+<p>Source vertex is responsible for reliable reading data from an unbounded source into Numaflow.
+Source vertex may require <a href="../transformer/overview/">transformation</a> or formatting of data prior to sending it to the output buffers.
+Source Vertex also does <a href="../../../core-concepts/watermarks/">Watermark</a> tracking and late data detection.</p>
+<p>In Numaflow, we currently support the following sources</p>
 <ul>
 <li><a href="../kafka/">Kafka</a></li>
 <li><a href="../http/">HTTP</a></li>
 <li><a href="../generator/">Ticker</a></li>
 <li><a href="../nats/">Nats</a></li>
+<li><a href="../user-defined-sources/">User Defined Source</a></li>
 </ul>
-<p>Source Vertex also does <a href="../../../core-concepts/watermarks/">Watermark</a> tracking and late data detection.</p>
+<p>A user defined source is a custom source that a user can write using Numaflow SDK when 
+the user needs to read data from a system that is not supported by the platform's built-in sources.</p>
 
               
             </article>
