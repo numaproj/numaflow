@@ -534,6 +534,9 @@ func needsUpdate(old, new *dfv1.Pipeline) bool {
 	if !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers) {
 		return true
 	}
+	if !equality.Semantic.DeepEqual(old.GetAnnotations(), new.GetAnnotations()) {
+		return true
+	}
 	return false
 }
 
@@ -729,9 +732,6 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 	// reset pause timestamp
 	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
 		delete(pl.GetAnnotations(), dfv1.KeyPauseTimestamp)
-		if err := r.client.Update(ctx, pl.DeepCopy()); err != nil {
-			return false, err
-		}
 	}
 
 	_, err := r.scaleUpAllVertices(ctx, pl)
@@ -746,9 +746,6 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 
 	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
 		pl.SetAnnotations(map[string]string{dfv1.KeyPauseTimestamp: time.Now().Format(time.RFC3339)})
-		if err := r.client.Update(ctx, pl.DeepCopy()); err != nil {
-			return false, err
-		}
 	}
 
 	pl.Status.MarkPhasePausing()
