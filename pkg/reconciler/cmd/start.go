@@ -135,9 +135,6 @@ func Start(namespaced bool, managedNamespace string) {
 		predicate.Or(
 			predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{},
 		),
-		predicate.Not(
-			predicate.AnnotationChangedPredicate{},
-		),
 	); err != nil {
 		logger.Fatalw("Unable to watch Pipelines", zap.Error(err))
 	}
