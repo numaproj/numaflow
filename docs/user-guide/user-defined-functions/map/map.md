@@ -8,33 +8,13 @@ There are some [Built-in Functions](builtin-functions/README.md) that can be use
 
 ## Build Your Own UDF
 
-You can build your own UDF in multiple languages. A User Defined Function could be as simple as below in Golang.
-
-```golang
-package main
-
-import (
-	"context"
-
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	"github.com/numaproj/numaflow-go/pkg/function/server"
-)
-
-func mapHandle(_ context.Context, keys []string, d functionsdk.Datum) functionsdk.Messages {
-	// Directly forward the input to the output
-	return functionsdk.MessagesBuilder().Append(functionsdk.NewMessage(d.Value()).WithKeys(keys))
-}
-
-func main() {
-	server.New().RegisterMapper(functionsdk.MapFunc(mapHandle)).Start(context.Background())
-}
-```
+You can build your own UDF in multiple languages.
 
 Check the links below to see the UDF examples for different languages.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/function)
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples)
-- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/map/)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/map/)
 
 After building a docker image for the written UDF, specify the image as below in the vertex spec.
 
@@ -49,8 +29,8 @@ spec:
 
 ### Streaming Mode
 
-In cases the map function generates more than one outputs (e.g. flat map), the UDF can be
-configured to run in a streaming mode instead of batching which is the default mode.
+In cases the map function generates more than one output (e.g., flat map), the UDF can be
+configured to run in a streaming mode instead of batching, which is the default mode.
 In streaming mode, the messages will be pushed to the downstream vertices once generated
 instead of in a batch at the end. The streaming mode can be enabled by setting the annotation
 `numaflow.numaproj.io/map-stream` to `true` in the vertex spec.
@@ -68,13 +48,13 @@ spec:
 
 Check the links below to see the UDF examples in streaming mode for different languages.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/function/flatmap_stream)
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/flatmap_stream)
-- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/map/flatmapstream)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream/)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapstreamer/examples/flatmap_stream/)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream/)
 
 ### Available Environment Variables
 
-Some environment variables are available in the user defined function container, they might be useful in you own UDF implementation.
+Some environment variables are available in the user defined function container, they might be useful in your own UDF implementation.
 
 - `NUMAFLOW_NAMESPACE` - Namespace.
 - `NUMAFLOW_POD` - Pod name.

@@ -40,9 +40,9 @@ an API. Watermark API is supported in all our client SDKs.
 
 ```go
 // Go
-func handle(ctx context.Context, key string, data funcsdk.Datum) funcsdk.Messages {
-	_ = data.EventTime() // Event time
-	_ = data.Watermark() // Watermark
-	... ...
+func mapFn(context context.Context, keys []string, d mapper.Datum) mapper.Messages {
+    _ = d.EventTime() // Event time
+    _ = d.Watermark() // Watermark
+    ... ...
 }
 ```
