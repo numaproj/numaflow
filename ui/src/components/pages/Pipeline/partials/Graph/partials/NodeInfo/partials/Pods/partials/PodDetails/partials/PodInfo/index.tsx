@@ -22,6 +22,8 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
     pod?.containerSpecMap?.get(containerName)?.cpu;
   if (!usedCPU) {
     usedCPU = "?";
+  } else if (usedCPU.endsWith("n")) {
+    usedCPU = `${(parseFloat(usedCPU) / 1e6).toFixed(2)}m`;
   }
   if (!specCPU) {
     specCPU = "?";
@@ -37,6 +39,8 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
     pod?.containerSpecMap?.get(containerName)?.memory;
   if (!usedMem) {
     usedMem = "?";
+  } else if (usedMem.endsWith("Ki")) {
+    usedMem = `${(parseFloat(usedMem) / 1024).toFixed(2)}Mi`;
   }
   if (!specMem) {
     specMem = "?";
@@ -54,7 +58,7 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        color: "#DCDCDC"
+        color: "#DCDCDC",
       }}
     >
       <TableContainer sx={{ maxHeight: "37.5rem", backgroundColor: "#FFF" }}>
@@ -67,6 +71,10 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
             <TableRow>
               <TableCell sx={{ fontWeight: 600 }}>CPU %</TableCell>
               <TableCell>{cpuPercent}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>CPU</TableCell>
+              <TableCell>{`${usedCPU} / ${specCPU}`}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell sx={{ fontWeight: 600 }}>MEMORY %</TableCell>

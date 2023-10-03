@@ -281,6 +281,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
               component="span"
               sx={{
                 whiteSpace: "nowrap",
+                paddingTop: "0.5rem",
               }}
             >
               <Highlighter
@@ -307,6 +308,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
                 component="span"
                 sx={{
                   whiteSpace: "nowrap",
+                  paddingTop: "0.5rem",
                 }}
               >
                 <Highlighter
