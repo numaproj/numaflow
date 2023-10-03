@@ -153,20 +153,20 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 	// dryRun is used to check if the operation is just a validation or an actual create
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
-	var pipelineSpec *dfv1.Pipeline
-	err := c.ShouldBindJSON(pipelineSpec)
+	var pipelineSpec dfv1.Pipeline
+	err := c.ShouldBindJSON(&pipelineSpec)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
 		return
 	}
 
-	err = validateNamespace(h, pipelineSpec, ns)
+	err = validateNamespace(h, &pipelineSpec, ns)
 	if err != nil {
 		h.respondWithError(c, err.Error())
 		return
 	}
 	pipelineSpec.Namespace = ns
-	err = validatePipelineSpec(h, nil, pipelineSpec, ValidTypeCreate)
+	err = validatePipelineSpec(h, nil, &pipelineSpec, ValidTypeCreate)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", err.Error()))
 		return
@@ -177,7 +177,7 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.numaflowClient.Pipelines(ns).Create(context.Background(), pipelineSpec, metav1.CreateOptions{}); err != nil {
+	if _, err := h.numaflowClient.Pipelines(ns).Create(context.Background(), &pipelineSpec, metav1.CreateOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to create pipeline %q, %s", pipelineSpec.Name, err.Error()))
 		return
 	}
@@ -289,15 +289,15 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 		return
 	}
 
-	var updatedSpec *dfv1.Pipeline
-	err = c.ShouldBindJSON(updatedSpec)
+	var updatedSpec dfv1.Pipeline
+	err = c.ShouldBindJSON(&updatedSpec)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
 		return
 	}
 
 	// Validate the namespace of the request
-	err = validateNamespace(h, updatedSpec, ns)
+	err = validateNamespace(h, &updatedSpec, ns)
 	if err != nil {
 		h.respondWithError(c, err.Error())
 		return
@@ -311,7 +311,7 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 
 	oldSpec.Spec = updatedSpec.Spec
 	updatedSpec.Namespace = ns
-	isValid := validatePipelineSpec(h, oldSpec, updatedSpec, ValidTypeUpdate)
+	isValid := validatePipelineSpec(h, oldSpec, &updatedSpec, ValidTypeUpdate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update pipeline %q, %s", pipeline, isValid.Error()))
 		return
@@ -366,14 +366,14 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	// dryRun is used to check if the operation is just a validation or an actual update
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
-	var isbsvcSpec *dfv1.InterStepBufferService
-	err := c.ShouldBindJSON(isbsvcSpec)
+	var isbsvcSpec dfv1.InterStepBufferService
+	err := c.ShouldBindJSON(&isbsvcSpec)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
 		return
 	}
 
-	isValid := validateISBSVCSpec(h, nil, isbsvcSpec, ValidTypeCreate)
+	isValid := validateISBSVCSpec(h, nil, &isbsvcSpec, ValidTypeCreate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service spec, %s", isValid.Error()))
 		return
@@ -384,7 +384,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.numaflowClient.InterStepBufferServices(ns).Create(context.Background(), isbsvcSpec, metav1.CreateOptions{}); err != nil {
+	if _, err := h.numaflowClient.InterStepBufferServices(ns).Create(context.Background(), &isbsvcSpec, metav1.CreateOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service %q, %s", isbsvcSpec.Name, err.Error()))
 		return
 	}
@@ -432,14 +432,14 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	var updatedSpec *dfv1.InterStepBufferService
-	err = c.ShouldBindJSON(updatedSpec)
+	var updatedSpec dfv1.InterStepBufferService
+	err = c.ShouldBindJSON(&updatedSpec)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
 		return
 	}
 
-	err = validateISBSVCSpec(h, isbSVC, updatedSpec, ValidTypeUpdate)
+	err = validateISBSVCSpec(h, isbSVC, &updatedSpec, ValidTypeUpdate)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate interstepbuffer service spec, %s", err.Error()))
 		return
