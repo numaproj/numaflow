@@ -192,6 +192,20 @@ func (s *E2ESuite) Given() *Given {
 	}
 }
 
+func (s *E2ESuite) GetNumaflowServerPodName() string {
+	s.T().Log("Get numaflow server pod name")
+	podList, err := s.kubeClient.CoreV1().Pods(Namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, "numaflow-server") {
+			return pod.Name
+		}
+	}
+	return ""
+}
+
 func (s *E2ESuite) StartPortForward(podName string, port int) (stopPortForward func()) {
 
 	s.T().Log("Starting port-forward to pod :", podName, port)

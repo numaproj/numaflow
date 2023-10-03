@@ -37,45 +37,48 @@ type Validator interface {
 }
 
 // GetValidator returns a Validator instance
-func GetValidator(ctx context.Context, client kubernetes.Interface, ISBSVCClient v1alpha1.InterStepBufferServiceInterface, PipelineClient v1alpha1.PipelineInterface, kind metav1.GroupVersionKind, oldBytes []byte, newBytes []byte) (Validator, error) {
+func GetValidator(ctx context.Context, client kubernetes.Interface, NumaClient v1alpha1.NumaflowV1alpha1Interface, kind metav1.GroupVersionKind, oldBytes []byte, newBytes []byte) (Validator, error) {
 	log := logging.FromContext(ctx)
 	switch kind.Kind {
 	case dfv1.ISBGroupVersionKind.Kind:
-		var new *dfv1.InterStepBufferService
+		var newSpec *dfv1.InterStepBufferService
 		if len(newBytes) > 0 {
-			new = &dfv1.InterStepBufferService{}
-			if err := json.Unmarshal(newBytes, new); err != nil {
+			newSpec = &dfv1.InterStepBufferService{}
+			if err := json.Unmarshal(newBytes, newSpec); err != nil {
 				log.Errorf("Could not unmarshal new raw object: %v", err)
 				return nil, err
 			}
 		}
-		var old *dfv1.InterStepBufferService
+		var oldSpec *dfv1.InterStepBufferService
 		if len(oldBytes) > 0 {
-			old = &dfv1.InterStepBufferService{}
-			if err := json.Unmarshal(oldBytes, old); err != nil {
+			oldSpec = &dfv1.InterStepBufferService{}
+			if err := json.Unmarshal(oldBytes, oldSpec); err != nil {
 				log.Errorf("Could not unmarshal old raw object: %v", err)
 				return nil, err
 			}
 		}
-		return NewISBServiceValidator(client, ISBSVCClient, old, new), nil
+		isbSvcClient := NumaClient.InterStepBufferServices(newSpec.Namespace)
+		return NewISBServiceValidator(client, isbSvcClient, oldSpec, newSpec), nil
 	case dfv1.PipelineGroupVersionKind.Kind:
-		var new *dfv1.Pipeline
+		var newSpec *dfv1.Pipeline
 		if len(newBytes) > 0 {
-			new = &dfv1.Pipeline{}
-			if err := json.Unmarshal(newBytes, new); err != nil {
+			newSpec = &dfv1.Pipeline{}
+			if err := json.Unmarshal(newBytes, newSpec); err != nil {
 				log.Errorf("Could not unmarshal new raw object: %v", err)
 				return nil, err
 			}
 		}
-		var old *dfv1.Pipeline
+		var oldSpec *dfv1.Pipeline
 		if len(oldBytes) > 0 {
-			old = &dfv1.Pipeline{}
-			if err := json.Unmarshal(oldBytes, old); err != nil {
+			oldSpec = &dfv1.Pipeline{}
+			if err := json.Unmarshal(oldBytes, oldSpec); err != nil {
 				log.Errorf("Could not unmarshal old raw object: %v", err)
 				return nil, err
 			}
 		}
-		return NewPipelineValidator(client, PipelineClient, old, new), nil
+		isbSvcClient := NumaClient.InterStepBufferServices(newSpec.Namespace)
+		pipelineClient := NumaClient.Pipelines(newSpec.Namespace)
+		return NewPipelineValidator(client, pipelineClient, isbSvcClient, oldSpec, newSpec), nil
 	default:
 		return nil, fmt.Errorf("unrecognized kind: %v", kind)
 	}

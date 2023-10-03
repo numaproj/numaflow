@@ -47,7 +47,7 @@ kind export kubeconfig
   Build container image, and import it to `k3d`, `kind`, or `minikube` cluster if corresponding `KUBECONFIG` is sourced.
 
 - `make docs`
-  Convert the docs to Github pages, check if there's any error.
+  Convert the docs to GitHub pages, check if there's any error.
 
 - `make docs-serve`
   Start [an HTTP server](http://127.0.0.1:8000/) on your local to host the docs generated Github pages.

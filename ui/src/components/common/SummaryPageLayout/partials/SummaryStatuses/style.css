@@ -1,0 +1,32 @@
+.summary-statuses-title {
+  color: #393A3D;
+  font-size: 0.8125rem;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.summary-statuses-count {
+  color: #3C4348;
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.summary-statuses-active-logo {
+  width: 1.5rem;
+}
+
+.summary-statuses-active-text {
+  color: #3C4348;
+  font-size: 0.875rem;
+  font-style: normal;
+  font-weight: 400;
+  margin-top: 0.125rem;
+}
+
+.summary-statuses-link {
+  color: #393A3D;
+  font-size: 0.8125rem;
+  font-style: normal;
+  font-weight: 600;
+}

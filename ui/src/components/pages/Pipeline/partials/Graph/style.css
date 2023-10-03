@@ -2,20 +2,75 @@
     flex-grow: 1;
     position: relative;
     cursor: move;
-    height: 30rem;
-    border: 0.125rem solid whitesmoke;
+    height: 100%;
+    background: url("../../../../../images/graph-background.png") no-repeat;
+    background-size: cover;
 }
 
-.Graph .controls {
-    position: absolute;
-    right: 10px;
-    top: 10px;
-    z-index: 10;
-    font-size: 12px;
+.interaction {
+    display: flex;
+    flex-direction: row;
+    width: 21.375rem;
+    height: 2.5rem;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 0.25rem;
+    border: 1px solid var(--base-gray-gray-05, #D4D7DC);
+    background: var(--primitives-white, #FFF);
+    box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.00);
+    margin-bottom: 3rem;
+    margin-left: 3rem;
+    padding: 0 0.5rem;
 }
 
-.Graph .controls button:first-child {
-    margin-right: 10px;
+.legend {
+    display: flex;
+    flex-direction: column;
+    height: 12rem;
+    width: 5rem;
+    justify-content: space-between;
+    margin-bottom: 6rem;
+    margin-left: 4rem;
+}
+
+.legend-title {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    color: var(--badge-pending, #6B6C72);
+    font-family: AvenirNext forINTUIT, "IBM Plex Sans";
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: normal;
+    /*justify-content: space-between;*/
+}
+
+.legend-title > img {
+    width: 1.25rem;
+}
+
+.legend-text {
+    margin-top: 0.15rem;
+    margin-left: 0.75rem;
+}
+
+.zoom-percent-text {
+    fill: #000;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 1rem;
+    text-transform: uppercase;
+}
+
+.divider {
+    width: 0.0625rem;
+    height: 1.5rem;
+    background-color: var(--primitives-white, #D4D7DC);
+    box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.00);
 }
 
 .react-flow svg { overflow: visible; }
