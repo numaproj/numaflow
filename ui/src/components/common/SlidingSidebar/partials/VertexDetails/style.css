@@ -1,0 +1,34 @@
+.vertex-details-header-text {
+  font-size: 1.25rem;
+  font-style: normal;
+  font-weight: 500;
+  margin-left: 1rem;
+}
+
+.vertex-details-header-icon {
+  width: 2.25rem;
+}
+
+.vertex-details-tab-panel {
+  height: 100%;
+}
+
+.vertex-details-tab.MuiTab-root {
+  font-size: 14px !important;
+  font-style: normal !important;
+  font-weight: 600 !important;
+  color: #6B6C72 !important;
+  text-transform: none !important;
+}
+
+.vertex-details-tab-selected.MuiTab-root {
+  font-size: 14px !important;
+  font-style: normal !important;
+  font-weight: 600 !important;
+  color: #393A3D !important;
+  text-transform: none !important;
+}
+
+.vertex-details-tabs > .MuiTabs-scroller > .MuiTabs-indicator {
+  background-color: #037C8F !important;
+}

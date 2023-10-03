@@ -45,6 +45,47 @@ export default function NodeInfo(props: NodeInfoProps) {
     );
   }
 
+  if (node?.data?.type === "sideInput") {
+    // returning just spec in case of side input
+    return (
+      <Box>
+        <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+          <Tabs value={0}>
+            <Tab style={fontWeightStyle} label={`${node?.id} Generator`} />
+          </Tabs>
+        </Box>
+        <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+          <Tabs value={0}>
+            {node?.data?.nodeInfo && (
+              <Tab
+                style={fontWeightStyle}
+                data-testid="spec"
+                label="Spec"
+                {...a11yProps(1)}
+              />
+            )}
+          </Tabs>
+        </Box>
+
+        {node?.data?.nodeInfo && (
+          <TabPanel value={value} index={0}>
+            <ReactJson
+              name="spec"
+              enableClipboard={handleCopy}
+              theme="apathy:inverted"
+              src={node.data.nodeInfo}
+              style={{
+                width: "100%",
+                borderRadius: "4px",
+                fontFamily: "IBM Plex Sans",
+              }}
+            />
+          </TabPanel>
+        )}
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>

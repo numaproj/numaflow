@@ -92,6 +92,8 @@ message EdgeWatermark {
   required string edge = 2;
   repeated int64 watermarks = 3;
   required bool isWatermarkEnabled = 4;
+  required string from = 5;
+  required string to = 6;
 }
 
 message GetPipelineWatermarksResponse {
