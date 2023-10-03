@@ -119,7 +119,7 @@ var forwardAChunkProcessingTime = promauto.NewHistogramVec(prometheus.HistogramO
 	Subsystem: "forwarder",
 	Name:      "forward_chunk_processing_time",
 	Help:      "Processing times of the entire forward a chunk (100 microseconds to 20 minutes)",
-	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 60),
+	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
 // udfProcessingTime is a histogram to Observe UDF Processing times as a whole
@@ -127,7 +127,7 @@ var udfProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "forwarder",
 	Name:      "udf_processing_time",
 	Help:      "Processing times of UDF (100 microseconds to 15 minutes)",
-	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 60),
+	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 10),
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
 // concurrentUDFProcessingTime is a histogram to Observe UDF Processing times as a whole
@@ -135,7 +135,7 @@ var concurrentUDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramO
 	Subsystem: "forwarder",
 	Name:      "concurrent_udf_processing_time",
 	Help:      "Processing times of Concurrent UDF (100 microseconds to 20 minutes)",
-	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 60),
+	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
 // udfReadMessagesCount is used to indicate the number of messages read by UDF
