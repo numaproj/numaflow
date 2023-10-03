@@ -1,18 +1,32 @@
 //go:build test
 
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package http_e2e
 
 import (
 	"fmt"
 	"testing"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	. "github.com/numaproj/numaflow/test/fixtures"
 	"github.com/stretchr/testify/suite"
 )
 
 //go:generate kubectl apply -f testdata/http-auth-fake-secret.yaml -n numaflow-system
-
 type HTTPSuite struct {
 	E2ESuite
 }
@@ -21,72 +35,45 @@ func (s *HTTPSuite) TestHTTPSourcePipeline() {
 	w := s.Given().Pipeline("@testdata/http-source.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
+	pipelineName := "http-source"
 
-	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("out", LogSinkVertexStarted)
-
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
 
 	// Check Service
 	cmd := fmt.Sprintf("kubectl -n %s get svc -lnumaflow.numaproj.io/pipeline-name=%s,numaflow.numaproj.io/vertex-name=%s | grep -v CLUSTER-IP | grep -v headless", Namespace, "http-source", "in")
 	w.Exec("sh", []string{"-c", cmd}, OutputRegexp("http-source-in"))
 
-	HTTPExpect(s.T(), "https://localhost:8443").GET("/health").Expect().Status(204)
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("no-id")).
-		Expect().
-		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("no-id")).
-		Expect().
-		Status(204)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-id"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-id")))
 	// No x-numaflow-id, expect 2 outputs
-	w.Expect().VertexPodLogContains("out", "no-id", PodLogCheckOptionWithCount(2))
+	w.Expect().SinkContains("out", "no-id", WithContainCount(2))
 
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("x-numaflow-id", "101").WithBytes([]byte("with-id")).
-		Expect().
-		Status(204)
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("x-numaflow-id", "101").WithBytes([]byte("with-id")).
-		Expect().
-		Status(204)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("with-id")).WithHeader("x-numaflow-id", "101")).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("with-id")).WithHeader("x-numaflow-id", "101"))
 	// With same x-numaflow-id, expect 1 output
-	w.Expect().VertexPodLogContains("out", "with-id", PodLogCheckOptionWithCount(1))
+	w.Expect().SinkContains("out", "with-id", WithContainCount(1))
 
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("x-numaflow-id", "102").WithBytes([]byte("with-id")).
-		Expect().
-		Status(204)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("with-id")).WithHeader("x-numaflow-id", "102"))
 	// With a new x-numaflow-id, expect 2 outputs
-	w.Expect().VertexPodLogContains("out", "with-id", PodLogCheckOptionWithCount(2))
+	w.Expect().SinkContains("out", "with-id", WithContainCount(2))
 }
 
 func (s *HTTPSuite) TestHTTPSourceAuthPipeline() {
 	w := s.Given().Pipeline("@testdata/http-source-with-auth.yaml").
 		When().
 		CreatePipelineAndWait()
-
 	defer w.DeletePipelineAndWait()
+	pipelineName := "http-auth-source"
 
-	w.Expect().
-		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("out", LogSinkVertexStarted)
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
 
-	defer w.VertexPodPortForward("in", 8443, dfv1.VertexHTTPSPort).
-		TerminateAllPodPortForwards()
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithBytes([]byte("no-auth")).
-		Expect().
-		Status(403)
-
-	HTTPExpect(s.T(), "https://localhost:8443").POST("/vertices/in").WithHeader("Authorization", "Bearer faketoken").WithBytes([]byte("with-auth")).
-		Expect().
-		Status(204)
-
-	w.Expect().VertexPodLogContains("out", "with-auth")
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-auth"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("with-auth")).WithHeader("Authorization", "Bearer faketoken"))
+	w.Expect().SinkContains("out", "with-auth")
+	w.Expect().SinkNotContains("out", "no-auth")
 }
 
 func TestHTTPSuite(t *testing.T) {

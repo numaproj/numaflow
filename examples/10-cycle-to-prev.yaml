@@ -1,0 +1,45 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: cycle-to-prev
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: cat
+      udf:
+        builtin:
+          name: cat
+    - name: retry
+      scale:
+        min: 1
+        disabled: true # don't scale this beyond one Pod since it doesn't make sense for this particular container, which uses in-memory storage
+      udf:
+        container:
+          # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/retry
+          # (a more realistic example might retry only on failure)
+          image: quay.io/numaio/numaflow-go/map-retry:latest
+    - name: out
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: cat
+    - from: cat
+      to: retry
+    - from: retry
+      to: cat
+      conditions:
+        tags:
+          values:
+            - retry
+    - from: retry
+      to: out
+      conditions:
+        tags:
+          operator: not
+          values:
+            - retry

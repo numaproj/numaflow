@@ -1,0 +1,58 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: numaflow-server-role
+rules:
+  - apiGroups:
+      - numaflow.numaproj.io
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    resources:
+      - interstepbufferservices
+      - interstepbufferservices/finalizers
+      - interstepbufferservices/status
+      - pipelines
+      - pipelines/finalizers
+      - pipelines/status
+      - vertices
+      - vertices/finalizers
+      - vertices/status
+      - vertices/scale
+  - apiGroups:
+      - ""
+    resources:
+      - events
+      - pods
+      - pods/log
+      - pods/exec
+      - configmaps
+      - services
+      - persistentvolumeclaims
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - metrics.k8s.io
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch

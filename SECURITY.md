@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you find a security related bug in NumaFlow, we kindly ask you for responsible disclosure and for giving us appropriate time to react, analyze and develop a fix to mitigate the found security vulnerability.
+If you find a security related bug in Numaflow, we kindly ask you for responsible disclosure and for giving us appropriate time to react, analyze and develop a fix to mitigate the found security vulnerability.
 
 Please report vulnerabilities by e-mail to the following address:
 
@@ -18,4 +18,4 @@ Security vulnerabilities will be disclosed via [release notes](https://github.co
 
 ## Vulnerability Scanning
 
-See [static code analysis](docs/STATIC_CODE_ANALYSIS.md).
+See [static code analysis](docs/development/static-code-analysis.md).

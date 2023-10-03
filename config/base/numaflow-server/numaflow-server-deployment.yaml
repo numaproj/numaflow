@@ -18,12 +18,31 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737
+      volumes:
+      - name: env-volume
+        emptyDir: {}
+      initContainers:
+      - name: server-init
+        image: quay.io/numaproj/numaflow:latest
+        args:
+        - "server-init"
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /opt/numaflow
+          name: env-volume
       containers:
         - name: main
           image: quay.io/numaproj/numaflow:latest
           args:
           - "server"
           imagePullPolicy: Always
+          volumeMounts:
+          - mountPath: /ui/build/runtime-env.js
+            name: env-volume
+            subPath: runtime-env.js
+          - mountPath: /ui/build/index.html
+            name: env-volume
+            subPath: index.html
           env:
             - name: NAMESPACE
               valueFrom:
@@ -38,7 +57,7 @@ spec:
               memory: 200Mi
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /livez
               port: 8443
               scheme: HTTPS
             initialDelaySeconds: 3

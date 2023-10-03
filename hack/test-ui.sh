@@ -12,7 +12,7 @@ ensure_yarn
 
 test_ui() {
     yarn --cwd ui lint
-    CI=false yarn --cwd ui test
+    yarn --cwd ui test
 }
 
 test_ui

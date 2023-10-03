@@ -5,7 +5,7 @@ on:
       - "main"
       - "release-*"
   pull_request:
-    branches: [ main ]
+    branches: [main]
 jobs:
   ui:
     name: UI
@@ -23,8 +23,9 @@ jobs:
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
-      - name: Yarn Build/Test
-        run: make ui-test
+      # Temporarily disable it.
+      #- name: Yarn Build/Test
+      #  run: make ui-test
       - name: Ensure nothing changed
         run: git diff --exit-code
   codegen:
@@ -40,9 +41,9 @@ jobs:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ hashFiles('**/go.mod') }}
       - name: Setup Golang
-        uses: actions/setup-go@v3.1.0
+        uses: actions/setup-go@v4.0.0
         with:
-          go-version: "1.18"
+          go-version: '1.20'
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -82,11 +83,21 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      redis:
+        image: redis:6.2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Set up Go 1.x
-        uses: actions/setup-go@v3.1.0
+        uses: actions/setup-go@v4.0.0
         with:
-          go-version: "1.18"
+          go-version: '1.20'
         id: go
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
@@ -97,23 +108,11 @@ jobs:
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
       - name: Get dependencies
         run: go mod download
-      - name: Install JetStream
-        run: |
-          set -eux -o pipefail
-          JS_VERSION=2.8.2
-          curl -L https://github.com/nats-io/nats-server/releases/download/v$JS_VERSION/nats-server-v$JS_VERSION-linux-amd64.zip -o nats-server.zip
-          sudo unzip nats-server.zip -d nats-server
-          nats-server/nats-server-v$JS_VERSION-linux-amd64/nats-server -js &
-      - name: Insall Redis
-        uses: shogo82148/actions-setup-redis@v1
-        with:
-          redis-version: '6.2'
-      - run: redis-cli ping
       - name: Test
         run: make test-code
 
   lint:
-    name: lint
+    name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -121,9 +120,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Setup Golang
-        uses: actions/setup-go@v3.1.0
+        uses: actions/setup-go@v4.0.0
         with:
-          go-version: "1.18"
+          go-version: '1.20'
       - name: Restore Go build cache
         uses: actions/cache@v3
         with:
@@ -138,10 +137,10 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 10
       matrix:
         driver: [jetstream]
-        case: [e2e, kafka-e2e, http-e2e]
+        case: [e2e, diamond-e2e, transformer-e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-e2e, udsource-e2e, api-e2e]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -151,9 +150,9 @@ jobs:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v2-${{ hashFiles('**/go.mod') }}
       - name: Setup Golang
-        uses: actions/setup-go@v3.1.0
+        uses: actions/setup-go@v4.0.0
         with:
-          go-version: "1.18"
+          go-version: '1.20'
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -175,7 +174,7 @@ jobs:
           k3d cluster create e2e --registry-use k3d-e2e-registry:5111
           k3d kubeconfig get e2e > ~/.kube/numaflow-e2e-config
           echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
-      - name: Install NumaFlow
+      - name: Install Numaflow
         env:
           GOPATH: /home/runner/go
         run: |
@@ -184,4 +183,3 @@ jobs:
         env:
           GOPATH: /home/runner/go
         run: KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
-

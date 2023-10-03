@@ -1,12 +1,31 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package testutils
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
@@ -29,10 +48,11 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 		messages = append(messages,
 			isb.Message{
 				Header: isb.Header{
-					PaneInfo: isb.PaneInfo{
+					MessageInfo: isb.MessageInfo{
 						EventTime: tmpTime,
 					},
-					ID: fmt.Sprintf("%d", i),
+					ID:   fmt.Sprintf("%d-testVertex-0-0", i), // TODO: hard coded ID suffix ATM, make configurable if needed
+					Keys: []string{},
 				},
 				Body: isb.Body{Payload: result},
 			},
@@ -50,7 +70,24 @@ func BuildTestReadMessages(count int64, startTime time.Time) []isb.ReadMessage {
 	for idx, writeMessage := range writeMessages {
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
-			ReadOffset: isb.SimpleOffset(func() string { return fmt.Sprintf("read_%s", writeMessage.Header.ID) }),
+			ReadOffset: isb.NewSimpleStringPartitionOffset(fmt.Sprintf("read_%s", writeMessage.Header.ID), 0),
+		}
+	}
+
+	return readMessages
+}
+
+// BuildTestReadMessagesIntOffset builds test isb.ReadMessage which can be used for testing.
+func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.ReadMessage {
+	writeMessages := BuildTestWriteMessages(count, startTime)
+	var readMessages = make([]isb.ReadMessage, count)
+
+	for idx, writeMessage := range writeMessages {
+		splitStr := strings.Split(writeMessage.Header.ID, "-")
+		offset, _ := strconv.Atoi(splitStr[0])
+		readMessages[idx] = isb.ReadMessage{
+			Message:    writeMessage,
+			ReadOffset: isb.NewSimpleIntPartitionOffset(int64(offset), 0),
 		}
 	}
 

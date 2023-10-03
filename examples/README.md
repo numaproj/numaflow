@@ -1,10 +1,11 @@
-# NumaFlow by Example
+# Numaflow by Example
 
-Welcome to the NumaFlow Community! This document provides an example-by-example guide to using NumaFlow.
+Welcome to the Numaflow Community! This document provides an example-by-example guide to using Numaflow.
 
-If you haven't already, install NumaFlow by following the [QUICK START](../docs/QUICK_START.md) instructions.
+If you haven't already, install Numaflow by following the [QUICK START](../docs/quick-start.md) instructions.
 
-The top-level abstraction in NumaFlow is the `Pipeline`. A `Pipeline` consists of a set of `vertices` connected by `edges`. A vertex can be a `source`, `sink`, or `processing` vertex. In the example below, we have a source vertex named *in* that generates messages at a specified rate, a sink vertex named *out* that logs messages, and a processing vertex named *cat* that produces any input message as output. Lastly, there are two edges, one connecting the *in* to the *cat* vertex and another connecting the *cat* to the *out* vertex. The resulting pipeline simply copies internally generated messages to the log.
+The top-level abstraction in Numaflow is the `Pipeline`. A `Pipeline` consists of a set of `vertices` connected by `edges`. A vertex can be a `source`, `sink`, or `processing` vertex. In the example below, we have a source vertex named _in_ that generates messages at a specified rate, a sink vertex named _out_ that logs messages, and a processing vertex named _cat_ that produces any input message as output. Lastly, there are two edges, one connecting the _in_ to the _cat_ vertex and another connecting the _cat_ to the _out_ vertex. The resulting pipeline simply copies internally generated messages to the log.
+
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
@@ -21,12 +22,11 @@ spec:
           duration: 1s
     - name: cat
       udf: # A user defined function
-        builtin: # Use a builtin function as the udf
+        builtin: # Use a built-in function as the udf
           name: cat # cats the message
     - name: out
       sink:
-        # Output message to the log
-	# xxx which log? k8s events?
+        # Output message to the stdout log
         log: {}
 
   # in -> cat -> out
@@ -38,6 +38,7 @@ spec:
 ```
 
 Below we have a simple variation on the above example that takes input from an http endpoint.
+
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
@@ -49,19 +50,17 @@ spec:
       source:
         http:
           # Whether to create a ClusterIP Service, defaults to false
-	  # xxx Needd example of how to send data to the endpoint
           service: true
           # Optional bearer token auth
-	  # xxx This is a k8s secret? How is this token used?
-#         auth:
-#           # A secret selector pointing to the secret contains token
-#           token:
-#             name: my-secret
-#             key: my-key
+    #         auth:
+    #           # A secret selector pointing to the secret contains token
+    #           token:
+    #             name: my-secret
+    #             key: my-key
     - name: cat
       udf:
         builtin:
-          name: cat # A builtin UDF which simply cats the message
+          name: cat # A built-in UDF which simply cats the message
     - name: out
       sink:
         # A simple log printing sink
@@ -73,7 +72,8 @@ spec:
       to: out
 ```
 
-Let's modify the UDF in the first example to pass-through only messages with an *id* less than 100
+Let's modify the UDF in the first example to pass-through only messages with an _id_ less than 100
+
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
@@ -101,4 +101,3 @@ spec:
     - from: filter
       to: out
 ```
-

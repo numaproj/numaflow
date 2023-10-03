@@ -3,31 +3,47 @@ kind: Kustomization
 
 resources:
   - ../../config/cluster-install
-
+  - ../../config/extensions/webhook
 patches:
   - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent
-    target:
-      kind: Deployment
-      name: controller-manager
-  - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
           name: NUMAFLOW_IMAGE_PULL_POLICY
           value: IfNotPresent
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: NUMAFLOW_DEBUG
+          value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: NUMAFLOW_LEADER_ELECTION_DISABLED
+          value: "true"
     target:
       kind: Deployment
-      name: controller-manager
+      name: numaflow-controller
+  - patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+      - op: add
+        path: /spec/template/spec/initContainers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: numaflow-server
   - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent
     target:
       kind: Deployment
-      name: numaflow-server
+      name: numaflow-webhook
 namespace: numaflow-system
 
 commonLabels:

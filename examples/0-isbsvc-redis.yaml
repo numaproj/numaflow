@@ -5,4 +5,4 @@ metadata:
 spec:
   redis:
     native:
-      version: 6.2.6
+      version: 7.0.11

@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: numaflow-server-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: numaflow-server-role
+rules:
+- apiGroups:
+  - numaflow.numaproj.io
+  resources:
+  - interstepbufferservices
+  - interstepbufferservices/finalizers
+  - interstepbufferservices/status
+  - pipelines
+  - pipelines/finalizers
+  - pipelines/status
+  - vertices
+  - vertices/finalizers
+  - vertices/status
+  - vertices/scale
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  - pods
+  - pods/log
+  - pods/exec
+  - configmaps
+  - services
+  - persistentvolumeclaims
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metrics.k8s.io
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: numaflow-server-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: numaflow-server-role
+subjects:
+- kind: ServiceAccount
+  name: numaflow-server-sa
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: numaflow-server
+spec:
+  ports:
+  - port: 8443
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: numaflow-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: numaflow-ux
+      app.kubernetes.io/part-of: numaflow
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: numaflow-ux
+        app.kubernetes.io/part-of: numaflow
+    spec:
+      containers:
+      - args:
+        - server
+        - --namespaced
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        name: main
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1024Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        volumeMounts:
+        - mountPath: /ui/build/runtime-env.js
+          name: env-volume
+          subPath: runtime-env.js
+        - mountPath: /ui/build/index.html
+          name: env-volume
+          subPath: index.html
+      initContainers:
+      - args:
+        - server-init
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        name: server-init
+        volumeMounts:
+        - mountPath: /opt/numaflow
+          name: env-volume
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 9737
+      serviceAccountName: numaflow-server-sa
+      volumes:
+      - emptyDir: {}
+        name: env-volume

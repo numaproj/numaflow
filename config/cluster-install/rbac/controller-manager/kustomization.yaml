@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - numaflow-aggregate-to-admin.yaml
+  - numaflow-aggregate-to-edit.yaml
+  - numaflow-aggregate-to-view.yaml
+  - numaflow-cluster-role.yaml
+  - numaflow-binding.yaml

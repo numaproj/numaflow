@@ -1,0 +1,24 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: drop-on-full
+spec:
+  lifecycle:
+    # Such that pipeline can be deleted when we have unprocessed messages.
+    deleteGracePeriodSeconds: 1
+  limits:
+    # Using the following limits for generating a buffer full scenario.
+    bufferMaxLength: 1
+    bufferUsageLimit: 100
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: sink
+      partitions: 2
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: sink
+      onFull: discardLatest

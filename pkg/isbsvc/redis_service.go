@@ -1,43 +1,60 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package isbsvc
 
 import (
 	"context"
 	"fmt"
 
+	"go.uber.org/multierr"
 	"go.uber.org/zap"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb/redis"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	redis2 "github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type isbsRedisSvc struct {
-	client *clients.RedisClient
+	client *redisclient.RedisClient
 }
 
 // NewISBRedisSvc is used to return a new object of type isbsRedisSvc
-func NewISBRedisSvc(client *clients.RedisClient) ISBService {
+func NewISBRedisSvc(client *redisclient.RedisClient) ISBService {
 	return &isbsRedisSvc{client: client}
 }
 
-// CreateBuffers is used to create the inter-step redis buffers.
-func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer, opts ...BufferCreateOption) error {
+// CreateBuffersAndBuckets  is used to create the inter-step redis buffers.
+func (r *isbsRedisSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, opts ...CreateOption) error {
+	if len(buffers) == 0 && len(buckets) == 0 {
+		return nil
+	}
 	log := logging.FromContext(ctx)
 	failToCreate := false
 	for _, s := range buffers {
-		if s.Type != dfv1.EdgeBuffer {
-			continue
-		}
-		stream := s.Name
-		group := fmt.Sprintf("%s-group", stream)
-		err := r.client.CreateStreamGroup(ctx, stream, group, clients.ReadFromEarliest)
+		stream := redisclient.GetRedisStreamName(s)
+		group := fmt.Sprintf("%s-group", s)
+		err := r.client.CreateStreamGroup(ctx, stream, group, redisclient.ReadFromEarliest)
 		if err != nil {
-			if clients.IsAlreadyExistError(err) {
+			if redisclient.IsAlreadyExistError(err) {
 				log.Warnw("Stream already exists.", zap.String("group", group), zap.String("stream", stream))
 			} else {
 				failToCreate = true
-				log.Errorw("Failed to Redis Stream and Group creation.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
+				log.Errorw("Failed to create Redis Stream and Group.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
 			}
 		} else {
 			log.Infow("Redis StreamGroup created", zap.String("group", group), zap.String("stream", stream))
@@ -49,56 +66,54 @@ func (r *isbsRedisSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer,
 	return nil
 }
 
-// DeleteBuffers is used to delete the inter-step redis buffers.
-func (r *isbsRedisSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
+// DeleteBuffersAndBuckets is used to delete the inter-step redis buffers.
+func (r *isbsRedisSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
+	if len(buffers) == 0 && len(buckets) == 0 {
+		return nil
+	}
+	// FIXME: delete the keys created by the lua script
 	log := logging.FromContext(ctx)
-	failToDelete := false
-	streamNames := []string{}
+	var errList error
 	for _, s := range buffers {
-		if s.Type != dfv1.EdgeBuffer {
-			continue
-		}
-		stream := s.Name
-		streamNames = append(streamNames, stream)
-		group := fmt.Sprintf("%s-group", stream)
+		stream := redisclient.GetRedisStreamName(s)
+		group := fmt.Sprintf("%s-group", s)
 		if err := r.client.DeleteStreamGroup(ctx, stream, group); err != nil {
-			if clients.NotFoundError(err) {
-				log.Warnw("Redis Streams group is not found.", zap.String("group", group), zap.String("stream", stream))
+			if redisclient.NotFoundError(err) {
+				log.Warnw("Redis StreamGroup is not found.", zap.String("group", group), zap.String("stream", stream))
 			} else {
-				failToDelete = true
-				log.Errorw("Failed Redis StreamGroup deletion.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
+				errList = multierr.Append(errList, err)
+				log.Errorw("Failed to delete Redis StreamGroup.", zap.String("group", group), zap.String("stream", stream), zap.Error(err))
 			}
 		} else {
 			log.Infow("Redis StreamGroup deleted", zap.String("group", group), zap.String("stream", stream))
 		}
-	}
-	if !failToDelete {
-		log.Infow("Deleted Redis Streams groups successfully")
-	}
 
-	err := r.client.DeleteKeys(ctx, streamNames...)
-	if err != nil {
-		return err
+		if err := r.client.DeleteKeys(ctx, stream); err != nil {
+			errList = multierr.Append(errList, err)
+			log.Errorw("Failed to delete Redis keys.", zap.String("stream", stream), zap.Error(err))
+		} else {
+			log.Infow("Redis keys deleted", zap.String("stream", stream))
+		}
 	}
-	log.Infow("Deleted Redis Streams successfully")
-
-	if failToDelete {
-		return fmt.Errorf("failed all or some Stream group deletion")
+	if errList != nil {
+		return fmt.Errorf("failed to delete all or some Redis StreamGroups and keys")
 	}
+	log.Infow("Deleted Redis StreamGroups and keys successfully")
 	return nil
 }
 
-// ValidateBuffers is used to validate inter-step redis buffers to see if the stream/stream group exist
-func (r *isbsRedisSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
-	for _, stream := range buffers {
-		if stream.Type != dfv1.EdgeBuffer {
-			continue
+// ValidateBuffersAndBuckets is used to validate inter-step redis buffers to see if the stream/stream group exist
+func (r *isbsRedisSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
+	if len(buffers) == 0 && len(buckets) == 0 {
+		return nil
+	}
+	for _, s := range buffers {
+		var stream = redisclient.GetRedisStreamName(s)
+		if !r.client.IsStreamExists(ctx, stream) {
+			return fmt.Errorf("s %s not existing", stream)
 		}
-		if !r.client.IsStreamExists(ctx, stream.Name) {
-			return fmt.Errorf("stream %s not existing", stream.Name)
-		}
-		group := fmt.Sprintf("%s-group", stream.Name)
-		if !r.client.IsStreamGroupExists(ctx, stream.Name, group) {
+		group := fmt.Sprintf("%s-group", s)
+		if !r.client.IsStreamGroupExists(ctx, stream, group) {
 			return fmt.Errorf("group %s not existing", group)
 		}
 	}
@@ -106,20 +121,33 @@ func (r *isbsRedisSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffe
 }
 
 // GetBufferInfo is used to provide buffer information like pending count, buffer length, has unprocessed data etc.
-func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*BufferInfo, error) {
-	if buffer.Type != dfv1.EdgeBuffer {
-		return nil, fmt.Errorf("buffer infomation inquiry is not supported for type %q", buffer.Type)
-	}
-	group := fmt.Sprintf("%s-group", buffer.Name)
-	rqw := redis.NewBufferWrite(ctx, clients.NewInClusterRedisClient(), buffer.Name, group, redis.WithRefreshBufferWriteInfo(false))
-	var bufferWrite = rqw.(*redis.BufferWrite)
+func (r *isbsRedisSvc) GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error) {
+	group := fmt.Sprintf("%s-group", buffer)
+	rqw := redis2.NewBufferWrite(ctx, redisclient.NewInClusterRedisClient(), buffer, group, 0, redisclient.WithRefreshBufferWriteInfo(false))
+	var bufferWrite = rqw.(*redis2.BufferWrite)
 
 	bufferInfo := &BufferInfo{
-		Name:            buffer.Name,
+		Name:            buffer,
 		PendingCount:    bufferWrite.GetPendingCount(),
 		AckPendingCount: 0,                             // TODO: this should not be 0
 		TotalMessages:   bufferWrite.GetPendingCount(), // TODO: what should this be?
 	}
 
 	return bufferInfo, nil
+}
+
+// CreateWatermarkStores is used to create the watermark stores.
+func (r *isbsRedisSvc) CreateWatermarkStores(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]store.WatermarkStore, error) {
+	// Watermark fetching is not supported for Redis ATM. Creating noop watermark fetcher.
+	var wmStores []store.WatermarkStore
+	partitions := 1
+	if isReduce {
+		partitions = fromBufferPartitionCount
+	}
+	for i := 0; i < partitions; i++ {
+		wmStore, _ := store.BuildNoOpWatermarkStore()
+		wmStores = append(wmStores, wmStore)
+	}
+
+	return wmStores, nil
 }

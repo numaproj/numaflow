@@ -1,0 +1,63 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-pipeline-watermark
+spec:
+  watermark:
+    disabled: false
+  vertices:
+    - name: input
+      source:
+        # A self data generating source
+        generator:
+          rpu: 1
+          duration: 1s
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+    - name: cat1
+      partitions: 2
+      udf:
+        builtin:
+          name: cat # A builtin UDF which simply cats the message
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+    - name: cat2
+      udf:
+        builtin:
+          name: cat # A builtin UDF which simply cats the message
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+    - name: cat3
+      partitions: 3
+      udf:
+        builtin:
+          name: cat # A builtin UDF which simply cats the message
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+    - name: output1
+      sink:
+        # A simple log printing sink
+        log: {}
+    - name: output2
+      sink:
+        # A simple log printing sink
+        log: {}
+  edges:
+    - from: input
+      to: cat1
+    - from: input
+      to: cat2
+    - from: cat1
+      to: output1
+    - from: cat2
+      to: cat3
+    - from: cat3
+      to: output2

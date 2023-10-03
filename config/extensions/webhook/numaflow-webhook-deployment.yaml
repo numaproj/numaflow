@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: numaflow-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: numaflow
+      app.kubernetes.io/component: numaflow-webhook
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: numaflow
+        app.kubernetes.io/component: numaflow-webhook
+    spec:
+      containers:
+      - name: webhook
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        args:
+        - webhook-service
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: PORT
+          value: "443"              
+        - name: DEPLOYMENT_NAME
+          value: numaflow-webhook
+        - name: SERVICE_NAME
+          value: numaflow-webhook
+        - name: CLUSTER_ROLE_NAME
+          value: numaflow-webhook
+      serviceAccountName: numaflow-webhook-sa

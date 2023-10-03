@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package isbsvc
 
 import (
@@ -5,18 +21,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type jetStreamSvc struct {
 	pipelineName string
-	js           nats.JetStreamContext
+
+	jsClient *jsclient.NATSClient
+	js       nats.JetStreamContext
 }
 
 func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBService, error) {
@@ -31,207 +51,247 @@ func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBServic
 
 type JSServiceOption func(*jetStreamSvc) error
 
-func WithNatsConnection(conn *nats.Conn) JSServiceOption {
+func WithJetStreamClient(jsClient *jsclient.NATSClient) JSServiceOption {
 	return func(j *jetStreamSvc) error {
-		js, err := conn.JetStream()
-		if err != nil {
-			return err
-		}
-		j.js = js
+		j.jsClient = jsClient
 		return nil
 	}
 }
 
-func (jss *jetStreamSvc) CreateBuffers(ctx context.Context, buffers []dfv1.Buffer, opts ...BufferCreateOption) error {
+func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, opts ...CreateOption) error {
+	if len(buffers) == 0 && len(buckets) == 0 {
+		return nil
+	}
 	log := logging.FromContext(ctx)
-	bufferCreatOpts := &bufferCreateOptions{}
+	creatOpts := &createOptions{}
 	for _, opt := range opts {
-		if err := opt(bufferCreatOpts); err != nil {
+		if err := opt(creatOpts); err != nil {
 			return err
 		}
 	}
 	v := viper.New()
 	v.SetConfigType("yaml")
-	if err := v.ReadConfig(bytes.NewBufferString(bufferCreatOpts.bufferConfig)); err != nil {
+	if err := v.ReadConfig(bytes.NewBufferString(creatOpts.config)); err != nil {
 		return err
 	}
 
-	nc, err := clients.NewInClusterJetStreamClient().Connect(ctx)
+	nc, err := jsclient.NewNATSClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 	}
 	defer nc.Close()
-	js, err := nc.JetStream()
+	js, err := nc.JetStreamContext()
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
-	for _, buffer := range buffers {
-		// Create streams for edge buffer
-		if buffer.Type == dfv1.EdgeBuffer {
-			streamName := JetStreamName(jss.pipelineName, buffer.Name)
-			_, err := js.StreamInfo(streamName)
-			if err != nil {
-				if !errors.Is(err, nats.ErrStreamNotFound) {
-					return fmt.Errorf("failed to query information of stream %q during buffer creating, %w", streamName, err)
-				}
-				if _, err := js.AddStream(&nats.StreamConfig{
-					Name:       streamName,
-					Subjects:   []string{streamName}, // Use the stream name as the only subject
-					Retention:  nats.RetentionPolicy(v.GetInt("stream.retention")),
-					Discard:    nats.DiscardOld,
-					MaxMsgs:    v.GetInt64("stream.maxMsgs"),
-					MaxAge:     v.GetDuration("stream.maxAge"),
-					MaxBytes:   v.GetInt64("stream.maxBytes"),
-					Storage:    nats.FileStorage,
-					Replicas:   v.GetInt("stream.replicas"),
-					Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period
-				}); err != nil {
-					return fmt.Errorf("failed to create stream %q and buffers, %w", streamName, err)
-				}
-				log.Infow("Succeeded to create a stream and buffers", zap.String("stream", streamName), zap.Strings("buffers", []string{streamName}))
-				if _, err := js.AddConsumer(streamName, &nats.ConsumerConfig{
-					Durable:       streamName,
-					DeliverPolicy: nats.DeliverAllPolicy,
-					AckPolicy:     nats.AckExplicitPolicy,
-					AckWait:       v.GetDuration("consumer.ackWait"),
-					MaxAckPending: v.GetInt("consumer.maxAckPending"),
-					FilterSubject: streamName,
-				}); err != nil {
-					return fmt.Errorf("failed to create a consumer for stream %q, %w", streamName, err)
-				}
-				log.Infow("Succeeded to create a consumer for a stream", zap.String("stream", streamName), zap.String("consumer", streamName))
-			}
-		}
-		// Create offset-timeline bucket
-		otBucket := JetStreamOTBucket(jss.pipelineName, buffer.Name)
-		if _, err := js.KeyValue(otBucket); err != nil {
+	if sideInputsStore != "" {
+		kvName := JetStreamSideInputsStoreKVName(sideInputsStore)
+		if _, err := js.KeyValue(kvName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otBucket, err)
+				return fmt.Errorf("failed to query information of KV %q, %w", kvName, err)
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
-				Bucket:       otBucket,
-				Description:  fmt.Sprintf("Offset timeline bucket of buffer [%s]", buffer.Name),
+				Bucket:       kvName,
+				MaxValueSize: 0,
+				History:      1,                   // No history
+				TTL:          time.Hour * 24 * 30, // 30 days
+				MaxBytes:     0,
+				Storage:      nats.FileStorage,
+				Replicas:     3,
+			}); err != nil {
+				return fmt.Errorf("failed to create side inputs KV %q, %w", kvName, err)
+			}
+			log.Infow("Succeeded to create a side inputs KV", zap.String("kvName", kvName))
+		}
+	}
+	for _, buffer := range buffers {
+		streamName := JetStreamName(buffer)
+		_, err := js.StreamInfo(streamName)
+		if err != nil {
+			if !errors.Is(err, nats.ErrStreamNotFound) {
+				return fmt.Errorf("failed to query information of stream %q during buffer creating, %w", streamName, err)
+			}
+			if _, err := js.AddStream(&nats.StreamConfig{
+				Name:       streamName,
+				Subjects:   []string{streamName}, // Use the stream name as the only subject
+				Retention:  nats.RetentionPolicy(v.GetInt("stream.retention")),
+				Discard:    nats.DiscardOld,
+				MaxMsgs:    v.GetInt64("stream.maxMsgs"),
+				MaxAge:     v.GetDuration("stream.maxAge"),
+				MaxBytes:   v.GetInt64("stream.maxBytes"),
+				Storage:    nats.StorageType(v.GetInt("stream.storage")),
+				Replicas:   v.GetInt("stream.replicas"),
+				Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period
+			}); err != nil {
+				return fmt.Errorf("failed to create stream %q and buffers, %w", streamName, err)
+			}
+			log.Infow("Succeeded to create a stream", zap.String("stream", streamName))
+			if _, err := js.AddConsumer(streamName, &nats.ConsumerConfig{
+				Durable:       streamName,
+				DeliverPolicy: nats.DeliverAllPolicy,
+				AckPolicy:     nats.AckExplicitPolicy,
+				AckWait:       v.GetDuration("consumer.ackWait"),
+				MaxAckPending: v.GetInt("consumer.maxAckPending"),
+				FilterSubject: streamName,
+			}); err != nil {
+				return fmt.Errorf("failed to create a consumer for stream %q, %w", streamName, err)
+			}
+			log.Infow("Succeeded to create a consumer for a stream", zap.String("stream", streamName), zap.String("consumer", streamName))
+		}
+		// TODO: remove sleep and use a better way to wait for the stream to be ready
+		time.Sleep(3 * time.Second)
+	}
+
+	for _, bucket := range buckets {
+		// Create offset-timeline KV
+		otKVName := wmstore.JetStreamOTKVName(bucket)
+		if _, err := js.KeyValue(otKVName); err != nil {
+			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otKVName, err)
+			}
+			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
+				Bucket:       otKVName,
 				MaxValueSize: v.GetInt32("otBucket.maxValueSize"),
 				History:      uint8(v.GetUint("otBucket.history")),
 				TTL:          v.GetDuration("otBucket.ttl"),
 				MaxBytes:     v.GetInt64("otBucket.maxBytes"),
-				Storage:      nats.FileStorage,
+				Storage:      nats.StorageType(v.GetInt("otBucket.storage")),
 				Replicas:     v.GetInt("otBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {
-				return fmt.Errorf("failed to create offset timeline bucket %q, %w", otBucket, err)
+				return fmt.Errorf("failed to create offset timeline KV %q, %w", otKVName, err)
 			}
 		}
-		// Create processor bucket
-		procBucket := JetStreamProcessorBucket(jss.pipelineName, buffer.Name)
-		if _, err := js.KeyValue(procBucket); err != nil {
+		// Create processor KV
+		procKVName := wmstore.JetStreamProcessorKVName(bucket)
+		if _, err := js.KeyValue(procKVName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procBucket, err)
+				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procKVName, err)
 			}
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
-				Bucket:       procBucket,
-				Description:  fmt.Sprintf("Processor bucket of buffer [%s]", buffer.Name),
+				Bucket:       procKVName,
 				MaxValueSize: v.GetInt32("procBucket.maxValueSize"),
 				History:      uint8(v.GetUint("procBucket.history")),
 				TTL:          v.GetDuration("procBucket.ttl"),
 				MaxBytes:     v.GetInt64("procBucket.maxBytes"),
-				Storage:      nats.FileStorage,
+				Storage:      nats.StorageType(v.GetInt("procBucket.storage")),
 				Replicas:     v.GetInt("procBucket.replicas"),
 				Placement:    nil,
 			}); err != nil {
-				return fmt.Errorf("failed to create processor bucket %q, %w", otBucket, err)
+				return fmt.Errorf("failed to create processor KV %q, %w", procKVName, err)
 			}
 		}
 	}
 	return nil
 }
 
-func (jss *jetStreamSvc) DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
+func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
+	if len(buffers) == 0 && len(buckets) == 0 {
+		return nil
+	}
 	log := logging.FromContext(ctx)
-	nc, err := clients.NewInClusterJetStreamClient().Connect(ctx)
+	nc, err := jsclient.NewNATSClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 	}
 	defer nc.Close()
-	js, err := nc.JetStream()
+	js, err := nc.JetStreamContext()
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
 	for _, buffer := range buffers {
-		if buffer.Type == dfv1.EdgeBuffer {
-			streamName := JetStreamName(jss.pipelineName, buffer.Name)
-			if err := js.DeleteStream(streamName); err != nil && !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to delete stream %q, %w", streamName, err)
-			}
-			log.Infow("Succeeded to delete a stream", zap.String("stream", streamName))
+		streamName := JetStreamName(buffer)
+		if err := js.DeleteStream(streamName); err != nil && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete stream %q, %w", streamName, err)
 		}
-		otBucket := JetStreamOTBucket(jss.pipelineName, buffer.Name)
-		if err := js.DeleteKeyValue(otBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-			return fmt.Errorf("failed to delete offset timeline bucket %q, %w", otBucket, err)
+		log.Infow("Succeeded to delete a stream", zap.String("stream", streamName))
+	}
+	for _, bucket := range buckets {
+		otKVName := wmstore.JetStreamOTKVName(bucket)
+		if err := js.DeleteKeyValue(otKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete offset timeline KV %q, %w", otKVName, err)
 		}
-		log.Infow("Succeeded to delete an offset timeline bucket", zap.String("bucket", otBucket))
-		procBucket := JetStreamProcessorBucket(jss.pipelineName, buffer.Name)
-		if err := js.DeleteKeyValue(procBucket); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-			return fmt.Errorf("failed to delete processor bucket %q, %w", procBucket, err)
+		log.Infow("Succeeded to delete an offset timeline KV", zap.String("kvName", otKVName))
+		procKVName := wmstore.JetStreamProcessorKVName(bucket)
+		if err := js.DeleteKeyValue(procKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete processor KV %q, %w", procKVName, err)
 		}
-		log.Infow("Succeeded to delete a processor bucket", zap.String("bucket", procBucket))
+		log.Infow("Succeeded to delete a processor KV", zap.String("kvName", procKVName))
+	}
+
+	if sideInputsStore != "" {
+		sideInputsKVName := JetStreamSideInputsStoreKVName(sideInputsStore)
+		if err := js.DeleteKeyValue(sideInputsKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete side inputs KV %q, %w", sideInputsKVName, err)
+		}
+		log.Infow("Succeeded to delete a side inputs KV", zap.String("kvName", sideInputsKVName))
 	}
 	return nil
 }
 
-func (jss *jetStreamSvc) ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error {
-	log := logging.FromContext(ctx)
-	nc, err := clients.NewInClusterJetStreamClient().Connect(ctx)
+func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
+	if len(buffers) == 0 && len(buckets) == 0 {
+		return nil
+	}
+	nc, err := jsclient.NewNATSClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 	}
 	defer nc.Close()
-	js, err := nc.JetStream()
+	js, err := nc.JetStreamContext()
 	if err != nil {
 		return fmt.Errorf("failed to get a js context from nats connection, %w", err)
 	}
 	for _, buffer := range buffers {
-		if buffer.Type == dfv1.EdgeBuffer {
-			streamName := JetStreamName(jss.pipelineName, buffer.Name)
-			if _, err := js.StreamInfo(streamName); err != nil {
-				return fmt.Errorf("failed to query information of stream %q, %w", streamName, err)
-			}
+		streamName := JetStreamName(buffer)
+		if _, err := js.StreamInfo(streamName); err != nil {
+			return fmt.Errorf("failed to query information of stream %q, %w", streamName, err)
+		}
+	}
+	for _, bucket := range buckets {
+		otKVName := wmstore.JetStreamOTKVName(bucket)
+		if _, err := js.KeyValue(otKVName); err != nil {
+			return fmt.Errorf("failed to query OT KV %q, %w", otKVName, err)
 		}
 
-		otBucket := JetStreamOTBucket(jss.pipelineName, buffer.Name)
-		if _, err := js.KeyValue(otBucket); err != nil {
-			// TODO: throw an error
-			log.Warnw("Failed to query bucket", zap.String("bucket", otBucket), zap.Error(err))
+		procKVName := wmstore.JetStreamProcessorKVName(bucket)
+		if _, err := js.KeyValue(procKVName); err != nil {
+			return fmt.Errorf("failed to query processor KV %q, %w", procKVName, err)
 		}
-
-		procBucket := JetStreamProcessorBucket(jss.pipelineName, buffer.Name)
-		if _, err := js.KeyValue(procBucket); err != nil {
-			// TODO: throw an error
-			log.Warnw("Failed to query bucket", zap.String("bucket", procBucket), zap.Error(err))
+	}
+	if sideInputsStore != "" {
+		sideInputsKVName := JetStreamSideInputsStoreKVName(sideInputsStore)
+		if _, err := js.KeyValue(sideInputsKVName); err != nil {
+			return fmt.Errorf("failed to query side inputs store KV %q, %w", sideInputsKVName, err)
 		}
 	}
 	return nil
 }
 
-func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*BufferInfo, error) {
-	if buffer.Type != dfv1.EdgeBuffer {
-		return nil, fmt.Errorf("buffer infomation inquiry is not supported for type %q", buffer.Type)
-	}
+func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error) {
 	var js nats.JetStreamContext
-	if jss.js != nil {
+	var err error
+	if jss.js != nil { // Daemon server use case
 		js = jss.js
-	} else {
-		nc, err := clients.NewInClusterJetStreamClient().Connect(ctx)
+	} else if jss.jsClient != nil { // Daemon server first time access use case
+		js, err = jss.jsClient.JetStreamContext()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get a JetStream context from nats connection, %w", err)
+		}
+		jss.js = js
+	} else { // Short running use case
+		nc, err := jsclient.NewNATSClient(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 		}
 		defer nc.Close()
-		js, err = nc.JetStream()
+		js, err = nc.JetStreamContext()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get a JetStream context from nats connection, %w", err)
 		}
+		jss.js = js
 	}
-	streamName := JetStreamName(jss.pipelineName, buffer.Name)
+	streamName := JetStreamName(buffer)
 	stream, err := js.StreamInfo(streamName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of stream %q", streamName)
@@ -245,7 +305,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) 
 		totalMessages = int64(consumer.NumPending) + int64(consumer.NumAckPending)
 	}
 	bufferInfo := &BufferInfo{
-		Name:            buffer.Name,
+		Name:            buffer,
 		PendingCount:    int64(consumer.NumPending),
 		AckPendingCount: int64(consumer.NumAckPending),
 		TotalMessages:   totalMessages,
@@ -253,14 +313,30 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) 
 	return bufferInfo, nil
 }
 
-func JetStreamName(pipelineName, bufferName string) string {
-	return fmt.Sprintf("%s-%s", pipelineName, bufferName)
+// CreateWatermarkStores is used to create watermark stores.
+func (jss *jetStreamSvc) CreateWatermarkStores(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]wmstore.WatermarkStore, error) {
+	log := logging.FromContext(ctx).With("bucket", bucketName)
+	ctx = logging.WithLogger(ctx, log)
+	var wmStores []wmstore.WatermarkStore
+	partitions := 1
+	if isReduce {
+		partitions = fromBufferPartitionCount
+	}
+	// if it's not a reduce vertex, we only need one store to store the watermark
+	for i := 0; i < partitions; i++ {
+		wmStore, err := wmstore.BuildJetStreamWatermarkStore(ctx, bucketName, jss.jsClient)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create new JetStream watermark store, %w", err)
+		}
+		wmStores = append(wmStores, wmStore)
+	}
+	return wmStores, nil
 }
 
-func JetStreamOTBucket(pipelineName, bufferName string) string {
-	return fmt.Sprintf("%s-%s_OT", pipelineName, bufferName)
+func JetStreamName(bufferName string) string {
+	return bufferName
 }
 
-func JetStreamProcessorBucket(pipelineName, bufferName string) string {
-	return fmt.Sprintf("%s-%s_PROCESSORS", pipelineName, bufferName)
+func JetStreamSideInputsStoreKVName(sideInputStoreName string) string {
+	return fmt.Sprintf("%s_SIDE_INPUTS", sideInputStoreName)
 }

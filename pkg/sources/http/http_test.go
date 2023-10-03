@@ -1,14 +1,46 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package http
 
 import (
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/simplebuffer"
 	"github.com/stretchr/testify/assert"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
+
+type myForwardToAllTest struct {
+}
+
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
+	return []forward.VertexBuffer{{
+		ToVertexName:         "test",
+		ToVertexPartitionIdx: 0,
+	}}, nil
+}
 
 func TestWithBufferSize(t *testing.T) {
 	h := &httpSource{
@@ -39,8 +71,21 @@ func Test_NewHTTP(t *testing.T) {
 			},
 		},
 	}
-	dest := []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("test", 100)}
-	h, err := New(v, dest)
+	vi := &dfv1.VertexInstance{
+		Vertex:   v,
+		Hostname: "test-host",
+		Replica:  0,
+	}
+	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
+	toBuffers := map[string][]isb.BufferWriter{
+		"test": {dest},
+	}
+	publishWMStores, _ := store.BuildNoOpWatermarkStore()
+	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
+	toVertexWmStores := map[string]store.WatermarkStore{
+		"test": publishWMStores,
+	}
+	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, wmb.NewIdleManager(len(toBuffers)))
 	assert.NoError(t, err)
 	assert.False(t, h.ready)
 	assert.Equal(t, v.Spec.Name, h.GetName())

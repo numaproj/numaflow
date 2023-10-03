@@ -3,6 +3,7 @@ body,
 #root,
 .MuiScopedCssBaseline-root {
   height: 100%;
+  font-family: Avenir !important;
 }
 
 .App-side-nav-link {
@@ -12,4 +13,31 @@ body,
 
 .react-flow__attribution {
   display: none !important;
+}
+
+.logo {
+  width: 2.6875rem;
+}
+
+.text-logo {
+  margin-left: 0.81rem;
+  width: 9.125rem;
+}
+
+.app-container {
+  height: 100%;
+}
+
+.MuiAppBar-root {
+  height: 3.75rem;
+  background: linear-gradient(90deg, #00254A 2.77%, #3492EF 105.54%) !important;
+}
+
+.MuiToolbar-root {
+  padding-left: 1.25rem !important;
+  min-height: 3.75rem !important;
+}
+
+.MuiBackdrop-root {
+  opacity: 0 !important;
 }

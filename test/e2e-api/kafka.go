@@ -1,14 +1,30 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 )
 
 func init() {
@@ -19,15 +35,13 @@ func init() {
 		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer admin.Close()
 		if err = admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: 1, ReplicationFactor: 1}, true); err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(201)
@@ -38,14 +52,12 @@ func init() {
 		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer admin.Close()
 		if err = admin.DeleteTopic(topic); err != nil {
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(201)
@@ -54,16 +66,14 @@ func init() {
 		consumer, err := sarama.NewConsumer(brokers, sarama.NewConfig())
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer consumer.Close()
 		topics, err := consumer.Topics()
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(200)
@@ -75,22 +85,19 @@ func init() {
 		count, err := strconv.Atoi(r.URL.Query().Get("count"))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		consumer, err := sarama.NewConsumer(brokers, sarama.NewConfig())
 		if err != nil {
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer consumer.Close()
 		pConsumer, err := consumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		msgCount := 0
@@ -110,11 +117,10 @@ func init() {
 	http.HandleFunc("/kafka/produce-topic", func(w http.ResponseWriter, r *http.Request) {
 		topic := r.URL.Query().Get("topic")
 		key := r.URL.Query().Get("key")
-		buf, err := ioutil.ReadAll(r.Body)
+		buf, err := io.ReadAll(r.Body)
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -124,8 +130,7 @@ func init() {
 		syncProducer, err := sarama.NewSyncProducer(brokers, config)
 
 		if err != nil {
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer syncProducer.Close()
@@ -145,8 +150,7 @@ func init() {
 		duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
 		if err != nil {
 			log.Println(err)
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -156,8 +160,7 @@ func init() {
 		}
 		n, err := strconv.Atoi(ns)
 		if err != nil {
-			w.WriteHeader(400)
-			_, _ = w.Write([]byte(err.Error()))
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -170,8 +173,8 @@ func init() {
 		syncProducer, err := sarama.NewSyncProducer(brokers, config)
 
 		if err != nil {
-			w.WriteHeader(500)
-			_, _ = w.Write([]byte(err.Error()))
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer syncProducer.Close()

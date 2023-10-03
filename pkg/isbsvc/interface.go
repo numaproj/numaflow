@@ -1,31 +1,53 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package isbsvc
 
 import (
 	"context"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 // ISBService is an interface used to do the operations on ISBSvc
 type ISBService interface {
-	CreateBuffers(ctx context.Context, buffers []dfv1.Buffer, opts ...BufferCreateOption) error
-	DeleteBuffers(ctx context.Context, buffers []dfv1.Buffer) error
-	ValidateBuffers(ctx context.Context, buffers []dfv1.Buffer) error
-	GetBufferInfo(ctx context.Context, buffer dfv1.Buffer) (*BufferInfo, error)
+	// CreateBuffersAndBuckets creates buffers and buckets
+	CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, opts ...CreateOption) error
+	// DeleteBuffersAndBuckets deletes buffers and buckets
+	DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error
+	// ValidateBuffersAndBuckets validates buffers and buckets
+	ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error
+	// GetBufferInfo returns buffer info for the given buffer
+	GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error)
+	// CreateWatermarkStores creates watermark stores
+	CreateWatermarkStores(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]store.WatermarkStore, error)
 }
 
-// bufferCreateOptions describes the options for creating buffers
-type bufferCreateOptions struct {
-	// bufferConfig is configuratiion for the to be created buffer
-	bufferConfig string
+// createOptions describes the options for creating buffers and buckets
+type createOptions struct {
+	// config is configuration for the to be created buffers and buckets
+	config string
 }
 
-type BufferCreateOption func(*bufferCreateOptions) error
+type CreateOption func(*createOptions) error
 
-// WithBufferConfig sets buffer config option
-func WithBufferConfig(conf string) BufferCreateOption {
-	return func(o *bufferCreateOptions) error {
-		o.bufferConfig = conf
+// WithConfig sets buffer and bucket config option
+func WithConfig(conf string) CreateOption {
+	return func(o *createOptions) error {
+		o.config = conf
 		return nil
 	}
 }

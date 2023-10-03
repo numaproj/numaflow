@@ -8,35 +8,50 @@ spec:
       source:
         http: {}
     - name: even-or-odd
+      partitions: 2
       udf:
         container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/examples/function/evenodd
-          image: quay.io/numaio/go-even-odd-example
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.5.0
     - name: even-sink
+      partitions: 2
       sink:
-        log: {}
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
     - name: odd-sink
       sink:
-        log: {}
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
     - name: number-sink
       sink:
-        log: {}
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
   edges:
     - from: in
       to: even-or-odd
     - from: even-or-odd
       to: even-sink
       conditions:
-        keyIn:
-          - even
+        tags:
+          operator: or
+          values:
+            - even-tag
     - from: even-or-odd
       to: odd-sink
       conditions:
-        keyIn:
-          - odd
+        tags:
+          operator: or
+          values:
+            - odd-tag
     - from: even-or-odd
       to: number-sink
       conditions:
-        keyIn:
-          - even
-          - odd
+        tags:
+          operator: or
+          values:
+            - odd-tag
+            - even-tag

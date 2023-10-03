@@ -11,16 +11,16 @@ spec:
           # Whether to create a ClusterIP Service, defaults to false
           service: true
           # Optional bearer token auth
-          # xxx examples should be self-contained and runable by the user
-#         auth:
-#           # A secret selector pointing to the secret contains token
-#           token:
-#             name: my-secret
-#             key: my-key
+          # xxx examples should be self-contained and runnable by the user
+    #         auth:
+    #           # A secret selector pointing to the secret contains token
+    #           token:
+    #             name: my-secret
+    #             key: my-key
     - name: cat
       udf:
         builtin:
-          name: cat # A builtin UDF which simply cats the message
+          name: cat # A built-in UDF which simply cats the message
     - name: out
       sink:
         # A simple log printing sink

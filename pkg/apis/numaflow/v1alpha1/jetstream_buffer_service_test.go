@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import (
@@ -5,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestJetStreamGetStatefulSetSpec(t *testing.T) {
@@ -44,7 +61,7 @@ func TestJetStreamGetStatefulSetSpec(t *testing.T) {
 		for _, e := range spec.Template.Spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
-		for _, e := range []string{"POD_NAME", "SERVER_NAME", "POD_NAMESPACE", "CLUSTER_ADVERTISE", "JS_KEY"} {
+		for _, e := range []string{"POD_NAME", "SERVER_NAME", "POD_NAMESPACE", "CLUSTER_ADVERTISE", "GOMEMLIMIT", "JS_KEY"} {
 			assert.Contains(t, envNames, e)
 		}
 	})
@@ -67,6 +84,25 @@ func TestJetStreamGetStatefulSetSpec(t *testing.T) {
 		spec := s.GetStatefulSetSpec(req)
 		assert.Equal(t, "config-volume", spec.Template.Spec.Volumes[1].Name)
 		assert.Equal(t, 7, len(spec.Template.Spec.Volumes[1].VolumeSource.Projected.Sources[1].Secret.Items))
+	})
+
+	t.Run("with customized containers", func(t *testing.T) {
+		r := corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		}
+		s := &JetStreamBufferService{
+			ContainerTemplate:         &ContainerTemplate{Resources: r, SecurityContext: &corev1.SecurityContext{}, ImagePullPolicy: corev1.PullNever},
+			ReloaderContainerTemplate: &ContainerTemplate{Resources: r, SecurityContext: &corev1.SecurityContext{}, ImagePullPolicy: corev1.PullNever},
+			MetricsContainerTemplate:  &ContainerTemplate{Resources: r, SecurityContext: &corev1.SecurityContext{}, ImagePullPolicy: corev1.PullNever},
+		}
+		spec := s.GetStatefulSetSpec(req)
+		for _, c := range spec.Template.Spec.Containers {
+			assert.Equal(t, c.Resources, r)
+			assert.NotNil(t, c.SecurityContext)
+			assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
+		}
 	})
 }
 

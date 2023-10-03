@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package metrics
 
 import (
@@ -9,29 +25,36 @@ import (
 	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/zap"
+	"github.com/numaproj/numaflow/pkg/shared/util"
+)
+
+const (
+	LabelPipeline           = "pipeline"
+	LabelVertex             = "vertex"
+	LabelPeriod             = "period"
+	LabelVertexReplicaIndex = "replica"
+	LabelPartitionName      = "partition_name"
+
+	VertexPendingMessages = "vertex_pending_messages"
 )
 
 var (
-	processingRate = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "vertex_processing_rate",
-		Help: "Message processing rate in the last period of seconds, tps. It represents the rate of a vertex instead of a pod.",
-	}, []string{"pipeline", "vertex", "period"})
-
 	pending = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "vertex_pending_messages",
+		Name: VertexPendingMessages,
 		Help: "Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.",
-	}, []string{"pipeline", "vertex", "period"})
+	}, []string{LabelPipeline, LabelVertex, LabelPeriod, LabelPartitionName})
 
-	// Always expose metrics of following lookback seconds (1m, 5m, 15m)
+	// fixedLookbackSeconds Always expose metrics of following lookback seconds (1m, 5m, 15m)
 	fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
 )
 
@@ -42,65 +65,105 @@ type timestampedPending struct {
 	timestamp int64
 }
 
+// metricsServer runs an HTTP server to:
+// 1. Expose metrics;
+// 2. Serve an endpoint to execute health checks
 type metricsServer struct {
-	vertex    *dfv1.Vertex
-	rater     isb.Ratable
-	lagReader isb.LagReader
-	// lookbackSeconds is the look back seconds for pending and rate calculation used for auto scaling
+	vertex     *dfv1.Vertex
+	lagReaders map[string]isb.LagReader
+	// lookbackSeconds is the look back seconds for pending calculation used for autoscaling
 	lookbackSeconds     int64
 	lagCheckingInterval time.Duration
 	refreshInterval     time.Duration
-	// pendingInfo stores a list of pending/timestamp(seconds) information
-	pendingInfo *sharedqueue.OverflowQueue[timestampedPending]
+	// partitionPendingInfo stores a list of pending/timestamp(seconds) information for each partition
+	partitionPendingInfo map[string]*sharedqueue.OverflowQueue[timestampedPending]
+	// Functions that health check executes
+	healthCheckExecutors []func() error
 }
 
 type Option func(*metricsServer)
 
-func WithRater(r isb.Ratable) Option {
+// WithLagReaders sets the lag readers
+func WithLagReaders(r map[string]isb.LagReader) Option {
 	return func(m *metricsServer) {
-		m.rater = r
+		m.lagReaders = r
 	}
 }
 
-func WithLagReader(r isb.LagReader) Option {
-	return func(m *metricsServer) {
-		m.lagReader = r
-	}
-}
-
+// WithRefreshInterval sets how often to refresh the pending information
 func WithRefreshInterval(d time.Duration) Option {
 	return func(m *metricsServer) {
 		m.refreshInterval = d
 	}
 }
 
+// WithLookbackSeconds sets lookback seconds for pending calculation
 func WithLookbackSeconds(seconds int64) Option {
 	return func(m *metricsServer) {
 		m.lookbackSeconds = seconds
 	}
 }
 
+// WithHealthCheckExecutor appends a health check executor
+func WithHealthCheckExecutor(f func() error) Option {
+	return func(m *metricsServer) {
+		m.healthCheckExecutors = append(m.healthCheckExecutors, f)
+	}
+}
+
+// NewMetricsOptions returns a metrics option list.
+func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, healthCheckers []HealthChecker, readers []isb.BufferReader) []Option {
+	metricsOpts := []Option{
+		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
+	}
+
+	if util.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
+		for _, hc := range healthCheckers {
+			metricsOpts = append(metricsOpts, WithHealthCheckExecutor(func() error {
+				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				return hc.IsHealthy(cctx)
+			}))
+		}
+	}
+
+	lagReaders := make(map[string]isb.LagReader)
+	for _, reader := range readers {
+		if x, ok := reader.(isb.LagReader); ok {
+			lagReaders[reader.GetName()] = x
+		}
+	}
+	if len(lagReaders) > 0 {
+		metricsOpts = append(metricsOpts, WithLagReaders(lagReaders))
+	}
+	return metricsOpts
+}
+
 // NewMetricsServer returns a Prometheus metrics server instance, which can be used to start an HTTPS service to expose Prometheus metrics.
 func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 	m := new(metricsServer)
 	m.vertex = vertex
-	m.refreshInterval = 5 * time.Second     // Default refersh interval
-	m.lagCheckingInterval = 3 * time.Second // Default lag checking interval
-	m.lookbackSeconds = 180                 // Default
+	m.partitionPendingInfo = make(map[string]*sharedqueue.OverflowQueue[timestampedPending])
+	m.refreshInterval = 5 * time.Second             // Default refresh interval
+	m.lagCheckingInterval = 3 * time.Second         // Default lag checking interval
+	m.lookbackSeconds = dfv1.DefaultLookbackSeconds // Default
 	for _, opt := range opts {
 		if opt != nil {
 			opt(m)
 		}
 	}
-	if m.lagReader != nil {
-		m.pendingInfo = sharedqueue.New[timestampedPending](1800)
+	if m.lagReaders != nil {
+		for partitionName := range m.lagReaders {
+			m.partitionPendingInfo[partitionName] = sharedqueue.New[timestampedPending](1800)
+
+		}
 	}
 	return m
 }
 
-// Enqueue pending pending information
+// Enqueue pending information
 func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
-	if ms.lagReader == nil {
+	if ms.lagReaders == nil {
 		return
 	}
 	log := logging.FromContext(ctx)
@@ -111,25 +174,26 @@ func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if pending, err := ms.lagReader.Pending(ctx); err != nil {
-				log.Errorw("failed to get pending messages", zap.Error(err))
-			} else {
-				if pending != isb.PendingNotAvailable {
-					ts := timestampedPending{pending: pending, timestamp: time.Now().Unix()}
-					ms.pendingInfo.Append(ts)
+			for partitionName, lagReader := range ms.lagReaders {
+				if pending, err := lagReader.Pending(ctx); err != nil {
+					log.Errorw("Failed to get pending messages", zap.Error(err))
+				} else {
+					if pending != isb.PendingNotAvailable {
+						ts := timestampedPending{pending: pending, timestamp: time.Now().Unix()}
+						ms.partitionPendingInfo[partitionName].Append(ts)
+					}
 				}
 			}
 		}
 	}
 }
 
-// Expose pending and rate metrics
-func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
-	if ms.lagReader == nil && ms.rater == nil {
+// Expose pending metrics
+func (ms *metricsServer) exposePendingMetrics(ctx context.Context) {
+	if ms.lagReaders == nil {
 		return
 	}
-	log := logging.FromContext(ctx)
-	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds}
+	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds} // Metrics for autoscaling use key "default"
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}
@@ -138,21 +202,12 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if ms.rater != nil {
-				for n, i := range lookbackSecondsMap {
-					if r, err := ms.rater.Rate(ctx, i); err != nil {
-						log.Errorw("failed to get processing rate in the past seconds", zap.Int64("seconds", i), zap.Error(err))
-					} else {
-						if r != isb.RateNotAvailable {
-							processingRate.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(r)
+			if ms.lagReaders != nil {
+				for partitionName := range ms.lagReaders {
+					for n, i := range lookbackSecondsMap {
+						if p := ms.calculatePending(i, partitionName); p != isb.PendingNotAvailable {
+							pending.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n, partitionName).Set(float64(p))
 						}
-					}
-				}
-			}
-			if ms.lagReader != nil {
-				for n, i := range lookbackSecondsMap {
-					if p := ms.calculatePending(i); p != isb.PendingNotAvailable {
-						pending.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n).Set(float64(p))
 					}
 				}
 			}
@@ -163,9 +218,9 @@ func (ms *metricsServer) exposePendingAndRate(ctx context.Context) {
 }
 
 // Calculate the avg pending of last seconds
-func (ms *metricsServer) calculatePending(seconds int64) int64 {
+func (ms *metricsServer) calculatePending(seconds int64, partitionName string) int64 {
 	result := isb.PendingNotAvailable
-	items := ms.pendingInfo.Items()
+	items := ms.partitionPendingInfo[partitionName].Items()
 	total := int64(0)
 	num := int64(0)
 	now := time.Now().Unix()
@@ -194,13 +249,24 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(204)
+	mux.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
 	})
-	debugEnabled := os.Getenv(dfv1.EnvDebug)
-	if debugEnabled == "true" {
+	mux.HandleFunc("/sidecar-livez", func(w http.ResponseWriter, r *http.Request) {
+		for _, ex := range ms.healthCheckExecutors {
+			if err := ex(); err != nil {
+				log.Errorw("Failed to execute sidecar health check", zap.Error(err))
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(err.Error()))
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	pprofEnabled := os.Getenv(dfv1.EnvDebug) == "true" || os.Getenv(dfv1.EnvPPROF) == "true"
+	if pprofEnabled {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
 		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
@@ -217,8 +283,8 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	}
 	// Buildup pending information
 	go ms.buildupPendingInfo(ctx)
-	// Expose pending and rate metrics
-	go ms.exposePendingAndRate(ctx)
+	// Expose pending metrics
+	go ms.exposePendingMetrics(ctx)
 	go func() {
 		log.Info("Starting metrics HTTPS server")
 		if err := httpServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {

@@ -1,7 +1,15 @@
+#
+# This manifest is intended for demonstration purpose, it's not suitable for production.
+# Check https://numaflow.numaproj.io/user-guide/inter-step-buffer-service/ to figure out reliable configuration for production.
+#
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: InterStepBufferService
 metadata:
   name: default
 spec:
   jetstream:
-    version: 2.8.1
+    version: latest # Do NOT use "latest" in real deployment, check "numaflow-controller-config" ConfigMap to get available versions.
+    # Optional. Specifying "persistence" will create a PersistentVolumeClaim for data persistence, it works for most of Kubernetes 
+    # clusters, including Kind, Minikube, K3s, etc, it's needed to run production workloads.
+    persistence:
+      volumeSize: 3Gi

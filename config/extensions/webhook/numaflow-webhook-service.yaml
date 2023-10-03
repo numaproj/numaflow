@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: numaflow-webhook
+spec:
+  ports:
+    - port: 443
+      targetPort: 443
+  selector:
+    app.kubernetes.io/part-of: numaflow
+    app.kubernetes.io/component: numaflow-webhook

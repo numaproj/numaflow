@@ -1,4 +1,6 @@
 /*
+Copyright 2022 The Numaproj Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -16,8 +18,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	fmt "fmt"
+	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +37,15 @@ const (
 	VertexPhaseRunning   VertexPhase = "Running"
 	VertexPhaseSucceeded VertexPhase = "Succeeded"
 	VertexPhaseFailed    VertexPhase = "Failed"
+)
+
+type VertexType string
+
+const (
+	VertexTypeSource    VertexType = "Source"
+	VertexTypeSink      VertexType = "Sink"
+	VertexTypeMapUDF    VertexType = "MapUDF"
+	VertexTypeReduceUDF VertexType = "ReduceUDF"
 )
 
 // +genclient
@@ -57,15 +70,59 @@ type Vertex struct {
 }
 
 func (v Vertex) IsASource() bool {
-	return v.Spec.Source != nil
+	return v.Spec.IsASource()
+}
+
+func (v Vertex) HasUDTransformer() bool {
+	return v.Spec.HasUDTransformer()
+}
+
+func (v Vertex) IsUDSource() bool {
+	return v.Spec.IsUDSource()
+}
+
+func (v Vertex) HasSideInputs() bool {
+	return len(v.Spec.SideInputs) > 0
 }
 
 func (v Vertex) IsASink() bool {
-	return v.Spec.Sink != nil
+	return v.Spec.IsASink()
 }
 
-func (v Vertex) IsAnUDF() bool {
-	return v.Spec.Sink == nil && v.Spec.Source == nil
+func (v Vertex) IsUDSink() bool {
+	return v.Spec.IsUDSink()
+}
+
+func (v Vertex) IsMapUDF() bool {
+	return v.Spec.IsMapUDF()
+}
+
+func (v Vertex) IsReduceUDF() bool {
+	return v.Spec.IsReduceUDF()
+}
+
+func (v Vertex) GetVertexType() VertexType {
+	return v.Spec.GetVertexType()
+}
+
+func (v Vertex) Scalable() bool {
+	if v.Spec.Scale.Disabled || v.IsReduceUDF() {
+		return false
+	}
+	if v.IsASink() || v.IsMapUDF() {
+		return true
+	}
+	if v.IsASource() {
+		src := v.Spec.Source
+		if src.Kafka != nil || src.UDSource != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (v Vertex) GetPartitionCount() int {
+	return v.Spec.GetPartitionCount()
 }
 
 func (v Vertex) GetHeadlessServiceName() string {
@@ -113,13 +170,28 @@ func (v Vertex) getServiceObj(name string, headless bool, port int, servicePortN
 	return svc
 }
 
-func (v Vertex) commonEvns() []corev1.EnvVar {
+// CommonEnvs returns the common envs for all vertex pod containers.
+func (v Vertex) commonEnvs() []corev1.EnvVar {
 	return []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
 		{Name: EnvVertexName, Value: v.Spec.Name},
+	}
+}
+
+// SidecarEnvs returns the envs for sidecar containers.
+func (v Vertex) sidecarEnvs() []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{Name: EnvCPULimit, ValueFrom: &corev1.EnvVarSource{
+			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "limits.cpu"}}},
+		{Name: EnvCPURequest, ValueFrom: &corev1.EnvVarSource{
+			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "requests.cpu"}}},
+		{Name: EnvMemoryLimit, ValueFrom: &corev1.EnvVarSource{
+			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "limits.memory"}}},
+		{Name: EnvMemoryRequest, ValueFrom: &corev1.EnvVarSource{
+			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "requests.memory"}}},
 	}
 }
 
@@ -139,15 +211,8 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	envVars := []corev1.EnvVar{
 		{Name: EnvVertexObject, Value: encodedVertexSpec},
 	}
-	envVars = append(envVars, v.commonEvns()...)
+	envVars = append(envVars, v.commonEnvs()...)
 	envVars = append(envVars, req.Env...)
-	resources := standardResources
-	if v.Spec.ContainerTemplate != nil {
-		resources = v.Spec.ContainerTemplate.Resources
-		if len(v.Spec.ContainerTemplate.Env) > 0 {
-			envVars = append(envVars, v.Spec.ContainerTemplate.Env...)
-		}
-	}
 
 	varVolumeName := "var-run-numaflow"
 	volumes := []corev1.Volume{
@@ -165,7 +230,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		env:             envVars,
 		image:           req.Image,
 		imagePullPolicy: req.PullPolicy,
-		resources:       resources,
+		resources:       standardResources,
 		volumeMounts:    volumeMounts,
 	})
 	if err != nil {
@@ -186,54 +251,103 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	containers[0].LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
-				Path:   "/healthz",
+				Path:   "/livez",
 				Port:   intstr.FromInt(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 3,
-		PeriodSeconds:       3,
-		TimeoutSeconds:      1,
+		InitialDelaySeconds: 20,
+		PeriodSeconds:       60,
+		TimeoutSeconds:      30,
 	}
 
-	if len(containers) > 1 { // udf and udsink
-		containers[1].Env = append(containers[1].Env, v.commonEvns()...)
+	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
+		for i := 1; i < len(containers); i++ {
+			containers[i].Env = append(containers[i].Env, v.commonEnvs()...)
+			containers[i].Env = append(containers[i].Env, v.sidecarEnvs()...)
+		}
+	}
+
+	initContainers := v.getInitContainers(req)
+
+	if v.HasSideInputs() {
+		sideInputsVolName := "var-run-side-inputs"
+		volumes = append(volumes, corev1.Volume{
+			Name:         sideInputsVolName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+
+		sideInputsWatcher := corev1.Container{
+			Name:            CtrSideInputsWatcher,
+			Env:             req.Env,
+			Image:           req.Image,
+			ImagePullPolicy: req.PullPolicy,
+			Resources:       standardResources,
+			Args:            []string{"side-inputs-watcher", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+		}
+		sideInputsWatcher.Env = append(sideInputsWatcher.Env, v.commonEnvs()...)
+		if x := v.Spec.SideInputsContainerTemplate; x != nil {
+			x.ApplyToContainer(&sideInputsWatcher)
+		}
+		containers = append(containers, sideInputsWatcher)
+		for i := 1; i < len(containers); i++ {
+			if containers[i].Name == CtrSideInputsWatcher {
+				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
+			} else {
+				// Readonly mount for user defined containers
+				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
+			}
+		}
+		// Side Inputs init container
+		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 	}
 
 	spec := &corev1.PodSpec{
-		Subdomain:          v.GetHeadlessServiceName(),
-		NodeSelector:       v.Spec.NodeSelector,
-		Tolerations:        v.Spec.Tolerations,
-		SecurityContext:    v.Spec.SecurityContext,
-		ImagePullSecrets:   v.Spec.ImagePullSecrets,
-		PriorityClassName:  v.Spec.PriorityClassName,
-		Priority:           v.Spec.Priority,
-		Affinity:           v.Spec.Affinity,
-		ServiceAccountName: v.Spec.ServiceAccountName,
-		Volumes:            append(volumes, v.Spec.Volumes...),
-		InitContainers: []corev1.Container{
-			v.getInitContainer(req),
-		},
-		Containers: containers,
+		Subdomain:      v.GetHeadlessServiceName(),
+		Volumes:        append(volumes, v.Spec.Volumes...),
+		InitContainers: initContainers,
+		Containers:     append(containers, v.Spec.Sidecars...),
+	}
+	v.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
+	if v.Spec.ContainerTemplate != nil {
+		v.Spec.ContainerTemplate.ApplyToNumaflowContainers(spec.Containers)
 	}
 	return spec, nil
 }
 
-func (v Vertex) getInitContainer(req GetVertexPodSpecReq) corev1.Container {
+func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 	envVars := []corev1.EnvVar{
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
-		{Name: "GODEBUG", Value: os.Getenv("GODEBUG")},
+		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
-	return corev1.Container{
-		Name:            CtrInit,
-		Env:             envVars,
-		Image:           req.Image,
-		ImagePullPolicy: req.PullPolicy,
-		Resources:       standardResources,
-		Args:            []string{"isbsvc-buffer-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
+	initContainers := []corev1.Container{
+		{
+			Name:            CtrInit,
+			Env:             envVars,
+			Image:           req.Image,
+			ImagePullPolicy: req.PullPolicy,
+			Resources:       standardResources,
+			Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
+		},
 	}
+	if v.HasSideInputs() {
+		initContainers = append(initContainers, corev1.Container{
+			Name:            CtrInitSideInputs,
+			Env:             envVars,
+			Image:           req.Image,
+			ImagePullPolicy: req.PullPolicy,
+			Resources:       standardResources,
+			Args:            []string{"side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+		})
+	}
+
+	if v.Spec.InitContainerTemplate != nil {
+		v.Spec.InitContainerTemplate.ApplyToNumaflowContainers(initContainers)
+	}
+	return append(initContainers, v.Spec.InitContainers...)
 }
+
 func (vs VertexSpec) WithOutReplicas() VertexSpec {
 	zero := int32(0)
 	x := *vs.DeepCopy()
@@ -241,41 +355,68 @@ func (vs VertexSpec) WithOutReplicas() VertexSpec {
 	return x
 }
 
-type BufferType string
-
-const (
-	SourceBuffer BufferType = "so"
-	SinkBuffer   BufferType = "si"
-	EdgeBuffer   BufferType = "ed"
-)
-
-type Buffer struct {
-	Name string     `protobuf:"bytes,1,opt,name=name"`
-	Type BufferType `protobuf:"bytes,2,opt,name=type,casttype=BufferType"`
+// OwnedBuffers returns the buffers that the vertex owns
+func (v Vertex) OwnedBuffers() []string {
+	return v.Spec.OwnedBufferNames(v.Namespace, v.Spec.PipelineName)
 }
 
-func (v Vertex) GetFromBuffers() []Buffer {
-	r := []Buffer{}
+// GetFromBuckets returns the buckets that the vertex reads from.
+// For a source vertex, it returns the source bucket name.
+func (v Vertex) GetFromBuckets() []string {
 	if v.IsASource() {
-		r = append(r, Buffer{GenerateSourceBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SourceBuffer})
-	} else {
-		for _, vt := range v.Spec.FromEdges {
-			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, vt.From, v.Spec.Name), EdgeBuffer})
+		return []string{GenerateSourceBucketName(v.Namespace, v.Spec.PipelineName, v.Spec.Name)}
+	}
+	r := []string{}
+	for _, vt := range v.Spec.FromEdges {
+		r = append(r, GenerateEdgeBucketName(v.Namespace, v.Spec.PipelineName, vt.From, vt.To))
+	}
+	return r
+}
+
+// GetToBuckets returns the buckets that the vertex writes to.
+// For a sink vertex, it returns the sink bucket name.
+func (v Vertex) GetToBuckets() []string {
+	if v.IsASink() {
+		return []string{GenerateSinkBucketName(v.Namespace, v.Spec.PipelineName, v.Spec.Name)}
+	}
+	r := []string{}
+	for _, vt := range v.Spec.ToEdges {
+		r = append(r, GenerateEdgeBucketName(v.Namespace, v.Spec.PipelineName, vt.From, vt.To))
+	}
+	return r
+}
+
+func (v Vertex) GetToBuffers() []string {
+	r := []string{}
+	if v.IsASink() {
+		return r
+	}
+	for _, vt := range v.Spec.ToEdges {
+		for i := 0; i < vt.GetToVertexPartitionCount(); i++ {
+			r = append(r, GenerateBufferName(v.Namespace, v.Spec.PipelineName, vt.To, i))
 		}
 	}
 	return r
 }
 
-func (v Vertex) GetToBuffers() []Buffer {
-	r := []Buffer{}
-	if v.IsASink() {
-		r = append(r, Buffer{GenerateSinkBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name), SinkBuffer})
-	} else {
-		for _, vt := range v.Spec.ToEdges {
-			r = append(r, Buffer{GenerateEdgeBufferName(v.Namespace, v.Spec.PipelineName, v.Spec.Name, vt.To), EdgeBuffer})
+func (v Vertex) GetReplicas() int {
+	if v.IsReduceUDF() {
+		// Replica of a reduce vertex is determined by the partitions.
+		return v.GetPartitionCount()
+	}
+	if v.Spec.Replicas == nil {
+		return 1
+	}
+	return int(*v.Spec.Replicas)
+}
+
+func (v Vertex) MapUdfStreamEnabled() (bool, error) {
+	if v.Spec.Metadata != nil && v.Spec.Metadata.Annotations != nil {
+		if mapUdfStream, existing := v.Spec.Metadata.Annotations[MapUdfStreamKey]; existing {
+			return strconv.ParseBool(mapUdfStream)
 		}
 	}
-	return r
+	return false, nil
 }
 
 type VertexSpec struct {
@@ -287,107 +428,257 @@ type VertexSpec struct {
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,4,opt,name=replicas"`
 	// +optional
-	FromEdges []Edge `json:"fromEdges,omitempty" protobuf:"bytes,5,rep,name=fromEdges"`
+	FromEdges []CombinedEdge `json:"fromEdges,omitempty" protobuf:"bytes,5,rep,name=fromEdges"`
 	// +optional
-	ToEdges []Edge `json:"toEdges,omitempty" protobuf:"bytes,6,rep,name=toEdges"`
-}
-
-func (vs VertexSpec) GetReplicas() int {
-	if vs.Replicas == nil {
-		return 1
-	}
-	return int(*vs.Replicas)
+	ToEdges []CombinedEdge `json:"toEdges,omitempty" protobuf:"bytes,6,rep,name=toEdges"`
+	// Watermark indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.
+	// +kubebuilder:default={"disabled": false}
+	// +optional
+	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,7,opt,name=watermark"`
 }
 
 type AbstractVertex struct {
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
 	// +optional
-	Source *Source `json:"source,omitempty" protobuf:"bytes,3,rep,name=source"`
+	Source *Source `json:"source,omitempty" protobuf:"bytes,2,opt,name=source"`
 	// +optional
-	Sink *Sink `json:"sink,omitempty" protobuf:"bytes,4,rep,name=sink"`
+	Sink *Sink `json:"sink,omitempty" protobuf:"bytes,3,opt,name=sink"`
 	// +optional
-	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,5,rep,name=containerTemplate"`
+	UDF *UDF `json:"udf,omitempty" protobuf:"bytes,4,opt,name=udf"`
+	// Container template for the main numa container.
 	// +optional
-	UDF *UDF `json:"udf,omitempty" protobuf:"bytes,6,rep,name=udf"`
-	// Metadata sets the pods's metadata, i.e. annotations and labels
-	Metadata *Metadata `json:"metadata,omitempty" protobuf:"bytes,7,opt,name=metadata"`
-	// NodeSelector is a selector which must be true for the pod to fit on a node.
-	// Selector which must match a node's labels for the pod to be scheduled on that node.
-	// More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,5,opt,name=containerTemplate"`
+	// Container template for all the vertex pod init containers spawned by numaflow, excluding the ones specified by the user.
 	// +optional
-	NodeSelector map[string]string `json:"nodeSelector,omitempty" protobuf:"bytes,8,rep,name=nodeSelector"`
-	// If specified, the pod's tolerations.
+	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,6,opt,name=initContainerTemplate"`
 	// +optional
-	Tolerations []corev1.Toleration `json:"tolerations,omitempty" protobuf:"bytes,9,rep,name=tolerations"`
-	// SecurityContext holds pod-level security attributes and common container settings.
-	// Optional: Defaults to empty.  See type description for default values of each field.
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,7,opt,name=abstractPodTemplate"`
 	// +optional
-	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty" protobuf:"bytes,10,opt,name=securityContext"`
-	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
-	// If specified, these secrets will be passed to individual puller implementations for them to use. For example,
-	// in the case of docker, only DockerConfig type secrets are honored.
-	// More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
-	// +optional
-	// +patchMergeKey=name
-	// +patchStrategy=merge
-	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,11,rep,name=imagePullSecrets"`
-	// If specified, indicates the Redis pod's priority. "system-node-critical"
-	// and "system-cluster-critical" are two special keywords which indicate the
-	// highest priorities with the former being the highest priority. Any other
-	// name must be defined by creating a PriorityClass object with that name.
-	// If not specified, the pod priority will be default or zero if there is no
-	// default.
-	// More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-	// +optional
-	PriorityClassName string `json:"priorityClassName,omitempty" protobuf:"bytes,12,opt,name=priorityClassName"`
-	// The priority value. Various system components use this field to find the
-	// priority of the Redis pod. When Priority Admission Controller is enabled,
-	// it prevents users from setting this field. The admission controller populates
-	// this field from PriorityClassName.
-	// The higher the value, the higher the priority.
-	// More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-	// +optional
-	Priority *int32 `json:"priority,omitempty" protobuf:"bytes,13,opt,name=priority"`
-	// The pod's scheduling constraints
-	// More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-	// +optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty" protobuf:"bytes,14,opt,name=affinity"`
-	// ServiceAccountName to apply to the StatefulSet
-	// +optional
-	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,15,opt,name=serviceAccountName"`
 	// +patchStrategy=merge
 	// +patchMergeKey=name
-	Volumes []corev1.Volume `json:"volumes,omitempty" protobuf:"bytes,16,rep,name=volumes"`
-	// Limits define the limitations such as buffer read batch size for all the vertices of a pipleine, will override pipeline level settings
+	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,8,rep,name=volumes"`
+	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
 	// +optional
-	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,17,opt,name=limits"`
+	Limits *VertexLimits `json:"limits,omitempty" protobuf:"bytes,9,opt,name=limits"`
+	// Settings for autoscaling
 	// +optional
-	Scale Scale `json:"scale,omitempty" protobuf:"bytes,18,opt,name=scale"`
+	Scale Scale `json:"scale,omitempty" protobuf:"bytes,10,opt,name=scale"`
+	// List of customized init containers belonging to the pod.
+	// More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+	// +optional
+	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,11,rep,name=initContainers"`
+	// List of customized sidecar containers belonging to the pod.
+	// +optional
+	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,12,rep,name=sidecars"`
+	// Number of partitions of the vertex owned buffers.
+	// It applies to udf and sink vertices only.
+	// +optional
+	Partitions *int32 `json:"partitions,omitempty" protobuf:"bytes,13,opt,name=partitions"`
+	// Names of the side inputs used in this vertex.
+	// +optional
+	SideInputs []string `json:"sideInputs,omitempty" protobuf:"bytes,14,rep,name=sideInputs"`
+	// Container template for the side inputs watcher container.
+	// +optional
+	SideInputsContainerTemplate *ContainerTemplate `json:"sideInputsContainerTemplate,omitempty" protobuf:"bytes,15,opt,name=sideInputsContainerTemplate"`
 }
 
+func (av AbstractVertex) GetVertexType() VertexType {
+	if av.IsASource() {
+		return VertexTypeSource
+	} else if av.IsASink() {
+		return VertexTypeSink
+	} else if av.IsMapUDF() {
+		return VertexTypeMapUDF
+	} else if av.IsReduceUDF() {
+		return VertexTypeReduceUDF
+	}
+	// This won't happen
+	return ""
+}
+
+func (av AbstractVertex) GetPartitionCount() int {
+	if av.Partitions == nil || *av.Partitions < 1 {
+		return 1
+	}
+	if av.IsASource() || (av.IsReduceUDF() && !av.UDF.GroupBy.Keyed) {
+		return 1
+	}
+	return int(*av.Partitions)
+}
+
+func (av AbstractVertex) IsASource() bool {
+	return av.Source != nil
+}
+
+func (av AbstractVertex) HasUDTransformer() bool {
+	return av.Source != nil && av.Source.UDTransformer != nil
+}
+
+func (av AbstractVertex) IsUDSource() bool {
+	return av.IsASource() && av.Source.UDSource != nil
+}
+
+func (av AbstractVertex) IsASink() bool {
+	return av.Sink != nil
+}
+
+func (av AbstractVertex) IsUDSink() bool {
+	return av.IsASink() && av.Sink.UDSink != nil
+}
+
+func (av AbstractVertex) IsMapUDF() bool {
+	return av.UDF != nil && av.UDF.GroupBy == nil
+}
+
+func (av AbstractVertex) IsReduceUDF() bool {
+	return av.UDF != nil && av.UDF.GroupBy != nil
+}
+
+func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {
+	var r []string
+	if av.IsASource() {
+		return r
+	}
+	for i := 0; i < av.GetPartitionCount(); i++ {
+		r = append(r, GenerateBufferName(namespace, pipeline, av.Name, i))
+	}
+	return r
+}
+
+// Scale defines the parameters for autoscaling.
 type Scale struct {
-	// Minimal replicas
-	// +kubebuilder:default=1
+	// Whether to disable autoscaling.
+	// Set to "true" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
 	// +optional
-	Min *int32 `json:"min,omitempty" protobuf:"varint,1,opt,name=min"`
-	// Maximum replicas
-	// +kubebuilder:default=100
+	Disabled bool `json:"disabled,omitempty" protobuf:"bytes,1,opt,name=disabled"`
+	// Minimum replicas.
 	// +optional
-	Max *int32 `json:"max,omitempty" protobuf:"varint,2,opt,name=max"`
-	// Lookback seconds to calculate the average pending messages and processing rate
-	// +kubebuilder:default=180
+	Min *int32 `json:"min,omitempty" protobuf:"varint,2,opt,name=min"`
+	// Maximum replicas.
 	// +optional
-	LookbackSeconds *int32 `json:"lookbackSeconds,omitempty" protobuf:"varint,3,opt,name=lookbackSeconds"`
+	Max *int32 `json:"max,omitempty" protobuf:"varint,3,opt,name=max"`
+	// Lookback seconds to calculate the average pending messages and processing rate.
+	// +optional
+	LookbackSeconds *uint32 `json:"lookbackSeconds,omitempty" protobuf:"varint,4,opt,name=lookbackSeconds"`
+	// Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead.
+	// Cooldown seconds after a scaling operation before another one.
+	// +optional
+	DeprecatedCooldownSeconds *uint32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`
+	// After scaling down to 0, sleep how many seconds before scaling up to peek.
+	// +optional
+	ZeroReplicaSleepSeconds *uint32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,6,opt,name=zeroReplicaSleepSeconds"`
+	// TargetProcessingSeconds is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast
+	// you want the vertex to process all the pending messages. Typically increasing the value, which leads to lower processing
+	// rate, thus less replicas. It's only effective for source vertices.
+	// +optional
+	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
+	// TargetBufferAvailability is used to define the target percentage of the buffer availability.
+	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
+	// It only applies to UDF and Sink vertices because only they have buffers to read.
+	// +optional
+	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,8,opt,name=targetBufferAvailability"`
+	// ReplicasPerScale defines maximum replicas can be scaled up or down at once.
+	// The is use to prevent too aggressive scaling operations
+	// +optional
+	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
+	// ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up.
+	// It defaults to the CooldownSeconds if not set.
+	// +optional
+	ScaleUpCooldownSeconds *uint32 `json:"scaleUpCooldownSeconds,omitempty" protobuf:"varint,10,opt,name=scaleUpCooldownSeconds"`
+	// ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down.
+	// It defaults to the CooldownSeconds if not set.
+	// +optional
+	ScaleDownCooldownSeconds *uint32 `json:"scaleDownCooldownSeconds,omitempty" protobuf:"varint,11,opt,name=scaleDownCooldownSeconds"`
+}
+
+func (s Scale) GetLookbackSeconds() int {
+	if s.LookbackSeconds != nil {
+		return int(*s.LookbackSeconds)
+	}
+	return DefaultLookbackSeconds
+}
+
+func (s Scale) GetScaleUpCooldownSeconds() int {
+	if s.ScaleUpCooldownSeconds != nil {
+		return int(*s.ScaleUpCooldownSeconds)
+	}
+	if s.DeprecatedCooldownSeconds != nil {
+		return int(*s.DeprecatedCooldownSeconds)
+	}
+	return DefaultCooldownSeconds
+}
+
+func (s Scale) GetScaleDownCooldownSeconds() int {
+	if s.ScaleDownCooldownSeconds != nil {
+		return int(*s.ScaleDownCooldownSeconds)
+	}
+	if s.DeprecatedCooldownSeconds != nil {
+		return int(*s.DeprecatedCooldownSeconds)
+	}
+	return DefaultCooldownSeconds
+}
+
+func (s Scale) GetZeroReplicaSleepSeconds() int {
+	if s.ZeroReplicaSleepSeconds != nil {
+		return int(*s.ZeroReplicaSleepSeconds)
+	}
+	return DefaultZeroReplicaSleepSeconds
+}
+
+func (s Scale) GetTargetProcessingSeconds() int {
+	if s.TargetProcessingSeconds != nil {
+		return int(*s.TargetProcessingSeconds)
+	}
+	return DefaultTargetProcessingSeconds
+}
+
+func (s Scale) GetTargetBufferAvailability() int {
+	if s.TargetBufferAvailability != nil {
+		return int(*s.TargetBufferAvailability)
+	}
+	return DefaultTargetBufferAvailability
+}
+
+func (s Scale) GetReplicasPerScale() int {
+	if s.ReplicasPerScale != nil {
+		return int(*s.ReplicasPerScale)
+	}
+	return DefaultReplicasPerScale
+}
+
+func (s Scale) GetMinReplicas() int32 {
+	if x := s.Min; x == nil || *x < 0 {
+		return 0
+	} else {
+		return *x
+	}
+}
+
+func (s Scale) GetMaxReplicas() int32 {
+	if x := s.Max; x == nil {
+		return DefaultMaxReplicas
+	} else {
+		return *x
+	}
 }
 
 type VertexLimits struct {
-	// Read batch size
+	// Read batch size from the source or buffer.
+	// It overrides the settings from pipeline limits.
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
-	// Workers used to concurrently call UDF functions, it's only meaningful for UDF vertex, and will be ignored by source and sink vertices.
-	// It overrides the setting in pipeline limits.
+	// Read timeout duration from the source or buffer
+	// It overrides the settings from pipeline limits.
 	// +optional
-	UDFWorkers *uint32 `json:"udfWorkers,omitempty" protobuf:"varint,2,opt,name=udfWorkers"`
+	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
+	// BufferMaxLength is used to define the max length of a buffer.
+	// It overrides the settings from pipeline limits.
+	// +optional
+	BufferMaxLength *uint64 `json:"bufferMaxLength,omitempty" protobuf:"varint,3,opt,name=bufferMaxLength"`
+	// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85.
+	// It overrides the settings from pipeline limits.
+	// +optional
+	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
 }
 
 func (v VertexSpec) getType() containerSupplier {
@@ -433,15 +724,33 @@ type VertexList struct {
 	Items           []Vertex `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
-// GenerateEdgeBufferName generates buffer name
-func GenerateEdgeBufferName(namespace, pipelineName, fromVetex, toVertex string) string {
-	return fmt.Sprintf("%s-%s-%s-%s", namespace, pipelineName, fromVetex, toVertex)
+func GenerateBufferName(namespace, pipelineName, vertex string, index int) string {
+	return fmt.Sprintf("%s-%s-%s-%d", namespace, pipelineName, vertex, index)
 }
 
-func GenerateSourceBufferName(namespace, pipelineName, vertex string) string {
-	return fmt.Sprintf("%s-%s-%s_SOURCE", namespace, pipelineName, vertex)
+func GenerateBufferNames(namespace, pipelineName, vertex string, numOfPartitions int) []string {
+	var result []string
+	for i := 0; i < numOfPartitions; i++ {
+		result = append(result, GenerateBufferName(namespace, pipelineName, vertex, i))
+	}
+	return result
 }
 
-func GenerateSinkBufferName(namespace, pipelineName, vertex string) string {
+func GenerateSourceBucketName(namespace, pipeline, vertex string) string {
+	return fmt.Sprintf("%s-%s-%s_SOURCE", namespace, pipeline, vertex)
+}
+
+func GenerateSinkBucketName(namespace, pipelineName, vertex string) string {
 	return fmt.Sprintf("%s-%s-%s_SINK", namespace, pipelineName, vertex)
+}
+
+type VertexTemplate struct {
+	// +optional
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,1,opt,name=abstractPodTemplate"`
+	// Template for the vertex numa container
+	// +optional
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,2,opt,name=containerTemplate"`
+	// Template for the vertex init container
+	// +optional
+	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,3,opt,name=initContainerTemplate"`
 }

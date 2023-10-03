@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fixtures
 
 import (
@@ -6,11 +22,12 @@ import (
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 )
 
 type When struct {
@@ -23,7 +40,35 @@ type When struct {
 	restConfig     *rest.Config
 	kubeClient     kubernetes.Interface
 
-	portForwarderStopChanels map[string]chan struct{}
+	portForwarderStopChannels map[string]chan struct{}
+	// Key: vertex label selector
+	// Value: the ip of, one of the pods matching the label selector
+	vertexToPodIpMapping map[string]string
+}
+
+// SendMessageTo sends msg to one of the pods in http source vertex.
+func (w *When) SendMessageTo(pipelineName string, vertexName string, req HttpPostRequest) *When {
+	w.t.Helper()
+	if w.vertexToPodIpMapping == nil {
+		w.vertexToPodIpMapping = make(map[string]string)
+	}
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
+	if w.vertexToPodIpMapping[labelSelector] == "" {
+		ctx := context.Background()
+		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+		if err != nil {
+			w.t.Fatalf("Error getting vertex pod list: %v", err)
+		}
+		if len(podList.Items) == 0 {
+			w.t.Fatalf("No running pod found in pipeline %s, vertex: %s", pipelineName, vertexName)
+		}
+		w.vertexToPodIpMapping[labelSelector] = podList.Items[0].Status.PodIP
+	}
+
+	// There could be a rare corner case when a previous added pod gets replaced by a new one, making the mapping entry no longer valid.
+	// Considering current e2e tests are all lightweight, we assume no such case for now.
+	SendMessageTo(w.vertexToPodIpMapping[labelSelector], vertexName, req)
+	return w
 }
 
 func (w *When) CreateISBSvc() *When {
@@ -94,12 +139,12 @@ func (w *When) DeletePipelineAndWait() *When {
 	for {
 		select {
 		case <-ctx.Done():
-			w.t.Fatal(fmt.Errorf("timeout after %v waiting for pipeline pods terminating", timeout))
+			w.t.Fatalf("Timeout after %v waiting for pipeline pods terminating", timeout)
 		default:
 		}
 		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
-			w.t.Fatal(fmt.Errorf("error getting pipeline pods: %w", err))
+			w.t.Fatalf("Error getting pipeline pods: %v", err)
 		}
 		if len(podList.Items) == 0 {
 			return w
@@ -126,26 +171,48 @@ func (w *When) VertexPodPortForward(vertexName string, localPort, remotePort int
 	ctx := context.Background()
 	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 	if err != nil {
-		w.t.Fatalf("error getting vertex pod name: %v", err)
+		w.t.Fatalf("Error getting vertex pod name: %v", err)
 	}
 	podName := podList.Items[0].GetName()
 	w.t.Logf("Vertex POD name: %s", podName)
 
 	stopCh := make(chan struct{}, 1)
 	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
-		w.t.Fatalf("expected vertex pod port-forward: %v", err)
+		w.t.Fatalf("Expected vertex pod port-forward: %v", err)
 	}
-	if w.portForwarderStopChanels == nil {
-		w.portForwarderStopChanels = make(map[string]chan struct{})
+	if w.portForwarderStopChannels == nil {
+		w.portForwarderStopChannels = make(map[string]chan struct{})
 	}
-	w.portForwarderStopChanels[podName] = stopCh
+	w.portForwarderStopChannels[podName] = stopCh
+	return w
+}
+
+func (w *When) DaemonPodPortForward(pipelineName string, localPort, remotePort int) *When {
+	w.t.Helper()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyComponent, dfv1.ComponentDaemon)
+	ctx := context.Background()
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting daemon pod name: %v", err)
+	}
+	podName := podList.Items[0].GetName()
+	w.t.Logf("Daemon POD name: %s", podName)
+
+	stopCh := make(chan struct{}, 1)
+	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
+		w.t.Fatalf("Expected daemon pod port-forward: %v", err)
+	}
+	if w.portForwarderStopChannels == nil {
+		w.portForwarderStopChannels = make(map[string]chan struct{})
+	}
+	w.portForwarderStopChannels[podName] = stopCh
 	return w
 }
 
 func (w *When) TerminateAllPodPortForwards() *When {
 	w.t.Helper()
-	if len(w.portForwarderStopChanels) > 0 {
-		for k, v := range w.portForwarderStopChanels {
+	if len(w.portForwarderStopChannels) > 0 {
+		for k, v := range w.portForwarderStopChannels {
 			w.t.Logf("Terminating port-forward for POD %s", k)
 			close(v)
 		}

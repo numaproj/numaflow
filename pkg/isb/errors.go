@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package isb
 
 import "fmt"
@@ -79,4 +95,14 @@ type MessageReadErr struct {
 
 func (e MessageReadErr) Error() string {
 	return fmt.Sprintf("(%s) %s Header: %s Body:%s", e.Name, e.Message, string(e.Header), string(e.Body))
+}
+
+// NoRetryableBufferWriteErr indicates that the buffer is full and the writer, based on user specification, decides to not retry.
+type NoRetryableBufferWriteErr struct {
+	Name    string
+	Message string
+}
+
+func (e NoRetryableBufferWriteErr) Error() string {
+	return fmt.Sprintf("(%s) %s %#v", e.Name, e.Message, e)
 }

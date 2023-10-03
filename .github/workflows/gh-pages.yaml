@@ -1,0 +1,33 @@
+name: docs
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  docs:
+    if: github.repository == 'numaproj/numaflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20'
+      - name: build
+        run: make docs
+      - name: deploy
+        uses: peaceiris/actions-gh-pages@v3
+        if: github.repository == 'numaproj/numaflow' && github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          cname: numaflow.numaproj.io

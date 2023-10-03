@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 syntax = "proto2";
 option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/daemon";
 
@@ -10,17 +26,29 @@ package daemon;
 // pending messages count, if it has unprocessed data etc which helps in pipeline/buffer deletion etc
 message BufferInfo {
   required string pipeline = 1;
-  required string fromVertex = 2;
-  required string toVertex = 3;
-  required string bufferName = 4;
-  required int64 pendingCount = 5;
-  required int64 ackPendingCount = 6;
+  required string bufferName = 2;
+  required int64 pendingCount = 3;
+  required int64 ackPendingCount = 4;
   // Total messages existing in the buffer, including pending, ackPending and acked.
-  required int64 totalMessages = 7;
-  required int64 bufferLength = 8;
-  required double bufferUsageLimit = 9;
-  required double bufferUsage = 10;
-  required bool isFull = 11;
+  required int64 totalMessages = 5;
+  required int64 bufferLength = 6;
+  required double bufferUsageLimit = 7;
+  required double bufferUsage = 8;
+  required bool isFull = 9;
+}
+
+// VertexMetrics is used to provide information about the vertex including processing rate.
+message VertexMetrics {
+  required string pipeline = 1;
+  required string vertex = 2;
+  map<string, double> processingRates = 3;
+  map<string, int64> pendings = 4;
+}
+
+// PipelineStatus
+message PipelineStatus {
+  required string status = 1;
+  required string message = 2;
 }
 
 message ListBuffersRequest {
@@ -40,6 +68,43 @@ message GetBufferResponse {
     required BufferInfo buffer = 1;
 }
 
+message GetPipelineStatusRequest {
+    required string pipeline = 1;
+}
+
+message GetPipelineStatusResponse {
+    required PipelineStatus status = 1;
+}
+
+message GetVertexMetricsRequest {
+  required string pipeline = 2;
+  required string vertex = 3;
+}
+
+message GetVertexMetricsResponse {
+  repeated VertexMetrics vertexMetrics = 1;
+}
+
+/* Watermark */
+// EdgeWatermark has edge to watermark mapping.
+message EdgeWatermark {
+  required string pipeline = 1;
+  required string edge = 2;
+  repeated int64 watermarks = 3;
+  required bool isWatermarkEnabled = 4;
+  required string from = 5;
+  required string to = 6;
+}
+
+message GetPipelineWatermarksResponse {
+  repeated EdgeWatermark pipelineWatermarks = 1;
+}
+
+// GetPipelineWatermarksRequest requests for the watermark for a pipeline.
+message GetPipelineWatermarksRequest {
+  required string pipeline = 1;
+}
+
 // DaemonService is a grpc service that is used to provide APIs for giving any pipeline information.
 service DaemonService {
 
@@ -49,5 +114,18 @@ service DaemonService {
 
   rpc GetBuffer (GetBufferRequest) returns (GetBufferResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/buffers/{buffer}";
+  };
+
+  rpc GetVertexMetrics (GetVertexMetricsRequest) returns (GetVertexMetricsResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/metrics";
+  };
+
+  // GetPipelineWatermarks return the watermark of the given pipeline
+  rpc GetPipelineWatermarks (GetPipelineWatermarksRequest) returns (GetPipelineWatermarksResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/watermarks";
+  };
+
+  rpc GetPipelineStatus (GetPipelineStatusRequest) returns (GetPipelineStatusResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/status";
   };
 }

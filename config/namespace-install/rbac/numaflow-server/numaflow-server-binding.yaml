@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: numaflow-server-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: numaflow-server-role
+subjects:
+  - kind: ServiceAccount
+    name: numaflow-server-sa

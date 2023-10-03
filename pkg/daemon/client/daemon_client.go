@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package client
 
 import (
@@ -12,6 +28,7 @@ import (
 
 type DaemonClient struct {
 	client daemon.DaemonServiceClient
+	conn   *grpc.ClientConn
 }
 
 func NewDaemonServiceClient(address string) (*DaemonClient, error) {
@@ -23,7 +40,15 @@ func NewDaemonServiceClient(address string) (*DaemonClient, error) {
 		return nil, err
 	}
 	daemonClient := daemon.NewDaemonServiceClient(conn)
-	return &DaemonClient{client: daemonClient}, nil
+	return &DaemonClient{conn: conn, client: daemonClient}, nil
+}
+
+// Close function closes the gRPC connection, it has to be called after a daemon client has finished all its jobs.
+func (dc *DaemonClient) Close() error {
+	if dc.conn != nil {
+		return dc.conn.Close()
+	}
+	return nil
 }
 
 func (dc *DaemonClient) IsDrained(ctx context.Context, pipeline string) (bool, error) {
@@ -59,5 +84,37 @@ func (dc *DaemonClient) GetPipelineBuffer(ctx context.Context, pipeline, buffer 
 		return nil, err
 	} else {
 		return rspn.Buffer, nil
+	}
+}
+
+func (dc *DaemonClient) GetVertexMetrics(ctx context.Context, pipeline, vertex string) ([]*daemon.VertexMetrics, error) {
+	if rspn, err := dc.client.GetVertexMetrics(ctx, &daemon.GetVertexMetricsRequest{
+		Pipeline: &pipeline,
+		Vertex:   &vertex,
+	}); err != nil {
+		return nil, err
+	} else {
+		return rspn.VertexMetrics, nil
+	}
+}
+
+// GetPipelineWatermarks returns the []EdgeWatermark response instance for GetPipelineWatermarksRequest
+func (dc *DaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.EdgeWatermark, error) {
+	if rspn, err := dc.client.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{
+		Pipeline: &pipeline,
+	}); err != nil {
+		return nil, err
+	} else {
+		return rspn.PipelineWatermarks, nil
+	}
+}
+
+func (dc *DaemonClient) GetPipelineStatus(ctx context.Context, pipeline string) (*daemon.PipelineStatus, error) {
+	if rspn, err := dc.client.GetPipelineStatus(ctx, &daemon.GetPipelineStatusRequest{
+		Pipeline: &pipeline,
+	}); err != nil {
+		return nil, err
+	} else {
+		return rspn.Status, nil
 	}
 }

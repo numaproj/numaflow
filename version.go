@@ -1,5 +1,5 @@
 /*
-
+Copyright 2022 The Numaproj Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ type Version struct {
 
 // String outputs the version as a string
 func (v Version) String() string {
-	return v.Version
+	return fmt.Sprintf(`Version: %s, BuildDate: %s, GitCommit: %s, GitTag: %s, GitTreeState: %s, GoVersion: %s, Compiler: %s, Platform: %s`, v.Version, v.BuildDate, v.GitCommit, v.GitTag, v.GitTreeState, v.GoVersion, v.Compiler, v.Platform)
 }
 
 // GetVersion returns the version information

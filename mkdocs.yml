@@ -1,0 +1,127 @@
+site_name: Numaflow - Data/streaming processing platform on Kubernetes
+repo_url: https://github.com/numaproj/numaflow
+edit_uri: edit/main/docs/
+strict: true
+theme:
+  name: material
+  favicon: assets/numaproj.svg
+  font:
+    text: Roboto
+    code: Roboto Mono
+  logo: assets/logo.png
+  palette:
+    - scheme: default
+      primary: blue
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+extra:
+  analytics:
+    provider: google
+    property: G-M7DD40E8RV
+markdown_extensions:
+  - codehilite
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.details
+  - toc:
+      permalink: true
+nav:
+  - Home: README.md
+  - Getting Started:
+      - quick-start.md
+  - User Guide:
+      - Core Concepts:
+          - core-concepts/pipeline.md
+          - core-concepts/vertex.md
+          - core-concepts/inter-step-buffer.md
+          - core-concepts/inter-step-buffer-service.md
+          - core-concepts/watermarks.md
+      - Sources:
+          - Overview: "user-guide/sources/overview.md"
+          - user-guide/sources/generator.md
+          - user-guide/sources/http.md
+          - user-guide/sources/kafka.md
+          - user-guide/sources/nats.md
+          - user-guide/sources/user-defined-sources.md
+          - Data Transformer:
+              - Overview: "user-guide/sources/transformer/overview.md"
+              - Built-in Transformers:
+                  - Overview: "user-guide/sources/transformer/builtin-transformers/README.md"
+                  - Filter: "user-guide/sources/transformer/builtin-transformers/filter.md"
+                  - Event Time Extractor: "user-guide/sources/transformer/builtin-transformers/event-time-extractor.md"
+                  - Event Time Extraction Filter: "user-guide/sources/transformer/builtin-transformers/time-extraction-filter.md"
+      - Sinks:
+          - Overview: "user-guide/sinks/overview.md"
+          - user-guide/sinks/kafka.md
+          - user-guide/sinks/log.md
+          - user-guide/sinks/blackhole.md
+          - User Defined Sinks: "user-guide/sinks/user-defined-sinks.md"
+      - User Defined Functions:
+          - Overview: "user-guide/user-defined-functions/user-defined-functions.md"
+          - Map:
+              - Overview: "user-guide/user-defined-functions/map/map.md"
+              - Built-in UDFs:
+                  - Overview: "user-guide/user-defined-functions/map/builtin-functions/README.md"
+                  - Cat: "user-guide/user-defined-functions/map/builtin-functions/cat.md"
+                  - Filter: "user-guide/user-defined-functions/map/builtin-functions/filter.md"
+          - Reduce:
+              - Overview: "user-guide/user-defined-functions/reduce/reduce.md"
+              - Windowing:
+                  - Overview: "user-guide/user-defined-functions/reduce/windowing/windowing.md"
+                  - Fixed: "user-guide/user-defined-functions/reduce/windowing/fixed.md"
+                  - Sliding: "user-guide/user-defined-functions/reduce/windowing/sliding.md"
+              - Examples: "user-guide/user-defined-functions/reduce/examples.md"
+      - Reference:
+          - user-guide/reference/pipeline-tuning.md
+          - user-guide/reference/edge-tuning.md
+          - user-guide/reference/autoscaling.md
+          - user-guide/reference/conditional-forwarding.md
+          - user-guide/reference/pipeline-operations.md
+          - user-guide/reference/join-vertex.md
+          - user-guide/reference/multi-partition.md
+          - user-guide/reference/side-inputs.md
+          - Configuration:              
+            - user-guide/reference/configuration/container-resources.md
+            - user-guide/reference/configuration/volumes.md
+            - user-guide/reference/configuration/environment-variables.md
+            - user-guide/reference/configuration/labels-and-annotations.md
+            - user-guide/reference/configuration/init-containers.md
+            - user-guide/reference/configuration/sidecar-containers.md
+            - user-guide/reference/configuration/pipeline-customization.md
+            - user-guide/reference/configuration/istio.md
+            - user-guide/reference/configuration/max-message-size.md
+          - user-guide/reference/kustomize/kustomize.md
+          - APIs.md
+      - Use Cases:
+          - user-guide/use-cases/overview.md
+          - user-guide/use-cases/monitoring-and-observability.md
+  - Operator Manual:
+      - Releases ⧉: "operations/releases.md"
+      - operations/installation.md
+      - Validating Webhook: operations/validating-webhook.md
+      - Configuration:
+          - Controller Configuration: "operations/controller-configmap.md"
+          - UI Server Access Path: "operations/ui-access-path.md"
+          - operations/metrics/metrics.md
+          - operations/grafana.md
+  - Contributor Guide:
+      - development/development.md
+      - Specifications:
+          - Overview: "specifications/overview.md"
+          - specifications/controllers.md
+          - specifications/autoscaling.md
+          - Edges, Buffers and Buckets: "specifications/edges-buffers-buckets.md"
+          - Side Inputs: "specifications/side-inputs.md"
+      - development/debugging.md
+      - development/static-code-analysis.md
+      - development/releasing.md
+  - Numaproj: https://numaproj.io

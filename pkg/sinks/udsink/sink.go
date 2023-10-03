@@ -1,39 +1,65 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package udsink
 
 import (
 	"context"
 	"time"
 
-	sinksdk "github.com/numaproj/numaflow-go/sink"
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
-	"go.uber.org/zap"
+	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-type userDefinedSink struct {
+type UserDefinedSink struct {
 	name         string
 	pipelineName string
-	isdf         *forward.InterStepDataForward
+	isdf         *sinkforward.DataForward
 	logger       *zap.SugaredLogger
-	udsink       *udsHTTPBasedUDSink
+	udsink       SinkApplier
 }
 
-type Option func(*userDefinedSink) error
+type Option func(*UserDefinedSink) error
 
 func WithLogger(log *zap.SugaredLogger) Option {
-	return func(t *userDefinedSink) error {
+	return func(t *UserDefinedSink) error {
 		t.logger = log
 		return nil
 	}
 }
 
 // NewUserDefinedSink returns genericSink type.
-func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option) (*userDefinedSink, error) {
-	s := new(userDefinedSink)
+func NewUserDefinedSink(vertex *dfv1.Vertex,
+	fromBuffer isb.BufferReader,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark publish.Publisher,
+	idleManager wmb.IdleManager,
+	udsink SinkApplier,
+	opts ...Option) (*UserDefinedSink, error) {
+
+	s := new(UserDefinedSink)
 	name := vertex.Spec.Name
 	s.name = name
 	s.pipelineName = vertex.Spec.PipelineName
@@ -46,15 +72,14 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts .
 		s.logger = logging.NewLogger()
 	}
 
-	forwardOpts := []forward.Option{forward.WithLogger(s.logger)}
+	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(s.logger)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	contentType := sharedutil.LookupEnvStringOr(dfv1.EnvUDSinkContentType, string(dfv1.MsgPackType))
-	s.udsink = NewUDSHTTPBasedUDSink(dfv1.PathVarRun+"/udsink.sock", withTimeout(20*time.Second), withContentType(dfv1.ContentType(contentType)))
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{name: s}, forward.All, applier.Terminal, nil, nil, forwardOpts...)
+	s.udsink = udsink
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,41 +87,48 @@ func NewUserDefinedSink(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts .
 	return s, nil
 }
 
-func (s *userDefinedSink) GetName() string {
+func (s *UserDefinedSink) GetName() string {
 	return s.name
 }
 
-func (s *userDefinedSink) IsFull() bool {
+// GetPartitionIdx returns the partition index.
+// for sink it is always 0.
+func (s *UserDefinedSink) GetPartitionIdx() int32 {
+	return 0
+}
+
+func (s *UserDefinedSink) IsFull() bool {
 	return false
 }
 
 // Write writes to the UDSink container.
-func (s *userDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	msgs := make([]sinksdk.Message, len(messages))
+func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
+	msgs := make([]*sinkpb.SinkRequest, len(messages))
 	for i, m := range messages {
-		msgs[i] = sinksdk.Message{ID: m.ID, Payload: m.Payload}
+		msgs[i] = &sinkpb.SinkRequest{
+			Id:        m.ID,
+			Value:     m.Payload,
+			Keys:      m.Keys,
+			EventTime: timestamppb.New(m.EventTime),
+			// Watermark is only available in readmessage....
+			Watermark: timestamppb.New(time.Time{}), // TODO: insert the correct watermark
+		}
 	}
-	return nil, s.udsink.Apply(ctx, msgs)
+	return nil, s.udsink.ApplySink(ctx, msgs)
 }
 
-func (br *userDefinedSink) Close() error {
+func (s *UserDefinedSink) Close() error {
 	return nil
 }
 
-func (s *userDefinedSink) Start() <-chan struct{} {
-	// Readiness check
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	if err := s.udsink.WaitUntilReady(ctx); err != nil {
-		s.logger.Fatalf("failed on UDSink readiness check, %w", err)
-	}
+func (s *UserDefinedSink) Start() <-chan struct{} {
 	return s.isdf.Start()
 }
 
-func (s *userDefinedSink) Stop() {
+func (s *UserDefinedSink) Stop() {
 	s.isdf.Stop()
 }
 
-func (s *userDefinedSink) ForceStop() {
+func (s *UserDefinedSink) ForceStop() {
 	s.isdf.ForceStop()
 }

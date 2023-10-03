@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: auto-scaling-pipeline
+  name: autoscaling-pipeline
 spec:
   vertices:
     - name: in
@@ -12,14 +12,14 @@ spec:
           duration: 1s
     - name: cat
       scale:
-        min: 2 # Minimal replicas
+        min: 2 # Minimum replicas
         max: 4 # Maximum replicas
       udf:
         builtin:
-          name: cat # A builtin UDF which simply cats the message
+          name: cat # A built-in UDF which simply cats the message
     - name: out
       scale:
-        min: 3 # Minimal replicas
+        min: 3 # Minimum replicas
         max: 5 # Maximum replicas
       sink:
         # A simple log printing sink

@@ -1,0 +1,23 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  vertices:
+    - name: in
+      source:
+        generator:
+          rpu: 5
+          duration: 1s
+    - name: my-udf
+      udf:
+        container:
+          image: my-pipeline/my-udf:v0.1
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: my-udf
+    - from: my-udf
+      to: out

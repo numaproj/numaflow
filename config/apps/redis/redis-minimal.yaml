@@ -1,0 +1,81 @@
+---
+#
+# Redis service
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: client
+  clusterIP: None
+  selector:
+    app: redis
+---
+#
+# Redis configuration file
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  labels:
+    app: redis
+data:
+  redis-config:  |
+    maxmemory 10mb
+    maxmemory-policy allkeys-lru
+    protected-mode no
+---
+#
+# Redis stateful set
+#
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+spec:
+  serviceName: redis
+  replicas: 1
+  minReadySeconds: 10 # by default is 0
+  selector:
+    matchLabels:
+      app: redis # has to match .spec.template.metadata.labels
+  template:
+    metadata:
+      labels:
+        app: redis
+        name: redis
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: redis
+          image: redis:7.0.11
+          ports:
+            - containerPort: 6379
+              name: client
+          command:
+            - redis-server
+            - "/redis-master/redis.conf"
+          env:
+            - name: MASTER
+              value: "true"
+          volumeMounts:
+            - mountPath: /redis-master-data
+              name: data
+            - mountPath: /redis-master
+              name: config
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: redis-config
+            items:
+              - key: redis-config
+                path: redis.conf

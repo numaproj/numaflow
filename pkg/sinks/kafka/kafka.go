@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package kafka
 
 import (
@@ -5,15 +21,18 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
+	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // ToKafka produce the output to a kafka sinks.
@@ -23,7 +42,7 @@ type ToKafka struct {
 	producer     sarama.AsyncProducer
 	connected    bool
 	topic        string
-	isdf         *forward.InterStepDataForward
+	isdf         *sinkforward.DataForward
 	kafkaSink    *dfv1.KafkaSink
 	log          *zap.SugaredLogger
 }
@@ -38,17 +57,23 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewToKafka returns ToKafka type.
-func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option) (*ToKafka, error) {
+func NewToKafka(vertex *dfv1.Vertex,
+	fromBuffer isb.BufferReader,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark publish.Publisher,
+	idleManager wmb.IdleManager,
+	opts ...Option) (*ToKafka, error) {
+
 	kafkaSink := vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
-	//apply options for kafka sink
+	// apply options for kafka sink
 	for _, o := range opts {
 		if err := o(toKafka); err != nil {
 			return nil, err
 		}
 	}
 
-	//set default logger
+	// set default logger
 	if toKafka.log == nil {
 		toKafka.log = logging.NewLogger()
 	}
@@ -58,13 +83,14 @@ func NewToKafka(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option
 	toKafka.topic = kafkaSink.Topic
 	toKafka.kafkaSink = kafkaSink
 
-	forwardOpts := []forward.Option{forward.WithLogger(toKafka.log)}
+	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(toKafka.log)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	f, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{vertex.Name: toKafka}, forward.All, applier.Terminal, nil, nil, forwardOpts...)
+
+	f, err := sinkforward.NewDataForward(vertex, fromBuffer, toKafka, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +117,13 @@ func connect(kafkaSink *dfv1.KafkaSink) (sarama.AsyncProducer, error) {
 			config.Net.TLS.Config = c
 		}
 	}
+	if s := kafkaSink.SASL; s != nil {
+		if sasl, err := util.GetSASL(s); err != nil {
+			return nil, err
+		} else {
+			config.Net.SASL = *sasl
+		}
+	}
 	config.Producer.Return.Successes = true
 	config.Producer.Return.Errors = true
 	producer, err := sarama.NewAsyncProducer(kafkaSink.Brokers, config)
@@ -103,6 +136,12 @@ func connect(kafkaSink *dfv1.KafkaSink) (sarama.AsyncProducer, error) {
 // GetName returns the name.
 func (tk *ToKafka) GetName() string {
 	return tk.name
+}
+
+// GetPartitionIdx returns the partition index.
+// for sink it is always 0.
+func (tk *ToKafka) GetPartitionIdx() int32 {
+	return 0
 }
 
 // Write writes to the kafka topic.
@@ -144,7 +183,7 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 				// Need to close and recreate later because the successes and errors channels might be unclean
 				_ = tk.producer.Close()
 				tk.connected = false
-				kafkaSinkWriteTimeouts.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
+				kafkaSinkWriteTimeouts.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
 				close(done)
 				return
 			default:
@@ -155,16 +194,16 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 		message := &sarama.ProducerMessage{
 			Topic:    tk.topic,
 			Value:    sarama.ByteEncoder(msg.Payload),
-			Metadata: index, // Use metadata to identify if it succeedes or fails in the async return.
+			Metadata: index, // Use metadata to identify if it succeeds or fails in the async return.
 		}
 		tk.producer.Input() <- message
 	}
 	<-done
 	for _, err := range errs {
 		if err != nil {
-			kafkaSinkWriteErrors.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
+			kafkaSinkWriteErrors.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
 		} else {
-			kafkaSinkWriteCount.With(map[string]string{"vertex": tk.name, "pipeline": tk.pipelineName}).Inc()
+			kafkaSinkWriteCount.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
 		}
 	}
 	return nil, errs

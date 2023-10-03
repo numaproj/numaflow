@@ -1,24 +1,42 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package logger
 
 import (
 	"context"
 	"log"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-
 	"go.uber.org/zap"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/forward"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/udf/applier"
+	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // ToLog prints the output to a log sinks.
 type ToLog struct {
 	name         string
 	pipelineName string
-	isdf         *forward.InterStepDataForward
+	isdf         *sinkforward.DataForward
 	logger       *zap.SugaredLogger
 }
 
@@ -32,7 +50,13 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewToLog returns ToLog type.
-func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option) (*ToLog, error) {
+func NewToLog(vertex *dfv1.Vertex,
+	fromBuffer isb.BufferReader,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark publish.Publisher,
+	idleManager wmb.IdleManager,
+	opts ...Option) (*ToLog, error) {
+
 	toLog := new(ToLog)
 	name := vertex.Spec.Name
 	toLog.name = name
@@ -47,13 +71,14 @@ func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option) 
 		toLog.logger = logging.NewLogger()
 	}
 
-	forwardOpts := []forward.Option{forward.WithLogger(toLog.logger)}
+	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(toLog.logger)}
 	if x := vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	isdf, err := forward.NewInterStepDataForward(vertex, fromBuffer, map[string]isb.BufferWriter{name: toLog}, forward.All, applier.Terminal, nil, nil, forwardOpts...)
+
+	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, toLog, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -63,41 +88,47 @@ func NewToLog(vertex *dfv1.Vertex, fromBuffer isb.BufferReader, opts ...Option) 
 }
 
 // GetName returns the name.
-func (s *ToLog) GetName() string {
-	return s.name
+func (t *ToLog) GetName() string {
+	return t.name
+}
+
+// GetPartitionIdx returns the partition index.
+// for sink it is always 0.
+func (t *ToLog) GetPartitionIdx() int32 {
+	return 0
 }
 
 // IsFull returns whether logging is full, which is never true.
-func (s *ToLog) IsFull() bool {
+func (t *ToLog) IsFull() bool {
 	// printing can never be full
 	return false
 }
 
 // Write writes to the log.
-func (s *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	prefix := "(" + s.GetName() + ")"
+func (t *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
+	prefix := "(" + t.GetName() + ")"
 	for _, message := range messages {
-		logSinkWriteCount.With(map[string]string{"vertex": s.name, "pipeline": s.pipelineName}).Inc()
-		log.Println(prefix, string(message.Payload))
+		logSinkWriteCount.With(map[string]string{metrics.LabelVertex: t.name, metrics.LabelPipeline: t.pipelineName}).Inc()
+		log.Println(prefix, " Payload - ", string(message.Payload), " Keys - ", message.Keys, " EventTime - ", message.EventTime.UnixMilli())
 	}
 	return nil, make([]error, len(messages))
 }
 
-func (br *ToLog) Close() error {
+func (t *ToLog) Close() error {
 	return nil
 }
 
 // Start starts sinking to Log.
-func (s *ToLog) Start() <-chan struct{} {
-	return s.isdf.Start()
+func (t *ToLog) Start() <-chan struct{} {
+	return t.isdf.Start()
 }
 
 // Stop stops sinking
-func (s *ToLog) Stop() {
-	s.isdf.Stop()
+func (t *ToLog) Stop() {
+	t.isdf.Stop()
 }
 
 // ForceStop stops sinking
-func (s *ToLog) ForceStop() {
-	s.isdf.ForceStop()
+func (t *ToLog) ForceStop() {
+	t.isdf.ForceStop()
 }

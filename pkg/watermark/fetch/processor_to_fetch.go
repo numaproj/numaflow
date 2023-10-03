@@ -1,17 +1,33 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fetch
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
+	"strings"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/watermark/processor"
+	"github.com/numaproj/numaflow/pkg/watermark/entity"
+	"github.com/numaproj/numaflow/pkg/watermark/timeline"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"go.uber.org/zap"
 )
 
 type status int
@@ -34,33 +50,49 @@ func (s status) String() string {
 	return "unknown"
 }
 
-// ProcessorToFetch is the smallest unit of entity (from we which we fetch data) that does inorder processing or contains inorder data.
+// ProcessorToFetch is the smallest unit of entity (from which we fetch data) that does inorder processing or contains inorder data. It tracks OT for all the partitions of the from buffer.
 type ProcessorToFetch struct {
-	ctx            context.Context
-	entity         processor.ProcessorEntitier
-	status         status
-	offsetTimeline *OffsetTimeline
-	otWatcher      store.WatermarkKVWatcher
-	lock           sync.RWMutex
-	log            *zap.SugaredLogger
+	ctx    context.Context
+	entity entity.ProcessorEntitier
+	status status
+	// offsetTimelines is a slice of OTs for each partition of the incoming buffer.
+	offsetTimelines []*timeline.OffsetTimeline
+	lock            sync.RWMutex
+	log             *zap.SugaredLogger
+}
+
+// GetEntity returns the processor entity.
+func (p *ProcessorToFetch) GetEntity() entity.ProcessorEntitier {
+	return p.entity
+}
+
+// GetOffsetTimelines returns the processor's OT.
+func (p *ProcessorToFetch) GetOffsetTimelines() []*timeline.OffsetTimeline {
+	return p.offsetTimelines
 }
 
 func (p *ProcessorToFetch) String() string {
-	return fmt.Sprintf("%s status:%v, timeline: %s", p.entity.GetID(), p.getStatus(), p.offsetTimeline.Dump())
+	var stringBuilder strings.Builder
+	for _, ot := range p.offsetTimelines {
+		stringBuilder.WriteString(fmt.Sprintf(" %s\n ", ot.Dump()))
+	}
+	return fmt.Sprintf("%s status:%v, timelines: %s", p.entity.GetName(), p.getStatus(), stringBuilder.String())
 }
 
 // NewProcessorToFetch creates ProcessorToFetch.
-func NewProcessorToFetch(ctx context.Context, processor processor.ProcessorEntitier, capacity int, watcher store.WatermarkKVWatcher) *ProcessorToFetch {
-	p := &ProcessorToFetch{
-		ctx:            ctx,
-		entity:         processor,
-		status:         _active,
-		offsetTimeline: NewOffsetTimeline(ctx, capacity),
-		otWatcher:      watcher,
-		log:            logging.FromContext(ctx),
+func NewProcessorToFetch(ctx context.Context, processor entity.ProcessorEntitier, capacity int, fromBufferPartitionCount int32) *ProcessorToFetch {
+
+	var offsetTimelines []*timeline.OffsetTimeline
+	for i := int32(0); i < fromBufferPartitionCount; i++ {
+		t := timeline.NewOffsetTimeline(ctx, capacity)
+		offsetTimelines = append(offsetTimelines, t)
 	}
-	if watcher != nil {
-		go p.startTimeLineWatcher()
+	p := &ProcessorToFetch{
+		ctx:             ctx,
+		entity:          processor,
+		status:          _active,
+		offsetTimelines: offsetTimelines,
+		log:             logging.FromContext(ctx),
 	}
 	return p
 }
@@ -96,44 +128,4 @@ func (p *ProcessorToFetch) IsDeleted() bool {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 	return p.status == _deleted
-}
-
-func (p *ProcessorToFetch) startTimeLineWatcher() {
-	watchCh := p.otWatcher.Watch(p.ctx)
-	for {
-		select {
-		case <-p.ctx.Done():
-			return
-		case value := <-watchCh:
-			// TODO: why will value will be nil?
-			if value == nil {
-				continue
-			}
-			switch value.Operation() {
-			case store.KVPut:
-				epoch, skip, err := p.entity.ParseOTWatcherKey(value.Key())
-				if err != nil {
-					p.log.Errorw("unable to convert value.Key() to int64", zap.String("received", value.Key()), zap.Error(err))
-					continue
-				}
-				// if skip is set to true, it means the key update we received is for a different processor (sharing of bucket)
-				if skip {
-					continue
-				}
-				uint64Value := binary.LittleEndian.Uint64(value.Value())
-				p.offsetTimeline.Put(OffsetWatermark{
-					watermark: epoch,
-					offset:    int64(uint64Value),
-				})
-				p.log.Debugf("[%s]timelineWatcher- Updates:  [%s] > %d: %d", p.entity.GetBucketName(), p.otWatcher.GetKVName(), epoch, int64(uint64Value))
-				p.log.Debugf("[%s]%s", p.entity.GetBucketName(), p)
-			case store.KVDelete:
-				// we do not care about Delete events because the timeline bucket is meant to grow and the TTL will
-				// naturally trim the KV store.
-			case store.KVPurge:
-				// skip
-			}
-		}
-
-	}
 }

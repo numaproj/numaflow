@@ -1,5 +1,21 @@
 //go:build isb_redis
 
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package isbsvc
 
 import (
@@ -7,13 +23,12 @@ import (
 	"testing"
 	"time"
 
-	goredis "github.com/go-redis/redis/v8"
+	"github.com/numaproj/numaflow/pkg/isb/stores/redis"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb/redis"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/isbsvc/clients"
+	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 )
 
 func TestIsbsRedisSvc_Buffers(t *testing.T) {
@@ -22,14 +37,15 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 		Addrs: []string{":6379"},
 	}
 	buffer := "isbsRedisSvcBuffer"
+	stream := redisclient.GetRedisStreamName(buffer)
 	group := buffer + "-group"
-	buffers := []dfv1.Buffer{{Name: buffer, Type: dfv1.EdgeBuffer}}
-	redisClient := clients.NewRedisClient(redisOptions)
+	buffers := []string{buffer}
+	redisClient := redisclient.NewRedisClient(redisOptions)
 	isbsRedisSvc := NewISBRedisSvc(redisClient)
-	assert.NoError(t, isbsRedisSvc.CreateBuffers(ctx, buffers))
+	assert.NoError(t, isbsRedisSvc.CreateBuffersAndBuckets(ctx, buffers, nil, ""))
 
 	// validate buffer
-	assert.NoError(t, isbsRedisSvc.ValidateBuffers(ctx, buffers))
+	assert.NoError(t, isbsRedisSvc.ValidateBuffersAndBuckets(ctx, buffers, nil, ""))
 
 	// Verify
 	// Add some data
@@ -38,29 +54,29 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	// Add 10 messages
 	for _, msg := range messages {
 		err := redisClient.Client.XAdd(ctx, &goredis.XAddArgs{
-			Stream: "isbsRedisSvcBuffer",
+			Stream: stream,
 			Values: []interface{}{msg.Header, msg.Body},
 		}).Err()
 		assert.NoError(t, err)
 	}
 
 	// Read all the messages.
-	rqr, _ := redis.NewBufferRead(ctx, redisClient, buffer, group, "consumer").(*redis.BufferRead)
+	rqr, _ := redis.NewBufferRead(ctx, redisClient, buffer, group, "consumer", 0).(*redis.BufferRead)
 
 	readMessages, err := rqr.Read(ctx, 10)
 	assert.Nil(t, err)
 	// ACK just 1 message, which leaves a pending count of 9
 	var readOffsets = make([]string, 1)
 	readOffsets[0] = readMessages[0].ReadOffset.String()
-	_ = redisClient.Client.XAck(clients.RedisContext, buffer, group, readOffsets...).Err()
+	_ = redisClient.Client.XAck(redisclient.RedisContext, stream, group, readOffsets...).Err()
 
 	// test GetBufferInfo
 	for _, buffer := range buffers {
 		bufferInfo, err := isbsRedisSvc.GetBufferInfo(ctx, buffer)
 		assert.NoError(t, err)
-		assert.Equal(t, bufferInfo.PendingCount, int64(9))
+		assert.Equal(t, int64(9), bufferInfo.PendingCount)
 	}
 
 	// delete buffer
-	assert.NoError(t, isbsRedisSvc.DeleteBuffers(ctx, buffers))
+	assert.NoError(t, isbsRedisSvc.DeleteBuffersAndBuckets(ctx, buffers, nil, ""))
 }

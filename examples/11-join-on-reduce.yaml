@@ -1,0 +1,43 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: join-on-reduce
+spec:
+  vertices:
+    - name: http-in
+      source:
+        http: {}
+    - name: kafka-in
+      source:
+        kafka:
+          brokers:
+            - my-broker1:19700
+            - my-broker2:19700
+          topic: my-topic
+          consumerGroup: my-consumer-group
+    # Both of the incoming Vertices join on this Reduce Vertex
+    - name: compute-sum
+      udf:
+        container:
+          # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/sum
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
+        groupBy:
+          window:
+            fixed:
+              length: 10s
+          keyed: false
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 10Gi
+              accessMode: ReadWriteOnce
+    - name: sink
+      sink:
+        # A simple log printing sink
+        log: {}
+  edges:
+    - from: http-in
+      to: compute-sum
+    - from: kafka-in
+      to: compute-sum
+    - from: compute-sum
+      to: sink

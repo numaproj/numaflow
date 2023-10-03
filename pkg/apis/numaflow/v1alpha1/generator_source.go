@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import (
@@ -15,4 +31,8 @@ type GeneratorSource struct {
 	// +kubebuilder:default=8
 	// +optional
 	MsgSize *int32 `json:"msgSize,omitempty" protobuf:"bytes,3,opt,name=msgSize"`
+	// KeyCount is the number of unique keys in the payload
+	KeyCount *int32 `json:"keyCount,omitempty" protobuf:"bytes,4,opt,name=keyCount"`
+	// Value is an optional uint64 value to be written in to the payload
+	Value *uint64 `json:"value,omitempty" protobuf:"bytes,5,opt,name=value"`
 }

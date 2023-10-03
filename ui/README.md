@@ -1,27 +1,22 @@
-# NumaFlow UI
+# Numaflow UI
 
-![Numaflow Image](../docs/assets/numa.svg)
+![Numaflow Image](../docs/assets/numaproj.svg)
 
-A web-based UI for NumaFlow
+A web-based UI for Numaflow
 
 The UI has the following features:
 * View running pipelines in your namespace
 * View Vertex and Edge Information of your pipeline
 * View BackPressure and Pending Messages
-* View Container (main/udf) Logs for a given vertex
+* View Container Logs for a given vertex
 
 ## Development
 
-This  explains how to set up a development environment so you can get started with UI development
+See [Development Guide](../docs/development.md).
 
-### Prerequisites
-
-Follow the instructions below to set up your development environment.
-
-### Install requirements
-
-These tools are required for development.
-
-1. [`NumaFlow`](https://github.com/numaproj/numaflow/blob/master/docs/DEVELOPMENT.md): Follow the document to prepare `NumaFlow` development environment.
-1. [`node`](https://nodejs.org/en/download/): NodeJS - `brew install node`.
-1. [`yarn`](https://yarnpkg.com/): Package manager - `brew install yarn`
+```shell
+# Build image and deploy to a k3d cluster
+make start
+# Port-forward, and access https://localhost:8443
+kubectl -n numaflow-system port-forward svc/numaflow-server 8443
+```

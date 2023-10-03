@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package fixtures
 
 import (
@@ -9,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
 
@@ -25,6 +40,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	flowversiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
@@ -34,9 +50,11 @@ const (
 	ISBSvcName     = "numaflow-e2e"
 	defaultTimeout = 60 * time.Second
 
-	LogSourceVertexStarted = "Start processing source messages"
-	LogSinkVertexStarted   = "Start processing sink messages"
-	LogUDFVertexStarted    = "Start processing udf messages"
+	LogSourceVertexStarted    = "Start processing source messages"
+	SinkVertexStarted         = "Start processing sink messages"
+	LogUDFVertexStarted       = "Start processing udf messages"
+	LogReduceUDFVertexStarted = "Start processing reduce udf messages"
+	LogDaemonStarted          = "Daemon server started successfully"
 )
 
 var (
@@ -49,7 +67,7 @@ metadata:
 spec:
   redis:
     native:
-      version: 6.2.6`
+      version: 7.0.11`
 
 	e2eISBSvcJetStream = `apiVersion: numaflow.numaproj.io/v1alpha1
 kind: InterStepBufferService
@@ -74,19 +92,7 @@ type E2ESuite struct {
 
 func (s *E2ESuite) SetupSuite() {
 	var err error
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if kubeconfig == "" {
-		home, _ := os.UserHomeDir()
-		kubeconfig = home + "/.kube/config"
-		if _, err := os.Stat(kubeconfig); err != nil && os.IsNotExist(err) {
-			kubeconfig = ""
-		}
-	}
-	if kubeconfig != "" {
-		s.restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-	} else {
-		s.restConfig, err = rest.InClusterConfig()
-	}
+	s.restConfig, err = sharedutil.K8sRestConfig()
 	s.stopch = make(chan struct{})
 	s.CheckError(err)
 	s.kubeClient, err = kubernetes.NewForConfig(s.restConfig)
@@ -113,6 +119,13 @@ func (s *E2ESuite) SetupSuite() {
 	s.T().Log("ISB svc is ready")
 	err = PodPortForward(s.restConfig, Namespace, "e2e-api-pod", 8378, 8378, s.stopch)
 	s.CheckError(err)
+
+	// Create Redis resources used for sink data validation.
+	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
+	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, OutputRegexp(""))
+	createCMD := fmt.Sprintf("kubectl apply -k ../../config/apps/redis -n %s", Namespace)
+	s.Given().When().Exec("sh", []string{"-c", createCMD}, OutputRegexp("service/redis created"))
+	s.T().Log("Redis resources are ready")
 }
 
 func (s *E2ESuite) TearDownSuite() {
@@ -130,6 +143,9 @@ func (s *E2ESuite) TearDownSuite() {
 		Expect().
 		ISBSvcDeleted(1 * time.Minute)
 	s.T().Log("ISB svc is deleted")
+	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
+	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, OutputRegexp(`service "redis" deleted`))
+	s.T().Log("Redis resources are deleted")
 	close(s.stopch)
 }
 
@@ -176,9 +192,23 @@ func (s *E2ESuite) Given() *Given {
 	}
 }
 
+func (s *E2ESuite) GetNumaflowServerPodName() string {
+	s.T().Log("Get numaflow server pod name")
+	podList, err := s.kubeClient.CoreV1().Pods(Namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, "numaflow-server") {
+			return pod.Name
+		}
+	}
+	return ""
+}
+
 func (s *E2ESuite) StartPortForward(podName string, port int) (stopPortForward func()) {
 
-	s.T().Log("starting port-forward to pod :", podName, port)
+	s.T().Log("Starting port-forward to pod :", podName, port)
 	transport, upgrader, err := spdy.RoundTripperFor(s.restConfig)
 	if err != nil {
 		panic(err)
@@ -200,12 +230,10 @@ func (s *E2ESuite) StartPortForward(podName string, port int) (stopPortForward f
 		}
 	}()
 	<-readyChan
-	s.T().Log("started port-forward :", podName, port)
+	s.T().Log("Started port-forward :", podName, port)
 	return func() {
 		stopChan <- struct{}{}
-		// not needed
-		// forwarder.Close()
-		s.T().Log("stopped port-forward :", podName, port)
+		s.T().Log("Stopped port-forward :", podName, port)
 	}
 }
 

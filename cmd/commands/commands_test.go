@@ -1,19 +1,40 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package commands
 
 import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func Test_Commands(t *testing.T) {
+
+	os.Setenv(dfv1.EnvPipelineName, "test-pl")
+
 	t.Run("root execute", func(t *testing.T) {
 		assert.NotPanics(t, Execute, "help")
 	})
@@ -23,54 +44,53 @@ func Test_Commands(t *testing.T) {
 		rootCmd.SetOut(b)
 		rootCmd.SetArgs([]string{"help"})
 		Execute()
-		output, _ := ioutil.ReadAll(b)
+		output, _ := io.ReadAll(b)
 		assert.Contains(t, string(output), "Available Commands")
 	})
 
 	t.Run("ISBSvcBufferCreate", func(t *testing.T) {
-		cmd := NewISBSvcBufferCreateCommand()
+		cmd := NewISBSvcCreateCommand()
 		assert.True(t, cmd.HasLocalFlags())
-		assert.Equal(t, "isbsvc-buffer-create", cmd.Use)
-		assert.Equal(t, "stringToString", cmd.Flag("buffers").Value.Type())
+		assert.Equal(t, "isbsvc-create", cmd.Use)
+		assert.Equal(t, "stringSlice", cmd.Flag("buffers").Value.Type())
+		assert.Equal(t, "stringSlice", cmd.Flag("buckets").Value.Type())
 		assert.Equal(t, "string", cmd.Flag("isbsvc-type").Value.Type())
 		err := cmd.Execute()
 		assert.Error(t, err)
-		assert.Equal(t, "buffer list should not be empty", err.Error())
-		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1=bb"})
-		err = cmd.Execute()
-		assert.Error(t, err)
-		assert.Equal(t, "required environment variable '"+dfv1.EnvPipelineName+"' not defined", err.Error())
-		os.Setenv(dfv1.EnvPipelineName, "test-pl")
+		assert.Contains(t, err.Error(), "unsupported isb service type")
+		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1,buffer2", "--buckets=bucket1,bucket2"})
 		err = cmd.Execute()
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported isb service type")
 	})
 
 	t.Run("ISBSvcBufferDelete", func(t *testing.T) {
-		cmd := NewISBSvcBufferDeleteCommand()
+		cmd := NewISBSvcDeleteCommand()
 		assert.True(t, cmd.HasLocalFlags())
-		assert.Equal(t, "isbsvc-buffer-delete", cmd.Use)
-		assert.Equal(t, "stringToString", cmd.Flag("buffers").Value.Type())
+		assert.Equal(t, "isbsvc-delete", cmd.Use)
+		assert.Equal(t, "stringSlice", cmd.Flag("buffers").Value.Type())
+		assert.Equal(t, "stringSlice", cmd.Flag("buckets").Value.Type())
 		assert.Equal(t, "string", cmd.Flag("isbsvc-type").Value.Type())
 		err := cmd.Execute()
 		assert.Error(t, err)
-		assert.Equal(t, "buffer not supplied", err.Error())
-		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1=bb"})
+		assert.Contains(t, err.Error(), "unsupported isb service type")
+		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1,buffer2", "--buckets=bucket1,bucket2"})
 		err = cmd.Execute()
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported isb service type")
 	})
 
 	t.Run("ISBSvcBufferValidate", func(t *testing.T) {
-		cmd := NewISBSvcBufferValidateCommand()
+		cmd := NewISBSvcValidateCommand()
 		assert.True(t, cmd.HasLocalFlags())
-		assert.Equal(t, "isbsvc-buffer-validate", cmd.Use)
-		assert.Equal(t, "stringToString", cmd.Flag("buffers").Value.Type())
+		assert.Equal(t, "isbsvc-validate", cmd.Use)
+		assert.Equal(t, "stringSlice", cmd.Flag("buffers").Value.Type())
+		assert.Equal(t, "stringSlice", cmd.Flag("buckets").Value.Type())
 		assert.Equal(t, "string", cmd.Flag("isbsvc-type").Value.Type())
 		err := cmd.Execute()
 		assert.Error(t, err)
-		assert.Equal(t, "buffer not supplied", err.Error())
-		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1=bb"})
+		assert.Equal(t, "unsupported isb service type", err.Error())
+		cmd.SetArgs([]string{"--isbsvc-type=nonono", "--buffers=buffer1,buffer2", "--buckets=bucket1,bucket2"})
 		err = cmd.Execute()
 		assert.Error(t, err)
 		assert.Equal(t, "unsupported isb service type", err.Error())
@@ -79,7 +99,9 @@ func Test_Commands(t *testing.T) {
 	t.Run("Controller", func(t *testing.T) {
 		cmd := NewControllerCommand()
 		assert.Equal(t, "controller", cmd.Use)
-		assert.False(t, cmd.HasLocalFlags())
+		assert.True(t, cmd.HasLocalFlags())
+		assert.Equal(t, "string", cmd.Flag("managed-namespace").Value.Type())
+		assert.Equal(t, "bool", cmd.Flag("namespaced").Value.Type())
 	})
 
 	t.Run("BuiltinUDF", func(t *testing.T) {
@@ -136,8 +158,8 @@ func generateEncodedVertexSpecs() string {
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas:     &replicas,
-			FromEdges:    []dfv1.Edge{{From: "input", To: "name"}},
-			ToEdges:      []dfv1.Edge{{From: "name", To: "output"}},
+			FromEdges:    []dfv1.CombinedEdge{{Edge: dfv1.Edge{From: "input", To: "name"}}},
+			ToEdges:      []dfv1.CombinedEdge{{Edge: dfv1.Edge{From: "name", To: "output"}}},
 			PipelineName: "test-pl",
 			AbstractVertex: dfv1.AbstractVertex{
 				Name: "name",

@@ -1,0 +1,35 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-pipeline
+spec:
+  vertices:
+    - name: in
+      source:
+        generator:
+          rpu: 5
+          duration: 1s
+    - name: my-udf
+      udf:
+        container:
+          image: my-pipeline/my-udf:v0.1
+          volumeMounts:
+          - name: config-volume
+            mountPath: /etc/config
+          - name: secret-volume
+            mountPath: /etc/secrets
+      volumes:
+      - name: config-volume
+        configMap:
+          name: my-cm
+      - name: secret-volume
+        secret:
+          secretName: my-secret
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: my-udf
+    - from: my-udf
+      to: out

@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1alpha1
 
 import (
@@ -9,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type RedisBuferService struct {
+type RedisBufferService struct {
 	// Native brings up a native Redis service
 	Native *NativeRedis `json:"native,omitempty" protobuf:"bytes,1,opt,name=native"`
 	// External holds an External Redis config
@@ -53,56 +69,14 @@ type NativeRedis struct {
 	// +optional
 	MetricsContainerTemplate *ContainerTemplate `json:"metricsContainerTemplate,omitempty" protobuf:"bytes,5,opt,name=metricsContainerTemplate"`
 	// +optional
-	Persistence *PersistenceStrategy `json:"persistence,omitempty" protobuf:"bytes,6,opt,name=persistence"`
-	// Metadata sets the pods's metadata, i.e. annotations and labels
-	Metadata *Metadata `json:"metadata,omitempty" protobuf:"bytes,7,opt,name=metadata"`
-	// NodeSelector is a selector which must be true for the pod to fit on a node.
-	// Selector which must match a node's labels for the pod to be scheduled on that node.
-	// More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+	InitContainerTemplate *ContainerTemplate `json:"initContainerTemplate,omitempty" protobuf:"bytes,6,opt,name=initContainerTemplate"`
 	// +optional
-	NodeSelector map[string]string `json:"nodeSelector,omitempty" protobuf:"bytes,8,rep,name=nodeSelector"`
-	// If specified, the pod's tolerations.
+	Persistence *PersistenceStrategy `json:"persistence,omitempty" protobuf:"bytes,7,opt,name=persistence"`
 	// +optional
-	Tolerations []corev1.Toleration `json:"tolerations,omitempty" protobuf:"bytes,9,rep,name=tolerations"`
-	// SecurityContext holds pod-level security attributes and common container settings.
-	// Optional: Defaults to empty.  See type description for default values of each field.
-	// +optional
-	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty" protobuf:"bytes,10,opt,name=securityContext"`
-	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
-	// If specified, these secrets will be passed to individual puller implementations for them to use. For example,
-	// in the case of docker, only DockerConfig type secrets are honored.
-	// More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
-	// +optional
-	// +patchMergeKey=name
-	// +patchStrategy=merge
-	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,11,rep,name=imagePullSecrets"`
-	// If specified, indicates the Redis pod's priority. "system-node-critical"
-	// and "system-cluster-critical" are two special keywords which indicate the
-	// highest priorities with the former being the highest priority. Any other
-	// name must be defined by creating a PriorityClass object with that name.
-	// If not specified, the pod priority will be default or zero if there is no
-	// default.
-	// More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-	// +optional
-	PriorityClassName string `json:"priorityClassName,omitempty" protobuf:"bytes,12,opt,name=priorityClassName"`
-	// The priority value. Various system components use this field to find the
-	// priority of the Redis pod. When Priority Admission Controller is enabled,
-	// it prevents users from setting this field. The admission controller populates
-	// this field from PriorityClassName.
-	// The higher the value, the higher the priority.
-	// More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
-	// +optional
-	Priority *int32 `json:"priority,omitempty" protobuf:"bytes,13,opt,name=priority"`
-	// The pod's scheduling constraints
-	// More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-	// +optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty" protobuf:"bytes,14,opt,name=affinity"`
-	// ServiceAccountName to apply to the StatefulSet
-	// +optional
-	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,15,opt,name=serviceAccountName"`
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,8,opt,name=abstractPodTemplate"`
 	// Redis configuration, if not specified, global settings in numaflow-controller-config will be used.
 	// +optional
-	Settings *RedisSettings `json:"settings,omitempty" protobuf:"bytes,16,opt,name=settings"`
+	Settings *RedisSettings `json:"settings,omitempty" protobuf:"bytes,9,opt,name=settings"`
 }
 
 type RedisSettings struct {
@@ -136,8 +110,8 @@ func (nr NativeRedis) GetServiceSpec(req GetRedisServiceSpecReq) corev1.ServiceS
 			{Name: "tcp-redis", Port: req.RedisContainerPort},
 			{Name: "tcp-sentinel", Port: req.SentinelContainerPort},
 		},
-		Type:     corev1.ServiceTypeClusterIP,
-		Selector: req.Labels,
+		Selector:                 req.Labels,
+		PublishNotReadyAddresses: true,
 	}
 }
 
@@ -169,6 +143,200 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 	if nr.MetricsContainerTemplate != nil {
 		metricsContainerPullPolicy = nr.MetricsContainerTemplate.ImagePullPolicy
 	}
+	podSpec := &corev1.PodSpec{
+		Volumes: []corev1.Volume{
+			{
+				Name: "start-scripts",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: req.ScriptsConfigMapName,
+						},
+						DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
+					},
+				},
+			},
+			{
+				Name: "health",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: req.HealthConfigMapName,
+						},
+						DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
+					},
+				},
+			},
+			{
+				Name: "config",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: req.ConfConfigMapName,
+						},
+						DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
+					},
+				},
+			},
+			{Name: "sentinel-tmp-conf", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			{Name: "redis-tmp-conf", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		},
+		Containers: []corev1.Container{
+			{
+				Name:            "redis",
+				Image:           req.RedisImage,
+				ImagePullPolicy: redisContainerPullPolicy,
+				Ports: []corev1.ContainerPort{
+					{Name: "redis", ContainerPort: req.RedisContainerPort},
+				},
+				Command: []string{"/bin/bash"},
+				Args:    []string{"-c", "/opt/bitnami/scripts/start-scripts/start-node.sh"},
+				Env: []corev1.EnvVar{
+					{Name: "BITNAMI_DEBUG", Value: "true"},
+					{Name: "REDIS_MASTER_PORT_NUMBER", Value: fmt.Sprint(req.RedisContainerPort)},
+					{Name: "ALLOW_EMPTY_PASSWORD", Value: "no"},
+					{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
+					{Name: "REDIS_MASTER_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
+					{Name: "REDIS_TLS_ENABLED", Value: "no"},
+					{Name: "REDIS_PORT", Value: fmt.Sprint(req.RedisContainerPort)},
+					{Name: "REDIS_SENTINEL_TLS_ENABLED", Value: "no"},
+					{Name: "REDIS_SENTINEL_PORT", Value: fmt.Sprint(req.SentinelContainerPort)},
+					{Name: "REDIS_DATA_DIR", Value: "/data"},
+				},
+				Lifecycle: &corev1.Lifecycle{
+					PreStop: &corev1.LifecycleHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"/bin/bash", "-c", "/opt/bitnami/scripts/start-scripts/prestop-redis.sh"},
+						},
+					},
+				},
+				VolumeMounts: []corev1.VolumeMount{
+					{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
+					{Name: "health", MountPath: "/health"},
+					{Name: "config", MountPath: "/opt/bitnami/redis/mounted-etc"},
+					{Name: "redis-tmp-conf", MountPath: "/opt/bitnami/redis/etc"},
+					{Name: "tmp", MountPath: "/tmp"},
+				},
+				LivenessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_liveness_local.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      5,
+					PeriodSeconds:       5,
+					FailureThreshold:    5,
+				},
+				ReadinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_readiness_local.sh 1"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       5,
+					FailureThreshold:    5,
+				},
+				StartupProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_liveness_local.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 10,
+					TimeoutSeconds:      5,
+					PeriodSeconds:       10,
+					FailureThreshold:    22,
+					SuccessThreshold:    1,
+				},
+			},
+			{
+				Name:            "sentinel",
+				Image:           req.SentinelImage,
+				ImagePullPolicy: sentinelContainerPullPolicy,
+				Ports: []corev1.ContainerPort{
+					{Name: "sentinel", ContainerPort: req.SentinelContainerPort},
+				},
+				Command: []string{"/bin/bash"},
+				Args:    []string{"-c", "/opt/bitnami/scripts/start-scripts/start-sentinel.sh"},
+				Env: []corev1.EnvVar{
+					{Name: "BITNAMI_DEBUG", Value: "false"},
+					{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
+					{Name: "REDIS_SENTINEL_TLS_ENABLED", Value: "no"},
+					{Name: "REDIS_SENTINEL_PORT", Value: fmt.Sprint(req.SentinelContainerPort)},
+				},
+				Lifecycle: &corev1.Lifecycle{
+					PreStop: &corev1.LifecycleHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"/bin/bash", "-c", "/opt/bitnami/scripts/start-scripts/prestop-sentinel.sh"},
+						},
+					},
+				},
+				LivenessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      5,
+					FailureThreshold:    5,
+					PeriodSeconds:       5,
+				},
+				ReadinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_sentinel.sh 1"},
+						},
+					},
+					InitialDelaySeconds: 20,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       5,
+					FailureThreshold:    5,
+				},
+				StartupProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						Exec: &corev1.ExecAction{
+							Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
+						},
+					},
+					InitialDelaySeconds: 10,
+					TimeoutSeconds:      5,
+					PeriodSeconds:       10,
+					FailureThreshold:    22,
+					SuccessThreshold:    1,
+				},
+				VolumeMounts: []corev1.VolumeMount{
+					{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
+					{Name: "health", MountPath: "/health"},
+					{Name: "config", MountPath: "/opt/bitnami/redis-sentinel/mounted-etc"},
+					{Name: "sentinel-tmp-conf", MountPath: "/opt/bitnami/redis-sentinel/etc"},
+				},
+			},
+			{
+				Name:            "metrics",
+				Image:           req.MetricsExporterImage,
+				ImagePullPolicy: metricsContainerPullPolicy,
+				Command: []string{"/bin/bash", "-c", `if [[ -f '/secrets/redis-password' ]]; then
+export REDIS_PASSWORD=$(cat /secrets/redis-password)
+fi
+redis_exporter`},
+				Ports: []corev1.ContainerPort{
+					{Name: "metrics", ContainerPort: req.RedisMetricsContainerPort},
+				},
+				Env: []corev1.EnvVar{
+					{Name: "REDIS_ALIAS", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+					{Name: "REDIS_USER", Value: "default"},
+					{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
+				},
+			},
+		},
+	}
+	nr.AbstractPodTemplate.ApplyToPodSpec(podSpec)
+
 	spec := appv1.StatefulSetSpec{
 		Replicas:    &replicas,
 		ServiceName: req.ServiceName,
@@ -180,176 +348,7 @@ func (nr NativeRedis) GetStatefulSetSpec(req GetRedisStatefulSetSpecReq) appv1.S
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: podTemplateLabels,
 			},
-			Spec: corev1.PodSpec{
-				NodeSelector:       nr.NodeSelector,
-				Tolerations:        nr.Tolerations,
-				SecurityContext:    nr.SecurityContext,
-				ImagePullSecrets:   nr.ImagePullSecrets,
-				PriorityClassName:  nr.PriorityClassName,
-				Priority:           nr.Priority,
-				ServiceAccountName: nr.ServiceAccountName,
-				Affinity:           nr.Affinity,
-				Volumes: []corev1.Volume{
-					{
-						Name: "start-scripts",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: req.ScriptsConfigMapName,
-								},
-								DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
-							},
-						},
-					},
-					{
-						Name: "health",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: req.HealthConfigMapName,
-								},
-								DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
-							},
-						},
-					},
-					{
-						Name: "config",
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: req.ConfConfigMapName,
-								},
-								DefaultMode: func(i int32) *int32 { return &i }(0x1ED),
-							},
-						},
-					},
-					{Name: "sentinel-tmp-conf", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-					{Name: "redis-tmp-conf", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-					{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-				},
-				Containers: []corev1.Container{
-					{
-						Name:            "redis",
-						Image:           req.RedisImage,
-						ImagePullPolicy: redisContainerPullPolicy,
-						Ports: []corev1.ContainerPort{
-							{Name: "redis", ContainerPort: req.RedisContainerPort},
-						},
-						Command: []string{"/bin/bash"},
-						Args:    []string{"-c", "/opt/bitnami/scripts/start-scripts/start-node.sh"},
-						Env: []corev1.EnvVar{
-							{Name: "BITNAMI_DEBUG", Value: "true"},
-							{Name: "REDIS_MASTER_PORT_NUMBER", Value: fmt.Sprint(req.RedisContainerPort)},
-							{Name: "ALLOW_EMPTY_PASSWORD", Value: "no"},
-							{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
-							{Name: "REDIS_MASTER_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
-							{Name: "REDIS_TLS_ENABLED", Value: "no"},
-							{Name: "REDIS_PORT", Value: fmt.Sprint(req.RedisContainerPort)},
-							{Name: "REDIS_DATA_DIR", Value: "/data"},
-						},
-						Lifecycle: &corev1.Lifecycle{
-							PreStop: &corev1.LifecycleHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"/bin/bash", "-c", "/opt/bitnami/scripts/start-scripts/prestop-redis.sh"},
-								},
-							},
-						},
-						VolumeMounts: []corev1.VolumeMount{
-							{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
-							{Name: "health", MountPath: "/health"},
-							{Name: "config", MountPath: "/opt/bitnami/redis/mounted-etc"},
-							{Name: "redis-tmp-conf", MountPath: "/opt/bitnami/redis/etc"},
-							{Name: "tmp", MountPath: "/tmp"},
-						},
-						LivenessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"sh", "-c", "/health/ping_liveness_local.sh 5"},
-								},
-							},
-							InitialDelaySeconds: 20,
-							TimeoutSeconds:      5,
-							FailureThreshold:    5,
-						},
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"sh", "-c", "/health/ping_readiness_local.sh 5"},
-								},
-							},
-							InitialDelaySeconds: 20,
-							TimeoutSeconds:      5,
-							FailureThreshold:    5,
-						},
-					},
-					{
-						Name:            "sentinel",
-						Image:           req.SentinelImage,
-						ImagePullPolicy: sentinelContainerPullPolicy,
-						Ports: []corev1.ContainerPort{
-							{Name: "sentinel", ContainerPort: req.SentinelContainerPort},
-						},
-						Command: []string{"/bin/bash"},
-						Args:    []string{"-c", "/opt/bitnami/scripts/start-scripts/start-sentinel.sh"},
-						Env: []corev1.EnvVar{
-							{Name: "BITNAMI_DEBUG", Value: "false"},
-							{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
-							{Name: "REDIS_SENTINEL_TLS_ENABLED", Value: "no"},
-							{Name: "REDIS_SENTINEL_PORT", Value: fmt.Sprint(req.SentinelContainerPort)},
-						},
-						Lifecycle: &corev1.Lifecycle{
-							PreStop: &corev1.LifecycleHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"/bin/bash", "-c", "/opt/bitnami/scripts/start-scripts/prestop-sentinel.sh"},
-								},
-							},
-						},
-						LivenessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
-								},
-							},
-							InitialDelaySeconds: 20,
-							TimeoutSeconds:      5,
-							FailureThreshold:    5,
-						},
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								Exec: &corev1.ExecAction{
-									Command: []string{"sh", "-c", "/health/ping_sentinel.sh 5"},
-								},
-							},
-							InitialDelaySeconds: 20,
-							TimeoutSeconds:      5,
-							FailureThreshold:    5,
-						},
-						VolumeMounts: []corev1.VolumeMount{
-							{Name: "start-scripts", MountPath: "/opt/bitnami/scripts/start-scripts"},
-							{Name: "health", MountPath: "/health"},
-							{Name: "config", MountPath: "/opt/bitnami/redis-sentinel/mounted-etc"},
-							{Name: "sentinel-tmp-conf", MountPath: "/opt/bitnami/redis-sentinel/etc"},
-						},
-					},
-					{
-						Name:            "metrics",
-						Image:           req.MetricsExporterImage,
-						ImagePullPolicy: metricsContainerPullPolicy,
-						Command: []string{"/bin/bash", "-c", `if [[ -f '/secrets/redis-password' ]]; then
-  export REDIS_PASSWORD=$(cat /secrets/redis-password)
-fi
-redis_exporter`},
-						Ports: []corev1.ContainerPort{
-							{Name: "metrics", ContainerPort: req.RedisMetricsContainerPort},
-						},
-						Env: []corev1.EnvVar{
-							{Name: "REDIS_ALIAS", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
-							{Name: "REDIS_USER", Value: "default"},
-							{Name: "REDIS_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: req.CredentialSecretName}, Key: RedisAuthSecretKey}}},
-						},
-					},
-				},
-			},
+			Spec: *podSpec,
 		},
 	}
 	if nr.Metadata != nil {
@@ -406,8 +405,8 @@ redis_exporter`},
 		runAsUser := int64(1001)
 		fsGroup := int64(1001)
 		runAsUser0 := int64(0)
-		spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser}
-		spec.Template.Spec.Containers[1].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser}
+		spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser, RunAsGroup: &fsGroup}
+		spec.Template.Spec.Containers[1].SecurityContext = &corev1.SecurityContext{RunAsUser: &runAsUser, RunAsGroup: &fsGroup}
 		spec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:            "volume-permissions",
@@ -417,6 +416,9 @@ redis_exporter`},
 				Image:           req.InitContainerImage,
 				Command:         []string{"/bin/bash", "-ec", "chown -R 1001:1001 /data"},
 			},
+		}
+		if nr.InitContainerTemplate != nil {
+			nr.InitContainerTemplate.ApplyToContainer(&spec.Template.Spec.InitContainers[0])
 		}
 		if spec.Template.Spec.SecurityContext == nil {
 			spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{}
