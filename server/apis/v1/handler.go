@@ -154,9 +154,9 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
 	var pipelineSpec *dfv1.Pipeline
-	err := c.BindJSON(pipelineSpec)
+	err := c.ShouldBindJSON(pipelineSpec)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
 		return
 	}
 
@@ -290,9 +290,9 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 	}
 
 	var updatedSpec *dfv1.Pipeline
-	err = c.BindJSON(updatedSpec)
+	err = c.ShouldBindJSON(updatedSpec)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
 		return
 	}
 
@@ -367,9 +367,9 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
 	var isbsvcSpec *dfv1.InterStepBufferService
-	err := c.BindJSON(isbsvcSpec)
+	err := c.ShouldBindJSON(isbsvcSpec)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
 		return
 	}
 
@@ -433,9 +433,9 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	}
 
 	var updatedSpec *dfv1.InterStepBufferService
-	err = c.BindJSON(updatedSpec)
+	err = c.ShouldBindJSON(updatedSpec)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
 		return
 	}
 
@@ -536,7 +536,7 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&requestBody); err != nil {
+	if err = c.ShouldBindJSON(&requestBody); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", ns,
 			pipeline, inputVertexName, err.Error()))
 		return
