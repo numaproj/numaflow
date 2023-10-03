@@ -166,9 +166,9 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 		return
 	}
 	pipelineSpec.Namespace = ns
-	isValid := validatePipelineSpec(h, nil, pipelineSpec, ValidTypeCreate)
-	if isValid != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", isValid.Error()))
+	err = validatePipelineSpec(h, nil, pipelineSpec, ValidTypeCreate)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", err.Error()))
 		return
 	}
 	// if Validation flag "dryRun" is set to true, return without creating the pipeline
@@ -439,9 +439,9 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	isValid := validateISBSVCSpec(h, isbSVC, updatedSpec, ValidTypeUpdate)
-	if isValid != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to validate interstepbuffer service spec, %s", isValid.Error()))
+	err = validateISBSVCSpec(h, isbSVC, updatedSpec, ValidTypeUpdate)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to validate interstepbuffer service spec, %s", err.Error()))
 		return
 	}
 
