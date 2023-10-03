@@ -24,17 +24,19 @@ import (
 
 func TestValidatePipelineCreate(t *testing.T) {
 	pipeline := fakePipeline()
-	v := NewPipelineValidator(fakeK8sClient, &fakePipelineClient, nil, pipeline)
+	fk := MockInterStepBufferServices{}
+	v := NewPipelineValidator(fakeK8sClient, &fakePipelineClient, &fk, nil, pipeline)
 	r := v.ValidateCreate(contextWithLogger(t))
 	assert.True(t, r.Allowed)
 }
 
 func TestValidatePipelineUpdate(t *testing.T) {
 	pipeline := fakePipeline()
+	fk := MockInterStepBufferServices{}
 	t.Run("test Pipeline interStepBufferServiceName change", func(t *testing.T) {
 		newPipeline := pipeline.DeepCopy()
 		newPipeline.Spec.InterStepBufferServiceName = "change-name"
-		v := NewPipelineValidator(fakeK8sClient, &fakePipelineClient, pipeline, newPipeline)
+		v := NewPipelineValidator(fakeK8sClient, &fakePipelineClient, &fk, pipeline, newPipeline)
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
 	})

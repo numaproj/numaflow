@@ -56,8 +56,7 @@ func Start() {
 	}
 
 	kubeClient := kubernetes.NewForConfigOrDie(restConfig)
-	isbSvcClient := versioned.NewForConfigOrDie(restConfig).NumaflowV1alpha1().InterStepBufferServices(namespace)
-
+	numaClient := versioned.NewForConfigOrDie(restConfig).NumaflowV1alpha1()
 	portStr := sharedutil.LookupEnvStringOr(portEnvVar, "443")
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
@@ -75,9 +74,9 @@ func Start() {
 		ClientAuth:      tls.VerifyClientCertIfGiven,
 	}
 	controller := webhook.AdmissionController{
-		Client:       kubeClient,
-		ISBSVCClient: isbSvcClient,
-		Options:      options,
+		Client:     kubeClient,
+		NumaClient: numaClient,
+		Options:    options,
 		Handlers: map[schema.GroupVersionKind]runtime.Object{
 			{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "InterStepBufferService"}: &dfv1.InterStepBufferService{},
 			{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "Pipeline"}:               &dfv1.Pipeline{},

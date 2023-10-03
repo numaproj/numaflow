@@ -1,0 +1,35 @@
+.namespace-k8s-title {
+  font-size: 1.25rem;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.namespace-k8s-type-count-badge > .MuiBadge-badge {
+  color: #FFF !important;
+}
+
+.namespace-k8s-type-count-badge {
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.3125rem;
+  color: #FFF;
+  margin-left: 0.3125rem;
+}
+
+.normal {
+  background-color: #00BB42;
+}
+
+.warn {
+  background-color: #FB0;
+}
+
+.namespace-k8s-type-count-text {
+  text-transform: none;
+  font-family: Avenir;
+}
+
+.MuiTableCell-root {
+  background-color: #FFF !important;
+  border-bottom: 1px solid #DCDCDC !important;
+  padding: 1rem 0.5rem !important;
+}

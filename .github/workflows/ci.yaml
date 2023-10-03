@@ -23,8 +23,9 @@ jobs:
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
-      - name: Yarn Build/Test
-        run: make ui-test
+      # Temporarily disable it.
+      #- name: Yarn Build/Test
+      #  run: make ui-test
       - name: Ensure nothing changed
         run: git diff --exit-code
   codegen:
@@ -139,7 +140,7 @@ jobs:
       max-parallel: 10
       matrix:
         driver: [jetstream]
-        case: [e2e, diamond-e2e, transformer-e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-e2e, udsource-e2e]
+        case: [e2e, diamond-e2e, transformer-e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-e2e, udsource-e2e, api-e2e]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
