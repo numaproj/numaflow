@@ -309,7 +309,6 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 		return
 	}
 
-	oldSpec.Spec = updatedSpec.Spec
 	updatedSpec.Namespace = ns
 	isValid := validatePipelineSpec(h, oldSpec, &updatedSpec, ValidTypeUpdate)
 	if isValid != nil {
@@ -322,6 +321,7 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 		return
 	}
 
+	oldSpec.Spec = updatedSpec.Spec
 	if _, err := h.numaflowClient.Pipelines(ns).Update(context.Background(), oldSpec, metav1.UpdateOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update pipeline %q, %s", pipeline, err.Error()))
 		return
@@ -352,6 +352,7 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 		return
 	}
 
+	// TODO: validate the patched data as well, e.g. only allow lifecycle to be patched
 	if _, err := h.numaflowClient.Pipelines(ns).Patch(context.Background(), pipeline, types.MergePatchType, patchSpec, metav1.PatchOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q, %s", pipeline, err.Error()))
 		return
@@ -464,6 +465,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 	ns, isbServices := c.Param("namespace"), c.Param("isb-services")
 
+	// TODO: validate if it's being used by any pipelines
 	err := h.numaflowClient.InterStepBufferServices(ns).Delete(context.Background(), isbServices, metav1.DeleteOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to delete the interstep buffer service: namespace %q isb-services %q: %s",
