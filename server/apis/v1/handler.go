@@ -807,12 +807,6 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 	for _, isb := range isbSvcs.Items {
 		status := ISBServiceStatusHealthy
 		// TODO(API) : Get the current status of the ISB service
-		// status, err := getISBServiceStatus(isb.Namespace, isb.Name)
-		// if err != nil {
-		//	errMsg := fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isb.Name, isb.Namespace, err.Error())
-		//	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		//	return
-		// }
 		resp := NewISBService(status, &isb)
 		isbList = append(isbList, resp)
 	}
@@ -848,28 +842,6 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
 		retStatus = PipelineStatusCritical
 	}
-	// ns := pipeline.Namespace
-	// pipeName := pipeline.Name
-	// client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeName))
-	// if err != nil {
-	//	return "", err
-	// }
-	// defer func() {
-	//	_ = client.Close()
-	// }()
-	// l, err := client.GetPipelineStatus(context.Background(), pipeName)
-	// if err != nil {
-	//	return "", err
-	// }
-	// retStatus := PipelineStatusHealthy
-	// // TODO(API) : Check for warning status?
-	// if *l.Status != "OK" {
-	//	retStatus = PipelineStatusCritical
-	// }
-	// // Check if the pipeline is paused, if so, return inactive status
-	// if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
-	//	retStatus = PipelineStatusInactive
-	// }
 	return retStatus, nil
 }
 

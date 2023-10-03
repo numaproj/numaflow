@@ -197,36 +197,6 @@ func (s *APISuite) TestPipeline1() {
 	stopPortForward()
 }
 
-func (s *APISuite) TestAPI() {
-	numaflowServerPodName := s.GetNumaflowServerPodName()
-	if numaflowServerPodName == "" {
-		panic("failed to find the nuamflow-server pod")
-	}
-	stopPortForward := s.StartPortForward(numaflowServerPodName, 8443)
-
-	// TODO: metrics test
-	// namespacePodsMetricsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/metrics/namespaces/%s/pods", Namespace)).
-	// 	Expect().
-	// 	Status(200).Body().Raw()
-	// var namespacePodsMetricsExpect = `{"namespace":"numaflow-system","pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
-	// assert.Contains(s.T(), namespacePodsMetricsBody, namespacePodsMetricsExpect)
-
-	// TODO: logs test
-	// params := url.Values{}
-	// params.Add("container", "main")
-	// params.Add("following", "false")
-	// params.Add("tailLines", "3")
-	// namespacePodLogsURL := fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/logs?%s", Namespace, numaflowServerPodName, params.Encode())
-	//
-	// namespacePodLogsBody := HTTPExpect(s.T(), "https://localhost:8443").GET(namespacePodLogsURL).
-	// 	Expect().
-	// 	Status(200).Body().Raw()
-	// var namespacePodLogsBodyExpect = `{"namespace":"numaflow-system","pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
-	// assert.Contains(s.T(), namespacePodLogsBody, namespacePodLogsBodyExpect)
-
-	stopPortForward()
-}
-
 func TestAPISuite(t *testing.T) {
 	suite.Run(t, new(APISuite))
 }
