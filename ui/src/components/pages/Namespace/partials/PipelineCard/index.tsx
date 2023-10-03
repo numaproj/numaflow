@@ -5,7 +5,6 @@ import { PipelineCardProps } from "../../../../../types/declarations/namespace";
 import {
   Box,
   Button,
-  Chip,
   Grid,
   MenuItem,
   Select,
@@ -27,6 +26,7 @@ export function PipelineCard({
 }: PipelineCardProps) {
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const [editOption] = React.useState("view");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [deleteOption, setDeleteOption] = React.useState("Delete");
   const handleEditChange = useCallback(
     (event: SelectChangeEvent<string>) => {

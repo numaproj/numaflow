@@ -4,18 +4,12 @@ import { useParams } from "react-router-dom";
 import { SidebarType } from "../../../../common/SlidingSidebar";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
-import { Pipeline } from "../../../../../types/declarations/pipeline";
 import { DurationString } from "../../../../../utils";
 
 import "./style.css";
 
-export interface PipelineSummaryStatusProps {
-  pipeline?: Pipeline;
-  lag?: number;
-}
-
 export function PipelineSummaryStatus({ pipeline, lag }) {
-  const { namespaceId, pipelineId } = useParams();
+  const { namespaceId } = useParams();
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const handleK8sEventsClick = useCallback(() => {
     if (!namespaceId || !setSidebarProps) {
@@ -117,7 +111,7 @@ export function PipelineSummaryStatus({ pipeline, lag }) {
               </span>
             </div>
           </Box>
-          <Box sx={{ display: "flex", flexDirection: "column" }}>
+          <Box sx={{ display: "flex", flexDirection: "column", width: "12rem" }}>
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
                 <div>

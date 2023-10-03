@@ -24,7 +24,7 @@ export function Cluster() {
       {
         type: SummarySectionType.TITLED_VALUE,
         titledValueProps: {
-          title: "Namespaces",
+          title: "NAMESPACES",
           value: data.namespacesCount,
         },
       },
@@ -35,14 +35,14 @@ export function Cluster() {
           {
             type: SummarySectionType.TITLED_VALUE,
             titledValueProps: {
-              title: "Pipelines",
+              title: "PIPELINES",
               value: data.pipelinesCount,
             },
           },
           {
             type: SummarySectionType.STATUSES,
             statusesProps: {
-              title: "Pipelines Status",
+              title: "PIPELINES STATUS",
               active: data.pipelinesActiveCount,
               inActive: data.pipelinesInactiveCount,
               healthy: data.pipelinesHealthyCount,
@@ -59,14 +59,14 @@ export function Cluster() {
           {
             type: SummarySectionType.TITLED_VALUE,
             titledValueProps: {
-              title: "ISB Services",
+              title: "ISB SERVICES",
               value: data.isbsCount,
             },
           },
           {
             type: SummarySectionType.STATUSES,
             statusesProps: {
-              title: "ISB Services Status",
+              title: "ISB SERVICES STATUS",
               active: data.isbsActiveCount,
               inActive: data.isbsInactiveCount,
               healthy: data.isbsHealthyCount,

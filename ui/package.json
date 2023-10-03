@@ -73,7 +73,8 @@
     "eslint-plugin-prettier": "3.3.1",
     "jest-junit": "^12.0.0",
     "prettier": "2.5.1",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "@babel/plugin-proposal-private-property-in-object": "7.21.0-placeholder-for-preset-env.2"
   },
   "resolutions": {
     "nth-check": "^2.0.1"

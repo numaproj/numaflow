@@ -4,7 +4,6 @@ import { Handle, NodeProps, Position } from "reactflow";
 import { HighlightContext } from "../../index";
 import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
 import healthy from "../../../../../../../images/heart-fill.svg";
-import unhealthy from "../../../../../../../images/unhealthy.svg";
 import source from "../../../../../../../images/source.png";
 import map from "../../../../../../../images/map.png";
 import reduce from "../../../../../../../images/reduce.png";

@@ -7,43 +7,6 @@ import {
   NamespaceSummaryFetchResult,
 } from "../../types/declarations/namespace";
 
-const MOCK_PIPELINE_DATA: any[] = [
-  {
-    name: "pipeline1",
-    status: "healthy",
-  },
-  {
-    name: "pipeline2",
-    status: "warning",
-  },
-  {
-    name: "pipeline3",
-    status: "critical",
-  },
-  {
-    name: "pipeline4",
-    status: "inactive",
-  },
-];
-const MOCK_ISB_DATA: any[] = [
-  {
-    name: "isb1",
-    status: "healthy",
-  },
-  {
-    name: "isb2",
-    status: "warning",
-  },
-  {
-    name: "isb3",
-    status: "critical",
-  },
-  {
-    name: "isb4",
-    status: "inactive",
-  },
-];
-
 const rawDataToNamespaceSummary = (
   rawPipelineData: any[],
   rawIsbData: any[]
