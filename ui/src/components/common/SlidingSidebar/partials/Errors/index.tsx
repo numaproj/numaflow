@@ -8,6 +8,7 @@ export interface ErrorsProps {
   errors: boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function Errors({ errors }: ErrorsProps) {
   const header = useMemo(() => {
     const headerContainerStyle = {

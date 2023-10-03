@@ -49,7 +49,6 @@ import reduce from "../../../../../images/reduce.png";
 import sink from "../../../../../images/sink.png";
 import input from "../../../../../images/input.svg";
 import generator from "../../../../../images/generator.svg";
-import error from "../../../../../images/error.svg";
 import noError from "../../../../../images/no-error.svg";
 
 import "reactflow/dist/style.css";
@@ -331,9 +330,11 @@ export default function Graph(props: GraphProps) {
     [setEdges]
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [edgeOpen, setEdgeOpen] = useState(false);
 
   const [edgeId, setEdgeId] = useState<string>();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [edge, setEdge] = useState<Edge>();
 
   const openEdgeSidebar = useCallback(
@@ -389,9 +390,11 @@ export default function Graph(props: GraphProps) {
     });
   }, [edges, edgeId, sidebarProps, openEdgeSidebar]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [nodeOpen, setNodeOpen] = useState(false);
 
   const [nodeId, setNodeId] = useState<string>();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [node, setNode] = useState<Node>();
 
   useEffect(() => {
@@ -500,6 +503,7 @@ export default function Graph(props: GraphProps) {
     });
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showSpec, setShowSpec] = useState(true);
 
   return (

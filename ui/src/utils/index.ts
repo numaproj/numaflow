@@ -4,8 +4,6 @@ import circleDash from "../../src/images/circle-dash.png";
 import heartFill from "../../src/images/heart-fill.png";
 import warning from "../../src/images/warning-circle.png";
 import critical from "../../src/images/critical.png";
-import healthycircle from "../../src/images/green_circle.png";
-import { string } from "yaml/dist/schema/common/string";
 import moment from "moment";
 
 // global constants

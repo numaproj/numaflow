@@ -13,15 +13,13 @@ export enum VertexType {
 }
 
 export interface GeneratorDetailsProps {
-  namespaceId: string;
-  pipelineId: string;
+  namespaceId?: string;
+  pipelineId?: string;
   vertexId: string;
   generatorDetails: any;
 }
 
 export function GeneratorDetails({
-  namespaceId,
-  pipelineId,
   vertexId,
   generatorDetails,
 }: GeneratorDetailsProps) {
