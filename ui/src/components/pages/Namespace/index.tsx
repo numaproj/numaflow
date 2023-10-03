@@ -64,7 +64,7 @@ export function Namespaces() {
                   className="namespace-k8s-events"
                   onClick={handleK8sEventsClick}
                 >
-                  K8s Event Logs
+                  K8s Events
                 </div>
               ),
             },
