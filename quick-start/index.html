@@ -2136,7 +2136,14 @@
 2. Create and run a simple pipeline.<br />
 3. Create and run an advanced pipeline.</p>
 <h2 id="before-you-begin-prerequisites">Before you begin: prerequisites<a class="headerlink" href="#before-you-begin-prerequisites" title="Permanent link">&para;</a></h2>
-<p>To try Numaflow, you will first need to create a local cluster. This can be done simply using <a href="https://www.docker.com/blog/how-kubernetes-works-under-the-hood-with-docker-desktop">Docker Desktop</a>. Follow the steps on <a href="https://docs.docker.com/desktop/kubernetes/">Docker's documentation</a> to learn how to create a local Kubernetes cluster.</p>
+<p>To try Numaflow, you will first need to setup using one of the following options to run container images:
+- <a href="https://docs.docker.com/get-docker/">Docker Desktop</a>
+- <a href="https://podman.io/">podman</a></p>
+<p>Then use one of the following options to create a local Kubernete Cluster:
+- <a href="https://docs.docker.com/desktop/kubernetes/">Docker Desktop Kubernetes</a>
+- <a href="https://k3d.io/">k3d</a>
+- <a href="https://kind.sigs.k8s.io/">kind</a>
+- <a href="https://minikube.sigs.k8s.io/docs/start/">minikube</a></p>
 <p>You will also need <code>kubectl</code> to manage the cluster. <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/">Follow these steps to install kubectl</a>. In case you need a refresher, all the <code>kubectl</code> commands used in this quick start guide can be found in the <a href="https://kubernetes.io/docs/reference/kubectl/cheatsheet/">kubectl Cheat Sheet</a>.</p>
 <h2 id="installing-numaflow">Installing Numaflow<a class="headerlink" href="#installing-numaflow" title="Permanent link">&para;</a></h2>
 <p>Once you have completed all the prerequisites, run the following command lines to install Numaflow and start the <a href="../core-concepts/inter-step-buffer-service/">Inter-Step Buffer Service</a> that handles communication between vertices.</p>
