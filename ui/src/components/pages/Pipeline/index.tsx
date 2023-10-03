@@ -43,6 +43,7 @@ export function Pipeline() {
               <PipelineStatus
                 status={pipelineData?.pipeline?.status?.phase}
                 healthStatus={pipelineData?.status}
+                key={"pipeline-status"}
               />
             ),
           },
@@ -52,12 +53,13 @@ export function Pipeline() {
               <PipelineSummaryStatus
                 pipeline={pipelineData?.pipeline}
                 lag={pipelineData?.lag}
+                key={"pipeline-summary-status"}
               />
             ),
           },
           {
             type: SummarySectionType.CUSTOM,
-            customComponent: <PipelineISBStatus isbData={isbData} />,
+            customComponent: <PipelineISBStatus isbData={isbData} key={"pipeline-isb-status"} />,
           },
         ],
       },
