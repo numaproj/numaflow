@@ -151,8 +151,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 func (h *handler) CreatePipeline(c *gin.Context) {
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual create
-	dryRun := c.DefaultQuery("dry-run", "false")
-	dryRun = strings.ToLower(dryRun)
+	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
 	var pipelineSpec *dfv1.Pipeline
 	err := c.BindJSON(pipelineSpec)
@@ -173,7 +172,7 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 		return
 	}
 	// if Validation flag "dryRun" is set to true, return without creating the pipeline
-	if dryRun == "true" {
+	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
@@ -282,8 +281,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 func (h *handler) UpdatePipeline(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 	// dryRun is used to check if the operation is just a validation or an actual update
-	dryRun := c.DefaultQuery("dry-run", "false")
-	dryRun = strings.ToLower(dryRun)
+	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
 	oldSpec, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
@@ -319,7 +317,7 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 		return
 	}
 	// If Validation flag is set to true, return without updating the pipeline
-	if dryRun == "true" {
+	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
@@ -366,8 +364,7 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual update
-	dryRun := c.DefaultQuery("dry-run", "false")
-	dryRun = strings.ToLower(dryRun)
+	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
 	var isbsvcSpec *dfv1.InterStepBufferService
 	err := c.BindJSON(isbsvcSpec)
@@ -382,7 +379,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 		return
 	}
 	// If Validation flag is set to true, return without creating the ISB
-	if dryRun == "true" {
+	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
@@ -427,8 +424,7 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	ns, isbServices := c.Param("namespace"), c.Param("isb-services")
 	// dryRun is used to check if the operation is just a validation or an actual update
-	dryRun := c.DefaultQuery("dry-run", "false")
-	dryRun = strings.ToLower(dryRun)
+	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
 	isbSVC, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbServices, metav1.GetOptions{})
 	if err != nil {
@@ -450,7 +446,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	}
 
 	// If Validation flag is set to true, return without updating the ISB service
-	if dryRun == "true" {
+	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
