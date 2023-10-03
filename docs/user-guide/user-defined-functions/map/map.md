@@ -54,7 +54,7 @@ Check the links below to see the UDF examples in streaming mode for different la
 
 ### Available Environment Variables
 
-Some environment variables are available in the user-defined function container, they might be useful in you own UDF implementation.
+Some environment variables are available in the user defined function container, they might be useful in you own UDF implementation.
 
 - `NUMAFLOW_NAMESPACE` - Namespace.
 - `NUMAFLOW_POD` - Pod name.
