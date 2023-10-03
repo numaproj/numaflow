@@ -1,6 +1,6 @@
 # User Defined Sinks
 
-A `Pipeline` may have multiple Sinks, those sinks could either be a pre-defined sink such as `kafka`, `log`, etc, or a `User Defined Sink`.
+A `Pipeline` may have multiple Sinks, those sinks could either be a pre-defined sink such as `kafka`, `log`, etc., or a `User Defined Sink`.
 
 A pre-defined sink vertex runs single-container pods, a user defined sink runs two-container pods.
 
