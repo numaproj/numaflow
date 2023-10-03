@@ -113,12 +113,6 @@ func (s *APISuite) TestPipeline0() {
 	assert.Contains(s.T(), listPipelineBody, testPipeline1Name)
 	assert.Contains(s.T(), listPipelineBody, testPipeline2Name)
 
-	getPipelineBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
-		Expect().
-		Status(200).Body().Raw()
-	assert.Contains(s.T(), getPipelineBody, fmt.Sprintf(`"name":"%s"`, testPipeline1Name))
-	assert.Contains(s.T(), getPipelineBody, `"status":"healthy"`)
-
 	deletePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
 		Expect().
 		Status(200).Body().Raw()
@@ -174,6 +168,12 @@ func (s *APISuite) TestPipeline1() {
 
 	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-p1-0"`)
 	assert.Contains(s.T(), getPipelineISBsBody, `"bufferName":"numaflow-system-simple-pipeline-output-0"`)
+
+	getPipelineBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
+		Expect().
+		Status(200).Body().Raw()
+	assert.Contains(s.T(), getPipelineBody, fmt.Sprintf(`"name":"simple-pipeline"`))
+	assert.Contains(s.T(), getPipelineBody, `"status":"healthy"`)
 
 	getPipelineWatermarksBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/watermarks", Namespace, pipelineName)).
 		Expect().
