@@ -90,7 +90,9 @@ const getSectionComponentAndKey = (
           component: <div key={key}>Missing props</div>,
         };
       }
+      key = `custom-${sectionIndex}`;
       return {
+        key,
         component: section.customComponent,
       };
     case SummarySectionType.COLLECTION:
