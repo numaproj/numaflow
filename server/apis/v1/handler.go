@@ -209,6 +209,9 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
+	// set pl kind and apiVersion
+	pl.Kind = "Pipeline"
+	pl.APIVersion = "numaflow.numaproj.io/v1alpha1"
 
 	// get pipeline source and sink vertex
 	var (
