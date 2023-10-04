@@ -116,11 +116,7 @@ export const useNamespaceSummaryFetch = ({
     data: pipelineData,
     loading: pipelineLoading,
     error: pipelineError,
-  } = useFetch(
-    `/api/v1/namespaces/${namespace}/pipelines`,
-    undefined,
-    options
-  );
+  } = useFetch(`/api/v1/namespaces/${namespace}/pipelines`, undefined, options);
   const {
     data: isbData,
     loading: isbLoading,
@@ -169,11 +165,11 @@ export const useNamespaceSummaryFetch = ({
       return;
     }
     if (pipelineData && isbData) {
-      const pipeLineMap = pipelineData.data.reduce((map: any, obj: any) => {
+      const pipeLineMap = pipelineData?.data?.reduce((map: any, obj: any) => {
         map[obj.name] = obj;
         return map;
       }, {});
-      const isbMap = isbData.data.reduce((map: any, obj: any) => {
+      const isbMap = isbData?.data?.reduce((map: any, obj: any) => {
         map[obj.name] = obj;
         return map;
       }, {});
@@ -183,8 +179,8 @@ export const useNamespaceSummaryFetch = ({
       //   MOCK_ISB_DATA
       // );
       const nsSummary = rawDataToNamespaceSummary(
-        pipelineData.data,
-        isbData.data
+        pipelineData?.data,
+        isbData?.data
       );
       setResults({
         data: nsSummary,

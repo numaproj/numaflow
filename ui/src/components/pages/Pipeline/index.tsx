@@ -16,6 +16,7 @@ import { PipelineISBStatus } from "./partials/PipelineISBStatus";
 import { SidebarType } from "../../common/SlidingSidebar";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
+import { UNKNOWN } from "../../../utils";
 import noError from "../../../images/no-error.svg";
 
 import "./style.css";
@@ -32,6 +33,7 @@ export function Pipeline() {
     }
     const pipelineData = data?.pipelineData;
     const isbData = data?.isbData;
+    const pipelineStatus = pipelineData?.pipeline?.status?.phase || UNKNOWN;
     return [
       // pipeline collection
       {
@@ -41,7 +43,7 @@ export function Pipeline() {
             type: SummarySectionType.CUSTOM,
             customComponent: (
               <PipelineStatus
-                status={pipelineData?.pipeline?.status?.phase}
+                status={pipelineStatus}
                 healthStatus={pipelineData?.status}
                 key={"pipeline-status"}
               />
