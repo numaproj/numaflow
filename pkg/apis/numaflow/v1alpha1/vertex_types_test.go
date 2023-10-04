@@ -526,11 +526,15 @@ func TestScalable(t *testing.T) {
 	v.Spec.Sink = nil
 	v.Spec.UDF = &UDF{}
 	assert.True(t, v.Scalable())
+	v.Spec.UDF = &UDF{
+		GroupBy: &GroupBy{},
+	}
+	assert.False(t, v.Scalable())
 	v.Spec.UDF = nil
 	v.Spec.Source = &Source{
 		HTTP: &HTTPSource{},
 	}
-	assert.False(t, v.Scalable())
+	assert.True(t, v.Scalable())
 	v.Spec.Source = &Source{
 		Kafka: &KafkaSource{},
 	}

@@ -1,10 +1,17 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import {IconsStatusMap, ISBStatusString} from "../../../../../utils";
+import {
+  GetISBType,
+  IconsStatusMap,
+  ISBStatusString,
+  UNKNOWN,
+} from "../../../../../utils";
 
 import "./style.css";
 
 export function PipelineISBStatus({ isbData }) {
+  const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
+  const isbStatus = isbData?.isbService?.status?.phase || UNKNOWN;
   return (
     <Box
       sx={{
@@ -28,13 +35,13 @@ export function PipelineISBStatus({ isbData }) {
           >
             <Box sx={{ display: "flex", flexDirection: "column" }}>
               <img
-                src={IconsStatusMap[isbData?.isbService?.status?.phase]}
-                alt={IconsStatusMap[isbData?.isbService?.status?.phase]}
+                src={IconsStatusMap[isbStatus]}
+                alt="Status"
                 className={"pipeline-logo"}
               />
               <img
                 src={IconsStatusMap[isbData?.status]}
-                alt={isbData?.status}
+                alt="Health"
                 className={"pipeline-logo"}
               />
             </Box>
@@ -46,9 +53,11 @@ export function PipelineISBStatus({ isbData }) {
               }}
             >
               <span className="pipeline-logo-text">
-                {ISBStatusString[isbData?.isbService?.status?.phase]}
+                {ISBStatusString[isbStatus]}
               </span>
-              <span className="pipeline-logo-text">{ISBStatusString[isbData?.status]}</span>
+              <span className="pipeline-logo-text">
+                {ISBStatusString[isbData?.status]}
+              </span>
             </Box>
           </Box>
         </Box>
@@ -86,18 +95,14 @@ export function PipelineISBStatus({ isbData }) {
                 <span>{isbData?.name}</span>
               </div>
               <div className="isb-status-text">
-                <span>{isbData?.isbService?.status?.type}</span>
-                {/*<Chip*/}
-                {/*  label={isbData?.isbService?.status?.type}*/}
-                {/*  sx={{ height: "20px" }}*/}
-                {/*/>*/}
+                <span>{isbType}</span>
               </div>
             </Box>
             <Box
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                marginLeft: "2rem"
+                marginLeft: "2rem",
               }}
             >
               <div className="pipeline-summary-text">
@@ -105,11 +110,9 @@ export function PipelineISBStatus({ isbData }) {
                   <div className="pipeline-summary-text">
                     <span className="pipeline-summary-subtitle">Size: </span>
                     <span>
-                      {
-                        isbData?.isbService?.spec[
-                          isbData?.isbService?.status?.type
-                        ]?.replicas
-                      }
+                      {isbType && isbData?.isbService?.spec[isbType]
+                        ? isbData?.isbService?.spec[isbType].replicas
+                        : UNKNOWN}
                     </span>
                   </div>
                 </span>
