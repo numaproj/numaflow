@@ -456,6 +456,10 @@ func (s *Scaler) hasBackPressure(pl dfv1.Pipeline, vertex dfv1.Vertex) (bool, bo
 	directPressure, downstreamPressure := false, false
 loop:
 	for _, e := range downstreamEdges {
+		if e.BufferFullWritingStrategy() == dfv1.DiscardLatest {
+			// If the edge is configured to discard latest on full, we don't consider it as back pressure.
+			continue
+		}
 		vertexKey := pl.Namespace + "/" + pl.Name + "-" + e.To
 		pendingVal, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
 		if !ok { // Vertex key has not been cached, skip it.
