@@ -65,15 +65,15 @@ func newPipelines(c *NumaflowV1alpha1Client, namespace string) *pipelines {
 }
 
 // Get takes name of the pipeline, and returns the corresponding pipeline object, and an error if there is any.
-func (c *pipelines) Get(ctx context.Context, name string, options v1.GetOptions) (pipeline *v1alpha1.Pipeline, err error) {
-	pipeline = &v1alpha1.Pipeline{}
+func (c *pipelines) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Pipeline, err error) {
+	result = &v1alpha1.Pipeline{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("pipelines").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
 		Do(ctx).
-		Into(pipeline)
+		Into(result)
 	return
 }
 
