@@ -8,10 +8,10 @@ import { getAPIResponseError } from "../../../../../utils";
 
 import "./style.css";
 
-export function PiplineUpdate({
+export function ISBUpdate({
   initialYaml,
   namespaceId,
-  pipelineId,
+  isbId,
   viewType,
   onUpdateComplete,
 }: SpecEditorSidebarProps) {
@@ -28,7 +28,7 @@ export function PiplineUpdate({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?dry-run=false`,
+          `/api/v1/namespaces/${namespaceId}/isb-services/${isbId}?dry-run=false`,
           {
             method: "PUT",
             headers: {
@@ -78,7 +78,7 @@ export function PiplineUpdate({
     if (submitPayload) {
       postData();
     }
-  }, [namespaceId, pipelineId, submitPayload, onUpdateComplete]);
+  }, [namespaceId, isbId, submitPayload, onUpdateComplete]);
 
   // Validation API call
   useEffect(() => {
@@ -86,7 +86,7 @@ export function PiplineUpdate({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?dry-run=true`,
+          `/api/v1/namespaces/${namespaceId}/isb-services/${isbId}?dry-run=true`,
           {
             method: "PUT",
             headers: {
@@ -130,10 +130,10 @@ export function PiplineUpdate({
     if (validationPayload) {
       postData();
     }
-  }, [namespaceId, pipelineId, validationPayload]);
+  }, [namespaceId, isbId, validationPayload]);
 
   const handleValidate = useCallback((value: string) => {
-    let parsed;
+    let parsed: any;
     try {
       parsed = YAML.parse(value);
     } catch (e) {
@@ -156,7 +156,7 @@ export function PiplineUpdate({
       );
       return;
     }
-    setValidationPayload(parsed);
+    setValidationPayload({ spec: { ...parsed } });
     setContextComponent(undefined);
   }, []);
 
@@ -184,7 +184,7 @@ export function PiplineUpdate({
       );
       return;
     }
-    setSubmitPayload(parsed);
+    setSubmitPayload({ spec: { ...parsed } });
     setContextComponent(undefined);
   }, []);
 
@@ -207,7 +207,7 @@ export function PiplineUpdate({
           marginBottom: "2rem",
         }}
       >
-        <span className="pipeline-spec-header-text">{`Update Pipeline: ${pipelineId}`}</span>
+        <span className="isb-spec-header-text">{`Update ISB: ${isbId}`}</span>
       </Box>
       <SpecEditor
         initialYaml={initialYaml}
