@@ -211,7 +211,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	}
 	// set pl kind and apiVersion
 	pl.Kind = "Pipeline"
-	pl.APIVersion = "numaflow.numaproj.io/v1alpha1"
+	pl.APIVersion = dfv1.SchemeGroupVersion.String()
 
 	// get pipeline source and sink vertex
 	var (
