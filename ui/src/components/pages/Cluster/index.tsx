@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useContext, useMemo } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import {
@@ -7,16 +7,43 @@ import {
   SummarySectionType,
 } from "../../common/SummaryPageLayout";
 import { ClusterNamespaceListing } from "./partials/ClusterNamespaceListing";
+import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { useClusterSummaryFetch } from "../../../utils/fetchWrappers/clusterSummaryFetch";
+import { AppContextProps } from "../../../types/declarations/app";
+import { AppContext } from "../../../App";
 
 import "./style.css";
 
 export function Cluster() {
+  const { addError } = useContext<AppContextProps>(AppContext);
   const { data, loading, error } = useClusterSummaryFetch({
     loadOnRefresh: false,
+    addError,
   });
 
   const summarySections: SummarySection[] = useMemo(() => {
+    if (loading) {
+      return [
+        {
+          type: SummarySectionType.CUSTOM,
+          customComponent: <CircularProgress key="cluster-summary-loading" />,
+        },
+      ];
+    }
+    if (error) {
+      return [
+        {
+          type: SummarySectionType.CUSTOM,
+          customComponent: (
+            <ErrorDisplay
+              key="cluster-summary-error"
+              title="Error loading cluster summary"
+              message={error}
+            />
+          ),
+        },
+      ];
+    }
     if (!data) {
       return [];
     }
@@ -79,27 +106,58 @@ export function Cluster() {
         ],
       },
     ];
-  }, [data]);
+  }, [data, loading, error]);
 
-  if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-  if (error) {
-    return <div>{`Error loading cluster summary: ${error}`}</div>;
-  }
-  if (!data) {
-    return <div>{`No resources found.`}</div>;
-  }
+  const content = useMemo(() => {
+    if (error) {
+      return (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            width: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <ErrorDisplay
+            title="Error loading cluster namespaces"
+            message={error}
+          />
+        </Box>
+      );
+    }
+    if (loading) {
+      return (
+        <Box
+          sx={{
+            display: "flex",
+            height: "100%",
+            width: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      );
+    }
+    if (!data) {
+      return (
+        <ErrorDisplay
+          title="Error loading cluster namespaces"
+          message="No resources found."
+        />
+      );
+    }
+    return <ClusterNamespaceListing data={data} />;
+  }, [error, loading, data]);
+
   return (
-    <Box>
-      <SummaryPageLayout
-        summarySections={summarySections}
-        contentComponent={<ClusterNamespaceListing data={data} />}
-      />
-    </Box>
+    <SummaryPageLayout
+      summarySections={summarySections}
+      contentComponent={content}
+    />
   );
 }

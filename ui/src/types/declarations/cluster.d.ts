@@ -39,6 +39,7 @@ export interface ClusterSummaryFetchResult {
 
 export interface ClusterSummaryFetchProps {
   loadOnRefresh?: boolean;
+  addError: (error: string) => void;
 }
 
 export interface ClusterNamespaceListingProps {
