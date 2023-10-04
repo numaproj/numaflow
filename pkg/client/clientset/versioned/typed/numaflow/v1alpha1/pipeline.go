@@ -74,15 +74,6 @@ func (c *pipelines) Get(ctx context.Context, name string, options v1.GetOptions)
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
 		Do(ctx)
-	raw, err := result.Raw()
-	if err != nil {
-		return
-	}
-	var info struct{
-		Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
-		APIVersion string `json:"apiVersion,omitempty" protobuf:"bytes,2,opt,name=apiVersion"`
-	}
-	json.Unmarshal(raw, &info)
 	// although the kind and apiversion will be reset
 	// we still want to keep the Into function behaviour
 	// original issue link https://github.com/kubernetes/kubernetes/issues/80609
@@ -90,6 +81,17 @@ func (c *pipelines) Get(ctx context.Context, name string, options v1.GetOptions)
 	if err != nil {
 		return
 	}
+	// get the kind and api version
+	raw, err := result.Raw()
+	if err != nil {
+		return
+	}
+	var info struct{
+		Kind string `json:"kind,omitempty"`
+		APIVersion string `json:"apiVersion,omitempty"`
+	}
+	json.Unmarshal(raw, &info)
+	// set the kind and api version
 	pipeline.Kind = info.Kind
 	pipeline.APIVersion = info.APIVersion
 	return
