@@ -57,6 +57,9 @@ function App() {
       return;
     }
     const resizeObserver = new ResizeObserver(() => {
+      if (!pageRef.current) {
+        return;
+      }
       setPageWidth(pageRef.current.offsetWidth);
     });
     resizeObserver.observe(pageRef.current);

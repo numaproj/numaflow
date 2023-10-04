@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useFetch, Options } from "./fetch";
 import {
   NamespacePipelineSummary,
@@ -103,24 +103,31 @@ export const useNamespaceSummaryFetch = ({
   namespace,
   loadOnRefresh = false,
 }: NamespaceSummaryFetchProps) => {
-  const [results, setResults] = useState<NamespaceSummaryFetchResult>({
-    data: undefined,
-    loading: true,
-    error: undefined,
-  });
   const [options, setOptions] = useState<Options>({
     skip: false,
     requestKey: "",
   });
+
+  const refresh = useCallback(() => {
+    setOptions({
+      skip: false,
+      requestKey: "id" + Math.random().toString(16).slice(2),
+    });
+  }, []);
+
+  const [results, setResults] = useState<NamespaceSummaryFetchResult>({
+    data: undefined,
+    loading: true,
+    error: undefined,
+    refresh
+  });
+
   const {
     data: pipelineData,
     loading: pipelineLoading,
     error: pipelineError,
-  } = useFetch(
-    `/api/v1/namespaces/${namespace}/pipelines`,
-    undefined,
-    options
-  );
+  } = useFetch(`/api/v1/namespaces/${namespace}/pipelines`, undefined, options);
+
   const {
     data: isbData,
     loading: isbLoading,
@@ -148,6 +155,7 @@ export const useNamespaceSummaryFetch = ({
           data: undefined,
           loading: true,
           error: undefined,
+          refresh,
         });
       }
       return;
@@ -157,6 +165,7 @@ export const useNamespaceSummaryFetch = ({
         data: undefined,
         loading: false,
         error: pipelineError || isbError,
+        refresh,
       });
       return;
     }
@@ -165,6 +174,7 @@ export const useNamespaceSummaryFetch = ({
         data: undefined,
         loading: false,
         error: pipelineData?.errMsg || isbData?.errMsg,
+        refresh,
       });
       return;
     }
@@ -177,11 +187,6 @@ export const useNamespaceSummaryFetch = ({
         map[obj.name] = obj;
         return map;
       }, {});
-      // const nsSummary = rawDataToNamespaceSummary(
-      //   // TODO REMOVE MOCK
-      //   MOCK_PIPELINE_DATA,
-      //   MOCK_ISB_DATA
-      // );
       const nsSummary = rawDataToNamespaceSummary(
         pipelineData.data,
         isbData.data
@@ -192,6 +197,7 @@ export const useNamespaceSummaryFetch = ({
         isbRawData: isbMap,
         loading: false,
         error: undefined,
+        refresh,
       });
       return;
     }
@@ -204,6 +210,7 @@ export const useNamespaceSummaryFetch = ({
     isbError,
     loadOnRefresh,
     options,
+    refresh,
   ]);
 
   return results;

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useContext,
+} from "react";
 import Box from "@mui/material/Box";
 import Pagination from "@mui/material/Pagination";
 import Grid from "@mui/material/Grid";
@@ -9,7 +15,10 @@ import { PipelineCard } from "../PipelineCard";
 import { createSvgIcon } from "@mui/material/utils";
 import { NamespacePipelineListingProps } from "../../../../../types/declarations/namespace";
 import { PipelineData } from "./PipelinesTypes";
-import "./style.css";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { AppContext } from "../../../../../App";
+import { SidebarType } from "../../../../common/SlidingSidebar";
+import { ViewType } from "../../../../common/SpecEditor";
 import { Button, MenuItem, Select } from "@mui/material";
 
 import "./style.css";
@@ -64,7 +73,10 @@ export function NamespacePipelineListing({
   data,
   pipelineData,
   isbData,
+  refresh,
 }: NamespacePipelineListingProps) {
+  const { setSidebarProps } =
+    useContext<AppContextProps>(AppContext);
   const [search, setSearch] = useState("");
   const [health, setHealth] = useState(HEALTH[0]);
   const [status, setStatus] = useState(STATUS[0]);
@@ -222,13 +234,14 @@ export function NamespacePipelineListing({
                 data={p}
                 statusData={pipelineData ? pipelineData[p.name] : {}}
                 isbData={isbData ? isbData[isbName] : {}}
+                refresh={refresh}
               />
             </Grid>
           );
         })}
       </Grid>
     );
-  }, [filteredPipelines, namespace]);
+  }, [filteredPipelines, namespace, refresh]);
 
   const handleHealthFilterChange = useCallback(
     (e) => {
@@ -243,6 +256,56 @@ export function NamespacePipelineListing({
     },
     [status]
   );
+
+  const handleCreatePipelineComplete = useCallback(() => {
+    refresh();
+    if (!setSidebarProps) {
+      return;
+    }
+    // Close sidebar and change sort to show new pipeline
+    setSidebarProps(undefined);
+    setOrderBy({
+      value: LAST_UPDATED_SORT,
+      sortOrder: DESC,
+    })
+  }, [setSidebarProps, refresh]);
+
+  const handleCreatePiplineClick = useCallback(() => {
+    if (!setSidebarProps) {
+      return;
+    }
+    setSidebarProps({
+      type: SidebarType.PIPELINE_CREATE,
+      specEditorProps: {
+        namespaceId: namespace,
+        viewType: ViewType.EDIT,
+        onUpdateComplete: handleCreatePipelineComplete,
+      },
+    });
+  }, [setSidebarProps, handleCreatePipelineComplete, namespace]);
+
+  const handleCreateISBComplete = useCallback(() => {
+    refresh();
+    if (!setSidebarProps) {
+      return;
+    }
+    // Close sidebar and change sort to show new pipeline
+    setSidebarProps(undefined);
+  }, [setSidebarProps, refresh]);
+
+  const handleCreateISBClick = useCallback(() => {
+    if (!setSidebarProps) {
+      return;
+    }
+    setSidebarProps({
+      type: SidebarType.ISB_CREATE,
+      specEditorProps: {
+        namespaceId: namespace,
+        viewType: ViewType.EDIT,
+        onUpdateComplete: handleCreateISBComplete,
+      },
+    });
+  }, [setSidebarProps, handleCreateISBComplete, namespace]);
 
   return (
     <Box
@@ -385,8 +448,8 @@ export function NamespacePipelineListing({
             variant="outlined"
             startIcon={<PlusIcon />}
             size="medium"
-            disabled
             sx={{ marginRight: "10px" }}
+            onClick={handleCreatePiplineClick}
           >
             Create Pipeline
           </Button>
@@ -394,7 +457,7 @@ export function NamespacePipelineListing({
             variant="outlined"
             startIcon={<PlusIcon />}
             size="small"
-            disabled
+            onClick={handleCreateISBClick}
           >
             Create ISB
           </Button>
