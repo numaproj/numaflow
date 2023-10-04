@@ -6,6 +6,7 @@ export interface GraphProps {
   data: GraphData;
   namespaceId: string | undefined;
   pipelineId: string | undefined;
+  refresh: () => void;
 }
 
 export interface SpecProps {

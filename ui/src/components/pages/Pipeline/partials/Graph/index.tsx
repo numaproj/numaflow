@@ -24,6 +24,7 @@ import ReactFlow, {
   ReactFlowProvider,
 } from "reactflow";
 import IconButton from "@mui/material/IconButton";
+import { Alert, Box, Button, CircularProgress } from "@mui/material";
 import { graphlib, layout } from "dagre";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
@@ -53,6 +54,13 @@ import noError from "../../../../../images/no-error.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
+import {
+  PAUSED,
+  PAUSING,
+  RUNNING,
+  getAPIResponseError,
+  timeAgo,
+} from "../../../../../utils";
 
 const nodeWidth = 252;
 const nodeHeight = 72;
@@ -279,7 +287,7 @@ const getHiddenValue = (edges: Edge[]) => {
 };
 
 export default function Graph(props: GraphProps) {
-  const { data, namespaceId, pipelineId } = props;
+  const { data, namespaceId, pipelineId, refresh } = props;
   const { sidebarProps, setSidebarProps } =
     useContext<AppContextProps>(AppContext);
 
@@ -293,6 +301,11 @@ export default function Graph(props: GraphProps) {
   const [sideEdges, setSideEdges] = useState<Map<string, string>>(new Map());
   const initialHiddenValue = getHiddenValue(layoutedEdges);
   const [hidden, setHidden] = useState(initialHiddenValue);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [successMessage, setSuccessMessage] = useState<string | undefined>(
+    undefined
+  );
+  const [statusPayload, setStatusPayload] = useState<any>(undefined);
 
   useEffect(() => {
     const nodeSet = new Map();
@@ -303,7 +316,6 @@ export default function Graph(props: GraphProps) {
     });
     setSideNodes(nodeSet);
   }, [layoutedNodes]);
-
   useEffect(() => {
     const edgeSet: Map<string, string> = new Map();
     layoutedEdges.forEach((edge) => {
@@ -506,9 +518,149 @@ export default function Graph(props: GraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showSpec, setShowSpec] = useState(true);
 
+  const handlePlayClick = useCallback((e) => {
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: RUNNING,
+        },
+      },
+    });
+  }, []);
+
+  const handlePauseClick = useCallback((e) => {
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: PAUSED,
+        },
+      },
+    });
+  }, []);
+
+  useEffect(() => {
+    const patchStatus = async () => {
+      try {
+        const response = await fetch(
+          `/api/v1/namespaces/${namespaceId}/pipelines/${data?.pipeline?.metadata?.name}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(statusPayload),
+          }
+        );
+        const error = await getAPIResponseError(response);
+        if (error) {
+          setError(error);
+        } else {
+          refresh();
+          setSuccessMessage("Status updated successfully");
+        }
+      } catch (e) {
+        setError(e);
+      } finally {
+        const timer = setTimeout(() => {
+          setStatusPayload(undefined);
+          clearTimeout(timer);
+        }, 15000);
+      }
+    };
+    if (statusPayload) {
+      patchStatus();
+    }
+  }, [statusPayload]);
+  console.log(data);
+
   return (
     <div style={{ height: "90%" }}>
       <div className="Graph" data-testid="graph">
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+          }}
+        >
+          <Button
+            variant="contained"
+            sx={{
+              marginTop: "1rem",
+              marginLeft: "1rem",
+              width: "80px",
+              fontWeight: "bold",
+            }}
+            onClick={handlePlayClick}
+            disabled={data?.pipeline?.status?.phase === RUNNING}
+          >
+            Play
+          </Button>
+          <Button
+            variant="contained"
+            sx={{
+              marginTop: "1rem",
+              marginLeft: "1rem",
+              width: "80px",
+              fontWeight: "bold",
+            }}
+            onClick={handlePauseClick}
+            disabled={
+              data?.pipeline?.status?.phase === PAUSED ||
+              data?.pipeline?.status?.phase === PAUSING
+            }
+          >
+            Pause
+          </Button>
+          <Button sx={{ height: "35px", marginTop: "1rem" }}>
+            {" "}
+            {error && statusPayload ? (
+              <Alert
+                severity="error"
+                sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
+              >
+                {error}
+              </Alert>
+            ) : successMessage &&
+              statusPayload &&
+              statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED ? (
+              <div
+                style={{
+                  borderRadius: "13px",
+                  width: "228px",
+                  background: "#F0F0F0",
+                  display: "flex",
+                  flexDirection: "row",
+                  marginLeft: "1rem",
+                  marginTop: "1rem",
+                  padding: "0.5rem",
+                  color: "#516F91",
+                  alignItems: "center",
+                }}
+              >
+                <CircularProgress
+                  sx={{ width: "20px !important", height: "20px !important" }}
+                />{" "}
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <span style={{ marginLeft: "1rem" }}>
+                    Pipeline Pausing...
+                  </span>
+                  <span style={{ marginLeft: "1rem" }}>
+                    {data?.pipeline?.status?.lastUpdated
+                      ? timeAgo(data?.pipeline?.status?.lastUpdated)
+                      : ""}
+                  </span>
+                </Box>
+              </div>
+            ) : (
+              ""
+            )}
+          </Button>
+        </Box>
         <HighlightContext.Provider
           value={{
             highlightValues,

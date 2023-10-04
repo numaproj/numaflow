@@ -1,10 +1,12 @@
-import React, { useCallback, useContext } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import Paper from "@mui/material/Paper";
 import { Link } from "react-router-dom";
 import { PipelineCardProps } from "../../../../../types/declarations/namespace";
 import {
+  Alert,
   Box,
   Button,
+  CircularProgress,
   Grid,
   MenuItem,
   Select,
@@ -13,10 +15,15 @@ import {
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import {
   GetISBType,
+  getAPIResponseError,
   IconsStatusMap,
   ISBStatusString,
   StatusString,
+  timeAgo,
   UNKNOWN,
+  PAUSED,
+  RUNNING,
+  PAUSING,
 } from "../../../../../utils";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
@@ -37,6 +44,11 @@ export function PipelineCard({
   const [editOption] = React.useState("view");
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [deleteOption, setDeleteOption] = React.useState("Delete");
+  const [statusPayload, setStatusPayload] = useState<any>(undefined);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [successMessage, setSuccessMessage] = useState<string | undefined>(
+    undefined
+  );
 
   const handleUpdateComplete = useCallback(() => {
     refresh();
@@ -84,6 +96,58 @@ export function PipelineCard({
   const isbStatus = isbData?.isbService?.status?.phase || UNKNOWN;
   const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
 
+  const handlePlayClick = useCallback((e) => {
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: RUNNING,
+        },
+      },
+    });
+  }, []);
+
+  const handlePauseClick = useCallback((e) => {
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: PAUSED,
+        },
+      },
+    });
+  }, []);
+  useEffect(() => {
+    const patchStatus = async () => {
+      try {
+        const response = await fetch(
+          `/api/v1/namespaces/${namespace}/pipelines/${data?.name}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(statusPayload),
+          }
+        );
+        const error = await getAPIResponseError(response);
+        if (error) {
+          setError(error);
+        } else {
+          refresh();
+          setSuccessMessage("Status updated successfully");
+        }
+      } catch (e) {
+        setError(e);
+      } finally {
+        const timer = setTimeout(() => {
+          setStatusPayload(undefined);
+          clearTimeout(timer);
+        }, 5000);
+      }
+    };
+    if (statusPayload) {
+      patchStatus();
+    }
+  }, [statusPayload]);
   return (
     <>
       <Paper
@@ -123,12 +187,79 @@ export function PipelineCard({
               flexDirection: "row",
               flexGrow: 1,
               justifyContent: "flex-end",
+              alignItems: "center",
+              height: "64px",
             }}
           >
-            <Button variant="contained" sx={{ marginRight: "1.3rem" }} disabled>
+            {error && statusPayload ? (
+              <div
+                style={{
+                  borderRadius: "13px",
+                  width: "228px",
+                  background: "#F0F0F0",
+                  display: "flex",
+                  flexDirection: "row",
+                }}
+              >
+                {error}
+              </div>
+            ) : successMessage &&
+              statusPayload &&
+              statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
+              statusData?.pipeline?.status?.phase !== PAUSED ? (
+              <div
+                style={{
+                  borderRadius: "13px",
+                  width: "228px",
+                  background: "#F0F0F0",
+                  display: "flex",
+                  flexDirection: "row",
+                  marginLeft: "1rem",
+                  padding: "0.5rem",
+                  color: "#516F91",
+                  alignItems: "center",
+                }}
+              >
+                <CircularProgress
+                  sx={{ width: "20px !important", height: "20px !important" }}
+                />{" "}
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <span style={{ marginLeft: "1rem" }}>
+                    Pipeline Pausing...
+                  </span>
+                  <span style={{ marginLeft: "1rem" }}>
+                    {statusData?.pipeline?.status?.lastUpdated
+                      ? timeAgo(statusData?.pipeline?.status?.lastUpdated)
+                      : ""}
+                  </span>
+                </Box>
+              </div>
+            ) : (
+              ""
+            )}
+
+            <Button
+              variant="contained"
+              sx={{ marginRight: "1.3rem", marginLeft: "1rem", height: "34px" }}
+              onClick={handlePlayClick}
+              disabled={statusData?.pipeline?.status?.phase === RUNNING}
+            >
               Resume
             </Button>
-            <Button variant="contained" disabled sx={{ marginRight: "5.1rem" }}>
+            <Button
+              variant="contained"
+              sx={{ marginRight: "5.1rem", height: "34px" }}
+              onClick={handlePauseClick}
+              disabled={
+                statusData?.pipeline?.status?.phase === PAUSED ||
+                statusData?.pipeline?.status?.phase === PAUSING
+              }
+            >
               Pause
             </Button>
           </Box>
