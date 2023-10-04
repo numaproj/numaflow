@@ -85,7 +85,7 @@ func (c *pipelines) Get(ctx context.Context, name string, options v1.GetOptions)
 	json.Unmarshal(raw, &info)
 	// although the kind and apiversion will be reset
 	// we still want to keep the Into function behaviour
-	// original issue: https://github.com/kubernetes/kubernetes/issues/80609
+	// original issue link https://github.com/kubernetes/kubernetes/issues/80609
 	err = result.Into(pipeline)
 	if err != nil {
 		return
