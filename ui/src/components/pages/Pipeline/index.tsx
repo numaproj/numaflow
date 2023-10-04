@@ -19,6 +19,7 @@ import { AppContext } from "../../../App";
 import noError from "../../../images/no-error.svg";
 
 import "./style.css";
+import {UNKNOWN} from "../../../utils";
 
 export function Pipeline() {
   // TODO needs to be able to be given namespaceId from parent for NS only install
@@ -32,6 +33,7 @@ export function Pipeline() {
     }
     const pipelineData = data?.pipelineData;
     const isbData = data?.isbData;
+    const pipelineStatus = pipelineData?.pipeline?.status?.phase || UNKNOWN;
     return [
       // pipeline collection
       {
@@ -41,7 +43,7 @@ export function Pipeline() {
             type: SummarySectionType.CUSTOM,
             customComponent: (
               <PipelineStatus
-                status={pipelineData?.pipeline?.status?.phase}
+                status={pipelineStatus}
                 healthStatus={pipelineData?.status}
               />
             ),
