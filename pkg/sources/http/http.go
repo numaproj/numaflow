@@ -243,6 +243,10 @@ loop:
 	return msgs, nil
 }
 
+func (h *httpSource) Pending(_ context.Context) (int64, error) {
+	return isb.PendingNotAvailable, nil
+}
+
 func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	var oldest time.Time
 	for _, m := range msgs {
