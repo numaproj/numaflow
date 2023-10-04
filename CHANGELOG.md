@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.11.0-rc2 (2023-10-03)
+
+ * [8ae28af3](https://github.com/numaproj/numaflow/commit/8ae28af3fed4ed201f1eb40d3556377a04c9681f) Update manifests to v0.11.0-rc2
+ * [f74bde39](https://github.com/numaproj/numaflow/commit/f74bde398d2e35e84c7752952597898956b9dc69) fix: not considered as back pressured when onFull is discardLatest (#1153)
+ * [689aa295](https://github.com/numaproj/numaflow/commit/689aa2954ad279e7c91184dbf2f3690cde806fb2) fix(SERVER): handle states when status is unknown (#1154)
+ * [f83ea00a](https://github.com/numaproj/numaflow/commit/f83ea00a8e93c51c2f914ca383a91b5b2f05984e) fix(SERVER): fix key warning (#1152)
+
+### Contributors
+
+ * Derek Wang
+ * mshakira
+
 ## v0.11.0-rc1 (2023-10-03)
 
  * [1d89a12b](https://github.com/numaproj/numaflow/commit/1d89a12bc331e7daafaa30db540c5ac57ca50257) Update manifests to v0.11.0-rc1
