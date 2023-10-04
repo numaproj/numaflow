@@ -1,17 +1,20 @@
-import React, { useCallback, useContext } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import Paper from "@mui/material/Paper";
 import { Link } from "react-router-dom";
 import { PipelineCardProps } from "../../../../../types/declarations/namespace";
 import {
+  Alert,
   Box,
   Button,
   Grid,
   MenuItem,
   Select,
   SelectChangeEvent,
+  Snackbar,
 } from "@mui/material";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import {
+  getAPIResponseError,
   IconsStatusMap,
   ISBStatusString,
   StatusString,
@@ -35,6 +38,19 @@ export function PipelineCard({
   const [editOption] = React.useState("view");
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [deleteOption, setDeleteOption] = React.useState("Delete");
+  const [statusPayload, setStatusPayload] = useState({
+    spec: {
+      lifecycle: {
+        desiredPhase: "Paused",
+      },
+    },
+  });
+  const [autoHide, setAutoHide] = useState<boolean>(true);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [successMessage, setSuccessMessage] = useState<string | undefined>(
+    undefined
+  );
+  const [payloadSet, setPayloadSet] = useState<boolean>(false);
 
   const handleUpdatePipelineComplete = useCallback(() => {
     refresh();
@@ -74,6 +90,61 @@ export function PipelineCard({
   const handleDeleteChange = useCallback((event: SelectChangeEvent<string>) => {
     setDeleteOption(event.target.value);
   }, []);
+  const handlePlayClick = useCallback((e) => {
+    setPayloadSet(true);
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: "Running",
+        },
+      },
+    });
+  }, []);
+
+  const handlePauseClick = useCallback((e) => {
+    setPayloadSet(true);
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: "Paused",
+        },
+      },
+    });
+  }, []);
+  useEffect(() => {
+    const patchStatus = async () => {
+      try {
+        setAutoHide(false);
+        const response = await fetch(
+          `/api/v1/namespaces/${namespace}/pipelines/${data?.name}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(statusPayload),
+          }
+        );
+        const error = await getAPIResponseError(response);
+        if (error) {
+          setError(error);
+        } else {
+          setSuccessMessage("Status updated successfully");
+        }
+      } catch (e) {
+        setError(e);
+      } finally {
+        setPayloadSet(false);
+        const timer = setTimeout(() => {
+          setAutoHide(true);
+          clearTimeout(timer);
+        }, 5000);
+      }
+    };
+    if (payloadSet) {
+      patchStatus();
+    }
+  }, [statusPayload]);
   return (
     <>
       <Paper
@@ -84,6 +155,17 @@ export function PipelineCard({
           width: "100%",
         }}
       >
+        <Snackbar
+          open={!autoHide}
+          message={
+            error ? (
+              <Alert severity="error">{error}</Alert>
+            ) : (
+              <Alert severity="success">{successMessage}</Alert>
+            )
+          }
+          anchorOrigin={{ horizontal: "right", vertical: "top" }}
+        />
         <Box
           sx={{
             display: "flex",
@@ -115,10 +197,20 @@ export function PipelineCard({
               justifyContent: "flex-end",
             }}
           >
-            <Button variant="contained" sx={{ marginRight: "1.3rem" }} disabled>
+            <Button
+              variant="contained"
+              sx={{ marginRight: "1.3rem" }}
+              onClick={handlePlayClick}
+              disabled={statusData?.pipeline?.status?.phase === "Running"}
+            >
               Resume
             </Button>
-            <Button variant="contained" disabled sx={{ marginRight: "5.1rem" }}>
+            <Button
+              variant="contained"
+              sx={{ marginRight: "5.1rem" }}
+              onClick={handlePauseClick}
+              disabled={statusData?.pipeline?.status?.phase === "Paused"}
+            >
               Pause
             </Button>
           </Box>

@@ -24,6 +24,7 @@ import ReactFlow, {
   ReactFlowProvider,
 } from "reactflow";
 import IconButton from "@mui/material/IconButton";
+import { Alert, Box, Button, Snackbar } from "@mui/material";
 import { graphlib, layout } from "dagre";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
@@ -53,6 +54,7 @@ import noError from "../../../../../images/no-error.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
+import { getAPIResponseError } from "../../../../../utils";
 
 const nodeWidth = 252;
 const nodeHeight = 72;
@@ -293,6 +295,19 @@ export default function Graph(props: GraphProps) {
   const [sideEdges, setSideEdges] = useState<Map<string, string>>(new Map());
   const initialHiddenValue = getHiddenValue(layoutedEdges);
   const [hidden, setHidden] = useState(initialHiddenValue);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [successMessage, setSuccessMessage] = useState<string | undefined>(
+    undefined
+  );
+  const [autoHide, setAutoHide] = useState<boolean>(true);
+  const [payloadSet, setPayloadSet] = useState<boolean>(false);
+  const [statusPayload, setStatusPayload] = useState({
+    spec: {
+      lifecycle: {
+        desiredPhase: "Paused",
+      },
+    },
+  });
 
   useEffect(() => {
     const nodeSet = new Map();
@@ -303,7 +318,6 @@ export default function Graph(props: GraphProps) {
     });
     setSideNodes(nodeSet);
   }, [layoutedNodes]);
-
   useEffect(() => {
     const edgeSet: Map<string, string> = new Map();
     layoutedEdges.forEach((edge) => {
@@ -506,9 +520,110 @@ export default function Graph(props: GraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showSpec, setShowSpec] = useState(true);
 
+  const handlePlayClick = useCallback((e) => {
+    setPayloadSet(true);
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: "Running",
+        },
+      },
+    });
+  }, []);
+
+  const handlePauseClick = useCallback((e) => {
+    setPayloadSet(true);
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: "Paused",
+        },
+      },
+    });
+  }, []);
+
+  useEffect(() => {
+    const patchStatus = async () => {
+      try {
+        setAutoHide(false);
+        const response = await fetch(
+          `/api/v1/namespaces/${namespaceId}/pipelines/${data?.pipeline?.metadata?.name}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(statusPayload),
+          }
+        );
+        const error = await getAPIResponseError(response);
+        if (error) {
+          setError(error);
+        } else {
+          setSuccessMessage("Status updated successfully");
+        }
+      } catch (e) {
+        setError(e);
+      } finally {
+        setPayloadSet(false);
+        const timer = setTimeout(() => {
+          setAutoHide(true);
+          clearTimeout(timer);
+        }, 5000);
+      }
+    };
+    if (payloadSet) {
+      patchStatus();
+    }
+  }, [statusPayload]);
+
   return (
     <div style={{ height: "90%" }}>
+      <Snackbar
+        open={!autoHide}
+        message={
+          error ? (
+            <Alert severity="error">{error}</Alert>
+          ) : (
+            <Alert severity="success">{successMessage}</Alert>
+          )
+        }
+        anchorOrigin={{ horizontal: "right", vertical: "top" }}
+      />
       <div className="Graph" data-testid="graph">
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+          }}
+        >
+          <Button
+            variant="contained"
+            sx={{
+              marginTop: "1rem",
+              marginLeft: "1rem",
+              width: "80px",
+              fontWeight: "bold",
+            }}
+            onClick={handlePlayClick}
+            disabled={data?.pipeline?.status?.phase === "Running"}
+          >
+            Play
+          </Button>
+          <Button
+            variant="contained"
+            sx={{
+              marginTop: "1rem",
+              marginLeft: "1rem",
+              width: "80px",
+              fontWeight: "bold",
+            }}
+            onClick={handlePauseClick}
+            disabled={data?.pipeline?.status?.phase === "Paused"}
+          >
+            Pause
+          </Button>
+        </Box>
         <HighlightContext.Provider
           value={{
             highlightValues,
