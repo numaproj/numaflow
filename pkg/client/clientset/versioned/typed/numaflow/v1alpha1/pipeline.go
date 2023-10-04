@@ -68,32 +68,13 @@ func newPipelines(c *NumaflowV1alpha1Client, namespace string) *pipelines {
 // Get takes name of the pipeline, and returns the corresponding pipeline object, and an error if there is any.
 func (c *pipelines) Get(ctx context.Context, name string, options v1.GetOptions) (pipeline *v1alpha1.Pipeline, err error) {
 	pipeline = &v1alpha1.Pipeline{}
-	result := c.client.Get().
+	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("pipelines").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx)
-	// although the kind and apiversion will be reset
-	// we still want to keep the Into function behaviour
-	// original issue link https://github.com/kubernetes/kubernetes/issues/80609
-	err = result.Into(pipeline)
-	if err != nil {
-		return
-	}
-	// get the kind and api version
-	raw, err := result.Raw()
-	if err != nil {
-		return
-	}
-	var info struct{
-		Kind string `json:"kind,omitempty"`
-		APIVersion string `json:"apiVersion,omitempty"`
-	}
-	json.Unmarshal(raw, &info)
-	// set the kind and api version
-	pipeline.Kind = info.Kind
-	pipeline.APIVersion = info.APIVersion
+		Do(ctx).
+		Into(pipeline)
 	return
 }
 
