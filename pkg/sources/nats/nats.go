@@ -240,6 +240,10 @@ loop:
 	return msgs, nil
 }
 
+func (ns *natsSource) Pending(_ context.Context) (int64, error) {
+	return isb.PendingNotAvailable, nil
+}
+
 func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	var oldest time.Time
 	for _, m := range msgs {
