@@ -534,8 +534,20 @@ func needsUpdate(old, new *dfv1.Pipeline) bool {
 	if !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers) {
 		return true
 	}
-	if !equality.Semantic.DeepEqual(old.GetAnnotations(), new.GetAnnotations()) {
+
+	oldAnnotations := old.GetAnnotations()
+	newAnnotations := new.GetAnnotations()
+	if oldAnnotations != nil && newAnnotations == nil {
 		return true
+	}
+	if oldAnnotations == nil && newAnnotations != nil {
+		return true
+	}
+
+	for k, v := range oldAnnotations {
+		if strings.Contains(k, "numaflow.numaproj.io/") && v != newAnnotations[k] {
+			return true
+		}
 	}
 	return false
 }
