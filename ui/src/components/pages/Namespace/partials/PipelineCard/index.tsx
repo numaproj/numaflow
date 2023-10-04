@@ -52,7 +52,7 @@ export function PipelineCard({
   );
   const [payloadSet, setPayloadSet] = useState<boolean>(false);
 
-  const handleUpdatePipelineComplete = useCallback(() => {
+  const handleUpdateComplete = useCallback(() => {
     refresh();
     if (!setSidebarProps) {
       return;
@@ -71,20 +71,23 @@ export function PipelineCard({
             namespaceId: namespace,
             pipelineId: data?.name,
             viewType: ViewType.EDIT,
-            onUpdateComplete: handleUpdatePipelineComplete,
+            onUpdateComplete: handleUpdateComplete,
           },
         });
       } else if (event.target.value === "isb" && setSidebarProps) {
         setSidebarProps({
-          type: SidebarType.PIPELINE_SPEC,
-          pipelineSpecProps: {
-            spec: isbData?.isbService?.spec,
-            titleOverride: "ISB Spec",
+          type: SidebarType.ISB_UPDATE,
+          specEditorProps: {
+            initialYaml: isbData?.isbService?.spec,
+            namespaceId: namespace,
+            isbId: isbData?.name,
+            viewType: ViewType.EDIT,
+            onUpdateComplete: handleUpdateComplete,
           },
         });
       }
     },
-    [setSidebarProps, handleUpdatePipelineComplete, isbData, data]
+    [setSidebarProps, handleUpdateComplete, isbData, data]
   );
 
   const handleDeleteChange = useCallback((event: SelectChangeEvent<string>) => {
