@@ -116,11 +116,7 @@ export const useNamespaceSummaryFetch = ({
     data: pipelineData,
     loading: pipelineLoading,
     error: pipelineError,
-  } = useFetch(
-    `/api/v1/namespaces/${namespace}/pipelines`,
-    undefined,
-    options
-  );
+  } = useFetch(`/api/v1/namespaces/${namespace}/pipelines`, undefined, options);
   const {
     data: isbData,
     loading: isbLoading,

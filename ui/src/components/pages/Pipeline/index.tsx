@@ -16,10 +16,10 @@ import { PipelineISBStatus } from "./partials/PipelineISBStatus";
 import { SidebarType } from "../../common/SlidingSidebar";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
+import { UNKNOWN } from "../../../utils";
 import noError from "../../../images/no-error.svg";
 
 import "./style.css";
-import {UNKNOWN} from "../../../utils";
 
 export function Pipeline() {
   // TODO needs to be able to be given namespaceId from parent for NS only install

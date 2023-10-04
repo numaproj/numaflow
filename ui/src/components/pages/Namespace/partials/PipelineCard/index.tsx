@@ -14,7 +14,8 @@ import {
   GetISBType,
   IconsStatusMap,
   ISBStatusString,
-  StatusString, UNKNOWN,
+  StatusString,
+  UNKNOWN,
 } from "../../../../../utils";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
@@ -161,7 +162,7 @@ export function PipelineCard({
             >
               <img
                 src={IconsStatusMap[pipelineStatus]}
-                alt='Status'
+                alt="Status"
                 className={"pipeline-logo"}
               />
               <img
