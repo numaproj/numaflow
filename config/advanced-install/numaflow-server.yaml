@@ -115,7 +115,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: quay.io/numaproj/numaflow:v0.11.0-rc1
+        image: quay.io/numaproj/numaflow:v0.11.0-rc2
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -142,7 +142,7 @@ spec:
       initContainers:
       - args:
         - server-init
-        image: quay.io/numaproj/numaflow:v0.11.0-rc1
+        image: quay.io/numaproj/numaflow:v0.11.0-rc2
         imagePullPolicy: Always
         name: server-init
         volumeMounts:
