@@ -15,6 +15,7 @@ export function PiplineCreate({
   namespaceId,
   viewType,
   onUpdateComplete,
+  setModalOnClose,
 }: SpecEditorSidebarProps) {
   const [loading, setLoading] = useState(false);
   const [validationPayload, setValidationPayload] = useState<any>(undefined);
@@ -193,6 +194,23 @@ export function PiplineCreate({
     setContextComponent(undefined);
   }, []);
 
+  const handleMutationChange = useCallback(
+    (mutated: boolean) => {
+      if (!setModalOnClose) {
+        return;
+      }
+      if (mutated) {
+        setModalOnClose({
+          message: "Are you sure you want to discard your changes?",
+          iconType: "warn",
+        });
+      } else {
+        setModalOnClose(undefined);
+      }
+    },
+    [setModalOnClose]
+  );
+
   return (
     <Box
       sx={{
@@ -217,6 +235,7 @@ export function PiplineCreate({
         onValidate={handleValidate}
         onSubmit={handleSubmit}
         onResetApplied={handleReset}
+        onMutatedChange={handleMutationChange}
         contextComponent={contextComponent}
       />
     </Box>

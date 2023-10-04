@@ -18,7 +18,6 @@ import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
-import { toast } from "react-toastify";
 import {
   SlidingSidebar,
   SlidingSidebarProps,
@@ -48,6 +47,9 @@ function App() {
   const [pageWidth, setPageWidth] = useState(0);
   const [sidebarProps, setSidebarProps] = useState<
     SlidingSidebarProps | undefined
+  >();
+  const [sidebarCloseIndicator, setSidebarCloseIndicator] = useState<
+    string | undefined
   >();
   const { systemInfo, error: systemInfoError, loading } = useSystemInfoFetch();
 
@@ -81,9 +83,7 @@ function App() {
   }, [systemInfoError]);
 
   const handleSideBarClose = useCallback(() => {
-    setSidebarProps(undefined);
-    // remove all toast when sidebar is closed
-    toast.dismiss();
+    setSidebarCloseIndicator("id" + Math.random().toString(16).slice(2));
   }, []);
 
   const routes = useMemo(() => {
@@ -217,7 +217,7 @@ function App() {
             <SlidingSidebar
               {...sidebarProps}
               pageWidth={pageWidth}
-              onClose={handleSideBarClose}
+              parentCloseIndicator={sidebarCloseIndicator}
             />
           )}
         </Drawer>

@@ -21,7 +21,10 @@ export interface SpecEditorProps {
   onValidate?: (value: string) => void;
   onSubmit?: (value: string) => void;
   onResetApplied?: () => void;
+  onMutatedChange?: (mutated: boolean) => void;
   contextComponent?: React.ReactNode; // Component provided by parent to show error/validation context
+  mutationKey?: string;
+  editResetKey?: string;
 }
 
 export function SpecEditor({
@@ -31,7 +34,10 @@ export function SpecEditor({
   onValidate,
   onSubmit,
   onResetApplied,
+  onMutatedChange,
   contextComponent,
+  mutationKey,
+  editResetKey,
 }: SpecEditorProps) {
   const [editable, setEditable] = useState(viewType === ViewType.EDIT);
   const [mutated, setMutated] = useState(false);
@@ -40,6 +46,29 @@ export function SpecEditor({
       ? initialYaml
       : YAML.stringify(initialYaml) || ""
   );
+  const [editorRef, setEditorRef] = useState<any>(undefined);
+
+  useEffect(() => {
+    if (onMutatedChange) {
+      onMutatedChange(mutated);
+    }
+  }, [mutated, onMutatedChange]);
+
+  useEffect(() => {
+    if (editable) {
+      editorRef?.focus();
+    }
+  }, [editorRef, editable]);
+
+  useEffect(() => {
+    setMutated(false);
+  }, [mutationKey]);
+
+  useEffect(() => {
+    if (viewType === ViewType.TOGGLE_EDIT) {
+      setEditable(false);
+    }
+  }, [viewType, editResetKey]);
 
   // Update editable on view type change
   useEffect(() => {
@@ -79,6 +108,10 @@ export function SpecEditor({
     // No changes
     setMutated(false);
   }, [initialYaml, value]);
+
+  const handleEditorDidMount = useCallback((editor: any) => {
+    setEditorRef(editor);
+  }, []);
 
   const handleValueChange = useCallback((newValue: string | undefined) => {
     setValue(newValue ? newValue : "");
@@ -137,6 +170,9 @@ export function SpecEditor({
   }, [loading]);
 
   const actionButtons = useMemo(() => {
+    if (viewType === ViewType.READ_ONLY) {
+      return undefined;
+    }
     return (
       <Box
         sx={{
@@ -156,7 +192,7 @@ export function SpecEditor({
           </Button>
         )}
         <Button
-          disabled={!mutated || loading}
+          disabled={!mutated || loading || !editable}
           onClick={handleReset}
           variant="contained"
           sx={{ marginLeft: "0.5rem" }}
@@ -164,7 +200,7 @@ export function SpecEditor({
           Reset
         </Button>
         <Button
-          disabled={!mutated || loading}
+          disabled={!mutated || loading || !editable}
           onClick={handleValidate}
           variant="contained"
           sx={{ marginLeft: "0.5rem" }}
@@ -172,7 +208,7 @@ export function SpecEditor({
           Validate
         </Button>
         <Button
-          disabled={!mutated || loading}
+          disabled={!mutated || loading || !editable}
           onClick={handleSubmit}
           variant="contained"
           sx={{ marginLeft: "0.5rem" }}
@@ -204,6 +240,7 @@ export function SpecEditor({
           defaultLanguage="yaml"
           defaultValue={value}
           value={value}
+          onMount={handleEditorDidMount}
           onChange={handleValueChange}
           theme="github"
           options={

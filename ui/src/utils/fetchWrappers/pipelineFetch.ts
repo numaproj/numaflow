@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Options, useFetch } from "./fetch";
 import {PipelineSummaryFetchResult} from "../../types/declarations/pipeline";
 
@@ -7,16 +7,26 @@ const DATA_REFRESH_INTERVAL = 15000; // ms
 
 // fetch pipeline summary and ISB summary
 export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
-  const [results, setResults] = useState<PipelineSummaryFetchResult>({
-    data: undefined,
-    loading: true,
-    error: undefined,
-  });
   const [isb, setIsb] = useState<string | null>(null);
   const [options, setOptions] = useState<Options>({
     skip: false,
     requestKey: "",
   });
+
+  const refresh = useCallback(() => {
+    setOptions({
+      skip: false,
+      requestKey: "id" + Math.random().toString(16).slice(2),
+    });
+  }, []);
+
+  const [results, setResults] = useState<PipelineSummaryFetchResult>({
+    data: undefined,
+    loading: true,
+    error: undefined,
+    refresh,
+  });
+
   const {
     data: pipelineData,
     loading: pipelineLoading,
@@ -53,6 +63,7 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
           data: undefined,
           loading: true,
           error: undefined,
+          refresh,
         });
       }
       return;
@@ -62,6 +73,7 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
         data: undefined,
         loading: false,
         error: pipelineError || isbError,
+        refresh,
       });
       return;
     }
@@ -70,6 +82,7 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
         data: undefined,
         loading: false,
         error: pipelineData?.errMsg || isbData?.errMsg,
+        refresh,
       });
       return;
     }
@@ -91,6 +104,7 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
         data: pipelineSummary,
         loading: false,
         error: undefined,
+        refresh,
       });
       return;
     }
@@ -102,6 +116,7 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
     pipelineError,
     isbError,
     options,
+    refresh,
   ]);
   return results;
 };

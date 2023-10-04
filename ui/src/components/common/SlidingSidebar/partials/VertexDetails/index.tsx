@@ -2,11 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
-import { SpecEditor } from "./partials/SpecEditor";
+import { VertexUpdate } from "./partials/VertexUpdate";
 import { ProcessingRates } from "./partials/ProcessingRates";
 import { K8sEvents } from "../K8sEvents";
 import { Buffers } from "./partials/Buffers";
 import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
+import { SpecEditorModalProps } from "../..";
+import { CloseModal } from "../CloseModal";
 import sourceIcon from "../../../../../images/source_vertex.png";
 import sinkIcon from "../../../../../images/sink_vertex.png";
 import mapIcon from "../../../../../images/map_vertex.png";
@@ -35,6 +37,7 @@ export interface VertexDetailsProps {
   vertexMetrics: any;
   buffers: any[];
   type: string;
+  setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
 }
 
 export function VertexDetails({
@@ -45,10 +48,16 @@ export function VertexDetails({
   vertexMetrics,
   buffers,
   type,
+  setModalOnClose,
 }: VertexDetailsProps) {
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
   const [tabValue, setTabValue] = useState(PODS_VIEW_TAB_INDEX);
+  const [updateModalOnClose, setUpdateModalOnClose] = useState<
+    SpecEditorModalProps | undefined
+  >();
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [targetTab, setTargetTab] = useState<number | undefined>();
 
   // Find the vertex spec by id
   useEffect(() => {
@@ -63,13 +72,6 @@ export function VertexDetails({
     }
     setVertexSpec(vertexSpecs);
   }, [vertexSpecs, type]);
-
-  const handleTabChange = useCallback(
-    (event: React.SyntheticEvent, newValue: number) => {
-      setTabValue(newValue);
-    },
-    []
-  );
 
   const header = useMemo(() => {
     const headerContainerStyle = {
@@ -131,6 +133,40 @@ export function VertexDetails({
         );
     }
   }, [vertexType]);
+
+  const handleTabChange = useCallback(
+    (event: React.SyntheticEvent, newValue: number) => {
+      if (tabValue === SPEC_TAB_INDEX && updateModalOnClose) {
+        setTargetTab(newValue);
+        setUpdateModalOpen(true);
+      } else {
+        setTabValue(newValue);
+      }
+    },
+    [tabValue, updateModalOnClose]
+  );
+
+  const handleUpdateModalConfirm = useCallback(() => {
+    // Close modal
+    setUpdateModalOpen(false);
+    // Clear modal on close
+    setUpdateModalOnClose(undefined);
+    setModalOnClose && setModalOnClose(undefined);
+    // Change to tab requested
+    setTabValue(targetTab || PODS_VIEW_TAB_INDEX);
+  }, [targetTab]);
+
+  const handleUpdateModalCancel = useCallback(() => {
+    setUpdateModalOpen(false);
+  }, []);
+
+  const handleUpdateModalClose = useCallback(
+    (props: SpecEditorModalProps | undefined) => {
+      setUpdateModalOnClose(props);
+      setModalOnClose && setModalOnClose(props);
+    },
+    [setModalOnClose]
+  );
 
   return (
     <Box
@@ -211,7 +247,13 @@ export function VertexDetails({
       >
         {tabValue === SPEC_TAB_INDEX && (
           <Box sx={{ height: "100%" }}>
-            <SpecEditor vertexId={vertexId} vertexSpec={vertexSpec} />
+            <VertexUpdate
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+              vertexId={vertexId}
+              vertexSpec={vertexSpec}
+              setModalOnClose={handleUpdateModalClose}
+            />
           </Box>
         )}
       </div>
@@ -245,6 +287,13 @@ export function VertexDetails({
         >
           {tabValue === BUFFERS_TAB_INDEX && <Buffers buffers={buffers} />}
         </div>
+      )}
+      {updateModalOnClose && updateModalOpen && (
+        <CloseModal
+          {...updateModalOnClose}
+          onConfirm={handleUpdateModalConfirm}
+          onCancel={handleUpdateModalCancel}
+        />
       )}
     </Box>
   );
