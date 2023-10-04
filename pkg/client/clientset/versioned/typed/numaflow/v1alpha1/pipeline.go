@@ -20,7 +20,6 @@ package v1alpha1
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
