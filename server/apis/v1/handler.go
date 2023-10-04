@@ -94,6 +94,21 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 
 // GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
 func (h *handler) GetClusterSummary(c *gin.Context) {
+	pipelineList, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
+		return
+	}
+	_ = pipelineList
+	isbsvcList, err := h.numaflowClient.InterStepBufferServices("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
+		return
+	}
+	_ = isbsvcList
+}
+
+func (h *handler) GetClusterSummary0(c *gin.Context) {
 	namespaces, err := getAllNamespaces(h)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
