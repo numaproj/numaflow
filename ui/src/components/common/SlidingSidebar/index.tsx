@@ -12,6 +12,7 @@ import { Errors, ErrorsProps } from "./partials/Errors";
 import { PiplineCreate } from "./partials/PipelineCreate";
 import { PiplineUpdate } from "./partials/PipelineUpdate";
 import { ISBCreate } from "./partials/ISBCreate";
+import { ISBUpdate } from "./partials/ISBUpdate";
 import { ViewType } from "../SpecEditor";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
@@ -40,6 +41,7 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.PIPELINE_UPDATE]: 750,
   [SidebarType.PIPELINE_SPEC]: 750,
   [SidebarType.ISB_CREATE]: 750,
+  [SidebarType.ISB_UPDATE]: 750,
   [SidebarType.VERTEX_DETAILS]: 750,
   [SidebarType.EDGE_DETAILS]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,
@@ -50,6 +52,7 @@ export interface SpecEditorSidebarProps {
   initialYaml?: any;
   namespaceId?: string;
   pipelineId?: string;
+  isbId?: string;
   viewType?: ViewType;
   onUpdateComplete?: () => void;
 }
@@ -148,6 +151,11 @@ export function SlidingSidebar({
           break;
         }
         return <ISBCreate {...specEditorProps} />;
+      case SidebarType.ISB_UPDATE:
+        if (!specEditorProps || !specEditorProps.namespaceId || !specEditorProps.isbId) {
+          break;
+        }
+        return <ISBUpdate {...specEditorProps} />;
       case SidebarType.VERTEX_DETAILS:
         if (!vertexDetailsProps) {
           break;

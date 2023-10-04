@@ -196,7 +196,7 @@ export function SpecEditor({
     return (
       <Box
         sx={{
-          height: "75%",
+          height: "100%",
         }}
       >
         <Editor
