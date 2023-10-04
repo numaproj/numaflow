@@ -10,7 +10,12 @@ import {
   Select,
   SelectChangeEvent,
 } from "@mui/material";
-import {IconsStatusMap, ISBStatusString, StatusString} from "../../../../../utils";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import {
+  IconsStatusMap,
+  ISBStatusString,
+  StatusString,
+} from "../../../../../utils";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
@@ -79,58 +84,52 @@ export function PipelineCard({
           width: "100%",
         }}
       >
-        <Link
-          to={`/namespaces/${namespace}/pipelines/${data.name}`}
-          style={{ textDecoration: "none" }}
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            flexGrow: 1,
+            alignItems: "center",
+          }}
         >
+          <img
+            className="pipeline-card-icon"
+            src={pipelineIcon}
+            alt="pipeline icon"
+          />
           <Box
             sx={{
               display: "flex",
               flexDirection: "row",
               flexGrow: 1,
-              alignItems: "center",
+              marginLeft: "1rem",
             }}
           >
-            <img
-              className="pipeline-card-icon"
-              src={pipelineIcon}
-              alt="pipeline icon"
-            />
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "row",
-                flexGrow: 1,
-                marginLeft: "1rem",
-              }}
-            >
-              <span className="pipeline-card-name">{data?.name}</span>
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "row",
-                flexGrow: 1,
-                justifyContent: "flex-end",
-              }}
-            >
-              <Button
-                variant="contained"
-                sx={{ marginRight: "1.3rem" }}
-                disabled
-              >
-                Resume
-              </Button>
-              <Button
-                variant="contained"
-                disabled
-                sx={{ marginRight: "5.1rem" }}
-              >
-                Pause
-              </Button>
-            </Box>
+            <span className="pipeline-card-name">{data?.name}</span>
           </Box>
-        </Link>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              flexGrow: 1,
+              justifyContent: "flex-end",
+            }}
+          >
+            <Button variant="contained" sx={{ marginRight: "1.3rem" }} disabled>
+              Resume
+            </Button>
+            <Button variant="contained" disabled sx={{ marginRight: "5.1rem" }}>
+              Pause
+            </Button>
+          </Box>
+          <Link
+            to={`/namespaces/${namespace}/pipelines/${data.name}`}
+            style={{ textDecoration: "none" }}
+          >
+            <ArrowForwardIcon sx={{ color: "#0077C5" }} />
+          </Link>
+        </Box>
+
         <Box
           sx={{
             display: "flex",
