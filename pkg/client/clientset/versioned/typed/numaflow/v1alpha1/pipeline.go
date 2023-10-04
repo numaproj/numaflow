@@ -20,6 +20,7 @@ package v1alpha1
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -65,15 +66,32 @@ func newPipelines(c *NumaflowV1alpha1Client, namespace string) *pipelines {
 }
 
 // Get takes name of the pipeline, and returns the corresponding pipeline object, and an error if there is any.
-func (c *pipelines) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Pipeline, err error) {
-	result = &v1alpha1.Pipeline{}
-	err = c.client.Get().
+func (c *pipelines) Get(ctx context.Context, name string, options v1.GetOptions) (pipeline *v1alpha1.Pipeline, err error) {
+	pipeline = &v1alpha1.Pipeline{}
+	result := c.client.Get().
 		Namespace(c.ns).
 		Resource("pipelines").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
+		Do(ctx)
+	raw, err := result.Raw()
+	if err != nil {
+		return
+	}
+	var info struct{
+		Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
+		APIVersion string `json:"apiVersion,omitempty" protobuf:"bytes,2,opt,name=apiVersion"`
+	}
+	json.Unmarshal(raw, &info)
+	// although the kind and apiversion will be reset
+	// we still want to keep the Into function behaviour
+	// original issue: https://github.com/kubernetes/kubernetes/issues/80609
+	err = result.Into(pipeline)
+	if err != nil {
+		return
+	}
+	pipeline.Kind = info.Kind
+	pipeline.APIVersion = info.APIVersion
 	return
 }
 
