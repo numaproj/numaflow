@@ -247,6 +247,7 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 	v, err := r.findExistingVertices(ctx, testObj)
 	assert.NoError(t, err)
 	assert.Equal(t, int32(0), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+	assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
 	_, err = r.resumePipeline(ctx, testObj)
 	assert.NoError(t, err)
 	v, err = r.findExistingVertices(ctx, testObj)
