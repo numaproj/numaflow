@@ -75,8 +75,7 @@ export function NamespacePipelineListing({
   isbData,
   refresh,
 }: NamespacePipelineListingProps) {
-  const { setSidebarProps } =
-    useContext<AppContextProps>(AppContext);
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const [search, setSearch] = useState("");
   const [health, setHealth] = useState(HEALTH[0]);
   const [status, setStatus] = useState(STATUS[0]);
@@ -106,7 +105,7 @@ export function NamespacePipelineListing({
         if (orderBy.sortOrder === ASC) {
           return a.name > b.name ? 1 : -1;
         } else {
-          return a.name < b.name ? -1 : 1;
+          return a.name < b.name ? 1 : -1;
         }
       });
     } else if (orderBy.value === LAST_UPDATED_SORT) {
@@ -117,8 +116,8 @@ export function NamespacePipelineListing({
             : -1;
         } else {
           return a.pipeline.status.lastUpdated < b.pipeline.status.lastUpdated
-            ? -1
-            : 1;
+            ? 1
+            : -1;
         }
       });
     } else {
@@ -131,12 +130,11 @@ export function NamespacePipelineListing({
         } else {
           return Date.parse(a.pipeline.metadata.creationTimestamp) <
             Date.parse(b.pipeline.metadata.creationTimestamp)
-            ? -1
-            : 1;
+            ? 1
+            : -1;
         }
       });
     }
-
     //Filter by health
     if (health !== "All") {
       filtered = filtered.filter((p) => {
@@ -267,7 +265,7 @@ export function NamespacePipelineListing({
     setOrderBy({
       value: LAST_UPDATED_SORT,
       sortOrder: DESC,
-    })
+    });
   }, [setSidebarProps, refresh]);
 
   const handleCreatePiplineClick = useCallback(() => {
