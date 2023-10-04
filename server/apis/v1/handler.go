@@ -210,7 +210,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		return
 	}
 	// set pl kind and apiVersion
-	pl.Kind = "Pipeline"
+	pl.Kind = dfv1.PipelineGroupVersionKind.Kind
 	pl.APIVersion = dfv1.SchemeGroupVersion.String()
 
 	// get pipeline source and sink vertex
