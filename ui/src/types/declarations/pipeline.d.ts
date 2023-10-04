@@ -87,6 +87,7 @@ export interface IsbServiceStatus {
 
 export interface IsbServiceSpec {
   jetstream?: Jetstream;
+  redis?: Redis;
 }
 
 export interface PipelineSummary {

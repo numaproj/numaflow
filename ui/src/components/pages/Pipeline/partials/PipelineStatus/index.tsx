@@ -1,6 +1,6 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import {IconsStatusMap, StatusString} from "../../../../../utils";
+import { IconsStatusMap, StatusString } from "../../../../../utils";
 
 import "./style.css";
 
