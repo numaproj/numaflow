@@ -21,8 +21,6 @@ import (
 	"testing"
 
 	"github.com/goccy/go-json"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
@@ -37,6 +35,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
 )
 
 const (
@@ -250,7 +251,9 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 	assert.NoError(t, err)
 	v, err = r.findExistingVertices(ctx, testObj)
 	assert.NoError(t, err)
-	assert.Equal(t, int32(3), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+	// when auto-scaling is enabled, while resuming the pipeline, instead of setting the replicas to Scale.Min,
+	// we set it to one and let auto-scaling to scale up
+	assert.Equal(t, int32(1), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
 	assert.NoError(t, err)
 }
 

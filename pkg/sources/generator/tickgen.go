@@ -272,6 +272,10 @@ loop:
 	return msgs, nil
 }
 
+func (mg *memgen) Pending(_ context.Context) (int64, error) {
+	return isb.PendingNotAvailable, nil
+}
+
 func (mg *memgen) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	if len(msgs) <= 0 {
 		return
