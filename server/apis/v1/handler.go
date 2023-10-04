@@ -209,6 +209,9 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline %q namespace %q, %s", pipeline, ns, err.Error()))
 		return
 	}
+	// set pl kind and apiVersion
+	pl.Kind = dfv1.PipelineGroupVersionKind.Kind
+	pl.APIVersion = dfv1.SchemeGroupVersion.String()
 
 	// get pipeline source and sink vertex
 	var (
