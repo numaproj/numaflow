@@ -2,8 +2,13 @@ import React, { useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
 import YAML from "yaml";
 import { getAPIResponseError } from "../../../../../../../utils";
-import { ValidationMessage } from "../../../../../SpecEditor/partials/ValidationMessage";
-import { SpecEditor, ViewType } from "../../../../../SpecEditor";
+import {
+  SpecEditor,
+  ViewType,
+  Status,
+  StatusIndicator,
+  ValidationMessage,
+} from "../../../../../SpecEditor";
 import { SpecEditorModalProps } from "../../../..";
 
 import "./style.css";
@@ -26,16 +31,23 @@ export function VertexUpdate({
   const [loading, setLoading] = useState(false);
   const [validationPayload, setValidationPayload] = useState<any>(undefined);
   const [submitPayload, setSubmitPayload] = useState<any>(undefined);
-  const [contextComponent, setContextComponent] = useState<
-    React.ReactNode | undefined
+  const [validationMessage, setValidationMessage] = useState<
+    ValidationMessage | undefined
   >();
+  const [status, setStatus] = useState<StatusIndicator | undefined>();
   const [mutationKey, setMutationKey] = useState<string>("");
   const [currentSpec, setCurrentSpec] = useState<any>(vertexSpec);
 
   // Submit API call
   useEffect(() => {
     const postData = async () => {
-      setLoading(true);
+      setStatus({
+        submit: {
+          status: Status.LOADING,
+          message: "Submitting vertex update...",
+          allowRetry: false,
+        },
+      });
       try {
         const response = await fetch(
           `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=false`,
@@ -49,40 +61,36 @@ export function VertexUpdate({
         );
         const error = await getAPIResponseError(response);
         if (error) {
-          setContextComponent(
-            <ValidationMessage
-              type="error"
-              title="Submission Error"
-              content={error}
-            />
-          );
+          setValidationMessage({
+            type: "error",
+            message: error,
+          });
+          setStatus(undefined);
         } else {
-          setContextComponent(
-            <ValidationMessage
-              type="success"
-              title="Successfully submitted"
-              content=""
-            />
-          );
+          setStatus({
+            submit: {
+              status: Status.SUCCESS,
+              message: "Vertex updated successfully",
+              allowRetry: false,
+            },
+          });
           // Set current spec to submitted spec so any additional edits are noticed
           setCurrentSpec(submitPayload.value);
           // Set to not mutated on successful submit
           setMutationKey("id" + Math.random().toString(16).slice(2));
           // Clear success message after some time
           setTimeout(() => {
-            setContextComponent(undefined);
-          }, 2000);
+            setStatus(undefined);
+            setValidationMessage(undefined);
+          }, 1000);
         }
       } catch (e: any) {
-        setContextComponent(
-          <ValidationMessage
-            type="error"
-            title="Submission Error"
-            content={`Error: ${e.message}`}
-          />
-        );
+        setValidationMessage({
+          type: "error",
+          message: e.message,
+        });
+        setStatus(undefined);
       } finally {
-        setLoading(false);
         setSubmitPayload(undefined);
       }
     };
@@ -109,30 +117,21 @@ export function VertexUpdate({
         );
         const error = await getAPIResponseError(response);
         if (error) {
-          setContextComponent(
-            <ValidationMessage
-              type="error"
-              title="Validation Error"
-              content={error}
-            />
-          );
+          setValidationMessage({
+            type: "error",
+            message: error,
+          });
         } else {
-          setContextComponent(
-            <ValidationMessage
-              type="success"
-              title="Successfully validated"
-              content=""
-            />
-          );
+          setValidationMessage({
+            type: "success",
+            message: "Successfully validated",
+          });
         }
       } catch (e: any) {
-        setContextComponent(
-          <ValidationMessage
-            type="error"
-            title="Validation Error"
-            content={`Error: ${e.message}`}
-          />
-        );
+        setValidationMessage({
+          type: "error",
+          message: `Error: ${e.message}`,
+        });
       } finally {
         setLoading(false);
         setValidationPayload(undefined);
@@ -145,63 +144,52 @@ export function VertexUpdate({
   }, [namespaceId, pipelineId, vertexId, validationPayload]);
 
   const handleValidate = useCallback((value: string) => {
-    let parsed;
+    let parsed: any;
     try {
       parsed = YAML.parse(value);
     } catch (e) {
-      setContextComponent(
-        <ValidationMessage
-          type="error"
-          title="Validation Error"
-          content={`Invalid YAML: ${e.message}`}
-        />
-      );
+      setValidationMessage({
+        type: "error",
+        message: `Invalid YAML: ${e.message}`,
+      });
       return;
     }
     if (!parsed) {
-      setContextComponent(
-        <ValidationMessage
-          type="error"
-          title="Validation Error"
-          content="No spec provided."
-        />
-      );
+      setValidationMessage({
+        type: "error",
+        message: "Error: no spec provided.",
+      });
       return;
     }
     setValidationPayload(parsed);
-    setContextComponent(undefined);
+    setValidationMessage(undefined);
   }, []);
 
   const handleSubmit = useCallback((value: string) => {
-    let parsed;
+    let parsed: any;
     try {
       parsed = YAML.parse(value);
     } catch (e) {
-      setContextComponent(
-        <ValidationMessage
-          type="error"
-          title="Validation Error"
-          content={`Invalid YAML: ${e.message}`}
-        />
-      );
+      setValidationMessage({
+        type: "error",
+        message: `Invalid YAML: ${e.message}`,
+      });
       return;
     }
     if (!parsed) {
-      setContextComponent(
-        <ValidationMessage
-          type="error"
-          title="Validation Error"
-          content="No spec provided."
-        />
-      );
+      setValidationMessage({
+        type: "error",
+        message: "Error: no spec provided.",
+      });
       return;
     }
     setSubmitPayload({ parsed, value });
-    setContextComponent(undefined);
+    setValidationMessage(undefined);
   }, []);
 
   const handleReset = useCallback(() => {
-    setContextComponent(undefined);
+    setStatus(undefined);
+    setValidationMessage(undefined);
   }, []);
 
   const handleMutationChange = useCallback(
@@ -233,13 +221,14 @@ export function VertexUpdate({
         initialYaml={currentSpec}
         viewType={ViewType.TOGGLE_EDIT}
         loading={loading}
+        mutationKey={mutationKey}
+        editResetKey={mutationKey}
         onValidate={handleValidate}
         onSubmit={handleSubmit}
         onResetApplied={handleReset}
-        contextComponent={contextComponent}
-        mutationKey={mutationKey}
-        editResetKey={mutationKey}
         onMutatedChange={handleMutationChange}
+        statusIndicator={status}
+        validationMessage={validationMessage}
       />
     </Box>
   );

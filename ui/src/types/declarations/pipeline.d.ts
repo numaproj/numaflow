@@ -109,6 +109,10 @@ export interface PipelineSummaryFetchResult {
   refresh: () => void;
 }
 
+export interface PipelineUpdateFetchResult {
+  pipelineAvailable: boolean;
+}
+
 export interface PipelineVertexMetric {
   partition: number;
   oneM: number;
