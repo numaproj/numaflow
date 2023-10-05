@@ -90,7 +90,9 @@ const getSectionComponentAndKey = (
           component: <div key={key}>Missing props</div>,
         };
       }
+      key = `custom-${sectionIndex}`;
       return {
+        key,
         component: section.customComponent,
       };
     case SummarySectionType.COLLECTION:
@@ -198,12 +200,12 @@ export function SummaryPageLayout({
       return;
     }
     const resizeObserver = new ResizeObserver(() => {
-      if (!sumaryRef.current) {
+      if (!sumaryRef?.current) {
         return;
       }
-      setSummaryHeight(sumaryRef.current.offsetHeight);
+      setSummaryHeight(sumaryRef?.current?.offsetHeight);
     });
-    resizeObserver.observe(sumaryRef.current);
+    resizeObserver.observe(sumaryRef?.current);
     return function cleanup() {
       resizeObserver.disconnect();
     };

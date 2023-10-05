@@ -53,16 +53,16 @@ function App() {
 
   // Resize observer to keep page width in state. To be used by other dependent components.
   useEffect(() => {
-    if (!pageRef.current) {
+    if (!pageRef?.current) {
       return;
     }
     const resizeObserver = new ResizeObserver(() => {
-      if (!pageRef.current) {
+      if (!pageRef?.current) {
         return;
       }
-      setPageWidth(pageRef.current.offsetWidth);
+      setPageWidth(pageRef.current?.offsetWidth);
     });
-    resizeObserver.observe(pageRef.current);
+    resizeObserver.observe(pageRef?.current);
     return function cleanup() {
       resizeObserver.disconnect();
     };

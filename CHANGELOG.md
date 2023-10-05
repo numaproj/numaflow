@@ -1,5 +1,54 @@
 # Changelog
 
+## v0.11.0-rc2 (2023-10-03)
+
+ * [8ae28af3](https://github.com/numaproj/numaflow/commit/8ae28af3fed4ed201f1eb40d3556377a04c9681f) Update manifests to v0.11.0-rc2
+ * [f74bde39](https://github.com/numaproj/numaflow/commit/f74bde398d2e35e84c7752952597898956b9dc69) fix: not considered as back pressured when onFull is discardLatest (#1153)
+ * [689aa295](https://github.com/numaproj/numaflow/commit/689aa2954ad279e7c91184dbf2f3690cde806fb2) fix(SERVER): handle states when status is unknown (#1154)
+ * [f83ea00a](https://github.com/numaproj/numaflow/commit/f83ea00a8e93c51c2f914ca383a91b5b2f05984e) fix(SERVER): fix key warning (#1152)
+
+### Contributors
+
+ * Derek Wang
+ * mshakira
+
+## v0.11.0-rc1 (2023-10-03)
+
+ * [1d89a12b](https://github.com/numaproj/numaflow/commit/1d89a12bc331e7daafaa30db540c5ac57ca50257) Update manifests to v0.11.0-rc1
+ * [882bcef3](https://github.com/numaproj/numaflow/commit/882bcef3b3c2fbd37558f58bf5f424ead4be1aaa) feat: Numaflow UI 1.0 (#1077)
+ * [a7adee1e](https://github.com/numaproj/numaflow/commit/a7adee1eabc66c530d295ded25b27005055d1537) fix: treat ALL user-defined source vertices as scalable (#1132)
+ * [408ff389](https://github.com/numaproj/numaflow/commit/408ff389c56358a4ef6f98bf0f89cf1fe9bd415c) feat: add doc link checker (#1130)
+ * [dae11a7f](https://github.com/numaproj/numaflow/commit/dae11a7fb8ad0b1650877bc864dc4c7c9506c996) extracting redis streams source (#1113)
+ * [9d65e229](https://github.com/numaproj/numaflow/commit/9d65e229e0f8b92154dbbd2d50e707bf19f205aa) refactor: shared kubeconfig util (#1095)
+ * [bb6f29b2](https://github.com/numaproj/numaflow/commit/bb6f29b23c8eea8b9db8b3293d04df5baaac9fff) fix: wrong api group in webhook rbac settings (#1086)
+ * [4150eb28](https://github.com/numaproj/numaflow/commit/4150eb289355bf22a994a02a272b30fe4e93f50d) feat: set correct number of replices for some types of vertices after resuming pipeline (#1085)
+ * [2182b83b](https://github.com/numaproj/numaflow/commit/2182b83b7f089821b3e780a61aef851bab34faa2) chore(deps): bump graphql from 16.6.0 to 16.8.1 in /ui (#1078)
+ * [b2a377ca](https://github.com/numaproj/numaflow/commit/b2a377caf34e906f338cc3bff7d804d58195ba0b) feat: add forest validation for pipelines. Fixes #1002 (#1063)
+ * [9035ba8b](https://github.com/numaproj/numaflow/commit/9035ba8b44677aa8805d17926520e3ce5a0d0ffe) feat: implement pipeline validation for unsupported states (#1043)
+ * [4369d65f](https://github.com/numaproj/numaflow/commit/4369d65f5071591b033720ef941467650dac6afc) fix: message count read in forwarder (#1030)
+ * [8d52d78b](https://github.com/numaproj/numaflow/commit/8d52d78bda240e96dabbbb9575f4c127d001d34d) fix(ci): Wrong test pod image tag used for running CI on release branch (#1041)
+ * [6ed2c381](https://github.com/numaproj/numaflow/commit/6ed2c381e4b1d089e8442fee86eac331e30d3e83) fix: allow udsource pending api to return negative count to indicate PendingNotAvailable (#1040)
+ * [c12e9094](https://github.com/numaproj/numaflow/commit/c12e9094131c033e3ab98d79b3d289577080ad88) refactor: re-arrange some of the rater implementations (#1036)
+ * [abe332e6](https://github.com/numaproj/numaflow/commit/abe332e6d4cc09f3540440de17d9ec6225cf3c21) fix(docs): file names and links for side inputs (#1037)
+ * [20fb7cc2](https://github.com/numaproj/numaflow/commit/20fb7cc29c1eae2fb148fd70b173c3c61beb7674) doc: Add side input docs (#1029)
+ * [b373406c](https://github.com/numaproj/numaflow/commit/b373406ccdb4436f0bd6f568ebc3eb2f4f341fb9) doc: kill-switch when buffer is full (#1034)
+ * [9f5127f0](https://github.com/numaproj/numaflow/commit/9f5127f04ceb95fe130387da192c834b5b1c6ffd) fix: Idle handler refactor (#1021)
+ * [b1f8b026](https://github.com/numaproj/numaflow/commit/b1f8b0269669b58d90cc4982dd8bf28ee30c8fb0) fix: calculate processing rate for sink vertices (#1025)
+ * [c01a1406](https://github.com/numaproj/numaflow/commit/c01a1406825131d5a6adfe9214d55fbab232a24b) feat: colored logs for UI with toggle for logs order (#1022)
+
+### Contributors
+
+ * Derek Wang
+ * Dillen Padhiar
+ * Juanlu Yu
+ * Julie Vogelman
+ * Keran Yang
+ * Sidhant Kohli
+ * Tianchu Zhao
+ * Vedant Gupta
+ * Vigith Maurice
+ * dependabot[bot]
+
 ## v0.10.1 (2023-09-14)
 
  * [e5e2b619](https://github.com/numaproj/numaflow/commit/e5e2b6191a386a2e6fdb546e2d57b5ee69fb18ef) Update manifests to v0.10.1

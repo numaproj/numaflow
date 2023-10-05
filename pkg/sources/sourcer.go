@@ -26,4 +26,6 @@ import (
 type Sourcer interface {
 	isb.BufferReader
 	forward.StarterStopper
+	isb.LagReader
+	isb.SourceWatermarkPublisher
 }

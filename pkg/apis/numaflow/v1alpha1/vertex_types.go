@@ -109,14 +109,8 @@ func (v Vertex) Scalable() bool {
 	if v.Spec.Scale.Disabled || v.IsReduceUDF() {
 		return false
 	}
-	if v.IsASink() || v.IsMapUDF() {
+	if v.IsASink() || v.IsMapUDF() || v.IsASource() {
 		return true
-	}
-	if v.IsASource() {
-		src := v.Spec.Source
-		if src.Kafka != nil || src.UDSource != nil {
-			return true
-		}
 	}
 	return false
 }

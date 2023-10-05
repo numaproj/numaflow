@@ -5,6 +5,7 @@ import heartFill from "../../src/images/heart-fill.png";
 import warning from "../../src/images/warning-circle.png";
 import critical from "../../src/images/critical.png";
 import moment from "moment";
+import { IsbServiceSpec } from "../types/declarations/pipeline";
 
 // global constants
 export const RUNNING = "Running";
@@ -19,6 +20,11 @@ export const PENDING = "Pending";
 export const PAUSING = "Pausing";
 export const PAUSED = "Paused";
 export const DELETING = "Deleting";
+export const UNKNOWN = "Unknown";
+
+// ISB types
+export const JETSTREAM = "jetstream";
+export const REDIS = "redis";
 
 export function getBaseHref(): string {
   if (window.__RUNTIME_CONFIG__?.BASE_HREF) {
@@ -205,6 +211,7 @@ export const IconsStatusMap = {
   [HEALTHY]: heartFill,
   [WARNING]: warning,
   [CRITICAL]: critical,
+  [UNKNOWN]: circleDash,
 };
 
 interface StatusStringType {
@@ -224,6 +231,7 @@ export const StatusString: StatusStringType = {
   [HEALTHY]: "Healthy",
   [WARNING]: "Warning",
   [CRITICAL]: "Critical",
+  [UNKNOWN]: "Unknown",
 };
 
 export const ISBStatusString: StatusStringType = {
@@ -233,6 +241,7 @@ export const ISBStatusString: StatusStringType = {
   [HEALTHY]: "Healthy",
   [WARNING]: "Warning",
   [CRITICAL]: "Critical",
+  [UNKNOWN]: "Unknown",
 };
 
 // returns the duration string in the format of 1d 2hr 3min 4sec 5ms
@@ -261,4 +270,13 @@ export const DurationString = (duration: number): string => {
   } else {
     return `${milliseconds}ms`;
   }
+};
+
+export const GetISBType = (spec: IsbServiceSpec): string | null => {
+  if (spec?.jetstream) {
+    return JETSTREAM;
+  } else if (spec?.redis) {
+    return REDIS;
+  }
+  return null;
 };

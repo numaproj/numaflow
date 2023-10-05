@@ -12,9 +12,11 @@ import {
 } from "@mui/material";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import {
+  GetISBType,
   IconsStatusMap,
   ISBStatusString,
   StatusString,
+  UNKNOWN,
 } from "../../../../../utils";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
@@ -77,6 +79,11 @@ export function PipelineCard({
   const handleDeleteChange = useCallback((event: SelectChangeEvent<string>) => {
     setDeleteOption(event.target.value);
   }, []);
+
+  const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
+  const isbStatus = isbData?.isbService?.status?.phase || UNKNOWN;
+  const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
+
   return (
     <>
       <Paper
@@ -170,13 +177,13 @@ export function PipelineCard({
               }}
             >
               <img
-                src={IconsStatusMap[statusData?.pipeline?.status?.phase]}
-                alt={statusData?.pipeline?.status?.phase}
+                src={IconsStatusMap[pipelineStatus]}
+                alt="Status"
                 className={"pipeline-logo"}
               />
               <img
                 src={IconsStatusMap[statusData?.status]}
-                alt={statusData?.status}
+                alt="Health"
                 className={"pipeline-logo"}
               />
             </Box>
@@ -188,7 +195,7 @@ export function PipelineCard({
                 paddingLeft: "1rem",
               }}
             >
-              <span>{StatusString[statusData?.pipeline?.status?.phase]}</span>
+              <span>{StatusString[pipelineStatus]}</span>
               <span>{StatusString[statusData?.status]}</span>
             </Box>
           </Grid>
@@ -223,12 +230,11 @@ export function PipelineCard({
               }}
             >
               <span>{isbData?.name}</span>
-              <span>{isbData?.isbService?.status?.type}</span>
+              <span>{isbType}</span>
               <span>
-                {
-                  isbData?.isbService?.spec[isbData?.isbService?.status?.type]
-                    .replicas
-                }
+                {isbType && isbData?.isbService?.spec[isbType]
+                  ? isbData?.isbService?.spec[isbType].replicas
+                  : UNKNOWN}
               </span>
             </Box>
           </Grid>
@@ -262,13 +268,13 @@ export function PipelineCard({
               }}
             >
               <img
-                src={IconsStatusMap[isbData?.isbService?.status?.phase]}
-                alt={isbData?.isbService?.status?.phase}
+                src={IconsStatusMap[isbStatus]}
+                alt="Status"
                 className={"pipeline-logo"}
               />
               <img
                 src={IconsStatusMap[isbData?.status]}
-                alt={isbData?.status}
+                alt="Health"
                 className={"pipeline-logo"}
               />
             </Box>
@@ -280,7 +286,7 @@ export function PipelineCard({
                 paddingLeft: "1rem",
               }}
             >
-              <span>{ISBStatusString[isbData?.isbService?.status?.phase]}</span>
+              <span>{ISBStatusString[isbStatus]}</span>
               <span>{ISBStatusString[isbData?.status]}</span>
             </Box>
           </Grid>
