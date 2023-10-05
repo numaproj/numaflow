@@ -202,7 +202,7 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 					continue
 				}
 				if value == nil {
-					jss.log.Infow("watcher initialization and subscription got nil value")
+					jss.log.Infow("Watcher initialization and subscription got nil value")
 					continue
 				}
 				jss.previousFetchTime = value.Created()
