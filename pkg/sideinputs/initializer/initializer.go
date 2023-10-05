@@ -110,7 +110,7 @@ func startSideInputInitializer(ctx context.Context, store kvs.KVStorer, mountPat
 			m[value.Key()] = value.Value()
 			// Wait for the data to be ready in the side input store, and then copy it to the disk
 			if gotAllSideInputVals(sideInputs, m) {
-				for sideInput := range m {
+				for _, sideInput := range sideInputs {
 					p := path.Join(mountPath, sideInput)
 					log.Infof("Initializing Side Input data for %q", sideInput)
 					err := utils.UpdateSideInputFile(ctx, p, m[sideInput])
