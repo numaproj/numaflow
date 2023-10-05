@@ -62,7 +62,7 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	)
 
 	log := logging.FromContext(ctx)
-	log.Infow("Starting Side Inputs Watcher", zap.Strings("sideInputs", sis.sideInputs))
+	log.Infow("Starting Side Inputs Synchronizer", zap.Strings("sideInputs", sis.sideInputs))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -98,7 +98,7 @@ func startSideInputSynchronizer(ctx context.Context, watch kvs.KVStorer, mountPa
 	for {
 		select {
 		case <-stopped:
-			log.Info("Side Input watcher stopped")
+			log.Info("Side Input Synchronizer stopped")
 			return
 		case value := <-watchCh:
 			if value == nil {
