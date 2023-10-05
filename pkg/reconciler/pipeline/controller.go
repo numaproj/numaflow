@@ -545,7 +545,7 @@ func annotSlice(label string, annotations map[string]string) map[string]string {
 
 	slice := make(map[string]string)
 	for k, v := range annotations {
-		if strings.Contains(k, label) {
+		if strings.HasPrefix(k, label) {
 			slice[k] = v
 		}
 	}
