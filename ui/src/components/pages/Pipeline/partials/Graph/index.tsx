@@ -24,7 +24,7 @@ import ReactFlow, {
   ReactFlowProvider,
 } from "reactflow";
 import IconButton from "@mui/material/IconButton";
-import { Alert, Box, Button, Snackbar } from "@mui/material";
+import { Alert, Box, Button } from "@mui/material";
 import { graphlib, layout } from "dagre";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
@@ -300,14 +300,7 @@ export default function Graph(props: GraphProps) {
     undefined
   );
   const [autoHide, setAutoHide] = useState<boolean>(true);
-  const [payloadSet, setPayloadSet] = useState<boolean>(false);
-  const [statusPayload, setStatusPayload] = useState({
-    spec: {
-      lifecycle: {
-        desiredPhase: "Paused",
-      },
-    },
-  });
+  const [statusPayload, setStatusPayload] = useState<any>(undefined);
 
   useEffect(() => {
     const nodeSet = new Map();
@@ -521,7 +514,6 @@ export default function Graph(props: GraphProps) {
   const [showSpec, setShowSpec] = useState(true);
 
   const handlePlayClick = useCallback((e) => {
-    setPayloadSet(true);
     setStatusPayload({
       spec: {
         lifecycle: {
@@ -532,7 +524,6 @@ export default function Graph(props: GraphProps) {
   }, []);
 
   const handlePauseClick = useCallback((e) => {
-    setPayloadSet(true);
     setStatusPayload({
       spec: {
         lifecycle: {
@@ -565,31 +556,19 @@ export default function Graph(props: GraphProps) {
       } catch (e) {
         setError(e);
       } finally {
-        setPayloadSet(false);
         const timer = setTimeout(() => {
           setAutoHide(true);
           clearTimeout(timer);
         }, 5000);
       }
     };
-    if (payloadSet) {
+    if (statusPayload) {
       patchStatus();
     }
   }, [statusPayload]);
 
   return (
     <div style={{ height: "90%" }}>
-      <Snackbar
-        open={!autoHide}
-        message={
-          error ? (
-            <Alert severity="error">{error}</Alert>
-          ) : (
-            <Alert severity="success">{successMessage}</Alert>
-          )
-        }
-        anchorOrigin={{ horizontal: "right", vertical: "top" }}
-      />
       <div className="Graph" data-testid="graph">
         <Box
           sx={{
@@ -619,9 +598,32 @@ export default function Graph(props: GraphProps) {
               fontWeight: "bold",
             }}
             onClick={handlePauseClick}
-            disabled={data?.pipeline?.status?.phase === "Paused"}
+            disabled={
+              data?.pipeline?.status?.phase === "Paused" ||
+              data?.pipeline?.status?.phase === "Pausing"
+            }
           >
             Pause
+          </Button>
+          <Button sx={{ height: "35px", marginTop: "1rem" }}>
+            {" "}
+            {error && !autoHide ? (
+              <Alert
+                severity="error"
+                sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
+              >
+                {error}
+              </Alert>
+            ) : successMessage && !autoHide ? (
+              <Alert
+                severity="success"
+                sx={{ backgroundColor: "#EDF7ED", color: "#1E4620" }}
+              >
+                {successMessage}
+              </Alert>
+            ) : (
+              ""
+            )}
           </Button>
         </Box>
         <HighlightContext.Provider

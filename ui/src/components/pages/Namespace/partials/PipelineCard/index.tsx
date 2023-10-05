@@ -38,19 +38,12 @@ export function PipelineCard({
   const [editOption] = React.useState("view");
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [deleteOption, setDeleteOption] = React.useState("Delete");
-  const [statusPayload, setStatusPayload] = useState({
-    spec: {
-      lifecycle: {
-        desiredPhase: "Paused",
-      },
-    },
-  });
+  const [statusPayload, setStatusPayload] = useState<any>(undefined);
   const [autoHide, setAutoHide] = useState<boolean>(true);
   const [error, setError] = useState<string | undefined>(undefined);
   const [successMessage, setSuccessMessage] = useState<string | undefined>(
     undefined
   );
-  const [payloadSet, setPayloadSet] = useState<boolean>(false);
 
   const handleUpdateComplete = useCallback(() => {
     refresh();
@@ -94,7 +87,6 @@ export function PipelineCard({
     setDeleteOption(event.target.value);
   }, []);
   const handlePlayClick = useCallback((e) => {
-    setPayloadSet(true);
     setStatusPayload({
       spec: {
         lifecycle: {
@@ -105,7 +97,6 @@ export function PipelineCard({
   }, []);
 
   const handlePauseClick = useCallback((e) => {
-    setPayloadSet(true);
     setStatusPayload({
       spec: {
         lifecycle: {
@@ -137,14 +128,13 @@ export function PipelineCard({
       } catch (e) {
         setError(e);
       } finally {
-        setPayloadSet(false);
         const timer = setTimeout(() => {
           setAutoHide(true);
           clearTimeout(timer);
         }, 5000);
       }
     };
-    if (payloadSet) {
+    if (statusPayload) {
       patchStatus();
     }
   }, [statusPayload]);
@@ -158,17 +148,6 @@ export function PipelineCard({
           width: "100%",
         }}
       >
-        <Snackbar
-          open={!autoHide}
-          message={
-            error ? (
-              <Alert severity="error">{error}</Alert>
-            ) : (
-              <Alert severity="success">{successMessage}</Alert>
-            )
-          }
-          anchorOrigin={{ horizontal: "right", vertical: "top" }}
-        />
         <Box
           sx={{
             display: "flex",
@@ -191,6 +170,26 @@ export function PipelineCard({
             }}
           >
             <span className="pipeline-card-name">{data?.name}</span>
+            <Button sx={{ height: "20px" }}>
+              {" "}
+              {error && !autoHide ? (
+                <Alert
+                  severity="error"
+                  sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
+                >
+                  {error}
+                </Alert>
+              ) : successMessage && !autoHide ? (
+                <Alert
+                  severity="success"
+                  sx={{ backgroundColor: "#EDF7ED", color: "#1E4620" }}
+                >
+                  {successMessage}
+                </Alert>
+              ) : (
+                ""
+              )}
+            </Button>
           </Box>
           <Box
             sx={{
