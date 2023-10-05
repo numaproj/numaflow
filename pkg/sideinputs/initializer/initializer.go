@@ -110,9 +110,9 @@ func startSideInputInitializer(ctx context.Context, store kvs.KVStorer, mountPat
 			m[value.Key()] = value.Value()
 			// Wait for the data to be ready in the side input store, and then copy it to the disk
 			if gotAllSideInputVals(sideInputs, m) {
-				for sideInput := range m {
+				for _, sideInput := range sideInputs {
 					p := path.Join(mountPath, sideInput)
-					log.Info("Initializing Side Input data for %q", p)
+					log.Infof("Initializing Side Input data for %q", sideInput)
 					err := utils.UpdateSideInputFile(ctx, p, m[sideInput])
 					if err != nil {
 						return fmt.Errorf("failed to update Side Input value, %w", err)
@@ -132,9 +132,6 @@ func startSideInputInitializer(ctx context.Context, store kvs.KVStorer, mountPat
 // gotAllSideInputVals checks if values for all side-inputs
 // have been received from the KV bucket
 func gotAllSideInputVals(sideInputs []string, m map[string][]byte) bool {
-	if len(sideInputs) != len(m) {
-		return false
-	}
 	for _, sideInput := range sideInputs {
 		if _, ok := m[sideInput]; !ok {
 			return false
