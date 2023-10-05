@@ -25,7 +25,7 @@ export function Pipeline() {
   // TODO needs to be able to be given namespaceId from parent for NS only install
   const { namespaceId, pipelineId } = useParams();
   // TODO loading and error handling
-  const { data } = usePipelineSummaryFetch({ namespaceId, pipelineId });
+  const { data, refresh } = usePipelineSummaryFetch({ namespaceId, pipelineId });
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (!data) {
@@ -53,8 +53,10 @@ export function Pipeline() {
             type: SummarySectionType.CUSTOM,
             customComponent: (
               <PipelineSummaryStatus
+                pipelineId={pipelineId}
                 pipeline={pipelineData?.pipeline}
                 lag={pipelineData?.lag}
+                refresh={refresh}
                 key={"pipeline-summary-status"}
               />
             ),
@@ -66,7 +68,7 @@ export function Pipeline() {
         ],
       },
     ];
-  }, [data]);
+  }, [data, pipelineId, refresh]);
 
   const {
     pipeline,

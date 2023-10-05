@@ -13,7 +13,9 @@ export function PiplineUpdate({
   namespaceId,
   pipelineId,
   viewType,
+  titleOverride,
   onUpdateComplete,
+  setModalOnClose,
 }: SpecEditorSidebarProps) {
   const [loading, setLoading] = useState(false);
   const [validationPayload, setValidationPayload] = useState<any>(undefined);
@@ -192,6 +194,23 @@ export function PiplineUpdate({
     setContextComponent(undefined);
   }, []);
 
+  const handleMutationChange = useCallback(
+    (mutated: boolean) => {
+      if (!setModalOnClose) {
+        return;
+      }
+      if (mutated) {
+        setModalOnClose({
+          message: "Are you sure you want to discard your changes?",
+          iconType: "warn",
+        });
+      } else {
+        setModalOnClose(undefined);
+      }
+    },
+    [setModalOnClose]
+  );
+
   return (
     <Box
       sx={{
@@ -207,7 +226,9 @@ export function PiplineUpdate({
           marginBottom: "2rem",
         }}
       >
-        <span className="pipeline-spec-header-text">{`Update Pipeline: ${pipelineId}`}</span>
+        <span className="pipeline-spec-header-text">
+          {titleOverride ? titleOverride : `Edit Pipeline: ${pipelineId}`}
+        </span>
       </Box>
       <SpecEditor
         initialYaml={initialYaml}
@@ -216,6 +237,7 @@ export function PiplineUpdate({
         onValidate={handleValidate}
         onSubmit={handleSubmit}
         onResetApplied={handleReset}
+        onMutatedChange={handleMutationChange}
         contextComponent={contextComponent}
       />
     </Box>

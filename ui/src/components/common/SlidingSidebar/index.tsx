@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useContext,
+} from "react";
 import Box from "@mui/material/Box";
 import { K8sEvents, K8sEventsProps } from "./partials/K8sEvents";
 import { VertexDetails, VertexDetailsProps } from "./partials/VertexDetails";
-import { PiplineSpec, PiplineSpecProps } from "./partials/PipelineSpec";
 import { EdgeDetails, EdgeDetailsProps } from "./partials/EdgeDetails";
 import {
   GeneratorDetails,
@@ -16,6 +21,10 @@ import { ISBUpdate } from "./partials/ISBUpdate";
 import { ViewType } from "../SpecEditor";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
+import { CloseModal } from "./partials/CloseModal";
+import { AppContextProps } from "../../../types/declarations/app";
+import { AppContext } from "../../../App";
+import { toast } from "react-toastify";
 import slider from "../../../images/slider.png";
 
 import "./style.css";
@@ -25,7 +34,6 @@ export enum SidebarType {
   PIPELINE_K8s,
   PIPELINE_CREATE,
   PIPELINE_UPDATE,
-  PIPELINE_SPEC,
   ISB_CREATE,
   ISB_UPDATE,
   VERTEX_DETAILS,
@@ -39,7 +47,6 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.PIPELINE_K8s]: 750,
   [SidebarType.PIPELINE_CREATE]: 750,
   [SidebarType.PIPELINE_UPDATE]: 750,
-  [SidebarType.PIPELINE_SPEC]: 750,
   [SidebarType.ISB_CREATE]: 750,
   [SidebarType.ISB_UPDATE]: 750,
   [SidebarType.VERTEX_DETAILS]: 750,
@@ -48,6 +55,11 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.ERRORS]: 350,
 };
 
+export interface SpecEditorModalProps {
+  message?: string;
+  iconType?: "info" | "warn";
+}
+
 export interface SpecEditorSidebarProps {
   initialYaml?: any;
   namespaceId?: string;
@@ -55,6 +67,8 @@ export interface SpecEditorSidebarProps {
   isbId?: string;
   viewType?: ViewType;
   onUpdateComplete?: () => void;
+  titleOverride?: string;
+  setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
 }
 
 export interface SlidingSidebarProps {
@@ -64,11 +78,10 @@ export interface SlidingSidebarProps {
   k8sEventsProps?: K8sEventsProps;
   vertexDetailsProps?: VertexDetailsProps;
   edgeDetailsProps?: EdgeDetailsProps;
-  pipelineSpecProps?: PiplineSpecProps;
   generatorDetailsProps?: GeneratorDetailsProps;
   errorsProps?: ErrorsProps;
   specEditorProps?: SpecEditorSidebarProps;
-  onClose: () => void;
+  parentCloseIndicator?: string;
 }
 
 export function SlidingSidebar({
@@ -78,12 +91,12 @@ export function SlidingSidebar({
   k8sEventsProps,
   vertexDetailsProps,
   edgeDetailsProps,
-  pipelineSpecProps,
   generatorDetailsProps,
   errorsProps,
   specEditorProps,
-  onClose,
+  parentCloseIndicator,
 }: SlidingSidebarProps) {
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const [width, setWidth] = useState<number>(
     errorsProps
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
@@ -92,6 +105,21 @@ export function SlidingSidebar({
       : 0
   );
   const [minWidth, setMinWidth] = useState<number>(0);
+  const [modalOnClose, setModalOnClose] = useState<
+    SpecEditorModalProps | undefined
+  >();
+  const [modalOnCloseOpen, setModalOnCloseOpen] = useState<boolean>(false);
+  const [lastCloseIndicator, setLastCloseIndicator] = useState<
+    string | undefined
+  >(parentCloseIndicator);
+
+  // Handle parent attempting to close sidebar
+  useEffect(() => {
+    if (parentCloseIndicator && parentCloseIndicator !== lastCloseIndicator) {
+      setLastCloseIndicator(parentCloseIndicator);
+      handleClose();
+    }
+  }, [parentCloseIndicator, lastCloseIndicator]);
 
   // Set min width by type
   useEffect(() => {
@@ -124,6 +152,28 @@ export function SlidingSidebar({
     [width, minWidth]
   );
 
+  const handleClose = useCallback(() => {
+    if (modalOnClose) {
+      // Open close modal
+      setModalOnCloseOpen(true);
+      return;
+    }
+    // Close sidebar
+    setSidebarProps && setSidebarProps(undefined);
+    // remove all toast when sidebar is closed
+    toast.dismiss();
+  }, [modalOnClose, setSidebarProps]);
+
+  const handleCloseConfirm = useCallback(() => {
+    // Modal close confirmed
+    setSidebarProps && setSidebarProps(undefined);
+  }, [setSidebarProps]);
+
+  const handleCloseCancel = useCallback(() => {
+    // Modal close cancelled
+    setModalOnCloseOpen(false);
+  }, []);
+
   const content = useMemo(() => {
     switch (type) {
       case SidebarType.NAMESPACE_K8s:
@@ -136,7 +186,12 @@ export function SlidingSidebar({
         if (!specEditorProps || !specEditorProps.namespaceId) {
           break;
         }
-        return <PiplineCreate {...specEditorProps} />;
+        return (
+          <PiplineCreate
+            {...specEditorProps}
+            setModalOnClose={setModalOnClose}
+          />
+        );
       case SidebarType.PIPELINE_UPDATE:
         if (
           !specEditorProps ||
@@ -145,32 +200,45 @@ export function SlidingSidebar({
         ) {
           break;
         }
-        return <PiplineUpdate {...specEditorProps} />;
+        return (
+          <PiplineUpdate
+            {...specEditorProps}
+            setModalOnClose={setModalOnClose}
+          />
+        );
       case SidebarType.ISB_CREATE:
         if (!specEditorProps || !specEditorProps.namespaceId) {
           break;
         }
-        return <ISBCreate {...specEditorProps} />;
+        return (
+          <ISBCreate {...specEditorProps} setModalOnClose={setModalOnClose} />
+        );
       case SidebarType.ISB_UPDATE:
-        if (!specEditorProps || !specEditorProps.namespaceId || !specEditorProps.isbId) {
+        if (
+          !specEditorProps ||
+          !specEditorProps.namespaceId ||
+          !specEditorProps.isbId
+        ) {
           break;
         }
-        return <ISBUpdate {...specEditorProps} />;
+        return (
+          <ISBUpdate {...specEditorProps} setModalOnClose={setModalOnClose} />
+        );
       case SidebarType.VERTEX_DETAILS:
         if (!vertexDetailsProps) {
           break;
         }
-        return <VertexDetails {...vertexDetailsProps} />;
+        return (
+          <VertexDetails
+            {...vertexDetailsProps}
+            setModalOnClose={setModalOnClose}
+          />
+        );
       case SidebarType.EDGE_DETAILS:
         if (!edgeDetailsProps) {
           break;
         }
         return <EdgeDetails {...edgeDetailsProps} />;
-      case SidebarType.PIPELINE_SPEC:
-        if (!pipelineSpecProps) {
-          break;
-        }
-        return <PiplineSpec {...pipelineSpecProps} />;
       case SidebarType.GENERATOR_DETAILS:
         if (!generatorDetailsProps) {
           break;
@@ -191,7 +259,6 @@ export function SlidingSidebar({
     specEditorProps,
     vertexDetailsProps,
     edgeDetailsProps,
-    pipelineSpecProps,
     generatorDetailsProps,
     errorsProps,
   ]);
@@ -245,12 +312,19 @@ export function SlidingSidebar({
             justifyContent: "flex-end",
           }}
         >
-          <IconButton data-testid="close-button" onClick={onClose}>
+          <IconButton data-testid="close-button" onClick={handleClose}>
             <CloseIcon />
           </IconButton>
         </Box>
         {content}
       </Box>
+      {modalOnClose && modalOnCloseOpen && (
+        <CloseModal
+          {...modalOnClose}
+          onConfirm={handleCloseConfirm}
+          onCancel={handleCloseCancel}
+        />
+      )}
     </Box>
   );
 }

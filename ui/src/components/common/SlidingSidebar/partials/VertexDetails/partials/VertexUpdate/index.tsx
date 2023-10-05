@@ -1,27 +1,36 @@
-import React, { useCallback, useEffect, useState } from "react";
-import YAML from "yaml";
+import React, { useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
-import { SpecEditor } from "../../../SpecEditor";
-import { SpecEditorSidebarProps } from "../..";
-import { ValidationMessage } from "../../../SpecEditor/partials/ValidationMessage";
-import { getAPIResponseError } from "../../../../../utils";
+import YAML from "yaml";
+import { getAPIResponseError } from "../../../../../../../utils";
+import { ValidationMessage } from "../../../../../SpecEditor/partials/ValidationMessage";
+import { SpecEditor, ViewType } from "../../../../../SpecEditor";
+import { SpecEditorModalProps } from "../../../..";
 
 import "./style.css";
 
-export function ISBUpdate({
-  initialYaml,
+export interface VertexUpdateProps {
+  namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
+  vertexSpec: any;
+  setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
+}
+
+export function VertexUpdate({
   namespaceId,
-  isbId,
-  viewType,
-  onUpdateComplete,
+  pipelineId,
+  vertexId,
+  vertexSpec,
   setModalOnClose,
-}: SpecEditorSidebarProps) {
+}: VertexUpdateProps) {
   const [loading, setLoading] = useState(false);
   const [validationPayload, setValidationPayload] = useState<any>(undefined);
   const [submitPayload, setSubmitPayload] = useState<any>(undefined);
   const [contextComponent, setContextComponent] = useState<
     React.ReactNode | undefined
   >();
+  const [mutationKey, setMutationKey] = useState<string>("");
+  const [currentSpec, setCurrentSpec] = useState<any>(vertexSpec);
 
   // Submit API call
   useEffect(() => {
@@ -29,13 +38,13 @@ export function ISBUpdate({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/isb-services/${isbId}?dry-run=false`,
+          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=false`,
           {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(submitPayload),
+            body: JSON.stringify(submitPayload.parsed),
           }
         );
         const error = await getAPIResponseError(response);
@@ -55,12 +64,14 @@ export function ISBUpdate({
               content=""
             />
           );
-          if (onUpdateComplete) {
-            // Give small grace period before callling complete (allows user to see message)
-            setTimeout(() => {
-              onUpdateComplete();
-            }, 1000);
-          }
+          // Set current spec to submitted spec so any additional edits are noticed
+          setCurrentSpec(submitPayload.value);
+          // Set to not mutated on successful submit
+          setMutationKey("id" + Math.random().toString(16).slice(2));
+          // Clear success message after some time
+          setTimeout(() => {
+            setContextComponent(undefined);
+          }, 2000);
         }
       } catch (e: any) {
         setContextComponent(
@@ -79,7 +90,7 @@ export function ISBUpdate({
     if (submitPayload) {
       postData();
     }
-  }, [namespaceId, isbId, submitPayload, onUpdateComplete]);
+  }, [namespaceId, pipelineId, vertexId, submitPayload]);
 
   // Validation API call
   useEffect(() => {
@@ -87,7 +98,7 @@ export function ISBUpdate({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/isb-services/${isbId}?dry-run=true`,
+          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=true`,
           {
             method: "PUT",
             headers: {
@@ -131,10 +142,10 @@ export function ISBUpdate({
     if (validationPayload) {
       postData();
     }
-  }, [namespaceId, isbId, validationPayload]);
+  }, [namespaceId, pipelineId, vertexId, validationPayload]);
 
   const handleValidate = useCallback((value: string) => {
-    let parsed: any;
+    let parsed;
     try {
       parsed = YAML.parse(value);
     } catch (e) {
@@ -157,7 +168,7 @@ export function ISBUpdate({
       );
       return;
     }
-    setValidationPayload({ spec: { ...parsed } });
+    setValidationPayload(parsed);
     setContextComponent(undefined);
   }, []);
 
@@ -185,7 +196,7 @@ export function ISBUpdate({
       );
       return;
     }
-    setSubmitPayload({ spec: { ...parsed } });
+    setSubmitPayload({ parsed, value });
     setContextComponent(undefined);
   }, []);
 
@@ -218,24 +229,17 @@ export function ISBUpdate({
         height: "100%",
       }}
     >
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          marginBottom: "2rem",
-        }}
-      >
-        <span className="isb-spec-header-text">{`Edit ISB: ${isbId}`}</span>
-      </Box>
       <SpecEditor
-        initialYaml={initialYaml}
-        viewType={viewType}
+        initialYaml={currentSpec}
+        viewType={ViewType.TOGGLE_EDIT}
         loading={loading}
         onValidate={handleValidate}
         onSubmit={handleSubmit}
         onResetApplied={handleReset}
-        onMutatedChange={handleMutationChange}
         contextComponent={contextComponent}
+        mutationKey={mutationKey}
+        editResetKey={mutationKey}
+        onMutatedChange={handleMutationChange}
       />
     </Box>
   );

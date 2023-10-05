@@ -106,6 +106,7 @@ export interface PipelineSummaryFetchResult {
   data?: PipelineMergeSummaryData;
   loading: boolean;
   error: any;
+  refresh: () => void;
 }
 
 export interface PipelineVertexMetric {
