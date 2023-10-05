@@ -535,21 +535,26 @@ func needsUpdate(old, new *dfv1.Pipeline) bool {
 		return true
 	}
 
-	oldAnnotations := old.GetAnnotations()
-	newAnnotations := new.GetAnnotations()
-	if oldAnnotations != nil && newAnnotations == nil {
-		return true
-	}
-	if oldAnnotations == nil && newAnnotations != nil {
+	oldNumaAnnotations := annotSlice("numaflow.numaproj.io/", old.GetAnnotations())
+	newNumaAnnotations := annotSlice("numaflow.numaproj.io/", new.GetAnnotations())
+
+	if !equality.Semantic.DeepEqual(oldNumaAnnotations, newNumaAnnotations) {
 		return true
 	}
 
-	for k, v := range oldAnnotations {
-		if strings.Contains(k, "numaflow.numaproj.io/") && v != newAnnotations[k] {
-			return true
+	return false
+}
+
+func annotSlice(label string, annotations map[string]string) map[string]string {
+
+	slice := make(map[string]string)
+	for k, v := range annotations {
+		if strings.Contains(k, label) {
+			slice[k] = v
 		}
 	}
-	return false
+	return slice
+
 }
 
 func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
