@@ -538,11 +538,7 @@ func needsUpdate(old, new *dfv1.Pipeline) bool {
 	oldNumaAnnotations := annotSlice("numaflow.numaproj.io/", old.GetAnnotations())
 	newNumaAnnotations := annotSlice("numaflow.numaproj.io/", new.GetAnnotations())
 
-	if !equality.Semantic.DeepEqual(oldNumaAnnotations, newNumaAnnotations) {
-		return true
-	}
-
-	return false
+	return !equality.Semantic.DeepEqual(oldNumaAnnotations, newNumaAnnotations)
 }
 
 func annotSlice(label string, annotations map[string]string) map[string]string {
