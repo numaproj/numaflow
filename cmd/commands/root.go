@@ -48,5 +48,5 @@ func init() {
 	rootCmd.AddCommand(NewWebhookCommand())
 	rootCmd.AddCommand(NewSideInputsInitCommand())
 	rootCmd.AddCommand(NewSideInputsManagerCommand())
-	rootCmd.AddCommand(NewSideInputsWatcherCommand())
+	rootCmd.AddCommand(NewSideInputsSynchronizerCommand())
 }

@@ -72,7 +72,7 @@ const (
 	CtrUdtransformer     = "transformer"
 	CtrUdSideInput       = "udsi"
 	CtrInitSideInputs    = "init-side-inputs"
-	CtrSideInputsWatcher = "side-inputs-watcher"
+	CtrSideInputsWatcher = "side-inputs-synchronizer"
 
 	// components
 	ComponentISBSvc           = "isbsvc"

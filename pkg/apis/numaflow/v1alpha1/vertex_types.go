@@ -277,7 +277,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
 			Resources:       standardResources,
-			Args:            []string{"side-inputs-watcher", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+			Args:            []string{"side-inputs-synchronizer", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		}
 		sideInputsWatcher.Env = append(sideInputsWatcher.Env, v.commonEnvs()...)
 		if x := v.Spec.SideInputsContainerTemplate; x != nil {
