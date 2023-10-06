@@ -130,12 +130,11 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalw("Unable to set up Pipeline controller", zap.Error(err))
 	}
 
-	// Watch Pipelines excluding annotation changes
+	// Watch Pipelines
 	if err := pipelineController.Watch(&source.Kind{Type: &dfv1.Pipeline{}}, &handler.EnqueueRequestForObject{},
 		predicate.Or(
 			predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{},
-		),
-	); err != nil {
+		)); err != nil {
 		logger.Fatalw("Unable to watch Pipelines", zap.Error(err))
 	}
 
