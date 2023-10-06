@@ -228,6 +228,7 @@ endif
 
 /usr/local/bin/mkdocs:
 	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9 mkdocs-embed-external-markdown==2.3.0
+
 /usr/local/bin/lychee:
 ifeq (, $(shell which lychee))
 ifeq ($(shell uname),Darwin)
@@ -249,7 +250,7 @@ docs-serve: docs
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
-	lychee --exclude-path=CHANGELOG.md --exclude-mail *.md --include "https://github.com/numaproj/*" ./test/**/* ./docs/**/*.md
+	lychee --exclude-path=CHANGELOG.md --exclude-mail *.md --include "https://github.com/numaproj/*" $(shell find ./test -type f) $(wildcard ./docs/*.md)
 
 # pre-push checks
 
