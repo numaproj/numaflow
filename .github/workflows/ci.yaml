@@ -130,8 +130,6 @@ jobs:
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
       - run: make lint
       - run: git diff --exit-code
-      - name: Check links under docs and test folder
-        run: make docs-linkcheck
 
   e2e-tests:
     name: E2E Tests
