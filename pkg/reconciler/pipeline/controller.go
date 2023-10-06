@@ -535,22 +535,7 @@ func needsUpdate(old, new *dfv1.Pipeline) bool {
 		return true
 	}
 
-	oldNumaAnnotations := annotSlice("numaflow.numaproj.io/", old.GetAnnotations())
-	newNumaAnnotations := annotSlice("numaflow.numaproj.io/", new.GetAnnotations())
-
-	return !equality.Semantic.DeepEqual(oldNumaAnnotations, newNumaAnnotations)
-}
-
-func annotSlice(label string, annotations map[string]string) map[string]string {
-
-	slice := make(map[string]string)
-	for k, v := range annotations {
-		if strings.HasPrefix(k, label) {
-			slice[k] = v
-		}
-	}
-	return slice
-
+	return false
 }
 
 func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
@@ -744,7 +729,15 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 
 	// reset pause timestamp
 	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
-		delete(pl.GetAnnotations(), dfv1.KeyPauseTimestamp)
+		pl.GetAnnotations()[dfv1.KeyPauseTimestamp] = ""
+		body, err := json.Marshal(pl)
+		if err != nil {
+			return false, err
+		}
+		err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, body))
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err
+		}
 	}
 
 	_, err := r.scaleUpAllVertices(ctx, pl)
@@ -759,6 +752,14 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 
 	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
 		pl.SetAnnotations(map[string]string{dfv1.KeyPauseTimestamp: time.Now().Format(time.RFC3339)})
+		body, err := json.Marshal(pl)
+		if err != nil {
+			return false, err
+		}
+		err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, body))
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err
+		}
 	}
 
 	pl.Status.MarkPhasePausing()
