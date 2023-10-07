@@ -729,14 +729,9 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 
 	// reset pause timestamp
 	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
-		pl.GetAnnotations()[dfv1.KeyPauseTimestamp] = ""
-		body, err := json.Marshal(pl)
-		if err != nil {
-			return false, err
-		}
-		err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, body))
+		err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(`[{"op": "remove", "path": "/metadata/annotations/numaflow.numaproj.io~1pause-timestamp"}]`)))
 		if err != nil && !apierrors.IsNotFound(err) {
-			return false, err
+			return true, err
 		}
 	}
 
@@ -779,12 +774,12 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	}()
 	drainCompleted, err := daemonClient.IsDrained(ctx, pl.Name)
 	if err != nil {
-		return false, err
+		return true, err
 	}
 
 	pauseTimestamp, err := time.Parse(time.RFC3339, pl.GetAnnotations()[dfv1.KeyPauseTimestamp])
 	if err != nil {
-		return true, err
+		return false, err
 	}
 
 	// if drain is completed or we have exceed pause deadline, mark pl as paused and scale down
