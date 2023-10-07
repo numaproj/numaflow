@@ -2244,7 +2244,7 @@ kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </
 </code></pre></div>
 <p>View the UI for the advanced pipeline at https://localhost:8443/.</p>
 <p><img alt="Numaflow UI" src="../assets/numaflow-ui-advanced-pipeline.png" /></p>
-<p>The source code of the <code>even-odd</code> <a href="../user-guide/user-defined-functions/user-defined-functions/">User Defined Function</a> can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/even_odd">here</a>. You also can replace the <a href="../user-guide/sinks/log/">Log</a> Sink with some other sinks like <a href="../user-guide/sinks/kafka/">Kafka</a> to forward the data to Kafka topics.</p>
+<p>The source code of the <code>even-odd</code> <a href="../user-guide/user-defined-functions/user-defined-functions/">User Defined Function</a> can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd">here</a>. You also can replace the <a href="../user-guide/sinks/log/">Log</a> Sink with some other sinks like <a href="../user-guide/sinks/kafka/">Kafka</a> to forward the data to Kafka topics.</p>
 <p>The pipeline can be deleted by</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/2-even-odd-pipeline.yaml
 </code></pre></div>
