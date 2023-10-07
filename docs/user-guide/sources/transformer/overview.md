@@ -66,9 +66,9 @@ func main() {
 
 Check the links below to see another transformer example in various programming languages, where we apply conditional forwarding based on the input event time.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/function/event_time_filter)
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/event_time_filter)
-- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/function/map/eventtimefilter)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/sourcetransform/event_time_filter)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcetransformer/examples/event_time_filter)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter)
 
 After building a docker image for the written transformer, specify the image as below in the source vertex spec.
 
