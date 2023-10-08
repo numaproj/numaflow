@@ -68,7 +68,7 @@ func (s *DiamondSuite) TestJoinOnReducePipeline() {
 	// todo: this only tests for one occurrence: ideally should verify all
 	w.Expect().
 		SinkContains("sink", "40"). // per 10 second window: (10 * 2) * 2 atoi vertices
-		SinkContains("sink", "80")  // per 10 second window: 10 * (1 + 3) * 2 atoi vertices
+		SinkContains("sink", "80") // per 10 second window: 10 * (1 + 3) * 2 atoi vertices
 	done <- struct{}{}
 }
 
@@ -90,7 +90,7 @@ func (s *DiamondSuite) TestJoinOnMapPipeline() {
 		SinkContains("sink", "2")
 }
 
-func (s *DiamondSuite) TestJoinSinkVertex() {
+func (s *DiamondSuite) TestJoinOnSinkVertex() {
 	w := s.Given().Pipeline("@testdata/join-on-sink.yaml").
 		When().
 		CreatePipelineAndWait()
