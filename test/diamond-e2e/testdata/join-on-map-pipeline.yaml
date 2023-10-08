@@ -1,0 +1,40 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: join-on-map
+spec:
+  limits:
+    readBatchSize: 50
+  vertices:
+    - name: in-0
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: in-1
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: cat
+      partitions: 2
+      scale:
+        min: 1
+      udf:
+        builtin:
+          name: cat
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+  edges:
+    - from: in-0
+      to: cat
+    - from: in-1
+      to: cat
+    - from: cat
+      to: sink

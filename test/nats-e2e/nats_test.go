@@ -34,7 +34,7 @@ type NatsSuite struct {
 	fixtures.E2ESuite
 }
 
-func (ns *NatsSuite) TestNatsSourceHaHa() {
+func (ns *NatsSuite) TestNatsSource() {
 	subject := "test-subject"
 	w := ns.Given().Pipeline("@testdata/nats-source-pipeline.yaml").
 		When().
