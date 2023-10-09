@@ -28,15 +28,15 @@ import (
 	"github.com/numaproj/numaflow/pkg/sideinputs/synchronizer"
 )
 
-func NewSideInputsWatcherCommand() *cobra.Command {
+func NewSideInputsSynchronizerCommand() *cobra.Command {
 	var (
 		isbSvcType      string
 		sideInputsStore string
 		sideInputs      []string
 	)
 	command := &cobra.Command{
-		Use:   "side-inputs-watcher",
-		Short: "Start the Side Inputs Watcher",
+		Use:   "side-inputs-synchronizer",
+		Short: "Start the Side Inputs Synchronizer",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pipelineName, defined := os.LookupEnv(dfv1.EnvPipelineName)
 			if !defined {
@@ -47,7 +47,7 @@ func NewSideInputsWatcherCommand() *cobra.Command {
 				return fmt.Errorf("no side inputs are defined for this vertex")
 			}
 
-			logger := logging.NewLogger().Named("side-inputs-watcher").With("pipeline", pipelineName)
+			logger := logging.NewLogger().Named("side-inputs-synchronizer").With("pipeline", pipelineName)
 			ctx := logging.WithLogger(signals.SetupSignalHandler(), logger)
 			sideInputsWatcher := synchronizer.NewSideInputsSynchronizer(dfv1.ISBSvcType(isbSvcType), pipelineName, sideInputsStore, sideInputs)
 			return sideInputsWatcher.Start(ctx)
