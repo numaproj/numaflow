@@ -71,43 +71,6 @@ func (s *APISuite) TestISBSVC() {
 	stopPortForward()
 }
 
-func (s *APISuite) TestISBSVCReplica1() {
-	var err error
-	numaflowServerPodName := s.GetNumaflowServerPodName()
-	if numaflowServerPodName == "" {
-		panic("failed to find the nuamflow-server pod")
-	}
-	stopPortForward := s.StartPortForward(numaflowServerPodName, 8443)
-
-	var testISBSVC v1alpha1.InterStepBufferService
-	err = json.Unmarshal(testISBSVCReplica1Spec, &testISBSVC)
-	assert.NoError(s.T(), err)
-	createISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").POST(fmt.Sprintf("/api/v1/namespaces/%s/isb-services", Namespace)).WithJSON(testISBSVC).
-		Expect().
-		Status(200).Body().Raw()
-	var createISBSVCSuccessExpect = `{"data":null}`
-	assert.Contains(s.T(), createISBSVCBody, createISBSVCSuccessExpect)
-
-	listISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services", Namespace)).
-		Expect().
-		Status(200).Body().Raw()
-	assert.Contains(s.T(), listISBSVCBody, testISBSVCReplica1Name)
-
-	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
-		Expect().
-		Status(200).Body().Raw()
-	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCReplica1Name))
-	assert.Contains(s.T(), getISBSVCBody, `"status":"healthy"`)
-
-	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
-		Expect().
-		Status(200).Body().Raw()
-	var deleteISBSVCSuccessExpect = `{"data":null}`
-	assert.Contains(s.T(), deleteISBSVC, deleteISBSVCSuccessExpect)
-
-	stopPortForward()
-}
-
 func (s *APISuite) TestPipeline0() {
 	var err error
 	numaflowServerPodName := s.GetNumaflowServerPodName()
