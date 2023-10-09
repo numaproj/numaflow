@@ -1,0 +1,26 @@
+{
+  "image": "mcr.microsoft.com/vscode/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.21"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/python:1": {},
+    "ghcr.io/rocker-org/devcontainer-features/pandoc:1": {
+      "version": "2.17"
+    },
+    "ghcr.io/devcontainers-contrib/features/protoc:1": {
+      "version": "3.19.6"
+    }
+  },
+  "onCreateCommand": ".devcontainer/pre-build.sh",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/vscode/go/src/github.com/numaproj/numaflow,type=bind",
+  "workspaceFolder": "/home/vscode/go/src/github.com/numaproj/numaflow",
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/home/vscode/go/bin",
+    "GOPATH": "/home/vscode/go"
+  }
+}

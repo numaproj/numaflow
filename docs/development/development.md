@@ -2,6 +2,10 @@
 
 This doc explains how to set up a development environment for Numaflow.
 
+There are two ways to setup:
+- [Visual Studio Code](https://code.visualstudio.com/) with [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+- [Install the required tools](#install-required-tools) on your computer manually.
+
 ### Install required tools
 
 1. [`go`](https://golang.org/doc/install) 1.20+.
