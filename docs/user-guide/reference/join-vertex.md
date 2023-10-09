@@ -12,19 +12,6 @@ Please see the following examples:
 - [Join on Reduce Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-reduce.yaml)
 - [Join on Sink Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-sink.yaml)
 
-## Cycles
-
-A special case of a "Join" is a **Cycle** (a Vertex which can send either to itself or to a previous Vertex.) An example use of this is a Map UDF which does some sort of reprocessing of data under certain conditions such as a transient error.
-
-![Cycle](https://miro.medium.com/v2/resize:fit:1400/1*wYokY1wa9LhI1hKYimWiKA.png)
-
-Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a cycle inevitably produces late data, which would get dropped by the Reduce Vertex. For this reason, cycles should be used sparingly.)
-
-The following examples are of Cycles:
-
-- [Cycle to Self](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-self.yaml)
-- [Cycle to Previous](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-prev.yaml)
-
 ## Numaflow v0.10: Introduction of Join Vertex
 
 We are excited to announce a significant update to [Numaflow](https://numaflow.numaproj.io/), our Kubernetes-native stream processing platform. This update, which has been eagerly requested by our community, is available in [Numaflow v0.10](https://blog.numaproj.io/numaflow-v0-10-whats-new-212002160796).
@@ -84,6 +71,19 @@ Check out our examples on GitHub:
 * [Join on Sink Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-sink.yaml)
 * [Cycle to Self](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-self.yaml)
 * [Cycle to Previous](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-prev.yaml)
+
+## Cycles
+
+A special case of a "Join" is a **Cycle** (a Vertex which can send either to itself or to a previous Vertex.) An example use of this is a Map UDF which does some sort of reprocessing of data under certain conditions such as a transient error.
+
+![Cycle](https://miro.medium.com/v2/resize:fit:1400/1*wYokY1wa9LhI1hKYimWiKA.png)
+
+Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a cycle inevitably produces late data, which would get dropped by the Reduce Vertex. For this reason, cycles should be used sparingly.)
+
+The following examples are of Cycles:
+
+- [Cycle to Self](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-self.yaml)
+- [Cycle to Previous](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-prev.yaml)
 
 ## Next Steps
 
