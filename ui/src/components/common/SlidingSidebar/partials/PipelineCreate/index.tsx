@@ -62,6 +62,15 @@ export function PiplineCreate({
     active: !!createdPipelineId,
   });
 
+  // Call update complete on dismount if pipeline was created
+  useEffect(() => {
+    return () => {
+      if (createdPipelineId) {
+        onUpdateComplete && onUpdateComplete();
+      }
+    };
+  }, [createdPipelineId, onUpdateComplete]);
+
   // Track creation process and close on completion
   useEffect(() => {
     if (!createdPipelineId) {

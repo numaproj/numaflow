@@ -102,6 +102,7 @@ const DATA_REFRESH_INTERVAL = 15000; // ms
 export const useNamespaceSummaryFetch = ({
   namespace,
   loadOnRefresh = false,
+  addError,
 }: NamespaceSummaryFetchProps) => {
   const [options, setOptions] = useState<Options>({
     skip: false,
@@ -161,21 +162,33 @@ export const useNamespaceSummaryFetch = ({
       return;
     }
     if (pipelineError || isbError) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineError || isbError,
-        refresh,
-      });
+      if (options?.requestKey === "") {
+        // Failed on first load, return error
+        setResults({
+          data: undefined,
+          loading: false,
+          error: pipelineError || isbError,
+          refresh,
+        });
+      } else {
+        // Failed on refresh, add error to app context
+        addError(pipelineError || isbError);
+      }
       return;
     }
     if (pipelineData?.errMsg || isbData?.errMsg) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineData?.errMsg || isbData?.errMsg,
-        refresh,
-      });
+      if (options?.requestKey === "") {
+        // Failed on first load, return error
+        setResults({
+          data: undefined,
+          loading: false,
+          error: pipelineData?.errMsg || isbData?.errMsg,
+          refresh,
+        });
+      } else {
+        // Failed on refresh, add error to app context
+        addError(pipelineData?.errMsg || isbData?.errMsg);
+      }
       return;
     }
     if (pipelineData && isbData) {
@@ -211,6 +224,7 @@ export const useNamespaceSummaryFetch = ({
     loadOnRefresh,
     options,
     refresh,
+    addError,
   ]);
 
   return results;

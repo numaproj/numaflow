@@ -9,6 +9,7 @@ export const usePipelineUpdateFetch = ({
   namespaceId,
   pipelineId,
   active,
+  refreshInterval = DATA_REFRESH_INTERVAL,
 }: any) => {
   const [options, setOptions] = useState<Options>({
     skip: !active,
@@ -44,7 +45,7 @@ export const usePipelineUpdateFetch = ({
         skip: false,
         requestKey: "id" + Math.random().toString(16).slice(2),
       });
-    }, DATA_REFRESH_INTERVAL);
+    }, refreshInterval);
     // Clear any existing interval running and store new one
     setIntervalId((prev: any) => {
       if (prev) {
@@ -56,7 +57,7 @@ export const usePipelineUpdateFetch = ({
       // Clear interval on unmount
       clearInterval(id);
     };
-  }, [active]);
+  }, [active, refreshInterval]);
 
   useEffect(() => {
     if (loading) {

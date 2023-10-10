@@ -3,7 +3,6 @@ import Paper from "@mui/material/Paper";
 import { Link } from "react-router-dom";
 import { PipelineCardProps } from "../../../../../types/declarations/namespace";
 import {
-  Alert,
   Box,
   Button,
   CircularProgress,
@@ -25,7 +24,9 @@ import {
   PAUSED,
   RUNNING,
   PAUSING,
+  DELETING,
 } from "../../../../../utils";
+import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
@@ -48,7 +49,7 @@ export function PipelineCard({
   refresh,
 }: PipelineCardProps) {
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
-  const [editOption] = useState("view");
+  const [editOption] = useState("edit");
   const [deleteOption] = useState("delete");
   const [deleteProps, setDeleteProps] = useState<DeleteProps | undefined>();
   const [statusPayload, setStatusPayload] = useState<any>(undefined);
@@ -58,6 +59,19 @@ export function PipelineCard({
   );
   const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
   const [timer, setTimer] = useState<any>(undefined);
+  const [pipelineAbleToLoad, setPipelineAbleToLoad] = useState<boolean>(false);
+  const { pipelineAvailable } = usePipelineUpdateFetch({
+    namespaceId: namespace,
+    pipelineId: data?.name,
+    active: !pipelineAbleToLoad,
+    refreshInterval: 5000, // 5 seconds
+  });
+
+  useEffect(() => {
+    if (pipelineAvailable) {
+      setPipelineAbleToLoad(true);
+    }
+  }, [pipelineAvailable]);
 
   const handleUpdateComplete = useCallback(() => {
     refresh();
@@ -136,7 +150,8 @@ export function PipelineCard({
     }, 1000);
     setTimer(pauseTimer);
   }, []);
-  const handlePlayClick = useCallback((e) => {
+
+  const handlePlayClick = useCallback(() => {
     handleTimer();
     setStatusPayload({
       spec: {
@@ -147,7 +162,7 @@ export function PipelineCard({
     });
   }, []);
 
-  const handlePauseClick = useCallback((e) => {
+  const handlePauseClick = useCallback(() => {
     handleTimer();
     setStatusPayload({
       spec: {
@@ -301,19 +316,23 @@ export function PipelineCard({
 
             <Button
               variant="contained"
-              sx={{ marginRight: "1.3rem", marginLeft: "1rem", height: "34px" }}
+              sx={{ marginRight: "1.3rem", marginLeft: "1rem", height: "2.125rem" }}
               onClick={handlePlayClick}
-              disabled={statusData?.pipeline?.status?.phase === RUNNING}
+              disabled={
+                statusData?.pipeline?.status?.phase === RUNNING ||
+                pipelineStatus === DELETING
+              }
             >
               Resume
             </Button>
             <Button
               variant="contained"
-              sx={{ marginRight: "5.1rem", height: "34px" }}
+              sx={{ marginRight: "4.875rem", height: "2.125rem" }}
               onClick={handlePauseClick}
               disabled={
                 statusData?.pipeline?.status?.phase === PAUSED ||
-                statusData?.pipeline?.status?.phase === PAUSING
+                statusData?.pipeline?.status?.phase === PAUSING ||
+                pipelineStatus === DELETING
               }
             >
               Pause
@@ -321,9 +340,23 @@ export function PipelineCard({
           </Box>
           <Link
             to={`/namespaces/${namespace}/pipelines/${data.name}`}
-            style={{ textDecoration: "none" }}
+            style={
+              pipelineStatus === DELETING || !pipelineAbleToLoad
+                ? { pointerEvents: "none", textDecoration: "none" }
+                : { textDecoration: "none" }
+            }
           >
-            <ArrowForwardIcon sx={{ color: "#0077C5" }} />
+            {pipelineAbleToLoad ? (
+              <ArrowForwardIcon
+                sx={
+                  pipelineStatus === DELETING
+                    ? { color: "#D52B1E" }
+                    : { color: "#0077C5" }
+                }
+              />
+            ) : (
+              <CircularProgress size={24} />
+            )}
           </Link>
         </Box>
 
@@ -485,6 +518,7 @@ export function PipelineCard({
               marginTop: "10px",
               alignItems: "center",
               justifyContent: "end",
+              marginRight: "1.8125rem",
             }}
           >
             <Grid item>
@@ -493,6 +527,7 @@ export function PipelineCard({
                 onChange={handleEditChange}
                 value={editOption}
                 variant="outlined"
+                disabled={pipelineStatus === DELETING}
                 sx={{
                   color: "#0077C5",
                   height: "34px",
@@ -500,11 +535,11 @@ export function PipelineCard({
                   marginRight: "20px",
                 }}
               >
-                <MenuItem sx={{ display: "none" }} hidden value="view">
-                  Edit
+                <MenuItem sx={{ display: "none" }} hidden value="edit">
+                  EDIT
                 </MenuItem>
                 <MenuItem value="pipeline">Pipeline</MenuItem>
-                <MenuItem value="isb">ISB</MenuItem>
+                <MenuItem value="isb">ISB Service</MenuItem>
               </Select>
             </Grid>
             <Grid item>
@@ -512,6 +547,7 @@ export function PipelineCard({
                 defaultValue="delete"
                 onChange={handleDeleteChange}
                 value={deleteOption}
+                disabled={pipelineStatus === DELETING}
                 sx={{
                   color: "#0077C5",
                   height: "34px",
@@ -520,10 +556,10 @@ export function PipelineCard({
                 }}
               >
                 <MenuItem value="delete" sx={{ display: "none" }}>
-                  Delete
+                  DELETE
                 </MenuItem>
                 <MenuItem value="pipeline">Pipeline</MenuItem>
-                <MenuItem value="isb">ISB</MenuItem>
+                <MenuItem value="isb">ISB Service</MenuItem>
               </Select>
             </Grid>
           </Grid>

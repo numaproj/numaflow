@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useContext, useMemo } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import {
@@ -9,12 +9,16 @@ import {
 import { ClusterNamespaceListing } from "./partials/ClusterNamespaceListing";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { useClusterSummaryFetch } from "../../../utils/fetchWrappers/clusterSummaryFetch";
+import { AppContextProps } from "../../../types/declarations/app";
+import { AppContext } from "../../../App";
 
 import "./style.css";
 
 export function Cluster() {
+  const { addError } = useContext<AppContextProps>(AppContext);
   const { data, loading, error } = useClusterSummaryFetch({
     loadOnRefresh: false,
+    addError,
   });
 
   const summarySections: SummarySection[] = useMemo(() => {
@@ -22,7 +26,7 @@ export function Cluster() {
       return [
         {
           type: SummarySectionType.CUSTOM,
-          customComponent: <CircularProgress />,
+          customComponent: <CircularProgress key="cluster-summary-loading" />,
         },
       ];
     }
@@ -32,6 +36,7 @@ export function Cluster() {
           type: SummarySectionType.CUSTOM,
           customComponent: (
             <ErrorDisplay
+              key="cluster-summary-error"
               title="Error loading cluster summary"
               message={error}
             />

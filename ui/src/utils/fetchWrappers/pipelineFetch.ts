@@ -1,12 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
 import { Options, useFetch } from "./fetch";
-import {PipelineSummaryFetchResult} from "../../types/declarations/pipeline";
-
+import { PipelineSummaryFetchResult } from "../../types/declarations/pipeline";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
 // fetch pipeline summary and ISB summary
-export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
+export const usePipelineSummaryFetch = ({
+  namespaceId,
+  pipelineId,
+  addError,
+}: any) => {
   const [isb, setIsb] = useState<string | null>(null);
   const [options, setOptions] = useState<Options>({
     skip: false,
@@ -69,21 +72,33 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
       return;
     }
     if (pipelineError || isbError) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineError || isbError,
-        refresh,
-      });
+      if (options?.requestKey === "") {
+        // Failed on first load, return error
+        setResults({
+          data: undefined,
+          loading: false,
+          error: pipelineError || isbError,
+          refresh,
+        });
+      } else {
+        // Failed on refresh, add error to app context
+        addError(pipelineError || isbError);
+      }
       return;
     }
     if (pipelineData?.errMsg || isbData?.errMsg) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineData?.errMsg || isbData?.errMsg,
-        refresh,
-      });
+      if (options?.requestKey === "") {
+        // Failed on first load, return error
+        setResults({
+          data: undefined,
+          loading: false,
+          error: pipelineData?.errMsg || isbData?.errMsg,
+          refresh,
+        });
+      } else {
+        // Failed on refresh, add error to app context
+        addError(pipelineData?.errMsg || isbData?.errMsg);
+      }
       return;
     }
     if (pipelineData) {
@@ -117,6 +132,7 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
     isbError,
     options,
     refresh,
+    addError,
   ]);
   return results;
 };

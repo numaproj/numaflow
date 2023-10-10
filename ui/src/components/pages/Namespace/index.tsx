@@ -18,11 +18,12 @@ import "./style.css";
 
 export function Namespaces() {
   const { namespaceId } = useParams();
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const { setSidebarProps, addError } = useContext<AppContextProps>(AppContext);
   const { data, pipelineRawData, isbRawData, loading, error, refresh } =
     useNamespaceSummaryFetch({
       namespace: namespaceId || "",
       loadOnRefresh: false,
+      addError,
     });
 
   const handleK8sEventsClick = useCallback(() => {
@@ -40,7 +41,7 @@ export function Namespaces() {
       return [
         {
           type: SummarySectionType.CUSTOM,
-          customComponent: <CircularProgress />,
+          customComponent: <CircularProgress key="ns-summary-spinner" />,
         },
       ];
     }
@@ -50,6 +51,7 @@ export function Namespaces() {
           type: SummarySectionType.CUSTOM,
           customComponent: (
             <ErrorDisplay
+              key="ns-summary-error"
               title="Error loading namespace summary"
               message={error}
             />

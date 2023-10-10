@@ -20,10 +20,8 @@ import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
 import { ViewType } from "../../../../common/SpecEditor";
 import { Button, MenuItem, Select } from "@mui/material";
-
-import "./style.css";
+import { ErrorIndicator } from "../../../../common/ErrorIndicator";
 import {
-  ACTIVE,
   ALL,
   ALPHABETICAL_SORT,
   ASC,
@@ -37,6 +35,8 @@ import {
   STOPPED,
   WARNING,
 } from "../../../../../utils";
+
+import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
 
@@ -323,7 +323,7 @@ export function NamespacePipelineListing({
         padding: "0 2.625rem",
       }}
     >
-      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "end" }}>
+      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "flex-start" }}>
         <DebouncedSearchInput
           placeHolder="Search for pipeline"
           onChange={setSearch}
@@ -356,6 +356,7 @@ export function NamespacePipelineListing({
                 background: "#fff",
                 border: "1px solid #6B6C72",
                 height: "34px",
+                marginRight: "0.5rem",
               }}
               onChange={handleHealthFilterChange}
             >
@@ -405,6 +406,9 @@ export function NamespacePipelineListing({
               ))}
             </Select>
           </Box>
+        </Box>
+        <Box>
+          <ErrorIndicator />
         </Box>
       </Box>
       <Box sx={{ display: "flex", flexDirection: "row", marginTop: "2rem" }}>
