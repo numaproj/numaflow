@@ -1105,6 +1105,11 @@ func (in *Lifecycle) DeepCopyInto(out *Lifecycle) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.PauseGracePeriodSeconds != nil {
+		in, out := &in.PauseGracePeriodSeconds, &out.PauseGracePeriodSeconds
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
