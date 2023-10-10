@@ -480,7 +480,7 @@ func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 	for _, pl := range pipelines.Items {
 		plISBSvcName := pl.Spec.InterStepBufferServiceName
 		if (plISBSvcName == "" && isbsvcName == dfv1.DefaultISBSvcName) || (plISBSvcName == isbsvcName) {
-			h.respondWithError(c, fmt.Sprintf("Failed to delete the interstep buffer service %q: this ISBSVC is still used by pipeline %s", isbsvcName, pl.Name))
+			h.respondWithError(c, fmt.Sprintf("Failed to delete the interstep buffer service %q: this ISBSVC is in use by pipeline %s", isbsvcName, pl.Name))
 			return
 		}
 	}
