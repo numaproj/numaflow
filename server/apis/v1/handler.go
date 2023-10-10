@@ -412,11 +412,11 @@ func (h *handler) ListInterStepBufferServices(c *gin.Context) {
 
 // GetInterStepBufferService is used to provide the spec of the interstep buffer service
 func (h *handler) GetInterStepBufferService(c *gin.Context) {
-	ns, isbName := c.Param("namespace"), c.Param("isb-services")
+	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 
-	isbsvc, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbName, metav1.GetOptions{})
+	isbsvc, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbsvcName, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isbName, ns, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isbsvcName, ns, err.Error()))
 		return
 	}
 
@@ -429,13 +429,13 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 
 // UpdateInterStepBufferService is used to update the spec of the interstep buffer service
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
-	ns, isbServices := c.Param("namespace"), c.Param("isb-services")
+	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 	// dryRun is used to check if the operation is just a validation or an actual update
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
-	isbSVC, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbServices, metav1.GetOptions{})
+	isbSVC, err := h.numaflowClient.InterStepBufferServices(ns).Get(context.Background(), isbsvcName, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isb-services %q: %s", ns, isbServices, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the interstep buffer service: namespace %q isb-services %q: %s", ns, isbsvcName, err.Error()))
 		return
 	}
 
@@ -460,7 +460,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	isbSVC.Spec = updatedSpec.Spec
 	updatedISBSvc, err := h.numaflowClient.InterStepBufferServices(ns).Update(context.Background(), isbSVC, metav1.UpdateOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %s", ns, isbServices, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %s", ns, isbsvcName, err.Error()))
 		return
 	}
 
@@ -469,13 +469,12 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 
 // DeleteInterStepBufferService is used to update the spec of the inter step buffer service
 func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
-	ns, isbServices := c.Param("namespace"), c.Param("isb-services")
+	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 
-	// TODO: validate if it's being used by any pipelines
-	err := h.numaflowClient.InterStepBufferServices(ns).Delete(context.Background(), isbServices, metav1.DeleteOptions{})
+	err := h.numaflowClient.InterStepBufferServices(ns).Delete(context.Background(), isbsvcName, metav1.DeleteOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to delete the interstep buffer service: namespace %q isb-services %q: %s",
-			ns, isbServices, err.Error()))
+			ns, isbsvcName, err.Error()))
 		return
 	}
 
