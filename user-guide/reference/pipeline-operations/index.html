@@ -2119,7 +2119,7 @@
 <div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>pl<span class="w"> </span>my-pipeline<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Paused&quot;}}}&#39;</span>
 </code></pre></div>
 <p>Pausing a pipeline will not cause data loss. It does not clean up the unprocessed data in the pipeline, but just terminates the running pods. When the pipeline is resumed, the pods will be restarted and continue processing the unprocessed data.</p>
-<p>When pausing a pipeline, it will shutdown the source vertex pods first, and then wait for the other vertices to finish the backlog before terminating them.</p>
+<p>When pausing a pipeline, it will shutdown the source vertex pods first, and then wait for the other vertices to finish the backlog before terminating them. However, it will not wait forever and will terminate the pods after <code>pauseGracePeriodSeconds</code>. This is default set to 30 and can be customized by setting <code>spec.lifecycle.pauseGracePeriodSeconds</code>.</p>
 <p>If there's a <a href="../../user-defined-functions/reduce/reduce/">reduce</a> vertex in the pipeline, please make sure it uses <a href="../../user-defined-functions/reduce/reduce/#persistent-volume-claim-pvc">Persistent Volume Claim</a> for storage, otherwise the data will be lost.</p>
 <h2 id="resume-a-pipeline">Resume a Pipeline<a class="headerlink" href="#resume-a-pipeline" title="Permanent link">&para;</a></h2>
 <p>The command below will bring the pipeline back to <code>Running</code> status.</p>
