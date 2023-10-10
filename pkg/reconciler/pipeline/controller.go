@@ -730,8 +730,12 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 	// reset pause timestamp
 	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
 		err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(dfv1.RemovePauseTimestampPatch)))
-		if err != nil && apierrors.IsNotFound(err) {
-			return false, nil
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil // skip pipeline if it can't be found
+			} else {
+				return true, err // otherwise requeue resume
+			}
 		}
 	}
 
@@ -745,6 +749,7 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 
 func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
 
+	// check that annotations / pause timestamp annotation exist
 	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
 		pl.SetAnnotations(map[string]string{dfv1.KeyPauseTimestamp: time.Now().Format(time.RFC3339)})
 		body, err := json.Marshal(pl)
@@ -753,7 +758,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		}
 		err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, body))
 		if err != nil && !apierrors.IsNotFound(err) {
-			return false, err
+			return true, err
 		}
 	}
 
