@@ -71,11 +71,11 @@ func v1Routes(r gin.IRouter) {
 	// List all the InterStepBufferService objects for a given namespace.
 	r.GET("/namespaces/:namespace/isb-services", handler.ListInterStepBufferServices)
 	// Get an InterStepBufferService object.
-	r.GET("/namespaces/:namespace/isb-services/:isb-services", handler.GetInterStepBufferService)
+	r.GET("/namespaces/:namespace/isb-services/:isb-service", handler.GetInterStepBufferService)
 	// Update an InterStepBufferService object.
-	r.PUT("/namespaces/:namespace/isb-services/:isb-services", handler.UpdateInterStepBufferService)
+	r.PUT("/namespaces/:namespace/isb-services/:isb-service", handler.UpdateInterStepBufferService)
 	// Delete an InterStepBufferService object.
-	r.DELETE("/namespaces/:namespace/isb-services/:isb-services", handler.DeleteInterStepBufferService)
+	r.DELETE("/namespaces/:namespace/isb-services/:isb-service", handler.DeleteInterStepBufferService)
 	// Get all the Inter-Step Buffers of a pipeline.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs", handler.ListPipelineBuffers)
 	// Get all the watermarks information of a pipeline.
