@@ -1,10 +1,6 @@
 # Joins and Cycles
 
-Numaflow Pipeline Edges can be defined such that multiple Vertices forward messages to a single vertex. This includes:
-
-- UDF Map Vertices
-- UDF Reduce Vertices
-- Sink Vertices
+Numaflow Pipeline Edges can be defined such that multiple Vertices can forward messages to a single vertex.
 
 ### Quick Start 
 
@@ -13,13 +9,16 @@ Please see the following examples:
 - [Join on Map Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-map.yaml)
 - [Join on Reduce Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-reduce.yaml)
 - [Join on Sink Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-sink.yaml)
+- [Cycle to Self](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-self.yaml)
+- [Cycle to Previous](https://github.com/numaproj/numaflow/blob/main/examples/10-cycle-to-prev.yaml)
 
 ## Why do we need JOIN
 
 ### Without JOIN
-Without JOIN, Numaflow could only allow users to build [pipelines](https://numaflow.numaproj.io/core-concepts/pipeline/) where processing [vertices](https://numaflow.numaproj.io/core-concepts/vertex/) could only 
-read from *one* vertex. This meant that Numaflow could only support simple pipelines or tree-like pipelines. Supporting 
-pipelines where you had to read from multiple sources or UDFs was cumbersome and required creating redundant vertices.
+Without JOIN, Numaflow could only allow users to build [pipelines](https://numaflow.numaproj.io/core-concepts/pipeline/) where [vertices](https://numaflow.numaproj.io/core-concepts/vertex/)
+could only read from previous *one* vertex. This meant that Numaflow could only support simple pipelines or tree-like pipelines. 
+Supporting pipelines where you had to read from multiple sources or UDFs were cumbersome and required creating redundant
+vertices.
 
 ![Simple pipeline](https://miro.medium.com/v2/resize:fit:1400/1*MAwBZ3-eOQs29fvc36XLDw.png)
 
