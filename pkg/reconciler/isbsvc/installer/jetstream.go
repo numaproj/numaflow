@@ -390,9 +390,6 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	svcName := generateJetStreamServiceName(r.isbs)
 	ssName := generateJetStreamStatefulSetName(r.isbs)
 	replicas := r.isbs.Spec.JetStream.GetReplicas()
-	if replicas < 3 {
-		replicas = 3
-	}
 	routes := []string{}
 	for j := 0; j < replicas; j++ {
 		routes = append(routes, fmt.Sprintf("nats://%s-%s.%s.%s.svc:%s", ssName, strconv.Itoa(j), svcName, r.isbs.Namespace, strconv.Itoa(int(clusterPort))))
@@ -422,7 +419,13 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 			return fmt.Errorf("failed to merge customized jetstream settings, %w", err)
 		}
 	}
-	confTpl := template.Must(template.ParseFS(jetStremAssets, "assets/jetstream/nats.conf"))
+	var confTpl *template.Template
+	if replicas > 2 {
+		confTpl = template.Must(template.ParseFS(jetStremAssets, "assets/jetstream/nats-cluster.conf"))
+	} else {
+		confTpl = template.Must(template.ParseFS(jetStremAssets, "assets/jetstream/nats.conf"))
+	}
+
 	var confTplOutput bytes.Buffer
 	if err := confTpl.Execute(&confTplOutput, struct {
 		ClusterName        string
