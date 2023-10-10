@@ -126,7 +126,7 @@ var (
     "apiVersion": "numaflow.numaproj.io/v1alpha1",
     "kind": "InterStepBufferService",
     "metadata": {
-        "name": "test-isbsvc"
+        "name": "test-isbsvc-replica-1"
     },
     "spec": {
         "jetstream": {
