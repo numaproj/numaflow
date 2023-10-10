@@ -2340,7 +2340,7 @@
 <p><strong>Note</strong></p>
 <p>The version <code>latest</code> in the ConfigMap should only be used for testing purpose. It's recommended that you always use a fixed version in your real workload.</p>
 <h3 id="replicas">Replicas<a class="headerlink" href="#replicas" title="Permanent link">&para;</a></h3>
-<p>An optional property <code>spec.jetstream.replicas</code> (defaults to 3) can be specified, which gives the total number of nodes. An odd number 3 or 5 is suggested. If the given number &lt; 3, 3 will be used.</p>
+<p>An optional property <code>spec.jetstream.replicas</code> (defaults to 3) can be specified, which gives the total number of nodes. </p>
 <h3 id="persistence">Persistence<a class="headerlink" href="#persistence" title="Permanent link">&para;</a></h3>
 <p>Following example shows a JetStream <code>InterStepBufferService</code> with persistence.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
