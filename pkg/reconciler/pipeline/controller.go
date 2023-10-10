@@ -730,8 +730,8 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 	// reset pause timestamp
 	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
 		err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(dfv1.RemovePauseTimestampPatch)))
-		if err != nil && !apierrors.IsNotFound(err) {
-			return true, err
+		if err != nil && apierrors.IsNotFound(err) {
+			return false, nil
 		}
 	}
 
