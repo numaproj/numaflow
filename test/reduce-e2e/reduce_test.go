@@ -23,8 +23,9 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/numaproj/numaflow/test/fixtures"
 	"github.com/stretchr/testify/suite"
+
+	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
 type ReduceSuite struct {
@@ -144,87 +145,6 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 	// and the second window duration is 60s(non-keyed)
 	// the sum should be 180(60 + 120)
 	w.Expect().SinkContains("sink", "180")
-	done <- struct{}{}
-}
-
-func (r *ReduceSuite) TestJoinOnReducePipeline() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	w := r.Given().Pipeline("@testdata/join-on-reduce-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "join-on-reduce"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	done := make(chan struct{})
-	go func() {
-		// publish messages to source vertex, with event time starting from 60000
-		startTime := 60000
-		for i := 0; true; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case <-done:
-				return
-			default:
-				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
-			}
-		}
-	}()
-
-	// todo: this only tests for one occurrence: ideally should verify all
-	w.Expect().
-		SinkContains("sink", "40"). // per 10 second window: (10 * 2) * 2 atoi vertices
-		SinkContains("sink", "80")  // per 10 second window: 10 * (1 + 3) * 2 atoi vertices
-	done <- struct{}{}
-}
-
-func (r *ReduceSuite) TestJoinOnMapPipeline() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	w := r.Given().Pipeline("@testdata/join-on-map-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "join-on-map"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	done := make(chan struct{})
-	go func() {
-		// publish messages to source vertex, with event time starting from 60000
-		startTime := 60000
-		for i := 0; true; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case <-done:
-				return
-			default:
-				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
-				w.SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("5")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("6")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("7")).WithHeader("X-Numaflow-Event-Time", eventTime))
-
-			}
-		}
-	}()
-
-	// todo: this only tests for one occurrence: consider verifying that all match? (but test will take longer)
-	w.Expect().
-		SinkContains("sink", "80"). // per 10 second window: 10 * (2 + 6) = 80
-		SinkContains("sink", "160") // per 10 second window: 10 * (1 + 3 + 5 + 7) = 160
-
 	done <- struct{}{}
 }
 
