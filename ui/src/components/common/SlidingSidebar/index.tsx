@@ -100,9 +100,7 @@ export function SlidingSidebar({
   const [width, setWidth] = useState<number>(
     errorsProps
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
-      : pageWidth
-      ? pageWidth / 2
-      : 0
+      : (pageWidth * 0.75)
   );
   const [minWidth, setMinWidth] = useState<number>(0);
   const [modalOnClose, setModalOnClose] = useState<

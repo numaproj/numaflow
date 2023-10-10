@@ -34,11 +34,7 @@ export function CloseModal({
   }, [iconType]);
 
   return (
-    <Modal
-      open={true}
-      aria-labelledby="modal-modal-title"
-      aria-describedby="modal-modal-description"
-    >
+    <Modal open={true}>
       <Box
         sx={{
           display: "flex",
@@ -47,7 +43,6 @@ export function CloseModal({
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          width: "25rem",
           bgcolor: "background.paper",
           borderRadius: "0.3125rem",
           boxShadow: 24,

@@ -13,6 +13,7 @@ import {
   SelectChangeEvent,
 } from "@mui/material";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import { DeleteModal } from "../DeleteModal";
 import {
   GetISBType,
   getAPIResponseError,
@@ -33,6 +34,12 @@ import pipelineIcon from "../../../../../images/pipeline.png";
 
 import "./style.css";
 
+export interface DeleteProps {
+  type: "pipeline" | "isb";
+  pipelineId?: string;
+  isbId?: string;
+}
+
 export function PipelineCard({
   namespace,
   data,
@@ -41,9 +48,9 @@ export function PipelineCard({
   refresh,
 }: PipelineCardProps) {
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
-  const [editOption] = React.useState("view");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [deleteOption, setDeleteOption] = React.useState("Delete");
+  const [editOption] = useState("view");
+  const [deleteOption] = useState("delete");
+  const [deleteProps, setDeleteProps] = useState<DeleteProps | undefined>();
   const [statusPayload, setStatusPayload] = useState<any>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [successMessage, setSuccessMessage] = useState<string | undefined>(
@@ -88,8 +95,30 @@ export function PipelineCard({
     [setSidebarProps, handleUpdateComplete, isbData, data]
   );
 
-  const handleDeleteChange = useCallback((event: SelectChangeEvent<string>) => {
-    setDeleteOption(event.target.value);
+  const handleDeleteChange = useCallback(
+    (event: SelectChangeEvent<string>) => {
+      if (event.target.value === "pipeline") {
+        setDeleteProps({
+          type: "pipeline",
+          pipelineId: data?.name,
+        });
+      } else if (event.target.value === "isb") {
+        setDeleteProps({
+          type: "isb",
+          isbId: isbData?.name,
+        });
+      }
+    },
+    [isbData, data]
+  );
+
+  const handleDeleteComplete = useCallback(() => {
+    refresh();
+    setDeleteProps(undefined);
+  }, [refresh]);
+
+  const handeDeleteCancel = useCallback(() => {
+    setDeleteProps(undefined);
   }, []);
 
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
@@ -454,8 +483,8 @@ export function PipelineCard({
             <Grid item>
               <Select
                 defaultValue="delete"
-                disabled
                 onChange={handleDeleteChange}
+                value={deleteOption}
                 sx={{
                   color: "#0077C5",
                   height: "34px",
@@ -472,6 +501,14 @@ export function PipelineCard({
             </Grid>
           </Grid>
         </Box>
+        {deleteProps && (
+          <DeleteModal
+            {...deleteProps}
+            namespaceId={namespace}
+            onDeleteCompleted={handleDeleteComplete}
+            onCancel={handeDeleteCancel}
+          />
+        )}
       </Paper>
     </>
   );

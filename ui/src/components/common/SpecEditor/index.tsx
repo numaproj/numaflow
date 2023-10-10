@@ -5,6 +5,8 @@ import YAML from "yaml";
 import Editor from "@monaco-editor/react";
 import CircularProgress from "@mui/material/CircularProgress";
 import Button from "@mui/material/Button";
+import SuccessIcon from "@mui/icons-material/CheckCircle";
+import ErrorIcon from "../../../images/warning-triangle.png";
 
 import "./style.css";
 
@@ -12,6 +14,29 @@ export enum ViewType {
   READ_ONLY,
   TOGGLE_EDIT,
   EDIT,
+}
+
+export interface ValidationMessage {
+  type: "error" | "success";
+  message: string;
+}
+
+export enum Status {
+  LOADING,
+  SUCCESS,
+  ERROR,
+}
+
+export interface StatusIndicator {
+  submit?: {
+    status: Status;
+    message: string;
+    allowRetry?: boolean;
+  };
+  processing?: {
+    status: Status;
+    message: string;
+  };
 }
 
 export interface SpecEditorProps {
@@ -22,7 +47,8 @@ export interface SpecEditorProps {
   onSubmit?: (value: string) => void;
   onResetApplied?: () => void;
   onMutatedChange?: (mutated: boolean) => void;
-  contextComponent?: React.ReactNode; // Component provided by parent to show error/validation context
+  validationMessage?: ValidationMessage;
+  statusIndicator?: StatusIndicator;
   mutationKey?: string;
   editResetKey?: string;
 }
@@ -35,7 +61,8 @@ export function SpecEditor({
   onSubmit,
   onResetApplied,
   onMutatedChange,
-  contextComponent,
+  statusIndicator,
+  validationMessage,
   mutationKey,
   editResetKey,
 }: SpecEditorProps) {
@@ -173,51 +200,103 @@ export function SpecEditor({
     if (viewType === ViewType.READ_ONLY) {
       return undefined;
     }
+    const btnStyle = {
+      height: "fit-content",
+    };
+    const statusShowing =
+      !!statusIndicator &&
+      (!!statusIndicator.submit || !!statusIndicator.processing);
+    const retryAllowed =
+      !!statusIndicator &&
+      !!statusIndicator.submit &&
+      !!statusIndicator.submit.allowRetry;
     return (
       <Box
         sx={{
           display: "flex",
           flexDirection: "row",
-          justifyContent: "flex-end",
           marginBottom: "1.5rem",
+          marginLeft: "1.25rem",
+          justifyContent: validationMessage ? "space-between" : "flex-end",
         }}
       >
-        {viewType === ViewType.TOGGLE_EDIT && (
-          <Button
-            onClick={handleEditToggle}
-            variant="contained"
-            disabled={loading}
+        {validationMessage && (
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+            }}
           >
-            {editable ? "View" : "Edit"}
-          </Button>
+            {validationMessage.type === "error" && (
+              <img
+                src={ErrorIcon}
+                alt="Error"
+                className="spec-editor-validation-message-icon"
+              />
+            )}
+            {validationMessage.type === "success" && (
+              <SuccessIcon
+                fontSize="large"
+                color="success"
+                sx={{ marginRight: "0.5rem" }}
+              />
+            )}
+            <span className="spec-editor-validation-message">
+              {validationMessage.message}
+            </span>
+          </Box>
         )}
-        <Button
-          disabled={!mutated || loading || !editable}
-          onClick={handleReset}
-          variant="contained"
-          sx={{ marginLeft: "0.5rem" }}
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+          }}
         >
-          Reset
-        </Button>
-        <Button
-          disabled={!mutated || loading || !editable}
-          onClick={handleValidate}
-          variant="contained"
-          sx={{ marginLeft: "0.5rem" }}
-        >
-          Validate
-        </Button>
-        <Button
-          disabled={!mutated || loading || !editable}
-          onClick={handleSubmit}
-          variant="contained"
-          sx={{ marginLeft: "0.5rem" }}
-        >
-          Submit
-        </Button>
+          {viewType === ViewType.TOGGLE_EDIT && (
+            <Button
+              onClick={handleEditToggle}
+              variant="contained"
+              disabled={loading || statusShowing}
+              sx={btnStyle}
+            >
+              {editable ? "View" : "Edit"}
+            </Button>
+          )}
+          <Button
+            disabled={!mutated || loading || !editable || statusShowing}
+            onClick={handleReset}
+            variant="contained"
+            sx={{ marginLeft: "0.5rem", ...btnStyle }}
+          >
+            Reset
+          </Button>
+          <Button
+            disabled={!mutated || loading || !editable || statusShowing}
+            onClick={handleValidate}
+            variant="contained"
+            sx={{ marginLeft: "0.5rem", ...btnStyle }}
+          >
+            Validate
+          </Button>
+          <Button
+            disabled={
+              !mutated ||
+              loading ||
+              !editable ||
+              (statusShowing && !retryAllowed)
+            }
+            onClick={handleSubmit}
+            variant="contained"
+            sx={{ marginLeft: "0.5rem", ...btnStyle }}
+          >
+            Submit
+          </Button>
+        </Box>
       </Box>
     );
   }, [
+    statusIndicator,
     viewType,
     editable,
     mutated,
@@ -226,14 +305,99 @@ export function SpecEditor({
     handleReset,
     handleValidate,
     handleSubmit,
+    validationMessage,
   ]);
+
+  const status = useMemo(() => {
+    if (
+      !statusIndicator ||
+      (!statusIndicator.submit && !statusIndicator.processing)
+    ) {
+      // No status to display
+      return undefined;
+    }
+    const errorIcon = (
+      <img
+        src={ErrorIcon}
+        alt="Error"
+        className="spec-editor-status-message-icon"
+      />
+    );
+    const successIcon = (
+      <SuccessIcon
+        fontSize="large"
+        color="success"
+        sx={{ marginRight: "0.5rem" }}
+      />
+    );
+    const loadingIcon = (
+      <CircularProgress size={27} sx={{ marginRight: "1rem", marginLeft: "0.1875rem" }} />
+    );
+    const containerStyle = {
+      display: "flex",
+      flexDirection: "row",
+      alignItems: "center",
+      margin: "0.5rem 0",
+    };
+    const messageContainerStyle = {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "flex-start",
+    };
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100%",
+        }}
+      >
+        <Box>
+          {statusIndicator.submit && (
+            <Box sx={containerStyle}>
+              {statusIndicator.submit.status === Status.ERROR && errorIcon}
+              {statusIndicator.submit.status === Status.SUCCESS && successIcon}
+              {statusIndicator.submit.status === Status.LOADING && loadingIcon}
+              <Box sx={messageContainerStyle}>
+                <span className="spec-editor-status-message">
+                  {statusIndicator.submit.message}
+                </span>
+              </Box>
+            </Box>
+          )}
+          {statusIndicator.processing && (
+            <Box sx={containerStyle}>
+              {statusIndicator.processing.status === Status.ERROR && errorIcon}
+              {statusIndicator.processing.status === Status.SUCCESS &&
+                successIcon}
+              {statusIndicator.processing.status === Status.LOADING &&
+                loadingIcon}
+              <Box sx={messageContainerStyle}>
+                <span className="spec-editor-status-message">
+                  {statusIndicator.processing.message}
+                </span>
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </Box>
+    );
+  }, [statusIndicator]);
 
   const editor = useMemo(() => {
     return (
       <Box
-        sx={{
-          height: "100%",
-        }}
+        sx={
+          status // Hide editor if status is displayed
+            ? {
+                display: "none",
+              }
+            : {
+                height: "100%",
+              }
+        }
       >
         <Editor
           height="100%"
@@ -256,7 +420,7 @@ export function SpecEditor({
         />
       </Box>
     );
-  }, [value, editable, loading, handleValueChange]);
+  }, [status, value, editable, loading, handleValueChange]);
 
   return (
     <Box
@@ -277,16 +441,7 @@ export function SpecEditor({
       >
         {spinner}
         {actionButtons}
-        {contextComponent && (
-          <Box
-            sx={{
-              marginLeft: "1.5rem",
-              marginBottom: "1.5rem",
-            }}
-          >
-            {contextComponent}
-          </Box>
-        )}
+        {status}
         {editor}
       </Paper>
     </Box>

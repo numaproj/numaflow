@@ -22,6 +22,7 @@ import {
   SlidingSidebar,
   SlidingSidebarProps,
 } from "./components/common/SlidingSidebar";
+import { ErrorDisplay } from "./components/common/ErrorDisplay";
 import { AppContextProps } from "./types/declarations/app";
 import logo from "./images/icon.png";
 import textLogo from "./images/text-icon.png";
@@ -90,7 +91,16 @@ function App() {
     if (loading) {
       // System info loading
       return (
-        <Box sx={{ display: "flex", justifyContent: "center" }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            width: "100%",
+            height: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <CircularProgress />
         </Box>
       );
@@ -98,8 +108,20 @@ function App() {
     if (systemInfoError) {
       // System info load error
       return (
-        <Box sx={{ display: "flex", justifyContent: "center" }}>
-          {`Error loading System Info: ${systemInfoError}`}
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            width: "100%",
+            height: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <ErrorDisplay
+            title="Error loading system info"
+            message={systemInfoError}
+          />
         </Box>
       );
     }

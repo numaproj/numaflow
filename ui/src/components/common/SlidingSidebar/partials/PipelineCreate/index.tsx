@@ -1,15 +1,43 @@
 import React, { useCallback, useEffect, useState } from "react";
 import YAML from "yaml";
 import Box from "@mui/material/Box";
-import { SpecEditor } from "../../../SpecEditor";
+import {
+  SpecEditor,
+  Status,
+  StatusIndicator,
+  ValidationMessage,
+} from "../../../SpecEditor";
 import { SpecEditorSidebarProps } from "../..";
-import { ValidationMessage } from "../../../SpecEditor/partials/ValidationMessage";
 import { getAPIResponseError } from "../../../../../utils";
+import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
 
 import "./style.css";
 
-const INITIAL_VALUE =
-  "# Add pipeline spec and submit to create a new pipeline.\n";
+const INITIAL_VALUE = `apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-pipeline
+spec:
+  vertices:
+    - name: in
+      source:
+        # A self data generating source
+        generator:
+          rpu: 5
+          duration: 1s
+    - name: cat
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
+    - name: out
+      sink:
+        # A simple log printing sink
+        log: {}
+  edges:
+    - from: in
+      to: cat
+    - from: cat
+      to: out`;
 
 export function PiplineCreate({
   namespaceId,
@@ -17,17 +45,70 @@ export function PiplineCreate({
   onUpdateComplete,
   setModalOnClose,
 }: SpecEditorSidebarProps) {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
   const [validationPayload, setValidationPayload] = useState<any>(undefined);
   const [submitPayload, setSubmitPayload] = useState<any>(undefined);
-  const [contextComponent, setContextComponent] = useState<
-    React.ReactNode | undefined
+  const [validationMessage, setValidationMessage] = useState<
+    ValidationMessage | undefined
   >();
+  const [status, setStatus] = useState<StatusIndicator | undefined>();
+  const [createdPipelineId, setCreatedPipelineId] = useState<
+    string | undefined
+  >();
+
+  const { pipelineAvailable } = usePipelineUpdateFetch({
+    namespaceId,
+    pipelineId: createdPipelineId,
+    active: !!createdPipelineId,
+  });
+
+  // Track creation process and close on completion
+  useEffect(() => {
+    if (!createdPipelineId) {
+      return;
+    }
+    let timer: number;
+    if (pipelineAvailable) {
+      setStatus((prev) => {
+        const existing = prev ? { ...prev } : {};
+        return {
+          ...existing,
+          processing: {
+            status: Status.SUCCESS,
+            message: "Pipeline created successfully",
+          },
+        };
+      });
+      timer = setTimeout(() => {
+        onUpdateComplete && onUpdateComplete();
+      }, 1000);
+    } else {
+      setStatus((prev) => {
+        const existing = prev ? { ...prev } : {};
+        return {
+          ...existing,
+          processing: {
+            status: Status.LOADING,
+            message: "Pipeline is being created...",
+          },
+        };
+      });
+    }
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [createdPipelineId, pipelineAvailable, onUpdateComplete]);
 
   // Submit API call
   useEffect(() => {
     const postData = async () => {
-      setLoading(true);
+      setStatus({
+        submit: {
+          status: Status.LOADING,
+          message: "Submitting pipeline...",
+          allowRetry: false,
+        },
+      });
       try {
         const response = await fetch(
           `/api/v1/namespaces/${namespaceId}/pipelines?dry-run=false`,
@@ -41,46 +122,35 @@ export function PiplineCreate({
         );
         const error = await getAPIResponseError(response);
         if (error) {
-          setContextComponent(
-            <ValidationMessage
-              type="error"
-              title="Submission Error"
-              content={error}
-            />
-          );
+          setValidationMessage({
+            type: "error",
+            message: error,
+          });
+          setStatus(undefined);
         } else {
-          setContextComponent(
-            <ValidationMessage
-              type="success"
-              title="Successfully submitted"
-              content=""
-            />
-          );
-          if (onUpdateComplete) {
-            // Give small grace period before callling complete (allows user to see message)
-            setTimeout(() => {
-              onUpdateComplete();
-            }, 1000);
-          }
+          setStatus({
+            submit: {
+              status: Status.SUCCESS,
+              message: "Pipeline submitted successfully",
+              allowRetry: false,
+            },
+          });
+          setCreatedPipelineId(submitPayload.metadata?.name || "default");
+          setModalOnClose && setModalOnClose(undefined);
         }
       } catch (e: any) {
-        setContextComponent(
-          <ValidationMessage
-            type="error"
-            title="Submission Error"
-            content={`Error: ${e.message}`}
-          />
-        );
-      } finally {
-        setLoading(false);
-        setSubmitPayload(undefined);
+        setValidationMessage({
+          type: "error",
+          message: e.message,
+        });
+        setStatus(undefined);
       }
     };
 
     if (submitPayload) {
       postData();
     }
-  }, [namespaceId, submitPayload, onUpdateComplete]);
+  }, [namespaceId, submitPayload, setModalOnClose]);
 
   // Validation API call
   useEffect(() => {
@@ -99,30 +169,21 @@ export function PiplineCreate({
         );
         const error = await getAPIResponseError(response);
         if (error) {
-          setContextComponent(
-            <ValidationMessage
-              type="error"
-              title="Validation Error"
-              content={error}
-            />
-          );
+          setValidationMessage({
+            type: "error",
+            message: error,
+          });
         } else {
-          setContextComponent(
-            <ValidationMessage
-              type="success"
-              title="Successfully validated"
-              content=""
-            />
-          );
+          setValidationMessage({
+            type: "success",
+            message: "Successfully validated",
+          });
         }
       } catch (e: any) {
-        setContextComponent(
-          <ValidationMessage
-            type="error"
-            title="Validation Error"
-            content={`Error: ${e.message}`}
-          />
-        );
+        setValidationMessage({
+          type: "error",
+          message: `Error: ${e.message}`,
+        });
       } finally {
         setLoading(false);
         setValidationPayload(undefined);
@@ -135,63 +196,52 @@ export function PiplineCreate({
   }, [namespaceId, validationPayload]);
 
   const handleValidate = useCallback((value: string) => {
-    let parsed;
+    let parsed: any;
     try {
       parsed = YAML.parse(value);
     } catch (e) {
-      setContextComponent(
-        <ValidationMessage
-          type="error"
-          title="Validation Error"
-          content={`Invalid YAML: ${e.message}`}
-        />
-      );
+      setValidationMessage({
+        type: "error",
+        message: `Invalid YAML: ${e.message}`,
+      });
       return;
     }
     if (!parsed) {
-      setContextComponent(
-        <ValidationMessage
-          type="error"
-          title="Validation Error"
-          content="No spec provided."
-        />
-      );
+      setValidationMessage({
+        type: "error",
+        message: "Error: no spec provided.",
+      });
       return;
     }
     setValidationPayload(parsed);
-    setContextComponent(undefined);
+    setValidationMessage(undefined);
   }, []);
 
   const handleSubmit = useCallback((value: string) => {
-    let parsed;
+    let parsed: any;
     try {
       parsed = YAML.parse(value);
     } catch (e) {
-      setContextComponent(
-        <ValidationMessage
-          type="error"
-          title="Validation Error"
-          content={`Invalid YAML: ${e.message}`}
-        />
-      );
+      setValidationMessage({
+        type: "error",
+        message: `Invalid YAML: ${e.message}`,
+      });
       return;
     }
     if (!parsed) {
-      setContextComponent(
-        <ValidationMessage
-          type="error"
-          title="Validation Error"
-          content="No spec provided."
-        />
-      );
+      setValidationMessage({
+        type: "error",
+        message: "Error: no spec provided.",
+      });
       return;
     }
     setSubmitPayload(parsed);
-    setContextComponent(undefined);
+    setValidationMessage(undefined);
   }, []);
 
   const handleReset = useCallback(() => {
-    setContextComponent(undefined);
+    setStatus(undefined);
+    setValidationMessage(undefined);
   }, []);
 
   const handleMutationChange = useCallback(
@@ -236,7 +286,8 @@ export function PiplineCreate({
         onSubmit={handleSubmit}
         onResetApplied={handleReset}
         onMutatedChange={handleMutationChange}
-        contextComponent={contextComponent}
+        statusIndicator={status}
+        validationMessage={validationMessage}
       />
     </Box>
   );

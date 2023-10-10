@@ -12,6 +12,7 @@ import { AppContext } from "../../../App";
 import { AppContextProps } from "../../../types/declarations/app";
 import { SidebarType } from "../../common/SlidingSidebar";
 import { NamespacePipelineListing } from "./partials/NamespacePipelineListing";
+import { ErrorDisplay } from "../../common/ErrorDisplay";
 
 import "./style.css";
 
@@ -35,6 +36,27 @@ export function Namespaces() {
   }, [namespaceId, setSidebarProps]);
 
   const summarySections: SummarySection[] = useMemo(() => {
+    if (loading) {
+      return [
+        {
+          type: SummarySectionType.CUSTOM,
+          customComponent: <CircularProgress />,
+        },
+      ];
+    }
+    if (error) {
+      return [
+        {
+          type: SummarySectionType.CUSTOM,
+          customComponent: (
+            <ErrorDisplay
+              title="Error loading namespace summary"
+              message={error}
+            />
+          ),
+        },
+      ];
+    }
     if (!data) {
       return [];
     }
@@ -98,35 +120,66 @@ export function Namespaces() {
         ],
       },
     ];
-  }, [data, handleK8sEventsClick]);
+  }, [data, loading, error, handleK8sEventsClick]);
 
-  if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-  if (error) {
-    return <div>{`Error loading namespace summary: ${error}`}</div>;
-  }
-  if (!data) {
-    return <div>{`No resources found.`}</div>;
-  }
-  return (
-    <Box>
-      <SummaryPageLayout
-        summarySections={summarySections}
-        contentComponent={
-          <NamespacePipelineListing
-            namespace={namespaceId || ""}
-            data={data}
-            pipelineData={pipelineRawData}
-            isbData={isbRawData}
-            refresh={refresh}
+  const content = useMemo(() => {
+    if (error) {
+      return (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            width: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <ErrorDisplay
+            title="Error loading namespace pipelines"
+            message={error}
           />
-        }
+        </Box>
+      );
+    }
+    if (loading) {
+      return (
+        <Box
+          sx={{
+            display: "flex",
+            height: "100%",
+            width: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      );
+    }
+    if (!data) {
+      return (
+        <ErrorDisplay
+          title="Error loading namespace pipelines"
+          message="No resources found."
+        />
+      );
+    }
+    return (
+      <NamespacePipelineListing
+        namespace={namespaceId || ""}
+        data={data}
+        pipelineData={pipelineRawData}
+        isbData={isbRawData}
+        refresh={refresh}
       />
-    </Box>
+    );
+  }, [error, loading, data, namespaceId, pipelineRawData, isbRawData, refresh]);
+
+  return (
+    <SummaryPageLayout
+      summarySections={summarySections}
+      contentComponent={content}
+    />
   );
 }
