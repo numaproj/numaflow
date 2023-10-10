@@ -22,17 +22,25 @@ import { ViewType } from "../../../../common/SpecEditor";
 import { Button, MenuItem, Select } from "@mui/material";
 
 import "./style.css";
+import {
+  ACTIVE,
+  ALL,
+  ALPHABETICAL_SORT,
+  ASC,
+  CRITICAL,
+  DESC,
+  HEALTHY,
+  LAST_CREATED_SORT,
+  LAST_UPDATED_SORT,
+  PAUSED,
+  RUNNING,
+  STOPPED,
+  WARNING,
+} from "../../../../../utils";
 
 const MAX_PAGE_SIZE = 4;
-export const HEALTH = ["All", "Healthy", "Warning", "Critical"];
-export const STATUS = ["All", "Running", "Stopped", "Paused"];
-export const ASC = "asc";
-export const DESC = "desc";
-export const ALPHABETICAL_SORT = "alphabetical";
-export const LAST_UPDATED_SORT = "lastUpdated";
-export const LAST_CREATED_SORT = "lastCreated";
 
-export const sortOptions = [
+const sortOptions = [
   {
     label: "Last Updated",
     value: LAST_UPDATED_SORT,
@@ -75,10 +83,12 @@ export function NamespacePipelineListing({
   isbData,
   refresh,
 }: NamespacePipelineListingProps) {
+  const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL];
+  const STATUS = [ALL, RUNNING, STOPPED, PAUSED];
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const [search, setSearch] = useState("");
-  const [health, setHealth] = useState(HEALTH[0]);
-  const [status, setStatus] = useState(STATUS[0]);
+  const [health, setHealth] = useState(ALL);
+  const [status, setStatus] = useState(ALL);
   const [page, setPage] = useState(1);
   const [orderBy, setOrderBy] = useState({
     value: ALPHABETICAL_SORT,
@@ -350,7 +360,11 @@ export function NamespacePipelineListing({
               onChange={handleHealthFilterChange}
             >
               {HEALTH.map((health) => (
-                <MenuItem key={health} value={health}>
+                <MenuItem
+                  key={health}
+                  value={health}
+                  sx={{ textTransform: "capitalize" }}
+                >
                   {health}
                 </MenuItem>
               ))}
@@ -381,7 +395,11 @@ export function NamespacePipelineListing({
               onChange={handleStatusFilterChange}
             >
               {STATUS.map((status) => (
-                <MenuItem key={status} value={status}>
+                <MenuItem
+                  key={status}
+                  value={status}
+                  sx={{ textTransform: "capitalize" }}
+                >
                   {status}
                 </MenuItem>
               ))}
