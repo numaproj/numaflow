@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -123,17 +124,22 @@ func (s *SDKsSuite) TestReduceSDK() {
 	done <- struct{}{}
 }
 
-// TODO fix it when we have python sdk changes.
-func (s *SDKsSuite) TestSourceTransformerPython() {
-	s.testSourceTransformer("python")
-}
-
-func (s *SDKsSuite) TestSourceTransformerJava() {
-	s.testSourceTransformer("java")
-}
-
-func (s *SDKsSuite) TestSourceTransformerGo() {
-	s.testSourceTransformer("go")
+func (s *SDKsSuite) TestSourceTransformer() {
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		s.testSourceTransformer("python")
+	}()
+	go func() {
+		defer wg.Done()
+		s.testSourceTransformer("java")
+	}()
+	go func() {
+		defer wg.Done()
+		s.testSourceTransformer("go")
+	}()
+	wg.Wait()
 }
 
 func (s *SDKsSuite) testSourceTransformer(lang string) {
