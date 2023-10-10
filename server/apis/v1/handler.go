@@ -471,9 +471,23 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 
-	err := h.numaflowClient.InterStepBufferServices(ns).Delete(context.Background(), isbsvcName, metav1.DeleteOptions{})
+	pipelines, err := h.numaflowClient.Pipelines(ns).List(context.Background(), metav1.ListOptions{})
+	// Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to delete the interstep buffer service: namespace %q isb-services %q: %s",
+		h.respondWithError(c, fmt.Sprintf("Failed to get pipelines in namespace %q, %s", ns, err.Error()))
+		return
+	}
+	for _, pl := range pipelines.Items {
+		plISBSvcName := pl.Spec.InterStepBufferServiceName
+		if (plISBSvcName == "" && isbsvcName == dfv1.DefaultISBSvcName) || (plISBSvcName == isbsvcName) {
+			h.respondWithError(c, fmt.Sprintf("Failed to delete the interstep buffer service %q: this ISBSVC is still used by pipeline %s", isbsvcName, pl.Name))
+			return
+		}
+	}
+
+	err = h.numaflowClient.InterStepBufferServices(ns).Delete(context.Background(), isbsvcName, metav1.DeleteOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to delete the interstep buffer service: namespace %q isb-service %q: %s",
 			ns, isbsvcName, err.Error()))
 		return
 	}
