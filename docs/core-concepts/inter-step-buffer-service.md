@@ -46,7 +46,7 @@ The version `latest` in the ConfigMap should only be used for testing purpose. I
 
 ### Replicas
 
-An optional property `spec.jetstream.replicas` (defaults to 3) can be specified, which gives the total number of nodes. An odd number 3 or 5 is suggested. If the given number < 3, 3 will be used.
+An optional property `spec.jetstream.replicas` (defaults to 3) can be specified, which gives the total number of nodes. 
 
 ### Persistence
 
