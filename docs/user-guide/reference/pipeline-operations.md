@@ -22,7 +22,7 @@ To pause a pipeline, use the command below, it will bring the pipeline to `Pause
 
 Pausing a pipeline will not cause data loss. It does not clean up the unprocessed data in the pipeline, but just terminates the running pods. When the pipeline is resumed, the pods will be restarted and continue processing the unprocessed data.
 
-When pausing a pipeline, it will shutdown the source vertex pods first, and then wait for the other vertices to finish the backlog before terminating them.
+When pausing a pipeline, it will shutdown the source vertex pods first, and then wait for the other vertices to finish the backlog before terminating them. However, it will not wait forever and will terminate the pods after `pauseGracePeriodSeconds`. This is default set to 30 and can be customized by setting `spec.lifecycle.pauseGracePeriodSeconds`.
 
 If there's a [reduce](../user-defined-functions/reduce/reduce.md) vertex in the pipeline, please make sure it uses [Persistent Volume Claim](../user-defined-functions/reduce/reduce.md#persistent-volume-claim-pvc) for storage, otherwise the data will be lost.
 

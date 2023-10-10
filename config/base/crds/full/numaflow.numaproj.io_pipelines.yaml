@@ -97,6 +97,7 @@ spec:
                 default:
                   deleteGracePeriodSeconds: 30
                   desiredPhase: Running
+                  pauseGracePeriodSeconds: 30
                 properties:
                   deleteGracePeriodSeconds:
                     default: 30
@@ -113,6 +114,10 @@ spec:
                     - Paused
                     - Deleting
                     type: string
+                  pauseGracePeriodSeconds:
+                    default: 30
+                    format: int32
+                    type: integer
                 type: object
               limits:
                 default:
