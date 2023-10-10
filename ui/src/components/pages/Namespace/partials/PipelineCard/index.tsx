@@ -56,6 +56,8 @@ export function PipelineCard({
   const [successMessage, setSuccessMessage] = useState<string | undefined>(
     undefined
   );
+  const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
+  const [timer, setTimer] = useState<any>(undefined);
 
   const handleUpdateComplete = useCallback(() => {
     refresh();
@@ -124,8 +126,18 @@ export function PipelineCard({
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
   const isbStatus = isbData?.isbService?.status?.phase || UNKNOWN;
   const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
-
+  const handleTimer = useCallback(() => {
+    const dateString = new Date().toISOString();
+    const time = timeAgo(dateString);
+    setTimerDateStamp(time);
+    const pauseTimer = setInterval(() => {
+      const time = timeAgo(dateString);
+      setTimerDateStamp(time);
+    }, 1000);
+    setTimer(pauseTimer);
+  }, []);
   const handlePlayClick = useCallback((e) => {
+    handleTimer();
     setStatusPayload({
       spec: {
         lifecycle: {
@@ -136,6 +148,7 @@ export function PipelineCard({
   }, []);
 
   const handlePauseClick = useCallback((e) => {
+    handleTimer();
     setStatusPayload({
       spec: {
         lifecycle: {
@@ -144,6 +157,7 @@ export function PipelineCard({
       },
     });
   }, []);
+
   useEffect(() => {
     const patchStatus = async () => {
       try {
@@ -166,17 +180,30 @@ export function PipelineCard({
         }
       } catch (e) {
         setError(e);
-      } finally {
-        const timer = setTimeout(() => {
-          setStatusPayload(undefined);
-          clearTimeout(timer);
-        }, 5000);
       }
     };
     if (statusPayload) {
       patchStatus();
     }
   }, [statusPayload]);
+
+  useEffect(() => {
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
+      statusData?.pipeline?.status?.phase !== PAUSING
+    ) {
+      clearInterval(timer);
+      setStatusPayload(undefined);
+    }
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === RUNNING &&
+      statusData?.pipeline?.status?.phase === RUNNING
+    ) {
+      clearInterval(timer);
+      setStatusPayload(undefined);
+    }
+  }, [statusData]);
+
   return (
     <>
       <Paper
@@ -234,8 +261,10 @@ export function PipelineCard({
               </div>
             ) : successMessage &&
               statusPayload &&
-              statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
-              statusData?.pipeline?.status?.phase !== PAUSED ? (
+              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                statusData?.pipeline?.status?.phase !== PAUSED) ||
+                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                  statusData?.pipeline?.status?.phase !== RUNNING)) ? (
               <div
                 style={{
                   borderRadius: "13px",
@@ -259,13 +288,11 @@ export function PipelineCard({
                   }}
                 >
                   <span style={{ marginLeft: "1rem" }}>
-                    Pipeline Pausing...
+                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
+                      ? "Pipeline Pausing..."
+                      : "Pipeline Resuming..."}
                   </span>
-                  <span style={{ marginLeft: "1rem" }}>
-                    {statusData?.pipeline?.status?.lastUpdated
-                      ? timeAgo(statusData?.pipeline?.status?.lastUpdated)
-                      : ""}
-                  </span>
+                  <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
                 </Box>
               </div>
             ) : (
