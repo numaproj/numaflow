@@ -12,20 +12,6 @@ export const SearchablePodsHeatMap = ({
   selectedPod,
   setSelectedPod,
 }: SearchablePodsHeatMapProps) => {
-  // let count = 100;
-  // while (count > 0 && pods.length < 100) {
-  //   const a = JSON.parse(JSON.stringify(pods[0]));
-  //   a.name = `${a.name}${count}`;
-  //   pods.push(a);
-  //   const b = JSON.parse(JSON.stringify(podsDetailsMap.get(pods[0].name)));
-  //   b.containerSpecMap = new Map(podsDetailsMap.get(pods[0].name).containerMap);
-  //   if (b) {
-  //     b.name = a.name;
-  //     podsDetailsMap.set(a.name, b);
-  //   }
-  //   count--;
-  // }
-
   useEffect(() => {
     if (pods?.length) setSelectedPod(pods[0]);
     return;
