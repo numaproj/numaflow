@@ -306,6 +306,8 @@ export default function Graph(props: GraphProps) {
     undefined
   );
   const [statusPayload, setStatusPayload] = useState<any>(undefined);
+  const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
+  const [timer, setTimer] = useState<any>(undefined);
 
   useEffect(() => {
     const nodeSet = new Map();
@@ -519,6 +521,7 @@ export default function Graph(props: GraphProps) {
   const [showSpec, setShowSpec] = useState(true);
 
   const handlePlayClick = useCallback((e) => {
+    handleTimer();
     setStatusPayload({
       spec: {
         lifecycle: {
@@ -529,6 +532,7 @@ export default function Graph(props: GraphProps) {
   }, []);
 
   const handlePauseClick = useCallback((e) => {
+    handleTimer();
     setStatusPayload({
       spec: {
         lifecycle: {
@@ -536,6 +540,17 @@ export default function Graph(props: GraphProps) {
         },
       },
     });
+  }, []);
+
+  const handleTimer = useCallback(() => {
+    const dateString = new Date().toISOString();
+    const time = timeAgo(dateString);
+    setTimerDateStamp(time);
+    const pauseTimer = setInterval(() => {
+      const time = timeAgo(dateString);
+      setTimerDateStamp(time);
+    }, 1000);
+    setTimer(pauseTimer);
   }, []);
 
   useEffect(() => {
@@ -560,18 +575,29 @@ export default function Graph(props: GraphProps) {
         }
       } catch (e) {
         setError(e);
-      } finally {
-        const timer = setTimeout(() => {
-          setStatusPayload(undefined);
-          clearTimeout(timer);
-        }, 15000);
       }
     };
     if (statusPayload) {
       patchStatus();
     }
   }, [statusPayload]);
-  console.log(data);
+
+  useEffect(() => {
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
+      data?.pipeline?.status?.phase !== PAUSING
+    ) {
+      clearInterval(timer);
+      setStatusPayload(undefined);
+    }
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === RUNNING &&
+      data?.pipeline?.status?.phase === RUNNING
+    ) {
+      clearInterval(timer);
+      setStatusPayload(undefined);
+    }
+  }, [data]);
 
   return (
     <div style={{ height: "90%" }}>
@@ -622,7 +648,10 @@ export default function Graph(props: GraphProps) {
               </Alert>
             ) : successMessage &&
               statusPayload &&
-              statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED ? (
+              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                data?.pipeline?.status?.phase !== PAUSED) ||
+                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                  data?.pipeline?.status?.phase !== RUNNING)) ? (
               <div
                 style={{
                   borderRadius: "13px",
@@ -647,13 +676,11 @@ export default function Graph(props: GraphProps) {
                   }}
                 >
                   <span style={{ marginLeft: "1rem" }}>
-                    Pipeline Pausing...
+                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
+                      ? "Pipeline Pausing..."
+                      : "Pipeline Resuming..."}
                   </span>
-                  <span style={{ marginLeft: "1rem" }}>
-                    {data?.pipeline?.status?.lastUpdated
-                      ? timeAgo(data?.pipeline?.status?.lastUpdated)
-                      : ""}
-                  </span>
+                  <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
                 </Box>
               </div>
             ) : (
