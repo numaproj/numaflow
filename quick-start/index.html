@@ -2131,19 +2131,25 @@
 
 
 <h1 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h1>
-<p>In this page, we will guide you through the steps to:<br />
-1. Install Numaflow.<br />
-2. Create and run a simple pipeline.<br />
-3. Create and run an advanced pipeline.</p>
+<p>In this page, we will guide you through the steps to:</p>
+<ol>
+<li>Install Numaflow.</li>
+<li>Create and run a simple pipeline.</li>
+<li>Create and run an advanced pipeline.</li>
+</ol>
 <h2 id="before-you-begin-prerequisites">Before you begin: prerequisites<a class="headerlink" href="#before-you-begin-prerequisites" title="Permanent link">&para;</a></h2>
-<p>To try Numaflow, you will first need to setup using one of the following options to run container images:
-- <a href="https://docs.docker.com/get-docker/">Docker Desktop</a>
-- <a href="https://podman.io/">podman</a></p>
-<p>Then use one of the following options to create a local Kubernete Cluster:
-- <a href="https://docs.docker.com/desktop/kubernetes/">Docker Desktop Kubernetes</a>
-- <a href="https://k3d.io/">k3d</a>
-- <a href="https://kind.sigs.k8s.io/">kind</a>
-- <a href="https://minikube.sigs.k8s.io/docs/start/">minikube</a></p>
+<p>To try Numaflow, you will first need to setup using one of the following options to run container images:</p>
+<ul>
+<li><a href="https://docs.docker.com/get-docker/">Docker Desktop</a></li>
+<li><a href="https://podman.io/">podman</a></li>
+</ul>
+<p>Then use one of the following options to create a local Kubernete Cluster:</p>
+<ul>
+<li><a href="https://docs.docker.com/desktop/kubernetes/">Docker Desktop Kubernetes</a></li>
+<li><a href="https://k3d.io/">k3d</a></li>
+<li><a href="https://kind.sigs.k8s.io/">kind</a></li>
+<li><a href="https://minikube.sigs.k8s.io/docs/start/">minikube</a></li>
+</ul>
 <p>You will also need <code>kubectl</code> to manage the cluster. <a href="https://kubernetes.io/docs/tasks/tools/install-kubectl/">Follow these steps to install kubectl</a>. In case you need a refresher, all the <code>kubectl</code> commands used in this quick start guide can be found in the <a href="https://kubernetes.io/docs/reference/kubectl/cheatsheet/">kubectl Cheat Sheet</a>.</p>
 <h2 id="installing-numaflow">Installing Numaflow<a class="headerlink" href="#installing-numaflow" title="Permanent link">&para;</a></h2>
 <p>Once you have completed all the prerequisites, run the following command lines to install Numaflow and start the <a href="../core-concepts/inter-step-buffer-service/">Inter-Step Buffer Service</a> that handles communication between vertices.</p>
@@ -2152,18 +2158,18 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
 <h2 id="creating-a-simple-pipeline">Creating a simple pipeline<a class="headerlink" href="#creating-a-simple-pipeline" title="Permanent link">&para;</a></h2>
-<p>As an example, we will create a <code>simple pipeline</code> that contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages. </p>
+<p>As an example, we will create a <code>simple pipeline</code> that contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages.</p>
 <p>Run the command below to create a simple pipeline.</p>
-<p><div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
 </code></pre></div>
-To view a list of pipelines you've created, run:<br />
+<p>To view a list of pipelines you've created, run:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>pipeline<span class="w"> </span><span class="c1"># or &quot;pl&quot; as a short name</span>
-</code></pre></div></p>
-<p>This should create a response like the following, with <code>AGE</code> indicating the time elapsed since the creation of your simple pipeline.
+</code></pre></div>
+<p>This should create a response like the following, with <code>AGE</code> indicating the time elapsed since the creation of your simple pipeline.</p>
 <div class="highlight"><pre><span></span><code>NAME<span class="w">              </span>PHASE<span class="w">     </span>MESSAGE<span class="w">   </span>VERTICES<span class="w">   </span>AGE
 simple-pipeline<span class="w">   </span>Running<span class="w">             </span><span class="m">3</span><span class="w">          </span>9s
-</code></pre></div></p>
-<p>To inspect the status of the pipeline, use <code>kubectl get pods</code>. Note that the pod names will be different from the sample response: 
+</code></pre></div>
+<p>To inspect the status of the pipeline, use <code>kubectl get pods</code>. Note that the pod names will be different from the sample response:</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Wait for pods to be ready</span>
 kubectl<span class="w"> </span>get<span class="w"> </span>pods
 
@@ -2175,11 +2181,11 @@ simple-pipeline-daemon-78b798fb98-qf4t4<span class="w">      </span><span class=
 simple-pipeline-out-0-xc0pf<span class="w">                  </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>10s
 simple-pipeline-cat-0-kqrhy<span class="w">                  </span><span class="m">2</span>/2<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>10s
 simple-pipeline-in-0-rhpjm<span class="w">                   </span><span class="m">1</span>/1<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>11s
-</code></pre></div></p>
-<p>Now you can watch the log for the <code>output</code> vertex. Run the command below and remember to replace <code>xxxxx</code> with the appropriate pod name above. 
+</code></pre></div>
+<p>Now you can watch the log for the <code>output</code> vertex. Run the command below and remember to replace <code>xxxxx</code> with the appropriate pod name above.</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>simple-pipeline-out-0-xxxxx
 </code></pre></div>
-This should generate an output like the sample below:
+<p>This should generate an output like the sample below:</p>
 <div class="highlight"><pre><span></span><code><span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:38<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;VT+G+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707552597<span class="o">}</span>
 <span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:38<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;0TaH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707615953<span class="o">}</span>
 <span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:38<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;EEGH+/W7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471977707618576<span class="o">}</span>
@@ -2190,12 +2196,12 @@ This should generate an output like the sample below:
 <span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;iUonN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707962505<span class="o">}</span>
 <span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;mkwnN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707963034<span class="o">}</span>
 <span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;jk4nN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707963534<span class="o">}</span>
-</code></pre></div></p>
-<p>Numaflow also comes with a built-in user interface. To port forward the UI,  run the following command.</p>
-<p><div class="highlight"><pre><span></span><code><span class="c1"># Port forward the UI to https://localhost:8443/</span>
+</code></pre></div>
+<p>Numaflow also comes with a built-in user interface. To port forward the UI, run the following command.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Port forward the UI to https://localhost:8443/</span>
 kubectl<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span class="w"> </span>port-forward<span class="w"> </span>deployment/numaflow-server<span class="w"> </span><span class="m">8443</span>:8443
 </code></pre></div>
-This renders the following UI on https://localhost:8443/.</p>
+<p>This renders the following UI on https://localhost:8443/.</p>
 <p><img alt="Numaflow UI" src="../assets/numaflow-ui-simple-pipeline.png" /></p>
 <p>The pipeline can be deleted by issuing the following command:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
@@ -2205,9 +2211,9 @@ This renders the following UI on https://localhost:8443/.</p>
 <p><img alt="Pipeline Diagram" src="../assets/even-odd-square.png" /></p>
 <p>There are five vertices in this example of an advanced pipeline. An <a href="../user-guide/sources/http/">HTTP</a> source vertex which serves an HTTP endpoint to receive numbers as source data, a <a href="../user-guide/user-defined-functions/map/map/">UDF</a> vertex to tag the ingested numbers with the key <code>even</code> or <code>odd</code>, three <a href="../user-guide/sinks/log/">Log</a> sinks, one to print the <code>even</code> numbers, one to print the <code>odd</code> numbers, and the other one to print both the even and odd numbers.</p>
 <p>Run the following command to create the <code>even-odd</code> pipeline.</p>
-<p><div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/2-even-odd-pipeline.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/2-even-odd-pipeline.yaml
 </code></pre></div>
-You may opt to view the list of pipelines you've created so far by running <code>kubectl get pipeline</code>. Otherwise, proceed to inspect the status of the pipeline, using <code>kubectl get pods</code>.</p>
+<p>You may opt to view the list of pipelines you've created so far by running <code>kubectl get pipeline</code>. Otherwise, proceed to inspect the status of the pipeline, using <code>kubectl get pods</code>.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Wait for pods to be ready</span>
 kubectl<span class="w"> </span>get<span class="w"> </span>pods
 
@@ -2222,7 +2228,7 @@ isbsvc-default-js-0<span class="w">                </span><span class="m">3</spa
 isbsvc-default-js-1<span class="w">                </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>10m
 isbsvc-default-js-2<span class="w">                </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>10m
 </code></pre></div>
-<p>Next, port-forward the HTTP endpoint, and make a <code>POST</code> request using <code>curl</code>. Remember to replace <code>xxxxx</code> with the appropriate pod names both here and in the next step.
+<p>Next, port-forward the HTTP endpoint, and make a <code>POST</code> request using <code>curl</code>. Remember to replace <code>xxxxx</code> with the appropriate pod names both here and in the next step.</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>port-forward<span class="w"> </span>even-odd-in-0-xxxx<span class="w"> </span><span class="m">8444</span>:8443
 
 <span class="c1"># Post data to the HTTP endpoint</span>
@@ -2230,8 +2236,8 @@ curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span
 curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;102&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
 curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;103&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
 curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;104&quot;</span><span class="w"> </span>https://localhost:8444/vertices/in
-</code></pre></div></p>
-<p>Now you can watch the log for the <code>even</code> and <code>odd</code> vertices by running the commands below. </p>
+</code></pre></div>
+<p>Now you can watch the log for the <code>even</code> and <code>odd</code> vertices by running the commands below.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Watch the log for the even vertex</span>
 kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>even-odd-even-sink-0-xxxxx
 <span class="m">2022</span>/09/07<span class="w"> </span><span class="m">22</span>:29:40<span class="w"> </span><span class="o">(</span>even-sink<span class="o">)</span><span class="w"> </span><span class="m">102</span>
@@ -2252,8 +2258,8 @@ kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </
 <p>To set up an example pipeline with the <a href="../user-guide/user-defined-functions/reduce/reduce/">Reduce UDF</a>, see <a href="../user-guide/user-defined-functions/reduce/examples/">Reduce Examples</a>.</p>
 <h2 id="whats-next">What's Next<a class="headerlink" href="#whats-next" title="Permanent link">&para;</a></h2>
 <p>Try more examples in the <a href="https://github.com/numaproj/numaflow/tree/main/examples"><code>examples</code></a> directory.</p>
-<p>After exploring how Numaflow pipelines run, you can check what data <a href="../user-guide/sources/generator/">Sources</a> 
-and <a href="../user-guide/sinks/kafka/">Sinks</a> Numaflow supports out of the box, or learn how to write 
+<p>After exploring how Numaflow pipelines run, you can check what data <a href="../user-guide/sources/generator/">Sources</a>
+and <a href="../user-guide/sinks/kafka/">Sinks</a> Numaflow supports out of the box, or learn how to write
 <a href="../user-guide/user-defined-functions/user-defined-functions/">User Defined Functions</a>.</p>
 <p>Numaflow can also be paired with Numalogic, a collection of ML models and algorithms for real-time data analytics and AIOps including anomaly detection. Visit the <a href="https://numalogic.numaproj.io/">Numalogic homepage</a> for more information.</p>
 
