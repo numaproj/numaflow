@@ -7,6 +7,12 @@ import { StatusBar } from "../../../../common/StatusBar";
 import { NamespaceCardProps } from "../../../../../types/declarations/cluster";
 
 import "./style.css";
+import {
+  CRITICAL,
+  HEALTHY,
+  IconsStatusMap,
+  WARNING,
+} from "../../../../../utils";
 
 export function NamespaceCard({ data }: NamespaceCardProps) {
   return (
@@ -41,7 +47,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
             marginTop: "0.5rem",
           }}
         >
-          <Grid item xs={4}>
+          <Grid item xs={2}>
             <span className="namespace-card-section-text-14-normal">
               Status:
             </span>
@@ -55,20 +61,20 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                 width: "67%",
               }}
             >
-              <span className="namespace-card-section-text-16-bold">
+              <span className="namespace-card-section-text-14-bold">
                 {data?.pipelinesActiveCount}
               </span>
-              <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
+              <span className="namespace-card-section-text-14-normal namespace-card-group-spacing">
                 Active
               </span>
             </Box>
           </Grid>
           <Grid item xs={4}>
             <Box sx={{ display: "flex", flexDirection: "row" }}>
-              <span className="namespace-card-section-text-16-bold">
+              <span className="namespace-card-section-text-14-bold">
                 {data?.pipelinesInactiveCount}
               </span>
-              <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
+              <span className="namespace-card-section-text-14-normal namespace-card-group-spacing">
                 Non-Active
               </span>
             </Box>
@@ -83,17 +89,77 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
             marginTop: "0.5rem",
           }}
         >
-          <Grid item xs={4}>
+          <Grid item xs={2} sx={{ display: "flex", alignItems: "center" }}>
             <span className="namespace-card-section-text-14-normal">
               Health:
             </span>
           </Grid>
           <Grid item xs={8} sx={{ padding: "0.3125rem 0" }}>
-            <StatusBar
-              healthy={data?.pipelinesHealthyCount}
-              warning={data?.pipelinesWarningCount}
-              critical={data?.pipelinesCriticalCount}
-            />
+            <Grid container sx={{ flexDirection: "row" }}>
+              <Grid
+                item
+                xs={4}
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <span className="namespace-card-section-text-14-normal">
+                  Healthy
+                </span>
+                <img
+                  src={IconsStatusMap[HEALTHY]}
+                  alt="Healthy"
+                  className={"status-logo"}
+                />
+                <span className={"status-count"}>
+                  : {data?.pipelinesHealthyCount}
+                </span>
+              </Grid>
+              <Grid
+                item
+                xs={4}
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <span className="namespace-card-section-text-14-normal">
+                  Warning
+                </span>
+                <img
+                  src={IconsStatusMap[WARNING]}
+                  alt="Warning"
+                  className={"status-logo"}
+                />
+                <span className={"status-count"}>
+                  : {data?.pipelinesWarningCount}
+                </span>
+              </Grid>
+              <Grid
+                item
+                xs={4}
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <span className="namespace-card-section-text-14-normal">
+                  Critical
+                </span>
+                <img
+                  src={IconsStatusMap[CRITICAL]}
+                  alt="Critical"
+                  className={"status-logo"}
+                />
+                <span className={"status-count"}>
+                  : {data?.pipelinesCriticalCount}
+                </span>
+              </Grid>
+            </Grid>
           </Grid>
         </Grid>
         <Box
@@ -117,7 +183,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
             marginTop: "0.5rem",
           }}
         >
-          <Grid item xs={4}>
+          <Grid item xs={2}>
             <span className="namespace-card-section-text-14-normal">
               Status:
             </span>
@@ -131,20 +197,20 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                 width: "67%",
               }}
             >
-              <span className="namespace-card-section-text-16-bold">
+              <span className="namespace-card-section-text-14-bold">
                 {data?.isbsActiveCount}
               </span>
-              <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
+              <span className="namespace-card-section-text-14-normal namespace-card-group-spacing">
                 Live
               </span>
             </Box>
           </Grid>
           <Grid item xs={4}>
             <Box sx={{ display: "flex", flexDirection: "row" }}>
-              <span className="namespace-card-section-text-16-bold">
+              <span className="namespace-card-section-text-14-bold">
                 {data?.isbsInactiveCount}
               </span>
-              <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
+              <span className="namespace-card-section-text-14-normal namespace-card-group-spacing">
                 Not-Live
               </span>
             </Box>
@@ -158,17 +224,77 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
             marginTop: "0.5rem",
           }}
         >
-          <Grid item xs={4}>
+          <Grid item xs={2} sx={{ display: "flex", alignItems: "center" }}>
             <span className="namespace-card-section-text-14-normal">
               Health:
             </span>
           </Grid>
           <Grid item xs={8} sx={{ padding: "0.3125rem 0" }}>
-            <StatusBar
-              healthy={data?.isbsHealthyCount}
-              warning={data?.isbsWarningCount}
-              critical={data?.isbsCriticalCount}
-            />
+            <Grid container sx={{ flexDirection: "row" }}>
+              <Grid
+                item
+                xs={4}
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <span className="namespace-card-section-text-14-normal">
+                  Healthy
+                </span>
+                <img
+                  src={IconsStatusMap[HEALTHY]}
+                  alt="Healthy"
+                  className={"status-logo"}
+                />
+                <span className={"status-count"}>
+                  : {data?.isbsHealthyCount}
+                </span>
+              </Grid>
+              <Grid
+                item
+                xs={4}
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <span className="namespace-card-section-text-14-normal">
+                  Warning
+                </span>
+                <img
+                  src={IconsStatusMap[WARNING]}
+                  alt="Warning"
+                  className={"status-logo"}
+                />
+                <span className={"status-count"}>
+                  : {data?.isbsWarningCount}
+                </span>
+              </Grid>
+              <Grid
+                item
+                xs={4}
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <span className="namespace-card-section-text-14-normal">
+                  Critical
+                </span>
+                <img
+                  src={IconsStatusMap[CRITICAL]}
+                  alt="Critical"
+                  className={"status-logo"}
+                />
+                <span className={"status-count"}>
+                  : {data?.isbsCriticalCount}
+                </span>
+              </Grid>
+            </Grid>
           </Grid>
         </Grid>
       </Paper>

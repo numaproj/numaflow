@@ -6,14 +6,14 @@
 }
 
 .namespace-card-section-title {
-  color: #3C4348;
+  color: #3c4348;
   font-size: 0.875rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .namespace-card-section-title-value {
-  color: #3C4348;
+  color: #3c4348;
   font-size: 0.875rem;
   font-style: normal;
   font-weight: 400;
@@ -21,21 +21,27 @@
 }
 
 .namespace-card-section-text-14-normal {
-  color: #3C4348;
+  color: #3c4348;
   font-size: 0.875rem;
   font-style: normal;
   font-weight: 400;
 }
+.namespace-card-section-text-14-bold {
+  color: #3c4348;
+  font-size: 0.875rem;
+  font-style: normal;
+  font-weight: 600;
+}
 
 .namespace-card-section-text-16-bold {
-  color: #3C4348;
+  color: #3c4348;
   font-size: 1rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .namespace-card-section-text-16-normal {
-  color: #3C4348;
+  color: #3c4348;
   font-size: 1rem;
   font-style: normal;
   font-weight: 400;
@@ -43,4 +49,13 @@
 
 .namespace-card-group-spacing {
   margin-left: 5px;
+  flex-grow: 1;
+}
+.status-logo {
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.5rem;
+}
+.status-count {
+  margin-left: 0.25rem;
 }
