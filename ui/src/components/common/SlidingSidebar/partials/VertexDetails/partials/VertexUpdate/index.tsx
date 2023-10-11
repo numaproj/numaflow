@@ -19,6 +19,7 @@ export interface VertexUpdateProps {
   vertexId: string;
   vertexSpec: any;
   setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
+  refresh: () => void;
 }
 
 export function VertexUpdate({
@@ -27,6 +28,7 @@ export function VertexUpdate({
   vertexId,
   vertexSpec,
   setModalOnClose,
+  refresh,
 }: VertexUpdateProps) {
   const [loading, setLoading] = useState(false);
   const [validationPayload, setValidationPayload] = useState<any>(undefined);
@@ -82,6 +84,7 @@ export function VertexUpdate({
           setTimeout(() => {
             setStatus(undefined);
             setValidationMessage(undefined);
+            refresh();
           }, 1000);
         }
       } catch (e: any) {

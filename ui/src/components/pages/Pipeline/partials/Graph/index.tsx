@@ -55,15 +55,14 @@ import unlock from "../../../../../images/unlock.svg";
 import scrollToggle from "../../../../../images/move-arrows.svg";
 import closedHand from "../../../../../images/closed.svg";
 import fullscreen from "../../../../../images/fullscreen.svg";
-import sidePanel from "../../../../../images/side-panel.svg";
 import zoomInIcon from "../../../../../images/zoom-in.svg";
 import zoomOutIcon from "../../../../../images/zoom-out.svg";
 import source from "../../../../../images/source.png";
 import map from "../../../../../images/map.png";
 import reduce from "../../../../../images/reduce.png";
 import sink from "../../../../../images/sink.png";
-import input from "../../../../../images/input.svg";
-import generator from "../../../../../images/generator.svg";
+import input from "../../../../../images/input.png";
+import generator from "../../../../../images/generator.png";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -192,14 +191,6 @@ const Flow = (props: FlowProps) => {
         <IconButton onClick={onFullScreen}>
           <img src={fullscreen} alt={"fullscreen"} />
         </IconButton>
-        <IconButton
-          onClick={() => {
-            //TODO add single panel logic
-            alert("sidePanel");
-          }}
-        >
-          <img src={sidePanel} alt={"sidePanel"} />
-        </IconButton>
         <div className={"divider"} />
         <IconButton onClick={onZoomIn}>
           <img src={zoomInIcon} alt="zoom-in" />
@@ -257,11 +248,11 @@ const Flow = (props: FlowProps) => {
               <div className={"legend-text"}>Sink</div>
             </div>
             <div className={"legend-title"}>
-              <img src={input} width={22} height={24} alt={"input"} />
+              <img src={input} width={22} alt={"input"} />
               <div className={"legend-text"}>Input</div>
             </div>
             <div className={"legend-title"}>
-              <img src={generator} width={22} height={24} alt={"generator"} />
+              <img src={generator} width={22} alt={"generator"} />
               <div className={"legend-text"}>Generator</div>
             </div>
           </AccordionDetails>
@@ -449,6 +440,7 @@ export default function Graph(props: GraphProps) {
             vertexMetrics: node?.data?.vertexMetrics?.podMetrics?.data,
             buffers: node?.data?.buffers,
             type: node?.data?.type,
+            refresh,
           },
         };
         if (existingProps === JSON.stringify(updated)) {
@@ -458,7 +450,7 @@ export default function Graph(props: GraphProps) {
         setSidebarProps(updated);
       }
     },
-    [namespaceId, pipelineId, sideNodes, setSidebarProps, sidebarProps]
+    [namespaceId, pipelineId, sideNodes, setSidebarProps, sidebarProps, refresh]
   );
 
   const handleNodeClick = useCallback(
@@ -587,7 +579,7 @@ export default function Graph(props: GraphProps) {
   useEffect(() => {
     if (
       statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
-      data?.pipeline?.status?.phase !== PAUSING
+      data?.pipeline?.status?.phase === PAUSED
     ) {
       clearInterval(timer);
       setStatusPayload(undefined);
@@ -629,7 +621,7 @@ export default function Graph(props: GraphProps) {
             onClick={handlePlayClick}
             disabled={data?.pipeline?.status?.phase === RUNNING}
           >
-            Play
+            Resume
           </Button>
           <Button
             variant="contained"

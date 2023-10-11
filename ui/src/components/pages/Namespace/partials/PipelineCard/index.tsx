@@ -522,7 +522,7 @@ export function PipelineCard({
               marginTop: "10px",
               alignItems: "center",
               justifyContent: "end",
-              marginRight: "1.8125rem",
+              marginRight: "0.75rem",
             }}
           >
             <Grid item>

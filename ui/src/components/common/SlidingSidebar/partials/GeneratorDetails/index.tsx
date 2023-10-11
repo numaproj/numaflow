@@ -3,6 +3,7 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
 import { GeneratorUpdate } from "./partials/GeneratorUpdate";
+import generatorIcon from "../../../../../images/generator.png";
 
 import "./style.css";
 
@@ -44,8 +45,14 @@ export function GeneratorDetails({
         sx={{
           display: "flex",
           flexDirection: "row",
+          alignItems: "center",
         }}
       >
+        <img
+          src={generatorIcon}
+          alt="generator vertex"
+          className={"vertex-details-header-icon"}
+        />
         <span className="vertex-details-header-text">Generator Vertex</span>
       </Box>
       <Box sx={{ marginTop: "1rem", borderBottom: 1, borderColor: "divider" }}>

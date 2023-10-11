@@ -226,7 +226,7 @@ export function ISBCreate({
           marginBottom: "2rem",
         }}
       >
-        <span className="isb-spec-header-text">Create ISB</span>
+        <span className="isb-spec-header-text">Create ISB Service</span>
       </Box>
       <SpecEditor
         initialYaml={INITIAL_VALUE}

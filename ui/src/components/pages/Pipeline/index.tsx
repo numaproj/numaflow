@@ -1,4 +1,4 @@
-import React, { useContext, useMemo } from "react";
+import React, { useCallback, useContext, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
@@ -28,8 +28,16 @@ export function Pipeline() {
     data,
     loading: summaryLoading,
     error,
-    refresh,
+    refresh: summaryRefresh,
   } = usePipelineSummaryFetch({ namespaceId, pipelineId, addError });
+
+  const { pipeline, vertices, edges, pipelineErr, buffersErr, loading, refresh: graphRefresh } =
+    usePipelineViewFetch(namespaceId, pipelineId, addError);
+
+    const refresh = useCallback(() => {
+      graphRefresh();
+      summaryRefresh();
+    }, [graphRefresh, summaryRefresh]);
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (summaryLoading) {
@@ -100,9 +108,6 @@ export function Pipeline() {
       },
     ];
   }, [summaryLoading, error, data, pipelineId, refresh]);
-
-  const { pipeline, vertices, edges, pipelineErr, buffersErr, loading } =
-    usePipelineViewFetch(namespaceId, pipelineId, addError);
 
   const content = useMemo(() => {
     if (pipelineErr || buffersErr) {
