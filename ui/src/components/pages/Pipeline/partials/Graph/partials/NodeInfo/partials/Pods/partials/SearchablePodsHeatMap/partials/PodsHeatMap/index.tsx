@@ -163,9 +163,9 @@ export const PodsHeatMap = ({
   return (
     <Box
       sx={{
-        marginTop: "0.5rem",
         border: "1px solid #E0E0E0",
         padding: "0.5rem",
+        flexGrow: 1,
       }}
     >
       <Box
@@ -184,8 +184,6 @@ export const PodsHeatMap = ({
           display: "flex",
           flexDirection: "row",
           marginTop: "1rem",
-          maxHeight: "20rem",
-          overflow: "scroll",
         }}
       >
         <Box

@@ -28,7 +28,7 @@ export enum SidebarType {
 const MIN_WIDTH_BY_TYPE = {
   [SidebarType.NAMESPACE_K8s]: 750,
   [SidebarType.PIPELINE_K8s]: 750,
-  [SidebarType.VERTEX_DETAILS]: 750,
+  [SidebarType.VERTEX_DETAILS]: 1400,
   [SidebarType.EDGE_DETAILS]: 750,
   [SidebarType.PIPELINE_SPEC]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,

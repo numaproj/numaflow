@@ -12,10 +12,10 @@ import {
 import "./style.css";
 
 export const MAXIMUM_RADIUS = 15;
-export const MAXIMUM_WIDTH = 400;
-export const MAXIMUM_HEIGHT = 200;
+export const MAXIMUM_WIDTH = 350;
+export const MAXIMUM_HEIGHT = 100;
 export const TOOLTIP_OFFSET = 0;
-export const MIN_HEXAGONS = 3;
+export const MIN_HEXAGONS = 7;
 export const DEFAULT_COLOR = "#76b3f7";
 export const DEFAULT_STROKE = "rgb(25, 118, 210)"; //"#ffffff"
 export const DEFAULT_OPACITY = 0.5;
