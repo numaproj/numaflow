@@ -1,10 +1,9 @@
-import React, { useCallback, useContext, useEffect, useMemo } from "react";
+import React, { useContext, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
 import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
 import Graph from "./partials/Graph";
-import { notifyError } from "../../../utils/error";
 import {
   SummaryPageLayout,
   SummarySection,
@@ -14,31 +13,30 @@ import { usePipelineSummaryFetch } from "../../../utils/fetchWrappers/pipelineFe
 import { PipelineStatus } from "./partials/PipelineStatus";
 import { PipelineSummaryStatus } from "./partials/PipelineSummaryStatus";
 import { PipelineISBStatus } from "./partials/PipelineISBStatus";
-import { SidebarType } from "../../common/SlidingSidebar";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { UNKNOWN } from "../../../utils";
-import noError from "../../../images/no-error.svg";
 
 import "./style.css";
 
 export function Pipeline() {
   // TODO needs to be able to be given namespaceId from parent for NS only install
   const { namespaceId, pipelineId } = useParams();
+  const { addError } = useContext<AppContextProps>(AppContext);
   const {
     data,
     loading: summaryLoading,
     error,
     refresh,
-  } = usePipelineSummaryFetch({ namespaceId, pipelineId });
+  } = usePipelineSummaryFetch({ namespaceId, pipelineId, addError });
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (summaryLoading) {
       return [
         {
           type: SummarySectionType.CUSTOM,
-          customComponent: <CircularProgress />,
+          customComponent: <CircularProgress key="pipeline-summary-spinner" />,
         },
       ];
     }
@@ -48,6 +46,7 @@ export function Pipeline() {
           type: SummarySectionType.CUSTOM,
           customComponent: (
             <ErrorDisplay
+              key="pipeline-summary-error"
               title="Error loading pipeline summary"
               message={error}
             />
@@ -102,65 +101,11 @@ export function Pipeline() {
     ];
   }, [summaryLoading, error, data, pipelineId, refresh]);
 
-  const {
-    pipeline,
-    vertices,
-    edges,
-    pipelineErr,
-    buffersErr,
-    podsErr,
-    metricsErr,
-    watermarkErr,
-    loading,
-  } = usePipelineViewFetch(namespaceId, pipelineId);
-
-  // This useEffect notifies about the errors while querying for the vertices of the pipeline
-  useEffect(() => {
-    if (pipelineErr) notifyError(pipelineErr);
-  }, [pipelineErr]);
-
-  // This useEffect notifies about the errors while querying for the edges of the pipeline
-  useEffect(() => {
-    if (buffersErr) notifyError(buffersErr);
-  }, [buffersErr]);
-
-  // This useEffect notifies about the errors while querying for the pod count of a given vertex
-  useEffect(() => {
-    if (podsErr) notifyError(podsErr);
-  }, [podsErr]);
-
-  // This useEffect notifies about the errors while querying for the metrics of a given vertex
-  useEffect(() => {
-    if (metricsErr) notifyError(metricsErr);
-  }, [metricsErr]);
-
-  // This useEffect notifies about the errors while querying for the watermark of the pipeline
-  useEffect(() => {
-    if (watermarkErr) notifyError(watermarkErr);
-  }, [watermarkErr]);
-
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
-  const handleError = useCallback(() => {
-    setSidebarProps &&
-      setSidebarProps({
-        type: SidebarType.ERRORS,
-        errorsProps: {
-          errors: true,
-        },
-        slide: false,
-      });
-  }, [setSidebarProps]);
+  const { pipeline, vertices, edges, pipelineErr, buffersErr, loading } =
+    usePipelineViewFetch(namespaceId, pipelineId, addError);
 
   const content = useMemo(() => {
     if (pipelineErr || buffersErr) {
-      let errorString: string;
-      if (pipelineErr && pipelineErr.length) {
-        errorString = pipelineErr[0].error;
-      } else if (buffersErr && buffersErr.length) {
-        errorString = buffersErr[0].error;
-      } else {
-        errorString = "";
-      }
       return (
         <Box
           sx={{
@@ -180,11 +125,8 @@ export function Pipeline() {
           >
             <ErrorDisplay
               title="Error loading pipeline"
-              message={errorString}
+              message={pipelineErr || buffersErr || ""}
             />
-          </Box>
-          <Box onClick={handleError} sx={{ cursor: "pointer", flexGrow: 0 }}>
-            <img src={noError} width={22} height={24} alt={"error-status"} />
           </Box>
         </Box>
       );
@@ -225,7 +167,6 @@ export function Pipeline() {
     pipeline,
     namespaceId,
     pipelineId,
-    handleError,
     refresh,
   ]);
 
@@ -236,10 +177,7 @@ export function Pipeline() {
       collapsable
       summarySections={summarySections}
       contentComponent={
-        <Box
-          data-testid={"pipeline"}
-          sx={{ height: "100%" }}
-        >
+        <Box data-testid={"pipeline"} sx={{ height: "100%" }}>
           {content}
         </Box>
       }

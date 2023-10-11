@@ -7,7 +7,6 @@ import React, {
   useState,
   useContext,
 } from "react";
-
 import ReactFlow, {
   applyEdgeChanges,
   applyNodeChanges,
@@ -36,6 +35,14 @@ import {
   GraphProps,
   HighlightContextProps,
 } from "../../../../../types/declarations/graph";
+import {
+  PAUSED,
+  PAUSING,
+  RUNNING,
+  getAPIResponseError,
+  timeAgo,
+} from "../../../../../utils";
+import { ErrorIndicator } from "../../../../common/ErrorIndicator";
 import lock from "../../../../../images/lock.svg";
 import unlock from "../../../../../images/unlock.svg";
 import scrollToggle from "../../../../../images/move-arrows.svg";
@@ -50,17 +57,9 @@ import reduce from "../../../../../images/reduce.png";
 import sink from "../../../../../images/sink.png";
 import input from "../../../../../images/input.svg";
 import generator from "../../../../../images/generator.svg";
-import noError from "../../../../../images/no-error.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
-import {
-  PAUSED,
-  PAUSING,
-  RUNNING,
-  getAPIResponseError,
-  timeAgo,
-} from "../../../../../utils";
 
 const nodeWidth = 252;
 const nodeHeight = 72;
@@ -141,7 +140,6 @@ const Flow = (props: FlowProps) => {
     handleNodeClick,
     handleEdgeClick,
     handlePaneClick,
-    setSidebarProps,
   } = props;
 
   const onIsLockedChange = useCallback(
@@ -156,16 +154,6 @@ const Flow = (props: FlowProps) => {
   const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomLevel]);
   const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomLevel]);
 
-  const handleError = useCallback(() => {
-    setSidebarProps({
-      type: SidebarType.ERRORS,
-      errorsProps: {
-        errors: true,
-      },
-      slide: false,
-    });
-  }, [setSidebarProps]);
-  // TODO error panel icon color change
   return (
     <ReactFlow
       nodeTypes={defaultNodeTypes}
@@ -261,11 +249,6 @@ const Flow = (props: FlowProps) => {
           <div className={"legend-text"}>Generator</div>
         </div>
       </Panel>
-      <Panel position="top-right">
-        <div onClick={handleError} style={{ cursor: "pointer" }}>
-          <img src={noError} width={22} height={24} alt={"error-status"} />
-        </div>
-      </Panel>
     </ReactFlow>
   );
 };
@@ -306,6 +289,7 @@ export default function Graph(props: GraphProps) {
     undefined
   );
   const [statusPayload, setStatusPayload] = useState<any>(undefined);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
   const [timer, setTimer] = useState<any>(undefined);
 
@@ -520,7 +504,7 @@ export default function Graph(props: GraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showSpec, setShowSpec] = useState(true);
 
-  const handlePlayClick = useCallback((e) => {
+  const handlePlayClick = useCallback(() => {
     handleTimer();
     setStatusPayload({
       spec: {
@@ -531,7 +515,7 @@ export default function Graph(props: GraphProps) {
     });
   }, []);
 
-  const handlePauseClick = useCallback((e) => {
+  const handlePauseClick = useCallback(() => {
     handleTimer();
     setStatusPayload({
       spec: {
@@ -600,93 +584,107 @@ export default function Graph(props: GraphProps) {
   }, [data]);
 
   return (
-    <div style={{ height: "90%" }}>
+    <div style={{ height: "85%" }}>
       <div className="Graph" data-testid="graph">
         <Box
           sx={{
             display: "flex",
             flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          <Button
-            variant="contained"
+          <Box
             sx={{
-              marginTop: "1rem",
-              marginLeft: "1rem",
-              width: "80px",
-              fontWeight: "bold",
+              display: "flex",
+              flexDirection: "row",
             }}
-            onClick={handlePlayClick}
-            disabled={data?.pipeline?.status?.phase === RUNNING}
           >
-            Play
-          </Button>
-          <Button
-            variant="contained"
-            sx={{
-              marginTop: "1rem",
-              marginLeft: "1rem",
-              width: "80px",
-              fontWeight: "bold",
-            }}
-            onClick={handlePauseClick}
-            disabled={
-              data?.pipeline?.status?.phase === PAUSED ||
-              data?.pipeline?.status?.phase === PAUSING
-            }
-          >
-            Pause
-          </Button>
-          <Button sx={{ height: "35px", marginTop: "1rem" }}>
-            {" "}
-            {error && statusPayload ? (
-              <Alert
-                severity="error"
-                sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
-              >
-                {error}
-              </Alert>
-            ) : successMessage &&
-              statusPayload &&
-              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
-                data?.pipeline?.status?.phase !== PAUSED) ||
-                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
-                  data?.pipeline?.status?.phase !== RUNNING)) ? (
-              <div
-                style={{
-                  borderRadius: "13px",
-                  width: "228px",
-                  background: "#F0F0F0",
-                  display: "flex",
-                  flexDirection: "row",
-                  marginLeft: "1rem",
-                  marginTop: "1rem",
-                  padding: "0.5rem",
-                  color: "#516F91",
-                  alignItems: "center",
-                }}
-              >
-                <CircularProgress
-                  sx={{ width: "20px !important", height: "20px !important" }}
-                />{" "}
-                <Box
-                  sx={{
+            <Button
+              variant="contained"
+              sx={{
+                marginTop: "1rem",
+                marginLeft: "1rem",
+                width: "80px",
+                fontWeight: "bold",
+              }}
+              onClick={handlePlayClick}
+              disabled={data?.pipeline?.status?.phase === RUNNING}
+            >
+              Play
+            </Button>
+            <Button
+              variant="contained"
+              sx={{
+                marginTop: "1rem",
+                marginLeft: "1rem",
+                width: "80px",
+                fontWeight: "bold",
+              }}
+              onClick={handlePauseClick}
+              disabled={
+                data?.pipeline?.status?.phase === PAUSED ||
+                data?.pipeline?.status?.phase === PAUSING
+              }
+            >
+              Pause
+            </Button>
+            <Button sx={{ height: "35px", marginTop: "1rem" }}>
+              {" "}
+              {error && statusPayload ? (
+                <Alert
+                  severity="error"
+                  sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
+                >
+                  {error}
+                </Alert>
+              ) : successMessage &&
+                statusPayload &&
+                ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                  data?.pipeline?.status?.phase !== PAUSED) ||
+                  (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                    data?.pipeline?.status?.phase !== RUNNING)) ? (
+                <div
+                  style={{
+                    borderRadius: "13px",
+                    width: "228px",
+                    background: "#F0F0F0",
                     display: "flex",
-                    flexDirection: "column",
+                    flexDirection: "row",
+                    marginLeft: "1rem",
+                    marginTop: "1rem",
+                    padding: "0.5rem",
+                    color: "#516F91",
+                    alignItems: "center",
                   }}
                 >
-                  <span style={{ marginLeft: "1rem" }}>
-                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
-                      ? "Pipeline Pausing..."
-                      : "Pipeline Resuming..."}
-                  </span>
-                  <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
-                </Box>
-              </div>
-            ) : (
-              ""
-            )}
-          </Button>
+                  <CircularProgress
+                    sx={{ width: "20px !important", height: "20px !important" }}
+                  />{" "}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    <span style={{ marginLeft: "1rem" }}>
+                      Pipeline Pausing...
+                    </span>
+                    <span style={{ marginLeft: "1rem" }}>
+                      {data?.pipeline?.status?.lastUpdated
+                        ? timeAgo(data?.pipeline?.status?.lastUpdated)
+                        : ""}
+                    </span>
+                  </Box>
+                </div>
+              ) : (
+                ""
+              )}
+            </Button>
+          </Box>
+          <Box sx={{ marginRight: "1rem" }}>
+            <ErrorIndicator />
+          </Box>
         </Box>
         <HighlightContext.Provider
           value={{
@@ -714,23 +712,6 @@ export default function Graph(props: GraphProps) {
           </ReactFlowProvider>
         </HighlightContext.Provider>
       </div>
-
-      {/*<Card*/}
-      {/*  sx={{ borderBottom: 1, borderColor: "divider", boxShadow: 1 }}*/}
-      {/*  data-testid={"card"}*/}
-      {/*  variant={"outlined"}*/}
-      {/*>*/}
-      {/*  {showSpec && <Spec pipeline={data.pipeline} />}*/}
-      {/*  {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} />}*/}
-      {/*  {nodeOpen && (*/}
-      {/*    <NodeInfo*/}
-      {/*      data-testid="node-info"*/}
-      {/*      node={node}*/}
-      {/*      namespaceId={namespaceId}*/}
-      {/*      pipelineId={pipelineId}*/}
-      {/*    />*/}
-      {/*  )}*/}
-      {/*</Card>*/}
     </div>
   );
 }

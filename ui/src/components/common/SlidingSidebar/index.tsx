@@ -13,7 +13,7 @@ import {
   GeneratorDetails,
   GeneratorDetailsProps,
 } from "./partials/GeneratorDetails";
-import { Errors, ErrorsProps } from "./partials/Errors";
+import { Errors } from "./partials/Errors";
 import { PiplineCreate } from "./partials/PipelineCreate";
 import { PiplineUpdate } from "./partials/PipelineUpdate";
 import { ISBCreate } from "./partials/ISBCreate";
@@ -79,7 +79,6 @@ export interface SlidingSidebarProps {
   vertexDetailsProps?: VertexDetailsProps;
   edgeDetailsProps?: EdgeDetailsProps;
   generatorDetailsProps?: GeneratorDetailsProps;
-  errorsProps?: ErrorsProps;
   specEditorProps?: SpecEditorSidebarProps;
   parentCloseIndicator?: string;
 }
@@ -92,13 +91,12 @@ export function SlidingSidebar({
   vertexDetailsProps,
   edgeDetailsProps,
   generatorDetailsProps,
-  errorsProps,
   specEditorProps,
   parentCloseIndicator,
 }: SlidingSidebarProps) {
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const [width, setWidth] = useState<number>(
-    errorsProps
+    type === SidebarType.ERRORS
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
       : (pageWidth * 0.75)
   );
@@ -243,10 +241,7 @@ export function SlidingSidebar({
         }
         return <GeneratorDetails {...generatorDetailsProps} />;
       case SidebarType.ERRORS:
-        if (!errorsProps) {
-          break;
-        }
-        return <Errors {...errorsProps} />;
+        return <Errors />;
       default:
         break;
     }
@@ -258,7 +253,6 @@ export function SlidingSidebar({
     vertexDetailsProps,
     edgeDetailsProps,
     generatorDetailsProps,
-    errorsProps,
   ]);
 
   return (

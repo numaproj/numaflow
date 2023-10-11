@@ -11,7 +11,7 @@ import Drawer from "@mui/material/Drawer";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Cluster } from "./components/pages/Cluster";
 import { Namespaces } from "./components/pages/Namespace";
@@ -23,7 +23,7 @@ import {
   SlidingSidebarProps,
 } from "./components/common/SlidingSidebar";
 import { ErrorDisplay } from "./components/common/ErrorDisplay";
-import { AppContextProps } from "./types/declarations/app";
+import { AppContextProps, AppError } from "./types/declarations/app";
 import logo from "./images/icon.png";
 import textLogo from "./images/text-icon.png";
 
@@ -33,7 +33,16 @@ import "react-toastify/dist/ReactToastify.css";
 export const AppContext = React.createContext<AppContextProps>({
   systemInfo: undefined,
   systemInfoError: undefined,
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  setSidebarProps: () => {},
+  errors: [],
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  addError: () => {},
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  clearErrors: () => {},
 });
+
+const MAX_ERRORS = 6;
 
 function App() {
   // TODO remove, used for testing ns only installation
@@ -52,7 +61,14 @@ function App() {
   const [sidebarCloseIndicator, setSidebarCloseIndicator] = useState<
     string | undefined
   >();
+  const [errors, setErrors] = useState<AppError[]>([]);
   const { systemInfo, error: systemInfoError, loading } = useSystemInfoFetch();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Route changed
+    setErrors([]);
+  }, [location]);
 
   // Resize observer to keep page width in state. To be used by other dependent components.
   useEffect(() => {
@@ -85,6 +101,20 @@ function App() {
 
   const handleSideBarClose = useCallback(() => {
     setSidebarCloseIndicator("id" + Math.random().toString(16).slice(2));
+  }, []);
+
+  const handleAddError = useCallback((error: string) => {
+    setErrors((prev) => {
+      prev.unshift({
+        message: error,
+        date: new Date(),
+      });
+      return prev.slice(0, MAX_ERRORS);
+    });
+  }, []);
+
+  const handleClearErrors = useCallback(() => {
+    setErrors([]);
   }, []);
 
   const routes = useMemo(() => {
@@ -171,6 +201,9 @@ function App() {
           systemInfoError,
           sidebarProps,
           setSidebarProps,
+          errors,
+          addError: handleAddError,
+          clearErrors: handleClearErrors,
         }}
       >
         <ScopedCssBaseline>

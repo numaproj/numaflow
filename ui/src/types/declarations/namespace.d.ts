@@ -36,6 +36,7 @@ export interface NamespaceSummaryFetchResult {
 export interface NamespaceSummaryFetchProps {
   namespace: string;
   loadOnRefresh?: boolean;
+  addError: (error: string) => void;
 }
 export interface PipelineCardProps {
   namespace: string;
