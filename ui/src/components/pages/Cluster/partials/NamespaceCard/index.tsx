@@ -113,7 +113,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                   alt="Healthy"
                   className={"status-logo"}
                 />
-                <span className={"status-count"}>
+                <span className="status-count namespace-card-section-text-14-normal">
                   : {data?.pipelinesHealthyCount}
                 </span>
               </Grid>
@@ -134,7 +134,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                   alt="Warning"
                   className={"status-logo"}
                 />
-                <span className={"status-count"}>
+                <span className="status-count namespace-card-section-text-14-normal">
                   : {data?.pipelinesWarningCount}
                 </span>
               </Grid>
@@ -155,7 +155,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                   alt="Critical"
                   className={"status-logo"}
                 />
-                <span className={"status-count"}>
+                <span className="status-count namespace-card-section-text-14-normal">
                   : {data?.pipelinesCriticalCount}
                 </span>
               </Grid>
@@ -248,7 +248,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                   alt="Healthy"
                   className={"status-logo"}
                 />
-                <span className={"status-count"}>
+                <span className="status-count namespace-card-section-text-14-normal">
                   : {data?.isbsHealthyCount}
                 </span>
               </Grid>
@@ -269,7 +269,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                   alt="Warning"
                   className={"status-logo"}
                 />
-                <span className={"status-count"}>
+                <span className="status-count namespace-card-section-text-14-normal">
                   : {data?.isbsWarningCount}
                 </span>
               </Grid>
@@ -290,7 +290,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                   alt="Critical"
                   className={"status-logo"}
                 />
-                <span className={"status-count"}>
+                <span className="status-count namespace-card-section-text-14-normal">
                   : {data?.isbsCriticalCount}
                 </span>
               </Grid>
