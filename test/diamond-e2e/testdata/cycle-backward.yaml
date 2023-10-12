@@ -16,7 +16,7 @@ spec:
         disabled: true # don't scale this beyond one Pod since it doesn't make sense for this container
       udf:
         container:
-          # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/retry
+          # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/retry
           image: quay.io/numaio/numaflow-go/map-retry:v0.5.0
     - name: out
       sink:

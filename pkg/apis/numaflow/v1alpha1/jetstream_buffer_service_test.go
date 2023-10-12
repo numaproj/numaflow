@@ -125,6 +125,9 @@ func Test_JSBufferGetReplicas(t *testing.T) {
 	five := int32(5)
 	s.Replicas = &five
 	assert.Equal(t, 5, s.GetReplicas())
+	one := int32(1)
+	s.Replicas = &one
+	assert.Equal(t, 1, s.GetReplicas())
 	two := int32(2)
 	s.Replicas = &two
 	assert.Equal(t, 3, s.GetReplicas())
