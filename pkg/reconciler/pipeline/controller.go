@@ -534,6 +534,7 @@ func needsUpdate(old, new *dfv1.Pipeline) bool {
 	if !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers) {
 		return true
 	}
+
 	return false
 }
 
@@ -725,6 +726,19 @@ func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pi
 }
 
 func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
+
+	// reset pause timestamp
+	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
+		err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(dfv1.RemovePauseTimestampPatch)))
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil // skip pipeline if it can't be found
+			} else {
+				return true, err // otherwise requeue resume
+			}
+		}
+	}
+
 	_, err := r.scaleUpAllVertices(ctx, pl)
 	if err != nil {
 		return false, err
@@ -734,6 +748,20 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 }
 
 func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
+
+	// check that annotations / pause timestamp annotation exist
+	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
+		pl.SetAnnotations(map[string]string{dfv1.KeyPauseTimestamp: time.Now().Format(time.RFC3339)})
+		body, err := json.Marshal(pl)
+		if err != nil {
+			return false, err
+		}
+		err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, body))
+		if err != nil && !apierrors.IsNotFound(err) {
+			return true, err
+		}
+	}
+
 	pl.Status.MarkPhasePausing()
 	updated, err := r.scaleDownSourceVertices(ctx, pl)
 	if err != nil || updated {
@@ -753,7 +781,14 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	if err != nil {
 		return true, err
 	}
-	if drainCompleted {
+
+	pauseTimestamp, err := time.Parse(time.RFC3339, pl.GetAnnotations()[dfv1.KeyPauseTimestamp])
+	if err != nil {
+		return false, err
+	}
+
+	// if drain is completed or we have exceed pause deadline, mark pl as paused and scale down
+	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
 		_, err := r.scaleDownAllVertices(ctx, pl)
 		if err != nil {
 			return true, err

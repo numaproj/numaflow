@@ -97,7 +97,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				TTL:          time.Hour * 24 * 30, // 30 days
 				MaxBytes:     0,
 				Storage:      nats.FileStorage,
-				Replicas:     3,
+				Replicas:     v.GetInt("stream.replicas"),
 			}); err != nil {
 				return fmt.Errorf("failed to create side inputs KV %q, %w", kvName, err)
 			}

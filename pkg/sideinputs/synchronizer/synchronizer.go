@@ -29,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
@@ -62,7 +63,7 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	)
 
 	log := logging.FromContext(ctx)
-	log.Infow("Starting Side Inputs Watcher", zap.Strings("sideInputs", sis.sideInputs))
+	log.Infow("Starting Side Inputs Synchronizer", zap.Strings("sideInputs", sis.sideInputs))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -85,24 +86,27 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", sis.isbSvcType)
 	}
-	go startSideInputSynchronizer(ctx, sideInputStore, dfv1.PathSideInputsMount)
+	go startSideInputSynchronizer(ctx, sideInputStore, sis.sideInputs, dfv1.PathSideInputsMount)
 	<-ctx.Done()
 	return nil
 }
 
 // startSideInputSynchronizer watches the Side Input KV store for any changes
 // and writes the updated value to the mount volume.
-func startSideInputSynchronizer(ctx context.Context, watch kvs.KVStorer, mountPath string) {
+func startSideInputSynchronizer(ctx context.Context, watch kvs.KVStorer, sideInputs []string, mountPath string) {
 	log := logging.FromContext(ctx)
 	watchCh, stopped := watch.Watch(ctx)
 	for {
 		select {
 		case <-stopped:
-			log.Info("Side Input watcher stopped")
+			log.Info("Side Input Synchronizer stopped")
 			return
 		case value := <-watchCh:
 			if value == nil {
 				log.Warnw("nil value received from Side Input watcher")
+				continue
+			}
+			if !sharedutil.StringSliceContains(sideInputs, value.Key()) {
 				continue
 			}
 			log.Infow("Side Input value received ",

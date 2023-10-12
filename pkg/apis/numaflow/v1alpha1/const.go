@@ -39,7 +39,10 @@ const (
 	KeyVertexName       = "numaflow.numaproj.io/vertex-name"
 	KeyReplica          = "numaflow.numaproj.io/replica"
 	KeySideInputName    = "numaflow.numaproj.io/side-input-name"
+	KeyPauseTimestamp   = "numaflow.numaproj.io/pause-timestamp"
 	KeyDefaultContainer = "kubectl.kubernetes.io/default-container"
+
+	RemovePauseTimestampPatch = `[{"op": "remove", "path": "/metadata/annotations/numaflow.numaproj.io~1pause-timestamp"}]`
 
 	// ID key in the header of sources like http
 	KeyMetaID        = "x-numaflow-id"
@@ -71,7 +74,7 @@ const (
 	CtrUdtransformer     = "transformer"
 	CtrUdSideInput       = "udsi"
 	CtrInitSideInputs    = "init-side-inputs"
-	CtrSideInputsWatcher = "side-inputs-watcher"
+	CtrSideInputsWatcher = "side-inputs-synchronizer"
 
 	// components
 	ComponentISBSvc           = "isbsvc"

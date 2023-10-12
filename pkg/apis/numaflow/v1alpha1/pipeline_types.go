@@ -403,6 +403,10 @@ type Lifecycle struct {
 	// +kubebuilder:default=Running
 	// +optional
 	DesiredPhase PipelinePhase `json:"desiredPhase,omitempty" protobuf:"bytes,2,opt,name=desiredPhase"`
+	// PauseGracePeriodSeconds used to pause pipeline gracefully
+	// +kubebuilder:default=30
+	// +optional
+	PauseGracePeriodSeconds *int32 `json:"pauseGracePeriodSeconds,omitempty" protobuf:"varint,3,opt,name=pauseGracePeriodSeconds"`
 }
 
 // GetDeleteGracePeriodSeconds returns the value DeleteGracePeriodSeconds.
@@ -420,6 +424,14 @@ func (lc Lifecycle) GetDesiredPhase() PipelinePhase {
 	return PipelinePhaseRunning
 }
 
+// return PauseGracePeriodSeconds if set
+func (lc Lifecycle) GetPauseGracePeriodSeconds() int32 {
+	if lc.PauseGracePeriodSeconds != nil {
+		return *lc.PauseGracePeriodSeconds
+	}
+	return 30
+}
+
 type PipelineSpec struct {
 	// +optional
 	InterStepBufferServiceName string `json:"interStepBufferServiceName,omitempty" protobuf:"bytes,1,opt,name=interStepBufferServiceName"`
@@ -429,7 +441,7 @@ type PipelineSpec struct {
 	// Edges define the relationships between vertices
 	Edges []Edge `json:"edges,omitempty" protobuf:"bytes,3,rep,name=edges"`
 	// Lifecycle define the Lifecycle properties
-	// +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running}
+	// +kubebuilder:default={"deleteGracePeriodSeconds": 30, "desiredPhase": Running, "pauseGracePeriodSeconds": 30}
 	// +optional
 	Lifecycle Lifecycle `json:"lifecycle,omitempty" protobuf:"bytes,4,opt,name=lifecycle"`
 	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings
