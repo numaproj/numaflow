@@ -114,6 +114,7 @@ test-nats-e2e:
 test-sdks-e2e:
 test-reduce-e2e:
 test-api-e2e:
+test-sideinput-e2e:
 test-%: 
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image

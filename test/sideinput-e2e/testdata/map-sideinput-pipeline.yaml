@@ -1,0 +1,41 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: sideinput-pipeline
+spec:
+  sideInputs:
+    - name: myticker
+      container:
+        image: "quay.io/numaio/numaproj-contrib/e2e-sideinput-example:v0.0.6"
+        imagePullPolicy: IfNotPresent
+      trigger:
+        schedule: "* * * * *"
+        # timezone: America/Los_Angeles
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: si-e2e
+      udf:
+        container:
+          image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-udf:v0.0.10"
+          imagePullPolicy: IfNotPresent
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
+      sideInputs:
+        - myticker
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+  edges:
+    - from: in
+      to: si-e2e
+    - from: si-e2e
+      to: sink
