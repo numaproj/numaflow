@@ -135,8 +135,11 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		if value, ok := namespaceSummaryMap[isbsvc.Namespace]; ok {
 			summary = value
 		}
-		// TODO(API) : Get the current status of the ISB service
-		status := ISBServiceStatusHealthy
+		status, err := getIsbServiceStatus(&isbsvc)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
+			return
+		}
 		if status == ISBServiceStatusInactive {
 			summary.isbsvcSummary.Inactive++
 		} else {
@@ -420,8 +423,10 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	status := ISBServiceStatusHealthy
-	// TODO(API) : Get the current status of the ISB service
+	status, err := getIsbServiceStatus(isbsvc)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isbsvcName, ns, err.Error()))
+	}
 
 	resp := NewISBService(status, isbsvc)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, resp))
@@ -800,8 +805,10 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 	}
 	var isbList ISBServices
 	for _, isb := range isbSvcs.Items {
-		status := ISBServiceStatusHealthy
-		// TODO(API) : Get the current status of the ISB service
+		status, err := getIsbServiceStatus(&isb)
+		if err != nil {
+			return nil, err
+		}
 		resp := NewISBService(status, &isb)
 		isbList = append(isbList, resp)
 	}
@@ -820,6 +827,19 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 		retStatus = PipelineStatusHealthy
 	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
 		retStatus = PipelineStatusCritical
+	}
+	return retStatus, nil
+}
+
+// GetIsbServiceStatus is used to provide the status of a given InterStepBufferService
+func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
+	retStatus := ISBServiceStatusHealthy
+	if isbsvc.Status.Phase == dfv1.ISBSvcPhasePending || isbsvc.Status.Phase == dfv1.ISBSvcPhaseUnknown {
+		retStatus = ISBServiceStatusInactive
+	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhaseRunning {
+		retStatus = ISBServiceStatusHealthy
+	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhaseFailed {
+		retStatus = ISBServiceStatusCritical
 	}
 	return retStatus, nil
 }
