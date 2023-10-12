@@ -154,6 +154,35 @@ function HexagonHeatMap({
             />
           ))}
         </Group>
+        <Group top={margin.top} left={margin.left} key="hexagon-elements">
+          {hexagons.map((hexagon, i) => (
+            <image
+              data-testid={`hexagonImage_${data[i].name}-${data[i]?.type}`}
+              key={`hexagonImage_${data[i].name}-${data[i]?.type}`}
+              style={{ cursor: "pointer" }}
+              width={hexRadius}
+              height={hexRadius}
+              x={hexagon.x - hexRadius / 2}
+              y={hexagon.y - hexRadius / 2}
+              href={hexagon?.data?.image}
+              opacity={
+                (hover && hover === hexagon.data.name) ||
+                selected === hexagon.data.name
+                  ? HOVER_OPACITY
+                  : DEFAULT_OPACITY
+              }
+              onClick={(e) => handleClick(e, hexagon.data)}
+              onMouseMove={(e) => {
+                setHover(hexagon.data.name);
+                handleTooltip(e, hexagon);
+              }}
+              onMouseLeave={() => {
+                setHover(null);
+                hideTooltip();
+              }}
+            />
+          ))}
+        </Group>
       </svg>
       {tooltipData && (
         <Tooltip

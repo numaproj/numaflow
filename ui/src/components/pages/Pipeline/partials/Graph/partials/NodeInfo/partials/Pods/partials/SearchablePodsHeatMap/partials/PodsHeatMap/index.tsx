@@ -1,6 +1,9 @@
 import HexagonHeatMap from "./partials/HexagonHeatMap";
 import Box from "@mui/material/Box";
-import { fill } from "../../../../../../../../../../../../../utils/gradients";
+import {
+  fill,
+  imageForStatus,
+} from "../../../../../../../../../../../../../utils/gradients";
 import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
 import {
   ContainerHealth,
@@ -89,6 +92,7 @@ export const PodsHeatMap = ({
       type: "cpu",
       healthPercent: pod.maxCPUPerc,
       fill: fill(cpuColors, pod.maxCPUPerc, 1, 100),
+      image: imageForStatus(cpuColors, pod.maxCPUPerc, 100),
     });
     memData.push({
       name: pod.name,
@@ -96,6 +100,7 @@ export const PodsHeatMap = ({
       type: "mem",
       healthPercent: pod.maxMemPerc,
       fill: fill(memColors, pod.maxMemPerc, 1, 100),
+      image: imageForStatus(memColors, pod.maxMemPerc, 100),
     });
   });
 
