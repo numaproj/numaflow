@@ -73,6 +73,7 @@ export interface Hexagon {
   stroke?: string;
   strokeWidth?: number;
   type?: string;
+  image?: any;
 }
 
 export interface HexagonPoints {
