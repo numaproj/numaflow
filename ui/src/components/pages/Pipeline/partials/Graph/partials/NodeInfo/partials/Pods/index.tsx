@@ -106,10 +106,12 @@ export function Pods(props: PodsProps) {
     [pods]
   );
 
-  const defaultProps = {
-    options: pods?.map((pod) => pod.name) as string[],
-    getOptionLabel: (option: string) => option,
-  };
+  const defaultProps = useMemo(() => {
+    return {
+      options: pods?.map((pod) => pod.name) as string[],
+      getOptionLabel: (option: string) => option,
+    };
+  }, [pods]);
 
   const podSearchDetails = (
     <Box sx={{ display: "flex", flexDirection: "row" }}>
@@ -160,6 +162,11 @@ export function Pods(props: PodsProps) {
     </Box>
   );
 
+  const selectedPodDetails = useMemo(
+    () => podsDetails?.get(selectedPod?.name),
+    [podsDetails, selectedPod]
+  );
+
   if (loading) {
     return (
       <Box data-testid={"pods-loading"} sx={{ my: 2 }}>
@@ -177,8 +184,6 @@ export function Pods(props: PodsProps) {
       >{`Failed to get pods details`}</Box>
     );
   }
-
-  const selectedPodDetails = podsDetails?.get(selectedPod?.name);
 
   return (
     <Paper square elevation={0} sx={{ padding: "1rem" }}>
