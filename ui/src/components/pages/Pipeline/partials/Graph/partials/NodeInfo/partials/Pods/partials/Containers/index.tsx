@@ -9,14 +9,6 @@ export function Containers(props: ContainerProps) {
 
   return (
     <Box sx={{ mb: 2 }}>
-      <Box
-        sx={{
-          marginBottom: "0.625rem",
-          fontWeight: "bold",
-        }}
-      >
-        Containers
-      </Box>
       <Stack direction="row" spacing={1}>
         {pod?.containers?.map((c: string) => {
           return (
