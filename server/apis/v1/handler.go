@@ -832,6 +832,7 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 }
 
 // GetIsbServiceStatus is used to provide the status of a given InterStepBufferService
+// TODO: Figure out the correct way to determine if a ISBService is healthy
 func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 	retStatus := ISBServiceStatusHealthy
 	if isbsvc.Status.Phase == dfv1.ISBSvcPhasePending || isbsvc.Status.Phase == dfv1.ISBSvcPhaseUnknown {
