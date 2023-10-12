@@ -22,8 +22,15 @@ import ReactFlow, {
   useViewport,
   ReactFlowProvider,
 } from "reactflow";
+import {
+  Accordion,
+  AccordionSummary,
+  Typography,
+  AccordionDetails,
+} from "@mui/material";
 import IconButton from "@mui/material/IconButton";
 import { Alert, Box, Button, CircularProgress } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { graphlib, layout } from "dagre";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
@@ -223,31 +230,42 @@ const Flow = (props: FlowProps) => {
           </g>
         </svg>
       </Panel>
-      <Panel position="bottom-left" className={"legend"}>
-        <div className={"legend-title"}>
-          <img src={source} alt={"source"} />
-          <div className={"legend-text"}>Source</div>
-        </div>
-        <div className={"legend-title"}>
-          <img src={map} alt={"map"} />
-          <div className={"legend-text"}>Map</div>
-        </div>
-        <div className={"legend-title"}>
-          <img src={reduce} alt={"reduce"} />
-          <div className={"legend-text"}>Reduce</div>
-        </div>
-        <div className={"legend-title"}>
-          <img src={sink} alt={"sink"} />
-          <div className={"legend-text"}>Sink</div>
-        </div>
-        <div className={"legend-title"}>
-          <img src={input} width={22} height={24} alt={"input"} />
-          <div className={"legend-text"}>Input</div>
-        </div>
-        <div className={"legend-title"}>
-          <img src={generator} width={22} height={24} alt={"generator"} />
-          <div className={"legend-text"}>Generator</div>
-        </div>
+      <Panel position="top-left" className={"legend"}>
+        <Accordion>
+          <AccordionSummary
+            expandIcon={<ExpandMoreIcon />}
+            aria-controls="panel1a-content"
+            id="panel1a-header"
+          >
+            <Typography>Legend</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <div className={"legend-title"}>
+              <img src={source} alt={"source"} />
+              <div className={"legend-text"}>Source</div>
+            </div>
+            <div className={"legend-title"}>
+              <img src={map} alt={"map"} />
+              <div className={"legend-text"}>Map</div>
+            </div>
+            <div className={"legend-title"}>
+              <img src={reduce} alt={"reduce"} />
+              <div className={"legend-text"}>Reduce</div>
+            </div>
+            <div className={"legend-title"}>
+              <img src={sink} alt={"sink"} />
+              <div className={"legend-text"}>Sink</div>
+            </div>
+            <div className={"legend-title"}>
+              <img src={input} width={22} height={24} alt={"input"} />
+              <div className={"legend-text"}>Input</div>
+            </div>
+            <div className={"legend-title"}>
+              <img src={generator} width={22} height={24} alt={"generator"} />
+              <div className={"legend-text"}>Generator</div>
+            </div>
+          </AccordionDetails>
+        </Accordion>
       </Panel>
     </ReactFlow>
   );
