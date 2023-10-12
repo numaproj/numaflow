@@ -205,7 +205,7 @@ export function PipelineCard({
   useEffect(() => {
     if (
       statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
-      statusData?.pipeline?.status?.phase !== PAUSING
+      statusData?.pipeline?.status?.phase === PAUSED
     ) {
       clearInterval(timer);
       setStatusPayload(undefined);
@@ -316,7 +316,11 @@ export function PipelineCard({
 
             <Button
               variant="contained"
-              sx={{ marginRight: "1.3rem", marginLeft: "1rem", height: "2.125rem" }}
+              sx={{
+                marginRight: "1.3rem",
+                marginLeft: "1rem",
+                height: "2.125rem",
+              }}
               onClick={handlePlayClick}
               disabled={
                 statusData?.pipeline?.status?.phase === RUNNING ||
