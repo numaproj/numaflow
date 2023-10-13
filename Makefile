@@ -106,6 +106,7 @@ test-coverage-with-isb:
 test-code:
 	go test -tags=isb_redis -race -v $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -timeout 120s
 
+test-e2e:
 test-kafka-e2e:
 test-http-e2e:
 test-nats-e2e:
@@ -115,7 +116,6 @@ test-api-e2e:
 test-udsource-e2e:
 test-transformer-e2e:
 test-diamond-e2e:
-test-e2e:
 test-%: 
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
