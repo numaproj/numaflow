@@ -479,7 +479,7 @@ export function NamespacePipelineListing({
             size="small"
             onClick={handleCreateISBClick}
           >
-            Create ISB
+            Create ISB Service
           </Button>
         </Box>
       </Box>

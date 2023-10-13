@@ -44,6 +44,10 @@ export const usePipelineViewFetch = (
 
   const BASE_API = `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
 
+  const refresh = useCallback(() => {
+    setRequestKey(`${Date.now()}`);
+  }, []);
+
   // Call to get pipeline
   useEffect(() => {
     const fetchPipeline = async () => {
@@ -648,5 +652,6 @@ export const usePipelineViewFetch = (
     pipelineErr,
     buffersErr,
     loading,
+    refresh,
   };
 };

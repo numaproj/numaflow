@@ -211,7 +211,7 @@ export function ISBUpdate({
           marginBottom: "2rem",
         }}
       >
-        <span className="isb-spec-header-text">{`Edit ISB: ${isbId}`}</span>
+        <span className="isb-spec-header-text">{`Edit ISB Service: ${isbId}`}</span>
       </Box>
       <SpecEditor
         initialYaml={initialYaml}

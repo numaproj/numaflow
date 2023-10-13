@@ -9,10 +9,10 @@ import { Buffers } from "./partials/Buffers";
 import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
 import { SpecEditorModalProps } from "../..";
 import { CloseModal } from "../CloseModal";
-import sourceIcon from "../../../../../images/source_vertex.png";
-import sinkIcon from "../../../../../images/sink_vertex.png";
-import mapIcon from "../../../../../images/map_vertex.png";
-import reducIcon from "../../../../../images/reduce_vertex.png";
+import sourceIcon from "../../../../../images/source.png";
+import sinkIcon from "../../../../../images/sink.png";
+import mapIcon from "../../../../../images/map.png";
+import reducIcon from "../../../../../images/reduce.png";
 
 import "./style.css";
 
@@ -38,6 +38,7 @@ export interface VertexDetailsProps {
   buffers: any[];
   type: string;
   setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
+  refresh: () => void;
 }
 
 export function VertexDetails({
@@ -49,6 +50,7 @@ export function VertexDetails({
   buffers,
   type,
   setModalOnClose,
+  refresh,
 }: VertexDetailsProps) {
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
@@ -253,6 +255,7 @@ export function VertexDetails({
               vertexId={vertexId}
               vertexSpec={vertexSpec}
               setModalOnClose={handleUpdateModalClose}
+              refresh={refresh}
             />
           </Box>
         )}
