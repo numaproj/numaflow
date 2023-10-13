@@ -176,7 +176,7 @@ export function Pods(props: PodsProps) {
     );
   }
 
-  if (podsErr || podsDetailsErr) {
+  if (podsErr || podsDetailsErr || !pods?.length) {
     return (
       <Box
         data-testid={"pods-error"}
