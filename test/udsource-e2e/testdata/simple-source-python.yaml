@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: simple-source
+  name: simple-source-python
 spec:
   vertices:
     - name: in
@@ -9,7 +9,7 @@ spec:
         udsource:
           container:
             # A simple user-defined source for e2e testing
-            # See https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcer/examples/simple_source
+            # See https://github.com/numaproj/numaflow-python/tree/main/examples/source
             image: quay.io/numaio/numaflow-python/simple-source:v0.5.3
             imagePullPolicy: Always
       limits:
