@@ -17,9 +17,13 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
 
   // CPU
   let usedCPU: string | undefined =
-    podDetails?.containerMap?.get(containerName)?.cpu;
+    podDetails?.containerMap instanceof Map
+      ? podDetails?.containerMap?.get(containerName)?.cpu
+      : undefined;
   let specCPU: string | undefined =
-    pod?.containerSpecMap?.get(containerName)?.cpu;
+    pod?.containerSpecMap instanceof Map
+      ? pod?.containerSpecMap?.get(containerName)?.cpu
+      : undefined;
   if (!usedCPU) {
     usedCPU = "?";
   } else if (usedCPU.endsWith("n")) {
@@ -34,9 +38,13 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
   }
   // Memory
   let usedMem: string | undefined =
-    podDetails?.containerMap?.get(containerName)?.memory;
+    podDetails?.containerMap instanceof Map
+      ? podDetails?.containerMap?.get(containerName)?.memory
+      : undefined;
   let specMem: string | undefined =
-    pod?.containerSpecMap?.get(containerName)?.memory;
+    pod?.containerSpecMap instanceof Map
+      ? pod?.containerSpecMap?.get(containerName)?.memory
+      : undefined;
   if (!usedMem) {
     usedMem = "?";
   } else if (usedMem.endsWith("Ki")) {
