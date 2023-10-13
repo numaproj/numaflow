@@ -1,5 +1,7 @@
 .sidebar-drag-icon {
   margin-left: -1.5rem;
+  width: 3rem;
+  height: 3rem;
 }
 
 .sidebar-drawer > .MuiDrawer-paper {
