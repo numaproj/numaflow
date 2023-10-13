@@ -1,0 +1,22 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-source
+spec:
+  vertices:
+    - name: in
+      source:
+        udsource:
+          container:
+            # A simple user-defined source for e2e testing
+            # See https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcer/examples/simple_source
+            image: quay.io/numaio/numaflow-python/simple-source:v0.5.3
+            imagePullPolicy: Always
+      limits:
+        readBatchSize: 2
+    - name: out
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: out

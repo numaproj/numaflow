@@ -39,6 +39,10 @@ func (s *UserDefinedSourceSuite) TestSimpleSourceJava() {
 	s.testSimpleSource("java")
 }
 
+func (s *UserDefinedSourceSuite) TestSimpleSourcePython() {
+	s.testSimpleSource("python")
+}
+
 func (s *UserDefinedSourceSuite) testSimpleSource(lang string) {
 	w := s.Given().Pipeline(fmt.Sprintf("@testdata/simple-source-%s.yaml", lang)).
 		When().
