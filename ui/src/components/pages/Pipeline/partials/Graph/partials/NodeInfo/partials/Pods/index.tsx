@@ -187,46 +187,50 @@ export function Pods(props: PodsProps) {
 
   return (
     <Paper square elevation={0} sx={{ padding: "1rem" }}>
-      <Box sx={{ display: "flex", flexDirection: "row" }}>
-        <Box
-          sx={{
-            width: "70%",
-            border: "1px solid #E0E0E0",
-            marginRight: "1rem",
-            display: "flex",
-            flexDirection: "column",
-            padding: "1rem",
-            justifyContent: "space-evenly",
-          }}
-        >
-          {podSearchDetails}
-          <SearchablePodsHeatMap
-            pods={pods}
-            podsDetailsMap={podsDetails}
-            onPodClick={handlePodClick}
-            selectedPod={selectedPod}
-            setSelectedPod={setSelectedPod}
-          />
-          {containerSelector}
-        </Box>
-        <Box sx={{ width: "30%", border: "1px solid #E0E0E0" }}>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              width: "100%",
-              marginTop: "1rem",
-            }}
-          >
-            <PodInfo
-              pod={selectedPod}
-              podDetails={selectedPodDetails}
-              containerName={selectedContainer}
-            />
+      {pods && pods.length > 0 && (
+        <Box>
+          <Box sx={{ display: "flex", flexDirection: "row" }}>
+            <Box
+              sx={{
+                width: "70%",
+                border: "1px solid #E0E0E0",
+                marginRight: "1rem",
+                display: "flex",
+                flexDirection: "column",
+                padding: "1rem",
+                justifyContent: "space-evenly",
+              }}
+            >
+              {podSearchDetails}
+              <SearchablePodsHeatMap
+                pods={pods}
+                podsDetailsMap={podsDetails}
+                onPodClick={handlePodClick}
+                selectedPod={selectedPod}
+                setSelectedPod={setSelectedPod}
+              />
+              {containerSelector}
+            </Box>
+            <Box sx={{ width: "30%", border: "1px solid #E0E0E0" }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  width: "100%",
+                  marginTop: "1rem",
+                }}
+              >
+                <PodInfo
+                  pod={selectedPod}
+                  podDetails={selectedPodDetails}
+                  containerName={selectedContainer}
+                />
+              </Box>
+            </Box>
           </Box>
+          {podDetail}
         </Box>
-      </Box>
-      {podDetail}
+      )}
     </Paper>
   );
 }
