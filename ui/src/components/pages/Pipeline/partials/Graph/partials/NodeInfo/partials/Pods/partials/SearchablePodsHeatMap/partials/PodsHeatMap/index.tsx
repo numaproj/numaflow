@@ -51,31 +51,34 @@ export const PodsHeatMap = ({
             maxMemPerc: 0,
             container: [],
           };
-          details?.containerMap?.forEach((value, key) => {
-            const resourceUsage = getPodContainerUsePercentages(
-              pod,
-              details,
-              key
-            );
-            if (resourceUsage?.cpuPercent) {
-              podObj.maxCPUPerc = Math.max(
-                podObj.maxCPUPerc,
-                resourceUsage.cpuPercent
+          // check if details?.containerMap is an array
+          details?.containerMap &&
+            Array.isArray(details?.containerMap) &&
+            details?.containerMap?.forEach((value, key) => {
+              const resourceUsage = getPodContainerUsePercentages(
+                pod,
+                details,
+                key
               );
-            }
-            if (resourceUsage?.memoryPercent) {
-              podObj.maxMemPerc = Math.max(
-                podObj.maxMemPerc,
-                resourceUsage.memoryPercent
-              );
-            }
-            podObj.container.push({
-              name: key,
-              cpu: value.cpu,
-              mem: value.memory,
-              ...resourceUsage,
+              if (resourceUsage?.cpuPercent) {
+                podObj.maxCPUPerc = Math.max(
+                  podObj.maxCPUPerc,
+                  resourceUsage.cpuPercent
+                );
+              }
+              if (resourceUsage?.memoryPercent) {
+                podObj.maxMemPerc = Math.max(
+                  podObj.maxMemPerc,
+                  resourceUsage.memoryPercent
+                );
+              }
+              podObj.container.push({
+                name: key,
+                cpu: value.cpu,
+                mem: value.memory,
+                ...resourceUsage,
+              });
             });
-          });
           podsHealth.push(podObj);
         }
       }

@@ -18,7 +18,11 @@ export function StatusCounts(counts: StatusCountsProps) {
           <div className="flex row status-block">
             <div className="flex column">
               <div className="flex row">
-                <img src={IconsStatusMap[key]} alt={key} />
+                <img
+                  src={IconsStatusMap[key]}
+                  alt={key}
+                  className="status-icon-img"
+                />
                 <span style={{ marginLeft: "0.5rem" }} className="bold-text">
                   : {counts.counts[key]}
                 </span>
