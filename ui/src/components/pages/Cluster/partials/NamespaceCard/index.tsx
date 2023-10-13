@@ -3,8 +3,8 @@ import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid";
 import { Link } from "react-router-dom";
-import { StatusBar } from "../../../../common/StatusBar";
 import { NamespaceCardProps } from "../../../../../types/declarations/cluster";
+import { StatusCounts } from "../../../../common/StatusCounts/StatusCounts";
 
 import "./style.css";
 
@@ -41,7 +41,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
             marginTop: "0.5rem",
           }}
         >
-          <Grid item xs={4}>
+          <Grid item xs={3}>
             <span className="namespace-card-section-text-14-normal">
               Status:
             </span>
@@ -83,16 +83,18 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
             marginTop: "0.5rem",
           }}
         >
-          <Grid item xs={4}>
+          <Grid item xs={2}>
             <span className="namespace-card-section-text-14-normal">
               Health:
             </span>
           </Grid>
           <Grid item xs={8} sx={{ padding: "0.3125rem 0" }}>
-            <StatusBar
-              healthy={data?.pipelinesHealthyCount}
-              warning={data?.pipelinesWarningCount}
-              critical={data?.pipelinesCriticalCount}
+            <StatusCounts
+              counts={{
+                healthy: data?.pipelinesHealthyCount,
+                warning: data?.pipelinesWarningCount,
+                critical: data?.pipelinesCriticalCount,
+              }}
             />
           </Grid>
         </Grid>
@@ -117,7 +119,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
             marginTop: "0.5rem",
           }}
         >
-          <Grid item xs={4}>
+          <Grid item xs={3}>
             <span className="namespace-card-section-text-14-normal">
               Status:
             </span>
@@ -158,16 +160,18 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
             marginTop: "0.5rem",
           }}
         >
-          <Grid item xs={4}>
+          <Grid item xs={2}>
             <span className="namespace-card-section-text-14-normal">
               Health:
             </span>
           </Grid>
           <Grid item xs={8} sx={{ padding: "0.3125rem 0" }}>
-            <StatusBar
-              healthy={data?.isbsHealthyCount}
-              warning={data?.isbsWarningCount}
-              critical={data?.isbsCriticalCount}
+            <StatusCounts
+              counts={{
+                healthy: data?.isbsHealthyCount,
+                warning: data?.isbsWarningCount,
+                critical: data?.isbsCriticalCount,
+              }}
             />
           </Grid>
         </Grid>

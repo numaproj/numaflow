@@ -49,7 +49,7 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.PIPELINE_UPDATE]: 750,
   [SidebarType.ISB_CREATE]: 750,
   [SidebarType.ISB_UPDATE]: 750,
-  [SidebarType.VERTEX_DETAILS]: 750,
+  [SidebarType.VERTEX_DETAILS]: 1400,
   [SidebarType.EDGE_DETAILS]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,
   [SidebarType.ERRORS]: 350,
