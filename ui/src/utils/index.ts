@@ -142,25 +142,34 @@ export function getPodContainerUsePercentages(
   podDetails: PodDetail,
   containerName: string
 ): ResourceUsage {
-  const usedCPUParsed: number | undefined =
-    podDetails?.containerMap?.get(containerName)?.cpuParsed;
-  const specCPUParsed: number | undefined =
-    pod.containerSpecMap.get(containerName)?.cpuParsed;
-  let cpuPercent: number | undefined;
-  if (usedCPUParsed && specCPUParsed) {
-    cpuPercent = (usedCPUParsed / specCPUParsed) * 100;
-  }
-  const usedMemParsed: number | undefined =
-    podDetails?.containerMap?.get(containerName)?.memoryParsed;
-  const specMemParsed: number | undefined =
-    pod.containerSpecMap.get(containerName)?.memoryParsed;
-  let memoryPercent: number | undefined;
-  if (usedMemParsed && specMemParsed) {
-    memoryPercent = (usedMemParsed / specMemParsed) * 100;
+  if (
+    podDetails?.containerMap instanceof Map === true &&
+    pod.containerSpecMap instanceof Map === true
+  ) {
+    const usedCPUParsed: number | undefined =
+      podDetails?.containerMap?.get(containerName)?.cpuParsed;
+    const specCPUParsed: number | undefined =
+      pod.containerSpecMap?.get(containerName)?.cpuParsed;
+    let cpuPercent: number | undefined;
+    if (usedCPUParsed && specCPUParsed) {
+      cpuPercent = (usedCPUParsed / specCPUParsed) * 100;
+    }
+    const usedMemParsed: number | undefined =
+      podDetails?.containerMap?.get(containerName)?.memoryParsed;
+    const specMemParsed: number | undefined =
+      pod.containerSpecMap?.get(containerName)?.memoryParsed;
+    let memoryPercent: number | undefined;
+    if (usedMemParsed && specMemParsed) {
+      memoryPercent = (usedMemParsed / specMemParsed) * 100;
+    }
+    return {
+      cpuPercent,
+      memoryPercent,
+    };
   }
   return {
-    cpuPercent,
-    memoryPercent,
+    cpuPercent: undefined,
+    memoryPercent: undefined,
   };
 }
 
