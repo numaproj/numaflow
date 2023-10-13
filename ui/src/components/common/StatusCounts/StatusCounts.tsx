@@ -15,7 +15,7 @@ export function StatusCounts(counts: StatusCountsProps) {
     <div className="flex row" style={{ marginLeft: "0.5rem" }}>
       {Object.keys(counts.counts).map((key) => {
         return (
-          <div className="flex row status-block">
+          <div className="flex row status-block" key={key}>
             <div className="flex column">
               <div className="flex row">
                 <img
