@@ -17,9 +17,13 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
 
   // CPU
   let usedCPU: string | undefined =
-    podDetails?.containerMap?.get(containerName)?.cpu;
+    podDetails?.containerMap instanceof Map
+      ? podDetails?.containerMap?.get(containerName)?.cpu
+      : undefined;
   let specCPU: string | undefined =
-    pod?.containerSpecMap?.get(containerName)?.cpu;
+    pod?.containerSpecMap instanceof Map
+      ? pod?.containerSpecMap?.get(containerName)?.cpu
+      : undefined;
   if (!usedCPU) {
     usedCPU = "?";
   } else if (usedCPU.endsWith("n")) {
@@ -34,9 +38,13 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
   }
   // Memory
   let usedMem: string | undefined =
-    podDetails?.containerMap?.get(containerName)?.memory;
+    podDetails?.containerMap instanceof Map
+      ? podDetails?.containerMap?.get(containerName)?.memory
+      : undefined;
   let specMem: string | undefined =
-    pod?.containerSpecMap?.get(containerName)?.memory;
+    pod?.containerSpecMap instanceof Map
+      ? pod?.containerSpecMap?.get(containerName)?.memory
+      : undefined;
   if (!usedMem) {
     usedMem = "?";
   } else if (usedMem.endsWith("Ki")) {
@@ -52,41 +60,48 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
   const podName = pod?.name?.slice(0, pod?.name?.lastIndexOf("-"));
 
   return (
-    <Box
-      data-testid="podInfo"
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        color: "#DCDCDC",
-      }}
-    >
-      <TableContainer sx={{ maxHeight: "37.5rem", backgroundColor: "#FFF" }}>
-        <Table stickyHeader>
-          <TableBody>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-              <TableCell>{podName}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>CPU %</TableCell>
-              <TableCell>{cpuPercent}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>CPU</TableCell>
-              <TableCell>{`${usedCPU} / ${specCPU}`}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>MEMORY %</TableCell>
-              <TableCell>{memPercent}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>MEMORY</TableCell>
-              <TableCell>{`${usedMem} / ${specMem}`}</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </TableContainer>
+    <Box sx={{ padding: "1rem" }}>
+      <Box sx={{ fontWeight: 600 }}>Container Info</Box>
+      <Box
+        data-testid="podInfo"
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          color: "#DCDCDC",
+        }}
+      >
+        <TableContainer sx={{ maxHeight: "37.5rem", backgroundColor: "#FFF" }}>
+          <Table stickyHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Pod</TableCell>
+                <TableCell>{podName}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Container</TableCell>
+                <TableCell>{containerName}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>CPU %</TableCell>
+                <TableCell>{cpuPercent}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>CPU</TableCell>
+                <TableCell>{`${usedCPU} / ${specCPU}`}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>MEMORY %</TableCell>
+                <TableCell>{memPercent}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>MEMORY</TableCell>
+                <TableCell>{`${usedMem} / ${specMem}`}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
     </Box>
   );
 }

@@ -37,7 +37,7 @@ full-featured stream processing platforms.
 
 ## Roadmap
 
-- User-defined Source (v0.11)
+- Numaflow UI with CRUD and 1.0 Release (11/01/2023)
 
 ## Demo
 

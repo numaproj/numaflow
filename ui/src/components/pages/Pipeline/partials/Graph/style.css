@@ -27,10 +27,9 @@
     display: flex;
     flex-direction: column;
     height: 12rem;
-    width: 5rem;
+    width: 12rem;
     justify-content: space-between;
-    margin-bottom: 6rem;
-    margin-left: 4rem;
+    margin-top: 2rem;
 }
 
 .legend-title {
@@ -43,7 +42,20 @@
     font-style: normal;
     font-weight: 400;
     line-height: normal;
+    margin-top: 0;
     /*justify-content: space-between;*/
+}
+.legend-title:not(:first-child) {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    color: var(--badge-pending, #6B6C72);
+    font-family: AvenirNext forINTUIT, "IBM Plex Sans";
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: normal;
+    margin-top: 1rem;
 }
 
 .legend-title > img {

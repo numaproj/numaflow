@@ -1,0 +1,35 @@
+.flex{
+    display: flex;
+}
+.row{
+    flex-direction: row;
+}
+.column{
+    flex-direction: column;
+} 
+.status-block{
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+}
+.title-case{
+    text-transform: capitalize;
+}
+.regular-text{
+    color: #3C4348;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 23.50px;
+    word-wrap: break-word
+}
+.bold-text{
+    color: #3C4348;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 23.50px;
+    word-wrap: break-word
+}
+.status-icon-img{
+    width: 1.5rem;
+    height: 1.5rem;
+}

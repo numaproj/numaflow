@@ -290,6 +290,7 @@ export function PipelineCard({
                 onChange={handleEditChange}
                 value={editOption}
                 variant="outlined"
+                data-testid="pipeline-card-edit-select"
                 sx={{
                   color: "#0077C5",
                   height: "34px",
