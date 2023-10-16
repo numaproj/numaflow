@@ -1,12 +1,12 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: sideinput-pipeline
+  name: reduce-sideinput-pipeline
 spec:
   sideInputs:
     - name: myticker
       container:
-        image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-example:v0.0.10"
+        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:v0.0.1"
         imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
@@ -14,11 +14,28 @@ spec:
     - name: in
       source:
         http: {}
+    - name: atoi
+      scale:
+        min: 1
+      udf:
+        container:
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.5.0
+          imagePullPolicy: Always
     - name: si-e2e
       udf:
         container:
-          image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-udf:v0.0.10"
+          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:v0.0.1"
           imagePullPolicy: Always
+        groupBy:
+          window:
+            fixed:
+              length: 10s
+          keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 10Gi
+              accessMode: ReadWriteOnce
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
@@ -33,9 +50,10 @@ spec:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
             image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
-            imagePullPolicy: Always
   edges:
     - from: in
+      to: atoi
+    - from: atoi
       to: si-e2e
     - from: si-e2e
       to: sink
