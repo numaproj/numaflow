@@ -12,23 +12,17 @@ export const useSystemInfoFetch = () => {
   const { data, loading: fetchLoading, error } = useFetch(`/api/v1/sysinfo`);
 
   useEffect(() => {
-    if (fetchLoading) {
-      setLoading(true);
-      return;
-    }
+    setLoading(fetchLoading);
     if (error) {
-      setLoading(false);
       setErrMsg("Failed to fetch the system info");
       return;
     }
     if (data?.errMsg) {
-      setLoading(false);
       setErrMsg(data.errMsg);
       return;
     }
     if (data) {
       setSystemInfo(data?.data);
-      setLoading(false);
       return;
     }
   }, [data, fetchLoading]);
