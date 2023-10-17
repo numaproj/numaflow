@@ -419,11 +419,14 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isbsvcName, ns, err.Error()))
 		return
 	}
+	isbsvc.Kind = dfv1.ISBGroupVersionKind.Kind
+	isbsvc.APIVersion = dfv1.SchemeGroupVersion.Version
 
 	status := ISBServiceStatusHealthy
 	// TODO(API) : Get the current status of the ISB service
 
 	resp := NewISBService(status, isbsvc)
+
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, resp))
 }
 
