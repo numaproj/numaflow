@@ -42,6 +42,7 @@ export interface SummaryPageLayoutProps {
   summarySections: SummarySection[];
   contentComponent: React.ReactNode;
   contentPadding?: boolean;
+  contentHideOverflow?: boolean;
 }
 
 const SUMMARY_HEIGHT = "6.5625rem";
@@ -189,6 +190,7 @@ export function SummaryPageLayout({
   summarySections,
   contentComponent,
   contentPadding = true,
+  contentHideOverflow = false,
 }: SummaryPageLayoutProps) {
   const [collapsed, setCollapsed] = useState(collapsable && defaultCollapsed);
   const sumaryRef = useRef<any>();
@@ -296,7 +298,13 @@ export function SummaryPageLayout({
   }, [summaryHeight, collapsed, offsetOnCollapse]);
 
   return (
-    <Box sx={{ height: "100%" }}>
+    <Box
+      sx={
+        contentHideOverflow
+          ? { height: "100%", overflow: "hidden" }
+          : { height: "100%" }
+      }
+    >
       {summary}
       <Box
         sx={{

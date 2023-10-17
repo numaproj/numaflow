@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.11.0 (2023-10-13)
+
+ * [fbf51b2d](https://github.com/numaproj/numaflow/commit/fbf51b2db59f259d925471d40eede930441d9e71) Update manifests to v0.11.0
+ * [f33d614f](https://github.com/numaproj/numaflow/commit/f33d614fecc3affd1310415f01e36e2ff152b5ff) Namespace card status bar changes 0.11 (#1206)
+ * [391b75dc](https://github.com/numaproj/numaflow/commit/391b75dc7cca37ba9000f2e253f0256d2abeccb7) feat: added unit tests for PipelineCard component (#1205)
+ * [7bcc1f27](https://github.com/numaproj/numaflow/commit/7bcc1f278de7f1815bb103543e06418d321f2c02) pods component error fix (#1203)
+ * [df28f937](https://github.com/numaproj/numaflow/commit/df28f937991a38ffb3daca5650ba166160b3dbc9) fix: updated image styles to a class (#1202)
+ * [bbb7db77](https://github.com/numaproj/numaflow/commit/bbb7db77b8ed79c3fec70f6ccd2f126b79d7d19c) feat: Changed the status bar component to an icon based component (#1198)
+ * [f6f20d6c](https://github.com/numaproj/numaflow/commit/f6f20d6c89c024e616b0d21406f08a5e5002c302) fix(SERVER): restructure pod details component (#1189)
+ * [96a6002e](https://github.com/numaproj/numaflow/commit/96a6002eedb6d7570815f0c02b1666a912291f47) feat: updated the legend to a collapsible one on the top left (#1196)
+ * [575605b4](https://github.com/numaproj/numaflow/commit/575605b42adc7e34227894aabe64635e4030b0e7) chore(deps): bump golang.org/x/net from 0.12.0 to 0.17.0 (#1190)
+ * [bfec4fc5](https://github.com/numaproj/numaflow/commit/bfec4fc56d79948af025d28ce8657ab11a0c1ed6) added BCubed to the user list (#1184)
+ * [1e0b25fd](https://github.com/numaproj/numaflow/commit/1e0b25fd0b7556af3333002c149d53c14602b50a) feat: add timeout for pausing pipeline. Fixes #992 (#1138)
+ * [ae232764](https://github.com/numaproj/numaflow/commit/ae23276463f55553ef2604d7eba55d796d994671) feat: Jetstream support for replica of 1 Fixes #944 (#1177)
+ * [1e405b37](https://github.com/numaproj/numaflow/commit/1e405b37e92e2e898cc757f5d4ab9b67c5b7fef0) doc: minor clean up of JOIN doc (#1175)
+ * [77c01811](https://github.com/numaproj/numaflow/commit/77c01811c5ab9df188a0559f51151e66141d9088) fix: incorrect side inputs watch logic (#1164)
+
+### Contributors
+
+ * Darshan Simha U
+ * Derek Wang
+ * Dillen Padhiar
+ * Joel Millage
+ * Vigith Maurice
+ * dependabot[bot]
+ * mshakira
+
 ## v0.11.0-rc2 (2023-10-03)
 
  * [8ae28af3](https://github.com/numaproj/numaflow/commit/8ae28af3fed4ed201f1eb40d3556377a04c9681f) Update manifests to v0.11.0-rc2

@@ -1,6 +1,6 @@
 # Kafka Sink
 
-A `Kafka` sink is used to forward the messages to a Kafka topic.
+A `Kafka` sink is used to forward the messages to a Kafka topic. Kafka sink supports configuration overrides.
 
 ```yaml
 spec:

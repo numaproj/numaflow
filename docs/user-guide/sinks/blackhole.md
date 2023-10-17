@@ -9,3 +9,5 @@ spec:
       sink:
         blackhole: {}
 ```
+
+NOTE: The previous vertex should ideally be not forwarding the message to make it more efficient to avoid network latency.

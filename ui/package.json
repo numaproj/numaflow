@@ -66,6 +66,7 @@
     ]
   },
   "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@typescript-eslint/eslint-plugin": "^5.20.0",
     "@typescript-eslint/parser": "^5.20.0",
     "eslint": "^7.19.0",
@@ -73,8 +74,7 @@
     "eslint-plugin-prettier": "3.3.1",
     "jest-junit": "^12.0.0",
     "prettier": "2.5.1",
-    "react-scripts": "5.0.1",
-    "@babel/plugin-proposal-private-property-in-object": "7.21.0-placeholder-for-preset-env.2"
+    "react-scripts": "5.0.1"
   },
   "resolutions": {
     "nth-check": "^2.0.1"

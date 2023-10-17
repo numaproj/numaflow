@@ -20,6 +20,7 @@ package e2e
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -31,12 +32,34 @@ type UserDefinedSourceSuite struct {
 	E2ESuite
 }
 
-func (s *UserDefinedSourceSuite) TestSimpleSourceGo() {
+func (s *UserDefinedSourceSuite) testSimpleSourceGo() {
 	s.testSimpleSource("go")
 }
 
-func (s *UserDefinedSourceSuite) TestSimpleSourceJava() {
+func (s *UserDefinedSourceSuite) testSimpleSourceJava() {
 	s.testSimpleSource("java")
+}
+
+func (s *UserDefinedSourceSuite) testSimpleSourcePython() {
+	s.testSimpleSource("python")
+}
+
+func (s *UserDefinedSourceSuite) TestUDSource() {
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		s.testSimpleSourcePython()
+	}()
+	go func() {
+		defer wg.Done()
+		s.testSimpleSourceJava()
+	}()
+	go func() {
+		defer wg.Done()
+		s.testSimpleSourceGo()
+	}()
+	wg.Wait()
 }
 
 func (s *UserDefinedSourceSuite) testSimpleSource(lang string) {

@@ -4,6 +4,7 @@ import Pagination from "@mui/material/Pagination";
 import Grid from "@mui/material/Grid";
 import { DebouncedSearchInput } from "../../../../common/DebouncedSearchInput";
 import { NamespaceCard } from "../NamespaceCard";
+import { ErrorIndicator } from "../../../../common/ErrorIndicator";
 import {
   ClusterNamespaceListingProps,
   ClusterNamespaceSummary,
@@ -113,11 +114,20 @@ export function ClusterNamespaceListing({
     <Box
       sx={{ display: "flex", flexDirection: "column", padding: "0 2.625rem" }}
     >
-      <Box sx={{ display: "flex", flexDirection: "row" }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
+      >
         <DebouncedSearchInput
           placeHolder="Search for namespace"
           onChange={setSearch}
         />
+        <Box>
+          <ErrorIndicator />
+        </Box>
       </Box>
       <Box sx={{ display: "flex", flexDirection: "row", marginTop: "2rem" }}>
         <span className="cluster-ns-listing-table-title">Namespaces</span>
