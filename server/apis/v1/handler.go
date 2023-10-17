@@ -83,22 +83,24 @@ func NewHandler() (*handler, error) {
 	}, nil
 }
 
-// Login is used to redirect the user to authentication page and provide a token(or a claim?).
+// Login is used to redirect the user to authentication page and set the user identity token in the cookie
 func (h *handler) Login(c *gin.Context) {
-	// TODO - send a request to Dex to get the user identity token.
+	// TODO - send a request to Dex to get the real user identity token.
 	token := "dummy-token"
-	c.SetCookie("user-identity-token", token, 3600, "/", "", false, true)
-	c.JSON(http.StatusOK, nil)
+	c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
+	returnUrl := c.Request.URL.Query().Get("returnUrl")
+	c.JSON(http.StatusOK, returnUrl)
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
 	userIdentityToken, err := c.Cookie("user-identity-token")
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, can't identify user %s", error.Error()))
+		errMsg := "user is not authenticated."
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-
+	// TODO - After we successfully retrieved the user identity token, we still need to verify it with Dex.
 	if casbin.IsAuthorized(
 		casbin.AuthorizationRequest{
 			UserIdentityToken: userIdentityToken,
@@ -112,7 +114,8 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 		}
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
 	} else {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", "user is not authorized"))
+		errMsg := "user is not authorized to execute the requested action."
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
 	}
 }
 
