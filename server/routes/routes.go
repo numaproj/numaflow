@@ -48,6 +48,8 @@ func v1Routes(r gin.IRouter) {
 	if err != nil {
 		panic(err)
 	}
+	// Handle the login request.
+	r.GET("/login", handler.Login)
 	// List all namespaces that have Pipeline or InterStepBufferService objects.
 	r.GET("/namespaces", handler.ListNamespaces)
 	// Summarized information of all the namespaces in a cluster wrapped in a list.

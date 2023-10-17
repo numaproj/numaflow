@@ -44,6 +44,7 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/server/casbin"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -82,14 +83,40 @@ func NewHandler() (*handler, error) {
 	}, nil
 }
 
+// Login is used to redirect the user to authentication page and set the user identity token in the cookie
+func (h *handler) Login(c *gin.Context) {
+	// TODO - send a request to Dex to get the real user identity token.
+	token := "dummy-token"
+	c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
+	returnUrl := c.DefaultQuery("returnUrl", "/cluster-summary")
+	c.Redirect(http.StatusOK, returnUrl)
+}
+
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
-	namespaces, err := getAllNamespaces(h)
+	userIdentityToken, err := c.Cookie("user-identity-token")
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
+		errMsg := "user is not authenticated."
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
+	// TODO - After we successfully retrieved the user identity token, we still need to verify it with Dex.
+	if casbin.IsAuthorized(
+		casbin.AuthorizationRequest{
+			UserIdentityToken: userIdentityToken,
+			Resource:          "namespaces",
+			Action:            "list",
+		}) {
+		namespaces, err := getAllNamespaces(h)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
+			return
+		}
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
+	} else {
+		errMsg := "user is not authorized to execute the requested action."
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+	}
 }
 
 // GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
