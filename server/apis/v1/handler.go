@@ -88,8 +88,8 @@ func (h *handler) Login(c *gin.Context) {
 	// TODO - send a request to Dex to get the real user identity token.
 	token := "dummy-token"
 	c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
-	returnUrl := c.Request.URL.Query().Get("returnUrl")
-	c.JSON(http.StatusOK, returnUrl)
+	returnUrl := c.DefaultQuery("returnUrl", "/cluster-summary")
+	c.Redirect(http.StatusOK, returnUrl)
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
