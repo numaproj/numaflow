@@ -162,7 +162,7 @@ function App() {
       return (
         <Routes>
           <Route path="/" element={<Namespaces />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/login/:returnURL" element={<Login />} />
           <Route path="/pipelines/:pipelineId" element={<Pipeline />} />
           <Route
             path="*"
@@ -179,7 +179,7 @@ function App() {
     return (
       <Routes>
         <Route path="/" element={<Cluster />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/login/:returnURL" element={<Login />} />
         <Route path="/namespaces/:namespaceId" element={<Namespaces />} />
         <Route
           path="/namespaces/:namespaceId/pipelines/:pipelineId"
