@@ -1,6 +1,5 @@
 import React, { useCallback, useState, useEffect } from "react";
 import TextField from "@mui/material/TextField";
-import { styled } from "@mui/material/styles";
 import InputAdornment from "@mui/material/InputAdornment";
 import SearchIcon from "@mui/icons-material/Search";
 
@@ -11,29 +10,6 @@ export interface DebouncedSearchInputProps {
   placeHolder?: string;
   onChange: (value: string) => void;
 }
-
-const CssTextField = styled(TextField)({
-  background: "#FFFFFF !important",
-  border:
-    "1px solid var(--neutral-peppercorn-a-30, rgba(36, 28, 21, 0.30)) !important",
-  "& label.Mui-focused": {
-    border: 0,
-  },
-  "& .MuiInput-underline:after": {
-    border: 0,
-  },
-  "& .MuiOutlinedInput-root": {
-    "& fieldset": {
-      border: 0,
-    },
-    "&:hover fieldset": {
-      border: 0,
-    },
-    "&.Mui-focused fieldset": {
-      border: 0,
-    },
-  },
-});
 
 export function DebouncedSearchInput({
   disabled = false,
@@ -69,11 +45,13 @@ export function DebouncedSearchInput({
   }, [timerId]);
 
   return (
-    <CssTextField
+    <TextField
       sx={{
         background: "#FFFFFF",
         width: "50%",
         maxWidth: "39.375rem",
+        border: "1px solid #6B6C72",
+        borderRadius: "0.25rem",
       }}
       variant="outlined"
       placeholder={placeHolder}

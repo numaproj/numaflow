@@ -11,9 +11,10 @@ import {
 
 export const usePipelineViewFetch = (
   namespaceId: string | undefined,
-  pipelineId: string | undefined
+  pipelineId: string | undefined,
+  addError: (error: string) => void
 ) => {
-  const [requestKey, setRequestKey] = useState(`${Date.now()}`);
+  const [requestKey, setRequestKey] = useState("");
   const [pipeline, setPipeline] = useState<Pipeline | undefined>(undefined);
   const [ns_pl, setNS_PL] = useState("");
   const [spec, setSpec] = useState<Spec | undefined>(undefined);
@@ -37,16 +38,15 @@ export const usePipelineViewFetch = (
   const [nodeOutDegree, setNodeOutDegree] = useState<Map<string, number>>(
     new Map()
   );
-  const [pipelineErr, setPipelineErr] = useState<any[] | undefined>(undefined);
-  const [buffersErr, setBuffersErr] = useState<any[] | undefined>(undefined);
-  const [podsErr, setPodsErr] = useState<any[] | undefined>(undefined);
-  const [metricsErr, setMetricsErr] = useState<any[] | undefined>(undefined);
-  const [watermarkErr, setWatermarkErr] = useState<any[] | undefined>(
-    undefined
-  );
+  const [pipelineErr, setPipelineErr] = useState<string | undefined>(undefined);
+  const [buffersErr, setBuffersErr] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
   const BASE_API = `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
+
+  const refresh = useCallback(() => {
+    setRequestKey(`${Date.now()}`);
+  }, []);
 
   // Call to get pipeline
   useEffect(() => {
@@ -65,37 +65,35 @@ export const usePipelineViewFetch = (
             // Update spec state if it is not equal to the spec from the response
             if (!isEqual(spec, json.data?.pipeline?.spec))
               setSpec(json.data?.pipeline?.spec);
+            setPipelineErr(undefined);
           } else if (json?.errMsg) {
             // pipeline API call returns an error message
-            setPipelineErr([
-              {
-                error: json.errMsg,
-                options: { toastId: "pipeline-fetch-error", autoClose: 5000 },
-              },
-            ]);
+            if (requestKey === "") {
+              setPipelineErr(json.errMsg);
+            } else {
+              addError(json.errMsg);
+            }
           }
         } else {
           // Handle the case when the response is not OK
-          setPipelineErr([
-            {
-              error: "Failed to fetch the pipeline details",
-              options: { toastId: "pipeline-fetch", autoClose: 5000 },
-            },
-          ]);
+          if (requestKey === "") {
+            setPipelineErr(`Failed with code: ${response.status}`);
+          } else {
+            addError(`Failed with code: ${response.status}`);
+          }
         }
-      } catch {
+      } catch (e: any) {
         // Handle any errors that occur during the fetch request
-        setPipelineErr([
-          {
-            error: "Failed to fetch the pipeline details",
-            options: { toastId: "pipeline-fetch", autoClose: 5000 },
-          },
-        ]);
+        if (requestKey === "") {
+          setPipelineErr(e.message);
+        } else {
+          addError(e.message);
+        }
       }
     };
 
     fetchPipeline();
-  }, [requestKey]);
+  }, [requestKey, addError]);
 
   // Call to get buffers
   useEffect(() => {
@@ -109,37 +107,35 @@ export const usePipelineViewFetch = (
           if (json?.data) {
             // Update buffers state with data from the response
             setBuffers(json.data);
+            setBuffersErr(undefined);
           } else if (json?.errMsg) {
             // Buffer API call returns an error message
-            setBuffersErr([
-              {
-                error: json.errMsg,
-                options: { toastId: "isb-fetch-error", autoClose: 5000 },
-              },
-            ]);
+            if (requestKey === "") {
+              setBuffersErr(json.errMsg);
+            } else {
+              addError(json.errMsg);
+            }
           }
         } else {
           // Handle the case when the response is not OK
-          setBuffersErr([
-            {
-              error: "Failed to fetch the pipeline buffers",
-              options: { toastId: "isb-fetch", autoClose: 5000 },
-            },
-          ]);
+          if (requestKey === "") {
+            setBuffersErr(`Failed with code: ${response.status}`);
+          } else {
+            addError(`Failed with code: ${response.status}`);
+          }
         }
-      } catch {
+      } catch (e: any) {
         // Handle any errors that occur during the fetch request
-        setBuffersErr([
-          {
-            error: "Failed to fetch the pipeline buffers",
-            options: { toastId: "isb-fetch", autoClose: 5000 },
-          },
-        ]);
+        if (requestKey === "") {
+          setBuffersErr(e.message);
+        } else {
+          addError(e.message);
+        }
       }
     };
 
     fetchBuffers();
-  }, [requestKey]);
+  }, [requestKey, addError]);
 
   // Refresh pipeline and buffer info every 30 sec
   useEffect(() => {
@@ -152,7 +148,6 @@ export const usePipelineViewFetch = (
   // This useEffect is used to obtain all the pods for a given vertex in a pipeline.
   useEffect(() => {
     const vertexToPodsMap = new Map();
-    const podsErr: any[] = [];
 
     if (spec?.vertices) {
       // Fetch pods count for each vertex in parallel
@@ -172,13 +167,7 @@ export const usePipelineViewFetch = (
                 vertexToPodsMap.set(vertex.name, json.data.length);
               } else if (json?.errMsg) {
                 // Pods API call returns an error message
-                podsErr.push({
-                  error: json.errMsg,
-                  options: {
-                    toastId: `${vertex.name}-pods-fetch-error`,
-                    autoClose: 5000,
-                  },
-                });
+                addError(json.errMsg);
               }
             });
         })
@@ -187,19 +176,9 @@ export const usePipelineViewFetch = (
           results.forEach((result) => {
             if (result && result?.status === "rejected") {
               // Handle rejected promises and add error messages to podsErr
-              podsErr.push({
-                error: `${result.reason.response.status}: Failed to get pods count for ${result.reason.vertex} vertex`,
-                options: {
-                  toastId: `${result.reason.vertex}-pods-fetch`,
-                  autoClose: 5000,
-                },
-              });
+              addError(`Failed to get pods: ${result.reason.response.status}`);
             }
           });
-          if (podsErr.length > 0) {
-            // Update podsErr state if there are any errors
-            setPodsErr(podsErr);
-          }
         })
         .then(() => {
           if (!isEqual(vertexPods, vertexToPodsMap)) {
@@ -207,13 +186,14 @@ export const usePipelineViewFetch = (
             setVertexPods(vertexToPodsMap);
           }
         })
-        .catch(console.error);
+        .catch((e: any) => {
+          addError(`Error: ${e.message}`);
+        });
     }
-  }, [spec, requestKey]);
+  }, [spec, requestKey, addError]);
 
   const getVertexMetrics = useCallback(() => {
     const vertexToMetricsMap = new Map();
-    const metricsErr: any[] = [];
 
     if (spec?.vertices && vertexPods.size > 0) {
       // Fetch metrics for all vertices together
@@ -260,13 +240,9 @@ export const usePipelineViewFetch = (
                     ) {
                       // Handle case when processingRates are not available for a vertex
                       vertexMetrics.error = true;
-                      metricsErr.push({
-                        error: `Failed to get metrics for ${vertexName} vertex`,
-                        options: {
-                          toastId: `${vertexName}-metrics`,
-                          autoClose: 5000,
-                        },
-                      });
+                      addError(
+                        `Failed to get metrics for ${vertexName} vertex`
+                      );
                     }
                   }
                 });
@@ -283,13 +259,7 @@ export const usePipelineViewFetch = (
               });
             } else if (json?.errMsg) {
               // Metrics API call returns an error message
-              metricsErr.push({
-                error: json.errMsg,
-                options: {
-                  toastId: "vertex-metrics-fetch-error",
-                  autoClose: 5000,
-                },
-              });
+              addError(json.errMsg);
             }
           }),
       ])
@@ -297,21 +267,18 @@ export const usePipelineViewFetch = (
           results.forEach((result) => {
             if (result && result?.status === "rejected") {
               // Handle rejected promises and add error messages to metricsErr
-              metricsErr.push({
-                error: `${result.reason.response.status}: Failed to get metrics for some vertices`,
-                options: { toastId: `vertex-metrics-fetch`, autoClose: 5000 },
-              });
+              addError(
+                `Failed to get metrics: ${result.reason.response.status}`
+              );
             }
           });
-          if (metricsErr.length > 0) {
-            // Update metricsErr state if there are any errors
-            setMetricsErr(metricsErr);
-          }
         })
         .then(() => setVertexMetrics(vertexToMetricsMap))
-        .catch(console.error);
+        .catch((e: any) => {
+          addError(`Error: ${e.message}`);
+        });
     }
-  }, [spec, vertexPods]);
+  }, [spec, vertexPods, addError]);
 
   // This useEffect is used to obtain metrics for a given vertex in a pipeline and refreshes every 1 minute
   useEffect(() => {
@@ -325,7 +292,6 @@ export const usePipelineViewFetch = (
   // This is used to obtain the watermark of a given pipeline
   const getPipelineWatermarks = useCallback(() => {
     const edgeToWatermarkMap = new Map();
-    const watermarkErr: any[] = [];
 
     if (spec?.edges) {
       if (spec?.watermark?.disabled === true) {
@@ -353,13 +319,7 @@ export const usePipelineViewFetch = (
                 });
               } else if (json?.errMsg) {
                 // Watermarks API call returns an error message
-                watermarkErr.push({
-                  error: json.errMsg,
-                  options: {
-                    toastId: "watermarks-fetch-error",
-                    autoClose: 5000,
-                  },
-                });
+                addError(json.errMsg);
               }
             }),
         ])
@@ -367,19 +327,17 @@ export const usePipelineViewFetch = (
             results.forEach((result) => {
               if (result && result?.status === "rejected") {
                 // Handle rejected promises and add error messages to watermarkErr
-                watermarkErr.push({
-                  error: `${result.reason.status}: Failed to get watermarks for some vertices`,
-                  options: { toastId: "watermarks-fetch", autoClose: 5000 },
-                });
+                addError(`Failed to get watermarks: ${result.reason.status}`);
               }
             });
-            if (watermarkErr.length > 0) setWatermarkErr(watermarkErr);
           })
           .then(() => setEdgeWatermark(edgeToWatermarkMap))
-          .catch(console.error);
+          .catch((e: any) => {
+            addError(`Error: ${e.message}`);
+          });
       }
     }
-  }, [spec]);
+  }, [spec, addError]);
 
   // This useEffect is used to obtain watermark for a given vertex in a pipeline and refreshes every 1 minute
   useEffect(() => {
@@ -693,9 +651,7 @@ export const usePipelineViewFetch = (
     edges,
     pipelineErr,
     buffersErr,
-    podsErr,
-    metricsErr,
-    watermarkErr,
     loading,
+    refresh,
   };
 };

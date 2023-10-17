@@ -1,0 +1,17 @@
+.validation-message-icon {
+  width: 5rem;
+}
+
+.validation-message-title {
+  font-size: 24px;
+  font-style: normal;
+  font-weight: 500;
+  color: #393A3D;
+}
+
+.validation-message-content {
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 400;
+  color: #393A3D;
+}

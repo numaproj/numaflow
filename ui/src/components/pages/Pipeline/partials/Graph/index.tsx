@@ -7,7 +7,6 @@ import React, {
   useState,
   useContext,
 } from "react";
-
 import ReactFlow, {
   applyEdgeChanges,
   applyNodeChanges,
@@ -31,6 +30,7 @@ import {
 } from "@mui/material";
 import IconButton from "@mui/material/IconButton";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { Alert, Box, Button, CircularProgress } from "@mui/material";
 import { graphlib, layout } from "dagre";
 import CustomEdge from "./partials/CustomEdge";
 import CustomNode from "./partials/CustomNode";
@@ -42,21 +42,27 @@ import {
   GraphProps,
   HighlightContextProps,
 } from "../../../../../types/declarations/graph";
+import {
+  PAUSED,
+  PAUSING,
+  RUNNING,
+  getAPIResponseError,
+  timeAgo,
+} from "../../../../../utils";
+import { ErrorIndicator } from "../../../../common/ErrorIndicator";
 import lock from "../../../../../images/lock.svg";
 import unlock from "../../../../../images/unlock.svg";
 import scrollToggle from "../../../../../images/move-arrows.svg";
 import closedHand from "../../../../../images/closed.svg";
 import fullscreen from "../../../../../images/fullscreen.svg";
-import sidePanel from "../../../../../images/side-panel.svg";
 import zoomInIcon from "../../../../../images/zoom-in.svg";
 import zoomOutIcon from "../../../../../images/zoom-out.svg";
 import source from "../../../../../images/source.png";
 import map from "../../../../../images/map.png";
 import reduce from "../../../../../images/reduce.png";
 import sink from "../../../../../images/sink.png";
-import input from "../../../../../images/input.svg";
-import generator from "../../../../../images/generator.svg";
-import noError from "../../../../../images/no-error.svg";
+import input from "../../../../../images/input.png";
+import generator from "../../../../../images/generator.png";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -140,7 +146,6 @@ const Flow = (props: FlowProps) => {
     handleNodeClick,
     handleEdgeClick,
     handlePaneClick,
-    setSidebarProps,
   } = props;
 
   const onIsLockedChange = useCallback(
@@ -155,16 +160,6 @@ const Flow = (props: FlowProps) => {
   const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomLevel]);
   const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomLevel]);
 
-  const handleError = useCallback(() => {
-    setSidebarProps({
-      type: SidebarType.ERRORS,
-      errorsProps: {
-        errors: true,
-      },
-      slide: false,
-    });
-  }, [setSidebarProps]);
-  // TODO error panel icon color change
   return (
     <ReactFlow
       nodeTypes={defaultNodeTypes}
@@ -195,14 +190,6 @@ const Flow = (props: FlowProps) => {
         <div className={"divider"} />
         <IconButton onClick={onFullScreen}>
           <img src={fullscreen} alt={"fullscreen"} />
-        </IconButton>
-        <IconButton
-          onClick={() => {
-            //TODO add single panel logic
-            alert("sidePanel");
-          }}
-        >
-          <img src={sidePanel} alt={"sidePanel"} />
         </IconButton>
         <div className={"divider"} />
         <IconButton onClick={onZoomIn}>
@@ -261,20 +248,15 @@ const Flow = (props: FlowProps) => {
               <div className={"legend-text"}>Sink</div>
             </div>
             <div className={"legend-title"}>
-              <img src={input} width={22} height={24} alt={"input"} />
+              <img src={input} width={22} alt={"input"} />
               <div className={"legend-text"}>Input</div>
             </div>
             <div className={"legend-title"}>
-              <img src={generator} width={22} height={24} alt={"generator"} />
+              <img src={generator} width={22} alt={"generator"} />
               <div className={"legend-text"}>Generator</div>
             </div>
           </AccordionDetails>
         </Accordion>
-      </Panel>
-      <Panel position="top-right">
-        <div onClick={handleError} style={{ cursor: "pointer" }}>
-          <img src={noError} width={22} height={24} alt={"error-status"} />
-        </div>
       </Panel>
     </ReactFlow>
   );
@@ -297,7 +279,7 @@ const getHiddenValue = (edges: Edge[]) => {
 };
 
 export default function Graph(props: GraphProps) {
-  const { data, namespaceId, pipelineId } = props;
+  const { data, namespaceId, pipelineId, refresh } = props;
   const { sidebarProps, setSidebarProps } =
     useContext<AppContextProps>(AppContext);
 
@@ -311,6 +293,14 @@ export default function Graph(props: GraphProps) {
   const [sideEdges, setSideEdges] = useState<Map<string, string>>(new Map());
   const initialHiddenValue = getHiddenValue(layoutedEdges);
   const [hidden, setHidden] = useState(initialHiddenValue);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [successMessage, setSuccessMessage] = useState<string | undefined>(
+    undefined
+  );
+  const [statusPayload, setStatusPayload] = useState<any>(undefined);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
+  const [timer, setTimer] = useState<any>(undefined);
 
   useEffect(() => {
     const nodeSet = new Map();
@@ -321,7 +311,6 @@ export default function Graph(props: GraphProps) {
     });
     setSideNodes(nodeSet);
   }, [layoutedNodes]);
-
   useEffect(() => {
     const edgeSet: Map<string, string> = new Map();
     layoutedEdges.forEach((edge) => {
@@ -451,6 +440,7 @@ export default function Graph(props: GraphProps) {
             vertexMetrics: node?.data?.vertexMetrics?.podMetrics?.data,
             buffers: node?.data?.buffers,
             type: node?.data?.type,
+            refresh,
           },
         };
         if (existingProps === JSON.stringify(updated)) {
@@ -460,7 +450,7 @@ export default function Graph(props: GraphProps) {
         setSidebarProps(updated);
       }
     },
-    [namespaceId, pipelineId, sideNodes, setSidebarProps, sidebarProps]
+    [namespaceId, pipelineId, sideNodes, setSidebarProps, sidebarProps, refresh]
   );
 
   const handleNodeClick = useCallback(
@@ -524,9 +514,186 @@ export default function Graph(props: GraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showSpec, setShowSpec] = useState(true);
 
+  const handlePlayClick = useCallback(() => {
+    handleTimer();
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: RUNNING,
+        },
+      },
+    });
+  }, []);
+
+  const handlePauseClick = useCallback(() => {
+    handleTimer();
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: PAUSED,
+        },
+      },
+    });
+  }, []);
+
+  const handleTimer = useCallback(() => {
+    const dateString = new Date().toISOString();
+    const time = timeAgo(dateString);
+    setTimerDateStamp(time);
+    const pauseTimer = setInterval(() => {
+      const time = timeAgo(dateString);
+      setTimerDateStamp(time);
+    }, 1000);
+    setTimer(pauseTimer);
+  }, []);
+
+  useEffect(() => {
+    const patchStatus = async () => {
+      try {
+        const response = await fetch(
+          `/api/v1/namespaces/${namespaceId}/pipelines/${data?.pipeline?.metadata?.name}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(statusPayload),
+          }
+        );
+        const error = await getAPIResponseError(response);
+        if (error) {
+          setError(error);
+        } else {
+          refresh();
+          setSuccessMessage("Status updated successfully");
+        }
+      } catch (e) {
+        setError(e);
+      }
+    };
+    if (statusPayload) {
+      patchStatus();
+    }
+  }, [statusPayload]);
+
+  useEffect(() => {
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
+      data?.pipeline?.status?.phase === PAUSED
+    ) {
+      clearInterval(timer);
+      setStatusPayload(undefined);
+    }
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === RUNNING &&
+      data?.pipeline?.status?.phase === RUNNING
+    ) {
+      clearInterval(timer);
+      setStatusPayload(undefined);
+    }
+  }, [data]);
+
   return (
-    <div style={{ height: "90%" }}>
+    <div style={{ height: "85%" }}>
       <div className="Graph" data-testid="graph">
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+          }}
+        >
+          <Button
+            variant="contained"
+            sx={{
+              marginTop: "1rem",
+              marginLeft: "1rem",
+              width: "80px",
+              fontWeight: "bold",
+            }}
+            onClick={handlePlayClick}
+            disabled={data?.pipeline?.status?.phase === RUNNING}
+          >
+            Resume
+          </Button>
+          <Button
+            variant="contained"
+            sx={{
+              marginTop: "1rem",
+              marginLeft: "1rem",
+              width: "80px",
+              fontWeight: "bold",
+            }}
+            onClick={handlePauseClick}
+            disabled={
+              data?.pipeline?.status?.phase === PAUSED ||
+              data?.pipeline?.status?.phase === PAUSING
+            }
+          >
+            Pause
+          </Button>
+          <Button sx={{ height: "35px", marginTop: "1rem" }}>
+            {" "}
+            {error && statusPayload ? (
+              <Alert
+                severity="error"
+                sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
+              >
+                {error}
+              </Alert>
+            ) : successMessage &&
+              statusPayload &&
+              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                data?.pipeline?.status?.phase !== PAUSED) ||
+                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                  data?.pipeline?.status?.phase !== RUNNING)) ? (
+              <div
+                style={{
+                  borderRadius: "13px",
+                  width: "228px",
+                  background: "#F0F0F0",
+                  display: "flex",
+                  flexDirection: "row",
+                  marginLeft: "1rem",
+                  marginTop: "1rem",
+                  padding: "0.5rem",
+                  color: "#516F91",
+                  alignItems: "center",
+                }}
+              >
+                <CircularProgress
+                  sx={{ width: "20px !important", height: "20px !important" }}
+                />{" "}
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <span style={{ marginLeft: "1rem" }}>
+                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
+                      ? "Pipeline Pausing..."
+                      : "Pipeline Resuming..."}
+                  </span>
+                  <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
+                </Box>
+              </div>
+            ) : (
+              ""
+            )}
+          </Button>
+        </Box>
+          <Box sx={{ marginRight: "1rem" }}>
+            <ErrorIndicator />
+          </Box>
+        </Box>
         <HighlightContext.Provider
           value={{
             highlightValues,
@@ -553,23 +720,6 @@ export default function Graph(props: GraphProps) {
           </ReactFlowProvider>
         </HighlightContext.Provider>
       </div>
-
-      {/*<Card*/}
-      {/*  sx={{ borderBottom: 1, borderColor: "divider", boxShadow: 1 }}*/}
-      {/*  data-testid={"card"}*/}
-      {/*  variant={"outlined"}*/}
-      {/*>*/}
-      {/*  {showSpec && <Spec pipeline={data.pipeline} />}*/}
-      {/*  {edgeOpen && <EdgeInfo data-testid="edge-info" edge={edge} />}*/}
-      {/*  {nodeOpen && (*/}
-      {/*    <NodeInfo*/}
-      {/*      data-testid="node-info"*/}
-      {/*      node={node}*/}
-      {/*      namespaceId={namespaceId}*/}
-      {/*      pipelineId={pipelineId}*/}
-      {/*    />*/}
-      {/*  )}*/}
-      {/*</Card>*/}
     </div>
   );
 }
