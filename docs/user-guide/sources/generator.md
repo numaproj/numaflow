@@ -1,6 +1,7 @@
 # Generator Source
 
 Generator Source is mainly used for development purpose, where you want to have self-contained source to generate some messages. We mainly use generator for load testing and integration testing of Numaflow.
+The load generated is per replica.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
