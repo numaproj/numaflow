@@ -44,6 +44,7 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/server/casbin"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -82,14 +83,31 @@ func NewHandler() (*handler, error) {
 	}, nil
 }
 
+// Login is used to redirect the user to authentication page and provide a token(or a claim?).
+func (h *handler) Login(c *gin.Context) {
+	// TODO - send a request to Dex to get the user identity token.
+	token := "dummy-token"
+	c.JSON(http.StatusOK, token)
+}
+
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
-	namespaces, err := getAllNamespaces(h)
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
-		return
+	userIdentityToken := c.Request.Header.Get("user-identity-token")
+	if casbin.IsAuthorized(
+		casbin.AuthorizationRequest{
+			UserIdentityToken: userIdentityToken,
+			Resource:          "namespaces",
+			Action:            "list",
+		}) {
+		namespaces, err := getAllNamespaces(h)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
+			return
+		}
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
+	} else {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", "user is not authorized"))
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
 }
 
 // GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
