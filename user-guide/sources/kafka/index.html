@@ -2017,7 +2017,7 @@
 
 
 <h1 id="kafka-source">Kafka Source<a class="headerlink" href="#kafka-source" title="Permanent link">&para;</a></h1>
-<p>A <code>Kafka</code> source is used to ingest the messages from a Kafka topic.</p>
+<p>A <code>Kafka</code> source is used to ingest the messages from a Kafka topic. Numaflow uses consumer-groups to manage offsets.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input</span>
