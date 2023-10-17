@@ -35,6 +35,7 @@ var (
 	rewritePathPrefixes = []string{
 		"/namespaces",
 		"/pipelines",
+		"/login",
 	}
 )
 

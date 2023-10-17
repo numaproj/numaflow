@@ -1,8 +1,55 @@
-import React from "react";
-import Box from "@mui/material/Box";
+import React, { useCallback } from "react";
 
 import "./style.css";
+import { useSearchParams } from "react-router-dom";
+import { getAPIResponseError } from "../../../utils";
 
 export function Login() {
-  return <Box>LOGIN TODO</Box>;
+  const [error, setError] = React.useState<any>(null);
+  const [searchParams] = useSearchParams();
+  const returnURL = searchParams.get("returnUrl") || "/";
+
+  const handleLoginClick = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/v1/login?returnUrl=${returnURL}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const error = await getAPIResponseError(response);
+      if (error) {
+        setError(error);
+      }
+    } catch (e) {
+      setError(e);
+    }
+  }, []);
+  return (
+    <div className="flex row loginPageContainer">
+      <div className="flex row logoContainer">
+        <div className="flex column ">
+          <span
+            style={{
+              color: "#fff",
+              width: "82%",
+              fontSize: "32px",
+            }}
+          >
+            Unlock the power of data streaming with Numaflow!
+          </span>
+        </div>
+        <div className="flex row"></div>
+      </div>
+
+      <div className="flex row loginFormContainer">
+        <button onClick={handleLoginClick}>Login via Github</button>
+        {error && (
+          <div className="flex row">
+            <span className="error">{error.message}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
