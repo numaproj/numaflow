@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useContext,
+} from "react";
 import Box from "@mui/material/Box";
 import Pagination from "@mui/material/Pagination";
 import Grid from "@mui/material/Grid";
@@ -9,21 +15,32 @@ import { PipelineCard } from "../PipelineCard";
 import { createSvgIcon } from "@mui/material/utils";
 import { NamespacePipelineListingProps } from "../../../../../types/declarations/namespace";
 import { PipelineData } from "./PipelinesTypes";
-import "./style.css";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { AppContext } from "../../../../../App";
+import { SidebarType } from "../../../../common/SlidingSidebar";
+import { ViewType } from "../../../../common/SpecEditor";
 import { Button, MenuItem, Select } from "@mui/material";
+import { ErrorIndicator } from "../../../../common/ErrorIndicator";
+import {
+  ALL,
+  ALPHABETICAL_SORT,
+  ASC,
+  CRITICAL,
+  DESC,
+  HEALTHY,
+  LAST_CREATED_SORT,
+  LAST_UPDATED_SORT,
+  PAUSED,
+  RUNNING,
+  STOPPED,
+  WARNING,
+} from "../../../../../utils";
 
 import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
-export const HEALTH = ["All", "Healthy", "Warning", "Critical"];
-export const STATUS = ["All", "Running", "Stopped", "Paused"];
-export const ASC = "asc";
-export const DESC = "desc";
-export const ALPHABETICAL_SORT = "alphabetical";
-export const LAST_UPDATED_SORT = "lastUpdated";
-export const LAST_CREATED_SORT = "lastCreated";
 
-export const sortOptions = [
+const sortOptions = [
   {
     label: "Last Updated",
     value: LAST_UPDATED_SORT,
@@ -64,10 +81,14 @@ export function NamespacePipelineListing({
   data,
   pipelineData,
   isbData,
+  refresh,
 }: NamespacePipelineListingProps) {
+  const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL];
+  const STATUS = [ALL, RUNNING, STOPPED, PAUSED];
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const [search, setSearch] = useState("");
-  const [health, setHealth] = useState(HEALTH[0]);
-  const [status, setStatus] = useState(STATUS[0]);
+  const [health, setHealth] = useState(ALL);
+  const [status, setStatus] = useState(ALL);
   const [page, setPage] = useState(1);
   const [orderBy, setOrderBy] = useState({
     value: ALPHABETICAL_SORT,
@@ -94,7 +115,7 @@ export function NamespacePipelineListing({
         if (orderBy.sortOrder === ASC) {
           return a.name > b.name ? 1 : -1;
         } else {
-          return a.name < b.name ? -1 : 1;
+          return a.name < b.name ? 1 : -1;
         }
       });
     } else if (orderBy.value === LAST_UPDATED_SORT) {
@@ -105,8 +126,8 @@ export function NamespacePipelineListing({
             : -1;
         } else {
           return a.pipeline.status.lastUpdated < b.pipeline.status.lastUpdated
-            ? -1
-            : 1;
+            ? 1
+            : -1;
         }
       });
     } else {
@@ -119,12 +140,11 @@ export function NamespacePipelineListing({
         } else {
           return Date.parse(a.pipeline.metadata.creationTimestamp) <
             Date.parse(b.pipeline.metadata.creationTimestamp)
-            ? -1
-            : 1;
+            ? 1
+            : -1;
         }
       });
     }
-
     //Filter by health
     if (health !== "All") {
       filtered = filtered.filter((p) => {
@@ -222,13 +242,14 @@ export function NamespacePipelineListing({
                 data={p}
                 statusData={pipelineData ? pipelineData[p.name] : {}}
                 isbData={isbData ? isbData[isbName] : {}}
+                refresh={refresh}
               />
             </Grid>
           );
         })}
       </Grid>
     );
-  }, [filteredPipelines, namespace]);
+  }, [filteredPipelines, namespace, refresh]);
 
   const handleHealthFilterChange = useCallback(
     (e) => {
@@ -244,6 +265,56 @@ export function NamespacePipelineListing({
     [status]
   );
 
+  const handleCreatePipelineComplete = useCallback(() => {
+    refresh();
+    if (!setSidebarProps) {
+      return;
+    }
+    // Close sidebar and change sort to show new pipeline
+    setSidebarProps(undefined);
+    setOrderBy({
+      value: LAST_UPDATED_SORT,
+      sortOrder: DESC,
+    });
+  }, [setSidebarProps, refresh]);
+
+  const handleCreatePiplineClick = useCallback(() => {
+    if (!setSidebarProps) {
+      return;
+    }
+    setSidebarProps({
+      type: SidebarType.PIPELINE_CREATE,
+      specEditorProps: {
+        namespaceId: namespace,
+        viewType: ViewType.EDIT,
+        onUpdateComplete: handleCreatePipelineComplete,
+      },
+    });
+  }, [setSidebarProps, handleCreatePipelineComplete, namespace]);
+
+  const handleCreateISBComplete = useCallback(() => {
+    refresh();
+    if (!setSidebarProps) {
+      return;
+    }
+    // Close sidebar and change sort to show new pipeline
+    setSidebarProps(undefined);
+  }, [setSidebarProps, refresh]);
+
+  const handleCreateISBClick = useCallback(() => {
+    if (!setSidebarProps) {
+      return;
+    }
+    setSidebarProps({
+      type: SidebarType.ISB_CREATE,
+      specEditorProps: {
+        namespaceId: namespace,
+        viewType: ViewType.EDIT,
+        onUpdateComplete: handleCreateISBComplete,
+      },
+    });
+  }, [setSidebarProps, handleCreateISBComplete, namespace]);
+
   return (
     <Box
       sx={{
@@ -252,7 +323,7 @@ export function NamespacePipelineListing({
         padding: "0 2.625rem",
       }}
     >
-      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "end" }}>
+      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "flex-start" }}>
         <DebouncedSearchInput
           placeHolder="Search for pipeline"
           onChange={setSearch}
@@ -285,11 +356,16 @@ export function NamespacePipelineListing({
                 background: "#fff",
                 border: "1px solid #6B6C72",
                 height: "34px",
+                marginRight: "0.5rem",
               }}
               onChange={handleHealthFilterChange}
             >
               {HEALTH.map((health) => (
-                <MenuItem key={health} value={health}>
+                <MenuItem
+                  key={health}
+                  value={health}
+                  sx={{ textTransform: "capitalize" }}
+                >
                   {health}
                 </MenuItem>
               ))}
@@ -320,12 +396,19 @@ export function NamespacePipelineListing({
               onChange={handleStatusFilterChange}
             >
               {STATUS.map((status) => (
-                <MenuItem key={status} value={status}>
+                <MenuItem
+                  key={status}
+                  value={status}
+                  sx={{ textTransform: "capitalize" }}
+                >
                   {status}
                 </MenuItem>
               ))}
             </Select>
           </Box>
+        </Box>
+        <Box>
+          <ErrorIndicator />
         </Box>
       </Box>
       <Box sx={{ display: "flex", flexDirection: "row", marginTop: "2rem" }}>
@@ -385,8 +468,8 @@ export function NamespacePipelineListing({
             variant="outlined"
             startIcon={<PlusIcon />}
             size="medium"
-            disabled
             sx={{ marginRight: "10px" }}
+            onClick={handleCreatePiplineClick}
           >
             Create Pipeline
           </Button>
@@ -394,9 +477,9 @@ export function NamespacePipelineListing({
             variant="outlined"
             startIcon={<PlusIcon />}
             size="small"
-            disabled
+            onClick={handleCreateISBClick}
           >
-            Create ISB
+            Create ISB Service
           </Button>
         </Box>
       </Box>

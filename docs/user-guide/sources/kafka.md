@@ -1,6 +1,6 @@
 # Kafka Source
 
-A `Kafka` source is used to ingest the messages from a Kafka topic.
+A `Kafka` source is used to ingest the messages from a Kafka topic. Numaflow uses consumer-groups to manage offsets.
 
 ```yaml
 spec:

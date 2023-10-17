@@ -3,13 +3,13 @@ import { Tooltip } from "@mui/material";
 import { Handle, NodeProps, Position } from "reactflow";
 import { HighlightContext } from "../../index";
 import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
-import healthy from "../../../../../../../images/heart-fill.svg";
+// import healthy from "../../../../../../../images/heart-fill.svg";
 import source from "../../../../../../../images/source.png";
 import map from "../../../../../../../images/map.png";
 import reduce from "../../../../../../../images/reduce.png";
 import sink from "../../../../../../../images/sink.png";
-import input from "../../../../../../../images/input.svg";
-import generator from "../../../../../../../images/generator.svg";
+import input from "../../../../../../../images/input.png";
+import generator from "../../../../../../../images/generator.png";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -197,9 +197,9 @@ const CustomNode: FC<NodeProps> = ({
           </div>
         </Tooltip>
 
-        <div className={"node-status"}>
+        {/* <div className={"node-status"}>
           <img src={healthy} alt={"healthy"} />
-        </div>
+        </div> */}
 
         <Tooltip
           title={
@@ -300,6 +300,7 @@ const CustomNode: FC<NodeProps> = ({
               left: `${44.2 - idx * 10}%`,
               ...blurHandle(`3-${idx}`),
             }}
+            width={22}
             onMouseOver={handleMouseOver}
             onMouseOut={handleMouseOut}
             onClick={handleInputClick}
