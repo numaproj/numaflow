@@ -87,12 +87,18 @@ func NewHandler() (*handler, error) {
 func (h *handler) Login(c *gin.Context) {
 	// TODO - send a request to Dex to get the user identity token.
 	token := "dummy-token"
-	c.JSON(http.StatusOK, token)
+	c.SetCookie("user-identity-token", token, 3600, "/", "", false, true)
+	c.JSON(http.StatusOK, nil)
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
-	userIdentityToken := c.Request.Header.Get("user-identity-token")
+	userIdentityToken, err := c.Cookie("user-identity-token")
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, can't identify user %s", error.Error()))
+		return
+	}
+
 	if casbin.IsAuthorized(
 		casbin.AuthorizationRequest{
 			UserIdentityToken: userIdentityToken,
