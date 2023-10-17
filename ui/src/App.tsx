@@ -16,6 +16,7 @@ import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Cluster } from "./components/pages/Cluster";
 import { Namespaces } from "./components/pages/Namespace";
 import { Pipeline } from "./components/pages/Pipeline";
+import { Login } from "./components/pages/Login";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
 import {
@@ -43,6 +44,10 @@ export const AppContext = React.createContext<AppContextProps>({
 });
 
 const MAX_ERRORS = 6;
+
+const EXCLUDE_CRUMBS = {
+  "/login": true,
+};
 
 function App() {
   // TODO remove, used for testing ns only installation
@@ -157,6 +162,7 @@ function App() {
       return (
         <Routes>
           <Route path="/" element={<Namespaces />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/pipelines/:pipelineId" element={<Pipeline />} />
           <Route
             path="*"
@@ -173,6 +179,7 @@ function App() {
     return (
       <Routes>
         <Route path="/" element={<Cluster />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/namespaces/:namespaceId" element={<Namespaces />} />
         <Route
           path="/namespaces/:namespaceId/pipelines/:pipelineId"
@@ -229,21 +236,23 @@ function App() {
                 </Toolbar>
               </AppBar>
             </Box>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                width: "100%",
-                overflow: "auto",
-                height: "2.0625rem",
-                background: "#F8F8FB",
-                zIndex: (theme) => theme.zIndex.drawer - 1,
-                position: "fixed",
-                top: "3.75rem",
-              }}
-            >
-              <Breadcrumbs />
-            </Box>
+            {!EXCLUDE_CRUMBS[location.pathname] && (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  width: "100%",
+                  overflow: "auto",
+                  height: "2.0625rem",
+                  background: "#F8F8FB",
+                  zIndex: (theme) => theme.zIndex.drawer - 1,
+                  position: "fixed",
+                  top: "3.75rem",
+                }}
+              >
+                <Breadcrumbs />
+              </Box>
+            )}
             <Box
               sx={{
                 display: "flex",
@@ -251,7 +260,7 @@ function App() {
                 width: "100%",
                 height: "100%",
                 overflow: "auto",
-                marginTop: "2.75rem",
+                marginTop: EXCLUDE_CRUMBS[location.pathname] ? 0 : "2.75rem",
               }}
             >
               {routes}
