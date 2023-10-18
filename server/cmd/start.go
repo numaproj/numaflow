@@ -36,7 +36,7 @@ var (
 		"/namespaces",
 		"/pipelines",
 		"/login",
-		"/callback",
+		// "/callback",
 	}
 )
 

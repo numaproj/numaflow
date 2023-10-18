@@ -81,13 +81,13 @@ func NewHandler() (*handler, error) {
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
+		dexpoc:         NewDexPOC(context.Background()),
 	}, nil
 }
 
 // Login is used to redirect the user to authentication page and set the user identity token in the cookie
 func (h *handler) Login(c *gin.Context) {
-	// set up dex
-	h.dexpoc = NewDexPOC(context.Background())
+
 	// TODO - send a request to Dex to get the real user identity token.
 	h.dexpoc.handleLogin(c)
 }
@@ -96,10 +96,11 @@ func (h *handler) Callback(c *gin.Context) {
 	fmt.Println("numaflow callback")
 	// TODO - send a request to Dex to get the real user identity token.
 	h.dexpoc.handleCallback(c)
-	// token := "dummy-token"
-	// c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
-	// returnUrl := c.DefaultQuery("returnUrl", "/cluster-summary")
-	// c.Redirect(http.StatusOK, returnUrl)
+
+	token := "org:admin:refreshToken"
+	c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
+	returnUrl := c.DefaultQuery("returnUrl", "/cluster-summary")
+	c.Redirect(http.StatusOK, returnUrl)
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running

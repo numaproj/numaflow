@@ -62,7 +62,7 @@ func NewDexPOC(ctx context.Context) *DexPOC {
 	return &DexPOC{
 		clientID:       clientID,
 		clientSecret:   "ZXhhbXBsZS1hcHAtc2VjcmV0",
-		redirectURI:    "https://numaflow-server:8443/callback",
+		redirectURI:    "https://numaflow-server:8443/api/v1/callback",
 		verifier:       verifier,
 		provider:       provider,
 		offlineAsScope: true,
@@ -97,7 +97,6 @@ func (d *DexPOC) handleCallback(c *gin.Context) {
 		err   error
 		token *oauth2.Token
 	)
-	c.Redirect(http.StatusFound, "/")
 
 	ctx := oidc.ClientContext(r.Context(), d.client)
 	oauth2Config := d.oauth2Config(nil)
@@ -163,6 +162,7 @@ func (d *DexPOC) handleCallback(c *gin.Context) {
 		http.Error(w, fmt.Sprintf("error decoding ID token claims: %v", err), http.StatusInternalServerError)
 		return
 	}
+	fmt.Println(claims)
 
 	buff := new(bytes.Buffer)
 	if err := json.Indent(buff, []byte(claims), "", "  "); err != nil {
@@ -173,7 +173,9 @@ func (d *DexPOC) handleCallback(c *gin.Context) {
 	d.idToken = rawIDToken
 	fmt.Println("rawIDToken accessToken", rawIDToken, accessToken)
 	d.refreshToken, _ = token.Extra("refresh_token").(string)
-
+	c.Redirect(http.StatusFound, "/")
+	// rawIDToken, accessToken, d.stateNonce
+	// c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
 }
 
 // generateRandomNumber is for generating state nonce. This piece of code was obtained without much change from the argo-cd repository.
