@@ -3,18 +3,40 @@
 Please read [reduce](./reduce.md) to get the best out of these examples.
 
 ## Prerequisites
+Required to set up a basic Numaflow environment
+### Step1
+ Install the ISB
+  - ISB(Internal Service Broker) is a Kubernetes service that provides access to internal services within a Kubernetes cluster.
+  - Below is the Kubernetes command for that.
+    ```shell
+    kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
+    ```
+  - The above command will apply the Kubernetes manifest at the specified URL to your cluster.
+  - The manifest contains the configuration for a simple NumaFlow pipeline that uses the JetStream operator to deploy the pipeline to Kubernetes.
+  - When you run the command, Kubernetes will create the following resources in your cluster:
+    - A NumaFlow pipeline named isbsvc-jetstream
+    - A deployment for the pipeline
+    - A service for the pipeline
+  - Once the resources have been created, you can start the pipeline by running the following command:
+      ```shell
+      kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
+      ```
+  -   You can then monitor the pipeline status by running the following command:
+      ```shell
+        kubectl get pipeline isbsvc-jetstream
+      ```    
+  - The pipeline should start running and reach the Running phase within a few seconds.
 
-Install the ISB
+### Step2
+This is an example of how to use the `Numaflow HTTP` source. The `HTTP` source produces events from `HTTP` requests. 
+The `x-numaflow-event-time` header is used to specify the `event time` of the message. The `event time` is used by Numaflow to order events and perform time-based operations.
 
-```shell
-kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
-```
-
-Source used in the examples is an HTTP source producing messages with value 5 and 10 with event time
-starting from 60000. Please refer the doc [http source](../../sources/http.md) on how to use an HTTP
+To use the `HTTP` source, you need to send a `POST` request to the `HTTP source URL` with the `x-numaflow-event-time` header set to the desired event time. 
+The body of the request should contain the message data, here the `HTTP source` is producing messages with values `5 and 10` with event time
+starting from `60000`. Please refer to the doc [http source](../../sources/http.md) on how to use an HTTP
 source.
-An example will be as follows,
 
+The HTTP source sends these messages to the ISB, which then forwards them to the Numaflow Pipeline for processing. 
 ```sh
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "5" ${http-source-url}
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "10" ${http-source-url}
