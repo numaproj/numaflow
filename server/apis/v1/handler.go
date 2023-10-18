@@ -58,6 +58,7 @@ type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
+	dexpoc         *DexPOC
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -80,12 +81,19 @@ func NewHandler() (*handler, error) {
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
+		dexpoc:         NewDexPOC(context.Background()),
 	}, nil
 }
 
 // Login is used to redirect the user to authentication page and set the user identity token in the cookie
 func (h *handler) Login(c *gin.Context) {
 	// TODO - send a request to Dex to get the real user identity token.
+	h.dexpoc.handleLogin(c.Writer, c.Request)
+}
+
+func (h *handler) Callback(c *gin.Context) {
+	// TODO - send a request to Dex to get the real user identity token.
+	h.dexpoc.handleCallback(c.Writer, c.Request)
 	token := "dummy-token"
 	c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
 	returnUrl := c.DefaultQuery("returnUrl", "/cluster-summary")
