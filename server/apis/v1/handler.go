@@ -93,12 +93,13 @@ func (h *handler) Login(c *gin.Context) {
 }
 
 func (h *handler) Callback(c *gin.Context) {
+	fmt.Println("numaflow callback")
 	// TODO - send a request to Dex to get the real user identity token.
-	h.dexpoc.handleCallback(c.Writer, c.Request)
-	token := "dummy-token"
-	c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
-	returnUrl := c.DefaultQuery("returnUrl", "/cluster-summary")
-	c.Redirect(http.StatusOK, returnUrl)
+	h.dexpoc.handleCallback(c)
+	// token := "dummy-token"
+	// c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
+	// returnUrl := c.DefaultQuery("returnUrl", "/cluster-summary")
+	// c.Redirect(http.StatusOK, returnUrl)
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running

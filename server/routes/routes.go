@@ -36,8 +36,6 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 		c.Status(http.StatusOK)
 	})
 
-	r.Any("/dex/*name", v1.DexReverseProxy)
-
 	r1Group := r.Group("/api/v1")
 	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {

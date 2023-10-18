@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"log"
 	"math/rand"
 	"net/http"
@@ -52,7 +51,8 @@ func NewDexPOC(ctx context.Context) *DexPOC {
 	clientID := "example-app"
 	// TODO: TLS
 	// issuerURL := "https://numaflow-dex-server:5556/dex"
-	issuerURL := "https://numaflow-server:8443/dex"
+	// issuerURL := "https://numaflow-server:8443/dex"
+	issuerURL := "http://numaflow-dex-server:5556/dex"
 	provider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
 		log.Fatalf("failed to query provider %q: %v", issuerURL, err)
@@ -62,7 +62,7 @@ func NewDexPOC(ctx context.Context) *DexPOC {
 	return &DexPOC{
 		clientID:       clientID,
 		clientSecret:   "ZXhhbXBsZS1hcHAtc2VjcmV0",
-		redirectURI:    "https://nuamflow-server:8443/callback",
+		redirectURI:    "https://numaflow-server:8443/callback",
 		verifier:       verifier,
 		provider:       provider,
 		offlineAsScope: true,
@@ -89,11 +89,15 @@ func (d *DexPOC) handleLogin(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, authCodeURL)
 }
 
-func (d *DexPOC) handleCallback(w http.ResponseWriter, r *http.Request) {
+func (d *DexPOC) handleCallback(c *gin.Context) {
+	fmt.Println("dex callback")
 	var (
+		w     = c.Writer
+		r     = c.Request
 		err   error
 		token *oauth2.Token
 	)
+	c.Redirect(http.StatusFound, "/")
 
 	ctx := oidc.ClientContext(r.Context(), d.client)
 	oauth2Config := d.oauth2Config(nil)
@@ -167,9 +171,9 @@ func (d *DexPOC) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.idToken = rawIDToken
+	fmt.Println("rawIDToken accessToken", rawIDToken, accessToken)
 	d.refreshToken, _ = token.Extra("refresh_token").(string)
 
-	renderToken(w, d.redirectURI, rawIDToken, accessToken, token.RefreshToken, buff.String())
 }
 
 // generateRandomNumber is for generating state nonce. This piece of code was obtained without much change from the argo-cd repository.
@@ -194,71 +198,6 @@ func generateRandomNumber(n int) string {
 		remain--
 	}
 	return string(b)
-}
-
-type tokenTmplData struct {
-	IDToken      string
-	AccessToken  string
-	RefreshToken string
-	RedirectURL  string
-	Claims       string
-}
-
-var tokenTmpl = template.Must(template.New("token.html").Parse(`<html>
-  <head>
-    <style>
-/* make pre wrap */
-pre {
- white-space: pre-wrap;       /* css-3 */
- white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
- white-space: -pre-wrap;      /* Opera 4-6 */
- white-space: -o-pre-wrap;    /* Opera 7 */
- word-wrap: break-word;       /* Internet Explorer 5.5+ */
-}
-    </style>
-  </head>
-  <body>
-    <p> ID Token: <pre><code>{{ .IDToken }}</code></pre></p>
-    <p> Access Token: <pre><code>{{ .AccessToken }}</code></pre></p>
-    <p> Claims: <pre><code>{{ .Claims }}</code></pre></p>
-	{{ if .RefreshToken }}
-    <p> Refresh Token: <pre><code>{{ .RefreshToken }}</code></pre></p>
-	<form action="{{ .RedirectURL }}" method="post">
-	  <input type="hidden" name="refresh_token" value="{{ .RefreshToken }}">
-	  <input type="submit" value="Redeem refresh token">
-    </form>
-	{{ end }}
-  </body>
-</html>
-`))
-
-func renderToken(w http.ResponseWriter, redirectURL, idToken, accessToken, refreshToken, claims string) {
-	renderTemplate(w, tokenTmpl, tokenTmplData{
-		IDToken:      idToken,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		RedirectURL:  redirectURL,
-		Claims:       claims,
-	})
-}
-
-func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data interface{}) {
-	err := tmpl.Execute(w, data)
-	if err == nil {
-		return
-	}
-
-	switch err := err.(type) {
-	case *template.Error:
-		// An ExecError guarantees that Execute has not written to the underlying reader.
-		log.Printf("Error rendering template %s: %s", tmpl.Name(), err)
-
-		// TODO(ericchiang): replace with better internal server error.
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-	default:
-		// An error with the underlying write, such as the connection being
-		// dropped. Ignore for now.
-	}
 }
 
 func DexReverseProxy(c *gin.Context) {
