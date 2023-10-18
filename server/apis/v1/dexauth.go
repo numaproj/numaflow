@@ -131,7 +131,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	var claims json.RawMessage
+	var claims IDTokenClaims
 	if err := idToken.Claims(&claims); err != nil {
 		errMsg := fmt.Sprintf("error decoding ID token claims: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -144,12 +144,16 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	fmt.Println(claims)
-	fmt.Println(d.idToken)
-	fmt.Println(d.refreshToken)
-	tokenStr := "placeholder"
-	c.SetCookie("user-identity-token", tokenStr, 3600, "/", "", true, true)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+
+	res := NewCallbackResponse(claims, d.idToken, d.refreshToken)
+	tokenStr, err := json.Marshal(res)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to convert to token string: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	c.SetCookie("user-identity-token", string(tokenStr), 3600, "/", "", true, true)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
 // generateRandomNumber is for generating state nonce. This piece of code was obtained without much change from the argo-cd repository.
