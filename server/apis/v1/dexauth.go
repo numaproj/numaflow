@@ -55,7 +55,7 @@ func NewDexObject(ctx context.Context) *DexObject {
 	return &DexObject{
 		clientID:       clientID,
 		clientSecret:   "ZXhhbXBsZS1hcHAtc2VjcmV0",
-		redirectURI:    "https://numaflow-server:8443/callback",
+		redirectURI:    "https://numaflow-server:8443/login",
 		verifier:       verifier,
 		provider:       provider,
 		offlineAsScope: true,
