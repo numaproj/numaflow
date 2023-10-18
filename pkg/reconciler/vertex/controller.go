@@ -265,6 +265,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			labels[dfv1.KeyPartOf] = dfv1.Project
 			labels[dfv1.KeyManagedBy] = dfv1.ControllerVertex
 			labels[dfv1.KeyComponent] = dfv1.ComponentVertex
+			labels[dfv1.KeyAppName] = vertex.Spec.PipelineName + "-" + vertex.Name
 			labels[dfv1.KeyPipelineName] = vertex.Spec.PipelineName
 			labels[dfv1.KeyVertexName] = vertex.Spec.Name
 			annotations[dfv1.KeyHash] = hash
