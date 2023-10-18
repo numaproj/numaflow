@@ -88,7 +88,7 @@ func NewHandler() (*handler, error) {
 // Login is used to redirect the user to authentication page and set the user identity token in the cookie
 func (h *handler) Login(c *gin.Context) {
 	// TODO - send a request to Dex to get the real user identity token.
-	h.dexpoc.handleLogin(c.Writer, c.Request)
+	h.dexpoc.handleLogin(c)
 }
 
 func (h *handler) Callback(c *gin.Context) {

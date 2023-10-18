@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
 )
 
@@ -47,7 +48,9 @@ func (d *DexPOC) oauth2Config(scopes []string) *oauth2.Config {
 
 func NewDexPOC(ctx context.Context) *DexPOC {
 	clientID := "example-app"
-	issuerURL := "http://127.0.0.1:5556/dex"
+	// TODO: TLS
+	// issuerURL := "https://numaflow-dex-server:5556/dex"
+	issuerURL := "http://numaflow-dex-server:5556/dex"
 	provider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
 		log.Fatalf("failed to query provider %q: %v", issuerURL, err)
@@ -57,10 +60,10 @@ func NewDexPOC(ctx context.Context) *DexPOC {
 	return &DexPOC{
 		clientID:       clientID,
 		clientSecret:   "ZXhhbXBsZS1hcHAtc2VjcmV0",
-		redirectURI:    "/callback",
+		redirectURI:    "https://nuamflow-server:8443/callback",
 		verifier:       verifier,
 		provider:       provider,
-		offlineAsScope: false,
+		offlineAsScope: true,
 		client:         http.DefaultClient,
 		idToken:        "",
 		refreshToken:   "",
@@ -68,7 +71,7 @@ func NewDexPOC(ctx context.Context) *DexPOC {
 	}
 }
 
-func (d *DexPOC) handleLogin(w http.ResponseWriter, r *http.Request) {
+func (d *DexPOC) handleLogin(c *gin.Context) {
 	var scopes []string
 	authCodeURL := ""
 	scopes = append(scopes, "openid", "profile", "email", "groups")
@@ -80,7 +83,8 @@ func (d *DexPOC) handleLogin(w http.ResponseWriter, r *http.Request) {
 	} else {
 		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(d.stateNonce, oauth2.AccessTypeOffline)
 	}
-	http.Redirect(w, r, authCodeURL, http.StatusSeeOther)
+	fmt.Println(authCodeURL)
+	c.Redirect(http.StatusSeeOther, authCodeURL)
 }
 
 func (d *DexPOC) handleCallback(w http.ResponseWriter, r *http.Request) {
