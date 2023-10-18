@@ -8,6 +8,13 @@ export interface AppError {
   date: Date;
 }
 
+export interface UserInfo {
+  email: string;
+  name: string;
+  username: string;
+  groups: string[];
+}
+
 export interface AppContextProps {
   systemInfo: SystemInfo | undefined;
   systemInfoError: any | undefined;
@@ -16,4 +23,6 @@ export interface AppContextProps {
   errors: AppError[];
   addError: (error: string) => void;
   clearErrors: () => void;
+  userInfo?: UserInfo;
+  setUserInfo: (userInfo: UserInfo) => void;
 }

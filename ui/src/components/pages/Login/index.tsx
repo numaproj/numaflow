@@ -11,12 +11,11 @@ export function Login() {
 
   const handleLoginClick = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/login?returnUrl=${returnURL}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(`/api/v1/login?returnUrl=${returnURL}`);
+      if (response.ok) {
+        window.location.replace(response.url);
+        return;
+      }
       const error = await getAPIResponseError(response);
       if (error) {
         setError(error);
@@ -24,7 +23,7 @@ export function Login() {
     } catch (e) {
       setError(e);
     }
-  }, []);
+  }, [returnURL]);
   return (
     <div className="flex row loginPageContainer">
       <div className="flex row logoContainer">

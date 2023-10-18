@@ -24,7 +24,8 @@ import {
   SlidingSidebarProps,
 } from "./components/common/SlidingSidebar";
 import { ErrorDisplay } from "./components/common/ErrorDisplay";
-import { AppContextProps, AppError } from "./types/declarations/app";
+import { AppContextProps, AppError, UserInfo } from "./types/declarations/app";
+import AccountMenu from "./components/common/AccountMenu";
 import logo from "./images/icon.png";
 import textLogo from "./images/text-icon.png";
 
@@ -41,6 +42,8 @@ export const AppContext = React.createContext<AppContextProps>({
   addError: () => {},
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   clearErrors: () => {},
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  setUserInfo: () => {},
 });
 
 const MAX_ERRORS = 6;
@@ -67,6 +70,7 @@ function App() {
     string | undefined
   >();
   const [errors, setErrors] = useState<AppError[]>([]);
+  const [userInfo, setUserInfo] = useState<UserInfo | undefined>();
   const { systemInfo, error: systemInfoError, loading } = useSystemInfoFetch();
   const location = useLocation();
 
@@ -208,6 +212,8 @@ function App() {
           errors,
           addError: handleAddError,
           clearErrors: handleClearErrors,
+          userInfo,
+          setUserInfo,
         }}
       >
         <ScopedCssBaseline>
@@ -233,6 +239,8 @@ function App() {
                 <Toolbar>
                   <img src={logo} alt="logo" className={"logo"} />
                   <img src={textLogo} alt="text-logo" className={"text-logo"} />
+                  <Box sx={{ flexGrow: 1 }} />
+                  <AccountMenu />
                 </Toolbar>
               </AppBar>
             </Box>
