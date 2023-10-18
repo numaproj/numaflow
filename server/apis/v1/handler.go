@@ -58,7 +58,7 @@ type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
-	dexpoc         *DexPOC
+	dexpoc         *DexObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -81,26 +81,18 @@ func NewHandler() (*handler, error) {
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
-		dexpoc:         NewDexPOC(context.Background()),
+		dexpoc:         NewDexObject(context.Background()),
 	}, nil
 }
 
-// Login is used to redirect the user to authentication page and set the user identity token in the cookie
+// Login is used to generate the authentication URL and return the URL as part of the return payload.
 func (h *handler) Login(c *gin.Context) {
-
-	// TODO - send a request to Dex to get the real user identity token.
 	h.dexpoc.handleLogin(c)
 }
 
+// Callback is used to extract user authentication information from the Dex Server returned payload.
 func (h *handler) Callback(c *gin.Context) {
-	fmt.Println("numaflow callback")
-	// TODO - send a request to Dex to get the real user identity token.
 	h.dexpoc.handleCallback(c)
-
-	token := "org:admin:refreshToken"
-	c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
-	returnUrl := c.DefaultQuery("returnUrl", "/cluster-summary")
-	c.Redirect(http.StatusOK, returnUrl)
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running

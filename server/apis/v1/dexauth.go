@@ -1,15 +1,12 @@
 package v1
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -17,8 +14,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// DexPOC is a struct that holds details for dex handlers
-type DexPOC struct {
+// DexObject is a struct that holds details for dex handlers
+type DexObject struct {
 	clientID     string
 	clientSecret string
 	redirectURI  string
@@ -37,7 +34,7 @@ type DexPOC struct {
 	stateNonce   string // stateNonce is the nonce variable
 }
 
-func (d *DexPOC) oauth2Config(scopes []string) *oauth2.Config {
+func (d *DexObject) oauth2Config(scopes []string) *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     d.clientID,
 		ClientSecret: d.clientSecret,
@@ -47,11 +44,10 @@ func (d *DexPOC) oauth2Config(scopes []string) *oauth2.Config {
 	}
 }
 
-func NewDexPOC(ctx context.Context) *DexPOC {
+// NewDexObject returns a new DexObject.
+// TODO: refactor data structure and make configurable
+func NewDexObject(ctx context.Context) *DexObject {
 	clientID := "example-app"
-	// TODO: TLS
-	// issuerURL := "https://numaflow-dex-server:5556/dex"
-	// issuerURL := "https://numaflow-server:8443/dex"
 	issuerURL := "http://numaflow-dex-server:5556/dex"
 	provider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
@@ -59,7 +55,7 @@ func NewDexPOC(ctx context.Context) *DexPOC {
 	}
 	verifier := provider.Verifier(&oidc.Config{ClientID: clientID})
 
-	return &DexPOC{
+	return &DexObject{
 		clientID:       clientID,
 		clientSecret:   "ZXhhbXBsZS1hcHAtc2VjcmV0",
 		redirectURI:    "https://numaflow-server:8443/api/v1/callback",
@@ -73,7 +69,7 @@ func NewDexPOC(ctx context.Context) *DexPOC {
 	}
 }
 
-func (d *DexPOC) handleLogin(c *gin.Context) {
+func (d *DexObject) handleLogin(c *gin.Context) {
 	var scopes []string
 	authCodeURL := ""
 	scopes = append(scopes, "openid", "profile", "email", "groups")
@@ -85,97 +81,75 @@ func (d *DexPOC) handleLogin(c *gin.Context) {
 	} else {
 		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(d.stateNonce, oauth2.AccessTypeOffline)
 	}
-	fmt.Println(authCodeURL)
-	c.Redirect(http.StatusSeeOther, authCodeURL)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, NewLoginResponse(authCodeURL)))
 }
 
-func (d *DexPOC) handleCallback(c *gin.Context) {
-	fmt.Println("dex callback")
+func (d *DexObject) handleCallback(c *gin.Context) {
 	var (
-		w     = c.Writer
 		r     = c.Request
 		err   error
 		token *oauth2.Token
 	)
-
 	ctx := oidc.ClientContext(r.Context(), d.client)
 	oauth2Config := d.oauth2Config(nil)
-	switch r.Method {
-	case http.MethodGet:
-		// Authorization redirect callback from OAuth2 auth flow.
-		if errMsg := r.FormValue("error"); errMsg != "" {
-			http.Error(w, errMsg+": "+r.FormValue("error_description"), http.StatusBadRequest)
-			return
-		}
-		code := r.FormValue("code")
-		if code == "" {
-			http.Error(w, fmt.Sprintf("no code in request: %q", r.Form), http.StatusBadRequest)
-			return
-		}
-		if state := r.FormValue("state"); state != d.stateNonce {
-			http.Error(w, fmt.Sprintf("expected state %q got %q", d.stateNonce, state), http.StatusBadRequest)
-			return
-		}
-		token, err = oauth2Config.Exchange(ctx, code)
-	case http.MethodPost:
-		// Form request from frontend to refresh d token.
-		refresh := r.FormValue("refresh_token")
-		if refresh == "" {
-			http.Error(w, fmt.Sprintf("no refresh_token in request: %q", r.Form), http.StatusBadRequest)
-			return
-		}
-		t := &oauth2.Token{
-			RefreshToken: refresh,
-			Expiry:       time.Now().Add(-time.Hour),
-		}
-		token, err = oauth2Config.TokenSource(ctx, t).Token()
-	default:
-		http.Error(w, fmt.Sprintf("method not implemented: %s", r.Method), http.StatusBadRequest)
+
+	// Authorization redirect callback from OAuth2 auth flow.
+	if errMsg := r.FormValue("error"); errMsg != "" {
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	code := r.FormValue("code")
+	if code == "" {
+		errMsg := "Missing code in the request."
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	if state := r.FormValue("state"); state != d.stateNonce {
+		errMsg := fmt.Sprintf("Expected state %q got %q", d.stateNonce, state)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
+	token, err = oauth2Config.Exchange(ctx, code)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to get token: %v", err), http.StatusInternalServerError)
+		errMsg := fmt.Sprintf("Failed to get token: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
-		http.Error(w, "no id_token in token response", http.StatusInternalServerError)
+		errMsg := fmt.Sprintf("Failed to get id_token: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
 	idToken, err := d.verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to verify ID token: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	accessToken, ok := token.Extra("access_token").(string)
-	if !ok {
-		http.Error(w, "no access_token in token response", http.StatusInternalServerError)
+		errMsg := fmt.Sprintf("Failed to verify ID token: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
 	var claims json.RawMessage
 	if err := idToken.Claims(&claims); err != nil {
-		http.Error(w, fmt.Sprintf("error decoding ID token claims: %v", err), http.StatusInternalServerError)
-		return
-	}
-	fmt.Println(claims)
-
-	buff := new(bytes.Buffer)
-	if err := json.Indent(buff, []byte(claims), "", "  "); err != nil {
-		http.Error(w, fmt.Sprintf("error indenting ID token claims: %v", err), http.StatusInternalServerError)
+		errMsg := fmt.Sprintf("error decoding ID token claims: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
 	d.idToken = rawIDToken
-	fmt.Println("rawIDToken accessToken", rawIDToken, accessToken)
-	d.refreshToken, _ = token.Extra("refresh_token").(string)
-	c.Redirect(http.StatusFound, "/")
-	// rawIDToken, accessToken, d.stateNonce
-	// c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
+	if d.refreshToken, ok = token.Extra("refresh_token").(string); !ok {
+		errMsg := "Failed to convert refresh_token"
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	fmt.Println(claims)
+	fmt.Println(d.idToken)
+	fmt.Println(d.refreshToken)
+	tokenStr := "placeholder"
+	c.SetCookie("user-identity-token", tokenStr, 3600, "/", "", true, true)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
 
 // generateRandomNumber is for generating state nonce. This piece of code was obtained without much change from the argo-cd repository.
@@ -200,15 +174,4 @@ func generateRandomNumber(n int) string {
 		remain--
 	}
 	return string(b)
-}
-
-func DexReverseProxy(c *gin.Context) {
-	var target = "http://numaflow-dex-server:5556"
-	proxyUrl, _ := url.Parse(target)
-
-	c.Request.URL.Path = c.Param("name")
-
-	proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
-
-	proxy.ServeHTTP(c.Writer, c.Request)
 }

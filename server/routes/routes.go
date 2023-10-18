@@ -50,6 +50,7 @@ func v1Routes(r gin.IRouter) {
 	}
 	// Handle the login request.
 	r.GET("/login", handler.Login)
+	// Handle the callback request.
 	r.GET("/callback", handler.Callback)
 	// List all namespaces that have Pipeline or InterStepBufferService objects.
 	r.GET("/namespaces", handler.ListNamespaces)

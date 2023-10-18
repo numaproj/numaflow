@@ -36,24 +36,11 @@ var (
 		"/namespaces",
 		"/pipelines",
 		"/login",
-		// "/callback",
 	}
 )
 
 func Start(insecure bool, port int, namespaced bool, managedNamespace string, baseHref string) {
 	logger := logging.NewLogger().Named("server")
-	// go func() {
-	// 	devReverseProxyRouter := gin.New()
-	// 	devReverseProxyRouter.Any("/dex/*name", v1.DexReverseProxy)
-	// 	devReverseProxyServer := http.Server{
-	// 		Addr:    fmt.Sprintf(":%d", 5556),
-	// 		Handler: devReverseProxyRouter,
-	// 	}
-	// 	logger.Infow("Starting Dex Reverse Proxy Server (TLS disabled) on " + devReverseProxyServer.Addr)
-	// 	if err := devReverseProxyServer.ListenAndServe(); err != nil {
-	// 		panic(err)
-	// 	}
-	// }()
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.RedirectTrailingSlash = true
