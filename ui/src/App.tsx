@@ -51,6 +51,9 @@ const MAX_ERRORS = 6;
 const EXCLUDE_CRUMBS = {
   "/login": true,
 };
+const EXCLUDE_APP_BARS = {
+  "/login": true,
+};
 
 function App() {
   // TODO remove, used for testing ns only installation
@@ -225,25 +228,29 @@ function App() {
               height: "100%",
             }}
           >
-            <Box
-              sx={{
-                height: "4rem",
-              }}
-            >
-              <AppBar
-                position="fixed"
+            {!EXCLUDE_APP_BARS[location.pathname] && (
+              <Box
                 sx={{
-                  zIndex: (theme) => theme.zIndex.drawer + 1,
+                  height: "4rem",
                 }}
               >
-                <Toolbar>
-                  <img src={logo} alt="logo" className={"logo"} />
-                  <img src={textLogo} alt="text-logo" className={"text-logo"} />
-                  <Box sx={{ flexGrow: 1 }} />
-                  <AccountMenu />
-                </Toolbar>
-              </AppBar>
-            </Box>
+                <AppBar
+                  position="fixed"
+                  sx={{
+                    zIndex: (theme) => theme.zIndex.drawer + 1,
+                  }}
+                >
+                  <Toolbar>
+                    <img src={logo} alt="logo" className={"logo"} />
+                    <img
+                      src={textLogo}
+                      alt="text-logo"
+                      className={"text-logo"}
+                    />
+                  </Toolbar>
+                </AppBar>
+              </Box>
+            )}
             {!EXCLUDE_CRUMBS[location.pathname] && (
               <Box
                 sx={{
