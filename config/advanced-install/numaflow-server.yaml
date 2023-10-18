@@ -145,13 +145,6 @@ spec:
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         name: server-init
-        resources:
-          limits:
-            cpu: 500m
-            memory: 1024Mi
-          requests:
-            cpu: 100m
-            memory: 200Mi
         volumeMounts:
         - mountPath: /opt/numaflow
           name: env-volume
