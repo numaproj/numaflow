@@ -41,6 +41,9 @@ var (
 
 func Start(insecure bool, port int, namespaced bool, managedNamespace string, baseHref string) {
 	logger := logging.NewLogger().Named("server")
+	// devReverseProxyRouter := gin.New()
+	// devReverseProxyRouter.Any("/dex/*name", v1.DexReverseProxy)
+	// devReverseProxyRouter.Run()
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.RedirectTrailingSlash = true

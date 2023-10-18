@@ -30,6 +30,13 @@ spec:
         volumeMounts:
         - mountPath: /opt/numaflow
           name: env-volume
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1024Mi
+          requests:
+            cpu: 100m
+            memory: 200Mi
       containers:
         - name: main
           image: quay.io/numaproj/numaflow:latest

@@ -81,12 +81,13 @@ func NewHandler() (*handler, error) {
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
-		dexpoc:         NewDexPOC(context.Background()),
 	}, nil
 }
 
 // Login is used to redirect the user to authentication page and set the user identity token in the cookie
 func (h *handler) Login(c *gin.Context) {
+	// set up dex
+	h.dexpoc = NewDexPOC(context.Background())
 	// TODO - send a request to Dex to get the real user identity token.
 	h.dexpoc.handleLogin(c)
 }

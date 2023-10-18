@@ -9,6 +9,8 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -50,7 +52,7 @@ func NewDexPOC(ctx context.Context) *DexPOC {
 	clientID := "example-app"
 	// TODO: TLS
 	// issuerURL := "https://numaflow-dex-server:5556/dex"
-	issuerURL := "http://numaflow-dex-server:5556/dex"
+	issuerURL := "https://numaflow-server:8443/dex"
 	provider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
 		log.Fatalf("failed to query provider %q: %v", issuerURL, err)
@@ -257,4 +259,15 @@ func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data interfa
 		// An error with the underlying write, such as the connection being
 		// dropped. Ignore for now.
 	}
+}
+
+func DexReverseProxy(c *gin.Context) {
+	var target = "http://numaflow-dex-server:5556"
+	proxyUrl, _ := url.Parse(target)
+
+	c.Request.URL.Path = c.Param("name")
+
+	proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
+
+	proxy.ServeHTTP(c.Writer, c.Request)
 }
