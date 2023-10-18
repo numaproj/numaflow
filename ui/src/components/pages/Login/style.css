@@ -42,6 +42,7 @@
     box-shadow: 0px 24px 15px 0px rgba(0, 0, 0, 0.15);
     border-image-outset: 1 1 0 1;
     padding: 2rem;
+    justify-content: center;
 }
 .inputClass{
     color: #fff;
@@ -53,4 +54,14 @@
 .loginFormInput{
     width: 271px;
     height: 22px;
+}
+
+.login-loading-message {
+    color: #fff;
+    margin-top: 2rem;
+}
+
+.login-error-message {
+    color: #fff;
+    margin-top: 2rem;
 }

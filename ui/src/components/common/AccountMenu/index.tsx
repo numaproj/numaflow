@@ -8,8 +8,10 @@ import IconButton from "@mui/material/IconButton";
 import Logout from "@mui/icons-material/Logout";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
+import { useNavigate } from "react-router-dom";
 
 export default function AccountMenu() {
+  const navigate = useNavigate();
   const { userInfo } = useContext<AppContextProps>(AppContext);
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>();
 
@@ -21,9 +23,16 @@ export default function AccountMenu() {
     setAnchorEl(undefined);
   }, []);
 
-  const handleLogout = useCallback(() => {
-    handleClose();
-    // TODO
+  const handleLogout = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/v1/logout`);
+      if (response.ok) {
+        navigate("/login");
+      }
+      // TODO on failure?
+    } catch (e: any) {
+      // TODO on failure?
+    }
   }, []);
 
   const open = useMemo(() => !!anchorEl, [anchorEl]);

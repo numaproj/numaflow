@@ -96,6 +96,32 @@ func (h *handler) Callback(c *gin.Context) {
 	h.dexpoc.handleCallback(c)
 }
 
+// Logout is used to remove auth cookie ending a users session.
+func (h *handler) Logout(c *gin.Context) {
+	cookie := &http.Cookie{
+		Name:     "user-identity-token",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+	}
+	http.SetCookie(c.Writer, cookie)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
+// Load and return auth info from cookie
+func (h *handler) AuthInfo(c *gin.Context) {
+	userIdentityTokenStr, err := c.Cookie("user-identity-token")
+	if err != nil {
+		errMsg := "user is not authenticated."
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	userIdentityToken := getUserIdentityToken(userIdentityTokenStr)
+	res := NewCallbackResponse(userIdentityToken.IDTokenClaims, userIdentityToken.IDToken, userIdentityToken.RefreshToken)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+}
+
 func getUserIdentityToken(jsonStr string) CallbackResponse {
 	var callbackResponse CallbackResponse
 	err := json.Unmarshal([]byte(jsonStr), &callbackResponse)
@@ -138,6 +164,13 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 
 // GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
 func (h *handler) GetClusterSummary(c *gin.Context) {
+	userIdentityTokenStr, err := c.Cookie("user-identity-token")
+	if err != nil {
+		errMsg := "user is not authenticated."
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	getUserIdentityToken(userIdentityTokenStr)
 	type namespaceSummary struct {
 		pipelineSummary PipelineSummary
 		isbsvcSummary   IsbServiceSummary
