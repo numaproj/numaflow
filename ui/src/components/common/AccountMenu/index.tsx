@@ -25,7 +25,7 @@ export default function AccountMenu() {
 
   const handleLogout = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/logout`);
+      const response = await fetch(`/auth/v1/logout`);
       if (response.ok) {
         navigate("/login");
       }

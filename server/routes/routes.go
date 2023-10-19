@@ -78,9 +78,11 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysinfo))
 	})
+	noAuthGroup := r.Group("/auth/v1")
+	v1RoutesNoAuth(noAuthGroup)
 }
 
-func v1Routes(r gin.IRouter) {
+func v1RoutesNoAuth(r gin.IRouter) {
 	handler, err := v1.NewHandler()
 	if err != nil {
 		panic(err)
@@ -89,10 +91,17 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/login", handler.Login)
 	// Handle the logout request.
 	r.GET("/logout", handler.Logout)
-	// Handle the authinfo request.
-	r.GET("/authinfo", handler.AuthInfo)
 	// Handle the callback request.
 	r.GET("/callback", handler.Callback)
+}
+
+func v1Routes(r gin.IRouter) {
+	handler, err := v1.NewHandler()
+	if err != nil {
+		panic(err)
+	}
+	// Handle the authinfo request.
+	r.GET("/authinfo", handler.AuthInfo)
 	// List all namespaces that have Pipeline or InterStepBufferService objects.
 	r.GET("/namespaces", handler.ListNamespaces)
 	// Summarized information of all the namespaces in a cluster wrapped in a list.
