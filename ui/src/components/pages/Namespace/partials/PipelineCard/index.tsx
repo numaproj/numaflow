@@ -251,7 +251,20 @@ export function PipelineCard({
               marginLeft: "1rem",
             }}
           >
-            <span className="pipeline-card-name">{data?.name}</span>
+            <Link
+              to={
+                systemInfo?.namespaced
+                  ? `/pipelines/${data.name}`
+                  : `/namespaces/${namespace}/pipelines/${data.name}`
+              }
+              style={
+                pipelineStatus === DELETING || !pipelineAbleToLoad
+                  ? { pointerEvents: "none", textDecoration: "none" }
+                  : { textDecoration: "none" }
+              }
+            >
+              <span className="pipeline-card-name">{data?.name}</span>
+            </Link>
           </Box>
           <Box
             sx={{
