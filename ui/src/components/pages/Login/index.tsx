@@ -157,9 +157,8 @@ export function Login() {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            marginTop: "5rem",
+            justifyContent: "center",
             flexGrow: "1",
-            width: "50%",
             height: "100%",
           }}
         >
@@ -255,12 +254,12 @@ export function Login() {
               display: "flex",
               flexDirection: "column",
               width: "100%",
-              height: "50%",
               alignItems: "center",
               justifyContent: "center",
+              marginTop: "2rem",
             }}
           >
-            <img src={gitIcon} style={{ width: "10rem", height: "10rem" }} />
+            <img src={gitIcon} style={{ width: "4.125rem", height: "4.125rem" }} />
             <Button
               onClick={handleLoginClick}
               variant="text"
