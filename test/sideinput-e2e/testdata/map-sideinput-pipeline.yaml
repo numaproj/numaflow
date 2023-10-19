@@ -6,7 +6,7 @@ spec:
   sideInputs:
     - name: myticker
       container:
-        image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-example:v0.0.10"
+        image: "quay.io/chandan_kumar1/numaproj-contrib/e2e-map-sideinput-example:v0.0.1"
         imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
@@ -17,7 +17,7 @@ spec:
     - name: si-e2e
       udf:
         container:
-          image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-udf:v0.0.10"
+          image: "quay.io/chandan_kumar1/numaproj-contrib/e2e-map-sideinput-udf:v0.0.1"
           imagePullPolicy: Always
       containerTemplate:
         env:
