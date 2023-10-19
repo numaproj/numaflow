@@ -380,28 +380,33 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 	deployHash := sharedutil.MustHash(deploy.Spec)
 	deploy.Annotations = map[string]string{dfv1.KeyHash: deployHash}
 	existingDeploy := &appv1.Deployment{}
+	needToCreate := false
 	if err := r.client.Get(ctx, types.NamespacedName{Namespace: pl.Namespace, Name: deploy.Name}, existingDeploy); err != nil {
-		if apierrors.IsNotFound(err) {
-			if err := r.client.Create(ctx, deploy); err != nil && !apierrors.IsAlreadyExists(err) {
-				log.Errorw("Failed to create a daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
-				pl.Status.MarkDeployFailed("CreateDaemonDeployFailed", err.Error())
-				return fmt.Errorf("failed to create a daemon deployment, %w", err)
-			}
-			log.Infow("Succeeded to create a daemon deployment", zap.String("deployment", deploy.Name))
-		} else {
+		if !apierrors.IsNotFound(err) {
 			log.Errorw("Failed to find existing daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
 			pl.Status.MarkDeployFailed("FindDaemonDeployFailed", err.Error())
 			return fmt.Errorf("failed to find existing daemon deployment, %w", err)
+		} else {
+			needToCreate = true
 		}
-	} else if existingDeploy.GetAnnotations()[dfv1.KeyHash] != deployHash {
-		existingDeploy.Annotations[dfv1.KeyHash] = deployHash
-		existingDeploy.Spec = deploy.Spec
-		if err := r.client.Update(ctx, existingDeploy); err != nil {
-			log.Errorw("Failed to update a daemon deployment", zap.String("deployment", existingDeploy.Name), zap.Error(err))
-			pl.Status.MarkDeployFailed("UpdateDaemonDeployFailed", err.Error())
-			return fmt.Errorf("failed to update a daemon deployment, %w", err)
+	} else {
+		if existingDeploy.GetAnnotations()[dfv1.KeyHash] != deployHash {
+			// Delete and recreate, to avoid updating immutable fields problem.
+			if err := r.client.Delete(ctx, existingDeploy); err != nil {
+				log.Errorw("Failed to delete the outdated daemon deployment", zap.String("deployment", existingDeploy.Name), zap.Error(err))
+				pl.Status.MarkDeployFailed("DeleteOldDaemonDeployFailed", err.Error())
+				return fmt.Errorf("failed to delete an outdated daemon deployment, %w", err)
+			}
+			needToCreate = true
 		}
-		log.Infow("Succeeded to update daemon deployment", zap.String("deployment", existingDeploy.Name))
+	}
+	if needToCreate {
+		if err := r.client.Create(ctx, deploy); err != nil && !apierrors.IsAlreadyExists(err) {
+			log.Errorw("Failed to create a daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
+			pl.Status.MarkDeployFailed("CreateDaemonDeployFailed", err.Error())
+			return fmt.Errorf("failed to create a daemon deployment, %w", err)
+		}
+		log.Infow("Succeeded to created/recreatd a daemon deployment", zap.String("deployment", deploy.Name))
 	}
 	return nil
 }
@@ -447,27 +452,30 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 			newObj.Annotations = make(map[string]string)
 		}
 		newObj.Annotations[dfv1.KeyHash] = deployHash
-		if oldObj, existing := existingObjs[newObj.Name]; !existing {
+		needToCreate := false
+		if oldObj, existing := existingObjs[newObj.Name]; existing {
+			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] {
+				// Delete and recreate, to avoid updating immutable fields problem.
+				if err := r.client.Delete(ctx, &oldObj); err != nil {
+					pl.Status.MarkDeployFailed("DeleteOldSIMDeploymentFailed", err.Error())
+					return fmt.Errorf("failed to delete old Side Inputs Manager Deployment %q, %w", oldObj.Name, err)
+				}
+				needToCreate = true
+			}
+			delete(existingObjs, oldObj.Name)
+		} else {
+			needToCreate = true
+		}
+		if needToCreate {
 			if err := r.client.Create(ctx, newObj); err != nil {
 				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
 					continue
 				} else {
 					pl.Status.MarkDeployFailed("CreateSIMDeploymentFailed", err.Error())
-					return fmt.Errorf("failed to create Side Inputs Manager Deployment %q, %w", newObj.Name, err)
+					return fmt.Errorf("failed to create/recreate Side Inputs Manager Deployment %q, %w", newObj.Name, err)
 				}
 			}
-			log.Infow("Created Side Inputs Manager Deployment successfully", zap.String("deployment", newObj.Name))
-		} else {
-			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
-				oldObj.Spec = newObj.Spec
-				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
-				if err := r.client.Update(ctx, &oldObj); err != nil {
-					pl.Status.MarkDeployFailed("UpdateSIMDeploymentFailed", err.Error())
-					return fmt.Errorf("failed to update Side Inputs Manager Deployment %q, %w", oldObj.Name, err)
-				}
-				log.Infow("Updated Side Inputs Manager Deployment successfully", zap.String("deployment", oldObj.Name))
-			}
-			delete(existingObjs, oldObj.Name)
+			log.Infow("Succeeded to create/recreate Side Inputs Manager Deployment", zap.String("deployment", newObj.Name))
 		}
 	}
 	for _, v := range existingObjs {

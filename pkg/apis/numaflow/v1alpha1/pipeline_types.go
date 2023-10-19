@@ -281,6 +281,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		KeyPartOf:       Project,
 		KeyManagedBy:    ControllerPipeline,
 		KeyComponent:    ComponentDaemon,
+		KeyAppName:      p.GetDaemonDeploymentName(),
 		KeyPipelineName: p.Name,
 	}
 	spec := appv1.DeploymentSpec{

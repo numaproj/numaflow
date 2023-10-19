@@ -55,6 +55,7 @@ func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputD
 		KeyPartOf:        Project,
 		KeyManagedBy:     ControllerPipeline,
 		KeyComponent:     ComponentSideInputManager,
+		KeyAppName:       pipeline.GetSideInputsManagerDeploymentName(si.Name),
 		KeyPipelineName:  pipeline.Name,
 		KeySideInputName: si.Name,
 	}
