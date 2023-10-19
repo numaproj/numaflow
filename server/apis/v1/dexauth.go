@@ -2,11 +2,14 @@ package v1
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -45,8 +48,13 @@ func (d *DexObject) oauth2Config(scopes []string) *oauth2.Config {
 // TODO: refactor data structure and make configurable
 func NewDexObject(ctx context.Context) *DexObject {
 	clientID := "example-app"
-	issuerURL := "http://numaflow-dex-server:5556/dex"
-	provider, err := oidc.NewProvider(ctx, issuerURL)
+	issuerURL := "https://numaflow-server:8443/dex"
+	client := http.DefaultClient
+	client.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	newCtx := oidc.ClientContext(ctx, client)
+	provider, err := oidc.NewProvider(newCtx, issuerURL)
 	if err != nil {
 		log.Fatalf("failed to query provider %q: %v", issuerURL, err)
 	}
@@ -59,7 +67,7 @@ func NewDexObject(ctx context.Context) *DexObject {
 		verifier:       verifier,
 		provider:       provider,
 		offlineAsScope: true,
-		client:         http.DefaultClient,
+		client:         client,
 		stateNonce:     "",
 	}
 }
@@ -174,4 +182,17 @@ func generateRandomNumber(n int) string {
 		remain--
 	}
 	return string(b)
+}
+
+// DexReverseProxy sends the dex request to the dex server.
+func DexReverseProxy(c *gin.Context) {
+	var target = "http://numaflow-dex-server:5556/dex"
+	proxyUrl, _ := url.Parse(target)
+	c.Request.URL.Path = c.Param("name")
+	proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
+	fmt.Println("proxy", proxyUrl, c.Request.URL.Path)
+	proxy.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	proxy.ServeHTTP(c.Writer, c.Request)
 }
