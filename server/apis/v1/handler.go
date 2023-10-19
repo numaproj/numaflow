@@ -19,6 +19,7 @@ package v1
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -95,20 +96,33 @@ func (h *handler) Callback(c *gin.Context) {
 	h.dexpoc.handleCallback(c)
 }
 
+func getUserIdentityToken(jsonStr string) CallbackResponse {
+	var callbackResponse CallbackResponse
+	err := json.Unmarshal([]byte(jsonStr), &callbackResponse)
+	if err != nil {
+		return CallbackResponse{}
+	}
+	return callbackResponse
+}
+
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
-	userIdentityToken, err := c.Cookie("user-identity-token")
+	userIdentityTokenStr, err := c.Cookie("user-identity-token")
 	if err != nil {
 		errMsg := "user is not authenticated."
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
+	userIdentityToken := getUserIdentityToken(userIdentityTokenStr)
 	// TODO - After we successfully retrieved the user identity token, we still need to verify it with Dex.
+
+	// each group is in the format of orgName:teamName, e.g. ["jyu-dex-poc:readonly"]
+	groups := userIdentityToken.IDTokenClaims.Groups
 	if casbin.IsAuthorized(
 		casbin.AuthorizationRequest{
-			UserIdentityToken: userIdentityToken,
-			Resource:          "namespaces",
-			Action:            "list",
+			Groups:   groups,
+			Resource: "namespaces",
+			Action:   "list",
 		}) {
 		namespaces, err := getAllNamespaces(h)
 		if err != nil {
