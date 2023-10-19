@@ -17,6 +17,7 @@ limitations under the License.
 package routes
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -40,12 +41,13 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	})
 
 	r.Any("/dex/*name", v1.DexReverseProxy)
+	noAuthGroup := r.Group("/auth/v1")
+	v1RoutesNoAuth(noAuthGroup)
 	enforcer, err := getEnforcer()
 	if err != nil {
 
 	}
 	r1Group := r.Group("/api/v1")
-	v1Routes(r1Group)
 	r1Group.Use(func(c *gin.Context) {
 		userIdentityTokenStr, err := c.Cookie("user-identity-token")
 		if err != nil {
@@ -56,13 +58,14 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
 		groups := userIdentityToken.IDTokenClaims.Groups
 		// user := c.DefaultQuery("user", "readonly")
-		// user := "admin" // Replace with actual user from your authentication system.
 		resource := c.FullPath()
 		action := c.Request.Method
 		auth := false
+		fmt.Println(groups, resource, action)
 
 		for _, group := range groups {
 			user := strings.Split(group, ":")[1]
+			fmt.Println(user, resource, action)
 			// Check if the user has permission using Casbin Enforcer.
 			if enforceRBAC(enforcer, user, resource, action) {
 				auth = true
@@ -75,11 +78,10 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 			c.Abort()
 		}
 	})
+	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysinfo))
 	})
-	noAuthGroup := r.Group("/auth/v1")
-	v1RoutesNoAuth(noAuthGroup)
 }
 
 func v1RoutesNoAuth(r gin.IRouter) {
