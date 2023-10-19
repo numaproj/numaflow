@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useFetch, Options } from "./fetch";
 import {
   NamespacePipelineSummary,
@@ -102,16 +102,27 @@ const DATA_REFRESH_INTERVAL = 15000; // ms
 export const useNamespaceSummaryFetch = ({
   namespace,
   loadOnRefresh = false,
+  addError,
 }: NamespaceSummaryFetchProps) => {
-  const [results, setResults] = useState<NamespaceSummaryFetchResult>({
-    data: undefined,
-    loading: true,
-    error: undefined,
-  });
   const [options, setOptions] = useState<Options>({
     skip: false,
     requestKey: "",
   });
+
+  const refresh = useCallback(() => {
+    setOptions({
+      skip: false,
+      requestKey: "id" + Math.random().toString(16).slice(2),
+    });
+  }, []);
+
+  const [results, setResults] = useState<NamespaceSummaryFetchResult>({
+    data: undefined,
+    loading: true,
+    error: undefined,
+    refresh
+  });
+
   const {
     data: pipelineData,
     loading: pipelineLoading,
@@ -144,24 +155,39 @@ export const useNamespaceSummaryFetch = ({
           data: undefined,
           loading: true,
           error: undefined,
+          refresh,
         });
       }
       return;
     }
     if (pipelineError || isbError) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineError || isbError,
-      });
+      if (options?.requestKey === "") {
+        // Failed on first load, return error
+        setResults({
+          data: undefined,
+          loading: false,
+          error: pipelineError || isbError,
+          refresh,
+        });
+      } else {
+        // Failed on refresh, add error to app context
+        addError(pipelineError || isbError);
+      }
       return;
     }
     if (pipelineData?.errMsg || isbData?.errMsg) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineData?.errMsg || isbData?.errMsg,
-      });
+      if (options?.requestKey === "") {
+        // Failed on first load, return error
+        setResults({
+          data: undefined,
+          loading: false,
+          error: pipelineData?.errMsg || isbData?.errMsg,
+          refresh,
+        });
+      } else {
+        // Failed on refresh, add error to app context
+        addError(pipelineData?.errMsg || isbData?.errMsg);
+      }
       return;
     }
     if (pipelineData && isbData) {
@@ -173,11 +199,6 @@ export const useNamespaceSummaryFetch = ({
         map[obj.name] = obj;
         return map;
       }, {});
-      // const nsSummary = rawDataToNamespaceSummary(
-      //   // TODO REMOVE MOCK
-      //   MOCK_PIPELINE_DATA,
-      //   MOCK_ISB_DATA
-      // );
       const nsSummary = rawDataToNamespaceSummary(
         pipelineData?.data,
         isbData?.data
@@ -188,6 +209,7 @@ export const useNamespaceSummaryFetch = ({
         isbRawData: isbMap,
         loading: false,
         error: undefined,
+        refresh,
       });
       return;
     }
@@ -200,6 +222,8 @@ export const useNamespaceSummaryFetch = ({
     isbError,
     loadOnRefresh,
     options,
+    refresh,
+    addError,
   ]);
 
   return results;

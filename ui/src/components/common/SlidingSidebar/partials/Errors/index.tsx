@@ -1,28 +1,60 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useContext, useMemo } from "react";
 import Box from "@mui/material/Box";
-import { Slide, ToastContainer } from "react-toastify";
+import Grid from "@mui/material/Grid";
+import Paper from "@mui/material/Paper";
+import Button from "@mui/material/Button";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { AppContext } from "../../../../../App";
 
 import "./style.css";
 
-export interface ErrorsProps {
-  errors: boolean;
-}
+export function Errors() {
+  const { errors, clearErrors } = useContext<AppContextProps>(AppContext);
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function Errors({ errors }: ErrorsProps) {
-  const header = useMemo(() => {
-    const headerContainerStyle = {
+  const handleClear = useCallback(() => {
+    clearErrors();
+  }, [clearErrors]);
+
+  const content = useMemo(() => {
+    const paperStyle = {
       display: "flex",
-      flexDirection: "row",
+      flexDirection: "column",
+      padding: "1rem",
     };
-    const textClass = "vertex-details-header-text";
-
     return (
-      <Box sx={headerContainerStyle}>
-        <span className={textClass}>Errors</span>
-      </Box>
+      <Grid
+        container
+        spacing={2}
+        sx={{ marginTop: "0.5rem", justifyContent: "center" }}
+      >
+        {!errors.length && (
+          <Grid item xs={12}>
+            <Paper elevation={0} sx={paperStyle}>
+              No errors
+            </Paper>
+          </Grid>
+        )}
+        {errors.map((error) => (
+          <Grid item xs={12}>
+            <Paper elevation={0} sx={paperStyle}>
+              <span className="errors-message-text">{error.message}</span>
+              <span>{error.date.toLocaleTimeString()}</span>
+            </Paper>
+          </Grid>
+        ))}
+        {!!errors.length && (
+          <Button
+            sx={{ marginTop: "1rem" }}
+            onClick={handleClear}
+            variant="outlined"
+            color="primary"
+          >
+            Clear
+          </Button>
+        )}
+      </Grid>
     );
-  }, []);
+  }, [errors]);
 
   return (
     <Box
@@ -30,25 +62,10 @@ export function Errors({ errors }: ErrorsProps) {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        borderColor: "divider",
       }}
     >
-      <Box sx={{ marginTop: "1rem", borderBottom: 1, borderColor: "divider" }}>
-        {header}
-      </Box>
-      <ToastContainer
-        position="bottom-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        limit={11}
-        closeOnClick={false}
-        rtl={false}
-        draggable={true}
-        pauseOnHover={true}
-        transition={Slide}
-        theme="light"
-      />
+      <span className="errors-header-text">Errors</span>
+      {content}
     </Box>
   );
 }
