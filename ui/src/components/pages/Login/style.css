@@ -7,30 +7,16 @@
 .column{
     flex-direction: column;
 }
-.loginPageContainer{
-    display: flex;
-    width: 100%;
-    height: 100%;
-    background-color: #001D3C;
-}
+
 .logoContainer{
     flex-grow: 1;
     background-image:  url("../../../images/logo.png"),url("../../../images/background\ glow.png"), url("../../../images/specs.png") ;
     background-repeat: no-repeat;
     background-position: center;
 }
-.loginFormContainer{
-    flex-grow: 1;
-}
-.loginFormContainer{
-    width: 50%;
-    height: 100%;
-
-}
 .formContainer{
     width: 441px;
     height: 704px;
-    align-items: flex-start;
     border-radius: 20px;
     border: 1px solid transparent;
     border-image-slice: 1;
