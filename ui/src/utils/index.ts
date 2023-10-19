@@ -51,7 +51,7 @@ export async function getAPIResponseError(
       try {
         const data = await response.json();
         if (data.errMsg) {
-          message = data.errMsg;
+          message = response.status === 403 ? `Error: ${data.errMsg}` : data.errMsg;
         }
       } catch (e) {
         // Ignore

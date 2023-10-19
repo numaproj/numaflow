@@ -20,9 +20,13 @@ import { UNKNOWN } from "../../../utils";
 
 import "./style.css";
 
-export function Pipeline() {
-  // TODO needs to be able to be given namespaceId from parent for NS only install
-  const { namespaceId, pipelineId } = useParams();
+export interface PipelineProps {
+  namespaceId?: string;
+}
+
+export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
+  const { namespaceId: nsIdParam, pipelineId } = useParams();
+  const namespaceId = nsIdProp || nsIdParam;
   const { addError } = useContext<AppContextProps>(AppContext);
   const {
     data,
@@ -31,13 +35,20 @@ export function Pipeline() {
     refresh: summaryRefresh,
   } = usePipelineSummaryFetch({ namespaceId, pipelineId, addError });
 
-  const { pipeline, vertices, edges, pipelineErr, buffersErr, loading, refresh: graphRefresh } =
-    usePipelineViewFetch(namespaceId, pipelineId, addError);
+  const {
+    pipeline,
+    vertices,
+    edges,
+    pipelineErr,
+    buffersErr,
+    loading,
+    refresh: graphRefresh,
+  } = usePipelineViewFetch(namespaceId, pipelineId, addError);
 
-    const refresh = useCallback(() => {
-      graphRefresh();
-      summaryRefresh();
-    }, [graphRefresh, summaryRefresh]);
+  const refresh = useCallback(() => {
+    graphRefresh();
+    summaryRefresh();
+  }, [graphRefresh, summaryRefresh]);
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (summaryLoading) {

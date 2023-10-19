@@ -17,9 +17,7 @@ import {
   GetISBType,
   getAPIResponseError,
   IconsStatusMap,
- 
   ISBStatusString,
- 
   StatusString,
   timeAgo,
   UNKNOWN,
@@ -50,7 +48,8 @@ export function PipelineCard({
   isbData,
   refresh,
 }: PipelineCardProps) {
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const { setSidebarProps, systemInfo } =
+    useContext<AppContextProps>(AppContext);
   const [editOption] = useState("edit");
   const [deleteOption] = useState("delete");
   const [deleteProps, setDeleteProps] = useState<DeleteProps | undefined>();
@@ -345,7 +344,11 @@ export function PipelineCard({
             </Button>
           </Box>
           <Link
-            to={`/namespaces/${namespace}/pipelines/${data.name}`}
+            to={
+              systemInfo?.namespaced
+                ? `/pipelines/${data.name}`
+                : `/namespaces/${namespace}/pipelines/${data.name}`
+            }
             style={
               pipelineStatus === DELETING || !pipelineAbleToLoad
                 ? { pointerEvents: "none", textDecoration: "none" }

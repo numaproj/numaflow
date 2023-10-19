@@ -84,14 +84,14 @@ function App() {
         const response = await fetch(`/api/v1/authinfo`);
         if (response.ok) {
           const data = await response.json();
-          const claims = data?.data?.id_token_claims
+          const claims = data?.data?.id_token_claims;
           if (claims) {
             setUserInfo({
               email: claims.email,
               name: claims.name,
               username: claims.preferred_username,
               groups: claims.groups,
-            })
+            });
           }
         }
       } catch (e: any) {
@@ -193,9 +193,15 @@ function App() {
       // Namespaced installation routing
       return (
         <Routes>
-          <Route path="/" element={<Namespaces />} />
+          <Route
+            path="/"
+            element={<Namespaces namespaceId={systemInfo.managedNamespace} />}
+          />
           <Route path="/login" element={<Login />} />
-          <Route path="/pipelines/:pipelineId" element={<Pipeline />} />
+          <Route
+            path="/pipelines/:pipelineId"
+            element={<Pipeline namespaceId={systemInfo.managedNamespace} />}
+          />
           <Route
             path="*"
             element={
