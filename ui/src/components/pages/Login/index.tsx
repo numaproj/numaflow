@@ -49,7 +49,7 @@ export function Login() {
       } else {
         setLoginError(await getAPIResponseError(response));
       }
-      
+
       setLoading(false);
       setLoadingMessage("");
     } catch (e: any) {
@@ -73,13 +73,13 @@ export function Login() {
           name: "unknown",
           preferred_username: "unknown",
           groups: [],
-        }
+        };
         setUserInfo({
           email: claims.email,
           name: claims.name,
           username: claims.preferred_username,
           groups: claims.groups,
-        })
+        });
         navigate("/");
         return;
       }
@@ -106,9 +106,13 @@ export function Login() {
     if (loading || (code && state)) {
       // Display spinner if loading or callback in progress
       return (
-        <div
-          className="flex column"
-          style={{ alignItems: "center", marginTop: "5rem" }}
+        <Box
+          style={{
+            alignItems: "center",
+            marginTop: "5rem",
+            display: "flex",
+            flexDirection: "column",
+          }}
         >
           <div className="flex column formContainer">
             <Box
@@ -127,7 +131,7 @@ export function Login() {
               )}
             </Box>
           </div>
-        </div>
+        </Box>
       );
     }
     let errorMessage = "";
@@ -140,64 +144,116 @@ export function Login() {
     }
     return (
       <div
-        className="flex column"
-        style={{ alignItems: "center", marginTop: "5rem" }}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          marginTop: "5rem",
+        }}
+        className="formContainer"
       >
-        <div className="flex column formContainer">
-          <div
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            marginTop: "5rem",
+            flexGrow: "1",
+            width: "50%",
+            height: "100%",
+          }}
+        >
+          <Box
             style={{
               color: "#fff",
               fontSize: "32px",
               width: "100%",
               alignItems: "center",
+              display: "flex",
+              flexDirection: "column",
             }}
-            className="flex column"
           >
             Login
-          </div>
+          </Box>
           {enableFormBasedLogin && (
             <>
-              {" "}
-              <div
-                className="flex column"
-                style={{ width: "100%", height: "50%", marginTop: "5rem" }}
+              <Box
+                style={{
+                  width: "100%",
+                  height: "50%",
+                  marginTop: "5rem",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
               >
-                <div className="flex column inputClass">
+                <Box
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    color: "#fff",
+                    width: "100%",
+                    flexShrink: "0",
+                    marginBottom: "2rem",
+                    boxShadow: "0px 24px 48px 0px rgba(39, 76, 119, 0.16)",
+                  }}
+                >
                   <label>Username</label>
                   <input
                     type="text"
                     placeholder="Username"
                     className="loginFormInput"
                   />
-                </div>
-                <div className="flex column inputClass">
+                </Box>
+                <Box
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    color: "#fff",
+                    width: "100%",
+                    flexShrink: "0",
+                    marginBottom: "2rem",
+                    boxShadow: "0px 24px 48px 0px rgba(39, 76, 119, 0.16)",
+                  }}
+                >
                   <label>Password</label>
                   <input
                     type="password"
                     placeholder="........."
                     className="loginFormInput"
                   />
-                </div>
-                <div
+                </Box>
+                <Box
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    color: "#fff",
+                    width: "100%",
+                    alignItems: "center",
+                  }}
                   className="flex column"
-                  style={{ width: "100%", alignItems: "center" }}
                 >
                   <Button variant="contained" size="small">
                     Submit
                   </Button>
-                </div>
-              </div>
-              <div
-                className="flex column"
-                style={{ color: "#fff", width: "100%", alignItems: "center" }}
+                </Box>
+              </Box>
+              <Box
+                style={{
+                  color: "#fff",
+                  width: "100%",
+                  alignItems: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
               >
                 Or
-              </div>
+              </Box>
             </>
           )}
-          <div
-            className="flex column"
+          <Box
             style={{
+              display: "flex",
+              flexDirection: "column",
               width: "100%",
               height: "50%",
               alignItems: "center",
@@ -221,8 +277,8 @@ export function Login() {
             {errorMessage && (
               <span className="login-error-message">{errorMessage}</span>
             )}
-          </div>
-        </div>
+          </Box>
+        </Box>
       </div>
     );
   }, [
@@ -238,33 +294,62 @@ export function Login() {
   ]);
 
   return (
-    <div className="flex row loginPageContainer">
-      <div className="flex column logoContainer" style={{ width: "100%" }}>
-        <div
-          className="flex column"
-          style={{ alignItems: "center", marginTop: "5rem" }}
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "row",
+        flexGrow: "1",
+        width: "100%",
+        height: "100%",
+        backgroundColor: "#001D3C",
+      }}
+    >
+      <div
+        className="logoContainer"
+        style={{ width: "100%", display: "flex", flexDirection: "column" }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            marginTop: "5rem",
+          }}
         >
-          <div
-            style={{
+          <Box
+            sx={{
               color: "#fff",
               fontSize: "32px",
+              display: "flex",
+              flexDirection: "row",
             }}
-            className="flex row"
           >
             Unlock the power of
-          </div>
-          <div
-            style={{
+          </Box>
+          <Box
+            sx={{
               color: "#fff",
               fontSize: "32px",
+              display: "flex",
+              flexDirection: "row",
             }}
-            className="flex row"
           >
             data streaming with Numaflow!
-          </div>
-        </div>
+          </Box>
+        </Box>
       </div>
-      <div className="flex column loginFormContainer">{loginContent}</div>
-    </div>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          flexGrow: "1",
+          width: "50%",
+          height: "100%",
+          alignItems: "center",
+        }}
+      >
+        {loginContent}
+      </Box>
+    </Box>
   );
 }
