@@ -18,7 +18,10 @@ package routes
 
 import (
 	"net/http"
+	"strings"
 
+	"github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v2/model"
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
@@ -37,9 +40,41 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	})
 
 	r.Any("/dex/*name", v1.DexReverseProxy)
+	enforcer, err := getEnforcer()
+	if err != nil {
 
+	}
 	r1Group := r.Group("/api/v1")
 	v1Routes(r1Group)
+	r1Group.Use(func(c *gin.Context) {
+		userIdentityTokenStr, err := c.Cookie("user-identity-token")
+		if err != nil {
+			errMsg := "user is not authenticated."
+			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
+		groups := userIdentityToken.IDTokenClaims.Groups
+		// user := c.DefaultQuery("user", "readonly")
+		// user := "admin" // Replace with actual user from your authentication system.
+		resource := c.FullPath()
+		action := c.Request.Method
+		auth := false
+
+		for _, group := range groups {
+			user := strings.Split(group, ":")[1]
+			// Check if the user has permission using Casbin Enforcer.
+			if enforceRBAC(enforcer, user, resource, action) {
+				auth = true
+				c.Next()
+			}
+		}
+		if !auth {
+			errMsg := "user is not authorized to execute the requested action."
+			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
+			c.Abort()
+		}
+	})
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysinfo))
 	})
@@ -102,4 +137,65 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
+}
+
+func getEnforcer() (*casbin.Enforcer, error) {
+	modelText := `
+	[request_definition]
+	r = sub, obj, act
+	
+	[policy_definition]
+	p = sub, obj, act
+	
+	[role_definition]
+	g = _, _
+	
+	[policy_effect]
+	e = some(where (p.eft == allow))
+	
+	[matchers]
+	m = g(r.sub, p.sub) && keyMatch(r.obj,p.obj) && r.act == p.act
+	`
+
+	// Initialize the Casbin model from the model configuration string.
+	model, err := model.NewModelFromString(modelText)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize the Casbin Enforcer with the model.
+	enforcer, err := casbin.NewEnforcer(model)
+	if err != nil {
+		return nil, err
+	}
+	rules := [][]string{
+		[]string{"role:readonly", "*", "GET"},
+		[]string{"role:admin", "*", "POST"},
+		[]string{"role:admin", "*", "PUT"},
+		[]string{"role:admin", "*", "UPDATE"},
+		[]string{"role:admin", "*", "DELETE"},
+	}
+
+	areRulesAdded, err := enforcer.AddPolicies(rules)
+	if !areRulesAdded {
+		return nil, err
+	}
+
+	rulesGroup := [][]string{
+		[]string{"role:admin", "role:readonly"},
+		[]string{"readonly", "role:readonly"},
+		[]string{"admin", "role:admin"},
+	}
+
+	areRulesAdded, err = enforcer.AddNamedGroupingPolicies("g", rulesGroup)
+	if !areRulesAdded {
+		return nil, err
+	}
+	return enforcer, nil
+}
+
+// enforceRBAC checks if the user has permission based on the Casbin model and policy.
+func enforceRBAC(enforcer *casbin.Enforcer, user, resource, action string) bool {
+	ok, _ := enforcer.Enforce(user, resource, action)
+	return ok
 }

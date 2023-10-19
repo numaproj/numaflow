@@ -117,12 +117,12 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	userIdentityToken := getUserIdentityToken(userIdentityTokenStr)
+	userIdentityToken := GetUserIdentityToken(userIdentityTokenStr)
 	res := NewCallbackResponse(userIdentityToken.IDTokenClaims, userIdentityToken.IDToken, userIdentityToken.RefreshToken)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
-func getUserIdentityToken(jsonStr string) CallbackResponse {
+func GetUserIdentityToken(jsonStr string) CallbackResponse {
 	var callbackResponse CallbackResponse
 	err := json.Unmarshal([]byte(jsonStr), &callbackResponse)
 	if err != nil {
@@ -139,7 +139,7 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	userIdentityToken := getUserIdentityToken(userIdentityTokenStr)
+	userIdentityToken := GetUserIdentityToken(userIdentityTokenStr)
 	// TODO - After we successfully retrieved the user identity token, we still need to verify it with Dex.
 
 	// each group is in the format of orgName:teamName, e.g. ["jyu-dex-poc:readonly"]
@@ -170,7 +170,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	getUserIdentityToken(userIdentityTokenStr)
+	GetUserIdentityToken(userIdentityTokenStr)
 	type namespaceSummary struct {
 		pipelineSummary PipelineSummary
 		isbsvcSummary   IsbServiceSummary
