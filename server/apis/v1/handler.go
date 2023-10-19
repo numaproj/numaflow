@@ -96,7 +96,36 @@ func (h *handler) Callback(c *gin.Context) {
 	h.dexpoc.handleCallback(c)
 }
 
-func getUserIdentityToken(jsonStr string) CallbackResponse {
+// performAuth is used to perform the authentication and authorization of the user.
+// it returns true if the user is authenticated and authorized to execute the requested action.
+// otherwise, it constructs the error response and returns false.
+func performAuth(c *gin.Context, resource string, action string) bool {
+	userIdentityTokenStr, err := c.Cookie("user-identity-token")
+	if err != nil {
+		errMsg := "user is not authenticated."
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return false
+	}
+	userIdentityToken := parseCallbackResp(userIdentityTokenStr)
+	// TODO - After we successfully retrieved the user identity token, we still need to verify it with Dex.
+
+	// each group is in the format of orgName:teamName, e.g. ["jyu-dex-poc:readonly"]
+	groups := userIdentityToken.IDTokenClaims.Groups
+	if casbin.IsAuthorized(
+		casbin.AuthorizationRequest{
+			Groups:   groups,
+			Resource: resource,
+			Action:   action,
+		}) {
+		return true
+	} else {
+		errMsg := "user is not authorized to execute the requested action."
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return false
+	}
+}
+
+func parseCallbackResp(jsonStr string) CallbackResponse {
 	var callbackResponse CallbackResponse
 	err := json.Unmarshal([]byte(jsonStr), &callbackResponse)
 	if err != nil {
@@ -107,33 +136,15 @@ func getUserIdentityToken(jsonStr string) CallbackResponse {
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
-	userIdentityTokenStr, err := c.Cookie("user-identity-token")
-	if err != nil {
-		errMsg := "user is not authenticated."
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+	if successful := performAuth(c, "namespaces", "list"); !successful {
 		return
 	}
-	userIdentityToken := getUserIdentityToken(userIdentityTokenStr)
-	// TODO - After we successfully retrieved the user identity token, we still need to verify it with Dex.
-
-	// each group is in the format of orgName:teamName, e.g. ["jyu-dex-poc:readonly"]
-	groups := userIdentityToken.IDTokenClaims.Groups
-	if casbin.IsAuthorized(
-		casbin.AuthorizationRequest{
-			Groups:   groups,
-			Resource: "namespaces",
-			Action:   "list",
-		}) {
-		namespaces, err := getAllNamespaces(h)
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
-			return
-		}
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
-	} else {
-		errMsg := "user is not authorized to execute the requested action."
-		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+	namespaces, err := getAllNamespaces(h)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
+		return
 	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
 }
 
 // GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
