@@ -78,6 +78,31 @@ function App() {
   const location = useLocation();
 
   useEffect(() => {
+    // Attempt to load user info on app load
+    const fetchData = async () => {
+      try {
+        const response = await fetch(`/api/v1/authinfo`);
+        if (response.ok) {
+          const data = await response.json();
+          const claims = data?.data?.id_token_claims
+          if (claims) {
+            setUserInfo({
+              email: claims.email,
+              name: claims.name,
+              username: claims.preferred_username,
+              groups: claims.groups,
+            })
+          }
+        }
+      } catch (e: any) {
+        // Do nothing, failure to load user info is not fatal
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  useEffect(() => {
     // Route changed
     setErrors([]);
   }, [location]);
@@ -247,6 +272,8 @@ function App() {
                       alt="text-logo"
                       className={"text-logo"}
                     />
+                    <Box sx={{ flexGrow: 1 }} />
+                    <AccountMenu />
                   </Toolbar>
                 </AppBar>
               </Box>

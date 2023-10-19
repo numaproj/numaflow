@@ -21,7 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/numaproj/numaflow/server/apis/v1"
+	v1 "github.com/numaproj/numaflow/server/apis/v1"
 )
 
 type SystemInfo struct {
@@ -52,6 +52,10 @@ func v1Routes(r gin.IRouter) {
 	}
 	// Handle the login request.
 	r.GET("/login", handler.Login)
+	// Handle the logout request.
+	r.GET("/logout", handler.Logout)
+	// Handle the authinfo request.
+	r.GET("/authinfo", handler.AuthInfo)
 	// Handle the callback request.
 	r.GET("/callback", handler.Callback)
 	// List all namespaces that have Pipeline or InterStepBufferService objects.
