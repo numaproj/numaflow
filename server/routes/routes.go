@@ -36,6 +36,8 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 		c.Status(http.StatusOK)
 	})
 
+	r.Any("/dex/*name", v1.DexReverseProxy)
+
 	r1Group := r.Group("/api/v1")
 	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
@@ -50,6 +52,8 @@ func v1Routes(r gin.IRouter) {
 	}
 	// Handle the login request.
 	r.GET("/login", handler.Login)
+	// Handle the callback request.
+	r.GET("/callback", handler.Callback)
 	// List all namespaces that have Pipeline or InterStepBufferService objects.
 	r.GET("/namespaces", handler.ListNamespaces)
 	// Summarized information of all the namespaces in a cluster wrapped in a list.

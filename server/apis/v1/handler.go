@@ -19,6 +19,7 @@ package v1
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -58,6 +59,7 @@ type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
+	dexpoc         *DexObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -83,29 +85,44 @@ func NewHandler() (*handler, error) {
 	}, nil
 }
 
-// Login is used to redirect the user to authentication page and set the user identity token in the cookie
+// Login is used to generate the authentication URL and return the URL as part of the return payload.
 func (h *handler) Login(c *gin.Context) {
-	// TODO - send a request to Dex to get the real user identity token.
-	token := "dummy-token"
-	c.SetCookie("user-identity-token", token, 3600, "/", "", true, true)
-	returnUrl := c.DefaultQuery("returnUrl", "/cluster-summary")
-	c.Redirect(http.StatusOK, returnUrl)
+	h.dexpoc = NewDexObject(context.Background())
+	h.dexpoc.handleLogin(c)
+}
+
+// Callback is used to extract user authentication information from the Dex Server returned payload.
+func (h *handler) Callback(c *gin.Context) {
+	h.dexpoc.handleCallback(c)
+}
+
+func getUserIdentityToken(jsonStr string) CallbackResponse {
+	var callbackResponse CallbackResponse
+	err := json.Unmarshal([]byte(jsonStr), &callbackResponse)
+	if err != nil {
+		return CallbackResponse{}
+	}
+	return callbackResponse
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
-	userIdentityToken, err := c.Cookie("user-identity-token")
+	userIdentityTokenStr, err := c.Cookie("user-identity-token")
 	if err != nil {
 		errMsg := "user is not authenticated."
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
+	userIdentityToken := getUserIdentityToken(userIdentityTokenStr)
 	// TODO - After we successfully retrieved the user identity token, we still need to verify it with Dex.
+
+	// each group is in the format of orgName:teamName, e.g. ["jyu-dex-poc:readonly"]
+	groups := userIdentityToken.IDTokenClaims.Groups
 	if casbin.IsAuthorized(
 		casbin.AuthorizationRequest{
-			UserIdentityToken: userIdentityToken,
-			Resource:          "namespaces",
-			Action:            "list",
+			Groups:   groups,
+			Resource: "namespaces",
+			Action:   "list",
 		}) {
 		namespaces, err := getAllNamespaces(h)
 		if err != nil {

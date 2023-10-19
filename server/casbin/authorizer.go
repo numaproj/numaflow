@@ -1,9 +1,9 @@
 package casbin
 
 type AuthorizationRequest struct {
-	UserIdentityToken string
-	Resource          string
-	Action            string
+	Groups   []string
+	Resource string
+	Action   string
 	// TODO - add more fields?
 }
 
