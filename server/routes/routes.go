@@ -18,7 +18,6 @@ package routes
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
@@ -54,15 +53,20 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
 		groups := userIdentityToken.IDTokenClaims.Groups
 		// user := c.DefaultQuery("user", "readonly")
-		resource := c.FullPath()
+		ns := c.Param("namespace")
+		if ns == "" {
+			c.Next()
+			return
+		}
+		resource := "pipeline"
 		action := c.Request.Method
 		auth := false
 
 		for _, group := range groups {
 			// Get the user from the group. The group is in the format "group:role".
-			user := strings.Split(group, ":")[1]
+
 			// Check if the user has permission using Casbin Enforcer.
-			if enforceRBAC(enforcer, user, resource, action) {
+			if enforceRBAC(enforcer, group, ns, resource, action) {
 				auth = true
 				c.Next()
 			}
@@ -148,10 +152,10 @@ func v1Routes(r gin.IRouter) {
 func getEnforcer() (*casbin.Enforcer, error) {
 	modelText := `
 	[request_definition]
-	r = sub, obj, act
+	r = sub, res, obj, act
 	
 	[policy_definition]
-	p = sub, obj, act
+	p = sub, res, obj, act
 	
 	[role_definition]
 	g = _, _
@@ -160,7 +164,7 @@ func getEnforcer() (*casbin.Enforcer, error) {
 	e = some(where (p.eft == allow))
 	
 	[matchers]
-	m = g(r.sub, p.sub) && keyMatch(r.obj,p.obj) && r.act == p.act
+	m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act && globMatch(r.res, p.res)
 	`
 
 	// Initialize the Casbin model from the model configuration string.
@@ -175,11 +179,12 @@ func getEnforcer() (*casbin.Enforcer, error) {
 		return nil, err
 	}
 	rules := [][]string{
-		[]string{"role:readonly", "*", "GET"},
-		[]string{"role:admin", "*", "POST"},
-		[]string{"role:admin", "*", "PUT"},
-		[]string{"role:admin", "*", "UPDATE"},
-		[]string{"role:admin", "*", "DELETE"},
+		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "GET"},
+		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "POST"},
+		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PUT"},
+		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "DELETE"},
+		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "UPDATE"},
+		[]string{"role:jyureadonly", "jyu-dex-poc*", "pipeline", "GET"},
 	}
 
 	areRulesAdded, err := enforcer.AddPolicies(rules)
@@ -188,9 +193,8 @@ func getEnforcer() (*casbin.Enforcer, error) {
 	}
 
 	rulesGroup := [][]string{
-		[]string{"role:admin", "role:readonly"},
-		[]string{"readonly", "role:readonly"},
-		[]string{"admin", "role:admin"},
+		[]string{"jyu-dex-poc:admin", "role:jyuadmin"},
+		[]string{"jyu-dex-poc:readonly", "role:jyureadonly"},
 	}
 
 	areRulesAdded, err = enforcer.AddNamedGroupingPolicies("g", rulesGroup)
@@ -201,7 +205,7 @@ func getEnforcer() (*casbin.Enforcer, error) {
 }
 
 // enforceRBAC checks if the user has permission based on the Casbin model and policy.
-func enforceRBAC(enforcer *casbin.Enforcer, user, resource, action string) bool {
-	ok, _ := enforcer.Enforce(user, resource, action)
+func enforceRBAC(enforcer *casbin.Enforcer, user, resource, object, action string) bool {
+	ok, _ := enforcer.Enforce(user, resource, object, action)
 	return ok
 }
