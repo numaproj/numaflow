@@ -181,6 +181,7 @@ func getEnforcer() (*casbin.Enforcer, error) {
 	rules := [][]string{
 		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "GET"},
 		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "POST"},
+		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PATCH"},
 		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PUT"},
 		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "DELETE"},
 		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "UPDATE"},
