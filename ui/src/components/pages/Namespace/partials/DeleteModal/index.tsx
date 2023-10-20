@@ -91,7 +91,7 @@ export function DeleteModal({
         <Box sx={containerStyle}>
           <ValidationMessage
             type="error"
-            title="Error occurred, please try again."
+            title={error}
             content={`Delete ${type === "pipeline" ? "Pipeline" : "ISB"}: ${
               type === "pipeline" ? pipelineId : isbId
             }`}

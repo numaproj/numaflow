@@ -1,5 +1,6 @@
 import React from "react";
 import { IconsStatusMap } from "../../../utils";
+import Box from "@mui/material/Box";
 
 import "./style.css";
 export interface StatusCountsProps {
@@ -12,12 +13,21 @@ export interface StatusCountsProps {
 
 export function StatusCounts(counts: StatusCountsProps) {
   return (
-    <div className="flex row" style={{ marginLeft: "0.5rem" }}>
+    <Box sx={{ display: "flex", flexDirection: "row", marginLeft: "0.5rem" }}>
       {Object.keys(counts.counts).map((key) => {
         return (
-          <div className="flex row status-block" key={key}>
-            <div className="flex column">
-              <div className="flex row">
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              flexGrow: "1",
+            }}
+            key={key}
+          >
+            <Box sx={{ display: "flex", flexDirection: "column" }}>
+              <Box sx={{ display: "flex", flexDirection: "row" }}>
                 <img
                   src={IconsStatusMap[key]}
                   alt={key}
@@ -26,12 +36,25 @@ export function StatusCounts(counts: StatusCountsProps) {
                 <span style={{ marginLeft: "0.5rem" }} className="bold-text">
                   : {counts.counts[key]}
                 </span>
-              </div>
-              <div className="flex row title-case regular-text">{key}</div>
-            </div>
-          </div>
+              </Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  textTransform: "capitalize",
+                  color: "#3C4348",
+                  fontSize: "12px",
+                  fontWeight: "400",
+                  lineHeight: "23.5px",
+                  wordWrap: "break-word",
+                }}
+              >
+                {key}
+              </Box>
+            </Box>
+          </Box>
         );
       })}
-    </div>
+    </Box>
   );
 }
