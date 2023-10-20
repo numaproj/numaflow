@@ -45,7 +45,6 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/server/casbin"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -96,20 +95,13 @@ func (h *handler) Callback(c *gin.Context) {
 	h.dexpoc.handleCallback(c)
 }
 
-// Logout is used to remove auth cookie ending a users session.
+// Logout is used to remove auth cookie ending a user's session.
 func (h *handler) Logout(c *gin.Context) {
-	cookie := &http.Cookie{
-		Name:     "user-identity-token",
-		Value:    "",
-		Path:     "/",
-		Expires:  time.Unix(0, 0),
-		HttpOnly: true,
-	}
-	http.SetCookie(c.Writer, cookie)
+	c.SetCookie("user-identity-token", "", -1, "/", "", true, true)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
 
-// Load and return auth info from cookie
+// AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
 	userIdentityTokenStr, err := c.Cookie("user-identity-token")
 	if err != nil {
@@ -133,44 +125,16 @@ func getUserIdentityToken(jsonStr string) CallbackResponse {
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
 func (h *handler) ListNamespaces(c *gin.Context) {
-	userIdentityTokenStr, err := c.Cookie("user-identity-token")
+	namespaces, err := getAllNamespaces(h)
 	if err != nil {
-		errMsg := "user is not authenticated."
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
 		return
 	}
-	userIdentityToken := getUserIdentityToken(userIdentityTokenStr)
-	// TODO - After we successfully retrieved the user identity token, we still need to verify it with Dex.
-
-	// each group is in the format of orgName:teamName, e.g. ["jyu-dex-poc:readonly"]
-	groups := userIdentityToken.IDTokenClaims.Groups
-	if casbin.IsAuthorized(
-		casbin.AuthorizationRequest{
-			Groups:   groups,
-			Resource: "namespaces",
-			Action:   "list",
-		}) {
-		namespaces, err := getAllNamespaces(h)
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
-			return
-		}
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
-	} else {
-		errMsg := "user is not authorized to execute the requested action."
-		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
-	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
 }
 
 // GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
 func (h *handler) GetClusterSummary(c *gin.Context) {
-	userIdentityTokenStr, err := c.Cookie("user-identity-token")
-	if err != nil {
-		errMsg := "user is not authenticated."
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	getUserIdentityToken(userIdentityTokenStr)
 	type namespaceSummary struct {
 		pipelineSummary PipelineSummary
 		isbsvcSummary   IsbServiceSummary
