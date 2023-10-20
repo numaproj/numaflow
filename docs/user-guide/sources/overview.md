@@ -8,6 +8,7 @@ In Numaflow, we currently support the following sources
 
 * [Kafka](./kafka.md)
 * [HTTP](./http.md)
+* [GCP Pub/Sub](./gcp-pubsub.md)
 * [Ticker](./generator.md)
 * [Nats](./nats.md)
 * [User Defined Source](./user-defined-sources.md)

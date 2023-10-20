@@ -39,6 +39,7 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/sources/gcppubsub"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
@@ -323,6 +324,20 @@ func (sp *SourceProcessor) getSourcer(
 			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
 		}
 		return nats.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
+	} else if x := src.GCPPubSub; x != nil {
+		readOptions := []gcppubsub.Option{
+			gcppubsub.WithLogger(logger),
+		}
+		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
+			readOptions = append(readOptions, gcppubsub.WithReadTimeout(l.ReadTimeout.Duration))
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		client, subscription, err := gcppubsub.PrepareSubscription(ctx, sp.VertexInstance, logger)
+		if err != nil {
+			cancel()
+			return nil, fmt.Errorf("failed to establish GCPPubSub client and subscription, %w", err)
+		}
+		return gcppubsub.New(ctx, cancel, client, subscription, sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }

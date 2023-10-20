@@ -39,6 +39,8 @@ type Source struct {
 	UDTransformer *UDTransformer `json:"transformer,omitempty" protobuf:"bytes,5,opt,name=transformer"`
 	// +optional
 	UDSource *UDSource `json:"udsource,omitempty" protobuf:"bytes,6,opt,name=udSource"`
+	// +optional
+	GCPPubSub *GCPPubSubSource `json:"pubsub,omitempty" protobuf:"bytes,7,opt,name=gcpPubSub"`
 }
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {

@@ -335,6 +335,23 @@ message Function {
   map<string, string> kwargs = 3;
 }
 
+message GCPPubSubSource {
+  // +optional
+  optional string projectID = 1;
+
+  // +optional
+  optional string topicProjectID = 2;
+
+  // +optional
+  optional string topic = 3;
+
+  // +optional
+  optional string subscriptionID = 4;
+
+  // +optional
+  optional k8s.io.api.core.v1.SecretKeySelector credentialSecret = 5;
+}
+
 // GSSAPI represents a SASL GSSAPI config
 message GSSAPI {
   optional string serviceName = 1;
@@ -1135,6 +1152,9 @@ message Source {
 
   // +optional
   optional UDSource udSource = 6;
+
+  // +optional
+  optional GCPPubSubSource gcpPubSub = 7;
 }
 
 // Status is a common structure which can be used for Status field.

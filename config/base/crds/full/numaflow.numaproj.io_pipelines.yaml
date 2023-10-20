@@ -7211,6 +7211,28 @@ spec:
                           - subject
                           - url
                           type: object
+                        pubsub:
+                          properties:
+                            credentialSecret:
+                              properties:
+                                key:
+                                  type: string
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            projectID:
+                              type: string
+                            subscriptionID:
+                              type: string
+                            topic:
+                              type: string
+                            topicProjectID:
+                              type: string
+                          type: object
                         transformer:
                           properties:
                             builtin:

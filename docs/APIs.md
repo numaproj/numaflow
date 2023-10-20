@@ -1157,6 +1157,71 @@ Description
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.GCPPubSubSource">
+GCPPubSubSource
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>projectID</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>topicProjectID</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>topic</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>subscriptionID</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>credentialSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GSSAPI">
 GSSAPI
 </h3>
@@ -4419,6 +4484,16 @@ GeneratorSource </a> </em>
 <td>
 <code>udsource</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDSource"> UDSource </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>pubsub</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.GCPPubSubSource">
+GCPPubSubSource </a> </em>
 </td>
 <td>
 <em>(Optional)</em>

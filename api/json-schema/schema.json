@@ -17771,6 +17771,26 @@
       ],
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.GCPPubSubSource": {
+      "properties": {
+        "credentialSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "projectID": {
+          "type": "string"
+        },
+        "subscriptionID": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        },
+        "topicProjectID": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.GSSAPI": {
       "description": "GSSAPI represents a SASL GSSAPI config",
       "properties": {
@@ -19239,6 +19259,9 @@
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
+        },
+        "pubsub": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GCPPubSubSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"

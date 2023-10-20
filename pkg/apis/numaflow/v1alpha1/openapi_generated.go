@@ -44,6 +44,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                    schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions":              schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function":                       schema_pkg_apis_numaflow_v1alpha1_Function(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GCPPubSubSource":                schema_pkg_apis_numaflow_v1alpha1_GCPPubSubSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI":                         schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource":                schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetDaemonDeploymentReq":         schema_pkg_apis_numaflow_v1alpha1_GetDaemonDeploymentReq(ref),
@@ -1101,6 +1102,53 @@ func schema_pkg_apis_numaflow_v1alpha1_Function(ref common.ReferenceCallback) co
 				Required: []string{"name"},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_GCPPubSubSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"projectID": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"topicProjectID": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"topic": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"subscriptionID": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"credentialSecret": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.SecretKeySelector"},
 	}
 }
 
@@ -3773,11 +3821,16 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource"),
 						},
 					},
+					"pubsub": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GCPPubSubSource"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GCPPubSubSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
 	}
 }
 
