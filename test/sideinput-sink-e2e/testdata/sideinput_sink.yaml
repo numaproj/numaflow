@@ -1,0 +1,39 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: user-defined-sink-test
+spec:
+  sideInputs:
+    - name: myticker
+      container:
+        image: "quay.io/shubhamdixit863/sideinput-sink-e2e-test:latest"
+        imagePullPolicy: Always
+      trigger:
+        schedule: "* * * * *"
+        # timezone: America/Los_Angeles
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: cat
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
+    - name: log-sink
+      sink:
+        log: {}
+    - name: redis-uds
+      sink:
+        udsink:
+          container:
+            image: shubhamdixit863/redis-e2e-test4
+      sideInputs:
+        - myticker
+
+  edges:
+    - from: in
+      to: cat
+    - from: cat
+      to: log-sink
+    - from: cat
+      to: redis-uds
