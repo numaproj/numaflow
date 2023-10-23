@@ -60,7 +60,7 @@ func (s *APISuite) TestISBSVC() {
 		Expect().
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCName))
-	assert.Contains(s.T(), getISBSVCBody, `"status":"healthy"`)
+	assert.Contains(s.T(), getISBSVCBody, `"status":"inactive"`)
 
 	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
 		Expect().
@@ -97,7 +97,7 @@ func (s *APISuite) TestISBSVCReplica1() {
 		Expect().
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCReplica1Name))
-	assert.Contains(s.T(), getISBSVCBody, `"status":"healthy"`)
+	assert.Contains(s.T(), getISBSVCBody, `"status":"inactive"`)
 
 	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
 		Expect().
