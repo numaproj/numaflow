@@ -34,6 +34,7 @@ func NewServerCommand() *cobra.Command {
 		baseHref         string
 		disableAuth      bool
 		dexServerAddr    string
+		serverAddr       string
 	)
 
 	command := &cobra.Command{
@@ -54,6 +55,7 @@ func NewServerCommand() *cobra.Command {
 				BaseHref:         baseHref,
 				DisableAuth:      disableAuth,
 				DexServerAddr:    dexServerAddr,
+				ServerAddr:       serverAddr,
 			}
 			server := svrcmd.NewServer(opts)
 			server.Start()
@@ -66,5 +68,6 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().StringVar(&baseHref, "base-href", "/", "Base href for Numaflow server, defaults to '/'.")
 	command.Flags().BoolVar(&disableAuth, "disable-auth", false, "Whether to disable authentication, defaults to false.")
 	command.Flags().StringVar(&dexServerAddr, "dex-server-addr", "http://numaflow-dex-server:5556", "The address of the Dex server.")
+	command.Flags().StringVar(&serverAddr, "server-addr", "https://numaflow-server:8443", "The address of the Numaflow server.")
 	return command
 }

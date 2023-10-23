@@ -28,6 +28,7 @@ import (
 	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
+	v1 "github.com/numaproj/numaflow/server/apis/v1"
 	"github.com/numaproj/numaflow/server/routes"
 )
 
@@ -47,6 +48,7 @@ type ServerOptions struct {
 	BaseHref         string
 	DisableAuth      bool
 	DexServerAddr    string
+	ServerAddr       string
 }
 
 type server struct {
@@ -71,6 +73,7 @@ func (s *server) Start() {
 		})
 	}
 	routes.Routes(router, routes.SystemInfo{ManagedNamespace: s.options.ManagedNamespace, Namespaced: s.options.Namespaced, Version: numaflow.GetVersion().String()})
+	router.Any("/dex/*name", v1.NewDexReverseProxy(s.options.DexServerAddr))
 	router.Use(UrlRewrite(router))
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", s.options.Port),

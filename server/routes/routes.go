@@ -19,7 +19,6 @@ package routes
 import (
 	"net/http"
 
-	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/gin-gonic/gin"
 
@@ -36,8 +35,6 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
-
-	r.Any("/dex/*name", v1.DexReverseProxy)
 	noAuthGroup := r.Group("/auth/v1")
 	v1RoutesNoAuth(noAuthGroup)
 	enforcer, _ := getEnforcer()

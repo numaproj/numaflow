@@ -17,17 +17,16 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// DexObject is a struct that holds details for dex handlers
+// DexObject is a struct that holds details for dex handlers.
 type DexObject struct {
-	clientID     string
-	clientSecret string
-	redirectURI  string
+	clientID    string
+	redirectURI string
 
 	verifier *oidc.IDTokenVerifier
 	provider *oidc.Provider
 
-	// Does the provider use "offline_access" scope to request a refresh token
-	// or does it use "access_type=offline" (e.g. Google)?
+	// offlineAsScope defines whether the provider uses "offline_access" scope to
+	// request a refresh token or uses "access_type=offline" (e.g. Google)
 	offlineAsScope bool
 
 	client     *http.Client
@@ -36,23 +35,28 @@ type DexObject struct {
 
 func (d *DexObject) oauth2Config(scopes []string) *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     d.clientID,
-		ClientSecret: d.clientSecret,
-		Endpoint:     d.provider.Endpoint(),
-		Scopes:       scopes,
-		RedirectURL:  d.redirectURI,
+		ClientID:    d.clientID,
+		Endpoint:    d.provider.Endpoint(),
+		Scopes:      scopes,
+		RedirectURL: d.redirectURI,
 	}
 }
 
 // NewDexObject returns a new DexObject.
 // TODO: refactor data structure and make configurable
-func NewDexObject(ctx context.Context) *DexObject {
-	clientID := "example-app"
-	issuerURL := "https://numaflow-server:8443/dex"
+func NewDexObject(ctx context.Context, baseURL string) *DexObject {
+	// TODO: make const
+	clientID := "numaflow-server-app"
+	issuerURL, err := url.JoinPath(baseURL, "/dex")
+	_ = err
+	redirectURI, err := url.JoinPath(baseURL, "/login")
+	_ = err
 	client := http.DefaultClient
 	client.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
+	// TODO: switch get local/cluster
+	client.Transport = NewDexRewriteURLRoundTripper("https://numaflow-server:8443/dex", client.Transport)
 	newCtx := oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(newCtx, issuerURL)
 	if err != nil {
@@ -62,13 +66,11 @@ func NewDexObject(ctx context.Context) *DexObject {
 
 	return &DexObject{
 		clientID:       clientID,
-		clientSecret:   "ZXhhbXBsZS1hcHAtc2VjcmV0",
-		redirectURI:    "https://numaflow-server:8443/login",
+		redirectURI:    redirectURI,
 		verifier:       verifier,
 		provider:       provider,
 		offlineAsScope: true,
 		client:         client,
-		stateNonce:     "",
 	}
 }
 
@@ -184,15 +186,40 @@ func generateRandomNumber(n int) string {
 	return string(b)
 }
 
-// DexReverseProxy sends the dex request to the dex server.
-func DexReverseProxy(c *gin.Context) {
-	var target = "http://numaflow-dex-server:5556/dex"
-	proxyUrl, _ := url.Parse(target)
-	c.Request.URL.Path = c.Param("name")
-	proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
-	fmt.Println("proxy", proxyUrl, c.Request.URL.Path)
-	proxy.Transport = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+// NewDexReverseProxy sends the dex request to the dex server.
+func NewDexReverseProxy(target string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		proxyUrl, _ := url.Parse(target)
+		c.Request.URL.Path = c.Param("name")
+		proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
+		fmt.Println("proxy", proxyUrl, c.Request.URL.Path)
+		proxy.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		proxy.ServeHTTP(c.Writer, c.Request)
 	}
-	proxy.ServeHTTP(c.Writer, c.Request)
+}
+
+// NewDexRewriteURLRoundTripper creates a new DexRewriteURLRoundTripper
+func NewDexRewriteURLRoundTripper(dexServerAddr string, T http.RoundTripper) DexRewriteURLRoundTripper {
+	dexURL, _ := url.Parse(dexServerAddr)
+	return DexRewriteURLRoundTripper{
+		DexURL: dexURL,
+		T:      T,
+	}
+}
+
+// DexRewriteURLRoundTripper is an HTTP RoundTripper to rewrite HTTP requests to the specified
+// dex server address. This is used when reverse proxying Dex to avoid the API server from
+// unnecessarily communicating to the numaflow server through its externally facing load balancer, which is not
+// always permitted in firewalled/air-gapped networks.
+type DexRewriteURLRoundTripper struct {
+	DexURL *url.URL
+	T      http.RoundTripper
+}
+
+func (s DexRewriteURLRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	r.URL.Host = s.DexURL.Host
+	r.URL.Scheme = s.DexURL.Scheme
+	return s.T.RoundTrip(r)
 }
