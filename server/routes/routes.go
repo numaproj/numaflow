@@ -30,6 +30,8 @@ type SystemInfo struct {
 	ManagedNamespace string `json:"managedNamespace"`
 	Namespaced       bool   `json:"namespaced"`
 	Version          string `json:"version"`
+	DisableAuth      bool   `json:"disableAuth"`
+	DexServerAddr    string `json:"dexServerAddr"`
 }
 
 func Routes(r *gin.Engine, sysinfo SystemInfo) {
@@ -178,13 +180,13 @@ func getEnforcer() (*casbin.Enforcer, error) {
 		return nil, err
 	}
 	rules := [][]string{
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "GET"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "POST"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PATCH"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PUT"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "DELETE"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "UPDATE"},
-		[]string{"role:jyureadonly", "jyu-dex-poc*", "pipeline", "GET"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "GET"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "POST"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PATCH"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PUT"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "DELETE"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "UPDATE"},
+		{"role:jyureadonly", "jyu-dex-poc*", "pipeline", "GET"},
 	}
 
 	areRulesAdded, err := enforcer.AddPolicies(rules)
@@ -193,8 +195,8 @@ func getEnforcer() (*casbin.Enforcer, error) {
 	}
 
 	rulesGroup := [][]string{
-		[]string{"jyu-dex-poc:admin", "role:jyuadmin"},
-		[]string{"jyu-dex-poc:readonly", "role:jyureadonly"},
+		{"jyu-dex-poc:admin", "role:jyuadmin"},
+		{"jyu-dex-poc:readonly", "role:jyureadonly"},
 	}
 
 	areRulesAdded, err = enforcer.AddNamedGroupingPolicies("g", rulesGroup)

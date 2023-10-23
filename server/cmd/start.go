@@ -70,6 +70,7 @@ func (s *server) Start() {
 			c.File("./ui/build/index.html")
 		})
 	}
+	logger.Infow("KeranTest - Starting server", "auth-disabled", s.options.DisableAuth)
 	routes.Routes(router, routes.SystemInfo{ManagedNamespace: s.options.ManagedNamespace, Namespaced: s.options.Namespaced, Version: numaflow.GetVersion().String()})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
