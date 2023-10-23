@@ -42,54 +42,18 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 
 	r.Any("/dex/*name", v1.DexReverseProxy)
 
-	// noAuthGroup is a group of routes that do not require AuthN/AuthZ.
+	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group("/auth/v1")
 	v1RoutesNoAuth(noAuthGroup)
 
-	// r1Group is a group of routes that require AuthN/AuthZ.
-	// they share the same AuthN/AuthZ middleware.
-	enforcer, _ := getEnforcer()
+	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
+	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group("/api/v1")
-	r1Group.Use(func(c *gin.Context) {
-		fmt.Print("KeranTest - running AuthN/AuthZ middleware\n")
-		if sysinfo.DisableAuth {
-			fmt.Println("KeranTest - auth is disabled")
-			c.Next()
-			return
-		}
-		userIdentityTokenStr, err := c.Cookie("user-identity-token")
-		if err != nil {
-			errMsg := "user is not authenticated."
-			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
-			return
-		}
-		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
-		groups := userIdentityToken.IDTokenClaims.Groups
-		// user := c.DefaultQuery("user", "readonly")
-		ns := c.Param("namespace")
-		if ns == "" {
-			c.Next()
-			return
-		}
-		resource := "pipeline"
-		action := c.Request.Method
-		auth := false
-
-		for _, group := range groups {
-			// Get the user from the group. The group is in the format "group:role".
-
-			// Check if the user has permission using Casbin Enforcer.
-			if enforceRBAC(enforcer, group, ns, resource, action) {
-				auth = true
-				c.Next()
-			}
-		}
-		if !auth {
-			errMsg := "user is not authorized to execute the requested action."
-			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
-			c.Abort()
-		}
-	})
+	enforcer, _ := getEnforcer()
+	if !sysinfo.DisableAuth {
+		// Add the AuthN/AuthZ middleware to the group.
+		r1Group.Use(authMiddleware(enforcer))
+	}
 	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysinfo))
@@ -160,6 +124,44 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
+}
+
+func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		fmt.Print("KeranTest - running AuthN/AuthZ middleware\n")
+		userIdentityTokenStr, err := c.Cookie("user-identity-token")
+		if err != nil {
+			errMsg := "user is not authenticated."
+			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
+		groups := userIdentityToken.IDTokenClaims.Groups
+		// user := c.DefaultQuery("user", "readonly")
+		ns := c.Param("namespace")
+		if ns == "" {
+			c.Next()
+			return
+		}
+		resource := "pipeline"
+		action := c.Request.Method
+		auth := false
+
+		for _, group := range groups {
+			// Get the user from the group. The group is in the format "group:role".
+
+			// Check if the user has permission using Casbin Enforcer.
+			if enforceRBAC(enforcer, group, ns, resource, action) {
+				auth = true
+				c.Next()
+			}
+		}
+		if !auth {
+			errMsg := "user is not authorized to execute the requested action."
+			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
+			c.Abort()
+		}
+	}
 }
 
 func getEnforcer() (*casbin.Enforcer, error) {
