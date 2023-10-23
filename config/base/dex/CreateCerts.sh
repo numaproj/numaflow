@@ -1,0 +1,1 @@
+kubectl create secret tls numaflow-dex-certs --cert=tls.crt --key=tls.key -n numaflow-system

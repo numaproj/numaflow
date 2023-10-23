@@ -21,6 +21,9 @@ spec:
       volumes:
       - name: env-volume
         emptyDir: {}
+      - name: rbac-config
+        configMap:
+          name: numaflow-server-rbac-config
       initContainers:
       - name: server-init
         image: quay.io/numaproj/numaflow:latest
@@ -43,6 +46,8 @@ spec:
           - mountPath: /ui/build/index.html
             name: env-volume
             subPath: index.html
+          - mountPath: /etc/numaflow
+            name: rbac-config
           env:
             - name: NAMESPACE
               valueFrom:
