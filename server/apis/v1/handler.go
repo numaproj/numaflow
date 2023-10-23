@@ -841,7 +841,7 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 // TODO: Figure out the correct way to determine if a ISBService is healthy
 func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 	retStatus := ISBServiceStatusHealthy
-	if isbsvc.Status.Phase == dfv1.ISBSvcPhasePending || isbsvc.Status.Phase == dfv1.ISBSvcPhaseUnknown {
+	if isbsvc.Status.Phase == dfv1.ISBSvcPhaseUnknown {
 		retStatus = ISBServiceStatusInactive
 	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhaseRunning {
 		retStatus = ISBServiceStatusHealthy
