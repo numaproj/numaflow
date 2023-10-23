@@ -70,7 +70,6 @@ func (s *server) Start() {
 			c.File("./ui/build/index.html")
 		})
 	}
-	logger.Infow("KeranTest - Starting server", "auth-disabled", s.options.DisableAuth)
 	routes.Routes(router, routes.SystemInfo{
 		ManagedNamespace: s.options.ManagedNamespace,
 		Namespaced:       s.options.Namespaced,
@@ -84,7 +83,11 @@ func (s *server) Start() {
 	}
 
 	if s.options.Insecure {
-		logger.Infow("Starting server (TLS disabled) on "+server.Addr, "version", numaflow.GetVersion())
+		logger.Infow(
+			"Starting server (TLS disabled) on "+server.Addr,
+			"version", numaflow.GetVersion(),
+			"disable-auth", s.options.DisableAuth,
+			"dex-server-addr", s.options.DexServerAddr)
 		if err := server.ListenAndServe(); err != nil {
 			panic(err)
 		}
@@ -94,8 +97,11 @@ func (s *server) Start() {
 			panic(err)
 		}
 		server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12}
-
-		logger.Infow("Starting server on "+server.Addr, "version", numaflow.GetVersion())
+		logger.Infow(
+			"Starting server on "+server.Addr,
+			"version", numaflow.GetVersion(),
+			"disable-auth", s.options.DisableAuth,
+			"dex-server-addr", s.options.DexServerAddr)
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			panic(err)
 		}

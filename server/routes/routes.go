@@ -17,7 +17,6 @@ limitations under the License.
 package routes
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/casbin/casbin/v2"
@@ -128,7 +127,6 @@ func v1Routes(r gin.IRouter) {
 
 func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		fmt.Print("KeranTest - running AuthN/AuthZ middleware\n")
 		userIdentityTokenStr, err := c.Cookie("user-identity-token")
 		if err != nil {
 			errMsg := "user is not authenticated."
