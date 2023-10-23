@@ -3,7 +3,7 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
 import { GeneratorUpdate } from "./partials/GeneratorUpdate";
-import generatorIcon from "../../../../../images/generator.png";
+import generatorIcon from "../../../../../images/generator.svg";
 
 import "./style.css";
 
