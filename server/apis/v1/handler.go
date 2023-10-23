@@ -57,6 +57,7 @@ type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
+	daemonClients  map[string]*daemonclient.DaemonClient
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -75,10 +76,12 @@ func NewHandler() (*handler, error) {
 	}
 	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
+	daemonClients := make(map[string]*daemonclient.DaemonClient)
 	return &handler{
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
+		daemonClients:  daemonClients,
 	}, nil
 }
 
@@ -238,12 +241,15 @@ func (h *handler) GetPipeline(c *gin.Context) {
 
 	// get pipeline lag
 	// TODO: the client should be cached.
-	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
-		return
+	if _, ok := h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)]; !ok {
+		daemonClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
+			return
+		}
+		h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)] = daemonClient
 	}
-	defer client.Close()
+	client := h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)]
 
 	var (
 		minWM int64 = math.MaxInt64
@@ -344,6 +350,10 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to delete pipeline %q, %s", pipeline, err.Error()))
 		return
 	}
+
+	// cleanup client after successfully deleting pipeline
+	h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)].Close()
+	delete(h.daemonClients, fmt.Sprintf("%s/%s", ns, pipeline))
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
@@ -500,12 +510,15 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	// TODO: the client should be cached.
-	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the Inter-Step buffers for pipeline %q: %s", pipeline, err.Error()))
-		return
+	if _, ok := h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)]; !ok {
+		daemonClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
+			return
+		}
+		h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)] = daemonClient
 	}
-	defer client.Close()
+	client := h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)]
 
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipeline)
 	if err != nil {
@@ -521,12 +534,15 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	// TODO: the client should be cached.
-	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the watermarks for pipeline %q: %s", pipeline, err.Error()))
-		return
+	if _, ok := h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)]; !ok {
+		daemonClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
+			return
+		}
+		h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)] = daemonClient
 	}
-	defer client.Close()
+	client := h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)]
 
 	watermarks, err := client.GetPipelineWatermarks(context.Background(), pipeline)
 	if err != nil {
@@ -601,12 +617,15 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 	}
 
 	// TODO: the client should be cached.
-	client, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the vertices metrics: failed to get demon service client for namespace %q pipeline %q: %s", ns, pipeline, err.Error()))
-		return
+	if _, ok := h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)]; !ok {
+		daemonClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch pipeline: failed to calculate lag for pipeline %q: %s", pipeline, err.Error()))
+			return
+		}
+		h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)] = daemonClient
 	}
-	defer client.Close()
+	client := h.daemonClients[fmt.Sprintf("%s/%s", ns, pipeline)]
 
 	var results = make(map[string][]*daemon.VertexMetrics)
 	for _, vertex := range pl.Spec.Vertices {
