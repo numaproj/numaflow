@@ -8,12 +8,6 @@
     flex-direction: column;
 }
 
-.logoContainer{
-    flex-grow: 1;
-    background-image:  url("../../../images/logo.png"),url("../../../images/background\ glow.png"), url("../../../images/specs.png") ;
-    background-repeat: no-repeat;
-    background-position: center;
-}
 .formContainer{
     width: 441px;
     height: 704px;
