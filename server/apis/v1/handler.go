@@ -81,11 +81,13 @@ func NewHandler() (*handler, error) {
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
+		// TODO: get args like disableAuth, dexServerAddr in
 	}, nil
 }
 
 // Login is used to generate the authentication URL and return the URL as part of the return payload.
 func (h *handler) Login(c *gin.Context) {
+	// TODO: move to init
 	h.dexpoc = NewDexObject(context.Background())
 	h.dexpoc.handleLogin(c)
 }

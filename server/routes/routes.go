@@ -29,8 +29,7 @@ import (
 type SystemInfo struct {
 	ManagedNamespace string `json:"managedNamespace"`
 	Namespaced       bool   `json:"namespaced"`
-	// TODO: Get the version of the current Numaflow
-	Version string `json:"version"`
+	Version          string `json:"version"`
 }
 
 func Routes(r *gin.Engine, sysinfo SystemInfo) {

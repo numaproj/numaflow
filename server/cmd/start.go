@@ -39,25 +39,45 @@ var (
 	}
 )
 
-func Start(insecure bool, port int, namespaced bool, managedNamespace string, baseHref string) {
+type ServerOptions struct {
+	Insecure         bool
+	Port             int
+	Namespaced       bool
+	ManagedNamespace string
+	BaseHref         string
+	DisableAuth      bool
+	DexServerAddr    string
+}
+
+type server struct {
+	options ServerOptions
+}
+
+func NewServer(opts ServerOptions) *server {
+	return &server{
+		options: opts,
+	}
+}
+
+func (s *server) Start() {
 	logger := logging.NewLogger().Named("server")
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.RedirectTrailingSlash = true
-	router.Use(static.Serve(baseHref, static.LocalFile("./ui/build", true)))
-	if baseHref != "/" {
+	router.Use(static.Serve(s.options.BaseHref, static.LocalFile("./ui/build", true)))
+	if s.options.BaseHref != "/" {
 		router.NoRoute(func(c *gin.Context) {
 			c.File("./ui/build/index.html")
 		})
 	}
-	routes.Routes(router, routes.SystemInfo{ManagedNamespace: managedNamespace, Namespaced: namespaced})
+	routes.Routes(router, routes.SystemInfo{ManagedNamespace: s.options.ManagedNamespace, Namespaced: s.options.Namespaced, Version: numaflow.GetVersion().String()})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", s.options.Port),
 		Handler: router,
 	}
 
-	if insecure {
+	if s.options.Insecure {
 		logger.Infow("Starting server (TLS disabled) on "+server.Addr, "version", numaflow.GetVersion())
 		if err := server.ListenAndServe(); err != nil {
 			panic(err)
