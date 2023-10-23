@@ -12,15 +12,6 @@ import "./style.css";
 export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
   const { namespaceId } = useParams();
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
-  const handleK8sEventsClick = useCallback(() => {
-    if (!namespaceId || !setSidebarProps) {
-      return;
-    }
-    setSidebarProps({
-      type: SidebarType.NAMESPACE_K8s,
-      k8sEventsProps: { namespaceId },
-    });
-  }, [namespaceId, setSidebarProps]);
 
   const handleUpdateComplete = useCallback(() => {
     refresh();
@@ -111,16 +102,17 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
             sx={{
               display: "flex",
               flexDirection: "column",
-              marginRight: "3rem",
+              width: "12rem"
             }}
           >
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
-                <div
-                  className="pipeline-onclick-events"
-                  onClick={handleK8sEventsClick}
-                >
-                  K8s Events
+                <div>
+                  <span className="pipeline-summary-subtitle">Max lag:</span>
+                  <span className="pipeline-summary-text">
+                    {" "}
+                    {DurationString(lag)}
+                  </span>
                 </div>
               </span>
             </div>
@@ -131,21 +123,6 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
                   onClick={handleSpecClick}
                 >
                   View/Edit Specs
-                </div>
-              </span>
-            </div>
-          </Box>
-          <Box
-            sx={{ display: "flex", flexDirection: "column", width: "12rem" }}
-          >
-            <div className="pipeline-summary-text">
-              <span className="pipeline-summary-subtitle">
-                <div>
-                  <span className="pipeline-summary-subtitle">Max lag:</span>
-                  <span className="pipeline-summary-text">
-                    {" "}
-                    {DurationString(lag)}
-                  </span>
                 </div>
               </span>
             </div>
