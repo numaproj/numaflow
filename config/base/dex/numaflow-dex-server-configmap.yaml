@@ -1,0 +1,34 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: numaflow-dex-server
+data:
+  config.yaml: |
+    issuer: hostname/dex
+    storage:
+      type: memory
+    web:
+      https: 0.0.0.0:5556
+      tlsCert: /etc/numaflow/dex/certs/tls.crt
+      tlsKey: /etc/numaflow/dex/certs/tls.key
+    staticClients:
+      - id: numaflow-server-app
+        redirectURIs: 
+          - 'hostname/login'
+        name: 'Numaflow Server App'
+        pubilc: true
+    connectors:
+    - type: github
+      id: github
+      name: GitHub
+      config:
+        clientID: $GITHUB_CLIENT_ID
+        clientSecret: $GITHUB_CLIENT_SECRET
+        redirectURI: hostname/dex/callback
+        orgs:
+        - name: namespace-name
+          teams:
+          - admin
+          - readonly
+    oauth2:
+      skipApprovalScreen: true
