@@ -843,7 +843,7 @@ func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 	retStatus := ISBServiceStatusHealthy
 	if isbsvc.Status.Phase == dfv1.ISBSvcPhaseUnknown {
 		retStatus = ISBServiceStatusInactive
-	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhaseRunning {
+	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhasePending || isbsvc.Status.Phase == dfv1.ISBSvcPhaseRunning {
 		retStatus = ISBServiceStatusHealthy
 	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhaseFailed {
 		retStatus = ISBServiceStatusCritical
