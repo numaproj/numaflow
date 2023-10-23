@@ -75,6 +75,21 @@ subjects:
   name: numaflow-server-sa
 ---
 apiVersion: v1
+data:
+  rbac-policy.csv: |
+    # Policies go here
+    p, role:admin, *, *, POST
+    p, role:admin, *, *, PUT
+    p, role:admin, *, *, PATCH
+    p, role:admin, *, *, DELETE
+    p, role:admin, *, *, GET
+  rbac.properties: |
+    policy.default: role:readonly
+kind: ConfigMap
+metadata:
+  name: numaflow-server-rbac-config
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: numaflow-server
@@ -136,6 +151,8 @@ spec:
         - mountPath: /ui/build/index.html
           name: env-volume
           subPath: index.html
+        - mountPath: /etc/numaflow
+          name: rbac-config
       initContainers:
       - args:
         - server-init
@@ -152,3 +169,6 @@ spec:
       volumes:
       - emptyDir: {}
         name: env-volume
+      - configMap:
+          name: numaflow-server-rbac-config
+        name: rbac-config

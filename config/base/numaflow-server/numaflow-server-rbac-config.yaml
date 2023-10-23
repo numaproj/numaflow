@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-server-rbac-config
+data:
+  rbac-policy.csv: |
+    # Policies go here
+    p, role:admin, *, *, POST
+    p, role:admin, *, *, PUT
+    p, role:admin, *, *, PATCH
+    p, role:admin, *, *, DELETE
+    p, role:admin, *, *, GET
+  rbac.properties: |
+    policy.default: role:readonly
