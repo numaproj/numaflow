@@ -109,12 +109,12 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	userIdentityToken := getUserIdentityToken(userIdentityTokenStr)
+	userIdentityToken := GetUserIdentityToken(userIdentityTokenStr)
 	res := NewCallbackResponse(userIdentityToken.IDTokenClaims, userIdentityToken.IDToken, userIdentityToken.RefreshToken)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
-func getUserIdentityToken(jsonStr string) CallbackResponse {
+func GetUserIdentityToken(jsonStr string) CallbackResponse {
 	var callbackResponse CallbackResponse
 	err := json.Unmarshal([]byte(jsonStr), &callbackResponse)
 	if err != nil {
