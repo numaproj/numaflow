@@ -30,11 +30,14 @@ type SystemInfo struct {
 	ManagedNamespace string `json:"managedNamespace"`
 	Namespaced       bool   `json:"namespaced"`
 	Version          string `json:"version"`
-	DisableAuth      bool   `json:"disableAuth"`
-	DexServerAddr    string `json:"dexServerAddr"`
 }
 
-func Routes(r *gin.Engine, sysinfo SystemInfo) {
+type AuthInfo struct {
+	DisableAuth   bool   `json:"disableAuth"`
+	DexServerAddr string `json:"dexServerAddr"`
+}
+
+func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -49,13 +52,13 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group("/api/v1")
 	enforcer, _ := getEnforcer()
-	if !sysinfo.DisableAuth {
+	if !authInfo.DisableAuth {
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(enforcer))
 	}
 	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
-		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysinfo))
+		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})
 }
 

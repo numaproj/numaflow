@@ -70,12 +70,16 @@ func (s *server) Start() {
 			c.File("./ui/build/index.html")
 		})
 	}
-	routes.Routes(router, routes.SystemInfo{
-		ManagedNamespace: s.options.ManagedNamespace,
-		Namespaced:       s.options.Namespaced,
-		Version:          numaflow.GetVersion().String(),
-		DisableAuth:      s.options.DisableAuth,
-		DexServerAddr:    s.options.DexServerAddr})
+	routes.Routes(
+		router,
+		routes.SystemInfo{
+			ManagedNamespace: s.options.ManagedNamespace,
+			Namespaced:       s.options.Namespaced,
+			Version:          numaflow.GetVersion().String()},
+		routes.AuthInfo{
+			DisableAuth:   s.options.DisableAuth,
+			DexServerAddr: s.options.DexServerAddr,
+		})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", s.options.Port),
