@@ -13,6 +13,9 @@ import { getAPIResponseError } from "../../../utils";
 import { AppContext } from "../../../App";
 import { AppContextProps } from "../../../types/declarations/app";
 import gitIcon from "../../../images/github.png";
+import specsBackground from "../../../images/specs.png";
+import logo from "../../../images/logo.png";
+import glowBackground from "../../../images/background_glow.png";
 
 import "./style.css";
 
@@ -165,7 +168,7 @@ export function Login() {
           <Box
             style={{
               color: "#fff",
-              fontSize: "32px",
+              fontSize: "2rem",
               width: "100%",
               alignItems: "center",
               display: "flex",
@@ -259,7 +262,10 @@ export function Login() {
               marginTop: "2rem",
             }}
           >
-            <img src={gitIcon} style={{ width: "4.125rem", height: "4.125rem" }} />
+            <img
+              src={gitIcon}
+              style={{ width: "4.125rem", height: "4.125rem" }}
+            />
             <Button
               onClick={handleLoginClick}
               variant="text"
@@ -292,6 +298,40 @@ export function Login() {
     returnURL,
   ]);
 
+  const logoTextContent = useMemo(() => {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          marginTop: "5rem",
+        }}
+      >
+        <Box
+          sx={{
+            color: "#fff",
+            fontSize: "2rem",
+            display: "flex",
+            flexDirection: "row",
+          }}
+        >
+          Unlock the power of
+        </Box>
+        <Box
+          sx={{
+            color: "#fff",
+            fontSize: "2rem",
+            display: "flex",
+            flexDirection: "row",
+          }}
+        >
+          data streaming with Numaflow!
+        </Box>
+      </Box>
+    );
+  }, []);
+
   return (
     <Box
       sx={{
@@ -303,40 +343,48 @@ export function Login() {
         backgroundColor: "#001D3C",
       }}
     >
-      <div
-        className="logoContainer"
-        style={{ width: "100%", display: "flex", flexDirection: "column" }}
+      <Box
+        sx={{
+          background: `url(${specsBackground})`,
+          height: "100%",
+          backgroundRepeat: "no-repeat",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          width: "100%",
+          backgroundPosition: "center",
+        }}
       >
         <Box
           sx={{
+            background: `url(${glowBackground})`,
+            height: "100%",
+            backgroundRepeat: "no-repeat",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            marginTop: "5rem",
+            width: "100%",
+            backgroundPosition: "center",
           }}
         >
           <Box
             sx={{
-              color: "#fff",
-              fontSize: "32px",
+              background: `url(${logo})`,
+              height: "100%",
+              backgroundRepeat: "no-repeat",
               display: "flex",
-              flexDirection: "row",
+              flexDirection: "column",
+              alignItems: "center",
+              width: "100%",
+              backgroundPosition: "center",
+              backgroundSize: "50vh",
             }}
           >
-            Unlock the power of
-          </Box>
-          <Box
-            sx={{
-              color: "#fff",
-              fontSize: "32px",
-              display: "flex",
-              flexDirection: "row",
-            }}
-          >
-            data streaming with Numaflow!
+            {logoTextContent}
           </Box>
         </Box>
-      </div>
+      </Box>
+
       <Box
         sx={{
           display: "flex",
