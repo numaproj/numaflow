@@ -17,6 +17,7 @@ limitations under the License.
 package routes
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/casbin/casbin/v2"
@@ -40,11 +41,22 @@ func Routes(r *gin.Engine, sysinfo SystemInfo) {
 	})
 
 	r.Any("/dex/*name", v1.DexReverseProxy)
+
+	// noAuthGroup is a group of routes that do not require AuthN/AuthZ.
 	noAuthGroup := r.Group("/auth/v1")
 	v1RoutesNoAuth(noAuthGroup)
+
+	// r1Group is a group of routes that require AuthN/AuthZ.
+	// they share the same AuthN/AuthZ middleware.
 	enforcer, _ := getEnforcer()
 	r1Group := r.Group("/api/v1")
 	r1Group.Use(func(c *gin.Context) {
+		fmt.Print("KeranTest - running AuthN/AuthZ middleware\n")
+		if sysinfo.DisableAuth {
+			fmt.Println("KeranTest - auth is disabled")
+			c.Next()
+			return
+		}
 		userIdentityTokenStr, err := c.Cookie("user-identity-token")
 		if err != nil {
 			errMsg := "user is not authenticated."

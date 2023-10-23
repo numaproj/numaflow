@@ -198,6 +198,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 
 // CreatePipeline is used to create a given pipeline
 func (h *handler) CreatePipeline(c *gin.Context) {
+	fmt.Println("KeranTest - CreatePipeline")
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual create
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))

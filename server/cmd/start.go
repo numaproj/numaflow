@@ -71,7 +71,12 @@ func (s *server) Start() {
 		})
 	}
 	logger.Infow("KeranTest - Starting server", "auth-disabled", s.options.DisableAuth)
-	routes.Routes(router, routes.SystemInfo{ManagedNamespace: s.options.ManagedNamespace, Namespaced: s.options.Namespaced, Version: numaflow.GetVersion().String()})
+	routes.Routes(router, routes.SystemInfo{
+		ManagedNamespace: s.options.ManagedNamespace,
+		Namespaced:       s.options.Namespaced,
+		Version:          numaflow.GetVersion().String(),
+		DisableAuth:      s.options.DisableAuth,
+		DexServerAddr:    s.options.DexServerAddr})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", s.options.Port),
