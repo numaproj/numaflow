@@ -6,6 +6,7 @@ export interface GraphProps {
   data: GraphData;
   namespaceId: string | undefined;
   pipelineId: string | undefined;
+  refresh: () => void;
 }
 
 export interface SpecProps {
@@ -30,7 +31,6 @@ export interface FlowProps {
   handleNodeClick: (e: Element | EventType, node: Node) => void;
   handleEdgeClick: (e: Element | EventType, edge: Edge) => void;
   handlePaneClick: () => void;
-  setSidebarProps: Dispatch<SetStateAction<any>>;
 }
 
 export interface HighlightContextProps {

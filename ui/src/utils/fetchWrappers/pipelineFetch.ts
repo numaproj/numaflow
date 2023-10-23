@@ -1,22 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Options, useFetch } from "./fetch";
-import {PipelineSummaryFetchResult} from "../../types/declarations/pipeline";
-
+import { PipelineSummaryFetchResult } from "../../types/declarations/pipeline";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
 // fetch pipeline summary and ISB summary
-export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
-  const [results, setResults] = useState<PipelineSummaryFetchResult>({
-    data: undefined,
-    loading: true,
-    error: undefined,
-  });
+export const usePipelineSummaryFetch = ({
+  namespaceId,
+  pipelineId,
+  addError,
+}: any) => {
   const [isb, setIsb] = useState<string | null>(null);
   const [options, setOptions] = useState<Options>({
     skip: false,
     requestKey: "",
   });
+
+  const refresh = useCallback(() => {
+    setOptions({
+      skip: false,
+      requestKey: "id" + Math.random().toString(16).slice(2),
+    });
+  }, []);
+
+  const [results, setResults] = useState<PipelineSummaryFetchResult>({
+    data: undefined,
+    loading: true,
+    error: undefined,
+    refresh,
+  });
+
   const {
     data: pipelineData,
     loading: pipelineLoading,
@@ -53,24 +66,39 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
           data: undefined,
           loading: true,
           error: undefined,
+          refresh,
         });
       }
       return;
     }
     if (pipelineError || isbError) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineError || isbError,
-      });
+      if (options?.requestKey === "") {
+        // Failed on first load, return error
+        setResults({
+          data: undefined,
+          loading: false,
+          error: pipelineError || isbError,
+          refresh,
+        });
+      } else {
+        // Failed on refresh, add error to app context
+        addError(pipelineError || isbError);
+      }
       return;
     }
     if (pipelineData?.errMsg || isbData?.errMsg) {
-      setResults({
-        data: undefined,
-        loading: false,
-        error: pipelineData?.errMsg || isbData?.errMsg,
-      });
+      if (options?.requestKey === "") {
+        // Failed on first load, return error
+        setResults({
+          data: undefined,
+          loading: false,
+          error: pipelineData?.errMsg || isbData?.errMsg,
+          refresh,
+        });
+      } else {
+        // Failed on refresh, add error to app context
+        addError(pipelineData?.errMsg || isbData?.errMsg);
+      }
       return;
     }
     if (pipelineData) {
@@ -91,6 +119,7 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
         data: pipelineSummary,
         loading: false,
         error: undefined,
+        refresh,
       });
       return;
     }
@@ -102,6 +131,8 @@ export const usePipelineSummaryFetch = ({ namespaceId, pipelineId }: any) => {
     pipelineError,
     isbError,
     options,
+    refresh,
+    addError,
   ]);
   return results;
 };
