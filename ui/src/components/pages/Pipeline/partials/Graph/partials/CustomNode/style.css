@@ -111,12 +111,17 @@
 }
 
 .sideInput_node {
-    width: 1.875rem;
+    display: flex;
+    cursor: pointer;
+}
+
+.sideInput_node_ele {
+    width: 2.25rem;
     height: 1.875rem;
+    background: #E0E0E0;
     display: flex;
     justify-content: center;
     align-items: center;
-    cursor: pointer;
 }
 
 .react-flow__handle-bottom {
@@ -130,7 +135,7 @@
 }
 
 .sideInput_handle {
-    bottom: -22% ;
+    bottom: -26% ;
     position: absolute;
     cursor: pointer;
 }
