@@ -14,7 +14,7 @@
 }
 
 .vertex-details-tab.MuiTab-root {
-    font-size: 14px !important;
+    font-size: 0.875rem !important;
     font-style: normal !important;
     font-weight: 600 !important;
     color: #6B6C72 !important;
@@ -22,7 +22,7 @@
 }
 
 .vertex-details-tab-selected.MuiTab-root {
-    font-size: 14px !important;
+    font-size: 0.875rem !important;
     font-style: normal !important;
     font-weight: 600 !important;
     color: #393A3D !important;

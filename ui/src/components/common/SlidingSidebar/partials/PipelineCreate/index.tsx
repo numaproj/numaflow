@@ -297,6 +297,7 @@ export function PiplineCreate({
         onMutatedChange={handleMutationChange}
         statusIndicator={status}
         validationMessage={validationMessage}
+        allowNonMutatedSubmit
       />
     </Box>
   );
