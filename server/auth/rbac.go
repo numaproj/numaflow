@@ -18,9 +18,9 @@ package auth
 
 import (
 	_ "embed"
-	"fmt"
 )
 
+/* commented the following codes out to make linter happy.
 var (
 	//go:embed rbac-model.conf
 	rbacModel string
@@ -30,3 +30,4 @@ var (
 func main() {
 	fmt.Print(rbacModel)
 }
+*/

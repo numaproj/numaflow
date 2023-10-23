@@ -70,7 +70,16 @@ func (s *server) Start() {
 			c.File("./ui/build/index.html")
 		})
 	}
-	routes.Routes(router, routes.SystemInfo{ManagedNamespace: s.options.ManagedNamespace, Namespaced: s.options.Namespaced, Version: numaflow.GetVersion().String()})
+	routes.Routes(
+		router,
+		routes.SystemInfo{
+			ManagedNamespace: s.options.ManagedNamespace,
+			Namespaced:       s.options.Namespaced,
+			Version:          numaflow.GetVersion().String()},
+		routes.AuthInfo{
+			DisableAuth:   s.options.DisableAuth,
+			DexServerAddr: s.options.DexServerAddr,
+		})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", s.options.Port),
@@ -78,7 +87,11 @@ func (s *server) Start() {
 	}
 
 	if s.options.Insecure {
-		logger.Infow("Starting server (TLS disabled) on "+server.Addr, "version", numaflow.GetVersion())
+		logger.Infow(
+			"Starting server (TLS disabled) on "+server.Addr,
+			"version", numaflow.GetVersion(),
+			"disable-auth", s.options.DisableAuth,
+			"dex-server-addr", s.options.DexServerAddr)
 		if err := server.ListenAndServe(); err != nil {
 			panic(err)
 		}
@@ -88,8 +101,11 @@ func (s *server) Start() {
 			panic(err)
 		}
 		server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12}
-
-		logger.Infow("Starting server on "+server.Addr, "version", numaflow.GetVersion())
+		logger.Infow(
+			"Starting server on "+server.Addr,
+			"version", numaflow.GetVersion(),
+			"disable-auth", s.options.DisableAuth,
+			"dex-server-addr", s.options.DexServerAddr)
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			panic(err)
 		}

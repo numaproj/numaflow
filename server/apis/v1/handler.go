@@ -81,7 +81,6 @@ func NewHandler() (*handler, error) {
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
-		// TODO: get args like disableAuth, dexServerAddr in
 	}, nil
 }
 
