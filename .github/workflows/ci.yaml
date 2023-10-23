@@ -4,8 +4,9 @@ on:
     branches:
       - "main"
       - "release-*"
+      - "ged-rbac"
   pull_request:
-    branches: [main]
+    branches: [main, ged-rbac]
 jobs:
   ui:
     name: UI
