@@ -5,4 +5,6 @@
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
+  padding-left: 2rem;
+  padding-right: 2rem;
 }
