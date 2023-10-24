@@ -16565,6 +16565,7 @@ spec:
       containers:
       - args:
         - server
+        - --disable-auth=true
         env:
         - name: NAMESPACE
           valueFrom:
