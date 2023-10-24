@@ -55,7 +55,7 @@ func (s *SideInputUDSSuite) TestUserDefinedSinkWithSideInput() {
 			}
 		}
 	}()
-	w.Expect().SinkContains("redis-uds", "test-data", WithTimeout(5*time.Minute))
+	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(5*time.Minute))
 	done <- struct{}{}
 }
 
@@ -67,7 +67,7 @@ func (s *SideInputUDSSuite) TestSourceWithSideInput() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-	w.Expect().SinkContains("redis-uds", "test-data", WithTimeout(5*time.Minute))
+	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(5*time.Minute))
 
 }
 
