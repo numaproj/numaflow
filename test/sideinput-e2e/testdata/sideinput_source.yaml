@@ -21,13 +21,6 @@ spec:
             image: "quay.io/numaio/numaflow-source/simple_source_with_sideinput:latest"
       sideInputs:
         - myticker
-    - name: cat
-      udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message      -
-    - name: log-sink
-      sink:
-        log: {}
     - name: redis-uds
       sink:
         udsink:
@@ -37,10 +30,6 @@ spec:
         - myticker
   edges:
     - from: in
-      to: cat
-    - from: cat
-      to: log-sink
-    - from: cat
       to: redis-uds
 
 

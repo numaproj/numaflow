@@ -20,13 +20,6 @@ spec:
           duration: 1s
           # Optional, size of each generated message, defaults to 10.
           msgSize: 1024
-    - name: cat
-      udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
-    - name: log-sink
-      sink:
-        log: {}
     - name: redis-uds
       sink:
         udsink:
@@ -37,8 +30,4 @@ spec:
 
   edges:
     - from: in
-      to: cat
-    - from: cat
-      to: log-sink
-    - from: cat
       to: redis-uds

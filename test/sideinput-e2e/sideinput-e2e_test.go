@@ -32,6 +32,7 @@ func (s *SideInputUDSSuite) TestUserDefinedSinkWithSideInput() {
 	defer w.DeletePipelineAndWait()
 	w.Expect().VertexPodsRunning()
 	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(5*time.Minute))
+
 }
 
 func (s *SideInputUDSSuite) TestSourceWithSideInput() {
