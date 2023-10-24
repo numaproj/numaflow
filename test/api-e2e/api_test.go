@@ -19,10 +19,6 @@ type APISuite struct {
 	E2ESuite
 }
 
-const (
-	defaultTimeout = 60 * time.Second
-)
-
 func (s *APISuite) TestGetSysInfo() {
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
@@ -116,7 +112,7 @@ func (s *APISuite) TestISBSVCReplica1() {
 
 	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
 		Expect().
-		Status(200).Body().Contains(`"status":"healthy"`).Raw()
+		Status(200).Body().Raw()
 	for !strings.Contains(getISBSVCBody, `"status":"healthy"`) {
 		select {
 		case <-ctx.Done():
