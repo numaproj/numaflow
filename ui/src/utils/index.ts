@@ -255,7 +255,7 @@ export const StatusString: StatusStringType = {
 };
 
 export const ISBStatusString: StatusStringType = {
-  [RUNNING]: "Live",
+  [RUNNING]: "Active",
   [FAILED]: "Failed",
   [PENDING]: "Pending",
   [HEALTHY]: "Healthy",
