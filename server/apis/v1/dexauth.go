@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
@@ -21,29 +20,16 @@ import (
 // DexObject is a struct that holds details for dex handlers.
 type DexObject struct {
 	clientID    string
+	issuerURL   string
 	redirectURI string
-
-	verifier *oidc.IDTokenVerifier
-	provider *oidc.Provider
-
 	// offlineAsScope defines whether the provider uses "offline_access" scope to
 	// request a refresh token or uses "access_type=offline" (e.g. Google)
 	offlineAsScope bool
-
-	client *http.Client
-}
-
-func (d *DexObject) oauth2Config(scopes []string) *oauth2.Config {
-	return &oauth2.Config{
-		ClientID:    d.clientID,
-		Endpoint:    d.provider.Endpoint(),
-		Scopes:      scopes,
-		RedirectURL: d.redirectURI,
-	}
+	client         *http.Client
 }
 
 // NewDexObject returns a new DexObject.
-func NewDexObject(ctx context.Context, baseURL string, proxyURL string) *DexObject {
+func NewDexObject(baseURL string, proxyURL string) *DexObject {
 	issuerURL, err := url.JoinPath(baseURL, "/dex")
 	_ = err
 	redirectURI, err := url.JoinPath(baseURL, "/login")
@@ -53,21 +39,40 @@ func NewDexObject(ctx context.Context, baseURL string, proxyURL string) *DexObje
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client.Transport = NewDexRewriteURLRoundTripper(proxyURL, client.Transport)
-	newCtx := oidc.ClientContext(ctx, client)
-	provider, err := oidc.NewProvider(newCtx, issuerURL)
-	if err != nil {
-		log.Fatalf("failed to query provider %q: %v", issuerURL, err)
-	}
-	verifier := provider.Verifier(&oidc.Config{ClientID: AppClientID})
-
 	return &DexObject{
 		clientID:       AppClientID,
+		issuerURL:      issuerURL,
 		redirectURI:    redirectURI,
-		verifier:       verifier,
-		provider:       provider,
 		offlineAsScope: true,
 		client:         client,
 	}
+}
+
+func (d *DexObject) provider(client *http.Client, issuerURL string) (*oidc.Provider, error) {
+	newCtx := oidc.ClientContext(context.Background(), client)
+	return oidc.NewProvider(newCtx, issuerURL)
+}
+
+func (d *DexObject) verifier() (*oidc.IDTokenVerifier, error) {
+	provider, err := d.provider(d.client, d.issuerURL)
+	if err != nil {
+		return nil, err
+	}
+	verifier := provider.Verifier(&oidc.Config{ClientID: AppClientID})
+	return verifier, nil
+}
+
+func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
+	provider, err := d.provider(d.client, d.issuerURL)
+	if err != nil {
+		return nil, err
+	}
+	return &oauth2.Config{
+		ClientID:    d.clientID,
+		Endpoint:    provider.Endpoint(),
+		Scopes:      scopes,
+		RedirectURL: d.redirectURI,
+	}, nil
 }
 
 func (d *DexObject) handleLogin(c *gin.Context) {
@@ -78,9 +83,19 @@ func (d *DexObject) handleLogin(c *gin.Context) {
 	stateNonce := generateRandomNumber(10)
 	if d.offlineAsScope {
 		scopes = append(scopes, "offline_access")
-		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(stateNonce)
+		oauth2Config, err := d.oauth2Config(scopes)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		}
+		authCodeURL = oauth2Config.AuthCodeURL(stateNonce)
 	} else {
-		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(stateNonce, oauth2.AccessTypeOffline)
+		oauth2Config, err := d.oauth2Config(scopes)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		}
+		authCodeURL = oauth2Config.AuthCodeURL(stateNonce, oauth2.AccessTypeOffline)
 	}
 	cookieValue := hex.EncodeToString([]byte(stateNonce))
 	c.SetCookie(StateCookieName, cookieValue, StateCookieMaxAge, "/", "", true, true)
@@ -94,7 +109,11 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		token *oauth2.Token
 	)
 	ctx := oidc.ClientContext(r.Context(), d.client)
-	oauth2Config := d.oauth2Config(nil)
+	oauth2Config, err := d.oauth2Config(nil)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	}
 	stateCookie, err := c.Cookie(StateCookieName)
 	val, err := hex.DecodeString(stateCookie)
 	if err != nil {
@@ -134,7 +153,12 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	idToken, err := d.verifier.Verify(r.Context(), rawIDToken)
+	verifier, err := d.verifier()
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get verifier %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	}
+	idToken, err := verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to verify ID token: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
