@@ -16251,7 +16251,7 @@ data:
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.9.15
+          natsImage: nats:2.10.3
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -16297,6 +16297,11 @@ data:
           startCommand: /nats-server
         - version: 2.9.15
           natsImage: nats:2.9.15
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.10.3
+          natsImage: nats:2.10.3
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server

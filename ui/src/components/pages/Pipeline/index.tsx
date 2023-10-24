@@ -13,10 +13,12 @@ import { usePipelineSummaryFetch } from "../../../utils/fetchWrappers/pipelineFe
 import { PipelineStatus } from "./partials/PipelineStatus";
 import { PipelineSummaryStatus } from "./partials/PipelineSummaryStatus";
 import { PipelineISBStatus } from "./partials/PipelineISBStatus";
+import { PipelineISBSummaryStatus } from "./partials/PipelineISBSummaryStatus";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { UNKNOWN } from "../../../utils";
+import { SidebarType } from "../../common/SlidingSidebar";
 
 import "./style.css";
 
@@ -31,13 +33,31 @@ export function Pipeline() {
     refresh: summaryRefresh,
   } = usePipelineSummaryFetch({ namespaceId, pipelineId, addError });
 
-  const { pipeline, vertices, edges, pipelineErr, buffersErr, loading, refresh: graphRefresh } =
-    usePipelineViewFetch(namespaceId, pipelineId, addError);
+  const {
+    pipeline,
+    vertices,
+    edges,
+    pipelineErr,
+    buffersErr,
+    loading,
+    refresh: graphRefresh,
+  } = usePipelineViewFetch(namespaceId, pipelineId, addError);
 
-    const refresh = useCallback(() => {
-      graphRefresh();
-      summaryRefresh();
-    }, [graphRefresh, summaryRefresh]);
+  const refresh = useCallback(() => {
+    graphRefresh();
+    summaryRefresh();
+  }, [graphRefresh, summaryRefresh]);
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+
+  const handleK8sEventsClick = useCallback(() => {
+    if (!namespaceId || !setSidebarProps) {
+      return;
+    }
+    setSidebarProps({
+      type: SidebarType.NAMESPACE_K8s,
+      k8sEventsProps: { namespaceId },
+    });
+  }, [namespaceId, setSidebarProps]);
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (summaryLoading) {
@@ -71,40 +91,49 @@ export function Pipeline() {
     return [
       // pipeline collection
       {
-        type: SummarySectionType.COLLECTION,
-        collectionSections: [
-          {
-            type: SummarySectionType.CUSTOM,
-            customComponent: (
-              <PipelineStatus
-                status={pipelineStatus}
-                healthStatus={pipelineData?.status}
-                key={"pipeline-status"}
-              />
-            ),
-          },
-          {
-            type: SummarySectionType.CUSTOM,
-            customComponent: (
-              <PipelineSummaryStatus
-                pipelineId={pipelineId}
-                pipeline={pipelineData?.pipeline}
-                lag={pipelineData?.lag}
-                refresh={refresh}
-                key={"pipeline-summary-status"}
-              />
-            ),
-          },
-          {
-            type: SummarySectionType.CUSTOM,
-            customComponent: (
-              <PipelineISBStatus
-                isbData={isbData}
-                key={"pipeline-isb-status"}
-              />
-            ),
-          },
-        ],
+        type: SummarySectionType.CUSTOM,
+        customComponent: (
+          <PipelineStatus
+            status={pipelineStatus}
+            healthStatus={pipelineData?.status}
+            key={"pipeline-status"}
+          />
+        ),
+      },
+      {
+        type: SummarySectionType.CUSTOM,
+        customComponent: (
+          <PipelineSummaryStatus
+            pipelineId={pipelineId}
+            pipeline={pipelineData?.pipeline}
+            lag={pipelineData?.lag}
+            refresh={refresh}
+            key={"pipeline-summary-status"}
+          />
+        ),
+      },
+      {
+        type: SummarySectionType.CUSTOM,
+        customComponent: (
+          <PipelineISBStatus isbData={isbData} key={"pipeline-isb-status"} />
+        ),
+      },
+      {
+        type: SummarySectionType.CUSTOM,
+        customComponent: (
+          <PipelineISBSummaryStatus
+            isbData={isbData}
+            key={"pipeline-isb-status"}
+          />
+        ),
+      },
+      {
+        type: SummarySectionType.CUSTOM,
+        customComponent: (
+          <div className="namespace-k8s-events" onClick={handleK8sEventsClick}>
+            K8s Events
+          </div>
+        ),
       },
     ];
   }, [summaryLoading, error, data, pipelineId, refresh]);

@@ -137,7 +137,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                 {data?.isbsActiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
-                Live
+                Active
               </span>
             </Box>
           </Grid>
@@ -147,7 +147,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                 {data?.isbsInactiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
-                Not-Live
+                Non-Active
               </span>
             </Box>
           </Grid>
