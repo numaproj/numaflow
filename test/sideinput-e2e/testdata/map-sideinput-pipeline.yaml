@@ -1,12 +1,13 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: sideinput-pipeline
+  name: map-sideinput-pipeline
 spec:
   sideInputs:
     - name: myticker
       container:
-        image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-example:v0.0.1"
+        # A map side input example , see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/map-side-input
+        image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-example:v0.0.2"
         imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
@@ -17,12 +18,9 @@ spec:
     - name: si-e2e
       udf:
         container:
-          image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-udf:v0.0.1"
+          # A map side input udf , see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/map-side-input/udf
+          image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-udf:v0.0.2"
           imagePullPolicy: Always
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
       sideInputs:
         - myticker
     - name: sink

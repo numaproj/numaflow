@@ -6,7 +6,8 @@ spec:
   sideInputs:
     - name: myticker
       container:
-        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:v0.0.1"
+        # A reduce side input, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input
+        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:v0.0.2"
         imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
@@ -25,7 +26,8 @@ spec:
     - name: si-e2e
       udf:
         container:
-          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:v0.0.1"
+          # A reduce side input udf, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input/udf
+          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:v0.0.2"
           imagePullPolicy: Always
         groupBy:
           window:
@@ -36,10 +38,6 @@ spec:
             persistentVolumeClaim:
               volumeSize: 10Gi
               accessMode: ReadWriteOnce
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
       sideInputs:
         - myticker
     - name: sink
