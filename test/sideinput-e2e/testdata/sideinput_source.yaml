@@ -9,7 +9,7 @@ spec:
         image: "quay.io/numaio/numaflow-sideinput/sideinput-sink-e2e-test:latest"
         imagePullPolicy: Always
       trigger:
-        schedule: "* * * * *"
+        schedule: "@every 5s"
         # timezone: America/Los_Angeles
   vertices:
     - name: in
