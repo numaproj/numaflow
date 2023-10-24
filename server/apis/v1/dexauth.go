@@ -107,7 +107,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	// TODO: currently looks like it only works when only one user does the login
+	// TODO: verify stateNonce
 	// if state := r.FormValue("state"); state != d.stateNonce {
 	// 	errMsg := fmt.Sprintf("Expected state %q got %q", d.stateNonce, state)
 	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
