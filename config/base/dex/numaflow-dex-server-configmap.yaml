@@ -24,6 +24,7 @@ data:
         clientSecret: $GITHUB_CLIENT_SECRET
         redirectURI: https://localhost:8443/dex/callback
         orgs:
+        # https://github.com/numa-default-dex-auth
         - name: numa-default-dex-auth
           teams:
           - admin

@@ -16272,8 +16272,9 @@ data:
     \n      - https://localhost:8443/login\n    name: 'Numaflow Server App'\n    public:
     true\nconnectors:\n- type: github\n  id: github\n  name: GitHub\n  config:\n    clientID:
     $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n    redirectURI: https://localhost:8443/dex/callback\n
-    \   orgs:\n    - name: numa-default-dex-auth\n      teams:\n      - admin\n      -
-    readonly\noauth2:\n  skipApprovalScreen: true\n"
+    \   orgs:\n    # https://github.com/numa-default-dex-auth\n    - name: numa-default-dex-auth\n
+    \     teams:\n      - admin\n      - readonly\noauth2:\n  skipApprovalScreen:
+    true\n"
 kind: ConfigMap
 metadata:
   name: numaflow-dex-server
