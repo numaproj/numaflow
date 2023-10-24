@@ -31,51 +31,31 @@ type SystemInfo struct {
 	Version          string `json:"version"`
 }
 
-func Routes(r *gin.Engine, sysinfo SystemInfo) {
+type AuthInfo struct {
+	DisableAuth   bool   `json:"disableAuth"`
+	DexServerAddr string `json:"dexServerAddr"`
+}
+
+func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
+
+	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group("/auth/v1")
 	v1RoutesNoAuth(noAuthGroup)
-	enforcer, _ := getEnforcer()
+
+	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
+	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group("/api/v1")
-	r1Group.Use(func(c *gin.Context) {
-		userIdentityTokenStr, err := c.Cookie("user-identity-token")
-		if err != nil {
-			errMsg := "user is not authenticated."
-			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
-			return
-		}
-		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
-		groups := userIdentityToken.IDTokenClaims.Groups
-		// user := c.DefaultQuery("user", "readonly")
-		ns := c.Param("namespace")
-		if ns == "" {
-			c.Next()
-			return
-		}
-		resource := "pipeline"
-		action := c.Request.Method
-		auth := false
-
-		for _, group := range groups {
-			// Get the user from the group. The group is in the format "group:role".
-
-			// Check if the user has permission using Casbin Enforcer.
-			if enforceRBAC(enforcer, group, ns, resource, action) {
-				auth = true
-				c.Next()
-			}
-		}
-		if !auth {
-			errMsg := "user is not authorized to execute the requested action."
-			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
-			c.Abort()
-		}
-	})
+	enforcer, _ := getEnforcer()
+	if !authInfo.DisableAuth {
+		// Add the AuthN/AuthZ middleware to the group.
+		r1Group.Use(authMiddleware(enforcer))
+	}
 	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
-		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysinfo))
+		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})
 }
 
@@ -145,6 +125,43 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
 }
 
+func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIdentityTokenStr, err := c.Cookie("user-identity-token")
+		if err != nil {
+			errMsg := "user is not authenticated."
+			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
+		groups := userIdentityToken.IDTokenClaims.Groups
+		// user := c.DefaultQuery("user", "readonly")
+		ns := c.Param("namespace")
+		if ns == "" {
+			c.Next()
+			return
+		}
+		resource := "pipeline"
+		action := c.Request.Method
+		auth := false
+
+		for _, group := range groups {
+			// Get the user from the group. The group is in the format "group:role".
+
+			// Check if the user has permission using Casbin Enforcer.
+			if enforceRBAC(enforcer, group, ns, resource, action) {
+				auth = true
+				c.Next()
+			}
+		}
+		if !auth {
+			errMsg := "user is not authorized to execute the requested action."
+			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
+			c.Abort()
+		}
+	}
+}
+
 func getEnforcer() (*casbin.Enforcer, error) {
 	modelText := `
 	[request_definition]
@@ -175,13 +192,13 @@ func getEnforcer() (*casbin.Enforcer, error) {
 		return nil, err
 	}
 	rules := [][]string{
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "GET"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "POST"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PATCH"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PUT"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "DELETE"},
-		[]string{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "UPDATE"},
-		[]string{"role:jyureadonly", "jyu-dex-poc*", "pipeline", "GET"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "GET"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "POST"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PATCH"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PUT"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "DELETE"},
+		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "UPDATE"},
+		{"role:jyureadonly", "jyu-dex-poc*", "pipeline", "GET"},
 	}
 
 	areRulesAdded, err := enforcer.AddPolicies(rules)
@@ -190,8 +207,8 @@ func getEnforcer() (*casbin.Enforcer, error) {
 	}
 
 	rulesGroup := [][]string{
-		[]string{"jyu-dex-poc:admin", "role:jyuadmin"},
-		[]string{"jyu-dex-poc:readonly", "role:jyureadonly"},
+		{"jyu-dex-poc:admin", "role:jyuadmin"},
+		{"jyu-dex-poc:readonly", "role:jyureadonly"},
 	}
 
 	areRulesAdded, err = enforcer.AddNamedGroupingPolicies("g", rulesGroup)

@@ -66,7 +66,7 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().BoolVar(&namespaced, "namespaced", false, "Whether to run in namespaced scope, defaults to false.")
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", sharedutil.LookupEnvStringOr("NAMESPACE", "numaflow-system"), "The namespace that the server watches when \"--namespaced\" is \"true\".")
 	command.Flags().StringVar(&baseHref, "base-href", "/", "Base href for Numaflow server, defaults to '/'.")
-	command.Flags().BoolVar(&disableAuth, "disable-auth", false, "Whether to disable authentication, defaults to false.")
+	command.Flags().BoolVar(&disableAuth, "disable-auth", false, "Whether to disable authentication and authorization, defaults to false.")
 	command.Flags().StringVar(&dexServerAddr, "dex-server-addr", "http://numaflow-dex-server:5556", "The address of the Dex server.")
 	command.Flags().StringVar(&serverAddr, "server-addr", "https://numaflow-server:8443", "The address of the Numaflow server.")
 	return command
