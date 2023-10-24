@@ -4,7 +4,7 @@ metadata:
   name: numaflow-dex-server
 data:
   config.yaml: |
-    issuer: https://numaflow-server:8443/dex
+    issuer: https://localhost:8443/dex
     storage:
       type: memory
     web:
@@ -12,7 +12,7 @@ data:
     staticClients:
       - id: numaflow-server-app
         redirectURIs: 
-          - https://numaflow-server:8443/login
+          - https://localhost:8443/login
         name: 'Numaflow Server App'
         public: true
     connectors:
@@ -22,9 +22,9 @@ data:
       config:
         clientID: $GITHUB_CLIENT_ID
         clientSecret: $GITHUB_CLIENT_SECRET
-        redirectURI: https://numaflow-server:8443/dex/callback
+        redirectURI: https://localhost:8443/dex/callback
         orgs:
-        - name: jyu-dex-poc
+        - name: numa-default-dex-auth
           teams:
           - admin
           - readonly

@@ -35,6 +35,7 @@ type SystemInfo struct {
 type AuthInfo struct {
 	DisableAuth   bool   `json:"disableAuth"`
 	DexServerAddr string `json:"dexServerAddr"`
+	DexProxyAddr  string `json:"dexProxyAddr"`
 	ServerAddr    string `json:"serverAddr"`
 }
 
@@ -62,7 +63,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 }
 
 func v1RoutesNoAuth(r gin.IRouter, authInfo AuthInfo) {
-	handler, err := v1.NewNoAuthHandler(authInfo.ServerAddr)
+	handler, err := v1.NewNoAuthHandler(authInfo.ServerAddr, authInfo.DexProxyAddr)
 	if err != nil {
 		panic(err)
 	}

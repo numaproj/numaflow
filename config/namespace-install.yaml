@@ -16267,14 +16267,13 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: "issuer: https://numaflow-server:8443/dex\nstorage:\n  type: memory\nweb:\n
+  config.yaml: "issuer: https://localhost:8443/dex\nstorage:\n  type: memory\nweb:\n
     \ http: 0.0.0.0:5556\nstaticClients:\n  - id: numaflow-server-app\n    redirectURIs:
-    \n      - https://numaflow-server:8443/login\n    name: 'Numaflow Server App'\n
-    \   public: true\nconnectors:\n- type: github\n  id: github\n  name: GitHub\n
-    \ config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n
-    \   redirectURI: https://numaflow-server:8443/dex/callback\n    orgs:\n    - name:
-    jyu-dex-poc\n      teams:\n      - admin\n      - readonly\noauth2:\n  skipApprovalScreen:
-    true\n"
+    \n      - https://localhost:8443/login\n    name: 'Numaflow Server App'\n    public:
+    true\nconnectors:\n- type: github\n  id: github\n  name: GitHub\n  config:\n    clientID:
+    $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n    redirectURI: https://localhost:8443/dex/callback\n
+    \   orgs:\n    - name: numa-default-dex-auth\n      teams:\n      - admin\n      -
+    readonly\noauth2:\n  skipApprovalScreen: true\n"
 kind: ConfigMap
 metadata:
   name: numaflow-dex-server
@@ -16299,8 +16298,8 @@ kind: Secret
 metadata:
   name: numaflow-dex-secrets
 stringData:
-  dex-github-client-id: 0455c8a7d301f23a7753
-  dex-github-client-secret: 34611416f296516cc97a6d9f5f35c09e8ceb6202
+  dex-github-client-id: bfa31f09c135d86c77c5
+  dex-github-client-secret: 6c5444bcd246d514ea7b41033b8a5e3490fc8adc
 ---
 apiVersion: v1
 kind: Service

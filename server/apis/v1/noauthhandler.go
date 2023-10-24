@@ -9,19 +9,21 @@ import (
 
 type noAuthHandler struct {
 	serverAddr string
+	proxyAddr  string
 	dexObj     *DexObject
 }
 
 // NewNoAuthHandler is used to provide a new instance of the handler type
-func NewNoAuthHandler(serverAddr string) (*noAuthHandler, error) {
+func NewNoAuthHandler(serverAddr string, proxyAddr string) (*noAuthHandler, error) {
 	return &noAuthHandler{
 		serverAddr: serverAddr,
+		proxyAddr:  proxyAddr,
 	}, nil
 }
 
 // Login is used to generate the authentication URL and return the URL as part of the return payload.
 func (h *noAuthHandler) Login(c *gin.Context) {
-	h.dexObj = NewDexObject(context.Background(), h.serverAddr)
+	h.dexObj = NewDexObject(context.Background(), h.serverAddr, h.proxyAddr)
 	h.dexObj.handleLogin(c)
 }
 

@@ -44,7 +44,7 @@ func (d *DexObject) oauth2Config(scopes []string) *oauth2.Config {
 
 // NewDexObject returns a new DexObject.
 // TODO: refactor data structure and make configurable
-func NewDexObject(ctx context.Context, baseURL string) *DexObject {
+func NewDexObject(ctx context.Context, baseURL string, proxyURL string) *DexObject {
 	// TODO: make const
 	clientID := "numaflow-server-app"
 	issuerURL, err := url.JoinPath(baseURL, "/dex")
@@ -56,7 +56,7 @@ func NewDexObject(ctx context.Context, baseURL string) *DexObject {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	// TODO: switch get local/cluster
-	client.Transport = NewDexRewriteURLRoundTripper("https://numaflow-server:8443/dex", client.Transport)
+	client.Transport = NewDexRewriteURLRoundTripper(proxyURL, client.Transport)
 	newCtx := oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(newCtx, issuerURL)
 	if err != nil {
