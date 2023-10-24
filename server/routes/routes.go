@@ -130,7 +130,7 @@ func v1Routes(r gin.IRouter) {
 
 func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIdentityTokenStr, err := c.Cookie("user-identity-token")
+		userIdentityTokenStr, err := c.Cookie(UserIdentityCookieName)
 		if err != nil {
 			errMsg := "user is not authenticated."
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))

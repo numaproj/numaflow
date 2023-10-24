@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -29,8 +30,7 @@ type DexObject struct {
 	// request a refresh token or uses "access_type=offline" (e.g. Google)
 	offlineAsScope bool
 
-	client     *http.Client
-	stateNonce string // stateNonce is the nonce variable
+	client *http.Client
 }
 
 func (d *DexObject) oauth2Config(scopes []string) *oauth2.Config {
@@ -44,8 +44,6 @@ func (d *DexObject) oauth2Config(scopes []string) *oauth2.Config {
 
 // NewDexObject returns a new DexObject.
 func NewDexObject(ctx context.Context, baseURL string, proxyURL string) *DexObject {
-	// TODO: make const
-	clientID := "numaflow-server-app"
 	issuerURL, err := url.JoinPath(baseURL, "/dex")
 	_ = err
 	redirectURI, err := url.JoinPath(baseURL, "/login")
@@ -60,10 +58,10 @@ func NewDexObject(ctx context.Context, baseURL string, proxyURL string) *DexObje
 	if err != nil {
 		log.Fatalf("failed to query provider %q: %v", issuerURL, err)
 	}
-	verifier := provider.Verifier(&oidc.Config{ClientID: clientID})
+	verifier := provider.Verifier(&oidc.Config{ClientID: AppClientID})
 
 	return &DexObject{
-		clientID:       clientID,
+		clientID:       AppClientID,
 		redirectURI:    redirectURI,
 		verifier:       verifier,
 		provider:       provider,
@@ -77,13 +75,15 @@ func (d *DexObject) handleLogin(c *gin.Context) {
 	authCodeURL := ""
 	scopes = append(scopes, "openid", "profile", "email", "groups")
 	// stateNonce is an OAuth2 state nonce
-	d.stateNonce = generateRandomNumber(10)
+	stateNonce := generateRandomNumber(10)
 	if d.offlineAsScope {
 		scopes = append(scopes, "offline_access")
-		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(d.stateNonce)
+		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(stateNonce)
 	} else {
-		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(d.stateNonce, oauth2.AccessTypeOffline)
+		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(stateNonce, oauth2.AccessTypeOffline)
 	}
+	cookieValue := hex.EncodeToString([]byte(stateNonce))
+	c.SetCookie(StateCookieName, cookieValue, StateCookieMaxAge, "/", "", true, true)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, NewLoginResponse(authCodeURL)))
 }
 
@@ -95,6 +95,18 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 	)
 	ctx := oidc.ClientContext(r.Context(), d.client)
 	oauth2Config := d.oauth2Config(nil)
+	stateCookie, err := c.Cookie(StateCookieName)
+	val, err := hex.DecodeString(stateCookie)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get state: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	if state := r.FormValue("state"); state != string(val) {
+		errMsg := fmt.Sprintf("Expected state %q got %q", string(val), state)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 
 	// Authorization redirect callback from OAuth2 auth flow.
 	if errMsg := r.FormValue("error"); errMsg != "" {
@@ -107,12 +119,6 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	// TODO: verify stateNonce
-	// if state := r.FormValue("state"); state != d.stateNonce {
-	// 	errMsg := fmt.Sprintf("Expected state %q got %q", d.stateNonce, state)
-	// 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	// 	return
-	// }
 
 	token, err = oauth2Config.Exchange(ctx, code)
 	if err != nil {
@@ -156,7 +162,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.SetCookie("user-identity-token", string(tokenStr), 3600, "/", "", true, true)
+	c.SetCookie(UserIdentityCookieName, string(tokenStr), UserIdentityCookieMaxAge, "/", "", true, true)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 

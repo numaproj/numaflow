@@ -34,6 +34,6 @@ func (h *noAuthHandler) Callback(c *gin.Context) {
 
 // Logout is used to remove auth cookie ending a user's session.
 func (h *noAuthHandler) Logout(c *gin.Context) {
-	c.SetCookie("user-identity-token", "", -1, "/", "", true, true)
+	c.SetCookie(UserIdentityCookieName, "", -1, "/", "", true, true)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
