@@ -57,7 +57,7 @@ func (s *APISuite) TestISBSVC() {
 
 	listISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services", Namespace)).
 		Expect().
-		Status(200).Body()
+		Status(200).Body().Raw()
 	assert.Contains(s.T(), listISBSVCBody, testISBSVCName)
 
 	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
