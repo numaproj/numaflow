@@ -174,6 +174,7 @@ func authenticate(c *gin.Context) (v1.CallbackResponse, error) {
 		return v1.CallbackResponse{}, err
 	}
 	userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
+
 	clientID := "example-app"
 	issuerURL := "https://numaflow-server:8443/dex"
 	client := http.DefaultClient
@@ -188,6 +189,7 @@ func authenticate(c *gin.Context) (v1.CallbackResponse, error) {
 	oidcConfig := &oidc.Config{
 		ClientID: clientID,
 	}
+	// TODO - can we directly get the verifier from the Dex object?
 	verifier := provider.Verifier(oidcConfig)
 	// validate the id token
 	// check malformed jwt token
