@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -27,22 +29,22 @@ type SideInputUDSSuite struct {
 	E2ESuite
 }
 
-func (s *SideInputUDSSuite) TestUserDefinedSinkWithSideInput() {
-	w := s.Given().Pipeline("@testdata/sideinput_sink.yaml").When().CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
+func (s *SideInputUDSSuite) setUpTests(pipeLineFile string) *When {
+	w := s.Given().Pipeline(pipeLineFile).When().CreatePipelineAndWait()
 	w.Expect().VertexPodsRunning()
+	return w
+}
+
+func (s *SideInputUDSSuite) TestSinkWithSideInput() {
+	w := s.setUpTests("@testdata/sideinput_sink.yaml")
+	defer w.DeletePipelineAndWait()
 	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(5*time.Minute))
 
 }
 
 func (s *SideInputUDSSuite) TestSourceWithSideInput() {
-	w := s.Given().Pipeline("@testdata/sideinput_source.yaml").
-		When().
-		CreatePipelineAndWait()
+	w := s.setUpTests("@testdata/sideinput_source.yaml")
 	defer w.DeletePipelineAndWait()
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
 	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(5*time.Minute))
 
 }
