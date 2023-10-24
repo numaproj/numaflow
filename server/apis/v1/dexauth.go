@@ -128,6 +128,8 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
+	// delete after read, we only need it for login flow
+	c.SetCookie(common.StateCookieName, "", -1, "/", "", true, true)
 
 	// Authorization redirect callback from OAuth2 auth flow.
 	if errMsg := r.FormValue("error"); errMsg != "" {
