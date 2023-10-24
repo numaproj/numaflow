@@ -82,6 +82,7 @@ func (s *server) Start() {
 		routes.AuthInfo{
 			DisableAuth:   s.options.DisableAuth,
 			DexServerAddr: s.options.DexServerAddr,
+			ServerAddr:    s.options.ServerAddr,
 		})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
@@ -94,7 +95,8 @@ func (s *server) Start() {
 			"Starting server (TLS disabled) on "+server.Addr,
 			"version", numaflow.GetVersion(),
 			"disable-auth", s.options.DisableAuth,
-			"dex-server-addr", s.options.DexServerAddr)
+			"dex-server-addr", s.options.DexServerAddr,
+			"server-addr", s.options.ServerAddr)
 		if err := server.ListenAndServe(); err != nil {
 			panic(err)
 		}
@@ -108,7 +110,8 @@ func (s *server) Start() {
 			"Starting server on "+server.Addr,
 			"version", numaflow.GetVersion(),
 			"disable-auth", s.options.DisableAuth,
-			"dex-server-addr", s.options.DexServerAddr)
+			"dex-server-addr", s.options.DexServerAddr,
+			"server-addr", s.options.ServerAddr)
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			panic(err)
 		}

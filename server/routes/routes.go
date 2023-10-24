@@ -34,6 +34,7 @@ type SystemInfo struct {
 type AuthInfo struct {
 	DisableAuth   bool   `json:"disableAuth"`
 	DexServerAddr string `json:"dexServerAddr"`
+	ServerAddr    string `json:"serverAddr"`
 }
 
 func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
