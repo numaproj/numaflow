@@ -19,10 +19,14 @@ type APISuite struct {
 	E2ESuite
 }
 
+const (
+	defaultTimeout = 60 * time.Second
+)
+
 func (s *APISuite) TestGetSysInfo() {
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
-		panic("failed to find the nuamflow-server pod")
+		panic("failed to find the numaflow-server pod")
 	}
 	stopPortForward := s.StartPortForward(numaflowServerPodName, 8443)
 
@@ -53,14 +57,16 @@ func (s *APISuite) TestISBSVC() {
 
 	listISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services", Namespace)).
 		Expect().
-		Status(200).Body().Raw()
+		Status(200).Body()
 	assert.Contains(s.T(), listISBSVCBody, testISBSVCName)
 
 	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
+		WithMaxRetries(5).
+		WithTimeout(defaultTimeout).
 		Expect().
-		Status(200).Body().Raw()
+		Status(200).Body().Contains(`"status":"healthy"`).Raw()
 	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCName))
-	assert.Contains(s.T(), getISBSVCBody, `"status":"inactive"`)
+	assert.Contains(s.T(), getISBSVCBody, `"status":"healthy"`)
 
 	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
 		Expect().
@@ -94,10 +100,12 @@ func (s *APISuite) TestISBSVCReplica1() {
 	assert.Contains(s.T(), listISBSVCBody, testISBSVCReplica1Name)
 
 	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
+		WithMaxRetries(5).
+		WithTimeout(defaultTimeout).
 		Expect().
-		Status(200).Body().Raw()
+		Status(200).Body().Contains(`"status":"healthy"`).Raw()
 	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCReplica1Name))
-	assert.Contains(s.T(), getISBSVCBody, `"status":"inactive"`)
+	assert.Contains(s.T(), getISBSVCBody, `"status":"healthy"`)
 
 	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
 		Expect().
