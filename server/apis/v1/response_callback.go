@@ -17,6 +17,7 @@ type IDTokenClaims struct {
 }
 
 // CallbackResponse is the response payload for the Callback API.
+// TODO - rename to something user identity token related.
 type CallbackResponse struct {
 	IDTokenClaims IDTokenClaims `json:"id_token_claims"`
 	IDToken       string        `json:"id_token"`

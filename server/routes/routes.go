@@ -17,10 +17,13 @@ limitations under the License.
 package routes
 
 import (
+	"crypto/tls"
+	"fmt"
 	"net/http"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
@@ -130,15 +133,15 @@ func v1Routes(r gin.IRouter) {
 
 func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIdentityTokenStr, err := c.Cookie("user-identity-token")
+		// authenticate the user.
+		userIdentityToken, err := authenticate(c)
 		if err != nil {
-			errMsg := "user is not authenticated."
+			errMsg := fmt.Sprintf("failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			return
 		}
-		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
+		// authorize the user and the request.
 		groups := userIdentityToken.IDTokenClaims.Groups
-		// user := c.DefaultQuery("user", "readonly")
 		ns := c.Param("namespace")
 		if ns == "" {
 			c.Next()
@@ -147,7 +150,6 @@ func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 		resource := "pipeline"
 		action := c.Request.Method
 		auth := false
-
 		for _, group := range groups {
 			// Get the user from the group. The group is in the format "group:role".
 
@@ -163,6 +165,41 @@ func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 			c.Abort()
 		}
 	}
+}
+
+func authenticate(c *gin.Context) (v1.CallbackResponse, error) {
+	// Validate the cookie exists
+	userIdentityTokenStr, err := c.Cookie("user-identity-token")
+	if err != nil {
+		return v1.CallbackResponse{}, err
+	}
+	userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
+	clientID := "example-app"
+	issuerURL := "https://numaflow-server:8443/dex"
+	client := http.DefaultClient
+	client.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	newCtx := oidc.ClientContext(c, client)
+	provider, err := oidc.NewProvider(newCtx, issuerURL)
+	if err != nil {
+		return v1.CallbackResponse{}, err
+	}
+	oidcConfig := &oidc.Config{
+		ClientID: clientID,
+	}
+	verifier := provider.Verifier(oidcConfig)
+	// validate the id token
+	// check malformed jwt token
+	// check issuer
+	// check audience
+	// check expiry
+	// check signature
+	_, err = verifier.Verify(newCtx, userIdentityToken.IDToken)
+	if err != nil {
+		return v1.CallbackResponse{}, err
+	}
+	return userIdentityToken, nil
 }
 
 func getEnforcer() (*casbin.Enforcer, error) {
