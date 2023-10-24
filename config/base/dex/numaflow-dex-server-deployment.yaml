@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: numaflow-dex-server
+    app.kubernetes.io/part-of: numaflow
+    app.kubernetes.io/component: dex-server
+  name: numaflow-dex-server
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: numaflow-dex-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: numaflow-dex-server
+    spec:
+      serviceAccountName: numaflow-dex-server
+      containers:
+        - name: dex
+          image: dexidp/dex:v2.37.0
+          imagePullPolicy: Always
+          command: ["/usr/local/bin/dex","serve","/etc/numaflow/dex/cfg/config.yaml"]
+          ports:
+            - containerPort: 5556
+          volumeMounts:
+            - mountPath: "/etc/numaflow/dex/cfg"
+              name: config
+          env:
+            - name: NUMAFLOW_SERVER_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-dex-server
+                  key: numaflow_server_addr
+#            - name: GITHUB_CLIENT_ID
+#              valueFrom:
+#                secretKeyRef:
+#                  name: numaflow-dex-secrets
+#                  key: dex-github-client-id
+#            - name: GITHUB_CLIENT_SECRET
+#              valueFrom:
+#                secretKeyRef:
+#                  name: numaflow-dex-secrets
+#                  key: dex-github-client-secret
+      volumes:
+#        - name: secrets
+#          secret:
+#            secretName: numaflow-dex-secrets
+        - name: config
+          configMap:
+            name: numaflow-dex-server
+            items:
+              - key: config.yaml
+                path: config.yaml
