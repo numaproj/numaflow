@@ -19,7 +19,7 @@ package routes
 import (
 	"net/http"
 
-	casbin "github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/gin-gonic/gin"
 
