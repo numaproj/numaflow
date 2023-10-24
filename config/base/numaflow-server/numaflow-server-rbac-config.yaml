@@ -7,7 +7,8 @@ data:
     # Policies go here
     p, role:admin, *, *, *
     p, role:readonly, *, *, GET
-    g, jyu-dex-poc:admin, role:admin
-    g, jyu-dex-poc:readonly, role:readonly
+    # Groups go here
+    # g, admin, role:admin
+    # g, my-github-org:my-github-team, role:readonly
   rbac.properties: |
     policy.default: role:readonly

@@ -23,6 +23,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
 	"github.com/numaproj/numaflow/server/auth"
 )
@@ -37,6 +38,8 @@ type AuthInfo struct {
 	DisableAuth   bool   `json:"disableAuth"`
 	DexServerAddr string `json:"dexServerAddr"`
 }
+
+var logger = logging.NewLogger().Named("server")
 
 func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	r.GET("/livez", func(c *gin.Context) {
@@ -142,37 +145,46 @@ func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 			errMsg := "user is not authenticated."
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
+			return
 		}
 		// Get the user from the user identity token.
 		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
 		groups := userIdentityToken.IDTokenClaims.Groups
-		resource := auth.ExtractResouce(c)
+		resource := auth.ExtractResource(c)
 		object := auth.ExtractObject(c)
 		action := c.Request.Method
 		isAuthorized := false
 
 		// Get the route map from the context. Key is in the format "method:path".
 		routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
-		// If the route does not require auth, skip the authz check.
-		if auth.RouteMap[routeMapKey] != nil && !auth.RouteMap[routeMapKey].RequiresAuth {
-			c.Next()
-		}
-		fmt.Println("groups", groups, resource, object, action)
-
-		// Check if the user has permission for any of the groups.
-		for _, group := range groups {
-			// Get the user from the group. The group is in the format "group:role".
-			// Check if the user has permission using Casbin Enforcer.
-			if enforceRBAC(enforcer, group, resource, object, action) {
-				isAuthorized = true
-				c.Next()
+		// Check if the route requires auth.
+		if auth.RouteMap[routeMapKey] != nil && auth.RouteMap[routeMapKey].RequiresAuth {
+			// Check if the user has permission for any of the groups.
+			for _, group := range groups {
+				// Get the user from the group. The group is in the format "group:role".
+				// Check if the user has permission using Casbin Enforcer.
+				if enforceRBAC(enforcer, group, resource, object, action) {
+					isAuthorized = true
+					c.Next()
+					break
+				}
 			}
-		}
-		// If the user is not authorized, return an error.
-		if !isAuthorized {
-			errMsg := "user is not authorized to execute the requested action."
+			// If the user is not authorized, return an error.
+			if !isAuthorized {
+				errMsg := "user is not authorized to execute the requested action."
+				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
+				c.Abort()
+			}
+		} else if auth.RouteMap[routeMapKey] != nil && !auth.RouteMap[routeMapKey].RequiresAuth {
+			// If the route does not require auth, skip the authz check.
+			c.Next()
+		} else {
+			// If the route is not present in the route map, return an error.
+			logger.Errorw("route not present in routeMap", "route", routeMapKey)
+			errMsg := "invalid route"
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
+			return
 		}
 	}
 }

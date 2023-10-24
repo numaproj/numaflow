@@ -14,5 +14,6 @@ const (
 	ResourceAll       = "*"
 	ResourceNamespace = "namespace"
 
+	// MatchAll is a wildcard to match all patterns
 	MatchAll = "*"
 )

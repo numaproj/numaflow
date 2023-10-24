@@ -32,6 +32,10 @@ var (
 	rbacModel string
 )
 
+const (
+	emptyString = ""
+)
+
 // GetEnforcer initializes the Casbin Enforcer with the model and policy.
 func GetEnforcer() (*casbin.Enforcer, error) {
 
@@ -84,25 +88,25 @@ func extractArgs(args ...interface{}) (string, string, error) {
 	// Should be 2 arguments as a list
 	args = args[0].([]interface{})
 	if len(args) != 2 {
-		return "", "", fmt.Errorf("expected 2 arguments, got %d", len(args))
+		return emptyString, emptyString, fmt.Errorf("expected 2 arguments, got %d", len(args))
 	}
 	req, ok := args[0].(string)
 	if !ok {
-		return "", "", fmt.Errorf("expected first argument to be string, got %T", args[0])
+		return emptyString, emptyString, fmt.Errorf("expected first argument to be string, got %T", args[0])
 	}
 	policy, ok := args[1].(string)
 	if !ok {
-		return "", "", fmt.Errorf("expected second argument to be string, got %T", args[1])
+		return emptyString, emptyString, fmt.Errorf("expected second argument to be string, got %T", args[1])
 	}
 	return req, policy, nil
 }
 
-// ExtractResouce extracts the resource from the request.
-func ExtractResouce(c *gin.Context) string {
+// ExtractResource extracts the resource from the request.
+func ExtractResource(c *gin.Context) string {
 	// We use the namespace in the request as the resource.
 	resource := c.Param(ResourceNamespace)
-	if resource == "" {
-		return ""
+	if resource == emptyString {
+		return emptyString
 	}
 	return resource
 }
@@ -116,5 +120,5 @@ func ExtractObject(c *gin.Context) string {
 	if RouteMap[routeMapKey] != nil {
 		return RouteMap[routeMapKey].Object
 	}
-	return ""
+	return emptyString
 }
