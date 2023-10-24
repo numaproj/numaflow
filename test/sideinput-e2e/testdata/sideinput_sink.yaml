@@ -1,12 +1,12 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: user-defined-sink-test
+  name: sideinput-sink-test
 spec:
   sideInputs:
     - name: myticker
       container:
-        image: "quay.io/shubhamdixit863/sideinput-sink-e2e-test:latest"
+        image: "quay.io/numaio/numaflow-sideinput/sideinput-sink-e2e-test:latest"
         imagePullPolicy: Always
       trigger:
         schedule: "* * * * *"
@@ -26,7 +26,7 @@ spec:
       sink:
         udsink:
           container:
-            image: shubhamdixit863/redis-e2e-test4
+            image: "quay.io/numaio/numaflow-sink/redis-e2e-test-sink-sideinput:latest"
       sideInputs:
         - myticker
 

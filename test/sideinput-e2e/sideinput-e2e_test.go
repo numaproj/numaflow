@@ -35,8 +35,9 @@ func (s *SideInputUDSSuite) TestUserDefinedSinkWithSideInput() {
 	w := s.Given().Pipeline("@testdata/sideinput_sink.yaml").When().CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
 	w.Expect().VertexPodsRunning()
-	pipelineName := "user-defined-sink-test"
+	pipelineName := "sideinput-sink-test"
 	done := make(chan struct{})
+
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
 		startTime := 60000
@@ -54,8 +55,19 @@ func (s *SideInputUDSSuite) TestUserDefinedSinkWithSideInput() {
 			}
 		}
 	}()
-	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(5*time.Minute))
+	w.Expect().SinkContains("redis-uds", "test-data", WithTimeout(5*time.Minute))
 	done <- struct{}{}
+}
+
+func (s *SideInputUDSSuite) TestSourceWithSideInput() {
+	w := s.Given().Pipeline("@testdata/sideinput_source.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+	w.Expect().SinkContains("redis-uds", "test-data", WithTimeout(5*time.Minute))
 
 }
 
