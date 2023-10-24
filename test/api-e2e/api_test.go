@@ -39,6 +39,8 @@ func (s *APISuite) TestGetSysInfo() {
 }
 
 func (s *APISuite) TestISBSVC() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	var err error
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
@@ -61,10 +63,21 @@ func (s *APISuite) TestISBSVC() {
 	assert.Contains(s.T(), listISBSVCBody, testISBSVCName)
 
 	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
-		WithMaxRetries(5).
-		WithTimeout(defaultTimeout).
 		Expect().
-		Status(200).Body().Contains(`"status":"healthy"`).Raw()
+		Status(200).Body().Raw()
+	for !strings.Contains(getISBSVCBody, `"status":"healthy"`) {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				s.T().Fatalf("failed to get namespaces/isb-services: %v", ctx.Err())
+			}
+		default:
+			time.Sleep(100 * time.Millisecond)
+			getISBSVCBody = HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
+				Expect().
+				Status(200).Body().Raw()
+		}
+	}
 	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCName))
 	assert.Contains(s.T(), getISBSVCBody, `"status":"healthy"`)
 
@@ -78,6 +91,8 @@ func (s *APISuite) TestISBSVC() {
 }
 
 func (s *APISuite) TestISBSVCReplica1() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	var err error
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
@@ -100,10 +115,21 @@ func (s *APISuite) TestISBSVCReplica1() {
 	assert.Contains(s.T(), listISBSVCBody, testISBSVCReplica1Name)
 
 	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
-		WithMaxRetries(5).
-		WithTimeout(defaultTimeout).
 		Expect().
 		Status(200).Body().Contains(`"status":"healthy"`).Raw()
+	for !strings.Contains(getISBSVCBody, `"status":"healthy"`) {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				s.T().Fatalf("failed to get namespaces/isb-services: %v", ctx.Err())
+			}
+		default:
+			time.Sleep(100 * time.Millisecond)
+			getISBSVCBody = HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
+				Expect().
+				Status(200).Body().Raw()
+		}
+	}
 	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCReplica1Name))
 	assert.Contains(s.T(), getISBSVCBody, `"status":"healthy"`)
 
