@@ -16360,14 +16360,14 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: "issuer: hostname/dex\nstorage:\n  type: memory\nweb:\n  https: 0.0.0.0:5556\n
-    \ tlsCert: /etc/numaflow/dex/certs/tls.crt\n  tlsKey: /etc/numaflow/dex/certs/tls.key\nstaticClients:\n
-    \ - id: numaflow-server-app\n    redirectURIs: \n      - 'hostname/login'\n    name:
-    'Numaflow Server App'\n    pubilc: true\nconnectors:\n- type: github\n  id: github\n
-    \ name: GitHub\n  config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret:
-    $GITHUB_CLIENT_SECRET\n    redirectURI: hostname/dex/callback\n    orgs:\n    -
-    name: namespace-name\n      teams:\n      - admin\n      - readonly\noauth2:\n
+  config.yaml: "issuer: $NUMAFLOW_SERVER_ADDR/dex\nstorage:\n  type: memory\nweb:\n
+    \ http: 0.0.0.0:5556\nstaticClients:\n  - id: numaflow-server-app\n    redirectURIs:
+    \n      - $NUMAFLOW_SERVER_ADDR/login\n    name: 'Numaflow Server App'\n    pubilc:
+    true\nconnectors:\n- type: github\n  id: github\n  name: GitHub\n  config:\n    clientID:
+    $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n    redirectURI: $NUMAFLOW_SERVER_ADDR/dex/callback\n
+    \   orgs:\n    - name: jyu-dex-poc\n      teams:\n      - admin\n      - readonly\noauth2:\n
     \ skipApprovalScreen: true\n"
+  numaflow_server_addr: https://numaflow-server:8443
 kind: ConfigMap
 metadata:
   name: numaflow-dex-server
@@ -16503,15 +16503,11 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/component: dex-server
       app.kubernetes.io/name: numaflow-dex-server
-      app.kubernetes.io/part-of: numaflow
   template:
     metadata:
       labels:
-        app.kubernetes.io/component: dex-server
         app.kubernetes.io/name: numaflow-dex-server
-        app.kubernetes.io/part-of: numaflow
     spec:
       containers:
       - command:
@@ -16519,6 +16515,11 @@ spec:
         - serve
         - /etc/numaflow/dex/cfg/config.yaml
         env:
+        - name: NUMAFLOW_SERVER_ADDR
+          valueFrom:
+            configMapKeyRef:
+              key: numaflow_server_addr
+              name: numaflow-dex-server
         - name: GITHUB_CLIENT_ID
           valueFrom:
             secretKeyRef:
@@ -16529,7 +16530,7 @@ spec:
             secretKeyRef:
               key: dex-github-client-secret
               name: numaflow-dex-secrets
-        image: docker.intuit.com/docker-rmt/dexidp/dex:v2.25.0
+        image: dexidp/dex:v2.37.0
         imagePullPolicy: Always
         name: dex
         ports:
@@ -16537,17 +16538,8 @@ spec:
         volumeMounts:
         - mountPath: /etc/numaflow/dex/cfg
           name: config
-        - mountPath: /etc/numaflow/dex/certs
-          name: certs
-          readOnly: true
-        - mountPath: /etc/numaflow/dex/secrets
-          name: secrets
-          readOnly: true
       serviceAccountName: numaflow-dex-server
       volumes:
-      - name: certs
-        secret:
-          secretName: numaflow-dex-certs
       - name: secrets
         secret:
           secretName: numaflow-dex-secrets

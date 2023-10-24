@@ -3,18 +3,17 @@ apiVersion: v1
 metadata:
   name: numaflow-dex-server
 data:
+  numaflow_server_addr: "https://numaflow-server:8443"
   config.yaml: |
-    issuer: hostname/dex
+    issuer: $NUMAFLOW_SERVER_ADDR/dex
     storage:
       type: memory
     web:
-      https: 0.0.0.0:5556
-      tlsCert: /etc/numaflow/dex/certs/tls.crt
-      tlsKey: /etc/numaflow/dex/certs/tls.key
+      http: 0.0.0.0:5556
     staticClients:
       - id: numaflow-server-app
         redirectURIs: 
-          - 'hostname/login'
+          - $NUMAFLOW_SERVER_ADDR/login
         name: 'Numaflow Server App'
         pubilc: true
     connectors:
@@ -24,9 +23,9 @@ data:
       config:
         clientID: $GITHUB_CLIENT_ID
         clientSecret: $GITHUB_CLIENT_SECRET
-        redirectURI: hostname/dex/callback
+        redirectURI: $NUMAFLOW_SERVER_ADDR/dex/callback
         orgs:
-        - name: namespace-name
+        - name: jyu-dex-poc
           teams:
           - admin
           - readonly
