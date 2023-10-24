@@ -44,7 +44,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group("/auth/v1")
-	v1RoutesNoAuth(noAuthGroup)
+	v1RoutesNoAuth(noAuthGroup, authInfo)
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
@@ -60,8 +60,8 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	})
 }
 
-func v1RoutesNoAuth(r gin.IRouter) {
-	handler, err := v1.NewHandler()
+func v1RoutesNoAuth(r gin.IRouter, authInfo AuthInfo) {
+	handler, err := v1.NewNoAuthHandler(authInfo.ServerAddr)
 	if err != nil {
 		panic(err)
 	}

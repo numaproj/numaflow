@@ -58,7 +58,6 @@ type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
-	dexpoc         *DexObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -82,24 +81,6 @@ func NewHandler() (*handler, error) {
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
 	}, nil
-}
-
-// Login is used to generate the authentication URL and return the URL as part of the return payload.
-func (h *handler) Login(c *gin.Context) {
-	// TODO: move to init
-	h.dexpoc = NewDexObject(context.Background())
-	h.dexpoc.handleLogin(c)
-}
-
-// Callback is used to extract user authentication information from the Dex Server returned payload.
-func (h *handler) Callback(c *gin.Context) {
-	h.dexpoc.handleCallback(c)
-}
-
-// Logout is used to remove auth cookie ending a user's session.
-func (h *handler) Logout(c *gin.Context) {
-	c.SetCookie("user-identity-token", "", -1, "/", "", true, true)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
 
 // AuthInfo loads and returns auth info from cookie
