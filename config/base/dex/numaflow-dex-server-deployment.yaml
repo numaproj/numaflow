@@ -27,25 +27,17 @@ spec:
             - mountPath: "/etc/numaflow/dex/cfg"
               name: config
           env:
-            - name: NUMAFLOW_SERVER_ADDR
+            - name: GITHUB_CLIENT_ID
               valueFrom:
-                configMapKeyRef:
-                  name: numaflow-dex-server
-                  key: numaflow_server_addr
-#            - name: GITHUB_CLIENT_ID
-#              valueFrom:
-#                secretKeyRef:
-#                  name: numaflow-dex-secrets
-#                  key: dex-github-client-id
-#            - name: GITHUB_CLIENT_SECRET
-#              valueFrom:
-#                secretKeyRef:
-#                  name: numaflow-dex-secrets
-#                  key: dex-github-client-secret
+                secretKeyRef:
+                  name: numaflow-dex-secrets
+                  key: dex-github-client-id
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: numaflow-dex-secrets
+                  key: dex-github-client-secret
       volumes:
-#        - name: secrets
-#          secret:
-#            secretName: numaflow-dex-secrets
         - name: config
           configMap:
             name: numaflow-dex-server

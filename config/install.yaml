@@ -16360,14 +16360,14 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: "issuer: $NUMAFLOW_SERVER_ADDR/dex\nstorage:\n  type: memory\nweb:\n
+  config.yaml: "issuer: https://numaflow-server:8443/dex\nstorage:\n  type: memory\nweb:\n
     \ http: 0.0.0.0:5556\nstaticClients:\n  - id: numaflow-server-app\n    redirectURIs:
-    \n      - $NUMAFLOW_SERVER_ADDR/login\n    name: 'Numaflow Server App'\n    pubilc:
-    true\nconnectors:\n- type: github\n  id: github\n  name: GitHub\n  config:\n    clientID:
-    $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n    redirectURI: $NUMAFLOW_SERVER_ADDR/dex/callback\n
-    \   orgs:\n    - name: jyu-dex-poc\n      teams:\n      - admin\n      - readonly\noauth2:\n
-    \ skipApprovalScreen: true\n"
-  numaflow_server_addr: https://numaflow-server:8443
+    \n      - https://numaflow-server:8443/login\n    name: 'Numaflow Server App'\n
+    \   public: true\nconnectors:\n- type: github\n  id: github\n  name: GitHub\n
+    \ config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n
+    \   redirectURI: https://numaflow-server:8443/dex/callback\n    orgs:\n    - name:
+    jyu-dex-poc\n      teams:\n      - admin\n      - readonly\noauth2:\n  skipApprovalScreen:
+    true\n"
 kind: ConfigMap
 metadata:
   name: numaflow-dex-server
@@ -16395,8 +16395,8 @@ metadata:
   name: numaflow-dex-secrets
   namespace: numaflow-system
 stringData:
-  dex-github-client-id: c1812606eaf8c6e53a79
-  dex-github-client-secret: c5244582cb71f9e341968fc9bcd72edec3c5aebc
+  dex-github-client-id: 0455c8a7d301f23a7753
+  dex-github-client-secret: 34611416f296516cc97a6d9f5f35c09e8ceb6202
 ---
 apiVersion: v1
 kind: Service
@@ -16515,11 +16515,6 @@ spec:
         - serve
         - /etc/numaflow/dex/cfg/config.yaml
         env:
-        - name: NUMAFLOW_SERVER_ADDR
-          valueFrom:
-            configMapKeyRef:
-              key: numaflow_server_addr
-              name: numaflow-dex-server
         - name: GITHUB_CLIENT_ID
           valueFrom:
             secretKeyRef:
@@ -16540,9 +16535,6 @@ spec:
           name: config
       serviceAccountName: numaflow-dex-server
       volumes:
-      - name: secrets
-        secret:
-          secretName: numaflow-dex-secrets
       - configMap:
           items:
           - key: config.yaml
