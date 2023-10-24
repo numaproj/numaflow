@@ -43,7 +43,6 @@ func (d *DexObject) oauth2Config(scopes []string) *oauth2.Config {
 }
 
 // NewDexObject returns a new DexObject.
-// TODO: refactor data structure and make configurable
 func NewDexObject(ctx context.Context, baseURL string, proxyURL string) *DexObject {
 	// TODO: make const
 	clientID := "numaflow-server-app"
