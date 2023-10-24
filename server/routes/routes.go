@@ -17,13 +17,14 @@ limitations under the License.
 package routes
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/model"
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	"github.com/numaproj/numaflow/server/auth"
 )
 
 type SystemInfo struct {
@@ -51,8 +52,11 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group("/api/v1")
-	enforcer, _ := getEnforcer()
 	if !authInfo.DisableAuth {
+		enforcer, err := auth.GetEnforcer()
+		if err != nil {
+			panic(err)
+		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(enforcer))
 	}
@@ -75,6 +79,8 @@ func v1RoutesNoAuth(r gin.IRouter) {
 	r.GET("/callback", handler.Callback)
 }
 
+// v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
+// for the route along with an entry in the RouteMap in auth/route_map.go.
 func v1Routes(r gin.IRouter) {
 	handler, err := v1.NewHandler()
 	if err != nil {
@@ -126,6 +132,7 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
+
 }
 
 func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
@@ -134,30 +141,35 @@ func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 		if err != nil {
 			errMsg := "user is not authenticated."
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
-			return
+			c.Abort()
 		}
+		// Get the user from the user identity token.
 		userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
 		groups := userIdentityToken.IDTokenClaims.Groups
-		// user := c.DefaultQuery("user", "readonly")
-		ns := c.Param("namespace")
-		if ns == "" {
-			c.Next()
-			return
-		}
-		resource := "pipeline"
+		resource := auth.ExtractResouce(c)
+		object := auth.ExtractObject(c)
 		action := c.Request.Method
-		auth := false
+		isAuthorized := false
 
+		// Get the route map from the context. Key is in the format "method:path".
+		routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
+		// If the route does not require auth, skip the authz check.
+		if auth.RouteMap[routeMapKey] != nil && !auth.RouteMap[routeMapKey].RequiresAuth {
+			c.Next()
+		}
+		fmt.Println("groups", groups, resource, object, action)
+
+		// Check if the user has permission for any of the groups.
 		for _, group := range groups {
 			// Get the user from the group. The group is in the format "group:role".
-
 			// Check if the user has permission using Casbin Enforcer.
-			if enforceRBAC(enforcer, group, ns, resource, action) {
-				auth = true
+			if enforceRBAC(enforcer, group, resource, object, action) {
+				isAuthorized = true
 				c.Next()
 			}
 		}
-		if !auth {
+		// If the user is not authorized, return an error.
+		if !isAuthorized {
 			errMsg := "user is not authorized to execute the requested action."
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
@@ -165,63 +177,7 @@ func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	}
 }
 
-func getEnforcer() (*casbin.Enforcer, error) {
-	modelText := `
-	[request_definition]
-	r = sub, res, obj, act
-	
-	[policy_definition]
-	p = sub, res, obj, act
-	
-	[role_definition]
-	g = _, _
-	
-	[policy_effect]
-	e = some(where (p.eft == allow))
-	
-	[matchers]
-	m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act && globMatch(r.res, p.res)
-	`
-
-	// Initialize the Casbin model from the model configuration string.
-	model, err := model.NewModelFromString(modelText)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize the Casbin Enforcer with the model.
-	enforcer, err := casbin.NewEnforcer(model)
-	if err != nil {
-		return nil, err
-	}
-	rules := [][]string{
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "GET"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "POST"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PATCH"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PUT"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "DELETE"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "UPDATE"},
-		{"role:jyureadonly", "jyu-dex-poc*", "pipeline", "GET"},
-	}
-
-	areRulesAdded, err := enforcer.AddPolicies(rules)
-	if !areRulesAdded {
-		return nil, err
-	}
-
-	rulesGroup := [][]string{
-		{"jyu-dex-poc:admin", "role:jyuadmin"},
-		{"jyu-dex-poc:readonly", "role:jyureadonly"},
-	}
-
-	areRulesAdded, err = enforcer.AddNamedGroupingPolicies("g", rulesGroup)
-	if !areRulesAdded {
-		return nil, err
-	}
-	return enforcer, nil
-}
-
-// enforceRBAC checks if the user has permission based on the Casbin model and policy.
+// EnforceRBAC checks if the user has permission based on the Casbin model and policy.
 func enforceRBAC(enforcer *casbin.Enforcer, user, resource, object, action string) bool {
 	ok, _ := enforcer.Enforce(user, resource, object, action)
 	return ok

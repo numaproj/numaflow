@@ -78,11 +78,10 @@ apiVersion: v1
 data:
   rbac-policy.csv: |
     # Policies go here
-    p, role:admin, *, *, POST
-    p, role:admin, *, *, PUT
-    p, role:admin, *, *, PATCH
-    p, role:admin, *, *, DELETE
-    p, role:admin, *, *, GET
+    p, role:admin, *, *, *
+    p, role:readonly, *, *, GET
+    g, jyu-dex-poc:admin, role:admin
+    g, jyu-dex-poc:readonly, role:readonly
   rbac.properties: |
     policy.default: role:readonly
 kind: ConfigMap
