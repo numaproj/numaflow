@@ -99,8 +99,6 @@ export function Cluster() {
               healthy: data.isbsHealthyCount,
               warning: data.isbsWarningCount,
               critical: data.isbsCriticalCount,
-              activeText: "Live",
-              inAcitveText: "Not-Live",
             },
           },
         ],

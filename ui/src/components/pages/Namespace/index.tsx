@@ -1,4 +1,4 @@
-import React, { useMemo, useContext, useCallback } from "react";
+import React, { useCallback, useContext, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -88,14 +88,6 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: data.pipelinesHealthyCount,
               warning: data.pipelinesWarningCount,
               critical: data.pipelinesCriticalCount,
-              linkComponent: (
-                <div
-                  className="namespace-k8s-events"
-                  onClick={handleK8sEventsClick}
-                >
-                  K8s Events
-                </div>
-              ),
             },
           },
         ],
@@ -120,11 +112,17 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: data.isbsHealthyCount,
               warning: data.isbsWarningCount,
               critical: data.isbsCriticalCount,
-              activeText: "Live",
-              inAcitveText: "Not-Live",
             },
           },
         ],
+      },
+      {
+        type: SummarySectionType.CUSTOM,
+        customComponent: (
+          <div className="namespace-k8s-events" onClick={handleK8sEventsClick}>
+            K8s Events
+          </div>
+        ),
       },
     ];
   }, [data, loading, error, handleK8sEventsClick]);

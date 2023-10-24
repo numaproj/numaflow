@@ -155,15 +155,25 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
   const components: React.ReactNode[] = [];
   summarySections.forEach((section, index) => {
     const { key, component } = getSectionComponentAndKey(section, index);
-    components.push(component);
     // Add separator if not last section
     if (index !== summarySections.length - 1) {
       components.push(
-        <div
-          key={`${key}-separator`}
-          className="summary-page-layout-separator"
-        />
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            flexGrow: "1",
+          }}
+        >
+          {component}
+          <div
+            key={`${key}-separator`}
+            className="summary-page-layout-separator"
+          />
+        </Box>
       );
+    } else {
+      components.push(component);
     }
   });
   return (
