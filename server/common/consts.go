@@ -1,4 +1,4 @@
-package v1
+package common
 
 const (
 	AppClientID              = "numaflow-server-app"

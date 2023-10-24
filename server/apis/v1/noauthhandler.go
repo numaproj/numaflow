@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/numaproj/numaflow/server/common"
 )
 
 type noAuthHandler struct {
@@ -29,6 +31,6 @@ func (h *noAuthHandler) Callback(c *gin.Context) {
 
 // Logout is used to remove auth cookie ending a user's session.
 func (h *noAuthHandler) Logout(c *gin.Context) {
-	c.SetCookie(UserIdentityCookieName, "", -1, "/", "", true, true)
+	c.SetCookie(common.UserIdentityCookieName, "", -1, "/", "", true, true)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }

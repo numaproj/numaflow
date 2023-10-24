@@ -45,6 +45,7 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/server/common"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -85,7 +86,7 @@ func NewHandler() (*handler, error) {
 
 // AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
-	userIdentityTokenStr, err := c.Cookie(UserIdentityCookieName)
+	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
 		errMsg := "user is not authenticated."
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))

@@ -15,6 +15,8 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
+
+	"github.com/numaproj/numaflow/server/common"
 )
 
 // DexObject is a struct that holds details for dex handlers.
@@ -40,7 +42,7 @@ func NewDexObject(baseURL string, proxyURL string) *DexObject {
 	}
 	client.Transport = NewDexRewriteURLRoundTripper(proxyURL, client.Transport)
 	return &DexObject{
-		clientID:       AppClientID,
+		clientID:       common.AppClientID,
 		issuerURL:      issuerURL,
 		redirectURI:    redirectURI,
 		offlineAsScope: true,
@@ -58,7 +60,7 @@ func (d *DexObject) verifier() (*oidc.IDTokenVerifier, error) {
 	if err != nil {
 		return nil, err
 	}
-	verifier := provider.Verifier(&oidc.Config{ClientID: AppClientID})
+	verifier := provider.Verifier(&oidc.Config{ClientID: common.AppClientID})
 	return verifier, nil
 }
 
@@ -98,7 +100,7 @@ func (d *DexObject) handleLogin(c *gin.Context) {
 		authCodeURL = oauth2Config.AuthCodeURL(stateNonce, oauth2.AccessTypeOffline)
 	}
 	cookieValue := hex.EncodeToString([]byte(stateNonce))
-	c.SetCookie(StateCookieName, cookieValue, StateCookieMaxAge, "/", "", true, true)
+	c.SetCookie(common.StateCookieName, cookieValue, common.StateCookieMaxAge, "/", "", true, true)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, NewLoginResponse(authCodeURL)))
 }
 
@@ -114,7 +116,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 	}
-	stateCookie, err := c.Cookie(StateCookieName)
+	stateCookie, err := c.Cookie(common.StateCookieName)
 	val, err := hex.DecodeString(stateCookie)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get state: %v", err)
@@ -186,7 +188,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.SetCookie(UserIdentityCookieName, string(tokenStr), UserIdentityCookieMaxAge, "/", "", true, true)
+	c.SetCookie(common.UserIdentityCookieName, string(tokenStr), common.UserIdentityCookieMaxAge, "/", "", true, true)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 

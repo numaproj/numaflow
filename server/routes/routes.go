@@ -24,6 +24,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	"github.com/numaproj/numaflow/server/common"
 )
 
 type SystemInfo struct {
@@ -130,7 +131,7 @@ func v1Routes(r gin.IRouter) {
 
 func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIdentityTokenStr, err := c.Cookie(UserIdentityCookieName)
+		userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 		if err != nil {
 			errMsg := "user is not authenticated."
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
