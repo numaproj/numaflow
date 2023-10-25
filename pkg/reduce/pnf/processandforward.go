@@ -62,8 +62,8 @@ type ProcessAndForward struct {
 	pbqManager     *pbq.Manager
 }
 
-// NewProcessAndForward will return a new processAndForward instance
-func NewProcessAndForward(ctx context.Context,
+// newProcessAndForward will return a new processAndForward instance
+func newProcessAndForward(ctx context.Context,
 	vertexName string,
 	pipelineName string,
 	vr int32,

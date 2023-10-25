@@ -154,10 +154,10 @@ outputLoop:
 	return finalResponse, nil
 }
 
-func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *isb.ReadMessage, id *partition.ID) (<-chan []*isb.WriteMessage, <-chan error) {
+func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.ReduceRequest) (<-chan *reducepb.ReduceResponse, <-chan error) {
 	var (
 		errCh      = make(chan error, 100)
-		responseCh = make(chan []*isb.WriteMessage)
+		responseCh = make(chan *reducepb.ReduceResponse)
 	)
 
 	stream, err := c.grpcClt.ReduceFn(ctx)
@@ -185,7 +185,7 @@ func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *isb.Re
 				if !ok {
 					break outerLoop
 				}
-				if sendErr = stream.Send(createDatum(datum)); sendErr != nil {
+				if sendErr = stream.Send(datum); sendErr != nil {
 					println("got an error while sending to client")
 					errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
 				}
@@ -215,7 +215,7 @@ func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *isb.Re
 				if recvErr != nil {
 					errCh <- util.ToUDFErr("ReduceFn stream.Recv()", recvErr)
 				}
-				responseCh <- convertToWriteMessages(resp, id)
+				responseCh <- resp
 			}
 		}
 	}()

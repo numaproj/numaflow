@@ -173,7 +173,7 @@ package pnf
 //	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.BufferWriter))
 //
 //	// create pf using key and reducer
-//	pf := NewProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.BufferWriter, 1), &forwardTest{}, publishWatermark, wmb.NewIdleManager(1))
+//	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.BufferWriter, 1), &forwardTest{}, publishWatermark, wmb.NewIdleManager(1))
 //
 //	err = pf.Process(ctx)
 //	assert.NoError(t, err)

@@ -111,7 +111,7 @@ func (op *OrderedProcessor) SchedulePnF(
 
 	//pq := op.pbqManager.GetPBQ(partitionID)
 
-	_ = NewProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager)
+	_ = newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager)
 
 	//doneCh := make(chan struct{})
 	//t := &ForwardTask{

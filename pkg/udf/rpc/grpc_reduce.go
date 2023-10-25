@@ -172,11 +172,11 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 }
 
 func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) (<-chan []*isb.WriteMessage, <-chan error) {
-	//var (
-	//errCh      = make(chan error)
-	//responseCh = make(chan []*isb.WriteMessage)
-	//datumCh    = make(chan *reducepb.ReduceRequest)
-	//)
+	var (
+		errCh      = make(chan error)
+		responseCh = make(chan []*isb.WriteMessage)
+		datumCh    = make(chan *reducepb.ReduceRequest)
+	)
 
 	// pass key and window information inside the context
 	mdMap := map[string]string{
@@ -186,58 +186,58 @@ func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *par
 
 	grpcCtx := metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
 
-	responseCh, errCh := u.client.AsyncReduceFn(grpcCtx, messageStream, partitionID)
-	//go func() {
-	//	resultCh, reduceErrCh := u.client.AsyncReduceFn(grpcCtx, datumCh)
-	//	for {
-	//		select {
-	//		case result, ok := <-resultCh:
-	//			if !ok {
-	//				close(responseCh)
-	//				close(errCh)
-	//				return
-	//			}
-	//			st := time.Now()
-	//			responseCh <- convertToWriteMessages(result, partitionID)
-	//			println("time taken to write the response to ch - ", time.Since(st).Milliseconds())
-	//		case err, _ := <-reduceErrCh:
-	//			if err != nil {
-	//				errCh <- err
-	//			}
-	//		case <-ctx.Done():
-	//			errCh <- ctx.Err()
-	//			return
-	//		}
-	//	}
-	//}()
+	//responseCh, errCh := u.client.AsyncReduceFn(grpcCtx, messageStream, partitionID)
+	go func() {
+		resultCh, reduceErrCh := u.client.AsyncReduceFn(grpcCtx, datumCh)
+		for {
+			select {
+			case result, ok := <-resultCh:
+				if !ok {
+					close(responseCh)
+					close(errCh)
+					return
+				}
+				st := time.Now()
+				responseCh <- convertToWriteMessages(result, partitionID)
+				println("time taken to write the response to ch - ", time.Since(st).Milliseconds())
+			case err, _ := <-reduceErrCh:
+				if err != nil {
+					errCh <- err
+				}
+			case <-ctx.Done():
+				errCh <- ctx.Err()
+				return
+			}
+		}
+	}()
 
-	//// create datum from isbMessage and send it to datumCh channel for reduceFn
-	//go func() {
-	//	// after reading all the messages from the messageStream or if ctx was canceled close the datumCh channel
-	//	defer close(datumCh)
-	//	for {
-	//		select {
-	//		case msg, ok := <-messageStream:
-	//			// if the messageStream is closed or if the message is nil, return
-	//			if !ok || msg == nil {
-	//				println("message stream was closed sending closed signal to client")
-	//				return
-	//			}
-	//
-	//			d := createDatum(msg)
-	//
-	//			// send the datum to datumCh channel, handle the case when the context is canceled
-	//			select {
-	//			case datumCh <- d:
-	//			case <-ctx.Done():
-	//				return
-	//			}
-	//
-	//		case <-ctx.Done(): // if the context is done, return
-	//			return
-	//		}
-	//	}
-	//}()
+	// create datum from isbMessage and send it to datumCh channel for reduceFn
+	go func() {
+		// after reading all the messages from the messageStream or if ctx was canceled close the datumCh channel
+		defer close(datumCh)
+		for {
+			select {
+			case msg, ok := <-messageStream:
+				// if the messageStream is closed or if the message is nil, return
+				if !ok || msg == nil {
+					println("message stream was closed sending closed signal to client")
+					return
+				}
+
+				d := createDatum(msg)
+
+				// send the datum to datumCh channel, handle the case when the context is canceled
+				select {
+				case datumCh <- d:
+				case <-ctx.Done():
+					return
+				}
+
+			case <-ctx.Done(): // if the context is done, return
+				return
+			}
+		}
+	}()
 
 	return responseCh, errCh
 }

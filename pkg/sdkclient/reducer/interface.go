@@ -21,9 +21,6 @@ import (
 
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
-
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 // Client contains methods to call a gRPC client.
@@ -31,5 +28,5 @@ type Client interface {
 	CloseConn(ctx context.Context) error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
 	ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.ReduceRequest) (*reducepb.ReduceResponse, error)
-	AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *isb.ReadMessage, id *partition.ID) (<-chan []*isb.WriteMessage, <-chan error)
+	AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.ReduceRequest) (<-chan *reducepb.ReduceResponse, <-chan error)
 }
