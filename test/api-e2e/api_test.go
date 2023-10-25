@@ -29,8 +29,12 @@ func (s *APISuite) TestGetSysInfo() {
 	sysinfoBody := HTTPExpect(s.T(), "https://localhost:8443").GET("/api/v1/sysinfo").
 		Expect().
 		Status(200).Body().Raw()
-	var sysinfoExpect = `{"data":{"managedNamespace":"numaflow-system","namespaced":false,"version":""}}`
+	var sysinfoExpect = `{"data":{"managedNamespace":"numaflow-system","namespaced":false`
 	assert.Contains(s.T(), sysinfoBody, sysinfoExpect)
+	assert.Contains(s.T(), sysinfoBody, "Version")
+	assert.Contains(s.T(), sysinfoBody, "BuildDate")
+	assert.Contains(s.T(), sysinfoBody, "GoVersion")
+	assert.Contains(s.T(), sysinfoBody, "Platform")
 	stopPortForward()
 }
 
