@@ -10,8 +10,8 @@ resources.
 
 ### Data Movement
 
- * Data movement happens only within the namespace (no cross-namespaces).
- * Numaflow provides the ability to encrypt data at rest and also in transit.
+ - Data movement happens only within the namespace (no cross-namespaces).
+ - Numaflow provides the ability to encrypt data at rest and also in transit.
 
 ### Controller and Data Plane
 
