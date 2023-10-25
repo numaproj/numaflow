@@ -50,10 +50,13 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
-
+	dexObj, err := v1.NewDexObject(authInfo.ServerAddr, authInfo.DexProxyAddr)
+	if err != nil {
+		panic(err)
+	}
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group("/auth/v1")
-	v1RoutesNoAuth(noAuthGroup, authInfo)
+	v1RoutesNoAuth(noAuthGroup, dexObj)
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
@@ -62,10 +65,6 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 		enforcer, err := authz.GetEnforcer()
 		if err != nil {
 			panic(err)
-		}
-		dexObj := v1.NewDexObject(authInfo.ServerAddr, authInfo.DexProxyAddr)
-		if dexObj == nil {
-			panic(fmt.Errorf("failed to create DexObject"))
 		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(enforcer, dexObj))
@@ -76,8 +75,8 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	})
 }
 
-func v1RoutesNoAuth(r gin.IRouter, authInfo AuthInfo) {
-	handler, err := v1.NewNoAuthHandler(authInfo.ServerAddr, authInfo.DexProxyAddr)
+func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject) {
+	handler, err := v1.NewNoAuthHandler(dexObj)
 	if err != nil {
 		panic(err)
 	}
