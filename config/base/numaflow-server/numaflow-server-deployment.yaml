@@ -39,7 +39,7 @@ spec:
           args:
           - "server"
           # By default, turn off authentication and authorization.
-          - "--disable-auth=false"
+          - "--disable-auth=true"
           imagePullPolicy: Always
           volumeMounts:
           - mountPath: /ui/build/runtime-env.js
