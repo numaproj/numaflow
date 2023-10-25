@@ -9,10 +9,10 @@ import (
 
 // ParseUserIdentityToken is used to extract user identity token from the Dex Server returned payload.
 func ParseUserIdentityToken(jsonStr string) (*authn.UserIdInfo, error) {
-	var callbackResponse *authn.UserIdInfo
-	err := json.Unmarshal([]byte(jsonStr), callbackResponse)
+	var u *authn.UserIdInfo
+	err := json.Unmarshal([]byte(jsonStr), u)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal user identity token: %v", err)
 	}
-	return callbackResponse, nil
+	return u, nil
 }

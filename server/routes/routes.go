@@ -197,6 +197,7 @@ func authMiddleware(enforcer *casbin.Enforcer, dexObj *v1.DexObject) gin.Handler
 	}
 }
 
+// authenticate authenticates the user by consulting Dex.
 func authenticate(c *gin.Context, dexObj *v1.DexObject) (*authn.UserIdInfo, error) {
 	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
