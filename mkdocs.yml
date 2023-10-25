@@ -107,13 +107,13 @@ nav:
   - Operator Manual:
       - Releases ⧉: "operations/releases.md"
       - operations/installation.md
-      - Security: operations/security.md
       - Validating Webhook: operations/validating-webhook.md
       - Configuration:
           - Controller Configuration: "operations/controller-configmap.md"
           - UI Server Access Path: "operations/ui-access-path.md"
           - operations/metrics/metrics.md
           - operations/grafana.md
+      - Security: operations/security.md          
   - Contributor Guide:
       - development/development.md
       - Specifications:
