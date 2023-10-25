@@ -138,7 +138,7 @@ export function K8sEvents({
           display: "flex",
           flexDirection: "column",
           borderTop: "1px solid #DCDCDC",
-          marginTop: "16px",
+          marginTop: "1rem",
           height: "100%",
         }}
       >

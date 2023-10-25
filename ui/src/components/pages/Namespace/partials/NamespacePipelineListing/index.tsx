@@ -352,10 +352,10 @@ export function NamespacePipelineListing({
                 id: "health",
               }}
               style={{
-                width: "224px",
+                width: "14rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "34px",
+                height: "2.125rem",
                 marginRight: "0.5rem",
               }}
               onChange={handleHealthFilterChange}
@@ -388,10 +388,10 @@ export function NamespacePipelineListing({
                 id: "health",
               }}
               style={{
-                width: "224px",
+                width: "14rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "34px",
+                height: "2.125rem",
               }}
               onChange={handleStatusFilterChange}
             >
@@ -461,14 +461,14 @@ export function NamespacePipelineListing({
             flexDirection: "row",
             flexGrow: 1,
             justifyContent: "flex-end",
-            marginRight: "4px",
+            marginRight: "0.25rem",
           }}
         >
           <Button
             variant="outlined"
             startIcon={<PlusIcon />}
             size="medium"
-            sx={{ marginRight: "10px" }}
+            sx={{ marginRight: "0.625rem" }}
             onClick={handleCreatePiplineClick}
           >
             Create Pipeline
