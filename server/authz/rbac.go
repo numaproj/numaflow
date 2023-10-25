@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package auth
+package authz
 
 import (
 	_ "embed"
@@ -40,6 +40,9 @@ const (
 func GetEnforcer() (*casbin.Enforcer, error) {
 
 	modelRBAC, err := model.NewModelFromString(rbacModel)
+	if err != nil {
+		return nil, err
+	}
 	a := fileadapter.NewAdapter(policyMapPath)
 
 	// Initialize the Casbin Enforcer with the model and policies.

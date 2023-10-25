@@ -1,4 +1,4 @@
-package v1
+package authn
 
 // IDTokenClaims is the claims extract from the IDToken.
 type IDTokenClaims struct {
@@ -16,16 +16,17 @@ type IDTokenClaims struct {
 	PreferredUsername string   `json:"preferred_username"`
 }
 
-// CallbackResponse is the response payload for the Callback API.
-type CallbackResponse struct {
+// UserIdInfo includes information about the user identity
+// It holds the IDTokenClaims, IDToken and RefreshToken for the user
+type UserIdInfo struct {
 	IDTokenClaims IDTokenClaims `json:"id_token_claims"`
 	IDToken       string        `json:"id_token"`
 	RefreshToken  string        `json:"refresh_token"`
 }
 
-// NewCallbackResponse return a Callback Response Object.
-func NewCallbackResponse(itc IDTokenClaims, idToken string, refreshToken string) CallbackResponse {
-	return CallbackResponse{
+// NewUserIdInfo return a Callback Response Object.
+func NewUserIdInfo(itc IDTokenClaims, idToken string, refreshToken string) UserIdInfo {
+	return UserIdInfo{
 		IDTokenClaims: itc,
 		IDToken:       idToken,
 		RefreshToken:  refreshToken,

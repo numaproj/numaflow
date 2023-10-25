@@ -1,4 +1,4 @@
-package auth
+package authz
 
 const (
 	// PolicyMapPath is the path to the policy map.

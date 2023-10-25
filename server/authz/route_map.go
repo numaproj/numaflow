@@ -1,4 +1,4 @@
-package auth
+package authz
 
 // RouteInfo is a struct which contains the route information with the object
 // corresponding to the route and a boolean to indicate whether the route requires
