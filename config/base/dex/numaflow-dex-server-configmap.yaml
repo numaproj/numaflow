@@ -4,7 +4,7 @@ metadata:
   name: numaflow-dex-server
 data:
   config.yaml: |
-    issuer: <HOSTNAME>/dex
+    issuer: https://localhost:8443/dex
     storage:
       type: memory
     web:
@@ -12,20 +12,20 @@ data:
     staticClients:
       - id: numaflow-server-app
         redirectURIs: 
-          - <HOSTNAME>/login
+          - https://localhost:8443/login
         name: 'Numaflow Server App'
         public: true
     connectors:
     - type: github
-      # https://dexidp.io/docs/connectors/github/
       id: github
       name: GitHub
       config:
         clientID: $GITHUB_CLIENT_ID
         clientSecret: $GITHUB_CLIENT_SECRET
-        redirectURI: <HOSTNAME>/dex/callback
+        redirectURI: https://localhost:8443/dex/callback
         orgs:
-        - name: <ORG_NAME>
+        # https://github.com/numa-default-dex-auth
+        - name: numa-default-dex-auth
           teams:
           - admin
           - readonly
