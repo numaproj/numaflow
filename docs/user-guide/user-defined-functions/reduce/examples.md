@@ -48,8 +48,10 @@ simple-pipeline-out-0-xc0pf                  1/1     Running     0          10s
 simple-pipeline-cat-0-kqrhy                  2/2     Running     0          10s
 simple-pipeline-in-0-rhpjm                   1/1     Running     0          11s
 ```
+---
+**NOTE**
 
-**_NOTE:_**  The Source used in the examples is an HTTP source producing messages with values 5 and 10 with event time
+The Source used in the examples is an HTTP source producing messages with values 5 and 10 with event time
 starting from 60000. Please refer to the doc [http source](../../sources/http.md) on how to use an HTTP
 source.
 An example will be as follows,
