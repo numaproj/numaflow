@@ -38,14 +38,14 @@ func (s *SideInputUDSSuite) setUpTests(pipeLineFile string) *When {
 func (s *SideInputUDSSuite) TestSinkWithSideInput() {
 	w := s.setUpTests("@testdata/sideinput_sink.yaml")
 	defer w.DeletePipelineAndWait()
-	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(5*time.Minute))
+	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(2*time.Minute))
 
 }
 
 func (s *SideInputUDSSuite) TestSourceWithSideInput() {
 	w := s.setUpTests("@testdata/sideinput_source.yaml")
 	defer w.DeletePipelineAndWait()
-	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(5*time.Minute))
+	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(2*time.Minute))
 
 }
 
