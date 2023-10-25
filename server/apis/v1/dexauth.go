@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
 
+	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
 )
 
@@ -133,9 +134,14 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 	}
 	stateCookie, err := c.Cookie(common.StateCookieName)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get state cookie: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 	val, err := hex.DecodeString(stateCookie)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get state: %v", err)
+		errMsg := fmt.Sprintf("Failed to decode state: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
@@ -180,7 +186,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	var claims IDTokenClaims
+	var claims authn.IDTokenClaims
 	if err := idToken.Claims(&claims); err != nil {
 		errMsg := fmt.Sprintf("error decoding ID token claims: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -194,7 +200,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	res := NewUserIdInfo(claims, rawIDToken, refreshToken)
+	res := authn.NewUserIdInfo(claims, rawIDToken, refreshToken)
 	tokenStr, err := json.Marshal(res)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to convert to token string: %v", err)

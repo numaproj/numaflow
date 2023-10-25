@@ -1,4 +1,4 @@
-package v1
+package authn
 
 // IDTokenClaims is the claims extract from the IDToken.
 type IDTokenClaims struct {

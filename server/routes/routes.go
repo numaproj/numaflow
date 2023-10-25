@@ -25,6 +25,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/authz"
 	"github.com/numaproj/numaflow/server/common"
 	"github.com/numaproj/numaflow/server/utils"
@@ -196,7 +197,7 @@ func authMiddleware(enforcer *casbin.Enforcer, dexObj *v1.DexObject) gin.Handler
 	}
 }
 
-func authenticate(c *gin.Context, dexObj *v1.DexObject) (*v1.UserIdInfo, error) {
+func authenticate(c *gin.Context, dexObj *v1.DexObject) (*authn.UserIdInfo, error) {
 	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user identity token from cookie: %v", err)
