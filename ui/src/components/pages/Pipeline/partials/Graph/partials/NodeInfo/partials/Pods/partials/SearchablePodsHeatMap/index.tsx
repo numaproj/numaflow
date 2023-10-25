@@ -10,13 +10,7 @@ export const SearchablePodsHeatMap = ({
   podsDetailsMap,
   onPodClick,
   selectedPod,
-  setSelectedPod,
 }: SearchablePodsHeatMapProps) => {
-
-  useEffect(() => {
-    if (pods?.length) setSelectedPod(pods[0]);
-    return;
-  }, [pods]);
 
   //
   return (
