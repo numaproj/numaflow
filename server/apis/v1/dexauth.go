@@ -31,11 +31,15 @@ type DexObject struct {
 }
 
 // NewDexObject returns a new DexObject.
-func NewDexObject(baseURL string, proxyURL string) *DexObject {
+func NewDexObject(baseURL string, proxyURL string) (*DexObject, error) {
 	issuerURL, err := url.JoinPath(baseURL, "/dex")
-	_ = err
+	if err != nil {
+		return nil, err
+	}
 	redirectURI, err := url.JoinPath(baseURL, "/login")
-	_ = err
+	if err != nil {
+		return nil, err
+	}
 	client := http.DefaultClient
 	client.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -47,7 +51,7 @@ func NewDexObject(baseURL string, proxyURL string) *DexObject {
 		redirectURI:    redirectURI,
 		offlineAsScope: true,
 		client:         client,
-	}
+	}, nil
 }
 
 func (d *DexObject) provider(client *http.Client, issuerURL string) (*oidc.Provider, error) {
