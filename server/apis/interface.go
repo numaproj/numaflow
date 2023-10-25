@@ -19,6 +19,10 @@ package apis
 import "github.com/gin-gonic/gin"
 
 type Handler interface {
+	Login(c *gin.Context)
+	Callback(c *gin.Context)
+	Logout(c *gin.Context)
+	AuthInfo(c *gin.Context)
 	ListNamespaces(c *gin.Context)
 	GetClusterSummary(c *gin.Context)
 	CreatePipeline(c *gin.Context)

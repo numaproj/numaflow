@@ -152,7 +152,6 @@ func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 		auth := false
 		for _, group := range groups {
 			// Get the user from the group. The group is in the format "group:role".
-
 			// Check if the user has permission using Casbin Enforcer.
 			if enforceRBAC(enforcer, group, ns, resource, action) {
 				auth = true
