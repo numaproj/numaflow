@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import Box from "@mui/material/Box";
 import { PodsHeatMap } from "./partials/PodsHeatMap";
 import { SearchablePodsHeatMapProps } from "../../../../../../../../../../../types/declarations/pods";
