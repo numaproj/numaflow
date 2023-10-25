@@ -29,11 +29,7 @@ type noAuthHandler struct {
 }
 
 // NewNoAuthHandler is used to provide a new instance of the handler type
-func NewNoAuthHandler(serverAddr string, proxyAddr string) (*noAuthHandler, error) {
-	dexObj, err := NewDexObject(serverAddr, proxyAddr)
-	if err != nil {
-		return nil, err
-	}
+func NewNoAuthHandler(dexObj *DexObject) (*noAuthHandler, error) {
 	return &noAuthHandler{
 		dexObj: dexObj,
 	}, nil
