@@ -38,6 +38,7 @@ export function Pods(props: PodsProps) {
       namespaceId,
       pipelineId,
       vertexId,
+      selectedPod,
       setSelectedPod,
       setSelectedContainer
     );
@@ -205,7 +206,6 @@ export function Pods(props: PodsProps) {
             podsDetailsMap={podsDetails}
             onPodClick={handlePodClick}
             selectedPod={selectedPod}
-            setSelectedPod={setSelectedPod}
           />
           {containerSelector}
         </Box>
