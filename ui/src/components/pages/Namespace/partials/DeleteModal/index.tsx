@@ -102,7 +102,7 @@ export function DeleteModal({
               variant="contained"
               color="secondary"
             >
-              Delete
+              Try again
             </Button>
             <Button onClick={onCancel} variant="outlined" color="primary">
               Cancel
