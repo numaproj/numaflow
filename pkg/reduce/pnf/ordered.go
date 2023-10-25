@@ -45,7 +45,7 @@ var retryDelay = 1 * time.Second
 type ForwardTask struct {
 	// doneCh is used to notify when the ForwardTask has been completed.
 	doneCh chan struct{}
-	pf     *processAndForward
+	pf     *ProcessAndForward
 }
 
 // OrderedProcessor orders the forwarding of the writeMessages of the execution of the tasks, even though the tasks itself are
@@ -91,7 +91,7 @@ func NewOrderedProcessor(ctx context.Context,
 		log:                 logging.FromContext(ctx),
 	}
 
-	go of.forward(ctx)
+	//go of.forward(ctx)
 
 	return of
 }
@@ -105,26 +105,28 @@ func (op *OrderedProcessor) InsertTask(t *ForwardTask) {
 // SchedulePnF creates and schedules the PnF routine.
 func (op *OrderedProcessor) SchedulePnF(
 	ctx context.Context,
-	partitionID partition.ID) *ForwardTask {
+	partitionID partition.ID,
+	pbq pbq.ReadWriteCloser,
+) {
 
-	pbq := op.pbqManager.GetPBQ(partitionID)
+	//pq := op.pbqManager.GetPBQ(partitionID)
 
-	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager)
+	_ = NewProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager)
 
-	doneCh := make(chan struct{})
-	t := &ForwardTask{
-		doneCh: doneCh,
-		pf:     pf,
-	}
-	partitionsInFlight.With(map[string]string{
-		metrics.LabelVertex:             op.vertexName,
-		metrics.LabelPipeline:           op.pipelineName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
-	}).Inc()
-
-	// invoke the reduce function
-	go op.reduceOp(ctx, t)
-	return t
+	//doneCh := make(chan struct{})
+	//t := &ForwardTask{
+	//	doneCh: doneCh,
+	//	pf:     pf,
+	//}
+	//partitionsInFlight.With(map[string]string{
+	//	metrics.LabelVertex:             op.vertexName,
+	//	metrics.LabelPipeline:           op.pipelineName,
+	//	metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
+	//}).Inc()
+	//
+	//// invoke the reduce function
+	//go op.reduceOp(ctx, t)
+	return
 }
 
 // reduceOp invokes the reduce function. The reducer is a long-running function since we stream in the data and it has

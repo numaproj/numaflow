@@ -27,7 +27,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -134,8 +137,8 @@ outputLoop:
 			if err == io.EOF {
 				break outputLoop
 			}
-			err = util.ToUDFErr("ReduceFn stream.Recv()", err)
 			if err != nil {
+				err = util.ToUDFErr("ReduceFn stream.Recv()", err)
 				return nil, err
 			}
 			finalResponse.Results = append(finalResponse.Results, resp.Results...)
@@ -149,4 +152,110 @@ outputLoop:
 	}
 
 	return finalResponse, nil
+}
+
+func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *isb.ReadMessage, id *partition.ID) (<-chan []*isb.WriteMessage, <-chan error) {
+	var (
+		errCh      = make(chan error, 100)
+		responseCh = make(chan []*isb.WriteMessage)
+	)
+
+	stream, err := c.grpcClt.ReduceFn(ctx)
+
+	if err != nil {
+		go func() {
+			select {
+			case <-ctx.Done():
+				return
+			case errCh <- util.ToUDFErr("c.grpcClt.ReduceFn", err):
+				return
+			}
+		}()
+	}
+
+	go func() {
+		var sendErr error
+	outerLoop:
+		for {
+			select {
+			case <-ctx.Done():
+				errCh <- ctx.Err()
+				return
+			case datum, ok := <-datumStreamCh:
+				if !ok {
+					break outerLoop
+				}
+				if sendErr = stream.Send(createDatum(datum)); sendErr != nil {
+					println("got an error while sending to client")
+					errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
+				}
+			}
+		}
+		sendErr = stream.CloseSend()
+		if sendErr != nil {
+			errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
+		}
+	}()
+
+	go func() {
+		var resp *reducepb.ReduceResponse
+		var recvErr error
+		for {
+			select {
+			case <-ctx.Done():
+				errCh <- ctx.Err()
+				return
+			default:
+				resp, recvErr = stream.Recv()
+				if recvErr == io.EOF {
+					close(responseCh)
+					close(errCh)
+					return
+				}
+				if recvErr != nil {
+					errCh <- util.ToUDFErr("ReduceFn stream.Recv()", recvErr)
+				}
+				responseCh <- convertToWriteMessages(resp, id)
+			}
+		}
+	}()
+
+	return responseCh, errCh
+}
+
+func createDatum(readMessage *isb.ReadMessage) *reducepb.ReduceRequest {
+	keys := readMessage.Keys
+	payload := readMessage.Body.Payload
+	parentMessageInfo := readMessage.MessageInfo
+	var d = &reducepb.ReduceRequest{
+		Keys:      keys,
+		Value:     payload,
+		EventTime: timestamppb.New(parentMessageInfo.EventTime),
+		Watermark: timestamppb.New(readMessage.Watermark),
+	}
+	return d
+}
+
+func convertToWriteMessages(response *reducepb.ReduceResponse, partitionID *partition.ID) []*isb.WriteMessage {
+	taggedMessages := make([]*isb.WriteMessage, 0)
+	for _, r := range response.GetResults() {
+		keys := r.Keys
+		taggedMessage := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: isb.MessageInfo{
+						EventTime: partitionID.End.Add(-1 * time.Millisecond),
+						IsLate:    false,
+					},
+					Keys: keys,
+				},
+				Body: isb.Body{
+					Payload: r.Value,
+				},
+			},
+			Tags: r.Tags,
+		}
+		taggedMessages = append(taggedMessages, taggedMessage)
+	}
+	return taggedMessages
 }

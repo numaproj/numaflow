@@ -27,6 +27,7 @@ import (
 // InternalErr can be returned and could be retried by the callee.
 type ReduceApplier interface {
 	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error)
+	AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) (<-chan []*isb.WriteMessage, <-chan error)
 }
 
 // ApplyReduceFunc utility function used to create a Reducer implementation

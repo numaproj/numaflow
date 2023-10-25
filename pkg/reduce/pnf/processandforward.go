@@ -44,9 +44,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-// processAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
+// ProcessAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
-type processAndForward struct {
+type ProcessAndForward struct {
 	vertexName     string
 	pipelineName   string
 	vertexReplica  int32
@@ -59,10 +59,11 @@ type processAndForward struct {
 	whereToDecider forward.ToWhichStepDecider
 	wmPublishers   map[string]publish.Publisher
 	idleManager    wmb.IdleManager
+	pbqManager     *pbq.Manager
 }
 
-// newProcessAndForward will return a new processAndForward instance
-func newProcessAndForward(ctx context.Context,
+// NewProcessAndForward will return a new processAndForward instance
+func NewProcessAndForward(ctx context.Context,
 	vertexName string,
 	pipelineName string,
 	vr int32,
@@ -72,9 +73,10 @@ func newProcessAndForward(ctx context.Context,
 	toBuffers map[string][]isb.BufferWriter,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
-	idleManager wmb.IdleManager) *processAndForward {
+	idleManager wmb.IdleManager,
+	manager *pbq.Manager) *ProcessAndForward {
 
-	return &processAndForward{
+	pf := &ProcessAndForward{
 		vertexName:     vertexName,
 		pipelineName:   pipelineName,
 		vertexReplica:  vr,
@@ -86,11 +88,16 @@ func newProcessAndForward(ctx context.Context,
 		whereToDecider: whereToDecider,
 		wmPublishers:   pw,
 		idleManager:    idleManager,
+		pbqManager:     manager,
 	}
+
+	go pf.AsyncProcessForward(ctx)
+
+	return pf
 }
 
 // Process method reads messages from the supplied PBQ, invokes UDF to reduce the writeMessages.
-func (p *processAndForward) Process(ctx context.Context) error {
+func (p *ProcessAndForward) Process(ctx context.Context) error {
 	var err error
 	startTime := time.Now()
 	defer reduceProcessTime.With(map[string]string{
@@ -104,8 +111,77 @@ func (p *processAndForward) Process(ctx context.Context) error {
 	return err
 }
 
+func (p *ProcessAndForward) AsyncProcessForward(ctx context.Context) {
+	results := make([]*isb.WriteMessage, 0)
+	startTime := time.Now()
+	resultMessagesCh, errCh := p.UDF.AsyncApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
+
+outerLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errCh:
+			if err != ctx.Err() {
+				p.log.Panic("Got an error while invoking AsyncApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
+			}
+			return
+		case resultMessages, ok := <-resultMessagesCh:
+			results = append(results, resultMessages...)
+			sTime := time.Now()
+			if !ok {
+				break outerLoop
+			}
+			println("got a result to process and forward")
+			messagesToStep := p.whereToStep(resultMessages)
+			// store write offsets to publish watermark
+			writeOffsets := make(map[string][][]isb.Offset)
+			for toVertexName, toVertexBuffer := range p.toBuffers {
+				writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
+			}
+
+			// parallel writes to each isb
+			var wg sync.WaitGroup
+			var mu sync.Mutex
+			for key, value := range messagesToStep {
+				for index, messages := range value {
+					if len(messages) == 0 {
+						continue
+					}
+					wg.Add(1)
+					go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
+						defer wg.Done()
+						offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
+						mu.Lock()
+						// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
+						writeOffsets[toVertexName][toVertexPartitionIdx] = offsets
+						mu.Unlock()
+					}(key, int32(index), messages)
+				}
+			}
+
+			// wait until all the writer go routines return
+			wg.Wait()
+
+			nextWindowToBeClosed := p.pbqManager.NextWindowToBeMaterialized()
+			if nextWindowToBeClosed != nil && nextWindowToBeClosed.EndTime().Before(p.PartitionID.End) {
+				p.publishWM(ctx, wmb.Watermark(nextWindowToBeClosed.EndTime().Add(-1*time.Millisecond)), writeOffsets)
+			} else {
+				p.publishWM(ctx, wmb.Watermark(p.PartitionID.End.Add(-1*time.Millisecond)), writeOffsets)
+			}
+			println("time taken to process one result - ", time.Since(sTime).Milliseconds())
+		}
+	}
+	err := p.pbqReader.GC()
+	if err != nil {
+		p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.PartitionID))
+		return
+	}
+	println("time taken to process and forward - ", time.Since(startTime).Milliseconds())
+}
+
 // Forward writes messages to the ISBs, publishes watermark, and invokes GC on PBQ.
-func (p *processAndForward) Forward(ctx context.Context) error {
+func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	// extract window end time from the partitionID, which will be used for watermark
 	startTime := time.Now()
 	defer reduceForwardTime.With(map[string]string{
@@ -117,7 +193,7 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 	// millisecond is the lowest granularity currently supported.
 	processorWM := wmb.Watermark(p.PartitionID.End.Add(-1 * time.Millisecond))
 
-	messagesToStep := p.whereToStep()
+	messagesToStep := p.whereToStep(p.writeMessages)
 
 	// store write offsets to publish watermark
 	writeOffsets := make(map[string][][]isb.Offset)
@@ -128,7 +204,6 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 	// parallel writes to each isb
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	success := true
 	for key, value := range messagesToStep {
 		for index, messages := range value {
 			if len(messages) == 0 {
@@ -137,12 +212,7 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 			wg.Add(1)
 			go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
 				defer wg.Done()
-				offsets, ctxClosedErr := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
-				if ctxClosedErr != nil {
-					success = false
-					p.log.Errorw("Context closed while waiting to write the message to ISB", zap.Error(ctxClosedErr), zap.Any("partitionID", p.PartitionID))
-					return
-				}
+				offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
 				mu.Lock()
 				// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
 				writeOffsets[toVertexName][toVertexPartitionIdx] = offsets
@@ -153,10 +223,6 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 
 	// wait until all the writer go routines return
 	wg.Wait()
-	// even if one write go routines fails, don't GC just return
-	if !success {
-		return errors.New("failed to forward the messages to isb")
-	}
 
 	p.publishWM(ctx, processorWM, writeOffsets)
 	// delete the persisted messages
@@ -168,13 +234,13 @@ func (p *processAndForward) Forward(ctx context.Context) error {
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.
-func (p *processAndForward) whereToStep() map[string][][]isb.Message {
+func (p *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[string][][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][][]isb.Message)
 
 	var to []forward.VertexBuffer
 	var err error
-	for _, msg := range p.writeMessages {
+	for _, msg := range writeMessages {
 		to, err = p.whereToDecider.WhereTo(msg.Keys, msg.Tags)
 		if err != nil {
 			platformError.With(map[string]string{
@@ -203,7 +269,7 @@ func (p *processAndForward) whereToStep() map[string][][]isb.Message {
 
 // writeToBuffer writes to the ISBs.
 // TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
-func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) ([]isb.Offset, error) {
+func (p *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) []isb.Offset {
 	var (
 		writeCount int
 		writeBytes float64
@@ -252,6 +318,11 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 		return true, nil
 	})
 
+	if ctxClosedErr != nil {
+		p.log.Errorw("Ctx closed while writing messages to ISB", zap.Error(ctxClosedErr), zap.Any("partitionID", p.PartitionID))
+		return nil
+	}
+
 	dropMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
@@ -275,12 +346,12 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(writeBytes)
-	return offsets, ctxClosedErr
+	return offsets
 }
 
 // publishWM publishes the watermark to each edge.
 // TODO: support multi partitioned edges.
-func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][][]isb.Offset) {
+func (p *ProcessAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][][]isb.Offset) {
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.

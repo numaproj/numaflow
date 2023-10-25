@@ -296,8 +296,8 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID parti
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
-		t := df.of.SchedulePnF(ctx, partitionID)
-		df.udfInvocationTracking[partitionID] = t
+		df.of.SchedulePnF(ctx, partitionID, q)
+		//df.udfInvocationTracking[partitionID] = t
 		df.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
 
@@ -384,6 +384,7 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 
 // writeMessagesToWindows write the messages to each window that message belongs to. Each window is backed by a PBQ.
 func (df *DataForward) writeMessagesToWindows(ctx context.Context, messages []*isb.ReadMessage) ([]*isb.ReadMessage, error) {
+	startTime := time.Now()
 	var err error
 	var writtenMessages = make([]*isb.ReadMessage, 0, len(messages))
 
@@ -457,7 +458,7 @@ messagesLoop:
 
 		writtenMessages = append(writtenMessages, message)
 	}
-
+	println("Time taken to write to windows/pbqs - ", time.Since(startTime).Milliseconds())
 	return writtenMessages, err
 }
 
@@ -506,7 +507,7 @@ func (df *DataForward) writeToPBQ(ctx context.Context, m *isb.ReadMessage, p par
 			metrics.LabelPipeline:           df.pipelineName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		}).Inc()
-		df.log.Debugw("Successfully wrote the message", zap.String("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()))
+		//df.log.Debugw("Successfully wrote the message", zap.String("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()))
 		return true, nil
 	})
 
@@ -614,8 +615,8 @@ func (df *DataForward) ClosePartitions(partitions []partition.ID) {
 		q := df.pbqManager.GetPBQ(p)
 		df.log.Infow("Close of book", zap.String("partitionID", p.String()))
 		// schedule the task for ordered processing.
-		df.of.InsertTask(df.udfInvocationTracking[p])
+		//df.of.InsertTask(df.udfInvocationTracking[p])
 		q.CloseOfBook()
-		delete(df.udfInvocationTracking, p)
+		//delete(df.udfInvocationTracking, p)
 	}
 }

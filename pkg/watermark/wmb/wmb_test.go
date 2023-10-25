@@ -18,9 +18,11 @@ package wmb
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestDecodeToWMB(t *testing.T) {
@@ -206,4 +208,15 @@ func TestWMB_EncodeToBytes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWMB_DecodeToWMB(t *testing.T) {
+	s := "APgMAwAAAAAA/2JxYosBAAAAAAAA"
+	b, _ := base64.StdEncoding.DecodeString(s)
+
+	w, _ := DecodeToWMB(b)
+
+	println(w.Watermark)
+
+	println(time.Since(time.UnixMilli(w.Watermark)).String())
 }

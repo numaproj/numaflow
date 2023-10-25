@@ -21,6 +21,7 @@ import (
 	"errors"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
@@ -66,7 +67,7 @@ func (p *PBQ) Write(ctx context.Context, message *isb.ReadMessage) error {
 	case p.output <- message:
 		// this store.Write is an `inSync` flush (if need be). The performance will be very bad but the system is correct.
 		// TODO: shortly in the near future we will move to async writes.
-		writeErr = p.store.Write(message)
+		//writeErr = p.store.Write(message)
 	case <-ctx.Done():
 		// closing the output channel will not cause panic, since its inside select case
 		// ctx.Done implicitly means write hasn't succeeded.
@@ -108,6 +109,10 @@ func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
 // GC cleans up the PBQ and also the store associated with it. GC is invoked after the Reader (ProcessAndForward) has
 // finished forwarding the output to ISB.
 func (p *PBQ) GC() error {
+	startTime := time.Now()
+	defer func() {
+		println("Time to GC: ", time.Since(startTime).Milliseconds())
+	}()
 	// we need a lock because Close() and PBQ.GC() can be invoked simultaneously
 	// by shutdown routine(pbq.GC in case of ctx close) and pnf(pbq.Close after forwarding the result)
 	p.mu.Lock()

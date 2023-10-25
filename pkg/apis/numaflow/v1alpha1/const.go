@@ -148,7 +148,7 @@ const (
 	DefaultReplicasPerScale         = 2   // Default maximum replicas to be scaled up or down at once
 
 	// Default persistent buffer queue options
-	DefaultPBQChannelBufferSize = 100             // Default channel size in int (what should be right value?)
+	DefaultPBQChannelBufferSize = 10000           // Default channel size in int (what should be right value?)
 	DefaultPBQReadTimeout       = 1 * time.Second // Default read timeout for pbq
 	DefaultPBQReadBatchSize     = 100             // Default read batch size for pbq
 
