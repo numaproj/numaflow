@@ -127,7 +127,7 @@ export function Pods(props: PodsProps) {
           justifyContent: "space-between",
         }}
       >
-        <Box sx={{ paddingBottom: "10px" }}>
+        <Box sx={{ paddingBottom: "0.625rem" }}>
           {pods && (
             <Autocomplete
               {...defaultProps}
