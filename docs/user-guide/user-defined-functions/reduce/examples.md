@@ -20,11 +20,18 @@ kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exam
 The expected output of the above command is shown below:
 
 ```shell
+$ kubectl get isbsvc 
+
+NAME      TYPE        PHASE     MESSAGE   AGE
+default   jetstream   Running             3d19h
+
+# Wait for pods to be ready
+$ kubectl get pods
+
 NAME                                         READY   STATUS      RESTARTS   AGE
 isbsvc-default-js-0                          3/3     Running     0          19s
 isbsvc-default-js-1                          3/3     Running     0          19s
 isbsvc-default-js-2                          3/3     Running     0          19s
-```
 
 To inspect the status of the pipeline, use `kubectl get pods`.
 
