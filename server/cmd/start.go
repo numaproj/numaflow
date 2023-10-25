@@ -28,6 +28,7 @@ import (
 	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
+	v1 "github.com/numaproj/numaflow/server/apis/v1"
 	"github.com/numaproj/numaflow/server/routes"
 )
 
@@ -47,6 +48,8 @@ type ServerOptions struct {
 	BaseHref         string
 	DisableAuth      bool
 	DexServerAddr    string
+	DexProxyAddr     string
+	ServerAddr       string
 }
 
 type server struct {
@@ -70,6 +73,7 @@ func (s *server) Start() {
 			c.File("./ui/build/index.html")
 		})
 	}
+	router.Any("/dex/*name", v1.NewDexReverseProxy(s.options.DexServerAddr))
 	routes.Routes(
 		router,
 		routes.SystemInfo{
@@ -79,6 +83,8 @@ func (s *server) Start() {
 		routes.AuthInfo{
 			DisableAuth:   s.options.DisableAuth,
 			DexServerAddr: s.options.DexServerAddr,
+			DexProxyAddr:  s.options.DexProxyAddr,
+			ServerAddr:    s.options.ServerAddr,
 		})
 	router.Use(UrlRewrite(router))
 	server := http.Server{
@@ -91,7 +97,9 @@ func (s *server) Start() {
 			"Starting server (TLS disabled) on "+server.Addr,
 			"version", numaflow.GetVersion(),
 			"disable-auth", s.options.DisableAuth,
-			"dex-server-addr", s.options.DexServerAddr)
+			"dex-server-addr", s.options.DexServerAddr,
+			"dex-proxy-addr", s.options.DexProxyAddr,
+			"server-addr", s.options.ServerAddr)
 		if err := server.ListenAndServe(); err != nil {
 			panic(err)
 		}
@@ -105,7 +113,9 @@ func (s *server) Start() {
 			"Starting server on "+server.Addr,
 			"version", numaflow.GetVersion(),
 			"disable-auth", s.options.DisableAuth,
-			"dex-server-addr", s.options.DexServerAddr)
+			"dex-server-addr", s.options.DexServerAddr,
+			"dex-proxy-addr", s.options.DexProxyAddr,
+			"server-addr", s.options.ServerAddr)
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			panic(err)
 		}

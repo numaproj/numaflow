@@ -3,9 +3,9 @@ package v1
 import (
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
@@ -15,61 +15,66 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
+
+	"github.com/numaproj/numaflow/server/common"
 )
 
-// DexObject is a struct that holds details for dex handlers
+// DexObject is a struct that holds details for dex handlers.
 type DexObject struct {
-	clientID     string
-	clientSecret string
-	redirectURI  string
-
-	verifier *oidc.IDTokenVerifier
-	provider *oidc.Provider
-
-	// Does the provider use "offline_access" scope to request a refresh token
-	// or does it use "access_type=offline" (e.g. Google)?
+	clientID    string
+	issuerURL   string
+	redirectURI string
+	// offlineAsScope defines whether the provider uses "offline_access" scope to
+	// request a refresh token or uses "access_type=offline" (e.g. Google)
 	offlineAsScope bool
-
-	client     *http.Client
-	stateNonce string // stateNonce is the nonce variable
-}
-
-func (d *DexObject) oauth2Config(scopes []string) *oauth2.Config {
-	return &oauth2.Config{
-		ClientID:     d.clientID,
-		ClientSecret: d.clientSecret,
-		Endpoint:     d.provider.Endpoint(),
-		Scopes:       scopes,
-		RedirectURL:  d.redirectURI,
-	}
+	client         *http.Client
 }
 
 // NewDexObject returns a new DexObject.
-// TODO: refactor data structure and make configurable
-func NewDexObject(ctx context.Context) *DexObject {
-	clientID := "example-app"
-	issuerURL := "https://numaflow-server:8443/dex"
+func NewDexObject(baseURL string, proxyURL string) *DexObject {
+	issuerURL, err := url.JoinPath(baseURL, "/dex")
+	_ = err
+	redirectURI, err := url.JoinPath(baseURL, "/login")
+	_ = err
 	client := http.DefaultClient
 	client.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	newCtx := oidc.ClientContext(ctx, client)
-	provider, err := oidc.NewProvider(newCtx, issuerURL)
-	if err != nil {
-		log.Fatalf("failed to query provider %q: %v", issuerURL, err)
-	}
-	verifier := provider.Verifier(&oidc.Config{ClientID: clientID})
-
+	client.Transport = NewDexRewriteURLRoundTripper(proxyURL, client.Transport)
 	return &DexObject{
-		clientID:       clientID,
-		clientSecret:   "ZXhhbXBsZS1hcHAtc2VjcmV0",
-		redirectURI:    "https://numaflow-server:8443/login",
-		verifier:       verifier,
-		provider:       provider,
+		clientID:       common.AppClientID,
+		issuerURL:      issuerURL,
+		redirectURI:    redirectURI,
 		offlineAsScope: true,
 		client:         client,
-		stateNonce:     "",
 	}
+}
+
+func (d *DexObject) provider(client *http.Client, issuerURL string) (*oidc.Provider, error) {
+	newCtx := oidc.ClientContext(context.Background(), client)
+	return oidc.NewProvider(newCtx, issuerURL)
+}
+
+func (d *DexObject) verifier() (*oidc.IDTokenVerifier, error) {
+	provider, err := d.provider(d.client, d.issuerURL)
+	if err != nil {
+		return nil, err
+	}
+	verifier := provider.Verifier(&oidc.Config{ClientID: common.AppClientID})
+	return verifier, nil
+}
+
+func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
+	provider, err := d.provider(d.client, d.issuerURL)
+	if err != nil {
+		return nil, err
+	}
+	return &oauth2.Config{
+		ClientID:    d.clientID,
+		Endpoint:    provider.Endpoint(),
+		Scopes:      scopes,
+		RedirectURL: d.redirectURI,
+	}, nil
 }
 
 func (d *DexObject) handleLogin(c *gin.Context) {
@@ -77,13 +82,25 @@ func (d *DexObject) handleLogin(c *gin.Context) {
 	authCodeURL := ""
 	scopes = append(scopes, "openid", "profile", "email", "groups")
 	// stateNonce is an OAuth2 state nonce
-	d.stateNonce = generateRandomNumber(10)
+	stateNonce := generateRandomNumber(10)
 	if d.offlineAsScope {
 		scopes = append(scopes, "offline_access")
-		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(d.stateNonce)
+		oauth2Config, err := d.oauth2Config(scopes)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		}
+		authCodeURL = oauth2Config.AuthCodeURL(stateNonce)
 	} else {
-		authCodeURL = d.oauth2Config(scopes).AuthCodeURL(d.stateNonce, oauth2.AccessTypeOffline)
+		oauth2Config, err := d.oauth2Config(scopes)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
+			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		}
+		authCodeURL = oauth2Config.AuthCodeURL(stateNonce, oauth2.AccessTypeOffline)
 	}
+	cookieValue := hex.EncodeToString([]byte(stateNonce))
+	c.SetCookie(common.StateCookieName, cookieValue, common.StateCookieMaxAge, "/", "", true, true)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, NewLoginResponse(authCodeURL)))
 }
 
@@ -94,7 +111,25 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		token *oauth2.Token
 	)
 	ctx := oidc.ClientContext(r.Context(), d.client)
-	oauth2Config := d.oauth2Config(nil)
+	oauth2Config, err := d.oauth2Config(nil)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	}
+	stateCookie, err := c.Cookie(common.StateCookieName)
+	val, err := hex.DecodeString(stateCookie)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get state: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	if state := r.FormValue("state"); state != string(val) {
+		errMsg := fmt.Sprintf("Expected state %q got %q", string(val), state)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	// delete after read, we only need it for login flow
+	c.SetCookie(common.StateCookieName, "", -1, "/", "", true, true)
 
 	// Authorization redirect callback from OAuth2 auth flow.
 	if errMsg := r.FormValue("error"); errMsg != "" {
@@ -104,12 +139,6 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 	code := r.FormValue("code")
 	if code == "" {
 		errMsg := "Missing code in the request."
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	// TODO: currently looks like it only works when only one user does the login
-	if state := r.FormValue("state"); state != d.stateNonce {
-		errMsg := fmt.Sprintf("Expected state %q got %q", d.stateNonce, state)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
@@ -128,7 +157,12 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	idToken, err := d.verifier.Verify(r.Context(), rawIDToken)
+	verifier, err := d.verifier()
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get verifier %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	}
+	idToken, err := verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to verify ID token: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -156,7 +190,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.SetCookie("user-identity-token", string(tokenStr), 3600, "/", "", true, true)
+	c.SetCookie(common.UserIdentityCookieName, string(tokenStr), common.UserIdentityCookieMaxAge, "/", "", true, true)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
@@ -184,15 +218,40 @@ func generateRandomNumber(n int) string {
 	return string(b)
 }
 
-// DexReverseProxy sends the dex request to the dex server.
-func DexReverseProxy(c *gin.Context) {
-	var target = "http://numaflow-dex-server:5556/dex"
-	proxyUrl, _ := url.Parse(target)
-	c.Request.URL.Path = c.Param("name")
-	proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
-	fmt.Println("proxy", proxyUrl, c.Request.URL.Path)
-	proxy.Transport = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+// NewDexReverseProxy sends the dex request to the dex server.
+func NewDexReverseProxy(target string) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		proxyUrl, _ := url.Parse(target)
+		c.Request.URL.Path = c.Param("name")
+		proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
+		fmt.Println("proxy", proxyUrl, c.Request.URL.Path)
+		proxy.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		proxy.ServeHTTP(c.Writer, c.Request)
 	}
-	proxy.ServeHTTP(c.Writer, c.Request)
+}
+
+// NewDexRewriteURLRoundTripper creates a new DexRewriteURLRoundTripper
+func NewDexRewriteURLRoundTripper(dexServerAddr string, T http.RoundTripper) DexRewriteURLRoundTripper {
+	dexURL, _ := url.Parse(dexServerAddr)
+	return DexRewriteURLRoundTripper{
+		DexURL: dexURL,
+		T:      T,
+	}
+}
+
+// DexRewriteURLRoundTripper is an HTTP RoundTripper to rewrite HTTP requests to the specified
+// dex server address. This is used when reverse proxying Dex to avoid the API server from
+// unnecessarily communicating to the numaflow server through its externally facing load balancer, which is not
+// always permitted in firewalled/air-gapped networks.
+type DexRewriteURLRoundTripper struct {
+	DexURL *url.URL
+	T      http.RoundTripper
+}
+
+func (s DexRewriteURLRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	r.URL.Host = s.DexURL.Host
+	r.URL.Scheme = s.DexURL.Scheme
+	return s.T.RoundTrip(r)
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
 	"github.com/numaproj/numaflow/server/auth"
+	"github.com/numaproj/numaflow/server/common"
 )
 
 type SystemInfo struct {
@@ -37,6 +38,8 @@ type SystemInfo struct {
 type AuthInfo struct {
 	DisableAuth   bool   `json:"disableAuth"`
 	DexServerAddr string `json:"dexServerAddr"`
+	DexProxyAddr  string `json:"dexProxyAddr"`
+	ServerAddr    string `json:"serverAddr"`
 }
 
 var logger = logging.NewLogger().Named("server")
@@ -46,11 +49,9 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 		c.Status(http.StatusOK)
 	})
 
-	r.Any("/dex/*name", v1.DexReverseProxy)
-
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group("/auth/v1")
-	v1RoutesNoAuth(noAuthGroup)
+	v1RoutesNoAuth(noAuthGroup, authInfo)
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
@@ -69,8 +70,8 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	})
 }
 
-func v1RoutesNoAuth(r gin.IRouter) {
-	handler, err := v1.NewHandler()
+func v1RoutesNoAuth(r gin.IRouter, authInfo AuthInfo) {
+	handler, err := v1.NewNoAuthHandler(authInfo.ServerAddr, authInfo.DexProxyAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -140,7 +141,7 @@ func v1Routes(r gin.IRouter) {
 
 func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIdentityTokenStr, err := c.Cookie("user-identity-token")
+		userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 		if err != nil {
 			errMsg := "user is not authenticated."
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
