@@ -24,9 +24,13 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/coreos/go-oidc/v3/oidc"
+
 	"github.com/gin-gonic/gin"
 
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	"github.com/numaproj/numaflow/server/auth"
+	"github.com/numaproj/numaflow/server/common"
 )
 
 type SystemInfo struct {
@@ -38,24 +42,29 @@ type SystemInfo struct {
 type AuthInfo struct {
 	DisableAuth   bool   `json:"disableAuth"`
 	DexServerAddr string `json:"dexServerAddr"`
+	DexProxyAddr  string `json:"dexProxyAddr"`
+	ServerAddr    string `json:"serverAddr"`
 }
+
+var logger = logging.NewLogger().Named("server")
 
 func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
-	r.Any("/dex/*name", v1.DexReverseProxy)
-
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group("/auth/v1")
-	v1RoutesNoAuth(noAuthGroup)
+	v1RoutesNoAuth(noAuthGroup, authInfo)
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group("/api/v1")
-	enforcer, _ := getEnforcer()
 	if !authInfo.DisableAuth {
+		enforcer, err := auth.GetEnforcer()
+		if err != nil {
+			panic(err)
+		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(enforcer))
 	}
@@ -65,8 +74,8 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	})
 }
 
-func v1RoutesNoAuth(r gin.IRouter) {
-	handler, err := v1.NewHandler()
+func v1RoutesNoAuth(r gin.IRouter, authInfo AuthInfo) {
+	handler, err := v1.NewNoAuthHandler(authInfo.ServerAddr, authInfo.DexProxyAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -78,6 +87,8 @@ func v1RoutesNoAuth(r gin.IRouter) {
 	r.GET("/callback", handler.Callback)
 }
 
+// v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
+// for the route along with an entry in the RouteMap in auth/route_map.go.
 func v1Routes(r gin.IRouter) {
 	handler, err := v1.NewHandler()
 	if err != nil {
@@ -129,6 +140,7 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
+
 }
 
 func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
@@ -138,37 +150,54 @@ func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
+			c.Abort()
 			return
 		}
 		// authorize the user and the request.
+		// Get the user from the user identity token.
 		groups := userIdentityToken.IDTokenClaims.Groups
-		ns := c.Param("namespace")
-		if ns == "" {
-			c.Next()
-			return
-		}
-		resource := "pipeline"
+		resource := auth.ExtractResource(c)
+		object := auth.ExtractObject(c)
 		action := c.Request.Method
-		auth := false
-		for _, group := range groups {
-			// Get the user from the group. The group is in the format "group:role".
-			// Check if the user has permission using Casbin Enforcer.
-			if enforceRBAC(enforcer, group, ns, resource, action) {
-				auth = true
-				c.Next()
+		isAuthorized := false
+
+		// Get the route map from the context. Key is in the format "method:path".
+		routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
+		// Check if the route requires auth.
+		if auth.RouteMap[routeMapKey] != nil && auth.RouteMap[routeMapKey].RequiresAuth {
+			// Check if the user has permission for any of the groups.
+			for _, group := range groups {
+				// Get the user from the group. The group is in the format "group:role".
+				// Check if the user has permission using Casbin Enforcer.
+				if enforceRBAC(enforcer, group, resource, object, action) {
+					isAuthorized = true
+					c.Next()
+					break
+				}
 			}
-		}
-		if !auth {
-			errMsg := "user is not authorized to execute the requested action."
+			// If the user is not authorized, return an error.
+			if !isAuthorized {
+				errMsg := "user is not authorized to execute the requested action."
+				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
+				c.Abort()
+			}
+		} else if auth.RouteMap[routeMapKey] != nil && !auth.RouteMap[routeMapKey].RequiresAuth {
+			// If the route does not require auth, skip the authz check.
+			c.Next()
+		} else {
+			// If the route is not present in the route map, return an error.
+			logger.Errorw("route not present in routeMap", "route", routeMapKey)
+			errMsg := "invalid route"
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
+			return
 		}
 	}
 }
 
 func authenticate(c *gin.Context) (v1.CallbackResponse, error) {
 	// Validate the cookie exists
-	userIdentityTokenStr, err := c.Cookie("user-identity-token")
+	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
 		return v1.CallbackResponse{}, err
 	}

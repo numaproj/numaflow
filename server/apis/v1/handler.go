@@ -45,6 +45,7 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/server/common"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -58,7 +59,6 @@ type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
-	dexpoc         *DexObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -84,27 +84,9 @@ func NewHandler() (*handler, error) {
 	}, nil
 }
 
-// Login is used to generate the authentication URL and return the URL as part of the return payload.
-func (h *handler) Login(c *gin.Context) {
-	// TODO: move to init
-	h.dexpoc = NewDexObject(context.Background())
-	h.dexpoc.handleLogin(c)
-}
-
-// Callback is used to extract user authentication information from the Dex Server returned payload.
-func (h *handler) Callback(c *gin.Context) {
-	h.dexpoc.handleCallback(c)
-}
-
-// Logout is used to remove auth cookie ending a user's session.
-func (h *handler) Logout(c *gin.Context) {
-	c.SetCookie("user-identity-token", "", -1, "/", "", true, true)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
-}
-
 // AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
-	userIdentityTokenStr, err := c.Cookie("user-identity-token")
+	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
 		errMsg := "user is not authenticated."
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
@@ -177,8 +159,11 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		if value, ok := namespaceSummaryMap[isbsvc.Namespace]; ok {
 			summary = value
 		}
-		// TODO(API) : Get the current status of the ISB service
-		status := ISBServiceStatusHealthy
+		status, err := getIsbServiceStatus(&isbsvc)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
+			return
+		}
 		if status == ISBServiceStatusInactive {
 			summary.isbsvcSummary.Inactive++
 		} else {
@@ -467,8 +452,10 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	isbsvc.Kind = dfv1.ISBGroupVersionKind.Kind
 	isbsvc.APIVersion = dfv1.SchemeGroupVersion.Version
 
-	status := ISBServiceStatusHealthy
-	// TODO(API) : Get the current status of the ISB service
+	status, err := getIsbServiceStatus(isbsvc)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch interstepbuffer service %q namespace %q, %s", isbsvcName, ns, err.Error()))
+	}
 
 	resp := NewISBService(status, isbsvc)
 
@@ -848,8 +835,10 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 	}
 	var isbList ISBServices
 	for _, isb := range isbSvcs.Items {
-		status := ISBServiceStatusHealthy
-		// TODO(API) : Get the current status of the ISB service
+		status, err := getIsbServiceStatus(&isb)
+		if err != nil {
+			return nil, err
+		}
 		resp := NewISBService(status, &isb)
 		isbList = append(isbList, resp)
 	}
@@ -868,6 +857,20 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 		retStatus = PipelineStatusHealthy
 	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
 		retStatus = PipelineStatusCritical
+	}
+	return retStatus, nil
+}
+
+// GetIsbServiceStatus is used to provide the status of a given InterStepBufferService
+// TODO: Figure out the correct way to determine if a ISBService is healthy
+func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
+	retStatus := ISBServiceStatusHealthy
+	if isbsvc.Status.Phase == dfv1.ISBSvcPhaseUnknown {
+		retStatus = ISBServiceStatusInactive
+	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhasePending || isbsvc.Status.Phase == dfv1.ISBSvcPhaseRunning {
+		retStatus = ISBServiceStatusHealthy
+	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhaseFailed {
+		retStatus = ISBServiceStatusCritical
 	}
 	return retStatus, nil
 }

@@ -16267,14 +16267,13 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: "issuer: hostname/dex\nstorage:\n  type: memory\nweb:\n  https: 0.0.0.0:5556\n
-    \ tlsCert: /etc/numaflow/dex/certs/tls.crt\n  tlsKey: /etc/numaflow/dex/certs/tls.key\nstaticClients:\n
-    \ - id: numaflow-server-app\n    redirectURIs: \n      - 'hostname/login'\n    name:
-    'Numaflow Server App'\n    pubilc: true\nconnectors:\n- type: github\n  id: github\n
-    \ name: GitHub\n  config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret:
-    $GITHUB_CLIENT_SECRET\n    redirectURI: hostname/dex/callback\n    orgs:\n    -
-    name: namespace-name\n      teams:\n      - admin\n      - readonly\noauth2:\n
-    \ skipApprovalScreen: true\n"
+  config.yaml: "issuer: <HOSTNAME>/dex\nstorage:\n  type: memory\nweb:\n  http: 0.0.0.0:5556\nstaticClients:\n
+    \ - id: numaflow-server-app\n    redirectURIs: \n      - <HOSTNAME>/login\n    name:
+    'Numaflow Server App'\n    public: true\nconnectors:\n- type: github\n  # https://dexidp.io/docs/connectors/github/\n
+    \ id: github\n  name: GitHub\n  config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret:
+    $GITHUB_CLIENT_SECRET\n    redirectURI: <HOSTNAME>/dex/callback\n    orgs:\n    -
+    name: <ORG_NAME>\n      teams:\n      - admin\n      - readonly\noauth2:\n  skipApprovalScreen:
+    true\n"
 kind: ConfigMap
 metadata:
   name: numaflow-dex-server
@@ -16283,11 +16282,11 @@ apiVersion: v1
 data:
   rbac-policy.csv: |
     # Policies go here
-    p, role:admin, *, *, POST
-    p, role:admin, *, *, PUT
-    p, role:admin, *, *, PATCH
-    p, role:admin, *, *, DELETE
-    p, role:admin, *, *, GET
+    p, role:admin, *, *, *
+    p, role:readonly, *, *, GET
+    # Groups go here
+    # g, admin, role:admin
+    # g, my-github-org:my-github-team, role:readonly
   rbac.properties: |
     policy.default: role:readonly
 kind: ConfigMap
@@ -16299,8 +16298,8 @@ kind: Secret
 metadata:
   name: numaflow-dex-secrets
 stringData:
-  dex-github-client-id: c1812606eaf8c6e53a79
-  dex-github-client-secret: c5244582cb71f9e341968fc9bcd72edec3c5aebc
+  dex-github-client-id: <GITHUB_CLIENT_ID>
+  dex-github-client-secret: <GITHUB_CLIENT_SECRET>
 ---
 apiVersion: v1
 kind: Service
@@ -16430,7 +16429,7 @@ spec:
             secretKeyRef:
               key: dex-github-client-secret
               name: numaflow-dex-secrets
-        image: docker.intuit.com/docker-rmt/dexidp/dex:v2.25.0
+        image: dexidp/dex:v2.37.0
         imagePullPolicy: Always
         name: dex
         ports:
@@ -16438,20 +16437,8 @@ spec:
         volumeMounts:
         - mountPath: /etc/numaflow/dex/cfg
           name: config
-        - mountPath: /etc/numaflow/dex/certs
-          name: certs
-          readOnly: true
-        - mountPath: /etc/numaflow/dex/secrets
-          name: secrets
-          readOnly: true
       serviceAccountName: numaflow-dex-server
       volumes:
-      - name: certs
-        secret:
-          secretName: numaflow-dex-certs
-      - name: secrets
-        secret:
-          secretName: numaflow-dex-secrets
       - configMap:
           items:
           - key: config.yaml
@@ -16478,6 +16465,7 @@ spec:
       containers:
       - args:
         - server
+        - --disable-auth=true
         - --namespaced
         env:
         - name: NAMESPACE
