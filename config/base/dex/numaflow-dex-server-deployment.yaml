@@ -22,7 +22,7 @@ spec:
       serviceAccountName: numaflow-dex-server
       containers:
         - name: dex
-          image: dexidp/dex:v2.37.0
+          image: docker.intuit.com/docker-rmt/dexidp/dex:v2.25.0
           imagePullPolicy: Always
           command: ["/usr/local/bin/dex","serve","/etc/numaflow/dex/cfg/config.yaml"]
           ports:
@@ -30,18 +30,30 @@ spec:
           volumeMounts:
             - mountPath: "/etc/numaflow/dex/cfg"
               name: config
+            - mountPath: "/etc/numaflow/dex/certs"
+              name: certs
+              readOnly: true
+            - mountPath: "/etc/numaflow/dex/secrets"
+              name: secrets
+              readOnly: true
           env:
-            - name: GITHUB_CLIENT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: numaflow-dex-secrets
-                  key: dex-github-client-id
-            - name: GITHUB_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: numaflow-dex-secrets
-                  key: dex-github-client-secret
+          - name: GITHUB_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: numaflow-dex-secrets
+                key: dex-github-client-id
+          - name: GITHUB_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: numaflow-dex-secrets
+                key: dex-github-client-secret
       volumes:
+        - name: certs
+          secret:
+            secretName: numaflow-dex-certs
+        - name: secrets
+          secret:
+            secretName: numaflow-dex-secrets
         - name: config
           configMap:
             name: numaflow-dex-server
