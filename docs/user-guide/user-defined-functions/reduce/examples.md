@@ -46,6 +46,7 @@ An example will be as follows,
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "5" ${http-source-url}
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "10" ${http-source-url}
 ```
+---
 
 ## sum pipeline using fixed window
 
