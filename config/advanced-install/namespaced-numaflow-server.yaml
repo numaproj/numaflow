@@ -121,7 +121,7 @@ spec:
       containers:
       - args:
         - server
-        - --disable-auth=false
+        - --disable-auth=true
         - --namespaced
         env:
         - name: NAMESPACE
