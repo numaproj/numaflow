@@ -10,6 +10,7 @@ export const usePodsViewFetch = (
   namespaceId: string | undefined,
   pipelineId: string | undefined,
   vertexId: string | undefined,
+  selectedPod: Pod | undefined,
   setSelectedPod: Dispatch<SetStateAction<Pod | undefined>>,
   setSelectedContainer: Dispatch<SetStateAction<string | undefined>>
 ) => {
@@ -107,8 +108,10 @@ export const usePodsViewFetch = (
 
   useEffect(() => {
     if (pods?.length) {
-      setSelectedPod(pods[0]);
-      setSelectedContainer(pods[0]?.containers[0]);
+      if (!(selectedPod && pods?.find((pod) => pod?.name === selectedPod?.name))) {
+        setSelectedPod(pods[0]);
+        setSelectedContainer(pods[0]?.containers[0]);
+      }
     } else {
       setSelectedPod(undefined);
       setSelectedContainer(undefined);

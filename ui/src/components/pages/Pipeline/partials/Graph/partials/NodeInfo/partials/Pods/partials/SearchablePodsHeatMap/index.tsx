@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import Box from "@mui/material/Box";
 import { PodsHeatMap } from "./partials/PodsHeatMap";
 import { SearchablePodsHeatMapProps } from "../../../../../../../../../../../types/declarations/pods";
@@ -10,13 +9,7 @@ export const SearchablePodsHeatMap = ({
   podsDetailsMap,
   onPodClick,
   selectedPod,
-  setSelectedPod,
 }: SearchablePodsHeatMapProps) => {
-
-  useEffect(() => {
-    if (pods?.length) setSelectedPod(pods[0]);
-    return;
-  }, [pods]);
 
   //
   return (
