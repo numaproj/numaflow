@@ -211,7 +211,7 @@ func authenticate(c *gin.Context, dexObj *v1.DexObject) (*authn.UserIdInfo, erro
 	if err != nil {
 		return nil, err
 	}
-	return userIdentityToken, nil
+	return &userIdentityToken, nil
 }
 
 // enforceRBAC checks if the user has permission based on the Casbin model and policy.
