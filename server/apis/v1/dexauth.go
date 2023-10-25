@@ -48,8 +48,6 @@ type DexObject struct {
 }
 
 // NewDexObject returns a new DexObject.
-
-// NewDexObject returns a new DexObject.
 func NewDexObject(baseURL string, proxyURL string) (*DexObject, error) {
 	issuerURL, err := url.JoinPath(baseURL, "/dex")
 	if err != nil {

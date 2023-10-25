@@ -32,6 +32,7 @@ export function DeleteModal({
   const handleDelete = useCallback(async () => {
     try {
       setLoading(true);
+      setError(undefined);
       let url: string;
       switch (type) {
         case "pipeline":
