@@ -14,8 +14,8 @@ import {
   GeneratorDetailsProps,
 } from "./partials/GeneratorDetails";
 import { Errors } from "./partials/Errors";
-import { PiplineCreate } from "./partials/PipelineCreate";
-import { PiplineUpdate } from "./partials/PipelineUpdate";
+import { PipelineCreate } from "./partials/PipelineCreate";
+import { PipelineUpdate } from "./partials/PipelineUpdate";
 import { ISBCreate } from "./partials/ISBCreate";
 import { ISBUpdate } from "./partials/ISBUpdate";
 import { ViewType } from "../SpecEditor";
@@ -183,7 +183,7 @@ export function SlidingSidebar({
           break;
         }
         return (
-          <PiplineCreate
+          <PipelineCreate
             {...specEditorProps}
             setModalOnClose={setModalOnClose}
           />
@@ -197,7 +197,7 @@ export function SlidingSidebar({
           break;
         }
         return (
-          <PiplineUpdate
+          <PipelineUpdate
             {...specEditorProps}
             setModalOnClose={setModalOnClose}
           />
@@ -281,6 +281,7 @@ export function SlidingSidebar({
             alt="slider"
             className={"sidebar-drag-icon"}
             draggable={false}
+            data-testid="sidebar-drag-icon"
           />
         </Box>
       )}

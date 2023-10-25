@@ -39,7 +39,7 @@ spec:
     - from: cat
       to: out`;
 
-export function PiplineCreate({
+export function PipelineCreate({
   namespaceId,
   viewType,
   onUpdateComplete,

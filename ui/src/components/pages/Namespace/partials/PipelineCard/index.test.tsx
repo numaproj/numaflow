@@ -652,8 +652,8 @@ describe("PipelineCard", () => {
     const button = within(wrapperNode).getByRole("button");
 
     fireEvent.mouseDown(button);
-    expect(screen.getByText("ISB")).toBeInTheDocument();
-    screen.getAllByText("ISB")[0].click();
+    expect(screen.getByText("ISB Service")).toBeInTheDocument();
+    screen.getAllByText("ISB Service")[0].click();
 
     expect(screen.getByText("simple-pipeline")).toBeInTheDocument();
   });
