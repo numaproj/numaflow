@@ -117,6 +117,11 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 	}
 	stateCookie, err := c.Cookie(common.StateCookieName)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get state: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 	val, err := hex.DecodeString(stateCookie)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get state: %v", err)

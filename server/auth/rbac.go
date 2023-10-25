@@ -40,6 +40,9 @@ const (
 func GetEnforcer() (*casbin.Enforcer, error) {
 
 	modelRBAC, err := model.NewModelFromString(rbacModel)
+	if err != nil {
+		return nil, err
+	}
 	a := fileadapter.NewAdapter(policyMapPath)
 
 	// Initialize the Casbin Enforcer with the model and policies.
