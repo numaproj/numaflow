@@ -62,8 +62,12 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 		if err != nil {
 			panic(err)
 		}
+		dexObj := v1.NewDexObject(authInfo.ServerAddr, authInfo.DexProxyAddr)
+		if dexObj == nil {
+			panic(fmt.Errorf("failed to create DexObject"))
+		}
 		// Add the AuthN/AuthZ middleware to the group.
-		r1Group.Use(authMiddleware(enforcer, authInfo))
+		r1Group.Use(authMiddleware(enforcer, dexObj))
 	}
 	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
@@ -140,10 +144,10 @@ func v1Routes(r gin.IRouter) {
 
 }
 
-func authMiddleware(enforcer *casbin.Enforcer, authInfo AuthInfo) gin.HandlerFunc {
+func authMiddleware(enforcer *casbin.Enforcer, dexObj *v1.DexObject) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Authenticate the user.
-		userIdentityToken, err := authenticate(c, authInfo)
+		userIdentityToken, err := authenticate(c, dexObj)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
@@ -192,7 +196,7 @@ func authMiddleware(enforcer *casbin.Enforcer, authInfo AuthInfo) gin.HandlerFun
 	}
 }
 
-func authenticate(c *gin.Context, authInfo AuthInfo) (*v1.UserIdInfo, error) {
+func authenticate(c *gin.Context, dexObj *v1.DexObject) (*v1.UserIdInfo, error) {
 	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user identity token from cookie: %v", err)
@@ -200,13 +204,6 @@ func authenticate(c *gin.Context, authInfo AuthInfo) (*v1.UserIdInfo, error) {
 	userIdentityToken, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse user identity token: %v", err)
-	}
-
-	// TODO - For every authentication call, we create a new DexObject?
-	// could be better
-	dexObj := v1.NewDexObject(authInfo.ServerAddr, authInfo.DexProxyAddr)
-	if dexObj == nil {
-		return nil, fmt.Errorf("failed to create DexObject")
 	}
 	_, err = dexObj.Verify(c, userIdentityToken.IDToken)
 	if err != nil {
