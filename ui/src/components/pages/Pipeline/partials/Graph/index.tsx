@@ -616,10 +616,11 @@ export default function Graph(props: GraphProps) {
           >
             <Button
               variant="contained"
+              data-testid="resume"
               sx={{
                 marginTop: "1rem",
                 marginLeft: "1rem",
-                width: "80px",
+                width: "5rem",
                 fontWeight: "bold",
               }}
               onClick={handlePlayClick}
@@ -629,10 +630,11 @@ export default function Graph(props: GraphProps) {
             </Button>
             <Button
               variant="contained"
+              data-testid="pause"
               sx={{
                 marginTop: "1rem",
                 marginLeft: "1rem",
-                width: "80px",
+                width: "5rem",
                 fontWeight: "bold",
               }}
               onClick={handlePauseClick}
@@ -643,7 +645,7 @@ export default function Graph(props: GraphProps) {
             >
               Pause
             </Button>
-            <Button sx={{ height: "35px", marginTop: "1rem" }}>
+            <Button sx={{ height: "2.1875rem", marginTop: "1rem" }}>
               {" "}
               {error && statusPayload ? (
                 <Alert
@@ -660,8 +662,8 @@ export default function Graph(props: GraphProps) {
                     data?.pipeline?.status?.phase !== RUNNING)) ? (
                 <div
                   style={{
-                    borderRadius: "13px",
-                    width: "228px",
+                    borderRadius: "0.8125rem",
+                    width: "14.25rem",
                     background: "#F0F0F0",
                     display: "flex",
                     flexDirection: "row",
@@ -673,7 +675,7 @@ export default function Graph(props: GraphProps) {
                   }}
                 >
                   <CircularProgress
-                    sx={{ width: "20px !important", height: "20px !important" }}
+                    sx={{ width: "1.25rem !important", height: "1.25rem !important" }}
                   />{" "}
                   <Box
                     sx={{

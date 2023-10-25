@@ -113,8 +113,10 @@ export function Login() {
           style={{
             alignItems: "center",
             marginTop: "5rem",
+            marginBottom: "5rem",
             display: "flex",
             flexDirection: "column",
+            height: "100%",
           }}
         >
           <div className="flex column formContainer">
@@ -152,6 +154,7 @@ export function Login() {
           flexDirection: "column",
           alignItems: "center",
           marginTop: "5rem",
+          marginBottom: "5rem",
         }}
         className="formContainer"
       >
@@ -182,8 +185,7 @@ export function Login() {
               <Box
                 style={{
                   width: "100%",
-                  height: "50%",
-                  marginTop: "5rem",
+                  margin: "2rem 0",
                   display: "flex",
                   flexDirection: "column",
                 }}
@@ -193,44 +195,69 @@ export function Login() {
                     display: "flex",
                     flexDirection: "column",
                     color: "#fff",
-                    width: "100%",
-                    flexShrink: "0",
-                    marginBottom: "2rem",
-                    boxShadow: "0px 24px 48px 0px rgba(39, 76, 119, 0.16)",
+                    borderRadius: "0 3.125rem 3.125rem 0",
+                    borderTop: "1px solid #0077C5",
                   }}
                 >
-                  <label>Username</label>
-                  <input
-                    type="text"
-                    placeholder="Username"
-                    className="loginFormInput"
-                  />
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      paddingBottom: "0.625rem",
+                      paddingTop: "0.5rem",
+                      paddingRight: "2rem",
+                      marginLeft: "2rem",
+                      borderRadius: "0 3.125rem 3.125rem 0",
+                      borderRight: "1px solid #0077C5",
+                      borderBottom: "1px solid #0077C5",
+                    }}
+                  >
+                    <label className="loginFormLabel">Username:</label>
+                    <input
+                      type="text"
+                      placeholder="Username"
+                      className="loginFormInput"
+                    />
+                  </Box>
                 </Box>
                 <Box
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     color: "#fff",
-                    width: "100%",
-                    flexShrink: "0",
-                    marginBottom: "2rem",
-                    boxShadow: "0px 24px 48px 0px rgba(39, 76, 119, 0.16)",
+                    borderRadius: "3.125rem0 0 3.125rem",
+                    borderBottom: "1px solid #0077C5",
+                    marginTop: "-0.0625rem",
                   }}
                 >
-                  <label>Password</label>
-                  <input
-                    type="password"
-                    placeholder="........."
-                    className="loginFormInput"
-                  />
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      paddingTop: "0.625rem",
+                      paddingBottom: "0.5rem",
+                      paddingLeft: "2rem",
+                      borderRadius: "3.125rem 0 0 3.125rem",
+                      borderLeft: "1px solid #0077C5",
+                      borderTop: "1px solid #0077C5",
+                      width: "16.9375rem",
+                    }}
+                  >
+                    <label className="loginFormLabel">Password:</label>
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      className="loginFormInput"
+                    />
+                  </Box>
                 </Box>
                 <Box
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     color: "#fff",
-                    width: "100%",
                     alignItems: "center",
+                    marginTop: "2rem",
                   }}
                   className="flex column"
                 >

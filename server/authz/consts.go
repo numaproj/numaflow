@@ -14,19 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package authz
 
-type NumaflowAPIResponse struct {
-	// ErrMsg provides more detailed error information. If API call succeeds, the ErrMsg is nil.
-	ErrMsg *string `json:"errMsg,omitempty"`
-	// Data is the response body.
-	Data interface{} `json:"data"`
-}
+const (
+	// PolicyMapPath is the path to the policy map.
+	policyMapPath = "/etc/numaflow/rbac-policy.csv"
 
-// NewNumaflowAPIResponse creates a new NumaflowAPIResponse.
-func NewNumaflowAPIResponse(errMsg *string, data interface{}) NumaflowAPIResponse {
-	return NumaflowAPIResponse{
-		ErrMsg: errMsg,
-		Data:   data,
-	}
-}
+	// Objects for the RBAC policy
+	ObjectAll      = "*"
+	ObjectPipeline = "pipeline"
+	ObjectISBSvc   = "isbsvc"
+	ObjectEvents   = "events"
+
+	// Resouces for the RBAC policy
+	ResourceAll       = "*"
+	ResourceNamespace = "namespace"
+
+	// MatchAll is a wildcard to match all patterns
+	MatchAll = "*"
+)

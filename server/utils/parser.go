@@ -14,19 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package utils
 
-type NumaflowAPIResponse struct {
-	// ErrMsg provides more detailed error information. If API call succeeds, the ErrMsg is nil.
-	ErrMsg *string `json:"errMsg,omitempty"`
-	// Data is the response body.
-	Data interface{} `json:"data"`
-}
+import (
+	"encoding/json"
+	"fmt"
 
-// NewNumaflowAPIResponse creates a new NumaflowAPIResponse.
-func NewNumaflowAPIResponse(errMsg *string, data interface{}) NumaflowAPIResponse {
-	return NumaflowAPIResponse{
-		ErrMsg: errMsg,
-		Data:   data,
+	"github.com/numaproj/numaflow/server/authn"
+)
+
+// ParseUserIdentityToken is used to extract user identity token from the Dex Server returned payload.
+func ParseUserIdentityToken(jsonStr string) (authn.UserIdInfo, error) {
+	var u authn.UserIdInfo
+	err := json.Unmarshal([]byte(jsonStr), &u)
+	if err != nil {
+		return authn.UserIdInfo{}, fmt.Errorf("failed to unmarshal user identity token: %v", err)
 	}
+	return u, nil
 }

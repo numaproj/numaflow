@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1
 
 import (
@@ -16,6 +32,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
 
+	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
 )
 
@@ -81,6 +98,22 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 	}, nil
 }
 
+// Verify is used to validate the user ID token.
+func (d *DexObject) Verify(ctx context.Context, rawIDToken string) (*oidc.IDToken, error) {
+	verifier, err := d.verifier()
+	if err != nil {
+		return nil, err
+	}
+	// the oidc library will verify the token for us:
+	// validate the id token
+	// check malformed jwt token
+	// check issuer
+	// check audience
+	// check expiry
+	// check signature
+	return verifier.Verify(ctx, rawIDToken)
+}
+
 func (d *DexObject) handleLogin(c *gin.Context) {
 	var scopes []string
 	authCodeURL := ""
@@ -122,13 +155,13 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 	}
 	stateCookie, err := c.Cookie(common.StateCookieName)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get state: %v", err)
+		errMsg := fmt.Sprintf("Failed to get state cookie: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	val, err := hex.DecodeString(stateCookie)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get state: %v", err)
+		errMsg := fmt.Sprintf("Failed to decode state: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
@@ -166,19 +199,14 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	verifier, err := d.verifier()
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get verifier %v", err)
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	}
-	idToken, err := verifier.Verify(r.Context(), rawIDToken)
+	idToken, err := d.Verify(r.Context(), rawIDToken)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to verify ID token: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
-	var claims IDTokenClaims
+	var claims authn.IDTokenClaims
 	if err := idToken.Claims(&claims); err != nil {
 		errMsg := fmt.Sprintf("error decoding ID token claims: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -192,7 +220,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	res := NewCallbackResponse(claims, rawIDToken, refreshToken)
+	res := authn.NewUserIdInfo(claims, rawIDToken, refreshToken)
 	tokenStr, err := json.Marshal(res)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to convert to token string: %v", err)

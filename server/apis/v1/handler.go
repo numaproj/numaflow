@@ -19,7 +19,6 @@ package v1
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -45,7 +44,9 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
+	"github.com/numaproj/numaflow/server/utils"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -88,22 +89,18 @@ func NewHandler() (*handler, error) {
 func (h *handler) AuthInfo(c *gin.Context) {
 	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
-		errMsg := "user is not authenticated."
+		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	userIdentityToken := GetUserIdentityToken(userIdentityTokenStr)
-	res := NewCallbackResponse(userIdentityToken.IDTokenClaims, userIdentityToken.IDToken, userIdentityToken.RefreshToken)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
-}
-
-func GetUserIdentityToken(jsonStr string) CallbackResponse {
-	var callbackResponse CallbackResponse
-	err := json.Unmarshal([]byte(jsonStr), &callbackResponse)
+	userIdentityToken, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
 	if err != nil {
-		return CallbackResponse{}
+		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
 	}
-	return callbackResponse
+	res := authn.NewUserIdInfo(userIdentityToken.IDTokenClaims, userIdentityToken.IDToken, userIdentityToken.RefreshToken)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
@@ -462,7 +459,7 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, resp))
 }
 
-// UpdateInterStepBufferService is used to update the spec of the interstep buffer service
+// UpdateInterStepBufferService is used to delete the inter-step buffer service
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 	// dryRun is used to check if the operation is just a validation or an actual update

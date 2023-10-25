@@ -32,6 +32,7 @@ export function DeleteModal({
   const handleDelete = useCallback(async () => {
     try {
       setLoading(true);
+      setError(undefined);
       let url: string;
       switch (type) {
         case "pipeline":
@@ -102,7 +103,7 @@ export function DeleteModal({
               variant="contained"
               color="secondary"
             >
-              Delete
+              Try again
             </Button>
             <Button onClick={onCancel} variant="outlined" color="primary">
               Cancel

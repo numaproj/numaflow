@@ -273,14 +273,14 @@ export function PipelineCard({
               flexGrow: 1,
               justifyContent: "flex-end",
               alignItems: "center",
-              height: "64px",
+              height: "4rem",
             }}
           >
             {error && statusPayload ? (
               <div
                 style={{
-                  borderRadius: "13px",
-                  width: "228px",
+                  borderRadius: "0.8125rem",
+                  width: "14.25rem",
                   background: "#F0F0F0",
                   display: "flex",
                   flexDirection: "row",
@@ -296,8 +296,8 @@ export function PipelineCard({
                   statusData?.pipeline?.status?.phase !== RUNNING)) ? (
               <div
                 style={{
-                  borderRadius: "13px",
-                  width: "228px",
+                  borderRadius: "0.8125rem",
+                  width: "14.25rem",
                   background: "#F0F0F0",
                   display: "flex",
                   flexDirection: "row",
@@ -308,7 +308,7 @@ export function PipelineCard({
                 }}
               >
                 <CircularProgress
-                  sx={{ width: "20px !important", height: "20px !important" }}
+                  sx={{ width: "1.25rem !important", height: "1.25rem !important" }}
                 />{" "}
                 <Box
                   sx={{
@@ -395,7 +395,7 @@ export function PipelineCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "10px",
+              marginTop: "0.625rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -447,7 +447,7 @@ export function PipelineCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "10px",
+              marginTop: "0.625rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -486,7 +486,7 @@ export function PipelineCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "10px",
+              marginTop: "0.625rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -537,7 +537,7 @@ export function PipelineCard({
             spacing={0.5}
             sx={{
               background: "#F9F9F9",
-              marginTop: "10px",
+              marginTop: "0.625rem",
               alignItems: "center",
               justifyContent: "end",
               marginRight: "0.75rem",
@@ -553,9 +553,9 @@ export function PipelineCard({
                 disabled={pipelineStatus === DELETING}
                 sx={{
                   color: "#0077C5",
-                  height: "34px",
+                  height: "2.125rem",
                   background: "#fff",
-                  marginRight: "20px",
+                  marginRight: "1.25rem",
                 }}
               >
                 <MenuItem sx={{ display: "none" }} hidden value="edit">
@@ -573,7 +573,7 @@ export function PipelineCard({
                 disabled={pipelineStatus === DELETING}
                 sx={{
                   color: "#0077C5",
-                  height: "34px",
+                  height: "2.125rem",
                   marginRight: "4rem",
                   background: "#fff",
                 }}
