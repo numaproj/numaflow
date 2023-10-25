@@ -4,14 +4,45 @@ Please read [reduce](./reduce.md) to get the best out of these examples.
 
 ## Prerequisites
 
-Install the ISB
+#### What is ISB?
+
+`Inter-Step Buffer (ISB)` Service is the service to provide `Inter-Step Buffers`.
+A Pipeline contains multiple vertices that ingest data from sources, process data, and forward processed data to sinks. Vertices are not connected directly but through Inter-Step Buffers. Please refer to the doc [Intern-Step Buffer Service](https://numaflow.numaproj.io/core-concepts/inter-step-buffer-service/) for more information on ISB.
+
+
+#### How to install the ISB
 
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 ```
 
-Source used in the examples is an HTTP source producing messages with value 5 and 10 with event time
-starting from 60000. Please refer the doc [http source](../../sources/http.md) on how to use an HTTP
+The expected output of the above command is shown below:
+
+```shell
+NAME                                         READY   STATUS      RESTARTS   AGE
+isbsvc-default-js-0                          3/3     Running     0          19s
+isbsvc-default-js-1                          3/3     Running     0          19s
+isbsvc-default-js-2                          3/3     Running     0          19s
+```
+
+To inspect the status of the pipeline, use `kubectl get pods`.
+
+```shell
+# Wait for pods to be ready
+kubectl get pods
+
+NAME                                         READY   STATUS      RESTARTS   AGE
+isbsvc-default-js-0                          3/3     Running     0          19s
+isbsvc-default-js-1                          3/3     Running     0          19s
+isbsvc-default-js-2                          3/3     Running     0          19s
+simple-pipeline-daemon-78b798fb98-qf4t4      1/1     Running     0          10s
+simple-pipeline-out-0-xc0pf                  1/1     Running     0          10s
+simple-pipeline-cat-0-kqrhy                  2/2     Running     0          10s
+simple-pipeline-in-0-rhpjm                   1/1     Running     0          11s
+```
+
+**_NOTE:_**  The Source used in the examples is an HTTP source producing messages with values 5 and 10 with event time
+starting from 60000. Please refer to the doc [http source](../../sources/http.md) on how to use an HTTP
 source.
 An example will be as follows,
 
