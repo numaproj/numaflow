@@ -4,10 +4,11 @@ Please read [reduce](./reduce.md) to get the best out of these examples.
 
 ## Prerequisites
 
-#### What is ISB?
+### Inter-Step Buffer (ISB)
 
-`Inter-Step Buffer (ISB)` Service is the service to provide `Inter-Step Buffers`.
-A Pipeline contains multiple vertices that ingest data from sources, process data, and forward processed data to sinks. Vertices are not connected directly but through Inter-Step Buffers. Please refer to the doc [Intern-Step Buffer Service](https://numaflow.numaproj.io/core-concepts/inter-step-buffer-service/) for more information on ISB.
+#### What is ISB?
+An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), which is used to pass data between vertices of a numaflow pipeline.
+Please refer to the doc [Intern-Step Buffer Service](../../../core-concepts/inter-step-buffer.md) for more information on ISB.
 
 
 #### How to install the ISB
