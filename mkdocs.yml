@@ -107,6 +107,7 @@ nav:
   - Operator Manual:
       - Releases ⧉: "operations/releases.md"
       - operations/installation.md
+      - Security: operations/security.md
       - Validating Webhook: operations/validating-webhook.md
       - Configuration:
           - Controller Configuration: "operations/controller-configmap.md"
