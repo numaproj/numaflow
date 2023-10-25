@@ -23,10 +23,21 @@ export function CloseModal({
   const icon = useMemo(() => {
     switch (iconType) {
       case "info":
-        return <SuccessIcon fontSize="large" color="success" />;
+        return (
+          <SuccessIcon
+            data-testid="info-icon"
+            fontSize="large"
+            color="success"
+          />
+        );
       case "warn":
         return (
-          <img src={WarnIcon} alt="Warn" className="close-modal-warn-icon" />
+          <img
+            data-testid="warn-icon"
+            src={WarnIcon}
+            alt="Warn"
+            className="close-modal-warn-icon"
+          />
         );
       default:
         return null;
@@ -69,10 +80,10 @@ export function CloseModal({
             justifyContent: "space-evenly",
           }}
         >
-          <Button onClick={onConfirm} variant="contained" color="primary">
+          <Button data-testid="close-modal-confirm" onClick={onConfirm} variant="contained" color="primary">
             Confirm
           </Button>
-          <Button onClick={onCancel} variant="outlined" color="primary">
+          <Button data-testid="close-modal-cancel" onClick={onCancel} variant="outlined" color="primary">
             Cancel
           </Button>
         </Box>
