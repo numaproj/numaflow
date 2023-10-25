@@ -77,6 +77,22 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 	}, nil
 }
 
+// Verify is used to validate the user ID token.
+func (d *DexObject) Verify(ctx context.Context, rawIDToken string) (*oidc.IDToken, error) {
+	verifier, err := d.verifier()
+	if err != nil {
+		return nil, err
+	}
+	// the oidc library will verify the token for us:
+	// validate the id token
+	// check malformed jwt token
+	// check issuer
+	// check audience
+	// check expiry
+	// check signature
+	return verifier.Verify(ctx, rawIDToken)
+}
+
 func (d *DexObject) handleLogin(c *gin.Context) {
 	var scopes []string
 	authCodeURL := ""
@@ -157,12 +173,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	verifier, err := d.verifier()
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get verifier %v", err)
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-	}
-	idToken, err := verifier.Verify(r.Context(), rawIDToken)
+	idToken, err := d.Verify(r.Context(), rawIDToken)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to verify ID token: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -183,7 +194,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	res := NewCallbackResponse(claims, rawIDToken, refreshToken)
+	res := NewUserIdInfo(claims, rawIDToken, refreshToken)
 	tokenStr, err := json.Marshal(res)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to convert to token string: %v", err)

@@ -17,20 +17,17 @@ limitations under the License.
 package routes
 
 import (
-	"crypto/tls"
 	"fmt"
 	"net/http"
 
 	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/model"
-	"github.com/coreos/go-oidc/v3/oidc"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
-	"github.com/numaproj/numaflow/server/auth"
+	"github.com/numaproj/numaflow/server/authz"
 	"github.com/numaproj/numaflow/server/common"
+	"github.com/numaproj/numaflow/server/utils"
 )
 
 type SystemInfo struct {
@@ -61,12 +58,12 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
 	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group("/api/v1")
 	if !authInfo.DisableAuth {
-		enforcer, err := auth.GetEnforcer()
+		enforcer, err := authz.GetEnforcer()
 		if err != nil {
 			panic(err)
 		}
 		// Add the AuthN/AuthZ middleware to the group.
-		r1Group.Use(authMiddleware(enforcer))
+		r1Group.Use(authMiddleware(enforcer, authInfo))
 	}
 	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
@@ -143,28 +140,28 @@ func v1Routes(r gin.IRouter) {
 
 }
 
-func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
+func authMiddleware(enforcer *casbin.Enforcer, authInfo AuthInfo) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// authenticate the user.
-		userIdentityToken, err := authenticate(c)
+		// Authenticate the user.
+		userIdentityToken, err := authenticate(c, authInfo)
 		if err != nil {
 			errMsg := fmt.Sprintf("failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 			return
 		}
-		// authorize the user and the request.
+		// Authorize the user and the request.
 		// Get the user from the user identity token.
 		groups := userIdentityToken.IDTokenClaims.Groups
-		resource := auth.ExtractResource(c)
-		object := auth.ExtractObject(c)
+		resource := authz.ExtractResource(c)
+		object := authz.ExtractObject(c)
 		action := c.Request.Method
 		isAuthorized := false
 
 		// Get the route map from the context. Key is in the format "method:path".
 		routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
 		// Check if the route requires auth.
-		if auth.RouteMap[routeMapKey] != nil && auth.RouteMap[routeMapKey].RequiresAuth {
+		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuth {
 			// Check if the user has permission for any of the groups.
 			for _, group := range groups {
 				// Get the user from the group. The group is in the format "group:role".
@@ -181,7 +178,7 @@ func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
 			}
-		} else if auth.RouteMap[routeMapKey] != nil && !auth.RouteMap[routeMapKey].RequiresAuth {
+		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuth {
 			// If the route does not require auth, skip the authz check.
 			c.Next()
 		} else {
@@ -195,97 +192,27 @@ func authMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	}
 }
 
-func authenticate(c *gin.Context) (v1.CallbackResponse, error) {
-	// Validate the cookie exists
+func authenticate(c *gin.Context, authInfo AuthInfo) (*v1.UserIdInfo, error) {
 	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
-		return v1.CallbackResponse{}, err
+		return nil, fmt.Errorf("failed to get user identity token from cookie: %v", err)
 	}
-	userIdentityToken := v1.GetUserIdentityToken(userIdentityTokenStr)
+	userIdentityToken, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse user identity token: %v", err)
+	}
 
-	clientID := "example-app"
-	issuerURL := "https://numaflow-server:8443/dex"
-	client := http.DefaultClient
-	client.Transport = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	// TODO - For every authentication call, we create a new DexObject?
+	// could be better
+	dexObj := v1.NewDexObject(authInfo.ServerAddr, authInfo.DexProxyAddr)
+	if dexObj == nil {
+		return nil, fmt.Errorf("failed to create DexObject")
 	}
-	newCtx := oidc.ClientContext(c, client)
-	provider, err := oidc.NewProvider(newCtx, issuerURL)
+	_, err = dexObj.Verify(c, userIdentityToken.IDToken)
 	if err != nil {
-		return v1.CallbackResponse{}, err
-	}
-	oidcConfig := &oidc.Config{
-		ClientID: clientID,
-	}
-	// TODO - can we directly get the verifier from the Dex object?
-	verifier := provider.Verifier(oidcConfig)
-	// validate the id token
-	// check malformed jwt token
-	// check issuer
-	// check audience
-	// check expiry
-	// check signature
-	_, err = verifier.Verify(newCtx, userIdentityToken.IDToken)
-	if err != nil {
-		return v1.CallbackResponse{}, err
+		return nil, err
 	}
 	return userIdentityToken, nil
-}
-
-func getEnforcer() (*casbin.Enforcer, error) {
-	modelText := `
-	[request_definition]
-	r = sub, res, obj, act
-	
-	[policy_definition]
-	p = sub, res, obj, act
-	
-	[role_definition]
-	g = _, _
-	
-	[policy_effect]
-	e = some(where (p.eft == allow))
-	
-	[matchers]
-	m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act && globMatch(r.res, p.res)
-	`
-
-	// Initialize the Casbin model from the model configuration string.
-	model, err := model.NewModelFromString(modelText)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize the Casbin Enforcer with the model.
-	enforcer, err := casbin.NewEnforcer(model)
-	if err != nil {
-		return nil, err
-	}
-	rules := [][]string{
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "GET"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "POST"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PATCH"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "PUT"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "DELETE"},
-		{"role:jyuadmin", "jyu-dex-poc*", "pipeline", "UPDATE"},
-		{"role:jyureadonly", "jyu-dex-poc*", "pipeline", "GET"},
-	}
-
-	areRulesAdded, err := enforcer.AddPolicies(rules)
-	if !areRulesAdded {
-		return nil, err
-	}
-
-	rulesGroup := [][]string{
-		{"jyu-dex-poc:admin", "role:jyuadmin"},
-		{"jyu-dex-poc:readonly", "role:jyureadonly"},
-	}
-
-	areRulesAdded, err = enforcer.AddNamedGroupingPolicies("g", rulesGroup)
-	if !areRulesAdded {
-		return nil, err
-	}
-	return enforcer, nil
 }
 
 // enforceRBAC checks if the user has permission based on the Casbin model and policy.
