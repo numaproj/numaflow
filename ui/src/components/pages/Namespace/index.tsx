@@ -13,8 +13,27 @@ import { AppContextProps } from "../../../types/declarations/app";
 import { SidebarType } from "../../common/SlidingSidebar";
 import { NamespacePipelineListing } from "./partials/NamespacePipelineListing";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
+import { NamespaceSummaryData } from "../../../types/declarations/namespace";
 
 import "./style.css";
+
+const defaultNamespaceSummaryData: NamespaceSummaryData = {
+  pipelinesCount: 0,
+  pipelinesActiveCount: 0,
+  pipelinesInactiveCount: 0,
+  pipelinesHealthyCount: 0,
+  pipelinesWarningCount: 0,
+  pipelinesCriticalCount: 0,
+  isbsCount: 0,
+  isbsActiveCount: 0,
+  isbsInactiveCount: 0,
+  isbsHealthyCount: 0,
+  isbsWarningCount: 0,
+  isbsCriticalCount: 0,
+  pipelineSummaries: [],
+  pipelineRawData: null,
+  isbRawData: null,
+};
 
 export interface NamespaceProps {
   namespaceId?: string;
@@ -30,7 +49,6 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
       loadOnRefresh: false,
       addError,
     });
-
   const handleK8sEventsClick = useCallback(() => {
     if (!namespaceId || !setSidebarProps) {
       return;
@@ -40,6 +58,66 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
       k8sEventsProps: { namespaceId },
     });
   }, [namespaceId, setSidebarProps]);
+  const defaultPipelinesData = useMemo(() => {
+    return [
+      // Pipelines collection
+      {
+        type: SummarySectionType.COLLECTION,
+        collectionSections: [
+          {
+            type: SummarySectionType.TITLED_VALUE,
+            titledValueProps: {
+              title: "PIPELINES",
+              value: 0,
+            },
+          },
+          {
+            type: SummarySectionType.STATUSES,
+            statusesProps: {
+              title: "PIPELINES STATUS",
+              active: 0,
+              inActive: 0,
+              healthy: 0,
+              warning: 0,
+              critical: 0,
+            },
+          },
+        ],
+      },
+      // ISBs collection
+      {
+        type: SummarySectionType.COLLECTION,
+        collectionSections: [
+          {
+            type: SummarySectionType.TITLED_VALUE,
+            titledValueProps: {
+              title: "ISB SERVICES",
+              value: 0,
+            },
+          },
+          {
+            type: SummarySectionType.STATUSES,
+            statusesProps: {
+              title: "ISB SERVICES STATUS",
+              active: 0,
+              inActive: 0,
+              healthy: 0,
+              warning: 0,
+              critical: 0,
+            },
+          },
+        ],
+      },
+      {
+        type: SummarySectionType.CUSTOM,
+        customComponent: (
+          <div className="namespace-k8s-events" onClick={handleK8sEventsClick}>
+            K8s Events
+          </div>
+        ),
+      },
+    ];
+  }, [handleK8sEventsClick]);
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (loading) {
@@ -65,7 +143,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
       ];
     }
     if (!data) {
-      return [];
+      return defaultPipelinesData;
     }
     return [
       // Pipelines collection
@@ -162,18 +240,10 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
         </Box>
       );
     }
-    if (!data) {
-      return (
-        <ErrorDisplay
-          title="Error loading namespace pipelines"
-          message="No resources found."
-        />
-      );
-    }
     return (
       <NamespacePipelineListing
         namespace={namespaceId || ""}
-        data={data}
+        data={data ? data : defaultNamespaceSummaryData}
         pipelineData={pipelineRawData}
         isbData={isbRawData}
         refresh={refresh}
