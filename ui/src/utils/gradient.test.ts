@@ -21,6 +21,6 @@ describe("gradients", () => {
     })
 
     it("fill", () => {
-        expect(fill(cpuColors, 8, 0.5, 10)).toEqual("rgb(248, 172, 168)")
+        expect(fill(cpuColors, 8, 0.5, 10)).toEqual("rgb(247, 87, 108)")
     })
 })

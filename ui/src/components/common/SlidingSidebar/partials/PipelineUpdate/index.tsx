@@ -13,7 +13,7 @@ import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipel
 
 import "./style.css";
 
-export function PiplineUpdate({
+export function PipelineUpdate({
   initialYaml,
   namespaceId,
   pipelineId,
