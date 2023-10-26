@@ -117,7 +117,7 @@ test-udsource-e2e:
 test-transformer-e2e:
 test-diamond-e2e:
 test-sideinput-e2e:
-test-%: 
+test-%:
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
