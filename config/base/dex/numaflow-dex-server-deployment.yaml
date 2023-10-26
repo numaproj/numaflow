@@ -1,10 +1,6 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  labels:
-    app.kubernetes.io/name: numaflow-dex-server
-    app.kubernetes.io/part-of: numaflow
-    app.kubernetes.io/component: dex-server
   name: numaflow-dex-server
 spec:
   selector:

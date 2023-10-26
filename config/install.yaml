@@ -15893,10 +15893,6 @@ status:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  labels:
-    app.kubernetes.io/component: dex-server
-    app.kubernetes.io/name: numaflow-dex-server
-    app.kubernetes.io/part-of: numaflow
   name: numaflow-dex-server
   namespace: numaflow-system
 ---
@@ -16020,6 +16016,10 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/component: controller-manager
+    app.kubernetes.io/name: numaflow-controller-manager
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-role
 rules:
 - apiGroups:
@@ -16119,6 +16119,10 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-server-role
 rules:
 - apiGroups:
@@ -16196,6 +16200,10 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  labels:
+    app.kubernetes.io/component: controller-manager
+    app.kubernetes.io/name: numaflow-controller-manager
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -16209,6 +16217,10 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-server-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -16400,10 +16412,6 @@ stringData:
 apiVersion: v1
 kind: Service
 metadata:
-  labels:
-    app.kubernetes.io/component: dex-server
-    app.kubernetes.io/name: numaflow-dex-server
-    app.kubernetes.io/part-of: numaflow
   name: numaflow-dex-server
   namespace: numaflow-system
 spec:
@@ -16413,7 +16421,9 @@ spec:
     protocol: TCP
     targetPort: 5556
   selector:
+    app.kubernetes.io/component: dex-server
     app.kubernetes.io/name: numaflow-dex-server
+    app.kubernetes.io/part-of: numaflow
 ---
 apiVersion: v1
 kind: Service
@@ -16439,11 +16449,13 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: controller-manager
+      app.kubernetes.io/name: controller-manager
       app.kubernetes.io/part-of: numaflow
   template:
     metadata:
       labels:
         app.kubernetes.io/component: controller-manager
+        app.kubernetes.io/name: controller-manager
         app.kubernetes.io/part-of: numaflow
     spec:
       containers:
@@ -16493,10 +16505,6 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  labels:
-    app.kubernetes.io/component: dex-server
-    app.kubernetes.io/name: numaflow-dex-server
-    app.kubernetes.io/part-of: numaflow
   name: numaflow-dex-server
   namespace: numaflow-system
 spec:
@@ -16555,11 +16563,13 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: numaflow-ux
+      app.kubernetes.io/name: numaflow-ux
       app.kubernetes.io/part-of: numaflow
   template:
     metadata:
       labels:
         app.kubernetes.io/component: numaflow-ux
+        app.kubernetes.io/name: numaflow-ux
         app.kubernetes.io/part-of: numaflow
     spec:
       containers:

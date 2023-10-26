@@ -8,6 +8,7 @@ require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/antonmedv/expr v1.9.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
+	github.com/casbin/casbin/v2 v2.77.2
 	github.com/coreos/go-oidc/v3 v3.6.0
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gavv/httpexpect/v2 v2.3.1
@@ -62,12 +63,6 @@ require (
 
 require (
 	github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible // indirect
-	github.com/tidwall/gjson v1.14.4 // indirect
-	github.com/tidwall/match v1.1.1 // indirect
-	github.com/tidwall/pretty v1.2.0 // indirect
-)
-
-require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.1.1 // indirect
 	github.com/ajg/form v1.5.1 // indirect
@@ -76,7 +71,6 @@ require (
 	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
-	github.com/casbin/casbin/v2 v2.77.2
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -173,6 +167,9 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
+	github.com/tidwall/gjson v1.14.4 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/toqueteos/webbrowser v1.2.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect

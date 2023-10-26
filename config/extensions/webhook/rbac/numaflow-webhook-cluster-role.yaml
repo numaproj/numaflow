@@ -2,6 +2,10 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: numaflow-webhook
+  labels:
+    app.kubernetes.io/name: numaflow-webhook
+    app.kubernetes.io/part-of: numaflow
+    app.kubernetes.io/component: numaflow-webhook
 rules:
   - apiGroups:
       - ""

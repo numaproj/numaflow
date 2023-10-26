@@ -6,6 +6,10 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-server-role
 rules:
 - apiGroups:
@@ -65,6 +69,10 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-server-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -111,11 +119,13 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: numaflow-ux
+      app.kubernetes.io/name: numaflow-ux
       app.kubernetes.io/part-of: numaflow
   template:
     metadata:
       labels:
         app.kubernetes.io/component: numaflow-ux
+        app.kubernetes.io/name: numaflow-ux
         app.kubernetes.io/part-of: numaflow
     spec:
       containers:

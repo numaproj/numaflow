@@ -6,7 +6,6 @@ metadata:
     app.kubernetes.io/part-of: numaflow
     app.kubernetes.io/component: dex-server
   name: numaflow-dex-server
-  namespace: numaflow-system
 rules:
   - apiGroups:
       - ""
