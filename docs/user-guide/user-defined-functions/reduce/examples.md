@@ -4,14 +4,41 @@ Please read [reduce](./reduce.md) to get the best out of these examples.
 
 ## Prerequisites
 
-Install the ISB
+### Inter-Step Buffer Service (ISB Service)
+
+#### What is ISB Service?
+An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), which is used to pass data between vertices of a numaflow pipeline.
+Please refer to the doc [Intern-Step Buffer Service](../../../core-concepts/inter-step-buffer.md) for more information on ISB.
+
+
+#### How to install the ISB Service
 
 ```shell
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 ```
 
-Source used in the examples is an HTTP source producing messages with value 5 and 10 with event time
-starting from 60000. Please refer the doc [http source](../../sources/http.md) on how to use an HTTP
+The expected output of the above command is shown below:
+
+```shell
+$ kubectl get isbsvc 
+
+NAME      TYPE        PHASE     MESSAGE   AGE
+default   jetstream   Running             3d19h
+
+# Wait for pods to be ready
+$ kubectl get pods
+
+NAME                                         READY   STATUS      RESTARTS   AGE
+isbsvc-default-js-0                          3/3     Running     0          19s
+isbsvc-default-js-1                          3/3     Running     0          19s
+isbsvc-default-js-2                          3/3     Running     0          19s
+```
+
+---
+**NOTE**
+
+The Source used in the examples is an HTTP source producing messages with values 5 and 10 with event time
+starting from 60000. Please refer to the doc [http source](../../sources/http.md) on how to use an HTTP
 source.
 An example will be as follows,
 
@@ -19,6 +46,7 @@ An example will be as follows,
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "5" ${http-source-url}
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "10" ${http-source-url}
 ```
+---
 
 ## sum pipeline using fixed window
 
