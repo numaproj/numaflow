@@ -43,9 +43,9 @@ export function StatusCounts(counts: StatusCountsProps) {
                   flexDirection: "row",
                   textTransform: "capitalize",
                   color: "#3C4348",
-                  fontSize: "12px",
+                  fontSize: "0.75rem",
                   fontWeight: "400",
-                  lineHeight: "23.5px",
+                  lineHeight: "1.46875rem",
                   wordWrap: "break-word",
                 }}
               >

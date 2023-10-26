@@ -77,7 +77,17 @@ export const usePipelineViewFetch = (
         } else {
           // Handle the case when the response is not OK
           if (requestKey === "") {
-            setPipelineErr(`Failed with code: ${response.status}`);
+            if (response.status === 403) {
+              // Unauthorized user, display given or default error message
+              const data = await response.json();
+              if (data.errMsg) {
+                setPipelineErr(`Error: ${data.errMsg}`);
+              } else {
+                setPipelineErr(`Error: user is not authorized to execute the requested action.`);
+              }
+            } else {
+              setPipelineErr(`Response code: ${response.status}`);
+            }
           } else {
             addError(`Failed with code: ${response.status}`);
           }

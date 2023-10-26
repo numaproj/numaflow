@@ -35,8 +35,13 @@ const defaultNamespaceSummaryData: NamespaceSummaryData = {
   isbRawData: null,
 };
 
-export function Namespaces() {
-  const { namespaceId } = useParams();
+export interface NamespaceProps {
+  namespaceId?: string;
+}
+
+export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
+  const { namespaceId: nsIdParam } = useParams();
+  const namespaceId = nsIdProp || nsIdParam;
   const { setSidebarProps, addError } = useContext<AppContextProps>(AppContext);
   const { data, pipelineRawData, isbRawData, loading, error, refresh } =
     useNamespaceSummaryFetch({

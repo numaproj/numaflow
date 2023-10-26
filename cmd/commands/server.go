@@ -19,10 +19,10 @@ package commands
 import (
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	svrcmd "github.com/numaproj/numaflow/server/cmd"
-
-	"github.com/spf13/cobra"
 )
 
 func NewServerCommand() *cobra.Command {
@@ -32,6 +32,10 @@ func NewServerCommand() *cobra.Command {
 		namespaced       bool
 		managedNamespace string
 		baseHref         string
+		disableAuth      bool
+		dexServerAddr    string
+		dexProxyAddr     string
+		serverAddr       string
 	)
 
 	command := &cobra.Command{
@@ -44,7 +48,19 @@ func NewServerCommand() *cobra.Command {
 			if !strings.HasSuffix(baseHref, "/") {
 				baseHref = baseHref + "/"
 			}
-			svrcmd.Start(insecure, port, namespaced, managedNamespace, baseHref)
+			opts := svrcmd.ServerOptions{
+				Insecure:         insecure,
+				Port:             port,
+				Namespaced:       namespaced,
+				ManagedNamespace: managedNamespace,
+				BaseHref:         baseHref,
+				DisableAuth:      disableAuth,
+				DexServerAddr:    dexServerAddr,
+				DexProxyAddr:     dexProxyAddr,
+				ServerAddr:       serverAddr,
+			}
+			server := svrcmd.NewServer(opts)
+			server.Start()
 		},
 	}
 	command.Flags().BoolVar(&insecure, "insecure", false, "Whether to disable TLS, defaults to false.")
@@ -52,5 +68,9 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().BoolVar(&namespaced, "namespaced", false, "Whether to run in namespaced scope, defaults to false.")
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", sharedutil.LookupEnvStringOr("NAMESPACE", "numaflow-system"), "The namespace that the server watches when \"--namespaced\" is \"true\".")
 	command.Flags().StringVar(&baseHref, "base-href", "/", "Base href for Numaflow server, defaults to '/'.")
+	command.Flags().BoolVar(&disableAuth, "disable-auth", false, "Whether to disable authentication and authorization, defaults to false.")
+	command.Flags().StringVar(&dexServerAddr, "dex-server-addr", "http://numaflow-dex-server:5556/dex", "The actual address of the Dex server for the reverse proxy to target.")
+	command.Flags().StringVar(&dexProxyAddr, "dex-proxy-addr", "https://localhost:8443/dex", "The proxy address of the Dex server.")
+	command.Flags().StringVar(&serverAddr, "server-addr", "https://localhost:8443", "The address of the Numaflow server.")
 	return command
 }

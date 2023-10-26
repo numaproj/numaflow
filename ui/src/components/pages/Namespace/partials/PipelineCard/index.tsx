@@ -17,9 +17,7 @@ import {
   GetISBType,
   getAPIResponseError,
   IconsStatusMap,
- 
   ISBStatusString,
- 
   StatusString,
   timeAgo,
   UNKNOWN,
@@ -50,7 +48,8 @@ export function PipelineCard({
   isbData,
   refresh,
 }: PipelineCardProps) {
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const { setSidebarProps, systemInfo } =
+    useContext<AppContextProps>(AppContext);
   const [editOption] = useState("edit");
   const [deleteOption] = useState("delete");
   const [deleteProps, setDeleteProps] = useState<DeleteProps | undefined>();
@@ -252,7 +251,20 @@ export function PipelineCard({
               marginLeft: "1rem",
             }}
           >
-            <span className="pipeline-card-name">{data?.name}</span>
+            <Link
+              to={
+                systemInfo?.namespaced
+                  ? `/pipelines/${data.name}`
+                  : `/namespaces/${namespace}/pipelines/${data.name}`
+              }
+              style={
+                pipelineStatus === DELETING || !pipelineAbleToLoad
+                  ? { pointerEvents: "none", textDecoration: "none" }
+                  : { textDecoration: "none" }
+              }
+            >
+              <span className="pipeline-card-name">{data?.name}</span>
+            </Link>
           </Box>
           <Box
             sx={{
@@ -261,14 +273,14 @@ export function PipelineCard({
               flexGrow: 1,
               justifyContent: "flex-end",
               alignItems: "center",
-              height: "64px",
+              height: "4rem",
             }}
           >
             {error && statusPayload ? (
               <div
                 style={{
-                  borderRadius: "13px",
-                  width: "228px",
+                  borderRadius: "0.8125rem",
+                  width: "14.25rem",
                   background: "#F0F0F0",
                   display: "flex",
                   flexDirection: "row",
@@ -284,8 +296,8 @@ export function PipelineCard({
                   statusData?.pipeline?.status?.phase !== RUNNING)) ? (
               <div
                 style={{
-                  borderRadius: "13px",
-                  width: "228px",
+                  borderRadius: "0.8125rem",
+                  width: "14.25rem",
                   background: "#F0F0F0",
                   display: "flex",
                   flexDirection: "row",
@@ -296,7 +308,7 @@ export function PipelineCard({
                 }}
               >
                 <CircularProgress
-                  sx={{ width: "20px !important", height: "20px !important" }}
+                  sx={{ width: "1.25rem !important", height: "1.25rem !important" }}
                 />{" "}
                 <Box
                   sx={{
@@ -345,7 +357,11 @@ export function PipelineCard({
             </Button>
           </Box>
           <Link
-            to={`/namespaces/${namespace}/pipelines/${data.name}`}
+            to={
+              systemInfo?.namespaced
+                ? `/pipelines/${data.name}`
+                : `/namespaces/${namespace}/pipelines/${data.name}`
+            }
             style={
               pipelineStatus === DELETING || !pipelineAbleToLoad
                 ? { pointerEvents: "none", textDecoration: "none" }
@@ -379,7 +395,7 @@ export function PipelineCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "10px",
+              marginTop: "0.625rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -431,7 +447,7 @@ export function PipelineCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "10px",
+              marginTop: "0.625rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -470,7 +486,7 @@ export function PipelineCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "10px",
+              marginTop: "0.625rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -521,7 +537,7 @@ export function PipelineCard({
             spacing={0.5}
             sx={{
               background: "#F9F9F9",
-              marginTop: "10px",
+              marginTop: "0.625rem",
               alignItems: "center",
               justifyContent: "end",
               marginRight: "0.75rem",
@@ -537,9 +553,9 @@ export function PipelineCard({
                 disabled={pipelineStatus === DELETING}
                 sx={{
                   color: "#0077C5",
-                  height: "34px",
+                  height: "2.125rem",
                   background: "#fff",
-                  marginRight: "20px",
+                  marginRight: "1.25rem",
                 }}
               >
                 <MenuItem sx={{ display: "none" }} hidden value="edit">
@@ -557,7 +573,7 @@ export function PipelineCard({
                 disabled={pipelineStatus === DELETING}
                 sx={{
                   color: "#0077C5",
-                  height: "34px",
+                  height: "2.125rem",
                   marginRight: "4rem",
                   background: "#fff",
                 }}

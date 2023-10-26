@@ -22,10 +22,14 @@ import { SidebarType } from "../../common/SlidingSidebar";
 
 import "./style.css";
 
-export function Pipeline() {
-  // TODO needs to be able to be given namespaceId from parent for NS only install
-  const { namespaceId, pipelineId } = useParams();
-  const { addError } = useContext<AppContextProps>(AppContext);
+export interface PipelineProps {
+  namespaceId?: string;
+}
+
+export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
+  const { namespaceId: nsIdParam, pipelineId } = useParams();
+  const namespaceId = nsIdProp || nsIdParam;
+  const { addError, setSidebarProps } = useContext<AppContextProps>(AppContext);
   const {
     data,
     loading: summaryLoading,
@@ -47,7 +51,6 @@ export function Pipeline() {
     graphRefresh();
     summaryRefresh();
   }, [graphRefresh, summaryRefresh]);
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
 
   const handleK8sEventsClick = useCallback(() => {
     if (!namespaceId || !setSidebarProps) {
