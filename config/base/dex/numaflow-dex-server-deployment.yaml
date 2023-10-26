@@ -20,11 +20,11 @@ spec:
         - name: dex
           image: dexidp/dex:v2.37.0
           imagePullPolicy: Always
-          command: ["/usr/local/bin/dex","serve","/etc/numaflow/dex/cfg/config.yaml"]
+          command: ["/usr/local/bin/dex", "serve", "/etc/numaflow/dex/cfg/config.yaml"]
           ports:
             - containerPort: 5556
           volumeMounts:
-            - mountPath: "/etc/numaflow/dex/cfg"
+            - mountPath: /etc/numaflow/dex/cfg
               name: config
           env:
             - name: GITHUB_CLIENT_ID
