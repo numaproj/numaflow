@@ -1,0 +1,59 @@
+.flex{
+    display: flex;
+}
+.row{
+    flex-direction: row;
+}
+.column{
+    flex-direction: column;
+}
+
+.formContainer{
+    width: 27.5625rem;
+    height: 100%;
+    border-radius: 1.25rem;
+    border: 1px solid transparent;
+    border-image-slice: 1;
+    border-width: 1px;
+    /* Applies a border image with a linear gradient that starts with the color #3874CB at the top, fades to transparent in the middle (at 100%), 
+    and then goes back to #3874CB at the bottom. The border image is applied to all sides of the element with a width of 1 pixel and an 
+    outset value of 1 on the top, right, and bottom sides, and 0 on the left side. */
+    border-image: linear-gradient(to bottom, #3874CB, rgba(0, 0, 0, 0) 100%, #3874CB) 1 1 0 1;
+    box-shadow: 0 1.5rem 0.9375rem 0 rgba(0, 0, 0, 0.15);
+    border-image-outset: 1 1 0 1;
+    padding: 2rem;
+    justify-content: center;
+}
+.inputClass{
+    color: #fff;
+    width: 100%;
+    flex-shrink: 0;
+    margin-bottom: 2rem;
+}
+.loginFormInput{
+    width: 16.9375rem;
+    height: 1.375rem;
+    background-color: rgba(39, 76, 119, 0.16);
+    border: 0;
+    color: #FFF;
+    font-size: 0.6875rem;
+    font-style: normal;
+    font-weight: 400;
+}
+.loginFormLabel{
+    font-size: 0.8125rem;
+    font-style: normal;
+    font-weight: 400;
+    margin-left: 0.3125rem;
+    margin-bottom: 0.3125rem;
+}
+
+.login-loading-message {
+    color: #fff;
+    margin-top: 2rem;
+}
+
+.login-error-message {
+    color: #fff;
+    margin-top: 2rem;
+}

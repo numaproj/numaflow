@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-server-rbac-config
+data:
+  rbac-policy.csv: |
+    # Policies go here
+    p, role:admin, *, *, *
+    p, role:readonly, *, *, GET
+    # Groups go here
+    # g, admin, role:admin
+    # g, my-github-org:my-github-team, role:readonly
+  rbac.conf: |
+    policy.default: role:readonly

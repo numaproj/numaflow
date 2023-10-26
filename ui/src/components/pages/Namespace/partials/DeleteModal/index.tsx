@@ -32,6 +32,7 @@ export function DeleteModal({
   const handleDelete = useCallback(async () => {
     try {
       setLoading(true);
+      setError(undefined);
       let url: string;
       switch (type) {
         case "pipeline":
@@ -91,7 +92,7 @@ export function DeleteModal({
         <Box sx={containerStyle}>
           <ValidationMessage
             type="error"
-            title="Error occurred, please try again."
+            title={error}
             content={`Delete ${type === "pipeline" ? "Pipeline" : "ISB"}: ${
               type === "pipeline" ? pipelineId : isbId
             }`}
@@ -102,7 +103,7 @@ export function DeleteModal({
               variant="contained"
               color="secondary"
             >
-              Delete
+              Try again
             </Button>
             <Button onClick={onCancel} variant="outlined" color="primary">
               Cancel
