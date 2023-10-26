@@ -86,7 +86,7 @@ func (s *server) Start() {
 			DexProxyAddr:  s.options.DexProxyAddr,
 			ServerAddr:    s.options.ServerAddr,
 		},
-		baseHref,
+		s.options.BaseHref,
 	)
 	router.Use(UrlRewrite(router))
 	server := http.Server{
