@@ -274,7 +274,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	if dClient == nil {
 		dClient, err = daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %s, %w", pipeline, err.Error()))
+			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 			return
 		}
 		h.daemonClientsCache.Add(pl.GetDaemonServiceURL(), dClient)
@@ -547,7 +547,7 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	if dClient == nil {
 		dClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %s, %w", pipeline, err.Error()))
+			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 			return
 		}
 		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
@@ -571,7 +571,7 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	if dClient == nil {
 		dClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %s, %w", pipeline, err.Error()))
+			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 			return
 		}
 		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
@@ -654,7 +654,7 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 	if dClient == nil {
 		dClient, err = daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %s, %w", pipeline, err.Error()))
+			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 			return
 		}
 		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
