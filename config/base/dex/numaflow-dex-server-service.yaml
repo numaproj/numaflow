@@ -4,9 +4,7 @@ metadata:
   name: numaflow-dex-server
 spec:
   ports:
-    - name: https
-      protocol: TCP
-      port: 5556
+    - port: 5556
       targetPort: 5556
   selector:
     app.kubernetes.io/name: numaflow-dex-server

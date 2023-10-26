@@ -16318,9 +16318,7 @@ metadata:
   name: numaflow-dex-server
 spec:
   ports:
-  - name: https
-    port: 5556
-    protocol: TCP
+  - port: 5556
     targetPort: 5556
   selector:
     app.kubernetes.io/component: dex-server
@@ -16337,6 +16335,7 @@ spec:
     targetPort: 8443
   selector:
     app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
     app.kubernetes.io/part-of: numaflow
   type: ClusterIP
 ---
