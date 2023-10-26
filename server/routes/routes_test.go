@@ -41,7 +41,7 @@ func TestRoutes(t *testing.T) {
 		DisableAuth:   false,
 		DexServerAddr: "test-dex-server-addr",
 	}
-	Routes(router, sysInfo, authInfo)
+	Routes(router, sysInfo, authInfo, "/")
 	t.Run("/404", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, "/404", nil)

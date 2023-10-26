@@ -48,12 +48,12 @@ type DexObject struct {
 }
 
 // NewDexObject returns a new DexObject.
-func NewDexObject(baseURL string, proxyURL string) (*DexObject, error) {
+func NewDexObject(baseURL string, baseHref string, proxyURL string) (*DexObject, error) {
 	issuerURL, err := url.JoinPath(baseURL, "/dex")
 	if err != nil {
 		return nil, err
 	}
-	redirectURI, err := url.JoinPath(baseURL, "/login")
+	redirectURI, err := url.JoinPath(baseURL, baseHref, "/login")
 	if err != nil {
 		return nil, err
 	}
