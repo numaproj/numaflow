@@ -1216,6 +1216,48 @@
     Prerequisites
   </a>
   
+    <nav class="md-nav" aria-label="Prerequisites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#inter-step-buffer-service-isb-service" class="md-nav__link">
+    Inter-Step Buffer Service (ISB Service)
+  </a>
+  
+    <nav class="md-nav" aria-label="Inter-Step Buffer Service (ISB Service)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-isb-service" class="md-nav__link">
+    What is ISB Service?
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-install-the-isb-service" class="md-nav__link">
+    How to install the ISB Service
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url" class="md-nav__link">
+    curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;5&quot; ${http-source-url}
+curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; ${http-source-url}
+
+  </a>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2079,6 +2121,48 @@
     Prerequisites
   </a>
   
+    <nav class="md-nav" aria-label="Prerequisites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#inter-step-buffer-service-isb-service" class="md-nav__link">
+    Inter-Step Buffer Service (ISB Service)
+  </a>
+  
+    <nav class="md-nav" aria-label="Inter-Step Buffer Service (ISB Service)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-isb-service" class="md-nav__link">
+    What is ISB Service?
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-install-the-isb-service" class="md-nav__link">
+    How to install the ISB Service
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url" class="md-nav__link">
+    curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;5&quot; ${http-source-url}
+curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; ${http-source-url}
+
+  </a>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2123,16 +2207,36 @@
 <h1 id="reduce-examples">Reduce Examples<a class="headerlink" href="#reduce-examples" title="Permanent link">&para;</a></h1>
 <p>Please read <a href="../reduce/">reduce</a> to get the best out of these examples.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
-<p>Install the ISB</p>
+<h3 id="inter-step-buffer-service-isb-service">Inter-Step Buffer Service (ISB Service)<a class="headerlink" href="#inter-step-buffer-service-isb-service" title="Permanent link">&para;</a></h3>
+<h4 id="what-is-isb-service">What is ISB Service?<a class="headerlink" href="#what-is-isb-service" title="Permanent link">&para;</a></h4>
+<p>An Inter-Step Buffer Service is described by a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>, which is used to pass data between vertices of a numaflow pipeline.
+Please refer to the doc <a href="../../../../core-concepts/inter-step-buffer/">Intern-Step Buffer Service</a> for more information on ISB.</p>
+<h4 id="how-to-install-the-isb-service">How to install the ISB Service<a class="headerlink" href="#how-to-install-the-isb-service" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
-<p>Source used in the examples is an HTTP source producing messages with value 5 and 10 with event time
-starting from 60000. Please refer the doc <a href="../../../sources/http/">http source</a> on how to use an HTTP
+<p>The expected output of the above command is shown below:</p>
+<div class="highlight"><pre><span></span><code>$<span class="w"> </span>kubectl<span class="w"> </span>get<span class="w"> </span>isbsvc<span class="w"> </span>
+
+NAME<span class="w">      </span>TYPE<span class="w">        </span>PHASE<span class="w">     </span>MESSAGE<span class="w">   </span>AGE
+default<span class="w">   </span>jetstream<span class="w">   </span>Running<span class="w">             </span>3d19h
+
+<span class="c1"># Wait for pods to be ready</span>
+$<span class="w"> </span>kubectl<span class="w"> </span>get<span class="w"> </span>pods
+
+NAME<span class="w">                                         </span>READY<span class="w">   </span>STATUS<span class="w">      </span>RESTARTS<span class="w">   </span>AGE
+isbsvc-default-js-0<span class="w">                          </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>19s
+isbsvc-default-js-1<span class="w">                          </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>19s
+isbsvc-default-js-2<span class="w">                          </span><span class="m">3</span>/3<span class="w">     </span>Running<span class="w">     </span><span class="m">0</span><span class="w">          </span>19s
+</code></pre></div>
+<hr />
+<p><strong>NOTE</strong></p>
+<p>The Source used in the examples is an HTTP source producing messages with values 5 and 10 with event time
+starting from 60000. Please refer to the doc <a href="../../../sources/http/">http source</a> on how to use an HTTP
 source.
 An example will be as follows,</p>
-<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;5&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+<h2 id="curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url"><div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;5&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;10&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
-</code></pre></div>
+</code></pre></div><a class="headerlink" href="#curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url" title="Permanent link">&para;</a></h2>
 <h2 id="sum-pipeline-using-fixed-window">sum pipeline using fixed window<a class="headerlink" href="#sum-pipeline-using-fixed-window" title="Permanent link">&para;</a></h2>
 <p>This is a simple reduce pipeline that just does summation (sum of numbers) but uses fixed window.
 The snippet for the reduce vertex is as follows.</p>
