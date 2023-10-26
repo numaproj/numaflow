@@ -616,6 +616,7 @@ export default function Graph(props: GraphProps) {
           >
             <Button
               variant="contained"
+              data-testid="resume"
               sx={{
                 marginTop: "1rem",
                 marginLeft: "1rem",
@@ -629,6 +630,7 @@ export default function Graph(props: GraphProps) {
             </Button>
             <Button
               variant="contained"
+              data-testid="pause"
               sx={{
                 marginTop: "1rem",
                 marginLeft: "1rem",
