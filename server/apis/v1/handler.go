@@ -277,7 +277,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 			return
 		}
-		h.daemonClientsCache.Add(pl.GetDaemonServiceURL(), dClient)
+		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
 	}
 	client := dClient.(*daemonclient.DaemonClient)
 
