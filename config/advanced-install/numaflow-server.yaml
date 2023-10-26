@@ -93,7 +93,7 @@ data:
     # Groups go here
     # g, admin, role:admin
     # g, my-github-org:my-github-team, role:readonly
-  rbac.properties: |
+  rbac.conf: |
     policy.default: role:readonly
 kind: ConfigMap
 metadata:
