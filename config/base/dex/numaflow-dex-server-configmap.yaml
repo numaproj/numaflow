@@ -12,7 +12,7 @@ data:
     staticClients:
       - id: numaflow-server-app
         redirectURIs: 
-          - <HOSTNAME>/login
+          - <HOSTNAME>/<base_herf>/login
         name: 'Numaflow Server App'
         public: true
     connectors:

@@ -46,11 +46,11 @@ type AuthInfo struct {
 
 var logger = logging.NewLogger().Named("server")
 
-func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo) {
+func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref string) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
-	dexObj, err := v1.NewDexObject(authInfo.ServerAddr, authInfo.DexProxyAddr)
+	dexObj, err := v1.NewDexObject(authInfo.ServerAddr, baseHref, authInfo.DexProxyAddr)
 	if err != nil {
 		panic(err)
 	}

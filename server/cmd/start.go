@@ -85,7 +85,9 @@ func (s *server) Start() {
 			DexServerAddr: s.options.DexServerAddr,
 			DexProxyAddr:  s.options.DexProxyAddr,
 			ServerAddr:    s.options.ServerAddr,
-		})
+		},
+		s.options.BaseHref,
+	)
 	router.Use(UrlRewrite(router))
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", s.options.Port),
