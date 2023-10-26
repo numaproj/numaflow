@@ -238,6 +238,7 @@ export function ISBCreate({
         onMutatedChange={handleMutationChange}
         statusIndicator={status}
         validationMessage={validationMessage}
+        allowNonMutatedSubmit
       />
     </Box>
   );

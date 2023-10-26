@@ -15893,6 +15893,12 @@ status:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  name: numaflow-dex-server
+  namespace: numaflow-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
   name: numaflow-sa
   namespace: numaflow-system
 ---
@@ -15901,6 +15907,26 @@ kind: ServiceAccount
 metadata:
   name: numaflow-server-sa
   namespace: numaflow-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/component: dex-server
+    app.kubernetes.io/name: numaflow-dex-server
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-dex-server
+  namespace: numaflow-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -15990,6 +16016,10 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/component: controller-manager
+    app.kubernetes.io/name: numaflow-controller-manager
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-role
 rules:
 - apiGroups:
@@ -16089,6 +16119,10 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-server-role
 rules:
 - apiGroups:
@@ -16146,8 +16180,30 @@ rules:
   - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: dex-server
+    app.kubernetes.io/name: numaflow-dex-server
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-dex-server
+  namespace: numaflow-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: numaflow-dex-server
+subjects:
+- kind: ServiceAccount
+  name: numaflow-dex-server
+  namespace: numaflow-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  labels:
+    app.kubernetes.io/component: controller-manager
+    app.kubernetes.io/name: numaflow-controller-manager
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -16161,6 +16217,10 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-server-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -16311,6 +16371,59 @@ metadata:
   namespace: numaflow-system
 ---
 apiVersion: v1
+data:
+  config.yaml: "issuer: <HOSTNAME>/dex\nstorage:\n  type: memory\nweb:\n  http: 0.0.0.0:5556\nstaticClients:\n
+    \ - id: numaflow-server-app\n    redirectURIs: \n      - <HOSTNAME>/login\n    name:
+    'Numaflow Server App'\n    public: true\nconnectors:\n- type: github\n  # https://dexidp.io/docs/connectors/github/\n
+    \ id: github\n  name: GitHub\n  config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret:
+    $GITHUB_CLIENT_SECRET\n    redirectURI: <HOSTNAME>/dex/callback\n    orgs:\n    -
+    name: <ORG_NAME>\n      teams:\n      - admin\n      - readonly\noauth2:\n  skipApprovalScreen:
+    true\n"
+kind: ConfigMap
+metadata:
+  name: numaflow-dex-server
+  namespace: numaflow-system
+---
+apiVersion: v1
+data:
+  rbac-policy.csv: |
+    # Policies go here
+    p, role:admin, *, *, *
+    p, role:readonly, *, *, GET
+    # Groups go here
+    # g, admin, role:admin
+    # g, my-github-org:my-github-team, role:readonly
+  rbac.conf: |
+    policy.default: role:readonly
+kind: ConfigMap
+metadata:
+  name: numaflow-server-rbac-config
+  namespace: numaflow-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: numaflow-dex-secrets
+  namespace: numaflow-system
+stringData:
+  dex-github-client-id: <GITHUB_CLIENT_ID>
+  dex-github-client-secret: <GITHUB_CLIENT_SECRET>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: numaflow-dex-server
+  namespace: numaflow-system
+spec:
+  ports:
+  - port: 5556
+    targetPort: 5556
+  selector:
+    app.kubernetes.io/component: dex-server
+    app.kubernetes.io/name: numaflow-dex-server
+    app.kubernetes.io/part-of: numaflow
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: numaflow-server
@@ -16321,6 +16434,7 @@ spec:
     targetPort: 8443
   selector:
     app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
     app.kubernetes.io/part-of: numaflow
   type: ClusterIP
 ---
@@ -16334,11 +16448,13 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: controller-manager
+      app.kubernetes.io/name: controller-manager
       app.kubernetes.io/part-of: numaflow
   template:
     metadata:
       labels:
         app.kubernetes.io/component: controller-manager
+        app.kubernetes.io/name: controller-manager
         app.kubernetes.io/part-of: numaflow
     spec:
       containers:
@@ -16388,6 +16504,57 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: numaflow-dex-server
+  namespace: numaflow-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: dex-server
+      app.kubernetes.io/name: numaflow-dex-server
+      app.kubernetes.io/part-of: numaflow
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: dex-server
+        app.kubernetes.io/name: numaflow-dex-server
+        app.kubernetes.io/part-of: numaflow
+    spec:
+      containers:
+      - command:
+        - /usr/local/bin/dex
+        - serve
+        - /etc/numaflow/dex/cfg/config.yaml
+        env:
+        - name: GITHUB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              key: dex-github-client-id
+              name: numaflow-dex-secrets
+        - name: GITHUB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: dex-github-client-secret
+              name: numaflow-dex-secrets
+        image: dexidp/dex:v2.37.0
+        imagePullPolicy: Always
+        name: dex
+        ports:
+        - containerPort: 5556
+        volumeMounts:
+        - mountPath: /etc/numaflow/dex/cfg
+          name: config
+      serviceAccountName: numaflow-dex-server
+      volumes:
+      - configMap:
+          items:
+          - key: config.yaml
+            path: config.yaml
+          name: numaflow-dex-server
+        name: config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: numaflow-server
   namespace: numaflow-system
 spec:
@@ -16395,16 +16562,19 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: numaflow-ux
+      app.kubernetes.io/name: numaflow-ux
       app.kubernetes.io/part-of: numaflow
   template:
     metadata:
       labels:
         app.kubernetes.io/component: numaflow-ux
+        app.kubernetes.io/name: numaflow-ux
         app.kubernetes.io/part-of: numaflow
     spec:
       containers:
       - args:
         - server
+        - --disable-auth=true
         env:
         - name: NAMESPACE
           valueFrom:
@@ -16434,6 +16604,8 @@ spec:
         - mountPath: /ui/build/index.html
           name: env-volume
           subPath: index.html
+        - mountPath: /etc/numaflow
+          name: rbac-config
       initContainers:
       - args:
         - server-init
@@ -16450,3 +16622,6 @@ spec:
       volumes:
       - emptyDir: {}
         name: env-volume
+      - configMap:
+          name: numaflow-server-rbac-config
+        name: rbac-config

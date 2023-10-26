@@ -5,6 +5,7 @@ resources:
   - crds/full
   - controller-manager
   - numaflow-server
+  - dex
 
 images:
   - name: quay.io/numaproj/numaflow
@@ -24,17 +25,3 @@ patchesStrategicMerge:
               env:
                 - name: NUMAFLOW_IMAGE
                   value: quay.io/numaproj/numaflow:latest
-  - |-
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: numaflow-server
-    spec:
-      template:
-        spec:
-          containers:
-            - name: main
-              image: quay.io/numaproj/numaflow:latest
-              args: 
-              - "server"
-

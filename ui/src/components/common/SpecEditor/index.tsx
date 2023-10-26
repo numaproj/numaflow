@@ -43,6 +43,7 @@ export interface SpecEditorProps {
   initialYaml?: any; // Value initally loaded into view. Object instance of spec or string.
   loading?: boolean; // Show spinner
   viewType?: ViewType; // Allow editing
+  allowNonMutatedSubmit?: boolean // Allow submit without content being changed
   onValidate?: (value: string) => void;
   onSubmit?: (value: string) => void;
   onResetApplied?: () => void;
@@ -57,6 +58,7 @@ export function SpecEditor({
   initialYaml,
   loading = false,
   viewType = ViewType.READ_ONLY,
+  allowNonMutatedSubmit = false,
   onValidate,
   onSubmit,
   onResetApplied,
@@ -272,7 +274,7 @@ export function SpecEditor({
             Reset
           </Button>
           <Button
-            disabled={!mutated || loading || !editable || statusShowing}
+            disabled={(!mutated && !allowNonMutatedSubmit) || loading || !editable || statusShowing}
             onClick={handleValidate}
             variant="contained"
             sx={{ marginLeft: "0.5rem", ...btnStyle }}
@@ -281,7 +283,7 @@ export function SpecEditor({
           </Button>
           <Button
             disabled={
-              !mutated ||
+              (!mutated && !allowNonMutatedSubmit) ||
               loading ||
               !editable ||
               (statusShowing && !retryAllowed)
