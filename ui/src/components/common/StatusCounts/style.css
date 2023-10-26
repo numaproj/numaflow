@@ -1,0 +1,11 @@
+.bold-text{
+    color: #3C4348;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 23.50px;
+    word-wrap: break-word
+}
+.status-icon-img{
+    width: 1.5rem;
+    height: 1.5rem;
+}

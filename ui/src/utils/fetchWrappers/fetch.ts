@@ -31,6 +31,7 @@ export const useFetch = (
           setLoading(false);
         } else {
           const data = await response.json();
+          setError(undefined);
           setData(data);
           setLoading(false);
         }

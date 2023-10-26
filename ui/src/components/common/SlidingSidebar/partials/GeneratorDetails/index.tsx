@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
-import { SpecEditor } from "../VertexDetails/partials/SpecEditor";
+import { GeneratorUpdate } from "./partials/GeneratorUpdate";
+import generatorIcon from "../../../../../images/generator.svg";
 
 import "./style.css";
 
@@ -23,15 +24,7 @@ export function GeneratorDetails({
   vertexId,
   generatorDetails,
 }: GeneratorDetailsProps) {
-  const [generatorSpec, setGeneratorSpec] = useState<any>();
-  const [vertexType, setVertexType] = useState<VertexType | undefined>();
   const [tabValue, setTabValue] = useState(SPEC_TAB_INDEX);
-
-  // Find the vertex spec by id
-  useEffect(() => {
-    setVertexType(VertexType.GENERATOR);
-    setGeneratorSpec(generatorDetails?.data?.nodeInfo);
-  }, [vertexId, generatorDetails]);
 
   const handleTabChange = useCallback(
     (event: React.SyntheticEvent, newValue: number) => {
@@ -39,28 +32,6 @@ export function GeneratorDetails({
     },
     []
   );
-
-  const header = useMemo(() => {
-    const headerContainerStyle = {
-      display: "flex",
-      flexDirection: "row",
-    };
-    const textClass = "vertex-details-header-text";
-    switch (vertexType) {
-      case VertexType.GENERATOR:
-        return (
-          <Box sx={headerContainerStyle}>
-            <span className={textClass}>Generator Vertex</span>
-          </Box>
-        );
-      default:
-        return (
-          <Box sx={headerContainerStyle}>
-            <span className={textClass}>Vertex</span>
-          </Box>
-        );
-    }
-  }, [vertexType]);
 
   return (
     <Box
@@ -70,7 +41,20 @@ export function GeneratorDetails({
         height: "100%",
       }}
     >
-      {header}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        <img
+          src={generatorIcon}
+          alt="generator vertex"
+          className={"vertex-details-header-icon"}
+        />
+        <span className="vertex-details-header-text">Generator Vertex</span>
+      </Box>
       <Box sx={{ marginTop: "1rem", borderBottom: 1, borderColor: "divider" }}>
         <Tabs
           className="vertex-details-tabs"
@@ -94,7 +78,10 @@ export function GeneratorDetails({
       >
         {tabValue === SPEC_TAB_INDEX && (
           <Box sx={{ height: "100%" }}>
-            <SpecEditor vertexId={vertexId} vertexSpec={generatorSpec} />
+            <GeneratorUpdate
+              generatorId={vertexId}
+              generatorSpec={generatorDetails?.data?.nodeInfo}
+            />
           </Box>
         )}
       </div>

@@ -109,7 +109,8 @@ const CustomEdge: FC<EdgeProps> = ({
     const style = {};
     if (
       !sideInputEdges.has(id) &&
-      sideInputNodes.has(Object.keys(highlightValues)[0])
+      sideInputNodes.has(Object.keys(highlightValues)[0]) &&
+      highlightValues["---"]
     ) {
       style["opacity"] = 0.5;
     }

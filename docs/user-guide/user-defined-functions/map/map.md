@@ -1,6 +1,6 @@
 # Map UDF
 
-Map in a Map vertex takes an input and returns 0, 1, or more outputs. Map is an element wise operator.
+Map in a Map vertex takes an input and returns 0, 1, or more outputs (also known as flat-map operation). Map is an element wise operator.
 
 ## Builtin UDF
 

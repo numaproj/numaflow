@@ -201,7 +201,7 @@ describe("Custom Pipeline hook", () => {
     (global as any).fetch = mockedFetch;
     await act(async () => {
       const { result } = renderHook(() =>
-        usePipelineViewFetch("default", "simple-pipeline")
+        usePipelineViewFetch("default", "simple-pipeline", () => { return;})
       );
     });
     expect(mockedFetch).toBeCalledTimes(9);
@@ -224,7 +224,9 @@ describe("Custom Pipeline hook", () => {
     (global as any).fetch = mockedFetch;
     await act(async () => {
       const { result } = renderHook(() =>
-        usePipelineViewFetch("default", "simple-pipeline")
+        usePipelineViewFetch("default", "simple-pipeline", () => {
+          return;
+        })
       );
     });
     expect(mockedFetch).toBeCalledTimes(2);

@@ -5,31 +5,46 @@ import { SidebarType } from "../../../../common/SlidingSidebar";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { DurationString } from "../../../../../utils";
+import { ViewType } from "../../../../common/SpecEditor";
 
 import "./style.css";
 
-export function PipelineSummaryStatus({ pipeline, lag }) {
+export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
   const { namespaceId } = useParams();
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
-  const handleK8sEventsClick = useCallback(() => {
-    if (!namespaceId || !setSidebarProps) {
+
+  const handleUpdateComplete = useCallback(() => {
+    refresh();
+    if (!setSidebarProps) {
       return;
     }
-    setSidebarProps({
-      type: SidebarType.NAMESPACE_K8s,
-      k8sEventsProps: { namespaceId },
-    });
-  }, [namespaceId, setSidebarProps]);
+    // Close sidebar
+    setSidebarProps(undefined);
+  }, [setSidebarProps, refresh]);
 
   const handleSpecClick = useCallback(() => {
     if (!namespaceId || !setSidebarProps) {
       return;
     }
     setSidebarProps({
-      type: SidebarType.PIPELINE_SPEC,
-      pipelineSpecProps: { spec: pipeline.spec },
+      type: SidebarType.PIPELINE_UPDATE,
+      specEditorProps: {
+        titleOverride: `View/Edit Pipeline: ${pipelineId}`,
+        initialYaml: pipeline,
+        namespaceId,
+        pipelineId,
+        viewType: ViewType.TOGGLE_EDIT,
+        onUpdateComplete: handleUpdateComplete,
+      },
     });
-  }, [namespaceId, setSidebarProps, pipeline]);
+  }, [
+    namespaceId,
+    pipelineId,
+    setSidebarProps,
+    pipeline,
+    handleUpdateComplete,
+  ]);
+
   return (
     <Box
       sx={{
@@ -87,16 +102,17 @@ export function PipelineSummaryStatus({ pipeline, lag }) {
             sx={{
               display: "flex",
               flexDirection: "column",
-              marginRight: "3rem",
+              width: "12rem"
             }}
           >
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
-                <div
-                  className="pipeline-onclick-events"
-                  onClick={handleK8sEventsClick}
-                >
-                  K8s Events
+                <div>
+                  <span className="pipeline-summary-subtitle">Max lag:</span>
+                  <span className="pipeline-summary-text">
+                    {" "}
+                    {DurationString(lag)}
+                  </span>
                 </div>
               </span>
             </div>
@@ -106,20 +122,7 @@ export function PipelineSummaryStatus({ pipeline, lag }) {
                   className="pipeline-onclick-events"
                   onClick={handleSpecClick}
                 >
-                  Pipeline Specs
-                </div>
-              </span>
-            </div>
-          </Box>
-          <Box sx={{ display: "flex", flexDirection: "column", width: "12rem" }}>
-            <div className="pipeline-summary-text">
-              <span className="pipeline-summary-subtitle">
-                <div>
-                  <span className="pipeline-summary-subtitle">Max lag:</span>
-                  <span className="pipeline-summary-text">
-                    {" "}
-                    {DurationString(lag)}
-                  </span>
+                  View/Edit Specs
                 </div>
               </span>
             </div>

@@ -42,6 +42,7 @@ export interface SummaryPageLayoutProps {
   summarySections: SummarySection[];
   contentComponent: React.ReactNode;
   contentPadding?: boolean;
+  contentHideOverflow?: boolean;
 }
 
 const SUMMARY_HEIGHT = "6.5625rem";
@@ -154,15 +155,25 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
   const components: React.ReactNode[] = [];
   summarySections.forEach((section, index) => {
     const { key, component } = getSectionComponentAndKey(section, index);
-    components.push(component);
     // Add separator if not last section
     if (index !== summarySections.length - 1) {
       components.push(
-        <div
-          key={`${key}-separator`}
-          className="summary-page-layout-separator"
-        />
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            flexGrow: "1",
+          }}
+        >
+          {component}
+          <div
+            key={`${key}-separator`}
+            className="summary-page-layout-separator"
+          />
+        </Box>
       );
+    } else {
+      components.push(component);
     }
   });
   return (
@@ -189,6 +200,7 @@ export function SummaryPageLayout({
   summarySections,
   contentComponent,
   contentPadding = true,
+  contentHideOverflow = false,
 }: SummaryPageLayoutProps) {
   const [collapsed, setCollapsed] = useState(collapsable && defaultCollapsed);
   const sumaryRef = useRef<any>();
@@ -296,7 +308,13 @@ export function SummaryPageLayout({
   }, [summaryHeight, collapsed, offsetOnCollapse]);
 
   return (
-    <Box sx={{ height: "100%" }}>
+    <Box
+      sx={
+        contentHideOverflow
+          ? { height: "100%", overflow: "hidden" }
+          : { height: "100%" }
+      }
+    >
       {summary}
       <Box
         sx={{

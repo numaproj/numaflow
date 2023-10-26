@@ -37,7 +37,6 @@ export interface SearchablePodsHeatMapProps {
   podsDetailsMap: Map<string, PodDetail>;
   onPodClick: (e: Element | EventType, pod: Pod) => void;
   selectedPod: Pod | undefined;
-  setSelectedPod: Dispatch<SetStateAction<Pod>>;
 }
 
 export interface PodsHeatMapProps {
@@ -73,6 +72,7 @@ export interface Hexagon {
   stroke?: string;
   strokeWidth?: number;
   type?: string;
+  image?: any;
 }
 
 export interface HexagonPoints {
