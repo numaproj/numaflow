@@ -16,9 +16,7 @@ limitations under the License.
 
 package apis
 
-import (
-	"github.com/gin-gonic/gin"
-)
+import "github.com/gin-gonic/gin"
 
 type Handler interface {
 	AuthInfo(c *gin.Context)

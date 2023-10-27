@@ -40,7 +40,6 @@ type CasbinObject struct {
 	enforcer *casbin.Enforcer
 }
 
-// NewCasbinObject creates a new CasbinObject.
 func NewCasbinObject() (*CasbinObject, error) {
 	enforcer, err := getEnforcer()
 	if err != nil {

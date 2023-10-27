@@ -140,6 +140,9 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
 }
 
+// authMiddleware is the middleware for AuthN/AuthZ.
+// it ensures the user is authenticated and authorized
+// to execute the requested action before sending the request to the api handler.
 func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var userInfo authn.UserIdInfo
@@ -165,7 +168,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 				c.Next()
 			}
 		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuthZ {
-			// If the route does not require authZ, skip the authZ check.
+			// If the route does not require AuthZ, skip the AuthZ check.
 			c.Next()
 		} else {
 			// If the route is not present in the route map, return an error.
