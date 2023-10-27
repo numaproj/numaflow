@@ -54,7 +54,7 @@ Now we will walk you through creating a map pipeline. In our example, this is ca
 
 ![Pipeline Diagram](../../../assets/even-odd-square.png)
 
-There are five vertices in this example of a map pipeline. An [HTTP](./user-guide/sources/http.md) source vertex which serves an HTTP endpoint to receive numbers as source data, a [UDF](user-guide/user-defined-functions/map/map.md) vertex to tag the ingested numbers with the key `even` or `odd`, three [Log](./user-guide/sinks/log.md) sinks, one to print the `even` numbers, one to print the `odd` numbers, and the other one to print both the even and odd numbers.
+There are five vertices in this example of a map pipeline. An [HTTP](../../sources/http.md) source vertex which serves an HTTP endpoint to receive numbers as source data, a [UDF](./map.md) vertex to tag the ingested numbers with the key `even` or `odd`, three [Log](../../sinks/log.md) sinks, one to print the `even` numbers, one to print the `odd` numbers, and the other one to print both the even and odd numbers.
 
 Run the following command to create the `even-odd` pipeline.
 
