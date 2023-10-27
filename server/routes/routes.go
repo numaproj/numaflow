@@ -89,7 +89,7 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject) {
 }
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
-// for the route along with an entry in the RouteMap in auth/route_map.go.
+// for the route along with an entry in the RouteMap in routes/route_map.go.
 func v1Routes(r gin.IRouter) {
 	handler, err := v1.NewHandler()
 	if err != nil {
@@ -157,15 +157,15 @@ func authMiddleware(enforcer *casbin.Enforcer, dexObj *v1.DexObject) gin.Handler
 		// Authorize the user and the request.
 		// Get the user from the user identity token.
 		groups := userIdentityToken.IDTokenClaims.Groups
-		resource := authz.ExtractResource(c)
-		object := authz.ExtractObject(c)
+		resource := extractResource(c)
+		object := extractObject(c)
 		action := c.Request.Method
 		isAuthorized := false
 
 		// Get the route map from the context. Key is in the format "method:path".
 		routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
 		// Check if the route requires auth.
-		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuth {
+		if RouteMap[routeMapKey] != nil && RouteMap[routeMapKey].RequiresAuthZ {
 			// Check if the user has permission for any of the groups.
 			for _, group := range groups {
 				// Get the user from the group. The group is in the format "group:role".
@@ -182,8 +182,8 @@ func authMiddleware(enforcer *casbin.Enforcer, dexObj *v1.DexObject) gin.Handler
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
 			}
-		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuth {
-			// If the route does not require auth, skip the authz check.
+		} else if RouteMap[routeMapKey] != nil && !RouteMap[routeMapKey].RequiresAuthZ {
+			// If the route does not require authZ, skip the authZ check.
 			c.Next()
 		} else {
 			// If the route is not present in the route map, return an error.
@@ -217,4 +217,26 @@ func authenticate(c *gin.Context, dexObj *v1.DexObject) (*authn.UserIdInfo, erro
 func enforceRBAC(enforcer *casbin.Enforcer, user, resource, object, action string) bool {
 	ok, _ := enforcer.Enforce(user, resource, object, action)
 	return ok
+}
+
+// extractResource extracts the resource from the request.
+func extractResource(c *gin.Context) string {
+	// We use the namespace in the request as the resource.
+	resource := c.Param(authz.ResourceNamespace)
+	if resource == common.EmptyString {
+		return common.EmptyString
+	}
+	return resource
+}
+
+// extractObject extracts the object from the request.
+func extractObject(c *gin.Context) string {
+	action := c.Request.Method
+	// Get the route map from the context. Key is in the format "method:path".
+	routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
+	// Return the object from the route map.
+	if RouteMap[routeMapKey] != nil {
+		return RouteMap[routeMapKey].Object
+	}
+	return common.EmptyString
 }

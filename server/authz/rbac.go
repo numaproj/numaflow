@@ -24,7 +24,6 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
-	"github.com/gin-gonic/gin"
 )
 
 var (
@@ -102,26 +101,4 @@ func extractArgs(args ...interface{}) (string, string, error) {
 		return emptyString, emptyString, fmt.Errorf("expected second argument to be string, got %T", args[1])
 	}
 	return req, policy, nil
-}
-
-// ExtractResource extracts the resource from the request.
-func ExtractResource(c *gin.Context) string {
-	// We use the namespace in the request as the resource.
-	resource := c.Param(ResourceNamespace)
-	if resource == emptyString {
-		return emptyString
-	}
-	return resource
-}
-
-// ExtractObject extracts the object from the request.
-func ExtractObject(c *gin.Context) string {
-	action := c.Request.Method
-	// Get the route map from the context. Key is in the format "method:path".
-	routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
-	// Return the object from the route map.
-	if RouteMap[routeMapKey] != nil {
-		return RouteMap[routeMapKey].Object
-	}
-	return emptyString
 }
