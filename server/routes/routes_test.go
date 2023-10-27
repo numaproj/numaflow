@@ -36,7 +36,12 @@ func TestRoutes(t *testing.T) {
 		ManagedNamespace: managedNamespace,
 		Namespaced:       namespaced,
 	}
-	Routes(router, sysInfo)
+
+	authInfo := AuthInfo{
+		DisableAuth:   false,
+		DexServerAddr: "test-dex-server-addr",
+	}
+	Routes(router, sysInfo, authInfo, "/")
 	t.Run("/404", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, "/404", nil)
@@ -52,5 +57,4 @@ func TestRoutes(t *testing.T) {
 		router.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
-
 }

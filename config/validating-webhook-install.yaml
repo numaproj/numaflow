@@ -7,6 +7,10 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-webhook
+    app.kubernetes.io/name: numaflow-webhook
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-webhook
 rules:
 - apiGroups:
@@ -68,6 +72,10 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-webhook
+    app.kubernetes.io/name: numaflow-webhook
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-webhook-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -89,6 +97,7 @@ spec:
     targetPort: 443
   selector:
     app.kubernetes.io/component: numaflow-webhook
+    app.kubernetes.io/name: numaflow-webhook
     app.kubernetes.io/part-of: numaflow
 ---
 apiVersion: apps/v1
@@ -101,11 +110,13 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: numaflow-webhook
+      app.kubernetes.io/name: numaflow-webhook
       app.kubernetes.io/part-of: numaflow
   template:
     metadata:
       labels:
         app.kubernetes.io/component: numaflow-webhook
+        app.kubernetes.io/name: numaflow-webhook
         app.kubernetes.io/part-of: numaflow
     spec:
       containers:

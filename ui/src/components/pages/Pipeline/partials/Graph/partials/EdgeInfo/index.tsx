@@ -106,7 +106,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
             src={edge.data.conditions}
             style={{
               width: "100%",
-              borderRadius: "4px",
+              borderRadius: "0.25rem",
               fontFamily: "IBM Plex Sans",
             }}
           />
