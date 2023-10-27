@@ -192,6 +192,7 @@ export function VertexDetails({
                 : "vertex-details-tab"
             }
             label="Pods View"
+            data-testid="pods-tab"
           />
           <Tab
             className={
@@ -200,6 +201,7 @@ export function VertexDetails({
                 : "vertex-details-tab"
             }
             label="Spec"
+            data-testid="spec-tab"
           />
           <Tab
             className={
@@ -208,6 +210,7 @@ export function VertexDetails({
                 : "vertex-details-tab"
             }
             label="Processing Rates"
+            data-testid="pr-tab"
           />
           <Tab
             className={
@@ -216,6 +219,7 @@ export function VertexDetails({
                 : "vertex-details-tab"
             }
             label="K8s Events"
+            data-testid="events-tab"
           />
           {buffers && (
             <Tab
@@ -225,6 +229,7 @@ export function VertexDetails({
                   : "vertex-details-tab"
               }
               label="Buffers"
+              data-testid="buffers-tab"
             />
           )}
         </Tabs>

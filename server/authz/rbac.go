@@ -36,9 +36,37 @@ const (
 	emptyString = ""
 )
 
-// GetEnforcer initializes the Casbin Enforcer with the model and policy.
-func GetEnforcer() (*casbin.Enforcer, error) {
+type CasbinObject struct {
+	enforcer *casbin.Enforcer
+}
 
+func NewCasbinObject() (*CasbinObject, error) {
+	enforcer, err := getEnforcer()
+	if err != nil {
+		return nil, err
+	}
+	return &CasbinObject{
+		enforcer: enforcer,
+	}, nil
+}
+
+func (cas *CasbinObject) Authorize(c *gin.Context, groups []string) (bool, error) {
+	resource := extractResource(c)
+	object := extractObject(c)
+	action := c.Request.Method
+	// Check if the user has permission for any of the groups.
+	for _, group := range groups {
+		// Get the user from the group. The group is in the format "group:role".
+		// Check if the user has permission using Casbin Enforcer.
+		if ok, _ := cas.enforcer.Enforce(group, resource, object, action); ok {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("user is not authorized to execute the requested action")
+}
+
+// getEnforcer initializes the Casbin Enforcer with the model and policy.
+func getEnforcer() (*casbin.Enforcer, error) {
 	modelRBAC, err := model.NewModelFromString(rbacModel)
 	if err != nil {
 		return nil, err
@@ -104,8 +132,8 @@ func extractArgs(args ...interface{}) (string, string, error) {
 	return req, policy, nil
 }
 
-// ExtractResource extracts the resource from the request.
-func ExtractResource(c *gin.Context) string {
+// extractResource extracts the resource from the request.
+func extractResource(c *gin.Context) string {
 	// We use the namespace in the request as the resource.
 	resource := c.Param(ResourceNamespace)
 	if resource == emptyString {
@@ -114,8 +142,8 @@ func ExtractResource(c *gin.Context) string {
 	return resource
 }
 
-// ExtractObject extracts the object from the request.
-func ExtractObject(c *gin.Context) string {
+// extractObject extracts the object from the request.
+func extractObject(c *gin.Context) string {
 	action := c.Request.Method
 	// Get the route map from the context. Key is in the format "method:path".
 	routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
