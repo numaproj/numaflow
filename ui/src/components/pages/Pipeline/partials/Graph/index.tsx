@@ -675,7 +675,10 @@ export default function Graph(props: GraphProps) {
                   }}
                 >
                   <CircularProgress
-                    sx={{ width: "1.25rem !important", height: "1.25rem !important" }}
+                    sx={{
+                      width: "1.25rem !important",
+                      height: "1.25rem !important",
+                    }}
                   />{" "}
                   <Box
                     sx={{
