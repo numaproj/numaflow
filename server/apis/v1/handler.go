@@ -270,16 +270,10 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	}
 
 	// get pipeline lag
-	dClient, _ := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline))
-	if dClient == nil {
-		dClient, err = daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
-			return
-		}
-		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
+	client, err := h.getDaemonClient(ns, pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 	}
-	client := dClient.(*daemonclient.DaemonClient)
 
 	var (
 		minWM int64 = math.MaxInt64
@@ -543,16 +537,10 @@ func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
-	dClient, _ := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline))
-	if dClient == nil {
-		dClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
-			return
-		}
-		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
+	client, err := h.getDaemonClient(ns, pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 	}
-	client := dClient.(*daemonclient.DaemonClient)
 
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipeline)
 	if err != nil {
@@ -567,16 +555,10 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
-	dClient, _ := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline))
-	if dClient == nil {
-		dClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
-			return
-		}
-		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
+	client, err := h.getDaemonClient(ns, pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 	}
-	client := dClient.(*daemonclient.DaemonClient)
 
 	watermarks, err := client.GetPipelineWatermarks(context.Background(), pipeline)
 	if err != nil {
@@ -650,16 +632,10 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 		return
 	}
 
-	dClient, _ := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline))
-	if dClient == nil {
-		dClient, err = daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
-		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
-			return
-		}
-		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
+	client, err := h.getDaemonClient(ns, pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 	}
-	client := dClient.(*daemonclient.DaemonClient)
 
 	var results = make(map[string][]*daemon.VertexMetrics)
 	for _, vertex := range pl.Spec.Vertices {
@@ -945,4 +921,17 @@ func validateNamespace(h *handler, pipeline *dfv1.Pipeline, ns string) error {
 
 func daemonSvcAddress(ns, pipeline string) string {
 	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
+}
+
+func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClient, error) {
+	dClient, _ := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline))
+	if dClient == nil {
+		dClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		if err != nil {
+			return nil, err
+		}
+		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
+	}
+
+	return dClient.(*daemonclient.DaemonClient), nil
 }
