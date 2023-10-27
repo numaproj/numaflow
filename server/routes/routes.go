@@ -23,8 +23,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/server/apis"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/authz"
 )
 
@@ -86,7 +86,7 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject) {
 }
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
-// for the route along with an entry in the RouteMap in routes/route_map.go.
+// for the route along with an entry in the RouteMap in auth/route_map.go.
 func v1Routes(r gin.IRouter) {
 	handler, err := v1.NewHandler()
 	if err != nil {
@@ -140,10 +140,12 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
 }
 
-func authMiddleware(authorizer authz.Authorizer, authenticator apis.Authenticator) gin.HandlerFunc {
+func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var userInfo authn.UserIdInfo
 		// Authenticate the user.
-		if _, err := authenticator.Authenticate(c); err != nil {
+		userInfo, err := authenticator.Authenticate(c)
+		if err != nil {
 			errMsg := fmt.Sprintf("failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
@@ -154,7 +156,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator apis.Authenticato
 		// Check if the route requires authorization.
 		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuthZ {
 			// If the user is not authorized, return an error.
-			if isAuthorized, _ := authorizer.Authorize(c); !isAuthorized {
+			if isAuthorized, _ := authorizer.Authorize(c, userInfo.IDTokenClaims.Groups); !isAuthorized {
 				errMsg := "user is not authorized to execute the requested action"
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()

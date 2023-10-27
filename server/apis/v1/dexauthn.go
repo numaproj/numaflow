@@ -99,20 +99,20 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 	}, nil
 }
 
-func (d *DexObject) Authenticate(c *gin.Context) (bool, error) {
+func (d *DexObject) Authenticate(c *gin.Context) (authn.UserIdInfo, error) {
 	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
-		return false, fmt.Errorf("failed to get user identity token from cookie: %v", err)
+		return authn.UserIdInfo{}, fmt.Errorf("failed to get user identity token from cookie: %v", err)
 	}
-	userIdentityToken, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
+	userIdInfo, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse user identity token: %v", err)
+		return authn.UserIdInfo{}, fmt.Errorf("failed to parse user identity token: %v", err)
 	}
-	_, err = d.verify(c, userIdentityToken.IDToken)
+	_, err = d.verify(c, userIdInfo.IDToken)
 	if err != nil {
-		return false, err
+		return authn.UserIdInfo{}, err
 	}
-	return true, nil
+	return userIdInfo, nil
 }
 
 // verify is used to validate the user ID token.

@@ -25,9 +25,6 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	"github.com/gin-gonic/gin"
-
-	"github.com/numaproj/numaflow/server/common"
-	"github.com/numaproj/numaflow/server/utils"
 )
 
 var (
@@ -54,18 +51,7 @@ func NewCasbinObject() (*CasbinObject, error) {
 	}, nil
 }
 
-func (cas *CasbinObject) Authorize(c *gin.Context) (bool, error) {
-	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
-	if err != nil {
-		return false, fmt.Errorf("failed to get user identity token from cookie: %v", err)
-	}
-	userIdentityToken, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse user identity token: %v", err)
-	}
-	// Authorize the user and the request.
-	// Get the user from the user identity token.
-	groups := userIdentityToken.IDTokenClaims.Groups
+func (cas *CasbinObject) Authorize(c *gin.Context, groups []string) (bool, error) {
 	resource := extractResource(c)
 	object := extractObject(c)
 	action := c.Request.Method
@@ -73,7 +59,7 @@ func (cas *CasbinObject) Authorize(c *gin.Context) (bool, error) {
 	for _, group := range groups {
 		// Get the user from the group. The group is in the format "group:role".
 		// Check if the user has permission using Casbin Enforcer.
-		if enforceRBAC(cas.enforcer, group, resource, object, action) {
+		if ok, _ := cas.enforcer.Enforce(group, resource, object, action); ok {
 			return true, nil
 		}
 	}
@@ -145,12 +131,6 @@ func extractArgs(args ...interface{}) (string, string, error) {
 		return emptyString, emptyString, fmt.Errorf("expected second argument to be string, got %T", args[1])
 	}
 	return req, policy, nil
-}
-
-// enforceRBAC checks if the user has permission based on the Casbin model and policy.
-func enforceRBAC(enforcer *casbin.Enforcer, user, resource, object, action string) bool {
-	ok, _ := enforcer.Enforce(user, resource, object, action)
-	return ok
 }
 
 // extractResource extracts the resource from the request.

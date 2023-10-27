@@ -1,16 +1,10 @@
 package authn
 
-import (
-	"context"
-
-	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/gin-gonic/gin"
-)
+import "github.com/gin-gonic/gin"
 
 type Authenticator interface {
-	HandleLogin(c *gin.Context)
-	HandleCallback(c *gin.Context)
-	HandleLogout(c *gin.Context)
-	Authenticate(c *gin.Context) (string, error)
-	Verify(ctx context.Context, rawIDToken string) (*oidc.IDToken, error)
+	// Authenticate is used to validate the user's identity.
+	// If the user is authenticated, the function returns user information.
+	// Otherwise, empty information with the corresponding error.
+	Authenticate(c *gin.Context) (UserIdInfo, error)
 }
