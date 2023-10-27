@@ -32,17 +32,16 @@ type IDTokenClaims struct {
 	PreferredUsername string   `json:"preferred_username"`
 }
 
-// UserIdInfo includes information about the user identity
+// UserInfo includes information about the user identity
 // It holds the IDTokenClaims, IDToken and RefreshToken for the user
-type UserIdInfo struct {
+type UserInfo struct {
 	IDTokenClaims IDTokenClaims `json:"id_token_claims"`
 	IDToken       string        `json:"id_token"`
 	RefreshToken  string        `json:"refresh_token"`
 }
 
-// NewUserIdInfo return a Callback Response Object.
-func NewUserIdInfo(itc IDTokenClaims, idToken string, refreshToken string) UserIdInfo {
-	return UserIdInfo{
+func NewUserInfo(itc IDTokenClaims, idToken string, refreshToken string) UserInfo {
+	return UserInfo{
 		IDTokenClaims: itc,
 		IDToken:       idToken,
 		RefreshToken:  refreshToken,

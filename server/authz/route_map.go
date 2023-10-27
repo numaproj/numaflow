@@ -20,20 +20,21 @@ package authz
 // corresponding to the route and a boolean to indicate whether the route requires
 // authorization.
 type RouteInfo struct {
-	Object       string
-	RequiresAuth bool
+	Object        string
+	RequiresAuthZ bool
 }
 
 // newRouteInfo creates a new RouteInfo object.
-func newRouteInfo(object string, requiresAuth bool) *RouteInfo {
+func newRouteInfo(object string, requiresAuthZ bool) *RouteInfo {
 	return &RouteInfo{
-		Object:       object,
-		RequiresAuth: requiresAuth,
+		Object:        object,
+		RequiresAuthZ: requiresAuthZ,
 	}
 }
 
-// RouteMap is a map of routes to their corresponding RouteInfo objects. This map is used to certain
-// information about the route.
+// RouteMap is a map of routes to their corresponding RouteInfo objects.
+// It saves the object corresponding to the route and a boolean to indicate
+// whether the route requires authorization.
 var RouteMap = map[string]*RouteInfo{
 	"GET:/api/v1/sysinfo":                                                         newRouteInfo(ObjectPipeline, false),
 	"GET:/api/v1/authinfo":                                                        newRouteInfo(ObjectEvents, false),
