@@ -45,3 +45,8 @@ type Handler interface {
 	GetNamespaceEvents(c *gin.Context)
 	GetPipelineStatus(c *gin.Context)
 }
+
+type Authenticator interface {
+	// Authenticate is used to validate the user's identity.
+	Authenticate(c *gin.Context) (bool, error)
+}

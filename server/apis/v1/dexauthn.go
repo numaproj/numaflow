@@ -34,6 +34,7 @@ import (
 
 	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
+	"github.com/numaproj/numaflow/server/utils"
 )
 
 // DexObject is a struct that holds details for dex handlers.
@@ -98,8 +99,24 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 	}, nil
 }
 
-// Verify is used to validate the user ID token.
-func (d *DexObject) Verify(ctx context.Context, rawIDToken string) (*oidc.IDToken, error) {
+func (d *DexObject) Authenticate(c *gin.Context) (bool, error) {
+	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get user identity token from cookie: %v", err)
+	}
+	userIdentityToken, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse user identity token: %v", err)
+	}
+	_, err = d.verify(c, userIdentityToken.IDToken)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// verify is used to validate the user ID token.
+func (d *DexObject) verify(ctx context.Context, rawIDToken string) (*oidc.IDToken, error) {
 	verifier, err := d.verifier()
 	if err != nil {
 		return nil, err
@@ -199,7 +216,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	idToken, err := d.Verify(r.Context(), rawIDToken)
+	idToken, err := d.verify(r.Context(), rawIDToken)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to verify ID token: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))

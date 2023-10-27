@@ -24,6 +24,10 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
+	"github.com/gin-gonic/gin"
+
+	"github.com/numaproj/numaflow/server/common"
+	"github.com/numaproj/numaflow/server/utils"
 )
 
 var (
@@ -35,9 +39,49 @@ const (
 	emptyString = ""
 )
 
-// GetEnforcer initializes the Casbin Enforcer with the model and policy.
-func GetEnforcer() (*casbin.Enforcer, error) {
+type CasbinObject struct {
+	enforcer *casbin.Enforcer
+}
 
+// NewCasbinObject creates a new CasbinObject.
+func NewCasbinObject() (*CasbinObject, error) {
+	enforcer, err := getEnforcer()
+	if err != nil {
+		return nil, err
+	}
+	return &CasbinObject{
+		enforcer: enforcer,
+	}, nil
+}
+
+func (cas *CasbinObject) Authorize(c *gin.Context) (bool, error) {
+	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get user identity token from cookie: %v", err)
+	}
+	userIdentityToken, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse user identity token: %v", err)
+	}
+	// Authorize the user and the request.
+	// Get the user from the user identity token.
+	groups := userIdentityToken.IDTokenClaims.Groups
+	resource := extractResource(c)
+	object := extractObject(c)
+	action := c.Request.Method
+	// Check if the user has permission for any of the groups.
+	for _, group := range groups {
+		// Get the user from the group. The group is in the format "group:role".
+		// Check if the user has permission using Casbin Enforcer.
+		if enforceRBAC(cas.enforcer, group, resource, object, action) {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("user is not authorized to execute the requested action")
+}
+
+// getEnforcer initializes the Casbin Enforcer with the model and policy.
+func getEnforcer() (*casbin.Enforcer, error) {
 	modelRBAC, err := model.NewModelFromString(rbacModel)
 	if err != nil {
 		return nil, err
@@ -101,4 +145,32 @@ func extractArgs(args ...interface{}) (string, string, error) {
 		return emptyString, emptyString, fmt.Errorf("expected second argument to be string, got %T", args[1])
 	}
 	return req, policy, nil
+}
+
+// enforceRBAC checks if the user has permission based on the Casbin model and policy.
+func enforceRBAC(enforcer *casbin.Enforcer, user, resource, object, action string) bool {
+	ok, _ := enforcer.Enforce(user, resource, object, action)
+	return ok
+}
+
+// extractResource extracts the resource from the request.
+func extractResource(c *gin.Context) string {
+	// We use the namespace in the request as the resource.
+	resource := c.Param(ResourceNamespace)
+	if resource == emptyString {
+		return emptyString
+	}
+	return resource
+}
+
+// extractObject extracts the object from the request.
+func extractObject(c *gin.Context) string {
+	action := c.Request.Method
+	// Get the route map from the context. Key is in the format "method:path".
+	routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
+	// Return the object from the route map.
+	if RouteMap[routeMapKey] != nil {
+		return RouteMap[routeMapKey].Object
+	}
+	return emptyString
 }

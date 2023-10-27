@@ -20,15 +20,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/server/apis"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
-	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/authz"
-	"github.com/numaproj/numaflow/server/common"
-	"github.com/numaproj/numaflow/server/utils"
 )
 
 type SystemInfo struct {
@@ -62,12 +59,12 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group("/api/v1")
 	if !authInfo.DisableAuth {
-		enforcer, err := authz.GetEnforcer()
+		authorizer, err := authz.NewCasbinObject()
 		if err != nil {
 			panic(err)
 		}
 		// Add the AuthN/AuthZ middleware to the group.
-		r1Group.Use(authMiddleware(enforcer, dexObj))
+		r1Group.Use(authMiddleware(authorizer, dexObj))
 	}
 	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
@@ -141,48 +138,31 @@ func v1Routes(r gin.IRouter) {
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
-
 }
 
-func authMiddleware(enforcer *casbin.Enforcer, dexObj *v1.DexObject) gin.HandlerFunc {
+func authMiddleware(authorizer authz.Authorizer, authenticator apis.Authenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Authenticate the user.
-		userIdentityToken, err := authenticate(c, dexObj)
-		if err != nil {
+		if _, err := authenticator.Authenticate(c); err != nil {
 			errMsg := fmt.Sprintf("failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 			return
 		}
-		// Authorize the user and the request.
-		// Get the user from the user identity token.
-		groups := userIdentityToken.IDTokenClaims.Groups
-		resource := extractResource(c)
-		object := extractObject(c)
-		action := c.Request.Method
-		isAuthorized := false
-
 		// Get the route map from the context. Key is in the format "method:path".
-		routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
-		// Check if the route requires auth.
-		if RouteMap[routeMapKey] != nil && RouteMap[routeMapKey].RequiresAuthZ {
-			// Check if the user has permission for any of the groups.
-			for _, group := range groups {
-				// Get the user from the group. The group is in the format "group:role".
-				// Check if the user has permission using Casbin Enforcer.
-				if enforceRBAC(enforcer, group, resource, object, action) {
-					isAuthorized = true
-					c.Next()
-					break
-				}
-			}
+		routeMapKey := fmt.Sprintf("%s:%s", c.Request.Method, c.FullPath())
+		// Check if the route requires authorization.
+		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuthZ {
 			// If the user is not authorized, return an error.
-			if !isAuthorized {
-				errMsg := "user is not authorized to execute the requested action."
+			if isAuthorized, _ := authorizer.Authorize(c); !isAuthorized {
+				errMsg := "user is not authorized to execute the requested action"
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
+			} else {
+				// If the user is authorized, continue the request.
+				c.Next()
 			}
-		} else if RouteMap[routeMapKey] != nil && !RouteMap[routeMapKey].RequiresAuthZ {
+		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuthZ {
 			// If the route does not require authZ, skip the authZ check.
 			c.Next()
 		} else {
@@ -194,49 +174,4 @@ func authMiddleware(enforcer *casbin.Enforcer, dexObj *v1.DexObject) gin.Handler
 			return
 		}
 	}
-}
-
-// authenticate authenticates the user by consulting Dex.
-func authenticate(c *gin.Context, dexObj *v1.DexObject) (*authn.UserIdInfo, error) {
-	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user identity token from cookie: %v", err)
-	}
-	userIdentityToken, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse user identity token: %v", err)
-	}
-	_, err = dexObj.Verify(c, userIdentityToken.IDToken)
-	if err != nil {
-		return nil, err
-	}
-	return &userIdentityToken, nil
-}
-
-// enforceRBAC checks if the user has permission based on the Casbin model and policy.
-func enforceRBAC(enforcer *casbin.Enforcer, user, resource, object, action string) bool {
-	ok, _ := enforcer.Enforce(user, resource, object, action)
-	return ok
-}
-
-// extractResource extracts the resource from the request.
-func extractResource(c *gin.Context) string {
-	// We use the namespace in the request as the resource.
-	resource := c.Param(authz.ResourceNamespace)
-	if resource == common.EmptyString {
-		return common.EmptyString
-	}
-	return resource
-}
-
-// extractObject extracts the object from the request.
-func extractObject(c *gin.Context) string {
-	action := c.Request.Method
-	// Get the route map from the context. Key is in the format "method:path".
-	routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
-	// Return the object from the route map.
-	if RouteMap[routeMapKey] != nil {
-		return RouteMap[routeMapKey].Object
-	}
-	return common.EmptyString
 }

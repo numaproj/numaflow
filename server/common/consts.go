@@ -22,5 +22,4 @@ const (
 	StateCookieMaxAge        = 60 * 5
 	UserIdentityCookieName   = "user-identity-token"
 	UserIdentityCookieMaxAge = 60 * 60
-	EmptyString              = ""
 )
