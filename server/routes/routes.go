@@ -145,7 +145,6 @@ func v1Routes(r gin.IRouter) {
 // to execute the requested action before sending the request to the api handler.
 func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var userInfo authn.UserInfo
 		// Authenticate the user.
 		userInfo, err := authenticator.Authenticate(c)
 		if err != nil {
