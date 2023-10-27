@@ -51,7 +51,8 @@ export async function getAPIResponseError(
       try {
         const data = await response.json();
         if (data.errMsg) {
-          message = response.status === 403 ? `Error: ${data.errMsg}` : data.errMsg;
+          message =
+            response.status === 403 ? `Error: ${data.errMsg}` : data.errMsg;
         }
       } catch (e) {
         // Ignore
@@ -342,3 +343,11 @@ export const timeAgo = (timestamp: string) => {
     }
   return time;
 };
+
+export const PIPELINE_STATUS_TOOLTIP = "Pipeline health is determined by backpressure. Active pipelines are running, while non-active pipelines are failed, pausing, paused, or deleting."
+export const ISB_SERVICES_TOOLTIP = "Inter State Buffer Services are used to transfer data between vertices in a pipeline.";
+export const ISB_SERVICES_STATUS_TOOLTIP = "The health of ISB Services is determined by processing requests. Active ISB Services are currently running, while non-active ISB Services are either failed or pending."
+export const MAX_LAG_TOOLTIP = "Max lag is the longest delay between the most recent watermark processed and the current time."
+export const ERRORS_TOOLTIP = "Errors that occur when attempting to retrieve data";
+// export const PIPELINES_TOOLTIP = "Pipelines list"
+// export const ISB_TOOLTIP = "Inter State Buffer services list"

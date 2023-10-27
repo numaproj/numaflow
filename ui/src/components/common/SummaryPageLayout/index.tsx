@@ -270,13 +270,13 @@ export function SummaryPageLayout({
           zIndex: (theme) => theme.zIndex.drawer - 1,
           position: "fixed",
           top: "5.75rem",
-          padding: "0.5rem",
         }}
       >
         <Box
           sx={{
             display: "flex",
             width: "100%",
+            padding: "0rem",
           }}
         >
           {getSummaryComponent(summarySections)}

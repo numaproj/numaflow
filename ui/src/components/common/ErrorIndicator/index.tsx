@@ -1,11 +1,13 @@
 import React, { useContext, useCallback } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
+import Tooltip from "@mui/material/Tooltip";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
 import { SidebarType } from "../SlidingSidebar";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import ErrorIcon from "@mui/icons-material/Error";
+import { ERRORS_TOOLTIP } from "../../../utils";
 
 import "./style.css";
 
@@ -20,24 +22,28 @@ export function ErrorIndicator() {
   }, []);
 
   return (
-    <Paper
-      elevation={1}
-      sx={{
-        cursor: "pointer",
-        padding: "0.25rem 0.5rem",
-      }}
-      onClick={onErrorClick}
-    >
-      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center" }}>
-        {errors && errors.length ? (
-          <ErrorIcon sx={{ color: "#D52B1E" }} />
-        ) : (
-          <ErrorOutlineIcon sx={{ color: "#6B6C72" }} />
-        )}
-        {errors.length ? (
-          <span className="error-indicator-text">Error occurred</span>
-        ) : undefined}
-      </Box>
-    </Paper>
+    <Tooltip title={ERRORS_TOOLTIP} arrow>
+      <Paper
+        elevation={1}
+        sx={{
+          cursor: "pointer",
+          padding: "0.25rem 0.5rem",
+        }}
+        onClick={onErrorClick}
+      >
+        <Box
+          sx={{ display: "flex", flexDirection: "row", alignItems: "center" }}
+        >
+          {errors && errors.length ? (
+            <ErrorIcon sx={{ color: "#D52B1E" }} />
+          ) : (
+            <ErrorOutlineIcon sx={{ color: "#6B6C72" }} />
+          )}
+          {errors.length ? (
+            <span className="error-indicator-text">Error occurred</span>
+          ) : undefined}
+        </Box>
+      </Paper>
+    </Tooltip>
   );
 }

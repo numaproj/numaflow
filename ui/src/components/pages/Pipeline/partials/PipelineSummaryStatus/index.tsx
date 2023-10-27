@@ -4,8 +4,9 @@ import { useParams } from "react-router-dom";
 import { SidebarType } from "../../../../common/SlidingSidebar";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
-import { DurationString } from "../../../../../utils";
+import { DurationString, MAX_LAG_TOOLTIP } from "../../../../../utils";
 import { ViewType } from "../../../../common/SpecEditor";
+import Tooltip from "@mui/material/Tooltip";
 
 import "./style.css";
 
@@ -102,18 +103,20 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
             sx={{
               display: "flex",
               flexDirection: "column",
-              width: "12rem"
+              width: "12rem",
             }}
           >
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
-                <div>
-                  <span className="pipeline-summary-subtitle">Max lag:</span>
-                  <span className="pipeline-summary-text">
-                    {" "}
-                    {DurationString(lag)}
-                  </span>
-                </div>
+                <Tooltip title={MAX_LAG_TOOLTIP} placement="top-start" arrow>
+                  <div>
+                    <span className="pipeline-summary-subtitle">Max lag:</span>
+                    <span className="pipeline-summary-text">
+                      {" "}
+                      {DurationString(lag)}
+                    </span>
+                  </div>
+                </Tooltip>
               </span>
             </div>
             <div className="pipeline-summary-text">

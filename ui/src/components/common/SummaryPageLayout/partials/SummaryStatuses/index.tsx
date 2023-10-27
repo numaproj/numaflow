@@ -1,6 +1,7 @@
 import React from "react";
 import Box from "@mui/material/Box";
 import { StatusBar } from "../../../StatusBar";
+import { Help } from "../../../Help";
 import circleCheck from "../../../../../images/checkmark-circle.png";
 import circleDash from "../../../../../images/circle-dash.png";
 
@@ -15,6 +16,7 @@ export interface SummaryStatusesProps {
   critical: number;
   activeText?: string;
   inAcitveText?: string;
+  tooltip?: string;
   linkComponent?: React.ReactNode;
 }
 
@@ -27,6 +29,7 @@ export function SummaryStatuses({
   critical,
   activeText = "Active",
   inAcitveText = "Non-Active",
+  tooltip,
   linkComponent,
 }: SummaryStatusesProps) {
   return (
@@ -40,6 +43,22 @@ export function SummaryStatuses({
         justifyContent: "center",
       }}
     >
+      {tooltip && (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "right",
+            width: "100%",
+            justifyContent: "flex-end",
+            paddingRight: "0.2rem",
+            marginBottom: "-1rem",
+            marginRight: "1rem",
+          }}
+        >
+          <Help tooltip={tooltip} />
+        </Box>
+      )}
       <Box sx={{ width: "fit-content" }}>
         <span className="summary-statuses-title">{title}</span>
         <Box
