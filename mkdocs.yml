@@ -73,6 +73,7 @@ nav:
                   - Overview: "user-guide/user-defined-functions/map/builtin-functions/README.md"
                   - Cat: "user-guide/user-defined-functions/map/builtin-functions/cat.md"
                   - Filter: "user-guide/user-defined-functions/map/builtin-functions/filter.md"
+              - Examples: "user-guide/user-defined-functions/map/examples.md"
           - Reduce:
               - Overview: "user-guide/user-defined-functions/reduce/reduce.md"
               - Windowing:
