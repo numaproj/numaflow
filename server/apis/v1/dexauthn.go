@@ -34,7 +34,6 @@ import (
 
 	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
-	"github.com/numaproj/numaflow/server/utils"
 )
 
 // DexObject is a struct that holds details for dex handlers.
@@ -100,19 +99,19 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 }
 
 func (d *DexObject) Authenticate(c *gin.Context) (authn.UserIdInfo, error) {
+	userInfo := authn.UserIdInfo{}
 	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
-		return authn.UserIdInfo{}, fmt.Errorf("failed to get user identity token from cookie: %v", err)
+		return userInfo, fmt.Errorf("failed to get user identity token from cookie: %v", err)
 	}
-	userIdInfo, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
-	if err != nil {
-		return authn.UserIdInfo{}, fmt.Errorf("failed to parse user identity token: %v", err)
+	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
+		return userInfo, fmt.Errorf("failed to parse user identity token: %v", err)
 	}
-	_, err = d.verify(c, userIdInfo.IDToken)
+	_, err = d.verify(c, userInfo.IDToken)
 	if err != nil {
 		return authn.UserIdInfo{}, err
 	}
-	return userIdInfo, nil
+	return userInfo, nil
 }
 
 // verify is used to validate the user ID token.
