@@ -29,10 +29,3 @@ type ReduceApplier interface {
 	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error)
 	AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) (<-chan []*isb.WriteMessage, <-chan error)
 }
-
-// ApplyReduceFunc utility function used to create a Reducer implementation
-type ApplyReduceFunc func(context.Context, *partition.ID, <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error)
-
-func (a ApplyReduceFunc) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return a(ctx, partitionID, messageStream)
-}

@@ -171,6 +171,8 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 	}
 }
 
+// AsyncApplyReduce accepts a channel of isbMessages and returns the aggregated result asynchronously on the responseCh channel
+// and any error on the errCh channel, it doesn't wait for the output of all the keys to be available.
 func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) (<-chan []*isb.WriteMessage, <-chan error) {
 	var (
 		errCh      = make(chan error)
@@ -186,52 +188,47 @@ func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *par
 
 	grpcCtx := metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
 
-	//responseCh, errCh := u.client.AsyncReduceFn(grpcCtx, messageStream, partitionID)
+	// invoke the AsyncReduceFn method with datumCh channel and send the result to responseCh channel
+	// and any error to errCh channel
 	go func() {
 		resultCh, reduceErrCh := u.client.AsyncReduceFn(grpcCtx, datumCh)
 		for {
 			select {
 			case result, ok := <-resultCh:
-				if !ok {
+				if !ok || result == nil {
+					// if the resultCh channel is closed, close the responseCh and errCh channels and return
 					close(responseCh)
-					close(errCh)
 					return
 				}
-				st := time.Now()
 				responseCh <- convertToWriteMessages(result, partitionID)
-				println("time taken to write the response to ch - ", time.Since(st).Milliseconds())
-			case err, _ := <-reduceErrCh:
+			case err := <-reduceErrCh:
 				if err != nil {
 					errCh <- err
 				}
 			case <-ctx.Done():
-				errCh <- ctx.Err()
 				return
 			}
 		}
 	}()
 
-	// create datum from isbMessage and send it to datumCh channel for reduceFn
+	// create datum from isbMessage and send it to datumCh channel for AsyncReduceFn
 	go func() {
 		// after reading all the messages from the messageStream or if ctx was canceled close the datumCh channel
-		defer close(datumCh)
+		defer func() {
+			close(datumCh)
+		}()
 		for {
 			select {
 			case msg, ok := <-messageStream:
 				// if the messageStream is closed or if the message is nil, return
 				if !ok || msg == nil {
-					println("message stream was closed sending closed signal to client")
 					return
 				}
 
 				d := createDatum(msg)
 
 				// send the datum to datumCh channel, handle the case when the context is canceled
-				select {
-				case datumCh <- d:
-				case <-ctx.Done():
-					return
-				}
+				datumCh <- d
 
 			case <-ctx.Done(): // if the context is done, return
 				return

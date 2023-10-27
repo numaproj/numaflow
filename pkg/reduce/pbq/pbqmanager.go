@@ -98,7 +98,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID, wi
 		pipelineName:  m.pipelineName,
 		vertexReplica: m.vertexReplica,
 		store:         persistentStore,
-		output:        make(chan *isb.ReadMessage, m.pbqOptions.channelBufferSize),
+		output:        make(chan *isb.ReadMessage),
 		cob:           false,
 		PartitionID:   partitionID,
 		options:       m.pbqOptions,

@@ -41,7 +41,7 @@ import (
 
 var retryDelay = 1 * time.Second
 
-// ForwardTask wraps the `processAndForward`.
+// ForwardTask wraps the `ProcessAndForward`.
 type ForwardTask struct {
 	// doneCh is used to notify when the ForwardTask has been completed.
 	doneCh chan struct{}
@@ -102,31 +102,40 @@ func (op *OrderedProcessor) InsertTask(t *ForwardTask) {
 	op.taskQueue.PushBack(t)
 }
 
+// AsyncSchedulePnF creates and schedules the PnF routine asynchronously.
+// does not maintain the order of pnf execution.
+func (op *OrderedProcessor) AsyncSchedulePnF(ctx context.Context,
+	partitionID partition.ID,
+	pbq pbq.ReadWriteCloser,
+) {
+	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager)
+	go pf.AsyncProcessForward(ctx)
+}
+
 // SchedulePnF creates and schedules the PnF routine.
 func (op *OrderedProcessor) SchedulePnF(
 	ctx context.Context,
 	partitionID partition.ID,
 	pbq pbq.ReadWriteCloser,
-) {
+) *ForwardTask {
 
-	//pq := op.pbqManager.GetPBQ(partitionID)
+	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager)
 
-	_ = newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager)
+	doneCh := make(chan struct{})
+	t := &ForwardTask{
+		doneCh: doneCh,
+		pf:     pf,
+	}
+	partitionsInFlight.With(map[string]string{
+		metrics.LabelVertex:             op.vertexName,
+		metrics.LabelPipeline:           op.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
+	}).Inc()
 
-	//doneCh := make(chan struct{})
-	//t := &ForwardTask{
-	//	doneCh: doneCh,
-	//	pf:     pf,
-	//}
-	//partitionsInFlight.With(map[string]string{
-	//	metrics.LabelVertex:             op.vertexName,
-	//	metrics.LabelPipeline:           op.pipelineName,
-	//	metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
-	//}).Inc()
-	//
-	//// invoke the reduce function
-	//go op.reduceOp(ctx, t)
-	return
+	// invoke the reduce function
+	go op.reduceOp(ctx, t)
+
+	return t
 }
 
 // reduceOp invokes the reduce function. The reducer is a long-running function since we stream in the data and it has

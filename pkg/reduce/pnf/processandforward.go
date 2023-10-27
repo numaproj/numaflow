@@ -62,7 +62,7 @@ type ProcessAndForward struct {
 	pbqManager     *pbq.Manager
 }
 
-// newProcessAndForward will return a new processAndForward instance
+// newProcessAndForward will return a new ProcessAndForward instance
 func newProcessAndForward(ctx context.Context,
 	vertexName string,
 	pipelineName string,
@@ -91,8 +91,6 @@ func newProcessAndForward(ctx context.Context,
 		pbqManager:     manager,
 	}
 
-	go pf.AsyncProcessForward(ctx)
-
 	return pf
 }
 
@@ -111,9 +109,10 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 	return err
 }
 
+// AsyncProcessForward reads messages from the supplied PBQ, invokes UDF to reduce the writeMessages, and then forwards
+// the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
+// manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
 func (p *ProcessAndForward) AsyncProcessForward(ctx context.Context) {
-	results := make([]*isb.WriteMessage, 0)
-	startTime := time.Now()
 	resultMessagesCh, errCh := p.UDF.AsyncApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 
 outerLoop:
@@ -122,17 +121,14 @@ outerLoop:
 		case <-ctx.Done():
 			return
 		case err := <-errCh:
-			if err != ctx.Err() {
-				p.log.Panic("Got an error while invoking AsyncApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
+			if err == ctx.Err() {
+				return
 			}
-			return
+			p.log.Panic("Got an error while invoking AsyncApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
 		case resultMessages, ok := <-resultMessagesCh:
-			results = append(results, resultMessages...)
-			sTime := time.Now()
-			if !ok {
+			if !ok || resultMessages == nil {
 				break outerLoop
 			}
-			println("got a result to process and forward")
 			messagesToStep := p.whereToStep(resultMessages)
 			// store write offsets to publish watermark
 			writeOffsets := make(map[string][][]isb.Offset)
@@ -160,24 +156,35 @@ outerLoop:
 				}
 			}
 
+			// 60 - 70
+			// 70 - 80
+			// 80 - 90 -> 90
+			// 100
+
 			// wait until all the writer go routines return
 			wg.Wait()
 
+			// publish watermark, we publish window end time as watermark
+			// but if there's a window that's about to be closed which has a end time before the current window end time,
+			// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
 			nextWindowToBeClosed := p.pbqManager.NextWindowToBeMaterialized()
 			if nextWindowToBeClosed != nil && nextWindowToBeClosed.EndTime().Before(p.PartitionID.End) {
 				p.publishWM(ctx, wmb.Watermark(nextWindowToBeClosed.EndTime().Add(-1*time.Millisecond)), writeOffsets)
 			} else {
 				p.publishWM(ctx, wmb.Watermark(p.PartitionID.End.Add(-1*time.Millisecond)), writeOffsets)
 			}
-			println("time taken to process one result - ", time.Since(sTime).Milliseconds())
+			// TODO: should we consider compacting the pbq here? Since we have successfully processed all the messages for a window + key.
+			// it could be a async call, we don't need to wait for it to finish.
 		}
 	}
+
+	// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
 	err := p.pbqReader.GC()
+	p.log.Infow("Finished GC", zap.Any("partitionID", p.PartitionID))
 	if err != nil {
 		p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.PartitionID))
 		return
 	}
-	println("time taken to process and forward - ", time.Since(startTime).Milliseconds())
 }
 
 // Forward writes messages to the ISBs, publishes watermark, and invokes GC on PBQ.

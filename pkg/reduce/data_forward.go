@@ -296,7 +296,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID parti
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
-		df.of.SchedulePnF(ctx, partitionID, q)
+		df.of.AsyncSchedulePnF(ctx, partitionID, q)
 		//df.udfInvocationTracking[partitionID] = t
 		df.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
@@ -384,7 +384,6 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 
 // writeMessagesToWindows write the messages to each window that message belongs to. Each window is backed by a PBQ.
 func (df *DataForward) writeMessagesToWindows(ctx context.Context, messages []*isb.ReadMessage) ([]*isb.ReadMessage, error) {
-	startTime := time.Now()
 	var err error
 	var writtenMessages = make([]*isb.ReadMessage, 0, len(messages))
 
@@ -423,7 +422,6 @@ messagesLoop:
 		// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
 		// to be violated.
 		if !message.IsLate && message.EventTime.Before(message.Watermark.Add(-1*df.opts.allowedLateness)) {
-			// TODO: track as a counter metric
 			df.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
 			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
 			writtenMessages = append(writtenMessages, message)
@@ -458,7 +456,6 @@ messagesLoop:
 
 		writtenMessages = append(writtenMessages, message)
 	}
-	println("Time taken to write to windows/pbqs - ", time.Since(startTime).Milliseconds())
 	return writtenMessages, err
 }
 

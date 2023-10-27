@@ -27,10 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -154,49 +151,48 @@ outputLoop:
 	return finalResponse, nil
 }
 
+// AsyncReduceFn applies a reduce function to a datum stream asynchronously.
 func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.ReduceRequest) (<-chan *reducepb.ReduceResponse, <-chan error) {
 	var (
-		errCh      = make(chan error, 100)
+		errCh      = make(chan error)
 		responseCh = make(chan *reducepb.ReduceResponse)
 	)
 
+	// stream the messages to server
 	stream, err := c.grpcClt.ReduceFn(ctx)
 
 	if err != nil {
 		go func() {
-			select {
-			case <-ctx.Done():
-				return
-			case errCh <- util.ToUDFErr("c.grpcClt.ReduceFn", err):
-				return
-			}
+			errCh <- util.ToUDFErr("c.grpcClt.ReduceFn", err)
 		}()
 	}
 
+	// read from the datumStreamCh channel and send it to the server stream
 	go func() {
 		var sendErr error
 	outerLoop:
 		for {
 			select {
 			case <-ctx.Done():
-				errCh <- ctx.Err()
 				return
 			case datum, ok := <-datumStreamCh:
 				if !ok {
 					break outerLoop
 				}
 				if sendErr = stream.Send(datum); sendErr != nil {
-					println("got an error while sending to client")
 					errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
 				}
 			}
 		}
+		// close the stream after sending all the messages
 		sendErr = stream.CloseSend()
 		if sendErr != nil {
 			errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
 		}
 	}()
 
+	// read the response from the server stream and send it to responseCh channel
+	// any error is sent to errCh channel
 	go func() {
 		var resp *reducepb.ReduceResponse
 		var recvErr error
@@ -207,9 +203,9 @@ func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *reduce
 				return
 			default:
 				resp, recvErr = stream.Recv()
+				// if the stream is closed, close the responseCh and errCh channels and return
 				if recvErr == io.EOF {
 					close(responseCh)
-					close(errCh)
 					return
 				}
 				if recvErr != nil {
@@ -221,41 +217,4 @@ func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *reduce
 	}()
 
 	return responseCh, errCh
-}
-
-func createDatum(readMessage *isb.ReadMessage) *reducepb.ReduceRequest {
-	keys := readMessage.Keys
-	payload := readMessage.Body.Payload
-	parentMessageInfo := readMessage.MessageInfo
-	var d = &reducepb.ReduceRequest{
-		Keys:      keys,
-		Value:     payload,
-		EventTime: timestamppb.New(parentMessageInfo.EventTime),
-		Watermark: timestamppb.New(readMessage.Watermark),
-	}
-	return d
-}
-
-func convertToWriteMessages(response *reducepb.ReduceResponse, partitionID *partition.ID) []*isb.WriteMessage {
-	taggedMessages := make([]*isb.WriteMessage, 0)
-	for _, r := range response.GetResults() {
-		keys := r.Keys
-		taggedMessage := &isb.WriteMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: partitionID.End.Add(-1 * time.Millisecond),
-						IsLate:    false,
-					},
-					Keys: keys,
-				},
-				Body: isb.Body{
-					Payload: r.Value,
-				},
-			},
-			Tags: r.Tags,
-		}
-		taggedMessages = append(taggedMessages, taggedMessage)
-	}
-	return taggedMessages
 }
