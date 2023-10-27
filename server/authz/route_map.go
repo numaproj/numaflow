@@ -33,7 +33,8 @@ func newRouteInfo(object string, requiresAuthZ bool) *RouteInfo {
 }
 
 // RouteMap is a map of routes to their corresponding RouteInfo objects.
-// This map is used to save certain information about the route.
+// It saves the object corresponding to the route and a boolean to indicate
+// whether the route requires authorization.
 var RouteMap = map[string]*RouteInfo{
 	"GET:/api/v1/sysinfo":                                                         newRouteInfo(ObjectPipeline, false),
 	"GET:/api/v1/authinfo":                                                        newRouteInfo(ObjectEvents, false),

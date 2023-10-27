@@ -98,8 +98,8 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 	}, nil
 }
 
-func (d *DexObject) Authenticate(c *gin.Context) (authn.UserIdInfo, error) {
-	userInfo := authn.UserIdInfo{}
+func (d *DexObject) Authenticate(c *gin.Context) (authn.UserInfo, error) {
+	userInfo := authn.UserInfo{}
 	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
 	if err != nil {
 		return userInfo, fmt.Errorf("failed to get user identity token from cookie: %v", err)
@@ -109,7 +109,7 @@ func (d *DexObject) Authenticate(c *gin.Context) (authn.UserIdInfo, error) {
 	}
 	_, err = d.verify(c, userInfo.IDToken)
 	if err != nil {
-		return authn.UserIdInfo{}, err
+		return authn.UserInfo{}, err
 	}
 	return userInfo, nil
 }
@@ -236,7 +236,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	res := authn.NewUserIdInfo(claims, rawIDToken, refreshToken)
+	res := authn.NewUserInfo(claims, rawIDToken, refreshToken)
 	tokenStr, err := json.Marshal(res)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to convert to token string: %v", err)
