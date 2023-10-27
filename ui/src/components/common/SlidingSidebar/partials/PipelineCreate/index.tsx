@@ -76,7 +76,7 @@ export function PipelineCreate({
     if (!createdPipelineId) {
       return;
     }
-    let timer: number;
+    let timer: NodeJS.Timeout;
     if (pipelineAvailable) {
       setStatus((prev) => {
         const existing = prev ? { ...prev } : {};
