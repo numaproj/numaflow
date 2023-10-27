@@ -17,19 +17,26 @@ limitations under the License.
 package authz
 
 import (
+	"bufio"
 	_ "embed"
 	"fmt"
+	"os"
 	"path"
+	"strings"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	"github.com/gin-gonic/gin"
+
+	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/server/authn"
 )
 
 var (
 	//go:embed rbac-model.conf
 	rbacModel string
+	logger    = logging.NewLogger().Named("server")
 )
 
 const (
@@ -50,19 +57,16 @@ func NewCasbinObject() (*CasbinObject, error) {
 	}, nil
 }
 
-func (cas *CasbinObject) Authorize(c *gin.Context, groups []string) (bool, error) {
-	resource := extractResource(c)
-	object := extractObject(c)
-	action := c.Request.Method
-	// Check if the user has permission for any of the groups.
-	for _, group := range groups {
-		// Get the user from the group. The group is in the format "group:role".
-		// Check if the user has permission using Casbin Enforcer.
-		if ok, _ := cas.enforcer.Enforce(group, resource, object, action); ok {
-			return true, nil
-		}
+func (cas *CasbinObject) Authorize(c *gin.Context, userIdentityToken *authn.UserInfo, scope string) bool {
+	switch scope {
+	case ScopeGroup:
+		return enforceGroups(cas.enforcer, c, userIdentityToken)
+	case ScopeEmail:
+		return enforceEmail(cas.enforcer, c, userIdentityToken)
+	default:
+		logger.Errorw("invalid scope provided in config", "scope", scope)
 	}
-	return false, fmt.Errorf("user is not authorized to execute the requested action")
+	return false
 }
 
 // getEnforcer initializes the Casbin Enforcer with the model and policy.
@@ -152,4 +156,103 @@ func extractObject(c *gin.Context) string {
 		return RouteMap[routeMapKey].Object
 	}
 	return emptyString
+}
+
+// getRbacProperty is used to read the RbacPropertiesPath file path and extract the policy provided as argument,
+func getRbacProperty(property string) (interface{}, error) {
+	// read from RbacPropertiesPath file path
+	readFile, err := os.Open(RbacPropertiesPath)
+	if err != nil {
+		return nil, err
+	}
+	fileScanner := bufio.NewScanner(readFile)
+	fileScanner.Split(bufio.ScanLines)
+	var fileLines []string
+
+	for fileScanner.Scan() {
+		fileLines = append(fileLines, fileScanner.Text())
+	}
+
+	readFile.Close()
+	for _, line := range fileLines {
+		prop, val := parseProperty(line)
+		if prop == property {
+			return val, nil
+		}
+	}
+	return "", nil
+}
+
+// parseProperty parses the property from the rbac properties file.
+// The property is in the format "property-name: value"
+func parseProperty(line string) (string, string) {
+	// line is in the format "property-name: value"
+	branchArray := strings.SplitN(line, ":", 2)
+	propertyName := strings.TrimSpace(branchArray[0])
+	value := strings.TrimSpace(branchArray[1])
+	return propertyName, value
+}
+
+// GetRbacScopes returns the scopes from the rbac properties file. If no scopes are provided, it returns Group as the
+// default scope. The scopes are used to determine the user identity token to be used for authorization.
+// If the scope is group, the user identity token will be the groups assigned to the user from the authentication
+// system. If the scope is email, the user identity token will be the email assigned to
+// the user from the authentication.
+// The scopes are provided as a comma separated list in the rbac properties file.
+// Example: policy.scopes=groups,email
+func GetRbacScopes() []string {
+	scopes, err := getRbacProperty(RbacPropertyScopes)
+	if err != nil {
+		logger.Errorw("error while getting scopes from rbac properties file", "error", err)
+		return nil
+	}
+	var retList []string
+	// If no scopes are provided, set Group as the default scope.
+	if scopes == emptyString {
+		retList = append(retList, ScopeGroup)
+		return retList
+	}
+	scopes = strings.Split(scopes.(string), ",")
+	for _, scope := range scopes.([]string) {
+		scope = strings.TrimSpace(scope)
+		retList = append(retList, scope)
+	}
+
+	return retList
+}
+
+// enforceGroups checks if the groups assigned to the user form the authentication system has permission based on the
+// Casbin model and policy.
+func enforceGroups(enforcer *casbin.Enforcer, c *gin.Context, userIdentityToken *authn.UserInfo) bool {
+	groups := userIdentityToken.IDTokenClaims.Groups
+	resource := extractResource(c)
+	object := extractObject(c)
+	action := c.Request.Method
+	// Check if the user has permission for any of the groups.
+	for _, group := range groups {
+		// Get the user from the group. The group is in the format "group:role".
+		// Check if the user has permission using Casbin Enforcer.
+		if enforceCheck(enforcer, group, resource, object, action) {
+			return true
+		}
+	}
+	return false
+}
+
+// enforceEmail checks if the email assigned to the user form the authentication system has permission based on the
+// Casbin model and policy.
+func enforceEmail(enforcer *casbin.Enforcer, c *gin.Context, userIdentityToken *authn.UserInfo) bool {
+	email := userIdentityToken.IDTokenClaims.Email
+	resource := extractResource(c)
+	object := extractObject(c)
+	action := c.Request.Method
+	// Check if the user has permission based on the email.
+	return enforceCheck(enforcer, email, resource, object, action)
+
+}
+
+// enforceCheck checks if the user has permission based on the Casbin model and policy.
+func enforceCheck(enforcer *casbin.Enforcer, user, resource, object, action string) bool {
+	ok, _ := enforcer.Enforce(user, resource, object, action)
+	return ok
 }

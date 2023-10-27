@@ -154,17 +154,26 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			return
 		}
 		// Get the route map from the context. Key is in the format "method:path".
-		routeMapKey := fmt.Sprintf("%s:%s", c.Request.Method, c.FullPath())
+		routeMapKey := authz.GetRouteMapKey(c)
 		// Check if the route requires authorization.
 		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuthZ {
+			// Get the scopes to check from the policy.
+			scopes := authz.GetRbacScopes()
+			isAuthorized := false
+			for _, scope := range scopes {
+				isAuthorized = authorizer.Authorize(c, userInfo, scope)
+				if isAuthorized {
+					// If the user is authorized, continue the request.
+					c.Next()
+					return
+				}
+			}
 			// If the user is not authorized, return an error.
-			if isAuthorized, _ := authorizer.Authorize(c, userInfo.IDTokenClaims.Groups); !isAuthorized {
+			if !isAuthorized {
 				errMsg := "user is not authorized to execute the requested action"
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
-			} else {
-				// If the user is authorized, continue the request.
-				c.Next()
+
 			}
 		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuthZ {
 			// If the route does not require AuthZ, skip the AuthZ check.
