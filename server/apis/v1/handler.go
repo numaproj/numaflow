@@ -19,6 +19,7 @@ package v1
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -46,7 +47,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
-	"github.com/numaproj/numaflow/server/utils"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -93,13 +93,13 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	userIdentityToken, err := utils.ParseUserIdentityToken(userIdentityTokenStr)
-	if err != nil {
+	userInfo := &authn.UserInfo{}
+	if err = json.Unmarshal([]byte(userIdentityTokenStr), userInfo); err != nil {
 		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	res := authn.NewUserIdInfo(userIdentityToken.IDTokenClaims, userIdentityToken.IDToken, userIdentityToken.RefreshToken)
+	res := authn.NewUserInfo(userInfo.IDTokenClaims, userInfo.IDToken, userInfo.RefreshToken)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
