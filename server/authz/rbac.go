@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/casbin/casbin/v2"
@@ -35,8 +36,9 @@ import (
 
 var (
 	//go:embed rbac-model.conf
-	rbacModel string
-	logger    = logging.NewLogger().Named("server")
+	rbacModel      string
+	logger         = logging.NewLogger().Named("server")
+	policyRegex, _ = regexp.Compile(`policy\.[A-Za-z]+:(.*?)`)
 )
 
 const (
@@ -175,10 +177,14 @@ func getRbacProperty(property string) (interface{}, error) {
 
 	readFile.Close()
 	for _, line := range fileLines {
-		prop, val := parseProperty(line)
-		if prop == property {
-			return val, nil
+		ok := policyRegex.MatchString(line)
+		if ok {
+			prop, val := parseProperty(line)
+			if prop == property {
+				return val, nil
+			}
 		}
+
 	}
 	return "", nil
 }

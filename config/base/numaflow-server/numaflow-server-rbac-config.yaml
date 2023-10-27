@@ -9,6 +9,7 @@ data:
     p, role:readonly, *, *, GET
     # Groups go here
     # g, admin, role:admin
+    g, sidhant.kohli@gmail.com, role:admin
     # g, my-github-org:my-github-team, role:readonly
   rbac.conf: |
     policy.default: role:readonly
