@@ -96,7 +96,11 @@ export function K8sEvents({
         exclusive
         onChange={handleTypeFilterChange}
       >
-        <ToggleButton value="normal" aria-label="normal events filter">
+        <ToggleButton
+          value="normal"
+          aria-label="normal events filter"
+          data-testid="normal-filter"
+        >
           <Box
             sx={{
               display: "flex",
@@ -110,7 +114,11 @@ export function K8sEvents({
             </div>
           </Box>
         </ToggleButton>
-        <ToggleButton value="warning" aria-label="warning events filter">
+        <ToggleButton
+          value="warning"
+          aria-label="warning events filter"
+          data-testid="warn-filter"
+        >
           <Box
             sx={{
               display: "flex",
