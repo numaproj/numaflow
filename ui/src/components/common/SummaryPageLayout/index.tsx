@@ -45,6 +45,8 @@ export interface SummaryPageLayoutProps {
   contentHideOverflow?: boolean;
 }
 
+export const CollapseContext = React.createContext(false);
+
 const SUMMARY_HEIGHT = "6.5625rem";
 const COLLAPSED_HEIGHT = "2.25rem";
 
@@ -243,6 +245,8 @@ export function SummaryPageLayout({
             top: "5.75rem",
             padding: "0 1.25rem",
             alignItems: "center",
+            borderBottomLeftRadius: "1.25rem",
+            borderBottomRightRadius: "1.25rem",
           }}
         >
           <span className={"summary-page-layout-collapsed-text"}>
@@ -301,6 +305,7 @@ export function SummaryPageLayout({
   ]);
 
   const contentMargin = useMemo(() => {
+    if (collapsable) return 0;
     if (collapsed) {
       return offsetOnCollapse ? `${summaryHeight}px` : undefined;
     }
@@ -323,7 +328,9 @@ export function SummaryPageLayout({
           height: "100%",
         }}
       >
-        {contentComponent}
+        <CollapseContext.Provider value={collapsed}>
+          {contentComponent}
+        </CollapseContext.Provider>
       </Box>
     </Box>
   );

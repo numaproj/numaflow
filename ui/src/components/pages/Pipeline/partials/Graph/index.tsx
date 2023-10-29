@@ -27,6 +27,7 @@ import {
   AccordionSummary,
   Typography,
   AccordionDetails,
+  Tooltip,
 } from "@mui/material";
 import IconButton from "@mui/material/IconButton";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -50,6 +51,7 @@ import {
   timeAgo,
 } from "../../../../../utils";
 import { ErrorIndicator } from "../../../../common/ErrorIndicator";
+import { CollapseContext } from "../../../../common/SummaryPageLayout";
 import lock from "../../../../../images/lock.svg";
 import unlock from "../../../../../images/unlock.svg";
 import scrollToggle from "../../../../../images/move-arrows.svg";
@@ -138,6 +140,10 @@ const Flow = (props: FlowProps) => {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const [isLocked, setIsLocked] = useState(false);
   const [isPanOnScrollLocked, setIsPanOnScrollLocked] = useState(false);
+  const [isMap, setIsMap] = useState(false);
+  const [isReduce, setIsReduce] = useState(false);
+  const [isSideInput, setIsSideInput] = useState(false);
+  const isCollapsed = useContext(CollapseContext);
   const {
     nodes,
     edges,
@@ -160,6 +166,17 @@ const Flow = (props: FlowProps) => {
   const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomLevel]);
   const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomLevel]);
 
+  useEffect(() => {
+    nodes.forEach((node) => {
+      if (node?.data?.type === "sideInput") {
+        setIsSideInput(true);
+      }
+      if (node?.data?.type === "udf") {
+        node.data?.nodeInfo?.udf?.groupBy ? setIsReduce(true) : setIsMap(true);
+      }
+    });
+  }, [nodes]);
+
   return (
     <ReactFlow
       nodeTypes={defaultNodeTypes}
@@ -177,27 +194,57 @@ const Flow = (props: FlowProps) => {
       panOnScroll={isPanOnScrollLocked}
       maxZoom={2.75}
     >
+      <Panel
+        position="top-left"
+        style={{ marginTop: isCollapsed ? "3rem" : "8rem" }}
+      >
+        <Button>Yo</Button>
+      </Panel>
+      <Panel
+        position="top-right"
+        style={{ marginTop: isCollapsed ? "3rem" : "8rem" }}
+      >
+        Error
+      </Panel>
       <Panel position="bottom-left" className={"interaction"}>
-        <IconButton onClick={onIsLockedChange}>
-          <img src={isLocked ? lock : unlock} alt={"lock-unlock"} />
-        </IconButton>
-        <IconButton onClick={onIsPanOnScrollLockedChange}>
-          <img
-            src={isPanOnScrollLocked ? closedHand : scrollToggle}
-            alt={"panOnScrollLock"}
-          />
-        </IconButton>
+        <Tooltip
+          title={isLocked ? "Unlock Graph" : "Lock Graph"}
+          placement={"top"}
+          arrow
+        >
+          <IconButton onClick={onIsLockedChange}>
+            <img src={isLocked ? lock : unlock} alt={"lock-unlock"} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip
+          title={isPanOnScrollLocked ? "Zoom On Scroll" : "Pan on Scroll"}
+          placement={"top"}
+          arrow
+        >
+          <IconButton onClick={onIsPanOnScrollLockedChange}>
+            <img
+              src={isPanOnScrollLocked ? closedHand : scrollToggle}
+              alt={"panOnScrollLock"}
+            />
+          </IconButton>
+        </Tooltip>
         <div className={"divider"} />
-        <IconButton onClick={onFullScreen}>
-          <img src={fullscreen} alt={"fullscreen"} />
-        </IconButton>
+        <Tooltip title={"Fit Graph"} placement={"top"} arrow>
+          <IconButton onClick={onFullScreen}>
+            <img src={fullscreen} alt={"fullscreen"} />
+          </IconButton>
+        </Tooltip>
         <div className={"divider"} />
-        <IconButton onClick={onZoomIn}>
-          <img src={zoomInIcon} alt="zoom-in" />
-        </IconButton>
-        <IconButton onClick={onZoomOut}>
-          <img src={zoomOutIcon} alt="zoom-out" />
-        </IconButton>
+        <Tooltip title={"Zoom In"} placement={"top"} arrow>
+          <IconButton onClick={onZoomIn}>
+            <img src={zoomInIcon} alt="zoom-in" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={"Zoom Out"} placement="top" arrow>
+          <IconButton onClick={onZoomOut}>
+            <img src={zoomOutIcon} alt="zoom-out" />
+          </IconButton>
+        </Tooltip>
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="54"
@@ -221,7 +268,11 @@ const Flow = (props: FlowProps) => {
           </g>
         </svg>
       </Panel>
-      <Panel position="top-left" className={"legend"}>
+      <Panel
+        position="top-left"
+        className={"legend"}
+        style={{ marginTop: isCollapsed ? "6rem" : "11rem" }}
+      >
         <Accordion>
           <AccordionSummary
             expandIcon={<ExpandMoreIcon />}
@@ -235,26 +286,34 @@ const Flow = (props: FlowProps) => {
               <img src={source} alt={"source"} />
               <div className={"legend-text"}>Source</div>
             </div>
-            <div className={"legend-title"}>
-              <img src={map} alt={"map"} />
-              <div className={"legend-text"}>Map</div>
-            </div>
-            <div className={"legend-title"}>
-              <img src={reduce} alt={"reduce"} />
-              <div className={"legend-text"}>Reduce</div>
-            </div>
+            {isMap && (
+              <div className={"legend-title"}>
+                <img src={map} alt={"map"} />
+                <div className={"legend-text"}>Map</div>
+              </div>
+            )}
+            {isReduce && (
+              <div className={"legend-title"}>
+                <img src={reduce} alt={"reduce"} />
+                <div className={"legend-text"}>Reduce</div>
+              </div>
+            )}
             <div className={"legend-title"}>
               <img src={sink} alt={"sink"} />
               <div className={"legend-text"}>Sink</div>
             </div>
-            <div className={"legend-title"}>
-              <img src={input} width={22} alt={"input"} />
-              <div className={"legend-text"}>Input</div>
-            </div>
-            <div className={"legend-title"}>
-              <img src={generator} width={22} alt={"generator"} />
-              <div className={"legend-text"}>Generator</div>
-            </div>
+            {isSideInput && (
+              <div className={"legend-title"}>
+                <img src={input} width={22} alt={"input"} />
+                <div className={"legend-text"}>Input</div>
+              </div>
+            )}
+            {isSideInput && (
+              <div className={"legend-title"}>
+                <img src={generator} width={22} alt={"generator"} />
+                <div className={"legend-text"}>Generator</div>
+              </div>
+            )}
           </AccordionDetails>
         </Accordion>
       </Panel>
@@ -598,111 +657,111 @@ export default function Graph(props: GraphProps) {
   }, [data]);
 
   return (
-    <div style={{ height: "85%" }}>
+    <div style={{ height: "100%" }}>
       <div className="Graph" data-testid="graph">
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-            }}
-          >
-            <Button
-              variant="contained"
-              data-testid="resume"
-              sx={{
-                marginTop: "1rem",
-                marginLeft: "1rem",
-                width: "5rem",
-                fontWeight: "bold",
-              }}
-              onClick={handlePlayClick}
-              disabled={data?.pipeline?.status?.phase === RUNNING}
-            >
-              Resume
-            </Button>
-            <Button
-              variant="contained"
-              data-testid="pause"
-              sx={{
-                marginTop: "1rem",
-                marginLeft: "1rem",
-                width: "5rem",
-                fontWeight: "bold",
-              }}
-              onClick={handlePauseClick}
-              disabled={
-                data?.pipeline?.status?.phase === PAUSED ||
-                data?.pipeline?.status?.phase === PAUSING
-              }
-            >
-              Pause
-            </Button>
-            <Button sx={{ height: "2.1875rem", marginTop: "1rem" }}>
-              {" "}
-              {error && statusPayload ? (
-                <Alert
-                  severity="error"
-                  sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
-                >
-                  {error}
-                </Alert>
-              ) : successMessage &&
-                statusPayload &&
-                ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
-                  data?.pipeline?.status?.phase !== PAUSED) ||
-                  (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
-                    data?.pipeline?.status?.phase !== RUNNING)) ? (
-                <div
-                  style={{
-                    borderRadius: "0.8125rem",
-                    width: "14.25rem",
-                    background: "#F0F0F0",
-                    display: "flex",
-                    flexDirection: "row",
-                    marginLeft: "1rem",
-                    marginTop: "1rem",
-                    padding: "0.5rem",
-                    color: "#516F91",
-                    alignItems: "center",
-                  }}
-                >
-                  <CircularProgress
-                    sx={{
-                      width: "1.25rem !important",
-                      height: "1.25rem !important",
-                    }}
-                  />{" "}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    <span style={{ marginLeft: "1rem" }}>
-                      {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
-                        ? "Pipeline Pausing..."
-                        : "Pipeline Resuming..."}
-                    </span>
-                    <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
-                  </Box>
-                </div>
-              ) : (
-                ""
-              )}
-            </Button>
-          </Box>
-          <Box sx={{ marginRight: "1rem" }}>
-            <ErrorIndicator />
-          </Box>
-        </Box>
+        {/*<Box*/}
+        {/*  sx={{*/}
+        {/*    display: "flex",*/}
+        {/*    flexDirection: "row",*/}
+        {/*    alignItems: "center",*/}
+        {/*    justifyContent: "space-between",*/}
+        {/*  }}*/}
+        {/*>*/}
+        {/*  <Box*/}
+        {/*    sx={{*/}
+        {/*      display: "flex",*/}
+        {/*      flexDirection: "row",*/}
+        {/*    }}*/}
+        {/*  >*/}
+        {/*    <Button*/}
+        {/*      variant="contained"*/}
+        {/*      data-testid="resume"*/}
+        {/*      sx={{*/}
+        {/*        marginTop: "1rem",*/}
+        {/*        marginLeft: "1rem",*/}
+        {/*        width: "5rem",*/}
+        {/*        fontWeight: "bold",*/}
+        {/*      }}*/}
+        {/*      onClick={handlePlayClick}*/}
+        {/*      disabled={data?.pipeline?.status?.phase === RUNNING}*/}
+        {/*    >*/}
+        {/*      Resume*/}
+        {/*    </Button>*/}
+        {/*    <Button*/}
+        {/*      variant="contained"*/}
+        {/*      data-testid="pause"*/}
+        {/*      sx={{*/}
+        {/*        marginTop: "1rem",*/}
+        {/*        marginLeft: "1rem",*/}
+        {/*        width: "5rem",*/}
+        {/*        fontWeight: "bold",*/}
+        {/*      }}*/}
+        {/*      onClick={handlePauseClick}*/}
+        {/*      disabled={*/}
+        {/*        data?.pipeline?.status?.phase === PAUSED ||*/}
+        {/*        data?.pipeline?.status?.phase === PAUSING*/}
+        {/*      }*/}
+        {/*    >*/}
+        {/*      Pause*/}
+        {/*    </Button>*/}
+        {/*    <Button sx={{ height: "2.1875rem", marginTop: "1rem" }}>*/}
+        {/*      {" "}*/}
+        {/*      {error && statusPayload ? (*/}
+        {/*        <Alert*/}
+        {/*          severity="error"*/}
+        {/*          sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}*/}
+        {/*        >*/}
+        {/*          {error}*/}
+        {/*        </Alert>*/}
+        {/*      ) : successMessage &&*/}
+        {/*        statusPayload &&*/}
+        {/*        ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&*/}
+        {/*          data?.pipeline?.status?.phase !== PAUSED) ||*/}
+        {/*          (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&*/}
+        {/*            data?.pipeline?.status?.phase !== RUNNING)) ? (*/}
+        {/*        <div*/}
+        {/*          style={{*/}
+        {/*            borderRadius: "0.8125rem",*/}
+        {/*            width: "14.25rem",*/}
+        {/*            background: "#F0F0F0",*/}
+        {/*            display: "flex",*/}
+        {/*            flexDirection: "row",*/}
+        {/*            marginLeft: "1rem",*/}
+        {/*            marginTop: "1rem",*/}
+        {/*            padding: "0.5rem",*/}
+        {/*            color: "#516F91",*/}
+        {/*            alignItems: "center",*/}
+        {/*          }}*/}
+        {/*        >*/}
+        {/*          <CircularProgress*/}
+        {/*            sx={{*/}
+        {/*              width: "1.25rem !important",*/}
+        {/*              height: "1.25rem !important",*/}
+        {/*            }}*/}
+        {/*          />{" "}*/}
+        {/*          <Box*/}
+        {/*            sx={{*/}
+        {/*              display: "flex",*/}
+        {/*              flexDirection: "column",*/}
+        {/*            }}*/}
+        {/*          >*/}
+        {/*            <span style={{ marginLeft: "1rem" }}>*/}
+        {/*              {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED*/}
+        {/*                ? "Pipeline Pausing..."*/}
+        {/*                : "Pipeline Resuming..."}*/}
+        {/*            </span>*/}
+        {/*            <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>*/}
+        {/*          </Box>*/}
+        {/*        </div>*/}
+        {/*      ) : (*/}
+        {/*        ""*/}
+        {/*      )}*/}
+        {/*    </Button>*/}
+        {/*  </Box>*/}
+        {/*  <Box sx={{ marginRight: "1rem" }}>*/}
+        {/*    <ErrorIndicator />*/}
+        {/*  </Box>*/}
+        {/*</Box>*/}
         <HighlightContext.Provider
           value={{
             highlightValues,
