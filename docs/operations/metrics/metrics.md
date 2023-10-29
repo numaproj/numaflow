@@ -12,113 +12,92 @@ These metrics can be used to determine throughput of your pipeline.
 
 #### Data-forward
 
-| Metric name                           | Metric type | Labels                                                                                                                       | Description                                                                                                      |
-|---------------------------------------|-------------|------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
-| `source_forwarder_read_total`         | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of messages read by a given Source Vertex                                              |
-| `source_forwarder_read_bytes_total`   | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of bytes read by a given Source Vertex                                                 |
-| `source_forwarder_write_total`        | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of messages written to Inter-Step Buffer by a given Source Vertex                      |
-| `source_forwarder_write_bytes_total`  | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of bytes written to Inter-Step Buffer by a given Source Vertex                         |
-| `source_forwarder_ack_total`          | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of messages acknowledged by a given Source Vertex                                      |
-| `source_forwarder_drop_total`         | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of messages dropped by a given Source Vertex due to a full Inter-Step Buffer Partition |
-| `source_forwarder_drop_bytes_total`   | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of bytes dropped by a given Source Vertex due to a full Inter-Step Buffer Partition    |
-| `forwarder_data_read`                 | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of messages read by a given Vertex from an Inter-Step Buffer Partition                 |
-| `forwarder_read_bytes_total`          | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer Partition                    |
-| `forwarder_write_total`               | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of messages written to Inter-Step Buffer by a given Vertex                             |
-| `forwarder_write_bytes_total`         | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of bytes written to Inter-Step Buffer by a given Vertex                                |
-| `forwarder_ack_total`                 | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer Partition         |
-| `forwarder_drop_total`                | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of messages dropped by a given Vertex due to a full Inter-Step Buffer Partition        |
-| `forwarder_drop_bytes_total`          | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Provides the total number of bytes dropped by a given Vertex due to a full Inter-Step Buffer Partition           |
-| `reduce_isb_reader_data_read`         | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages read by a given Reduce Vertex from an Inter-Step Buffer Partition          |
-| `reduce_isb_reader_read_bytes_total`  | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes read by a given Reduce Vertex from an Inter-Step Buffer Partition             |
-| `reduce_isb_writer_write_total`       | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages written to Inter-Step Buffer by a given Reduce Vertex                      |
-| `reduce_isb_writer_write_bytes_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes written to Inter-Step Buffer by a given Reduce Vertex                         |
-| `reduce_isb_writer_drop_total`        | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages dropped by a given Reduce Vertex due to a full Inter-Step Buffer Partition |
-| `reduce_isb_writer_drop_bytes_total`  | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes dropped by a given Reduce Vertex due to a full Inter-Step Buffer Partition    |
+| Metric name                   | Metric type | Labels                                                                                                                       | Description                                                                                               |
+| ----------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `forwarder_data_read_total`   | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages read by a given Vertex from an Inter-Step Buffer Partition          |
+| `forwarder_read_bytes_total`  | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer Partition             |
+| `forwarder_write_total`       | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages written to Inter-Step Buffer by a given Vertex                      |
+| `forwarder_write_bytes_total` | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes written to Inter-Step Buffer by a given Vertex                         |
+| `forwarder_ack_total`         | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer Partition  |
+| `forwarder_drop_total`        | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages dropped by a given Vertex due to a full Inter-Step Buffer Partition |
+| `forwarder_drop_bytes_total`  | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes dropped by a given Vertex due to a full Inter-Step Buffer Partition    |
 
 #### Kafka Source
 
 | Metric name               | Metric type | Labels                                                 | Description                                                                       |
-|---------------------------|-------------|--------------------------------------------------------|-----------------------------------------------------------------------------------|
-| `kafka_source_read_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages read by the Kafka Source Vertex/Processor.        |
-| `kafka_source_ack_total`  | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages acknowledged by the Kafka Source Vertex/Processor |
+| ------------------------- | ----------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `kafka_source_read_total` | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of messages read by the Kafka Source Vertex/Processor.        |
+| `kafka_source_ack_total`  | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of messages acknowledged by the Kafka Source Vertex/Processor |
 
 #### Redis Streams Source
 
 | Metric name                           | Metric type | Labels                                                 | Description                                                                                  |
-|---------------------------------------|-------------|--------------------------------------------------------|----------------------------------------------------------------------------------------------|
-| `redis_streams_source_read_total`     | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages read by the Redis Streams Source Vertex/Processor            |
-| `redis_streams_source_read_err_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of read failures for the Redis Streams Source Vertex/Processor           |
-| `redis_streams_source_ack_total`      | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages acked by the Redis Streams Source Vertex/Processor           |
-| `redis_streams_source_ack_err_total`  | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of errors attempting to ack by the Redis Streams Source Vertex/Processor |
+| ------------------------------------- | ----------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `redis_streams_source_read_total`     | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of messages read by the Redis Streams Source Vertex/Processor            |
+| `redis_streams_source_read_err_total` | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of read failures for the Redis Streams Source Vertex/Processor           |
+| `redis_streams_source_ack_total`      | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of messages acked by the Redis Streams Source Vertex/Processor           |
+| `redis_streams_source_ack_err_total`  | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of errors attempting to ack by the Redis Streams Source Vertex/Processor |
 
 #### Generator Source
 
 | Metric name                 | Metric type | Labels                                                 | Description                                                                    |
-|-----------------------------|-------------|--------------------------------------------------------|--------------------------------------------------------------------------------|
-| `tickgen_source_read_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages read by the Generator Source Vertex/Processor. |
+| --------------------------- | ----------- | ------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `tickgen_source_read_total` | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of messages read by the Generator Source Vertex/Processor. |
 
 #### Http Source
 
 | Metric name              | Metric type | Labels                                                 | Description                                                               |
-|--------------------------|-------------|--------------------------------------------------------|---------------------------------------------------------------------------|
-| `http_source_read_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages read by the HTTP Source Vertex/Processor. |
+| ------------------------ | ----------- | ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `http_source_read_total` | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of messages read by the HTTP Source Vertex/Processor. |
 
 #### Kafka Sink
 
 | Metric name              | Metric type | Labels                                                 | Description                                                                |
-|--------------------------|-------------|--------------------------------------------------------|----------------------------------------------------------------------------|
-| `kafka_sink_write_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages written by the Kafka Sink Vertex/Processor |
+| ------------------------ | ----------- | ------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `kafka_sink_write_total` | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of messages written by the Kafka Sink Vertex/Processor |
 
 #### Log Sink
 
 | Metric name            | Metric type | Labels                                                 | Description                                                              |
-|------------------------|-------------|--------------------------------------------------------|--------------------------------------------------------------------------|
-| `log_sink_write_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` | Provides the number of messages written by the Log Sink Vertex/Processor |
+| ---------------------- | ----------- | ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `log_sink_write_total` | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` | Provides the number of messages written by the Log Sink Vertex/Processor |
 
 ### Latency
 
 These metrics can be used to determine the latency of your pipeline.
 
-| Metric name                                      | Metric type | Labels                                                                                        | Description                                                                                           |
-|--------------------------------------------------|-------------|-----------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
-| `source_forwarder_transformer_processing_time`   | Histogram   | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>` | Provides a histogram distribution of the processing times of User Defined Source Transformer          |
-| `source_forwarder_forward_chunk_processing_time` | Histogram   | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>` | Provides a histogram distribution of the processing times of the source forwarder function as a whole |
-| `forwarder_udf_processing_time`                  | Histogram   | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>` | Provides a histogram distribution of the processing times of User Defined Functions. (UDF's)          |
-| `forwarder_forward_chunk_processing_time`        | Histogram   | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>` | Provides a histogram distribution of the processing times of the forwarder function as a whole        |
-| `reduce_pnf_process_time`                        | Histogram   | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>`         | Provides a histogram distribution of the processing times of the reducer                              |
-| `reduce_pnf_forward_time`                        | Histogram   | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>`         | Provides a histogram distribution of the forwarding times of the reducer                              |
+| Metric name                                    | Metric type | Labels                                                                                                                       | Description                                                                                    |
+| ---------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `source_forwarder_transformer_processing_time` | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides a histogram distribution of the processing times of User Defined Source Transformer   |
+| `forwarder_udf_processing_time`                | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>`                                        | Provides a histogram distribution of the processing times of User Defined Functions. (UDF's)   |
+| `forwarder_forward_chunk_processing_time`      | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>`                                        | Provides a histogram distribution of the processing times of the forwarder function as a whole |
+| `reduce_pnf_process_time`                      | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>`                                        | Provides a histogram distribution of the processing times of the reducer                       |
+| `reduce_pnf_forward_time`                      | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>`                                        | Provides a histogram distribution of the forwarding times of the reducer                       |
 
 ### Errors
 
 These metrics can be used to determine if there are any errors in the pipeline
 
-| Metric name                           | Metric type | Labels                                                                                                                       | Description                                                                   |
-|---------------------------------------|-------------|------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
-| `source_forwarder_platform_error`     | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Indicates any internal errors which could stop pipeline processing            |
-| `source_forwarder_read_error`         | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Indicates any errors while reading messages by the source forwarder           |
-| `source_forwarder_write_error`        | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Indicates any errors while writing messages by the source forwarder           |
-| `source_forwarder_ack_error`          | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Indicates any errors while acknowledging messages by the source forwarder     |
-| `forwarder_platform_error`            | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Indicates any internal errors which could stop pipeline processing            |
-| `forwarder_read_error`                | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Indicates any errors while reading messages by the forwarder                  |
-| `forwarder_write_error`               | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Indicates any errors while writing messages by the forwarder                  |
-| `forwarder_ack_error`                 | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `partition_name=<partition-name>`                                | Indicates any errors while acknowledging messages by the forwarder            |
-| `kafka_source_offset_ack_errors`      | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>`                                                                       | Indicates any kafka acknowledgement errors                                    |
-| `kafka_sink_write_error_total`        | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>`                                                                       | Provides the number of errors while writing to the Kafka sink                 |
-| `kafka_sink_write_timeout_total`      | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>`                                                                       | Provides the write timeouts while writing to the Kafka sink                   |
-| `isb_jetstream_read_error_total`      | Counter     | `partition_name=<partition-name>`                                                                                            | Indicates any read errors with NATS Jetstream ISB                             |
-| `isb_jetstream_write_error_total`     | Counter     | `partition_name=<partition-name>`                                                                                            | Indicates any write errors with NATS Jetstream ISB                            |
-| `isb_redis_read_error_total`          | Counter     | `partition_name=<partition-name>`                                                                                            | Indicates any read errors with Redis ISB                                      |
-| `isb_redis_write_error_total`         | Counter     | `partition_name=<partition-name>`                                                                                            | Indicates any write errors with Redis ISB                                     |
-| `reduce_isb_reader_read_error_total`  | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any read errors with Reducer ISB                                    |
-| `reduce_isb_writer_write_error_total` | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any write errors with Reducer ISB                                   |
-| `reduce_pnf_platform_error_total`     | Counter     | `vertex=<vertex-name>` <br> `pipeline=<pipeline-name>` <br> `replica=<replica-index>`                                        | Indicates any internal errors while processing and forwarding data by reducer |
+| Metric name                       | Metric type | Labels                                                                                                                       | Description                                                        |
+| --------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `forwarder_platform_error_total`  | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>`                                        | Indicates any internal errors which could stop pipeline processing |
+| `forwarder_read_error_total`      | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any errors while reading messages by the forwarder       |
+| `forwarder_write_error_total`     | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any errors while writing messages by the forwarder       |
+| `forwarder_ack_error_total`       | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any errors while acknowledging messages by the forwarder |
+| `kafka_source_offset_ack_errors`  | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>`                                                                       | Indicates any kafka acknowledgement errors                         |
+| `kafka_sink_write_error_total`    | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>`                                                                       | Provides the number of errors while writing to the Kafka sink      |
+| `kafka_sink_write_timeout_total`  | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>`                                                                       | Provides the write timeouts while writing to the Kafka sink        |
+| `isb_jetstream_read_error_total`  | Counter     | `partition_name=<partition-name>`                                                                                            | Indicates any read errors with NATS Jetstream ISB                  |
+| `isb_jetstream_write_error_total` | Counter     | `partition_name=<partition-name>`                                                                                            | Indicates any write errors with NATS Jetstream ISB                 |
+| `isb_redis_read_error_total`      | Counter     | `partition_name=<partition-name>`                                                                                            | Indicates any read errors with Redis ISB                           |
+| `isb_redis_write_error_total`     | Counter     | `partition_name=<partition-name>`                                                                                            | Indicates any write errors with Redis ISB                          |
 
 ### Saturation
 
 #### NATS JetStream ISB
 
 | Metric name                        | Metric type | Labels                 | Description                                                                                                                                  |
-|------------------------------------|-------------|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| ---------------------------------- | ----------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `isb_jetstream_isFull_total`       | Counter     | `buffer=<buffer-name>` | Indicates if the ISB is full. Continual increase of this counter metric indicates a potential backpressure that can be built on the pipeline |
 | `isb_jetstream_buffer_soft_usage`  | Gauge       | `buffer=<buffer-name>` | Indicates the usage/utilization of a NATS Jetstream ISB                                                                                      |
 | `isb_jetstream_buffer_solid_usage` | Gauge       | `buffer=<buffer-name>` | Indicates the solid usage of a NATS Jetstream ISB                                                                                            |
@@ -128,7 +107,7 @@ These metrics can be used to determine if there are any errors in the pipeline
 #### Redis ISB
 
 | Metric name              | Metric type | Labels                 | Description                                                                                                                                  |
-|--------------------------|-------------|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------------------ | ----------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `isb_redis_isFull_total` | Counter     | `buffer=<buffer-name>` | Indicates if the ISB is full. Continual increase of this counter metric indicates a potential backpressure that can be built on the pipeline |
 | `isb_redis_buffer_usage` | Gauge       | `buffer=<buffer-name>` | Indicates the usage/utilization of a Redis ISB                                                                                               |
 | `isb_redis_consumer_lag` | Gauge       | `buffer=<buffer-name>` | Indicates the the consumer lag of a Redis ISB                                                                                                |
