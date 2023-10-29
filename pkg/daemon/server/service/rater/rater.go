@@ -28,6 +28,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
@@ -217,15 +218,9 @@ func sleep(ctx context.Context, duration time.Duration) {
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodReadCount {
-	metricNames := map[string]string{
-		keyVertexTypeReduce: "reduce_isb_reader_data_read",
-		keyVertexTypeSource: "source_forwarder_read_total",
-		keyVertexTypeSink:   "sink_forwarder_data_read",
-	}
-
-	readTotalMetricName, ok := metricNames[vertexType]
-	if !ok {
-		readTotalMetricName = "forwarder_data_read"
+	readTotalMetricName := "forwarder_data_read_total"
+	if keyVertexTypeSource == vertexType {
+		readTotalMetricName = "forwarder_read_total"
 	}
 
 	// scrape the read total metric from pod metric port
@@ -250,7 +245,7 @@ func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodRea
 		for _, ele := range metricsList {
 			var partitionName string
 			for _, label := range ele.Label {
-				if label.GetName() == "partition_name" {
+				if label.GetName() == metrics.LabelPartitionName {
 					partitionName = label.GetValue()
 					break
 				}
