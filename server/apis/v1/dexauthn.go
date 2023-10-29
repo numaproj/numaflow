@@ -98,8 +98,24 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 	}, nil
 }
 
-// Verify is used to validate the user ID token.
-func (d *DexObject) Verify(ctx context.Context, rawIDToken string) (*oidc.IDToken, error) {
+func (d *DexObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
+	var userInfo authn.UserInfo
+	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user identity token from cookie: %v", err)
+	}
+	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse user identity token: %v", err)
+	}
+	_, err = d.verify(c, userInfo.IDToken)
+	if err != nil {
+		return nil, err
+	}
+	return &userInfo, nil
+}
+
+// verify is used to validate the user ID token.
+func (d *DexObject) verify(ctx context.Context, rawIDToken string) (*oidc.IDToken, error) {
 	verifier, err := d.verifier()
 	if err != nil {
 		return nil, err
@@ -199,7 +215,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	idToken, err := d.Verify(r.Context(), rawIDToken)
+	idToken, err := d.verify(r.Context(), rawIDToken)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to verify ID token: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -220,7 +236,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	res := authn.NewUserIdInfo(claims, rawIDToken, refreshToken)
+	res := authn.NewUserInfo(claims, rawIDToken, refreshToken)
 	tokenStr, err := json.Marshal(res)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to convert to token string: %v", err)
