@@ -34,6 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	udfapplier "github.com/numaproj/numaflow/pkg/udf/rpc"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -117,6 +118,11 @@ func TestNewDataForward(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
@@ -124,7 +130,7 @@ func TestNewDataForward(t *testing.T) {
 
 			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			noOpStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, noOpStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, noOpStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -216,10 +222,14 @@ func TestNewDataForward(t *testing.T) {
 					Name: "testVertex",
 				},
 			}}
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
 			fetchWatermark := &testForwardFetcher{}
 			toVertexStores := buildToVertexWatermarkStores(toSteps)
 
-			f, err := NewDataForward(vertex, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -363,10 +373,15 @@ func TestNewDataForward(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			fetchWatermark := &testForwardFetcher{}
 			toVertexStores := buildToVertexWatermarkStores(toSteps)
 
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -522,10 +537,15 @@ func TestNewDataForward(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			fetchWatermark := &testForwardFetcher{}
 			toVertexStores := buildToVertexWatermarkStores(toSteps)
 
-			f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -648,6 +668,11 @@ func TestNewDataForward(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
@@ -655,7 +680,7 @@ func TestNewDataForward(t *testing.T) {
 
 			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyTransformerErrTest{}, myForwardApplyTransformerErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardApplyTransformerErrTest{}, myForwardApplyTransformerErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -692,9 +717,14 @@ func TestNewDataForward(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.True(t, to1.IsEmpty())
@@ -729,9 +759,14 @@ func TestNewDataForward(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -826,6 +861,10 @@ func TestDataForwardSinglePartition(t *testing.T) {
 			Name: "receivingVertex",
 		},
 	}}
+	vertexInstance := &dfv1.VertexInstance{
+		Vertex:  vertex,
+		Replica: 0,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -833,7 +872,7 @@ func TestDataForwardSinglePartition(t *testing.T) {
 	fetchWatermark := &testForwardFetcher{}
 	toVertexStores := buildNoOpToVertexStores(toSteps)
 
-	f, err := NewDataForward(vertex, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(5))
+	f, err := NewDataForward(vertexInstance, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -876,6 +915,10 @@ func TestDataForwardMultiplePartition(t *testing.T) {
 			Name: "receivingVertex",
 		},
 	}}
+	vertexInstance := &dfv1.VertexInstance{
+		Vertex:  vertex,
+		Replica: 0,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -883,7 +926,7 @@ func TestDataForwardMultiplePartition(t *testing.T) {
 	fetchWatermark := &testForwardFetcher{}
 	toVertexStores := buildNoOpToVertexStores(toSteps)
 
-	f, err := NewDataForward(vertex, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(5))
+	f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to11.IsFull())
 	assert.False(t, to12.IsFull())
@@ -983,10 +1026,14 @@ func TestWriteToBuffer(t *testing.T) {
 					Name: "testVertex",
 				},
 			}}
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
 
 			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertex, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(value.batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(value.batchSize))
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
 			assert.True(t, buffer.IsEmpty())
@@ -1105,49 +1152,49 @@ func (f myForwardApplyTransformerErrTest) ApplyTransform(_ context.Context, _ *i
 
 func validateMetrics(batchSize int64) (err error) {
 	metadata := `
-		# HELP source_forwarder_read_total Total number of Messages Read
-		# TYPE source_forwarder_read_total counter
+		# HELP forwarder_read_total Total number of Messages Read
+		# TYPE forwarder_read_total counter
 		`
 	expected := `
-		source_forwarder_read_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		forwarder_read_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
-	err = testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "source_forwarder_read_total")
+	err = testutil.CollectAndCompare(metrics.ReadMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
 	if err != nil {
 		return err
 	}
 
 	writeMetadata := `
-		# HELP source_forwarder_write_total Total number of Messages Written
-		# TYPE source_forwarder_write_total counter
+		# HELP forwarder_write_total Total number of Messages Written
+		# TYPE forwarder_write_total counter
 		`
 	var writeExpected string
 	if batchSize > 1 {
 		writeExpected = `
-		source_forwarder_write_total{partition_name="to1-1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
-		source_forwarder_write_total{partition_name="to1-2",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
+		forwarder_write_total{partition_name="to1-1",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
+		forwarder_write_total{partition_name="to1-2",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)/2) + `
 	`
 	} else {
 		writeExpected = `
-		source_forwarder_write_total{partition_name="to1-1",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
-		source_forwarder_write_total{partition_name="to1-2",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(0)) + `
+		forwarder_write_total{partition_name="to1-1",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		forwarder_write_total{partition_name="to1-2",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(0)) + `
 	`
 	}
 
-	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "source_forwarder_write_total")
+	err = testutil.CollectAndCompare(metrics.WriteMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
 	if err != nil {
 		return err
 	}
 
 	ackMetadata := `
-		# HELP source_forwarder_ack_total Total number of Messages Acknowledged
-		# TYPE source_forwarder_ack_total counter
+		# HELP forwarder_ack_total Total number of Messages Acknowledged
+		# TYPE forwarder_ack_total counter
 		`
 	ackExpected := `
-		source_forwarder_ack_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
+		forwarder_ack_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
 	`
 
-	err = testutil.CollectAndCompare(ackMessagesCount, strings.NewReader(ackMetadata+ackExpected), "source_forwarder_ack_total")
+	err = testutil.CollectAndCompare(metrics.AckMessagesCount, strings.NewReader(ackMetadata+ackExpected), "forwarder_ack_total")
 	if err != nil {
 		return err
 	}
@@ -1156,9 +1203,9 @@ func validateMetrics(batchSize int64) (err error) {
 }
 
 func metricsReset() {
-	readMessagesCount.Reset()
-	writeMessagesCount.Reset()
-	ackMessagesCount.Reset()
+	metrics.ReadMessagesCount.Reset()
+	metrics.WriteMessagesCount.Reset()
+	metrics.AckMessagesCount.Reset()
 }
 
 // buildPublisherMap builds OTStore and publisher for each toBuffer

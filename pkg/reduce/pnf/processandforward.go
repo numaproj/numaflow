@@ -92,12 +92,13 @@ func newProcessAndForward(ctx context.Context,
 // Process method reads messages from the supplied PBQ, invokes UDF to reduce the writeMessages.
 func (p *processAndForward) Process(ctx context.Context) error {
 	var err error
-	startTime := time.Now()
-	defer reduceProcessTime.With(map[string]string{
-		metrics.LabelVertex:             p.vertexName,
-		metrics.LabelPipeline:           p.pipelineName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-	}).Observe(float64(time.Since(startTime).Milliseconds()))
+	defer func(t time.Time) {
+		metrics.ReduceProcessTime.With(map[string]string{
+			metrics.LabelVertex:             p.vertexName,
+			metrics.LabelPipeline:           p.pipelineName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+		}).Observe(float64(time.Since(t).Milliseconds()))
+	}(time.Now())
 
 	// blocking call, only returns the writeMessages after it has read all the messages from pbq
 	p.writeMessages, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
@@ -107,12 +108,13 @@ func (p *processAndForward) Process(ctx context.Context) error {
 // Forward writes messages to the ISBs, publishes watermark, and invokes GC on PBQ.
 func (p *processAndForward) Forward(ctx context.Context) error {
 	// extract window end time from the partitionID, which will be used for watermark
-	startTime := time.Now()
-	defer reduceForwardTime.With(map[string]string{
-		metrics.LabelVertex:             p.vertexName,
-		metrics.LabelPipeline:           p.pipelineName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-	}).Observe(float64(time.Since(startTime).Microseconds()))
+	defer func(t time.Time) {
+		metrics.ReduceForwardTime.With(map[string]string{
+			metrics.LabelVertex:             p.vertexName,
+			metrics.LabelPipeline:           p.pipelineName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
+		}).Observe(float64(time.Since(t).Microseconds()))
+	}(time.Now())
 
 	// millisecond is the lowest granularity currently supported.
 	processorWM := wmb.Watermark(p.PartitionID.End.Add(-1 * time.Millisecond))
@@ -177,7 +179,7 @@ func (p *processAndForward) whereToStep() map[string][][]isb.Message {
 	for _, msg := range p.writeMessages {
 		to, err = p.whereToDecider.WhereTo(msg.Keys, msg.Tags)
 		if err != nil {
-			platformError.With(map[string]string{
+			metrics.PlatformError.With(map[string]string{
 				metrics.LabelVertex:             p.vertexName,
 				metrics.LabelPipeline:           p.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
@@ -242,7 +244,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 		if len(failedMessages) > 0 {
 			p.log.Warnw("Failed to write messages to isb inside pnf", zap.Errors("errors", writeErrs))
 			writeMessages = failedMessages
-			writeMessagesError.With(map[string]string{
+			metrics.WriteMessagesError.With(map[string]string{
 				metrics.LabelVertex:             p.vertexName,
 				metrics.LabelPipeline:           p.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
@@ -252,25 +254,25 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 		return true, nil
 	})
 
-	dropMessagesCount.With(map[string]string{
+	metrics.DropMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(float64(len(resultMessages) - writeCount))
 
-	dropBytesCount.With(map[string]string{
+	metrics.DropBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(dropBytes)
 
-	writeMessagesCount.With(map[string]string{
+	metrics.WriteMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(float64(writeCount))
 
-	writeBytesCount.With(map[string]string{
+	metrics.WriteBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),

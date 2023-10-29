@@ -185,7 +185,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	totalBytes := 0
 	if err != nil {
 		df.log.Errorw("Failed to read from isb", zap.Error(err))
-		readMessagesError.With(map[string]string{
+		metrics.ReadMessagesError.With(map[string]string{
 			metrics.LabelVertex:             df.vertexName,
 			metrics.LabelPipeline:           df.pipelineName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
@@ -257,7 +257,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		m.Watermark = time.Time(processorWM)
 		totalBytes += len(m.Payload)
 	}
-	readBytesCount.With(map[string]string{
+	metrics.ReadBytesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
@@ -317,13 +317,13 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			ctrlMessages = append(ctrlMessages, message)
 		}
 	}
-	readMessagesCount.With(map[string]string{
+	metrics.ReadDataMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 	}).Add(float64(len(dataMessages)))
-	totalMessagesCount.With(map[string]string{
+	metrics.ReadMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
@@ -400,11 +400,11 @@ messagesLoop:
 				continue
 			} else if message.EventTime.Before(nextWinAsSeenByWriter.StartTime()) { // if the message doesn't fall in the next window that is about to be closed drop it.
 				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
-				droppedMessagesCount.With(map[string]string{
+				metrics.ReduceDroppedMessagesCount.With(map[string]string{
 					metrics.LabelVertex:             df.vertexName,
 					metrics.LabelPipeline:           df.pipelineName,
 					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-					LabelReason:                     "late"}).Inc()
+					metrics.LabelReason:             "late"}).Inc()
 
 				// mark it as a successfully written message as the message will be acked to avoid subsequent retries
 				writtenMessages = append(writtenMessages, message)
@@ -428,11 +428,11 @@ messagesLoop:
 			writtenMessages = append(writtenMessages, message)
 			// let's not continue processing this message, most likely the window has already been closed and the message
 			// won't be processed anyways.
-			droppedMessagesCount.With(map[string]string{
+			metrics.ReduceDroppedMessagesCount.With(map[string]string{
 				metrics.LabelVertex:             df.vertexName,
 				metrics.LabelPipeline:           df.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-				LabelReason:                     "watermark_issue"}).Inc()
+				metrics.LabelReason:             "watermark_issue"}).Inc()
 			continue
 		}
 
@@ -464,12 +464,13 @@ messagesLoop:
 // writeToPBQ writes to the PBQ. It will return error only if it is not failing to write to PBQ and is in a continuous
 // error loop, and we have received ctx.Done() via SIGTERM.
 func (df *DataForward) writeToPBQ(ctx context.Context, m *isb.ReadMessage, p partition.ID, kw window.AlignedKeyedWindower) error {
-	startTime := time.Now()
-	defer pbqWriteTime.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-	}).Observe(float64(time.Since(startTime).Milliseconds()))
+	defer func(t time.Time) {
+		metrics.PBQWriteTime.With(map[string]string{
+			metrics.LabelVertex:             df.vertexName,
+			metrics.LabelPipeline:           df.pipelineName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		}).Observe(float64(time.Since(t).Milliseconds()))
+	}(time.Now())
 
 	var pbqWriteBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
@@ -483,8 +484,8 @@ func (df *DataForward) writeToPBQ(ctx context.Context, m *isb.ReadMessage, p par
 	err := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
 		rErr := q.Write(context.Background(), m)
 		if rErr != nil {
-			df.log.Errorw("Failed to write message", zap.Any("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()), zap.Error(rErr))
-			pbqWriteErrorCount.With(map[string]string{
+			df.log.Errorw("Failed to write message", zap.String("msgOffSet", m.ReadOffset.String()), zap.String("partitionID", p.String()), zap.Error(rErr))
+			metrics.PBQWriteErrorCount.With(map[string]string{
 				metrics.LabelVertex:             df.vertexName,
 				metrics.LabelPipeline:           df.pipelineName,
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
@@ -501,7 +502,7 @@ func (df *DataForward) writeToPBQ(ctx context.Context, m *isb.ReadMessage, p par
 
 		}
 		// happy path
-		pbqWriteMessagesCount.With(map[string]string{
+		metrics.PBQWriteMessagesCount.With(map[string]string{
 			metrics.LabelVertex:             df.vertexName,
 			metrics.LabelPipeline:           df.pipelineName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
@@ -534,7 +535,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 				rErr := o.AckIt()
 				attempt += 1
 				if rErr != nil {
-					ackMessageError.With(map[string]string{
+					metrics.AckMessageError.With(map[string]string{
 						metrics.LabelVertex:             df.vertexName,
 						metrics.LabelPipeline:           df.pipelineName,
 						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
@@ -553,7 +554,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 					}
 				}
 				df.log.Debugw("Successfully acked message", zap.String("msgOffSet", o.String()))
-				ackMessagesCount.With(map[string]string{
+				metrics.AckMessagesCount.With(map[string]string{
 					metrics.LabelVertex:             df.vertexName,
 					metrics.LabelPipeline:           df.pipelineName,
 					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
