@@ -401,7 +401,7 @@ func NewKafkaSource(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, kafkaSource, writers, fsd, transformerApplier, fetchWM, kafkaSource, toVertexPublisherStores, idleManager, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance, kafkaSource, writers, fsd, transformerApplier, fetchWM, kafkaSource, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		kafkaSource.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
