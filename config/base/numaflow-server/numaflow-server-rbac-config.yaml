@@ -10,7 +10,7 @@ data:
     # Groups go here
     # g, admin, role:admin
     # g, my-github-org:my-github-team, role:readonly
-  rbacConf.yaml: |
+  rbac-conf.yaml: |
     policy.default: role:readonly
     # The scopes field controls which authentication scopes to examine during rbac enforcement.
     # We can have multiple scopes, and the first scope that matches with the policy will be used.

@@ -25,6 +25,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
+	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 
@@ -60,6 +61,7 @@ func NewCasbinObject() (*CasbinObject, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &CasbinObject{
 		enforcer:      enforcer,
 		config:        configReader,
@@ -73,6 +75,10 @@ func (cas *CasbinObject) GetConfig() *viper.Viper {
 
 func (cas *CasbinObject) GetScopes() []string {
 	return cas.currentScopes
+}
+
+func (cas *CasbinObject) SetScopes(scopes []string) {
+	cas.currentScopes = scopes
 }
 
 func (cas *CasbinObject) Authorize(c *gin.Context, userIdentityToken *authn.UserInfo, scope string) bool {
@@ -253,4 +259,18 @@ func enforceEmail(enforcer *casbin.Enforcer, c *gin.Context, userIdentityToken *
 func enforceCheck(enforcer *casbin.Enforcer, user, resource, object, action string) bool {
 	ok, _ := enforcer.Enforce(user, resource, object, action)
 	return ok
+}
+
+// ConfigFileReload is used to reload the config file when it is changed. This is used to reload the policy without
+// restarting the server. The config file is in the format of yaml.
+func ConfigFileReload(e fsnotify.Event, authorizer *CasbinObject) {
+	logger.Infow("RBAC conf file updated:", "fileName", e.Name)
+	conf := authorizer.GetConfig()
+	err := conf.ReadInConfig()
+	if err != nil {
+		return
+	}
+	currentScopes := GetRbacScopes(conf)
+	authorizer.SetScopes(currentScopes)
+	logger.Infow("Auth Scopes Updated", "scopes", authorizer.GetScopes())
 }

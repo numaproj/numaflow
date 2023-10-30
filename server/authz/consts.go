@@ -22,7 +22,7 @@ const (
 
 	// RbacPropertiesPath is the path to the rbac properties file. It includes configuraion for authorization like
 	// scope, default policy etc.
-	RbacPropertiesPath = "/etc/numaflow/rbacConf.yaml"
+	RbacPropertiesPath = "/etc/numaflow/rbac-conf.yaml"
 
 	// Objects for the RBAC policy
 	ObjectAll      = "*"

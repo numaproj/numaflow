@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -63,6 +64,12 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		if err != nil {
 			panic(err)
 		}
+		configReader := authorizer.GetConfig()
+		// Watch for changes in the config file.
+		configReader.WatchConfig()
+		configReader.OnConfigChange(func(in fsnotify.Event) {
+			authz.ConfigFileReload(in, authorizer)
+		})
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(authorizer, dexObj))
 	}
