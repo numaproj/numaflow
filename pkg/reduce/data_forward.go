@@ -265,7 +265,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}).Add(float64(totalBytes))
 
 	// readMessages has to be written to PBQ, acked, etc.
-	df.Process(ctx, readMessages)
+	df.process(ctx, readMessages)
 }
 
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
@@ -304,9 +304,9 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID parti
 	return q
 }
 
-// Process is one iteration of the read loop which writes the messages to the PBQs followed by acking the messages, and
+// process is one iteration of the read loop which writes the messages to the PBQs followed by acking the messages, and
 // then closing the windows that can closed.
-func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage) {
+func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage) {
 	var dataMessages = make([]*isb.ReadMessage, 0, len(messages))
 	var ctrlMessages = make([]*isb.ReadMessage, 0) // for a high TPS pipeline, 0 is the most optimal value
 

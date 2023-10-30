@@ -115,6 +115,18 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 func (p *ProcessAndForward) AsyncProcessForward(ctx context.Context) {
 	resultMessagesCh, errCh := p.UDF.AsyncApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 
+	// Hmm session window is nothing but a global window with infinite gap duration?
+
+	// et 60 75 69 86
+	// wm 59 69 69 86
+
+	// 60 - 70
+	// 75 - 85
+	// since we got 69 with watermark 69, we have to merge the two windows and the updated window
+	// should be 60 - 85
+	// now we got a message with et 86, and wm 86 we can materialize the window 60 - 85
+	// and publish the watermark as 85
+
 outerLoop:
 	for {
 		select {
