@@ -38,6 +38,9 @@ export const usePipelineViewFetch = (
   const [nodeOutDegree, setNodeOutDegree] = useState<Map<string, number>>(
     new Map()
   );
+  const [generatorToColorIdxMap, setGeneratorToColorIdxMap] = useState<
+    Map<string, string>
+  >(new Map());
   const [pipelineErr, setPipelineErr] = useState<string | undefined>(undefined);
   const [buffersErr, setBuffersErr] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -83,7 +86,9 @@ export const usePipelineViewFetch = (
               if (data.errMsg) {
                 setPipelineErr(`Error: ${data.errMsg}`);
               } else {
-                setPipelineErr(`Error: user is not authorized to execute the requested action.`);
+                setPipelineErr(
+                  `Error: user is not authorized to execute the requested action.`
+                );
               }
             } else {
               setPipelineErr(`Response code: ${response.status}`);
@@ -489,8 +494,9 @@ export const usePipelineViewFetch = (
       });
     }
     //creating side input nodes
+    const generatorToColorIdx = new Map();
     if (spec?.sideInputs) {
-      spec.sideInputs.forEach((sideInput) => {
+      spec.sideInputs.forEach((sideInput, idx) => {
         const newNode = {} as Node;
         newNode.id = sideInput?.name;
         newNode.data = { name: sideInput?.name };
@@ -501,7 +507,9 @@ export const usePipelineViewFetch = (
         newNode.data.type = "sideInput";
         newNode.data.sideHandle = true;
         newVertices.push(newNode);
+        generatorToColorIdx.set(sideInput?.name, `${idx % 5}`);
       });
+      setGeneratorToColorIdxMap(generatorToColorIdx);
     }
     return newVertices;
   }, [
@@ -659,6 +667,7 @@ export const usePipelineViewFetch = (
     pipeline,
     vertices,
     edges,
+    generatorToColorIdxMap,
     pipelineErr,
     buffersErr,
     loading,
