@@ -1,14 +1,6 @@
 import React from "react";
-import {
-  render,
-  screen,
-  waitFor,
-  fireEvent,
-  within,
-  getByTestId,
-} from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import userEvent from "@testing-library/user-event";
 import { PipelineCard } from "./index";
 import { AppContext } from "../../../../../App";
 import { BrowserRouter } from "react-router-dom";

@@ -43,7 +43,7 @@ func TestNativeRedisBadInstallation(t *testing.T) {
 		badIsbs.Spec.Redis = nil
 		installer := &redisInstaller{
 			client: fake.NewClientBuilder().Build(),
-			isbs:   badIsbs,
+			isbSvc: badIsbs,
 			config: fakeConfig,
 			labels: testLabels,
 			logger: zaptest.NewLogger(t).Sugar(),
@@ -78,7 +78,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 	i := &redisInstaller{
 		client:     cl,
 		kubeClient: k8sfake.NewSimpleClientset(),
-		isbs:       testNativeRedisIsbSvc,
+		isbSvc:     testNativeRedisIsbSvc,
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
@@ -86,7 +86,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 
 	t.Run("test create sts", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createStatefulSet(ctx)
 		assert.NoError(t, err)
 		sts := &appv1.StatefulSet{}
@@ -102,7 +102,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 
 	t.Run("test create redis svc", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createRedisService(ctx)
 		assert.NoError(t, err)
 		svc := &corev1.Service{}
@@ -114,7 +114,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 
 	t.Run("test create redis headless svc", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createRedisHeadlessService(ctx)
 		assert.NoError(t, err)
 		svc := &corev1.Service{}
@@ -126,7 +126,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 
 	t.Run("test create redis auth secret", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createAuthCredentialSecret(ctx)
 		assert.NoError(t, err)
 		s := &corev1.Secret{}
@@ -138,7 +138,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 
 	t.Run("test create redis config", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createConfConfigMap(ctx)
 		assert.NoError(t, err)
 		c := &corev1.ConfigMap{}
@@ -150,7 +150,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 
 	t.Run("test create redis scripts config", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createScriptsConfigMap(ctx)
 		assert.NoError(t, err)
 		c := &corev1.ConfigMap{}
@@ -162,7 +162,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 
 	t.Run("test create redis health config", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createHealthConfigMap(ctx)
 		assert.NoError(t, err)
 		c := &corev1.ConfigMap{}
@@ -179,7 +179,7 @@ func Test_NativeRedisInstall_Uninstall(t *testing.T) {
 	i := &redisInstaller{
 		client:     cl,
 		kubeClient: k8sfake.NewSimpleClientset(),
-		isbs:       testNativeRedisIsbSvc,
+		isbSvc:     testNativeRedisIsbSvc,
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),

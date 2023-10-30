@@ -125,6 +125,11 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			// Forwarder logic tested here with a jetstream read and write
 			bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 			assert.NoError(t, err)
@@ -140,7 +145,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := forward.NewInterStepDataForward(vertex, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 
 			stopped := f.Start()

@@ -57,14 +57,14 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewToKafka returns ToKafka type.
-func NewToKafka(vertex *dfv1.Vertex,
+func NewToKafka(vertexInstance *dfv1.VertexInstance,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
 	idleManager wmb.IdleManager,
 	opts ...Option) (*ToKafka, error) {
 
-	kafkaSink := vertex.Spec.Sink.Kafka
+	kafkaSink := vertexInstance.Vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
 	// apply options for kafka sink
 	for _, o := range opts {
@@ -78,19 +78,19 @@ func NewToKafka(vertex *dfv1.Vertex,
 		toKafka.log = logging.NewLogger()
 	}
 	toKafka.log = toKafka.log.With("sinkType", "kafka").With("topic", kafkaSink.Topic)
-	toKafka.name = vertex.Spec.Name
-	toKafka.pipelineName = vertex.Spec.PipelineName
+	toKafka.name = vertexInstance.Vertex.Spec.Name
+	toKafka.pipelineName = vertexInstance.Vertex.Spec.PipelineName
 	toKafka.topic = kafkaSink.Topic
 	toKafka.kafkaSink = kafkaSink
 
 	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(toKafka.log)}
-	if x := vertex.Spec.Limits; x != nil {
+	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
-	f, err := sinkforward.NewDataForward(vertex, fromBuffer, toKafka, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
+	f, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, toKafka, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

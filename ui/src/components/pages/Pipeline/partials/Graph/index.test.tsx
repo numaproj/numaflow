@@ -10,16 +10,7 @@ window.ResizeObserver = class ResizeObserver {
   }
 };
 import React from "react";
-import {
-  render,
-  screen,
-  waitFor,
-  fireEvent,
-  within,
-  getByTestId,
-  act,
-  renderHook,
-} from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import Graph from "./index";

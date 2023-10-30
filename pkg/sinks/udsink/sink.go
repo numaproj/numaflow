@@ -51,7 +51,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewUserDefinedSink returns genericSink type.
-func NewUserDefinedSink(vertex *dfv1.Vertex,
+func NewUserDefinedSink(vertexInstance *dfv1.VertexInstance,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
@@ -60,9 +60,9 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	opts ...Option) (*UserDefinedSink, error) {
 
 	s := new(UserDefinedSink)
-	name := vertex.Spec.Name
+	name := vertexInstance.Vertex.Spec.Name
 	s.name = name
-	s.pipelineName = vertex.Spec.PipelineName
+	s.pipelineName = vertexInstance.Vertex.Spec.PipelineName
 	for _, o := range opts {
 		if err := o(s); err != nil {
 			return nil, err
@@ -73,13 +73,13 @@ func NewUserDefinedSink(vertex *dfv1.Vertex,
 	}
 
 	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(s.logger)}
-	if x := vertex.Spec.Limits; x != nil {
+	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 	s.udsink = udsink
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, s, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, s, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

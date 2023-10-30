@@ -16373,7 +16373,7 @@ metadata:
 apiVersion: v1
 data:
   config.yaml: "issuer: <HOSTNAME>/dex\nstorage:\n  type: memory\nweb:\n  http: 0.0.0.0:5556\nstaticClients:\n
-    \ - id: numaflow-server-app\n    redirectURIs: \n      - <HOSTNAME>/<base_herf>/login\n
+    \ - id: numaflow-server-app\n    redirectURIs: \n      - <HOSTNAME>/<base_href>/login\n
     \   name: 'Numaflow Server App'\n    public: true\nconnectors:\n- type: github\n
     \ # https://dexidp.io/docs/connectors/github/\n  id: github\n  name: GitHub\n
     \ config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n

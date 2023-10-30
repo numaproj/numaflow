@@ -228,7 +228,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}
 		// create a forwarder for each partition
-		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance.Vertex, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, idleManager, opts...)
+		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, idleManager, opts...)
 		if err != nil {
 			return err
 		}

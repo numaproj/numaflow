@@ -36,8 +36,8 @@ type Installer interface {
 }
 
 // Install function installs the ISBS
-func Install(ctx context.Context, isbsvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) error {
-	installer, err := getInstaller(isbsvc, client, kubeClient, config, logger)
+func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) error {
+	installer, err := getInstaller(isbSvc, client, kubeClient, config, logger)
 	if err != nil {
 		logger.Errorw("failed to get an installer", zap.Error(err))
 		return err
@@ -47,28 +47,28 @@ func Install(ctx context.Context, isbsvc *dfv1.InterStepBufferService, client cl
 		logger.Errorw("installation error", zap.Error(err))
 		return err
 	}
-	isbsvc.Status.Config = *bufferConfig
+	isbSvc.Status.Config = *bufferConfig
 	return nil
 }
 
 // GetInstaller returns Installer implementation
-func getInstaller(isbsvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) (Installer, error) {
+func getInstaller(isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) (Installer, error) {
 	labels := map[string]string{
 		dfv1.KeyPartOf:     dfv1.Project,
 		dfv1.KeyManagedBy:  dfv1.ControllerISBSvc,
 		dfv1.KeyComponent:  dfv1.ComponentISBSvc,
-		dfv1.KeyISBSvcName: isbsvc.Name,
+		dfv1.KeyISBSvcName: isbSvc.Name,
 	}
-	if redis := isbsvc.Spec.Redis; redis != nil {
+	if redis := isbSvc.Spec.Redis; redis != nil {
 		labels[dfv1.KeyISBSvcType] = string(dfv1.ISBSvcTypeRedis)
 		if redis.External != nil {
-			return NewExternalRedisInstaller(isbsvc, logger), nil
+			return NewExternalRedisInstaller(isbSvc, logger), nil
 		} else if redis.Native != nil {
-			return NewNativeRedisInstaller(client, kubeClient, isbsvc, config, labels, logger), nil
+			return NewNativeRedisInstaller(client, kubeClient, isbSvc, config, labels, logger), nil
 		}
-	} else if js := isbsvc.Spec.JetStream; js != nil {
+	} else if js := isbSvc.Spec.JetStream; js != nil {
 		labels[dfv1.KeyISBSvcType] = string(dfv1.ISBSvcTypeJetStream)
-		return NewJetStreamInstaller(client, kubeClient, isbsvc, config, labels, logger), nil
+		return NewJetStreamInstaller(client, kubeClient, isbSvc, config, labels, logger), nil
 	}
 	return nil, fmt.Errorf("invalid isb service spec")
 }
@@ -81,8 +81,8 @@ func getInstaller(isbsvc *dfv1.InterStepBufferService, client client.Client, kub
 // separately.
 //
 // It could also be used to check if the ISB Service object can be safely deleted.
-func Uninstall(ctx context.Context, isbsvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) error {
-	installer, err := getInstaller(isbsvc, client, kubeClient, config, logger)
+func Uninstall(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) error {
+	installer, err := getInstaller(isbSvc, client, kubeClient, config, logger)
 	if err != nil {
 		logger.Errorw("Failed to get an installer", zap.Error(err))
 		return err
