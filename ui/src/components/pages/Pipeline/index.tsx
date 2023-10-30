@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useMemo } from "react";
+import { useCallback, useContext, useMemo, createContext } from "react";
 import { useParams } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
@@ -26,6 +26,10 @@ export interface PipelineProps {
   namespaceId?: string;
 }
 
+export const GeneratorColorContext = createContext<Map<string, string>>(
+  new Map()
+);
+
 export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
   const { namespaceId: nsIdParam, pipelineId } = useParams();
   const namespaceId = nsIdProp || nsIdParam;
@@ -41,6 +45,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
     pipeline,
     vertices,
     edges,
+    generatorToColorIdxMap,
     pipelineErr,
     buffersErr,
     loading,
@@ -184,18 +189,21 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
       );
     }
     return (
-      <Graph
-        data={{
-          edges: edges,
-          vertices: vertices,
-          pipeline: pipeline,
-        }}
-        namespaceId={namespaceId}
-        pipelineId={pipelineId}
-        refresh={refresh}
-      />
+      <GeneratorColorContext.Provider value={generatorToColorIdxMap}>
+        <Graph
+          data={{
+            edges: edges,
+            vertices: vertices,
+            pipeline: pipeline,
+          }}
+          namespaceId={namespaceId}
+          pipelineId={pipelineId}
+          refresh={refresh}
+        />
+      </GeneratorColorContext.Provider>
     );
   }, [
+    generatorToColorIdxMap,
     pipelineErr,
     buffersErr,
     loading,

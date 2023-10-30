@@ -63,8 +63,8 @@ import source from "../../../../../images/source.png";
 import map from "../../../../../images/map.png";
 import reduce from "../../../../../images/reduce.png";
 import sink from "../../../../../images/sink.png";
-import input from "../../../../../images/input.svg";
-import generator from "../../../../../images/generator.svg";
+import input from "../../../../../images/input0.svg";
+import generator from "../../../../../images/generator0.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -118,7 +118,7 @@ const getLayoutedElements = (
     const nodeWithPosition = dagreGraph.node(node.id);
     if (node?.data?.type === "sideInput") {
       nodeWithPosition.x = nodeWidth;
-      nodeWithPosition.y = max_pos + nodeHeight * cnt;
+      nodeWithPosition.y = max_pos + nodeHeight * 0.75 * cnt;
       cnt++;
     }
     node.targetPosition = isHorizontal ? Position.Left : Position.Top;
