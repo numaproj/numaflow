@@ -70,6 +70,8 @@ export interface K8sEventSummary {
 }
 export interface NamespaceK8sEventsFetchProps {
   namespace: string;
+  pipeline?: string;
+  vertex?: string;
 }
 export interface NamespaceK8sEventsFetchResult {
   data?: K8sEventSummary;

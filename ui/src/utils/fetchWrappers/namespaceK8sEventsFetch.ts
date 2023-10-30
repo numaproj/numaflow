@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useFetch, Options } from "./fetch";
 import {
   K8sEvent,
@@ -6,40 +6,6 @@ import {
   NamespaceK8sEventsFetchProps,
   NamespaceK8sEventsFetchResult,
 } from "../../types/declarations/namespace";
-
-// const MOCK_DATA = [
-//   {
-//     apiVersion: "v1",
-//     count: 4,
-//     eventTime: null,
-//     firstTimestamp: "2023-09-11T19:16:47Z",
-//     involvedObject: {
-//       apiVersion: "iammanager.keikoproj.io/v1alpha1",
-//       kind: "Iamrole",
-//       name: "iamrole",
-//       namespace: "dev-log-usw2-dev",
-//       resourceVersion: "16504395",
-//       uid: "517e486c-a9a0-4cf7-bbdd-0269e12fe8b8",
-//     },
-//     kind: "Event",
-//     lastTimestamp: "2023-09-11T21:15:45Z",
-//     message: "Successfully created/updated iam role",
-//     metadata: {
-//       creationTimestamp: "2023-09-11T21:15:45Z",
-//       name: "iamrole.1783ee37b9ff4d70",
-//       namespace: "dev-log-usw2-dev",
-//       resourceVersion: "16504414",
-//       uid: "a522d798-1bb5-4f46-aae0-71385e87fcd7",
-//     },
-//     reason: "Ready",
-//     reportingComponent: "",
-//     reportingInstance: "",
-//     source: {
-//       component: "iam-manager",
-//     },
-//     type: "Normal",
-//   },
-// ];
 
 const rawDataToEventListing = (
   namespace: string,
@@ -81,6 +47,8 @@ const rawDataToEventListing = (
 
 export const useNamespaceK8sEventsFetch = ({
   namespace,
+  pipeline,
+  vertex,
 }: NamespaceK8sEventsFetchProps) => {
   const [results, setResults] = useState<NamespaceK8sEventsFetchResult>({
     data: undefined,
@@ -91,11 +59,21 @@ export const useNamespaceK8sEventsFetch = ({
     skip: false,
     requestKey: "",
   });
+
+  const urlPath = useMemo(() => {
+    if (vertex) {
+      return `/api/v1/namespaces/${namespace}/events?objectType=vertex&objectName=${pipeline}-${vertex}`;
+    } else if (pipeline) {
+      return `/api/v1/namespaces/${namespace}/events?objectType=pipeline&objectName=${pipeline}`;
+    }
+    return `/api/v1/namespaces/${namespace}/events`;
+  }, [namespace, pipeline, vertex])
+
   const {
     data: fetchData,
     loading: fetchLoading,
     error: fetchError,
-  } = useFetch(`/api/v1/namespaces/${namespace}/events`, undefined, options);
+  } = useFetch(urlPath, undefined, options);
 
   useEffect(() => {
     if (fetchLoading) {
