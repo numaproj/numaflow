@@ -52,60 +52,60 @@ func NewReconciler(client client.Client, kubeClient kubernetes.Interface, scheme
 }
 
 func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	isbs := &dfv1.InterStepBufferService{}
-	if err := r.client.Get(ctx, req.NamespacedName, isbs); err != nil {
+	isbSvc := &dfv1.InterStepBufferService{}
+	if err := r.client.Get(ctx, req.NamespacedName, isbSvc); err != nil {
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
-		r.logger.Errorw("Unable to get ISBS", zap.Any("request", req), zap.Error(err))
+		r.logger.Errorw("Unable to get ISB Service", zap.Any("request", req), zap.Error(err))
 		return ctrl.Result{}, err
 	}
-	log := r.logger.With("namespace", isbs.Namespace).With("isbsvc", isbs.Name)
-	isbsCopy := isbs.DeepCopy()
-	reconcileErr := r.reconcile(ctx, isbsCopy)
+	log := r.logger.With("namespace", isbSvc.Namespace).With("isbsvc", isbSvc.Name)
+	isbSvcCopy := isbSvc.DeepCopy()
+	reconcileErr := r.reconcile(ctx, isbSvcCopy)
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
-	if r.needsUpdate(isbs, isbsCopy) {
+	if r.needsUpdate(isbSvc, isbSvcCopy) {
 		// Update with a DeepCopy because .Status will be cleaned up.
-		if err := r.client.Update(ctx, isbsCopy.DeepCopy()); err != nil {
+		if err := r.client.Update(ctx, isbSvcCopy.DeepCopy()); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
-	if err := r.client.Status().Update(ctx, isbsCopy); err != nil {
+	if err := r.client.Status().Update(ctx, isbSvcCopy); err != nil {
 		return reconcile.Result{}, err
 	}
 	return ctrl.Result{}, reconcileErr
 }
 
 // reconcile does the real logic
-func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbs *dfv1.InterStepBufferService) error {
-	log := r.logger.With("namespace", isbs.Namespace).With("isbs", isbs.Name)
-	if !isbs.DeletionTimestamp.IsZero() {
-		log.Info("Deleting isbs")
-		if controllerutil.ContainsFinalizer(isbs, finalizerName) {
+func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc *dfv1.InterStepBufferService) error {
+	log := r.logger.With("namespace", isbSvc.Namespace).With("isbsvc", isbSvc.Name)
+	if !isbSvc.DeletionTimestamp.IsZero() {
+		log.Info("Deleting isbsvc")
+		if controllerutil.ContainsFinalizer(isbSvc, finalizerName) {
 			// Finalizer logic should be added here.
-			if err := installer.Uninstall(ctx, isbs, r.client, r.kubeClient, r.config, log); err != nil {
+			if err := installer.Uninstall(ctx, isbSvc, r.client, r.kubeClient, r.config, log); err != nil {
 				log.Errorw("Failed to uninstall", zap.Error(err))
 				return err
 			}
-			controllerutil.RemoveFinalizer(isbs, finalizerName)
+			controllerutil.RemoveFinalizer(isbSvc, finalizerName)
 		}
 		return nil
 	}
-	if needsFinalizer(isbs) {
-		controllerutil.AddFinalizer(isbs, finalizerName)
+	if needsFinalizer(isbSvc) {
+		controllerutil.AddFinalizer(isbSvc, finalizerName)
 	}
 
-	isbs.Status.InitConditions()
-	if err := ValidateInterStepBufferService(isbs); err != nil {
+	isbSvc.Status.InitConditions()
+	if err := ValidateInterStepBufferService(isbSvc); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
-		isbs.Status.MarkNotConfigured("InvalidSpec", err.Error())
+		isbSvc.Status.MarkNotConfigured("InvalidSpec", err.Error())
 		return err
 	} else {
-		isbs.Status.MarkConfigured()
+		isbSvc.Status.MarkConfigured()
 	}
-	return installer.Install(ctx, isbs, r.client, r.kubeClient, r.config, log)
+	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log)
 }
 
 func (r *interStepBufferServiceReconciler) needsUpdate(old, new *dfv1.InterStepBufferService) bool {
@@ -118,11 +118,11 @@ func (r *interStepBufferServiceReconciler) needsUpdate(old, new *dfv1.InterStepB
 	return false
 }
 
-func needsFinalizer(isbs *dfv1.InterStepBufferService) bool {
-	if isbs.Spec.Redis != nil && isbs.Spec.Redis.Native != nil && isbs.Spec.Redis.Native.Persistence != nil {
+func needsFinalizer(isbSvc *dfv1.InterStepBufferService) bool {
+	if isbSvc.Spec.Redis != nil && isbSvc.Spec.Redis.Native != nil && isbSvc.Spec.Redis.Native.Persistence != nil {
 		return true
 	}
-	if isbs.Spec.JetStream != nil && isbs.Spec.JetStream.Persistence != nil {
+	if isbSvc.Spec.JetStream != nil && isbSvc.Spec.JetStream.Persistence != nil {
 		return true
 	}
 	return false
