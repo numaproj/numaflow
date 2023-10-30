@@ -35,6 +35,7 @@ export interface SummarySection {
 }
 
 export interface SummaryPageLayoutProps {
+  excludeContentMargin?: boolean;
   collapsable?: boolean;
   defaultCollapsed?: boolean;
   offsetOnCollapse?: boolean; // Add top margin to content when collapsed to avoid content overlap
@@ -44,6 +45,8 @@ export interface SummaryPageLayoutProps {
   contentPadding?: boolean;
   contentHideOverflow?: boolean;
 }
+
+export const CollapseContext = React.createContext(false);
 
 const SUMMARY_HEIGHT = "6.5625rem";
 const COLLAPSED_HEIGHT = "2.25rem";
@@ -193,6 +196,7 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
 };
 
 export function SummaryPageLayout({
+  excludeContentMargin = false,
   collapsable = false,
   defaultCollapsed = false,
   offsetOnCollapse = false,
@@ -240,9 +244,11 @@ export function SummaryPageLayout({
             boxShadow: "0 0.25rem 0.375rem rgba(39, 76, 119, 0.16)",
             zIndex: (theme) => theme.zIndex.drawer - 1,
             position: "fixed",
-            top: "5.75rem",
+            top: "6.25rem",
             padding: "0 1.25rem",
             alignItems: "center",
+            borderBottomLeftRadius: "1.25rem",
+            borderBottomRightRadius: "1.25rem",
           }}
         >
           <span className={"summary-page-layout-collapsed-text"}>
@@ -301,6 +307,7 @@ export function SummaryPageLayout({
   ]);
 
   const contentMargin = useMemo(() => {
+    if (excludeContentMargin) return 0;
     if (collapsed) {
       return offsetOnCollapse ? `${summaryHeight}px` : undefined;
     }
@@ -323,7 +330,9 @@ export function SummaryPageLayout({
           height: "100%",
         }}
       >
-        {contentComponent}
+        <CollapseContext.Provider value={collapsed}>
+          {contentComponent}
+        </CollapseContext.Provider>
       </Box>
     </Box>
   );
