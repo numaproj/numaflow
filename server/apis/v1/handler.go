@@ -741,7 +741,6 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	ns := c.Param("namespace")
 	ppl := c.DefaultQuery("pipeline", "")
 	vtx := c.DefaultQuery("vertex", "")
-	// keran - this check is tested right.
 	if ppl == "" && vtx != "" {
 		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: vertex %q is specified without pipeline", ns, vtx))
 		return
