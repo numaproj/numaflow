@@ -94,6 +94,18 @@ func newProcessAndForward(ctx context.Context,
 	return pf
 }
 
+// Hmm.. Global Window is nothing but a session window with infinite gap duration?
+
+// et 60 75 69 86
+// wm 59 69 69 86
+
+// 60 - 70
+// 75 - 85
+// since we got 69 with watermark 69, we have to merge the two windows and the updated window
+// should be 60 - 85
+// now we got a message with et 86, and wm 86 we can materialize the window 60 - 85
+// and publish the watermark as 85
+
 // Process method reads messages from the supplied PBQ, invokes UDF to reduce the writeMessages.
 func (p *ProcessAndForward) Process(ctx context.Context) error {
 	var err error
@@ -114,18 +126,6 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 // manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
 func (p *ProcessAndForward) AsyncProcessForward(ctx context.Context) {
 	resultMessagesCh, errCh := p.UDF.AsyncApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
-
-	// Hmm session window is nothing but a global window with infinite gap duration?
-
-	// et 60 75 69 86
-	// wm 59 69 69 86
-
-	// 60 - 70
-	// 75 - 85
-	// since we got 69 with watermark 69, we have to merge the two windows and the updated window
-	// should be 60 - 85
-	// now we got a message with et 86, and wm 86 we can materialize the window 60 - 85
-	// and publish the watermark as 85
 
 outerLoop:
 	for {
@@ -167,11 +167,6 @@ outerLoop:
 					}(key, int32(index), messages)
 				}
 			}
-
-			// 60 - 70
-			// 70 - 80
-			// 80 - 90 -> 90
-			// 100
 
 			// wait until all the writer go routines return
 			wg.Wait()
