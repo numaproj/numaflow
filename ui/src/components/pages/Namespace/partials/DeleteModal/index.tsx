@@ -150,7 +150,12 @@ export function DeleteModal({
           }`}
         />
         <Box sx={buttonContainerStyle}>
-          <Button onClick={handleDelete} variant="contained" color="secondary">
+          <Button
+            onClick={handleDelete}
+            variant="contained"
+            color="secondary"
+            data-testid="delete-confirmation-button"
+          >
             Delete
           </Button>
           <Button onClick={onCancel} variant="outlined" color="primary">
