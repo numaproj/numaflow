@@ -2,14 +2,23 @@ import { FC, memo, useCallback, useContext, useMemo } from "react";
 import { Tooltip } from "@mui/material";
 import { Handle, NodeProps, Position } from "reactflow";
 import { HighlightContext } from "../../index";
+import { GeneratorColorContext } from "../../../../index";
 import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
 // import healthy from "../../../../../../../images/heart-fill.svg";
 import source from "../../../../../../../images/source.png";
 import map from "../../../../../../../images/map.png";
 import reduce from "../../../../../../../images/reduce.png";
 import sink from "../../../../../../../images/sink.png";
-import input from "../../../../../../../images/input.svg";
-import generator from "../../../../../../../images/generator.svg";
+import input0 from "../../../../../../../images/input0.svg";
+import input1 from "../../../../../../../images/input1.svg";
+import input2 from "../../../../../../../images/input2.svg";
+import input3 from "../../../../../../../images/input3.svg";
+import input4 from "../../../../../../../images/input4.svg";
+import generator0 from "../../../../../../../images/generator0.svg";
+import generator1 from "../../../../../../../images/generator1.svg";
+import generator2 from "../../../../../../../images/generator2.svg";
+import generator3 from "../../../../../../../images/generator3.svg";
+import generator4 from "../../../../../../../images/generator4.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -19,9 +28,31 @@ const getBorderColor = (nodeType: string) => {
     ? "#3874CB"
     : nodeType === "udf"
     ? "#009EAC"
-    : nodeType === "sideInput"
-    ? "#C9007A"
     : "#577477";
+};
+
+const inputImage = {
+  0: input0,
+  1: input1,
+  2: input2,
+  3: input3,
+  4: input4,
+};
+
+const generatorImage = {
+  0: generator0,
+  1: generator1,
+  2: generator2,
+  3: generator3,
+  4: generator4,
+};
+
+const inputColor = {
+  0: "#C9007A",
+  1: "#73A8AE",
+  2: "#8D9096",
+  3: "#B61A37",
+  4: "#7C00F6",
 };
 
 const isSelected = (selected: boolean) => {
@@ -44,6 +75,17 @@ const CustomNode: FC<NodeProps> = ({
     // handleNodeClick,
     sideInputEdges,
   } = useContext<HighlightContextProps>(HighlightContext);
+
+  const generatorToColorMap: Map<string, string> = useContext(
+    GeneratorColorContext
+  );
+
+  const getSideInputColor = useCallback(
+    (nodeName: string) => {
+      return inputColor[generatorToColorMap.get(nodeName)];
+    },
+    [generatorToColorMap]
+  );
 
   const handleClick = useCallback(
     (e) => {
@@ -98,7 +140,7 @@ const CustomNode: FC<NodeProps> = ({
     return {
       border: `${isSelected(
         highlightValues[data?.name] && highlightValues[text]
-      )} ${getBorderColor(data?.type)}`,
+      )} ${getSideInputColor(data?.name)}`,
     };
   };
 
@@ -119,7 +161,7 @@ const CustomNode: FC<NodeProps> = ({
             }}
           >
             <img
-              src={generator}
+              src={generatorImage[generatorToColorMap.get(data?.name)]}
               alt={"generator"}
               width={16}
               height={16}
@@ -129,7 +171,7 @@ const CustomNode: FC<NodeProps> = ({
           <div
             className={"sideInput_node_ele"}
             style={{
-              color: "#C9007A",
+              color: getSideInputColor(data?.name),
               borderTopRightRadius: "1rem",
               borderBottomRightRadius: "1rem",
               ...genStyle("---"),
@@ -329,22 +371,22 @@ const CustomNode: FC<NodeProps> = ({
               id={`3-${idx}`}
               position={Position.Bottom}
               style={{
-                left: `${50 - idx * 10}%`,
+                left: `${50 - idx * 9}%`,
               }}
             />
           );
         })}
       </div>
-      {data?.nodeInfo?.sideInputs?.map((_, idx) => {
+      {data?.nodeInfo?.sideInputs?.map((input, idx) => {
         return (
           <img
             key={idx}
-            src={input}
+            src={inputImage[generatorToColorMap.get(input)]}
             alt={"input"}
             id={`3-${idx}`}
             className={"sideInput_handle"}
             style={{
-              left: `${44.2 - idx * 10}%`,
+              left: `${44.2 - idx * 9}%`,
               ...blurHandle(`3-${idx}`),
             }}
             width={22}
