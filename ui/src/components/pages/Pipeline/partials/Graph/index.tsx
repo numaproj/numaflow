@@ -152,6 +152,9 @@ const Flow = (props: FlowProps) => {
     handleNodeClick,
     handleEdgeClick,
     handlePaneClick,
+    refresh,
+    namespaceId,
+    data,
   } = props;
 
   const onIsLockedChange = useCallback(
@@ -165,6 +168,94 @@ const Flow = (props: FlowProps) => {
   const onFullScreen = useCallback(() => fitView(), [zoomLevel]);
   const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomLevel]);
   const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomLevel]);
+
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [successMessage, setSuccessMessage] = useState<string | undefined>(
+    undefined
+  );
+  const [statusPayload, setStatusPayload] = useState<any>(undefined);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
+  const [timer, setTimer] = useState<any>(undefined);
+
+  const handlePlayClick = useCallback(() => {
+    handleTimer();
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: RUNNING,
+        },
+      },
+    });
+  }, []);
+
+  const handlePauseClick = useCallback(() => {
+    handleTimer();
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: PAUSED,
+        },
+      },
+    });
+  }, []);
+
+  const handleTimer = useCallback(() => {
+    const dateString = new Date().toISOString();
+    const time = timeAgo(dateString);
+    setTimerDateStamp(time);
+    const pauseTimer = setInterval(() => {
+      const time = timeAgo(dateString);
+      setTimerDateStamp(time);
+    }, 1000);
+    setTimer(pauseTimer);
+  }, []);
+
+  useEffect(() => {
+    const patchStatus = async () => {
+      try {
+        const response = await fetch(
+          `/api/v1/namespaces/${namespaceId}/pipelines/${data?.pipeline?.metadata?.name}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(statusPayload),
+          }
+        );
+        const error = await getAPIResponseError(response);
+        if (error) {
+          setError(error);
+        } else {
+          refresh();
+          setSuccessMessage("Status updated successfully");
+        }
+      } catch (e) {
+        setError(e);
+      }
+    };
+    if (statusPayload) {
+      patchStatus();
+    }
+  }, [statusPayload]);
+
+  useEffect(() => {
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
+      data?.pipeline?.status?.phase === PAUSED
+    ) {
+      clearInterval(timer);
+      setStatusPayload(undefined);
+    }
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === RUNNING &&
+      data?.pipeline?.status?.phase === RUNNING
+    ) {
+      clearInterval(timer);
+      setStatusPayload(undefined);
+    }
+  }, [data]);
 
   useEffect(() => {
     nodes.forEach((node) => {
@@ -196,15 +287,101 @@ const Flow = (props: FlowProps) => {
     >
       <Panel
         position="top-left"
-        style={{ marginTop: isCollapsed ? "3rem" : "8rem" }}
+        style={{ marginTop: isCollapsed ? "3rem" : "6.75rem" }}
       >
-        <Button>Yo</Button>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+          }}
+        >
+          <Button
+            variant="contained"
+            data-testid="resume"
+            sx={{
+              height: "2rem",
+              width: "5rem",
+              fontWeight: "bold",
+            }}
+            onClick={handlePlayClick}
+            disabled={data?.pipeline?.status?.phase === RUNNING}
+          >
+            Resume
+          </Button>
+          <Button
+            variant="contained"
+            data-testid="pause"
+            sx={{
+              height: "2rem",
+              width: "5rem",
+              marginLeft: "1rem",
+              fontWeight: "bold",
+            }}
+            onClick={handlePauseClick}
+            disabled={
+              data?.pipeline?.status?.phase === PAUSED ||
+              data?.pipeline?.status?.phase === PAUSING
+            }
+          >
+            Pause
+          </Button>
+          <Box sx={{ marginLeft: "1rem" }}>
+            {error && statusPayload ? (
+              <Alert
+                severity="error"
+                sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
+              >
+                {error}
+              </Alert>
+            ) : successMessage &&
+              statusPayload &&
+              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                data?.pipeline?.status?.phase !== PAUSED) ||
+                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                  data?.pipeline?.status?.phase !== RUNNING)) ? (
+              <div
+                style={{
+                  borderRadius: "0.8125rem",
+                  width: "14.25rem",
+                  background: "#F0F0F0",
+                  display: "flex",
+                  flexDirection: "row",
+                  padding: "0.5rem",
+                  color: "#516F91",
+                  alignItems: "center",
+                }}
+              >
+                <CircularProgress
+                  sx={{
+                    width: "1.25rem !important",
+                    height: "1.25rem !important",
+                  }}
+                />{" "}
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <span style={{ marginLeft: "1rem" }}>
+                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
+                      ? "Pipeline Pausing..."
+                      : "Pipeline Resuming..."}
+                  </span>
+                  <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
+                </Box>
+              </div>
+            ) : (
+              ""
+            )}
+          </Box>
+        </Box>
       </Panel>
       <Panel
         position="top-right"
-        style={{ marginTop: isCollapsed ? "3rem" : "8rem" }}
+        style={{ marginTop: isCollapsed ? "0.5rem" : "6.75rem" }}
       >
-        Error
+        <ErrorIndicator />
       </Panel>
       <Panel position="bottom-left" className={"interaction"}>
         <Tooltip
@@ -271,7 +448,7 @@ const Flow = (props: FlowProps) => {
       <Panel
         position="top-left"
         className={"legend"}
-        style={{ marginTop: isCollapsed ? "6rem" : "11rem" }}
+        style={{ marginTop: isCollapsed ? "5.75rem" : "9.5rem" }}
       >
         <Accordion>
           <AccordionSummary
@@ -352,14 +529,6 @@ export default function Graph(props: GraphProps) {
   const [sideEdges, setSideEdges] = useState<Map<string, string>>(new Map());
   const initialHiddenValue = getHiddenValue(layoutedEdges);
   const [hidden, setHidden] = useState(initialHiddenValue);
-  const [error, setError] = useState<string | undefined>(undefined);
-  const [successMessage, setSuccessMessage] = useState<string | undefined>(
-    undefined
-  );
-  const [statusPayload, setStatusPayload] = useState<any>(undefined);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
-  const [timer, setTimer] = useState<any>(undefined);
 
   useEffect(() => {
     const nodeSet = new Map();
@@ -577,191 +746,9 @@ export default function Graph(props: GraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showSpec, setShowSpec] = useState(true);
 
-  const handlePlayClick = useCallback(() => {
-    handleTimer();
-    setStatusPayload({
-      spec: {
-        lifecycle: {
-          desiredPhase: RUNNING,
-        },
-      },
-    });
-  }, []);
-
-  const handlePauseClick = useCallback(() => {
-    handleTimer();
-    setStatusPayload({
-      spec: {
-        lifecycle: {
-          desiredPhase: PAUSED,
-        },
-      },
-    });
-  }, []);
-
-  const handleTimer = useCallback(() => {
-    const dateString = new Date().toISOString();
-    const time = timeAgo(dateString);
-    setTimerDateStamp(time);
-    const pauseTimer = setInterval(() => {
-      const time = timeAgo(dateString);
-      setTimerDateStamp(time);
-    }, 1000);
-    setTimer(pauseTimer);
-  }, []);
-
-  useEffect(() => {
-    const patchStatus = async () => {
-      try {
-        const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${data?.pipeline?.metadata?.name}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(statusPayload),
-          }
-        );
-        const error = await getAPIResponseError(response);
-        if (error) {
-          setError(error);
-        } else {
-          refresh();
-          setSuccessMessage("Status updated successfully");
-        }
-      } catch (e) {
-        setError(e);
-      }
-    };
-    if (statusPayload) {
-      patchStatus();
-    }
-  }, [statusPayload]);
-
-  useEffect(() => {
-    if (
-      statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
-      data?.pipeline?.status?.phase === PAUSED
-    ) {
-      clearInterval(timer);
-      setStatusPayload(undefined);
-    }
-    if (
-      statusPayload?.spec?.lifecycle?.desiredPhase === RUNNING &&
-      data?.pipeline?.status?.phase === RUNNING
-    ) {
-      clearInterval(timer);
-      setStatusPayload(undefined);
-    }
-  }, [data]);
-
   return (
     <div style={{ height: "100%" }}>
       <div className="Graph" data-testid="graph">
-        {/*<Box*/}
-        {/*  sx={{*/}
-        {/*    display: "flex",*/}
-        {/*    flexDirection: "row",*/}
-        {/*    alignItems: "center",*/}
-        {/*    justifyContent: "space-between",*/}
-        {/*  }}*/}
-        {/*>*/}
-        {/*  <Box*/}
-        {/*    sx={{*/}
-        {/*      display: "flex",*/}
-        {/*      flexDirection: "row",*/}
-        {/*    }}*/}
-        {/*  >*/}
-        {/*    <Button*/}
-        {/*      variant="contained"*/}
-        {/*      data-testid="resume"*/}
-        {/*      sx={{*/}
-        {/*        marginTop: "1rem",*/}
-        {/*        marginLeft: "1rem",*/}
-        {/*        width: "5rem",*/}
-        {/*        fontWeight: "bold",*/}
-        {/*      }}*/}
-        {/*      onClick={handlePlayClick}*/}
-        {/*      disabled={data?.pipeline?.status?.phase === RUNNING}*/}
-        {/*    >*/}
-        {/*      Resume*/}
-        {/*    </Button>*/}
-        {/*    <Button*/}
-        {/*      variant="contained"*/}
-        {/*      data-testid="pause"*/}
-        {/*      sx={{*/}
-        {/*        marginTop: "1rem",*/}
-        {/*        marginLeft: "1rem",*/}
-        {/*        width: "5rem",*/}
-        {/*        fontWeight: "bold",*/}
-        {/*      }}*/}
-        {/*      onClick={handlePauseClick}*/}
-        {/*      disabled={*/}
-        {/*        data?.pipeline?.status?.phase === PAUSED ||*/}
-        {/*        data?.pipeline?.status?.phase === PAUSING*/}
-        {/*      }*/}
-        {/*    >*/}
-        {/*      Pause*/}
-        {/*    </Button>*/}
-        {/*    <Button sx={{ height: "2.1875rem", marginTop: "1rem" }}>*/}
-        {/*      {" "}*/}
-        {/*      {error && statusPayload ? (*/}
-        {/*        <Alert*/}
-        {/*          severity="error"*/}
-        {/*          sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}*/}
-        {/*        >*/}
-        {/*          {error}*/}
-        {/*        </Alert>*/}
-        {/*      ) : successMessage &&*/}
-        {/*        statusPayload &&*/}
-        {/*        ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&*/}
-        {/*          data?.pipeline?.status?.phase !== PAUSED) ||*/}
-        {/*          (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&*/}
-        {/*            data?.pipeline?.status?.phase !== RUNNING)) ? (*/}
-        {/*        <div*/}
-        {/*          style={{*/}
-        {/*            borderRadius: "0.8125rem",*/}
-        {/*            width: "14.25rem",*/}
-        {/*            background: "#F0F0F0",*/}
-        {/*            display: "flex",*/}
-        {/*            flexDirection: "row",*/}
-        {/*            marginLeft: "1rem",*/}
-        {/*            marginTop: "1rem",*/}
-        {/*            padding: "0.5rem",*/}
-        {/*            color: "#516F91",*/}
-        {/*            alignItems: "center",*/}
-        {/*          }}*/}
-        {/*        >*/}
-        {/*          <CircularProgress*/}
-        {/*            sx={{*/}
-        {/*              width: "1.25rem !important",*/}
-        {/*              height: "1.25rem !important",*/}
-        {/*            }}*/}
-        {/*          />{" "}*/}
-        {/*          <Box*/}
-        {/*            sx={{*/}
-        {/*              display: "flex",*/}
-        {/*              flexDirection: "column",*/}
-        {/*            }}*/}
-        {/*          >*/}
-        {/*            <span style={{ marginLeft: "1rem" }}>*/}
-        {/*              {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED*/}
-        {/*                ? "Pipeline Pausing..."*/}
-        {/*                : "Pipeline Resuming..."}*/}
-        {/*            </span>*/}
-        {/*            <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>*/}
-        {/*          </Box>*/}
-        {/*        </div>*/}
-        {/*      ) : (*/}
-        {/*        ""*/}
-        {/*      )}*/}
-        {/*    </Button>*/}
-        {/*  </Box>*/}
-        {/*  <Box sx={{ marginRight: "1rem" }}>*/}
-        {/*    <ErrorIndicator />*/}
-        {/*  </Box>*/}
-        {/*</Box>*/}
         <HighlightContext.Provider
           value={{
             highlightValues,
@@ -783,6 +770,9 @@ export default function Graph(props: GraphProps) {
                 handleEdgeClick,
                 handlePaneClick,
                 setSidebarProps,
+                refresh,
+                namespaceId,
+                data,
               }}
             />
           </ReactFlowProvider>

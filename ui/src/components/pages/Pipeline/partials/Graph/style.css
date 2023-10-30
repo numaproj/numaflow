@@ -18,16 +18,16 @@
     border: 1px solid var(--base-gray-gray-05, #D4D7DC);
     background: var(--primitives-white, #FFF);
     box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.00);
-    margin-bottom: 3rem;
-    margin-left: 3rem;
+    margin-bottom: 1rem;
+    margin-left: 1rem;
     padding: 0 0.5rem;
 }
 
 .legend {
     display: flex;
     flex-direction: column;
-    height: 12rem;
-    width: 12rem;
+    height: 11rem;
+    width: 11rem;
     justify-content: space-between;
 }
 

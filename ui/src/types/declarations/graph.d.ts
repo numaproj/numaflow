@@ -31,6 +31,9 @@ export interface FlowProps {
   handleNodeClick: (e: Element | EventType, node: Node) => void;
   handleEdgeClick: (e: Element | EventType, edge: Edge) => void;
   handlePaneClick: () => void;
+  refresh: () => void;
+  namespaceId: string | undefined;
+  data: any;
 }
 
 export interface HighlightContextProps {

@@ -242,7 +242,7 @@ export function SummaryPageLayout({
             boxShadow: "0 0.25rem 0.375rem rgba(39, 76, 119, 0.16)",
             zIndex: (theme) => theme.zIndex.drawer - 1,
             position: "fixed",
-            top: "5.75rem",
+            top: "6.25rem",
             padding: "0 1.25rem",
             alignItems: "center",
             borderBottomLeftRadius: "1.25rem",
