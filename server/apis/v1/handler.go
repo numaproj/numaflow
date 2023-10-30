@@ -731,25 +731,21 @@ func (h *handler) streamLogs(c *gin.Context, stream io.ReadCloser) {
 }
 
 // GetNamespaceEvents gets a list of events for the given namespace.
-// If the pipeline and vertex name are specified in the url query,
-// it returns the events that are related to the vertex.
-// If only the pipeline name is specified,
-// it returns the events that are related to the pipeline, including all vertices in the pipeline.
-// If neither the pipeline name nor the vertex name is specified,
-// it returns all the events that are related to the namespace.
+// It supports filtering by object type and object name.
+// If objectType and objectName are specified in the request, only the events that match both will be returned.
+// If objectType and objectName are not specified, all the events for the given name space will be returned.
+// Events are sorted by timestamp in descending order.
 func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	ns := c.Param("namespace")
-	ppl := c.DefaultQuery("pipeline", "")
-	vtx := c.DefaultQuery("vertex", "")
-	if ppl == "" && vtx != "" {
-		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: vertex %q is specified without pipeline", ns, vtx))
+	objType := c.DefaultQuery("objectType", "")
+	objName := c.DefaultQuery("objectName", "")
+	if (objType == "" && objName != "") || (objType != "" && objName == "") {
+		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: "+
+			"please either specify both objectType and objectName or not specify.", ns))
 		return
 	}
-	limit, err := strconv.ParseInt(c.Query("limit"), 10, 64)
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to parse the input parameter limit to an integer, %s", err.Error()))
-		return
-	}
+	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
+	var err error
 	var events *corev1.EventList
 	if events, err = h.kubeClient.CoreV1().Events(ns).List(context.Background(), metav1.ListOptions{
 		Limit:    limit,
@@ -766,34 +762,17 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		if event.LastTimestamp.Time == defaultTimeObject {
 			continue
 		}
-		if shouldIncludeEvent(ppl, vtx, event) {
+		if (objType == "" && objName == "") ||
+			(strings.ToLower(event.InvolvedObject.Kind) == strings.ToLower(objType) &&
+				strings.ToLower(event.InvolvedObject.Name) == strings.ToLower(objName)) {
 			newEvent := NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
 			response = append(response, newEvent)
 		}
 	}
-	// sort the events by timestamp
-	// from most recent events to older events
 	sort.Slice(response, func(i int, j int) bool {
 		return response[i].TimeStamp >= response[j].TimeStamp
 	})
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
-}
-
-// shouldIncludeEvent determines whether to include an event by filtering on the object name of the event.
-// Caveat: This will not work for cases when the pipeline/vertex name is also a prefix of another pipeline/vertex name,
-// where both pipelines/vertices will be included in the response.
-// A better way would be to use the labels of the event object, but unfortunately we don't have that information yet.
-func shouldIncludeEvent(ppl, vtx string, event corev1.Event) bool {
-	if ppl == "" && vtx == "" {
-		return true
-	}
-	if ppl != "" && vtx != "" {
-		return strings.HasPrefix(event.InvolvedObject.Name, ppl+"-"+vtx)
-	}
-	if ppl != "" {
-		return strings.HasPrefix(event.InvolvedObject.Name, ppl)
-	}
-	return false
 }
 
 // GetPipelineStatus returns the pipeline status. It is based on Health and Criticality.
