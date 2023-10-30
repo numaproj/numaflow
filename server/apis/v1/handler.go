@@ -746,10 +746,12 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: vertex %q is specified without pipeline", ns, vtx))
 		return
 	}
-	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-
+	limit, err := strconv.ParseInt(c.Query("limit"), 10, 64)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to parse the input parameter limit to an integer, %s", err.Error()))
+		return
+	}
 	var events *corev1.EventList
-	var err error
 	if events, err = h.kubeClient.CoreV1().Events(ns).List(context.Background(), metav1.ListOptions{
 		Limit:    limit,
 		Continue: c.Query("continue"),
@@ -757,7 +759,6 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: %s", ns, err.Error()))
 		return
 	}
-
 	var (
 		response          []K8sEventsResponse
 		defaultTimeObject time.Time
@@ -766,31 +767,34 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		if event.LastTimestamp.Time == defaultTimeObject {
 			continue
 		}
-		if ppl != "" && vtx != "" && strings.HasPrefix(event.InvolvedObject.Name, ppl+"-"+vtx) {
-			// Retrieving events for a specific vertex by filtering on the object name of the event.
-			// Caveat: This will not work if the pipeline name + vertex name is a prefix of another pipeline vertex name.
-			var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+		if shouldIncludeEvent(ppl, vtx, event) {
+			newEvent := NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
 			response = append(response, newEvent)
-			continue
 		}
-		if ppl != "" && strings.HasPrefix(event.InvolvedObject.Name, ppl) {
-			// Retrieving events for a specific pipeline by filtering on the object name of the event.
-			// Caveat: This will not work if the pipeline name is a prefix of another pipeline name.
-			var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
-			response = append(response, newEvent)
-			continue
-		}
-		// For namespace-level events, we include all events.
-		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
-		response = append(response, newEvent)
 	}
-
 	// sort the events by timestamp
 	// from most recent events to older events
 	sort.Slice(response, func(i int, j int) bool {
 		return response[i].TimeStamp >= response[j].TimeStamp
 	})
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+}
+
+// shouldIncludeEvent determines whether to include an event by filtering on the object name of the event.
+// Caveat: This will not work for cases when the pipeline/vertex name is also a prefix of another pipeline/vertex name,
+// where both pipelines/vertices will be included in the response.
+// A better way would be to use the labels of the event object, but unfortunately we don't have that information yet.
+func shouldIncludeEvent(ppl, vtx string, event corev1.Event) bool {
+	if ppl == "" && vtx == "" {
+		return true
+	}
+	if ppl != "" && vtx != "" {
+		return strings.HasPrefix(event.InvolvedObject.Name, ppl+"-"+vtx)
+	}
+	if ppl != "" {
+		return strings.HasPrefix(event.InvolvedObject.Name, ppl)
+	}
+	return false
 }
 
 // GetPipelineStatus returns the pipeline status. It is based on Health and Criticality.
