@@ -46,8 +46,12 @@ func TestWriteSuccessToKafka(t *testing.T) {
 			},
 		},
 	}}
+	vertexInstance := &dfv1.VertexInstance{
+		Vertex:  vertex,
+		Replica: 0,
+	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	toKafka.isdf, err = sinkforward.NewDataForward(vertex, fromStep, toKafka, fetchWatermark, publishWatermark["testVertex"], wmb.NewIdleManager(1))
+	toKafka.isdf, err = sinkforward.NewDataForward(vertexInstance, fromStep, toKafka, fetchWatermark, publishWatermark["testVertex"], wmb.NewIdleManager(1))
 	assert.NoError(t, err)
 	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
 	toKafka.name = "Test"
@@ -98,9 +102,13 @@ func TestWriteFailureToKafka(t *testing.T) {
 			},
 		},
 	}}
+	vertexInstance := &dfv1.VertexInstance{
+		Vertex:  vertex,
+		Replica: 0,
+	}
 	toSteps := map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	toKafka.isdf, err = sinkforward.NewDataForward(vertex, fromStep, toKafka, fetchWatermark, publishWatermark["testVertex"], wmb.NewIdleManager(1))
+	toKafka.isdf, err = sinkforward.NewDataForward(vertexInstance, fromStep, toKafka, fetchWatermark, publishWatermark["testVertex"], wmb.NewIdleManager(1))
 	assert.NoError(t, err)
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"

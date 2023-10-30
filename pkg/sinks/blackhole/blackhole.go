@@ -49,7 +49,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewBlackhole returns Blackhole type.
-func NewBlackhole(vertex *dfv1.Vertex,
+func NewBlackhole(vertexInstance *dfv1.VertexInstance,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
@@ -57,9 +57,9 @@ func NewBlackhole(vertex *dfv1.Vertex,
 	opts ...Option) (*Blackhole, error) {
 
 	bh := new(Blackhole)
-	name := vertex.Spec.Name
+	name := vertexInstance.Vertex.Spec.Name
 	bh.name = name
-	bh.pipelineName = vertex.Spec.PipelineName
+	bh.pipelineName = vertexInstance.Vertex.Spec.PipelineName
 
 	for _, o := range opts {
 		if err := o(bh); err != nil {
@@ -71,13 +71,13 @@ func NewBlackhole(vertex *dfv1.Vertex,
 	}
 
 	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(bh.logger)}
-	if x := vertex.Spec.Limits; x != nil {
+	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, bh, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, bh, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

@@ -233,14 +233,14 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM publish.Publisher, idleManager wmb.IdleManager, sinkHandler udsink.SinkApplier) (Sinker, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	if x := sink.Log; x != nil {
-		return logsink.NewToLog(u.VertexInstance.Vertex, reader, fetchWM, publishWM, idleManager, logsink.WithLogger(logger))
+		return logsink.NewToLog(u.VertexInstance, reader, fetchWM, publishWM, idleManager, logsink.WithLogger(logger))
 	} else if x := sink.Kafka; x != nil {
-		return kafkasink.NewToKafka(u.VertexInstance.Vertex, reader, fetchWM, publishWM, idleManager, kafkasink.WithLogger(logger))
+		return kafkasink.NewToKafka(u.VertexInstance, reader, fetchWM, publishWM, idleManager, kafkasink.WithLogger(logger))
 	} else if x := sink.Blackhole; x != nil {
-		return blackhole.NewBlackhole(u.VertexInstance.Vertex, reader, fetchWM, publishWM, idleManager, blackhole.WithLogger(logger))
+		return blackhole.NewBlackhole(u.VertexInstance, reader, fetchWM, publishWM, idleManager, blackhole.WithLogger(logger))
 	} else if x := sink.UDSink; x != nil {
 		// if the sink is a user defined sink, then we need to pass the sinkHandler to it which will be used to invoke the user defined sink
-		return udsink.NewUserDefinedSink(u.VertexInstance.Vertex, reader, fetchWM, publishWM, idleManager, sinkHandler, udsink.WithLogger(logger))
+		return udsink.NewUserDefinedSink(u.VertexInstance, reader, fetchWM, publishWM, idleManager, sinkHandler, udsink.WithLogger(logger))
 	}
 	return nil, fmt.Errorf("invalid sink spec")
 }

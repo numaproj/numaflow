@@ -98,10 +98,9 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 
 func (pt *PodTracker) updateActivePods() {
 	for _, v := range pt.pipeline.Spec.Vertices {
-		vType := getVertexType(v)
 		for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
 			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
-			podKey := pt.getPodKey(i, v.Name, vType)
+			podKey := pt.getPodKey(i, v.Name)
 			if pt.isActive(v.Name, podName) {
 				pt.activePods.PushBack(podKey)
 			} else {
@@ -110,19 +109,6 @@ func (pt *PodTracker) updateActivePods() {
 		}
 	}
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
-}
-
-func getVertexType(v v1alpha1.AbstractVertex) string {
-	switch {
-	case v.IsReduceUDF():
-		return keyVertexTypeReduce
-	case v.IsASource():
-		return keyVertexTypeSource
-	case v.IsASink():
-		return keyVertexTypeSink
-	default:
-		return keyVertexTypeOther
-	}
 }
 
 // LeastRecentlyUsed returns the least recently used pod from the active pod list.
@@ -145,9 +131,9 @@ func (pt *PodTracker) GetActivePodsCount() int {
 	return pt.activePods.Length()
 }
 
-func (pt *PodTracker) getPodKey(index int, vertexName string, vertexType string) string {
+func (pt *PodTracker) getPodKey(index int, vertexName string) string {
 	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
-	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index), vertexType}, PodInfoSeparator)
+	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index)}, PodInfoSeparator)
 }
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {

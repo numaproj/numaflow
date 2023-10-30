@@ -17,280 +17,243 @@ limitations under the License.
 package metrics
 
 import (
-	"context"
-	"crypto/tls"
-	"fmt"
-	"net/http"
-	"net/http/pprof"
-	"os"
-	"time"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/zap"
-
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
-	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
-	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
 	LabelPipeline           = "pipeline"
 	LabelVertex             = "vertex"
-	LabelPeriod             = "period"
 	LabelVertexReplicaIndex = "replica"
+	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"
 
-	VertexPendingMessages = "vertex_pending_messages"
+	LabelReason = "reason"
 )
 
+// Generic forwarder metrics
 var (
-	pending = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: VertexPendingMessages,
-		Help: "Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.",
-	}, []string{LabelPipeline, LabelVertex, LabelPeriod, LabelPartitionName})
+	// ReadMessagesCount is used to indicate the number of total messages read
+	ReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "read_total",
+		Help:      "Total number of Messages Read",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
-	// fixedLookbackSeconds Always expose metrics of following lookback seconds (1m, 5m, 15m)
-	fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
+	// ReadDataMessagesCount is used to indicate the number of data messages read
+	ReadDataMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "data_read_total",
+		Help:      "Total number of Data Messages Read",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// ReadBytesCount is to indicate the number of bytes read
+	ReadBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "read_bytes_total",
+		Help:      "Total number of bytes read",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// ReadMessagesError is used to indicate the number of errors messages read
+	ReadMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "read_error_total",
+		Help:      "Total number of Read Errors",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// WriteMessagesCount is used to indicate the number of messages written
+	WriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "write_total",
+		Help:      "Total number of Messages Written",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// WriteBytesCount is to indicate the number of bytes written
+	WriteBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "write_bytes_total",
+		Help:      "Total number of bytes written",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// WriteMessagesError is used to indicate the number of errors messages written
+	WriteMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "write_error_total",
+		Help:      "Total number of Write Errors",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// DropMessagesCount is used to indicate the number of messages dropped
+	DropMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "drop_total",
+		Help:      "Total number of Messages Dropped",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// DropBytesCount is to indicate the number of bytes dropped
+	DropBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "drop_bytes_total",
+		Help:      "Total number of Bytes Dropped",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// AckMessagesCount is used to indicate the number of  messages acknowledged
+	AckMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "ack_total",
+		Help:      "Total number of Messages Acknowledged",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// AckMessageError is used to indicate the errors in the number of  messages acknowledged
+	AckMessageError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "ack_error_total",
+		Help:      "Total number of Acknowledged Errors",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// UDFError is used to indicate the number of UDF errors
+	UDFError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "udf_error_total",
+		Help:      "Total number of UDF Errors",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
+
+	// PlatformError is used to indicate the number of Internal/Platform errors
+	PlatformError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "platform_error_total",
+		Help:      "Total number of platform Errors",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
+
+	// ForwardAChunkProcessingTime is a histogram to Observe forwardAChunk Processing times as a whole
+	ForwardAChunkProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "forward_chunk_processing_time",
+		Help:      "Processing times of the entire forward a chunk (100 microseconds to 20 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
+
+	// UDFProcessingTime is a histogram to Observe UDF Processing times as a whole
+	UDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "udf_processing_time",
+		Help:      "Processing times of UDF (100 microseconds to 15 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
+
+	// ConcurrentUDFProcessingTime is a histogram to Observe UDF Processing times as a whole
+	ConcurrentUDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "concurrent_udf_processing_time",
+		Help:      "Processing times of Concurrent UDF (100 microseconds to 20 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
+
+	// UDFReadMessagesCount is used to indicate the number of messages read by UDF
+	UDFReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "udf_read_total",
+		Help:      "Total number of Messages Read by UDF",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// UDFWriteMessagesCount is used to indicate the number of messages written by UDF
+	UDFWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "udf_write_total",
+		Help:      "Total number of Messages Written by UDF",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 )
 
-// timestampedPending is a helper struct to wrap a pending number and timestamp pair
-type timestampedPending struct {
-	pending int64
-	// timestamp in seconds
-	timestamp int64
-}
+// Source forwarder specific metrics
+var (
+	// SourceTransformerError is used to indicate the number of source transformer errors
+	SourceTransformerError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "source_forwarder",
+		Name:      "transformer_error_total",
+		Help:      "Total number of source transformer Errors",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
 
-// metricsServer runs an HTTP server to:
-// 1. Expose metrics;
-// 2. Serve an endpoint to execute health checks
-type metricsServer struct {
-	vertex     *dfv1.Vertex
-	lagReaders map[string]isb.LagReader
-	// lookbackSeconds is the look back seconds for pending calculation used for autoscaling
-	lookbackSeconds     int64
-	lagCheckingInterval time.Duration
-	refreshInterval     time.Duration
-	// partitionPendingInfo stores a list of pending/timestamp(seconds) information for each partition
-	partitionPendingInfo map[string]*sharedqueue.OverflowQueue[timestampedPending]
-	// Functions that health check executes
-	healthCheckExecutors []func() error
-}
+	// SourceTransformerProcessingTime is a histogram to Observe Source Transformer Processing times as a whole
+	SourceTransformerProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "source_forwarder",
+		Name:      "transformer_processing_time",
+		Help:      "Processing times of source transformer (100 microseconds to 15 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
 
-type Option func(*metricsServer)
+	// SourceTransformerConcurrentProcessingTime is a histogram to Observe Source Transformer Processing times as a whole
+	SourceTransformerConcurrentProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "source_forwarder",
+		Name:      "concurrent_transformer_processing_time",
+		Help:      "Processing times of Concurrent source transformer (100 microseconds to 20 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
 
-// WithLagReaders sets the lag readers
-func WithLagReaders(r map[string]isb.LagReader) Option {
-	return func(m *metricsServer) {
-		m.lagReaders = r
-	}
-}
+	// SourceTransformerReadMessagesCount is used to indicate the number of messages read by source transformer
+	SourceTransformerReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "source_forwarder",
+		Name:      "transformer_read_total",
+		Help:      "Total number of Messages Read by source transformer",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
 
-// WithRefreshInterval sets how often to refresh the pending information
-func WithRefreshInterval(d time.Duration) Option {
-	return func(m *metricsServer) {
-		m.refreshInterval = d
-	}
-}
+	// SourceTransformerWriteMessagesCount is used to indicate the number of messages written by source transformer
+	SourceTransformerWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "source_forwarder",
+		Name:      "transformer_write_total",
+		Help:      "Total number of Messages Written by source transformer",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+)
 
-// WithLookbackSeconds sets lookback seconds for pending calculation
-func WithLookbackSeconds(seconds int64) Option {
-	return func(m *metricsServer) {
-		m.lookbackSeconds = seconds
-	}
-}
+// Reduce forwarder specific metrics
+var (
+	// ReduceDroppedMessagesCount is used to indicate the number of messages dropped
+	ReduceDroppedMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "reduce_data_forward",
+		Name:      "dropped_total",
+		Help:      "Total number of Messages Dropped",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelReason})
 
-// WithHealthCheckExecutor appends a health check executor
-func WithHealthCheckExecutor(f func() error) Option {
-	return func(m *metricsServer) {
-		m.healthCheckExecutors = append(m.healthCheckExecutors, f)
-	}
-}
+	// PBQWriteErrorCount is used to indicate the number of errors while writing to pbq
+	PBQWriteErrorCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "reduce_pbq",
+		Name:      "write_error_total",
+		Help:      "Total number of PBQ Write Errors",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
 
-// NewMetricsOptions returns a metrics option list.
-func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, healthCheckers []HealthChecker, readers []isb.BufferReader) []Option {
-	metricsOpts := []Option{
-		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
-	}
+	// PBQWriteMessagesCount is used to indicate the number of messages written to pbq
+	PBQWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "reduce_pbq",
+		Name:      "write_total",
+		Help:      "Total number of Messages Written to PBQ",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
 
-	if util.LookupEnvStringOr(dfv1.EnvHealthCheckDisabled, "false") != "true" {
-		for _, hc := range healthCheckers {
-			metricsOpts = append(metricsOpts, WithHealthCheckExecutor(func() error {
-				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-				defer cancel()
-				return hc.IsHealthy(cctx)
-			}))
-		}
-	}
+	// PBQWriteTime pbq write latency
+	PBQWriteTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "reduce_pbq",
+		Name:      "write_time",
+		Help:      "Entry write time (1 to 5000 microseconds)",
+		Buckets:   prometheus.ExponentialBucketsRange(1, 5000, 5),
+	}, []string{LabelPipeline, LabelVertex, LabelVertexReplicaIndex})
 
-	lagReaders := make(map[string]isb.LagReader)
-	for _, reader := range readers {
-		if x, ok := reader.(isb.LagReader); ok {
-			lagReaders[reader.GetName()] = x
-		}
-	}
-	if len(lagReaders) > 0 {
-		metricsOpts = append(metricsOpts, WithLagReaders(lagReaders))
-	}
-	return metricsOpts
-}
+	// ReduceProcessTime reduce ForwardTask processing latency
+	ReduceProcessTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "reduce_pnf",
+		Name:      "process_time",
+		Help:      "Reduce process time (1 to 1200000 milliseconds)",
+		Buckets:   prometheus.ExponentialBucketsRange(1, 1200000, 5),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
 
-// NewMetricsServer returns a Prometheus metrics server instance, which can be used to start an HTTPS service to expose Prometheus metrics.
-func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
-	m := new(metricsServer)
-	m.vertex = vertex
-	m.partitionPendingInfo = make(map[string]*sharedqueue.OverflowQueue[timestampedPending])
-	m.refreshInterval = 5 * time.Second             // Default refresh interval
-	m.lagCheckingInterval = 3 * time.Second         // Default lag checking interval
-	m.lookbackSeconds = dfv1.DefaultLookbackSeconds // Default
-	for _, opt := range opts {
-		if opt != nil {
-			opt(m)
-		}
-	}
-	if m.lagReaders != nil {
-		for partitionName := range m.lagReaders {
-			m.partitionPendingInfo[partitionName] = sharedqueue.New[timestampedPending](1800)
+	// ReduceForwardTime is used to indicate the time it took to forward the writeMessages
+	ReduceForwardTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "reduce_pnf",
+		Name:      "forward_time",
+		Help:      "Reduce forward time (1 to 100000 microseconds)",
+		Buckets:   prometheus.ExponentialBucketsRange(1, 100000, 5),
+	}, []string{LabelPipeline, LabelVertex, LabelVertexReplicaIndex})
 
-		}
-	}
-	return m
-}
-
-// Enqueue pending information
-func (ms *metricsServer) buildupPendingInfo(ctx context.Context) {
-	if ms.lagReaders == nil {
-		return
-	}
-	log := logging.FromContext(ctx)
-	ticker := time.NewTicker(ms.lagCheckingInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			for partitionName, lagReader := range ms.lagReaders {
-				if pending, err := lagReader.Pending(ctx); err != nil {
-					log.Errorw("Failed to get pending messages", zap.Error(err))
-				} else {
-					if pending != isb.PendingNotAvailable {
-						ts := timestampedPending{pending: pending, timestamp: time.Now().Unix()}
-						ms.partitionPendingInfo[partitionName].Append(ts)
-					}
-				}
-			}
-		}
-	}
-}
-
-// Expose pending metrics
-func (ms *metricsServer) exposePendingMetrics(ctx context.Context) {
-	if ms.lagReaders == nil {
-		return
-	}
-	lookbackSecondsMap := map[string]int64{"default": ms.lookbackSeconds} // Metrics for autoscaling use key "default"
-	for k, v := range fixedLookbackSeconds {
-		lookbackSecondsMap[k] = v
-	}
-	ticker := time.NewTicker(ms.refreshInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			if ms.lagReaders != nil {
-				for partitionName := range ms.lagReaders {
-					for n, i := range lookbackSecondsMap {
-						if p := ms.calculatePending(i, partitionName); p != isb.PendingNotAvailable {
-							pending.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n, partitionName).Set(float64(p))
-						}
-					}
-				}
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// Calculate the avg pending of last seconds
-func (ms *metricsServer) calculatePending(seconds int64, partitionName string) int64 {
-	result := isb.PendingNotAvailable
-	items := ms.partitionPendingInfo[partitionName].Items()
-	total := int64(0)
-	num := int64(0)
-	now := time.Now().Unix()
-	for i := len(items) - 1; i >= 0; i-- {
-		if now-items[i].timestamp < seconds {
-			total += items[i].pending
-			num++
-		} else {
-			break
-		}
-	}
-	if num > 0 {
-		result = total / num
-	}
-	return result
-}
-
-// Start function starts the HTTPS service to expose metrics, it returns a shutdown function and an error if any
-func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) error, error) {
-	log := logging.FromContext(ctx)
-	log.Info("Generating self-signed certificate")
-	cer, err := sharedtls.GenerateX509KeyPair()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate cert: %w", err)
-	}
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.HandleFunc("/sidecar-livez", func(w http.ResponseWriter, r *http.Request) {
-		for _, ex := range ms.healthCheckExecutors {
-			if err := ex(); err != nil {
-				log.Errorw("Failed to execute sidecar health check", zap.Error(err))
-				w.WriteHeader(http.StatusInternalServerError)
-				_, _ = w.Write([]byte(err.Error()))
-				return
-			}
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-	pprofEnabled := os.Getenv(dfv1.EnvDebug) == "true" || os.Getenv(dfv1.EnvPPROF) == "true"
-	if pprofEnabled {
-		mux.HandleFunc("/debug/pprof/", pprof.Index)
-		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	} else {
-		log.Info("Not enabling pprof debug endpoints")
-	}
-
-	httpServer := &http.Server{
-		Addr:      fmt.Sprintf(":%d", dfv1.VertexMetricsPort),
-		Handler:   mux,
-		TLSConfig: &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12},
-	}
-	// Buildup pending information
-	go ms.buildupPendingInfo(ctx)
-	// Expose pending metrics
-	go ms.exposePendingMetrics(ctx)
-	go func() {
-		log.Info("Starting metrics HTTPS server")
-		if err := httpServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-			log.Fatalw("Failed to listen-and-server on HTTPS", zap.Error(err))
-		}
-		log.Info("Metrics server shutdown")
-	}()
-	return httpServer.Shutdown, nil
-}
+	// ReducePartitionsInFlight is used to indicate the partitions in flight
+	ReducePartitionsInFlight = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "reduce_pnf",
+		Name:      "partitions_inflight",
+		Help:      "Total number of partitions in flight",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
+)

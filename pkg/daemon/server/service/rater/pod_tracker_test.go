@@ -118,8 +118,8 @@ func TestPodTracker_Start(t *testing.T) {
 	cancel()
 	wg.Wait()
 
-	assert.Equal(t, "p*v*0*other", tracker.LeastRecentlyUsed())
-	assert.Equal(t, "p*v*1*other", tracker.LeastRecentlyUsed())
-	assert.Equal(t, true, tracker.IsActive("p*v*4*other"))
-	assert.Equal(t, false, tracker.IsActive("p*v*5*other"))
+	assert.Equal(t, "p*v*0", tracker.LeastRecentlyUsed())
+	assert.Equal(t, "p*v*1", tracker.LeastRecentlyUsed())
+	assert.Equal(t, true, tracker.IsActive("p*v*4"))
+	assert.Equal(t, false, tracker.IsActive("p*v*5"))
 }
