@@ -1805,13 +1805,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#redis-streams-source" class="md-nav__link">
-    Redis Streams Source
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#generator-source" class="md-nav__link">
     Generator Source
   </a>
@@ -2232,13 +2225,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#redis-streams-source" class="md-nav__link">
-    Redis Streams Source
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#generator-source" class="md-nav__link">
     Generator Source
   </a>
@@ -2380,124 +2366,46 @@
 </thead>
 <tbody>
 <tr>
-<td><code>source_forwarder_read_total</code></td>
+<td><code>forwarder_data_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of messages read by a given Source Vertex</td>
-</tr>
-<tr>
-<td><code>source_forwarder_read_bytes_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of bytes read by a given Source Vertex</td>
-</tr>
-<tr>
-<td><code>source_forwarder_write_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of messages written to Inter-Step Buffer by a given Source Vertex</td>
-</tr>
-<tr>
-<td><code>source_forwarder_write_bytes_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of bytes written to Inter-Step Buffer by a given Source Vertex</td>
-</tr>
-<tr>
-<td><code>source_forwarder_ack_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of messages acknowledged by a given Source Vertex</td>
-</tr>
-<tr>
-<td><code>source_forwarder_drop_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of messages dropped by a given Source Vertex due to a full Inter-Step Buffer Partition</td>
-</tr>
-<tr>
-<td><code>source_forwarder_drop_bytes_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of bytes dropped by a given Source Vertex due to a full Inter-Step Buffer Partition</td>
-</tr>
-<tr>
-<td><code>forwarder_data_read</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of messages read by a given Vertex from an Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>forwarder_read_bytes_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>forwarder_write_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of messages written to Inter-Step Buffer by a given Vertex</td>
 </tr>
 <tr>
 <td><code>forwarder_write_bytes_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of bytes written to Inter-Step Buffer by a given Vertex</td>
 </tr>
 <tr>
 <td><code>forwarder_ack_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>forwarder_drop_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of messages dropped by a given Vertex due to a full Inter-Step Buffer Partition</td>
 </tr>
 <tr>
 <td><code>forwarder_drop_bytes_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of bytes dropped by a given Vertex due to a full Inter-Step Buffer Partition</td>
-</tr>
-<tr>
-<td><code>reduce_isb_reader_data_read</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of messages read by a given Reduce Vertex from an Inter-Step Buffer Partition</td>
-</tr>
-<tr>
-<td><code>reduce_isb_reader_read_bytes_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of bytes read by a given Reduce Vertex from an Inter-Step Buffer Partition</td>
-</tr>
-<tr>
-<td><code>reduce_isb_writer_write_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of messages written to Inter-Step Buffer by a given Reduce Vertex</td>
-</tr>
-<tr>
-<td><code>reduce_isb_writer_write_bytes_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of bytes written to Inter-Step Buffer by a given Reduce Vertex</td>
-</tr>
-<tr>
-<td><code>reduce_isb_writer_drop_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of messages dropped by a given Reduce Vertex due to a full Inter-Step Buffer Partition</td>
-</tr>
-<tr>
-<td><code>reduce_isb_writer_drop_bytes_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of bytes dropped by a given Reduce Vertex due to a full Inter-Step Buffer Partition</td>
 </tr>
 </tbody>
 </table>
@@ -2515,51 +2423,14 @@
 <tr>
 <td><code>kafka_source_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
 <td>Provides the number of messages read by the Kafka Source Vertex/Processor.</td>
 </tr>
 <tr>
 <td><code>kafka_source_ack_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
 <td>Provides the number of messages acknowledged by the Kafka Source Vertex/Processor</td>
-</tr>
-</tbody>
-</table>
-<h4 id="redis-streams-source">Redis Streams Source<a class="headerlink" href="#redis-streams-source" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Metric name</th>
-<th>Metric type</th>
-<th>Labels</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>redis_streams_source_read_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
-<td>Provides the number of messages read by the Redis Streams Source Vertex/Processor</td>
-</tr>
-<tr>
-<td><code>redis_streams_source_read_err_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
-<td>Provides the number of read failures for the Redis Streams Source Vertex/Processor</td>
-</tr>
-<tr>
-<td><code>redis_streams_source_ack_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
-<td>Provides the number of messages acked by the Redis Streams Source Vertex/Processor</td>
-</tr>
-<tr>
-<td><code>redis_streams_source_ack_err_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
-<td>Provides the number of errors attempting to ack by the Redis Streams Source Vertex/Processor</td>
 </tr>
 </tbody>
 </table>
@@ -2577,7 +2448,7 @@
 <tr>
 <td><code>tickgen_source_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
 <td>Provides the number of messages read by the Generator Source Vertex/Processor.</td>
 </tr>
 </tbody>
@@ -2596,7 +2467,7 @@
 <tr>
 <td><code>http_source_read_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
 <td>Provides the number of messages read by the HTTP Source Vertex/Processor.</td>
 </tr>
 </tbody>
@@ -2615,7 +2486,7 @@
 <tr>
 <td><code>kafka_sink_write_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
 <td>Provides the number of messages written by the Kafka Sink Vertex/Processor</td>
 </tr>
 </tbody>
@@ -2634,7 +2505,7 @@
 <tr>
 <td><code>log_sink_write_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
 <td>Provides the number of messages written by the Log Sink Vertex/Processor</td>
 </tr>
 </tbody>
@@ -2654,37 +2525,31 @@
 <tr>
 <td><code>source_forwarder_transformer_processing_time</code></td>
 <td>Histogram</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides a histogram distribution of the processing times of User Defined Source Transformer</td>
-</tr>
-<tr>
-<td><code>source_forwarder_forward_chunk_processing_time</code></td>
-<td>Histogram</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides a histogram distribution of the processing times of the source forwarder function as a whole</td>
 </tr>
 <tr>
 <td><code>forwarder_udf_processing_time</code></td>
 <td>Histogram</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
 <td>Provides a histogram distribution of the processing times of User Defined Functions. (UDF's)</td>
 </tr>
 <tr>
 <td><code>forwarder_forward_chunk_processing_time</code></td>
 <td>Histogram</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
 <td>Provides a histogram distribution of the processing times of the forwarder function as a whole</td>
 </tr>
 <tr>
 <td><code>reduce_pnf_process_time</code></td>
 <td>Histogram</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
 <td>Provides a histogram distribution of the processing times of the reducer</td>
 </tr>
 <tr>
 <td><code>reduce_pnf_forward_time</code></td>
 <td>Histogram</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
 <td>Provides a histogram distribution of the forwarding times of the reducer</td>
 </tr>
 </tbody>
@@ -2702,69 +2567,45 @@
 </thead>
 <tbody>
 <tr>
-<td><code>source_forwarder_platform_error</code></td>
+<td><code>forwarder_platform_error_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
 <td>Indicates any internal errors which could stop pipeline processing</td>
 </tr>
 <tr>
-<td><code>source_forwarder_read_error</code></td>
+<td><code>forwarder_read_error_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Indicates any errors while reading messages by the source forwarder</td>
-</tr>
-<tr>
-<td><code>source_forwarder_write_error</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Indicates any errors while writing messages by the source forwarder</td>
-</tr>
-<tr>
-<td><code>source_forwarder_ack_error</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Indicates any errors while acknowledging messages by the source forwarder</td>
-</tr>
-<tr>
-<td><code>forwarder_platform_error</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Indicates any internal errors which could stop pipeline processing</td>
-</tr>
-<tr>
-<td><code>forwarder_read_error</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any errors while reading messages by the forwarder</td>
 </tr>
 <tr>
-<td><code>forwarder_write_error</code></td>
+<td><code>forwarder_write_error_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any errors while writing messages by the forwarder</td>
 </tr>
 <tr>
-<td><code>forwarder_ack_error</code></td>
+<td><code>forwarder_ack_error_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any errors while acknowledging messages by the forwarder</td>
 </tr>
 <tr>
 <td><code>kafka_source_offset_ack_errors</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
 <td>Indicates any kafka acknowledgement errors</td>
 </tr>
 <tr>
 <td><code>kafka_sink_write_error_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
 <td>Provides the number of errors while writing to the Kafka sink</td>
 </tr>
 <tr>
 <td><code>kafka_sink_write_timeout_total</code></td>
 <td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
 <td>Provides the write timeouts while writing to the Kafka sink</td>
 </tr>
 <tr>
@@ -2790,24 +2631,6 @@
 <td>Counter</td>
 <td><code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any write errors with Redis ISB</td>
-</tr>
-<tr>
-<td><code>reduce_isb_reader_read_error_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Indicates any read errors with Reducer ISB</td>
-</tr>
-<tr>
-<td><code>reduce_isb_writer_write_error_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Indicates any write errors with Reducer ISB</td>
-</tr>
-<tr>
-<td><code>reduce_pnf_platform_error_total</code></td>
-<td>Counter</td>
-<td><code>vertex=&lt;vertex-name&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
-<td>Indicates any internal errors while processing and forwarding data by reducer</td>
 </tr>
 </tbody>
 </table>
