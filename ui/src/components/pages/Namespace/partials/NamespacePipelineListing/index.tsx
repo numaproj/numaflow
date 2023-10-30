@@ -6,6 +6,8 @@ import React, {
   useContext,
 } from "react";
 import Box from "@mui/material/Box";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
 import Pagination from "@mui/material/Pagination";
 import Grid from "@mui/material/Grid";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
@@ -21,6 +23,8 @@ import { SidebarType } from "../../../../common/SlidingSidebar";
 import { ViewType } from "../../../../common/SpecEditor";
 import { Button, MenuItem, Select } from "@mui/material";
 import { ErrorIndicator } from "../../../../common/ErrorIndicator";
+import { ISBServicesListing } from "./ISBServiceTypes";
+import { ISBServiceCard } from "./ISBServiceCard/ISBServiceCard";
 import {
   ALL,
   ALPHABETICAL_SORT,
@@ -55,6 +59,18 @@ const sortOptions = [
     label: "A-Z",
     value: ALPHABETICAL_SORT,
     sortOrder: ASC,
+  },
+];
+export const PIPELINE = "pipeline";
+export const ISB_SERVICES = "isb_services";
+export const NamespacePipelineListingTabs = [
+  {
+    label: "Pipelines",
+    value: PIPELINE,
+  },
+  {
+    label: "ISB Services",
+    value: ISB_SERVICES,
   },
 ];
 
@@ -99,6 +115,12 @@ export function NamespacePipelineListing({
   );
   const [filteredPipelines, setFilteredPipelines] = useState<PipelineData[]>(
     []
+  );
+  const [filteredISBServices, setFilteredISBServices] = useState<
+    ISBServicesListing[]
+  >([]);
+  const [tabValue, setTabValue] = useState(
+    NamespacePipelineListingTabs[0].value
   );
   // Update filtered pipelines based on search and page selected
   useEffect(() => {
@@ -183,7 +205,120 @@ export function NamespacePipelineListing({
     // Set filtered namespaces with current page of pipelines
     setFilteredPipelines(pages[page - 1] || []);
     setTotalPages(pages.length);
-  }, [data, search, page, pipelineData, isbData, orderBy, health, status]);
+  }, [
+    data,
+    search,
+    page,
+    pipelineData,
+    isbData,
+    orderBy,
+    health,
+    status,
+    tabValue,
+  ]);
+
+  // Update filtered ISB Services based on search and page selected
+  useEffect(() => {
+    let filtered: ISBServicesListing[] = Object.values(isbData ? isbData : {});
+    if (search) {
+      // Filter by search
+      filtered = filtered.filter((p: ISBServicesListing) =>
+        p.name.includes(search)
+      );
+    }
+    // Sorting
+    if (orderBy.value === ALPHABETICAL_SORT) {
+      filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
+        if (orderBy.sortOrder === ASC) {
+          return a.name > b.name ? 1 : -1;
+        } else {
+          return a.name < b.name ? 1 : -1;
+        }
+      });
+    } else if (orderBy.value === LAST_UPDATED_SORT) {
+      filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
+        if (orderBy.sortOrder === ASC) {
+          return new Date(
+            a.isbService.status.conditions[
+              a.isbService.status.conditions.length - 1
+            ].lastTransitionTime
+          ) >
+            new Date(
+              b.isbService.status.conditions[
+                b.isbService.status.conditions.length - 1
+              ].lastTransitionTime
+            )
+            ? 1
+            : -1;
+        } else {
+          return new Date(
+            a.isbService.status.conditions[
+              a.isbService.status.conditions.length - 1
+            ].lastTransitionTime
+          ) <
+            new Date(
+              b.isbService.status.conditions[
+                b.isbService.status.conditions.length - 1
+              ].lastTransitionTime
+            )
+            ? 1
+            : -1;
+        }
+      });
+    } else {
+      filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
+        if (orderBy.sortOrder === ASC) {
+          return new Date(a.isbService.metadata.creationTimestamp) >
+            new Date(b.isbService.metadata.creationTimestamp)
+            ? 1
+            : -1;
+        } else {
+          return new Date(a.isbService.metadata.creationTimestamp) <
+            new Date(b.isbService.metadata.creationTimestamp)
+            ? 1
+            : -1;
+        }
+      });
+    }
+    //Filter by health
+    if (health !== "All") {
+      filtered = filtered.filter((p: ISBServicesListing) => {
+        if (p.status.toLowerCase() === health.toLowerCase()) {
+          return true;
+        } else {
+          return false;
+        }
+      });
+    }
+
+    //Filter by status
+    if (status !== "All") {
+      filtered = filtered.filter((p: ISBServicesListing) => {
+        if (p.isbService.status.phase.toLowerCase() === status.toLowerCase()) {
+          return true;
+        } else {
+          return false;
+        }
+      });
+    }
+    // Break list into pages
+    const pages = filtered.reduce((resultArray: any[], item, index) => {
+      const chunkIndex = Math.floor(index / MAX_PAGE_SIZE);
+      if (!resultArray[chunkIndex]) {
+        resultArray[chunkIndex] = [];
+      }
+      resultArray[chunkIndex].push(item);
+      return resultArray;
+    }, []);
+
+    if (page > pages.length) {
+      // Reset to page 1 if current page is greater than total pages after filterting
+      setPage(1);
+    }
+    // Set filtered namespaces with current page of pipelines
+    setFilteredISBServices(pages[page - 1] || []);
+    setTotalPages(pages.length);
+  }, [data, search, page, isbData, orderBy, health, status, tabValue]);
 
   const handlePageChange = useCallback(
     (event: React.ChangeEvent<unknown>, value: number) => {
@@ -204,7 +339,7 @@ export function NamespacePipelineListing({
     [orderBy]
   );
   const listing = useMemo(() => {
-    if (!filteredPipelines.length) {
+    if (!filteredPipelines.length && !filteredISBServices.length) {
       return (
         <Box
           sx={{
@@ -215,7 +350,9 @@ export function NamespacePipelineListing({
           }}
         >
           <span className="ns-pipeline-listing-table-title">
-            No pipelines found
+            {tabValue === PIPELINE
+              ? "No pipelines found"
+              : "No ISB Services found"}
           </span>
         </Box>
       );
@@ -230,26 +367,39 @@ export function NamespacePipelineListing({
           margin: "0.5rem 0 1.5rem 0",
         }}
       >
-        {filteredPipelines.map((p: PipelineData) => {
-          const isbName = pipelineData
-            ? pipelineData[p.name]?.pipeline?.spec
-                ?.interStepBufferServiceName || "default"
-            : "default";
-          return (
-            <Grid key={`pipeline-${p.name}`} item xs={12}>
-              <PipelineCard
-                namespace={namespace}
-                data={p}
-                statusData={pipelineData ? pipelineData[p.name] : {}}
-                isbData={isbData ? isbData[isbName] : {}}
-                refresh={refresh}
-              />
-            </Grid>
-          );
-        })}
+        {tabValue === PIPELINE &&
+          filteredPipelines.map((p: PipelineData) => {
+            const isbName = pipelineData
+              ? pipelineData[p.name]?.pipeline?.spec
+                  ?.interStepBufferServiceName || "default"
+              : "default";
+            return (
+              <Grid key={`pipeline-${p.name}`} item xs={12}>
+                <PipelineCard
+                  namespace={namespace}
+                  data={p}
+                  statusData={pipelineData ? pipelineData[p.name] : {}}
+                  isbData={isbData ? isbData[isbName] : {}}
+                  refresh={refresh}
+                />
+              </Grid>
+            );
+          })}
+        {tabValue === ISB_SERVICES &&
+          filteredISBServices.map((p: ISBServicesListing) => {
+            return (
+              <Grid key={`isb-service-${p.name}`} item xs={12}>
+                <ISBServiceCard
+                  namespace={namespace}
+                  data={p}
+                  refresh={refresh}
+                />
+              </Grid>
+            );
+          })}
       </Grid>
     );
-  }, [filteredPipelines, namespace, refresh]);
+  }, [filteredPipelines, filteredISBServices, namespace, refresh]);
 
   const handleHealthFilterChange = useCallback(
     (e) => {
@@ -315,6 +465,10 @@ export function NamespacePipelineListing({
     });
   }, [setSidebarProps, handleCreateISBComplete, namespace]);
 
+  const handleTabsChange = useCallback((event, newValue) => {
+    setTabValue(newValue);
+  }, []);
+
   return (
     <Box
       sx={{
@@ -323,9 +477,15 @@ export function NamespacePipelineListing({
         padding: "0 2.625rem",
       }}
     >
-      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "flex-start" }}>
+      <Box
+        sx={{ display: "flex", flexDirection: "row", alignItems: "flex-start" }}
+      >
         <DebouncedSearchInput
-          placeHolder="Search for pipeline"
+          placeHolder={
+            tabValue === PIPELINE
+              ? "Search for pipeline"
+              : "Search for ISB service"
+          }
           onChange={setSearch}
         />
         <Box
@@ -411,77 +571,98 @@ export function NamespacePipelineListing({
           <ErrorIndicator />
         </Box>
       </Box>
-      <Box sx={{ display: "flex", flexDirection: "row", marginTop: "2rem" }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          marginTop: "2rem",
+          borderBottom: "1px solid #DBD9D2",
+        }}
+      >
         <Box
           sx={{
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
-            maxWidth: "8.75rem",
+            justifyContent: "space-between",
           }}
         >
-          <span className="ns-pipeline-listing-table-title">Pipelines</span>
+          <Box>
+            <Tabs value={tabValue} onChange={handleTabsChange}>
+              <Tab
+                value={NamespacePipelineListingTabs[0].value}
+                label={NamespacePipelineListingTabs[0].label}
+              />
+              <Tab
+                value={NamespacePipelineListingTabs[1].value}
+                label={NamespacePipelineListingTabs[1].label}
+              />
+            </Tabs>
+          </Box>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              textDecoration: "none",
+              marginBottom: "0.7rem",
+            }}
+          >
+            <Button
+              variant="outlined"
+              startIcon={<PlusIcon />}
+              size="medium"
+              sx={{
+                marginRight: "0.625rem",
+                justifyContent: "flex-end",
+              }}
+              onClick={handleCreatePiplineClick}
+            >
+              Create Pipeline
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<PlusIcon />}
+              size="small"
+              onClick={handleCreateISBClick}
+              sx={{ justifyContent: "flex-end" }}
+            >
+              Create ISB Service
+            </Button>
+          </Box>
         </Box>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            flexGrow: 1,
-            justifyContent: "space-evenly",
-            maxWidth: "35.9375rem",
-          }}
-        >
-          {sortOptions.map((option) => {
-            return (
-              <Button
-                sx={{ color: "#393A3D" }}
-                onClick={(e) => {
-                  handleSortChange(e, option.value);
-                }}
-                key={option.value}
-                variant="text"
-              >
-                {option.label}{" "}
-                {orderBy.value === option.value ? (
-                  orderBy.sortOrder === ASC ? (
-                    <ArrowUpwardIcon fontSize="small" />
-                  ) : (
-                    <ArrowDownwardIcon fontSize="small" />
-                  )
+      </Box>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          flexGrow: 1,
+          justifyContent: "center",
+          marginTop: "1.5rem",
+        }}
+      >
+        {sortOptions.map((option) => {
+          return (
+            <Button
+              sx={{ color: "#393A3D" }}
+              onClick={(e) => {
+                handleSortChange(e, option.value);
+              }}
+              key={option.value}
+              variant="text"
+            >
+              {option.label}{" "}
+              {orderBy.value === option.value ? (
+                orderBy.sortOrder === ASC ? (
+                  <ArrowUpwardIcon fontSize="small" />
                 ) : (
-                  ""
-                )}
-              </Button>
-            );
-          })}
-        </Box>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            flexGrow: 1,
-            justifyContent: "flex-end",
-            marginRight: "0.25rem",
-          }}
-        >
-          <Button
-            variant="outlined"
-            startIcon={<PlusIcon />}
-            size="medium"
-            sx={{ marginRight: "0.625rem" }}
-            onClick={handleCreatePiplineClick}
-          >
-            Create Pipeline
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<PlusIcon />}
-            size="small"
-            onClick={handleCreateISBClick}
-          >
-            Create ISB Service
-          </Button>
-        </Box>
+                  <ArrowDownwardIcon fontSize="small" />
+                )
+              ) : (
+                ""
+              )}
+            </Button>
+          );
+        })}
       </Box>
       {listing}
       <Box
