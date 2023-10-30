@@ -138,11 +138,10 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 		return fmt.Errorf("invalid key %q", key)
 	}
 	vertexName := podInfo[1]
-	vertexType := podInfo[3]
 	podName := strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-")
 	var podReadCount *PodReadCount
 	if r.podTracker.IsActive(key) {
-		podReadCount = r.getPodReadCounts(vertexName, vertexType, podName)
+		podReadCount = r.getPodReadCounts(vertexName, podName)
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podName)
 		}
@@ -217,11 +216,8 @@ func sleep(ctx context.Context, duration time.Duration) {
 
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
-func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodReadCount {
+func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 	readTotalMetricName := "forwarder_data_read_total"
-	if keyVertexTypeSource == vertexType {
-		readTotalMetricName = "forwarder_read_total"
-	}
 
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
