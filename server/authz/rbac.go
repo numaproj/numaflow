@@ -17,18 +17,16 @@ limitations under the License.
 package authz
 
 import (
-	"bufio"
 	_ "embed"
 	"fmt"
-	"os"
 	"path"
-	"regexp"
 	"strings"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/server/authn"
@@ -36,9 +34,8 @@ import (
 
 var (
 	//go:embed rbac-model.conf
-	rbacModel      string
-	logger         = logging.NewLogger().Named("server")
-	policyRegex, _ = regexp.Compile(`policy\.[A-Za-z]+:(.*?)`)
+	rbacModel string
+	logger    = logging.NewLogger().Named("server")
 )
 
 const (
@@ -46,7 +43,9 @@ const (
 )
 
 type CasbinObject struct {
-	enforcer *casbin.Enforcer
+	enforcer      *casbin.Enforcer
+	config        *viper.Viper
+	currentScopes []string
 }
 
 func NewCasbinObject() (*CasbinObject, error) {
@@ -54,9 +53,26 @@ func NewCasbinObject() (*CasbinObject, error) {
 	if err != nil {
 		return nil, err
 	}
+	configReader := viper.New()
+	configReader.SetConfigFile(RbacPropertiesPath)
+	err = configReader.ReadInConfig()
+	currentScopes := GetRbacScopes(configReader)
+	if err != nil {
+		return nil, err
+	}
 	return &CasbinObject{
-		enforcer: enforcer,
+		enforcer:      enforcer,
+		config:        configReader,
+		currentScopes: currentScopes,
 	}, nil
+}
+
+func (cas *CasbinObject) GetConfig() *viper.Viper {
+	return cas.config
+}
+
+func (cas *CasbinObject) GetScopes() []string {
+	return cas.currentScopes
 }
 
 func (cas *CasbinObject) Authorize(c *gin.Context, userIdentityToken *authn.UserInfo, scope string) bool {
@@ -161,32 +177,12 @@ func extractObject(c *gin.Context) string {
 }
 
 // getRbacProperty is used to read the RbacPropertiesPath file path and extract the policy provided as argument,
-func getRbacProperty(property string) (interface{}, error) {
-	// read from RbacPropertiesPath file path
-	readFile, err := os.Open(RbacPropertiesPath)
-	if err != nil {
-		return nil, err
+func getRbacProperty(property string, config *viper.Viper) interface{} {
+	val := config.Get(property)
+	if val == nil {
+		return emptyString
 	}
-	fileScanner := bufio.NewScanner(readFile)
-	fileScanner.Split(bufio.ScanLines)
-	var fileLines []string
-
-	for fileScanner.Scan() {
-		fileLines = append(fileLines, fileScanner.Text())
-	}
-
-	readFile.Close()
-	for _, line := range fileLines {
-		ok := policyRegex.MatchString(line)
-		if ok {
-			prop, val := parseProperty(line)
-			if prop == property {
-				return val, nil
-			}
-		}
-
-	}
-	return "", nil
+	return val
 }
 
 // parseProperty parses the property from the rbac properties file.
@@ -206,12 +202,8 @@ func parseProperty(line string) (string, string) {
 // the user from the authentication.
 // The scopes are provided as a comma separated list in the rbac properties file.
 // Example: policy.scopes=groups,email
-func GetRbacScopes() []string {
-	scopes, err := getRbacProperty(RbacPropertyScopes)
-	if err != nil {
-		logger.Errorw("error while getting scopes from rbac properties file", "error", err)
-		return nil
-	}
+func GetRbacScopes(config *viper.Viper) []string {
+	scopes := getRbacProperty(RbacPropertyScopes, config)
 	var retList []string
 	// If no scopes are provided, set Group as the default scope.
 	if scopes == emptyString {

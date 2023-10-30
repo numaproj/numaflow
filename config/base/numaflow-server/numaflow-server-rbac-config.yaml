@@ -9,13 +9,12 @@ data:
     p, role:readonly, *, *, GET
     # Groups go here
     # g, admin, role:admin
-    g, sidhant.kohli@gmail.com, role:admin
     # g, my-github-org:my-github-team, role:readonly
-  rbac.conf: |
+  rbacConf.yaml: |
     policy.default: role:readonly
-    // The scopes field controls which authentication scopes to examine during rbac enforcement.
-    // We can have multiple scopes, and the first scope that matches with the policy will be used.
-    // The default value is "groups", which means that the groups field of the user's token will be examined
-    // The other possible value is "email", which means that the email field of the user's token will be examined
-    // It can be provided as a comma-separated list, e.g "groups,email"
-    policy.scopes: groups,email
+    # The scopes field controls which authentication scopes to examine during rbac enforcement.
+    # We can have multiple scopes, and the first scope that matches with the policy will be used.
+    # The default value is "groups", which means that the groups field of the user's token will be examined
+    # The other possible value is "email", which means that the email field of the user's token will be examined
+    # It can be provided as a comma-separated list, e.g "groups,email"
+    # policy.scopes: groups,email

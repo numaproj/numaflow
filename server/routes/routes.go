@@ -158,8 +158,8 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 		// Check if the route requires authorization.
 		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuthZ {
 			// Get the scopes to check from the policy.
-			scopes := authz.GetRbacScopes()
-			logger.Infow("Requested Scopes", "scopes", scopes)
+			scopes := authorizer.GetScopes()
+			logger.Infow("Requested scopes for Auth", "scopes", scopes)
 			// Check if the user is authorized to execute the requested action.
 			isAuthorized := false
 			for _, scope := range scopes {
