@@ -731,15 +731,29 @@ func (h *handler) streamLogs(c *gin.Context, stream io.ReadCloser) {
 }
 
 // GetNamespaceEvents gets a list of events for the given namespace.
+// If the pipeline and vertex name are specified in the url query,
+// it returns the events that are related to the vertex.
+// If only the pipeline name is specified,
+// it returns the events that are related to the pipeline, including all vertices in the pipeline.
+// If neither the pipeline name nor the vertex name is specified,
+// it returns all the events that are related to the namespace.
 func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	ns := c.Param("namespace")
-
+	ppl := c.DefaultQuery("pipeline", "")
+	vtx := c.DefaultQuery("vertex", "")
+	// keran - this check is tested right.
+	if ppl == "" && vtx != "" {
+		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: vertex %q is specified without pipeline", ns, vtx))
+		return
+	}
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	events, err := h.kubeClient.CoreV1().Events(ns).List(context.Background(), metav1.ListOptions{
+
+	var events *corev1.EventList
+	var err error
+	if events, err = h.kubeClient.CoreV1().Events(ns).List(context.Background(), metav1.ListOptions{
 		Limit:    limit,
 		Continue: c.Query("continue"),
-	})
-	if err != nil {
+	}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: %s", ns, err.Error()))
 		return
 	}
@@ -748,11 +762,25 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		response          []K8sEventsResponse
 		defaultTimeObject time.Time
 	)
-
 	for _, event := range events.Items {
 		if event.LastTimestamp.Time == defaultTimeObject {
 			continue
 		}
+		if ppl != "" && vtx != "" && strings.HasPrefix(event.InvolvedObject.Name, ppl+"-"+vtx) {
+			// Retrieving events for a specific vertex by filtering on the object name of the event.
+			// Caveat: This will not work if the pipeline name + vertex name is a prefix of another pipeline vertex name.
+			var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+			response = append(response, newEvent)
+			continue
+		}
+		if ppl != "" && strings.HasPrefix(event.InvolvedObject.Name, ppl) {
+			// Retrieving events for a specific pipeline by filtering on the object name of the event.
+			// Caveat: This will not work if the pipeline name is a prefix of another pipeline name.
+			var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+			response = append(response, newEvent)
+			continue
+		}
+		// For namespace-level events, we include all events.
 		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
 		response = append(response, newEvent)
 	}
@@ -762,7 +790,6 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	sort.Slice(response, func(i int, j int) bool {
 		return response[i].TimeStamp >= response[j].TimeStamp
 	})
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
