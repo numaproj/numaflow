@@ -763,8 +763,7 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 			continue
 		}
 		if (objType == "" && objName == "") ||
-			(strings.ToLower(event.InvolvedObject.Kind) == strings.ToLower(objType) &&
-				strings.ToLower(event.InvolvedObject.Name) == strings.ToLower(objName)) {
+			(strings.EqualFold(event.InvolvedObject.Kind, objType) && strings.EqualFold(event.InvolvedObject.Name, objName)) {
 			newEvent := NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
 			response = append(response, newEvent)
 		}
