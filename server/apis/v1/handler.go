@@ -271,7 +271,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 
 	// get pipeline lag
 	client, err := h.getDaemonClient(ns, pipeline)
-	if err != nil {
+	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 		return
 	}
@@ -539,7 +539,7 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	client, err := h.getDaemonClient(ns, pipeline)
-	if err != nil {
+	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 		return
 	}
@@ -558,7 +558,7 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	client, err := h.getDaemonClient(ns, pipeline)
-	if err != nil {
+	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 		return
 	}
@@ -636,7 +636,7 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 	}
 
 	client, err := h.getDaemonClient(ns, pipeline)
-	if err != nil {
+	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 		return
 	}
@@ -937,5 +937,10 @@ func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClie
 		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
 	}
 
-	return dClient.(*daemonclient.DaemonClient), nil
+	client, ok := dClient.(*daemonclient.DaemonClient)
+	if !ok {
+		return nil, nil
+	}
+
+	return client, nil
 }
