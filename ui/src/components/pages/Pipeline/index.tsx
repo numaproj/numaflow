@@ -217,6 +217,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
 
   return (
     <SummaryPageLayout
+      excludeContentMargin={true}
       contentPadding={false}
       contentHideOverflow
       collapsable

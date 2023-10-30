@@ -31,6 +31,30 @@ const getBorderColor = (nodeType: string) => {
     : "#577477";
 };
 
+const inputImage = {
+  0: input0,
+  1: input1,
+  2: input2,
+  3: input3,
+  4: input4,
+};
+
+const generatorImage = {
+  0: generator0,
+  1: generator1,
+  2: generator2,
+  3: generator3,
+  4: generator4,
+};
+
+const inputColor = {
+  0: "#C9007A",
+  1: "#73A8AE",
+  2: "#8D9096",
+  3: "#B61A37",
+  4: "#7C00F6",
+};
+
 const isSelected = (selected: boolean) => {
   return selected ? "0.1875rem solid" : "0.0625rem solid";
 };
@@ -56,16 +80,12 @@ const CustomNode: FC<NodeProps> = ({
     GeneratorColorContext
   );
 
-  const getSideInputColor = (nodeName: string) => {
-    const inputColor = {
-      0: "#C9007A",
-      1: "#73A8AE",
-      2: "#8D9096",
-      3: "#B61A37",
-      4: "#7C00F6",
-    };
-    return inputColor[generatorToColorMap.get(nodeName)];
-  };
+  const getSideInputColor = useCallback(
+    (nodeName: string) => {
+      return inputColor[generatorToColorMap.get(nodeName)];
+    },
+    [generatorToColorMap]
+  );
 
   const handleClick = useCallback(
     (e) => {
@@ -125,13 +145,6 @@ const CustomNode: FC<NodeProps> = ({
   };
 
   if (data?.type === "sideInput") {
-    const generatorImage = {
-      0: generator0,
-      1: generator1,
-      2: generator2,
-      3: generator3,
-      4: generator4,
-    };
     return (
       <Tooltip
         title={<div className={"node-tooltip"}>{data?.name}</div>}
@@ -365,14 +378,6 @@ const CustomNode: FC<NodeProps> = ({
         })}
       </div>
       {data?.nodeInfo?.sideInputs?.map((input, idx) => {
-        const inputImage = {
-          0: input0,
-          1: input1,
-          2: input2,
-          3: input3,
-          4: input4,
-        };
-
         return (
           <img
             key={idx}

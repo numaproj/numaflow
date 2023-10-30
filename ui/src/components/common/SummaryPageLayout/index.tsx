@@ -35,6 +35,7 @@ export interface SummarySection {
 }
 
 export interface SummaryPageLayoutProps {
+  excludeContentMargin?: boolean;
   collapsable?: boolean;
   defaultCollapsed?: boolean;
   offsetOnCollapse?: boolean; // Add top margin to content when collapsed to avoid content overlap
@@ -195,6 +196,7 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
 };
 
 export function SummaryPageLayout({
+  excludeContentMargin = false,
   collapsable = false,
   defaultCollapsed = false,
   offsetOnCollapse = false,
@@ -305,7 +307,7 @@ export function SummaryPageLayout({
   ]);
 
   const contentMargin = useMemo(() => {
-    if (collapsable) return 0;
+    if (excludeContentMargin) return 0;
     if (collapsed) {
       return offsetOnCollapse ? `${summaryHeight}px` : undefined;
     }
