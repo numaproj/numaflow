@@ -55,79 +55,79 @@ var (
 type redisInstaller struct {
 	client     client.Client
 	kubeClient kubernetes.Interface
-	isbs       *dfv1.InterStepBufferService
+	isbSvc     *dfv1.InterStepBufferService
 	config     *reconciler.GlobalConfig
 	labels     map[string]string
 	logger     *zap.SugaredLogger
 }
 
-func NewNativeRedisInstaller(client client.Client, kubeClient kubernetes.Interface, isbs *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
+func NewNativeRedisInstaller(client client.Client, kubeClient kubernetes.Interface, isbSvc *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
 	return &redisInstaller{
 		client:     client,
 		kubeClient: kubeClient,
-		isbs:       isbs,
+		isbSvc:     isbSvc,
 		config:     config,
 		labels:     labels,
-		logger:     logger.With("isbs", isbs.Name),
+		logger:     logger.With("isbsvc", isbSvc.Name),
 	}
 }
 
 func (r *redisInstaller) Install(ctx context.Context) (*dfv1.BufferServiceConfig, error) {
-	if redis := r.isbs.Spec.Redis; redis == nil {
-		return nil, fmt.Errorf("invalid native redis isbs spec")
+	if redis := r.isbSvc.Spec.Redis; redis == nil {
+		return nil, fmt.Errorf("invalid native redis isb svc spec")
 	}
-	r.isbs.Status.SetType(dfv1.ISBSvcTypeRedis)
+	r.isbSvc.Status.SetType(dfv1.ISBSvcTypeRedis)
 	if err := r.createScriptsConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis scripts ConfigMap", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("RedisScriptsConfigMapFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisScriptsConfigMapFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createHealthConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis health ConfigMap", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("RedisHealthConfigMapFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisHealthConfigMapFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createConfConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis config ConfigMap", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("RedisConfConfigMapFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisConfConfigMapFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createAuthCredentialSecret(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis password", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("RedisPasswordSecretFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisPasswordSecretFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createRedisService(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis Service", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("RedisServiceFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisServiceFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createRedisHeadlessService(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis Headless Service", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("RedisHeadlessServiceFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisHeadlessServiceFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createStatefulSet(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis StatefulSet", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("RedisStatefulSetFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisStatefulSetFailed", err.Error())
 		return nil, err
 	}
 
-	r.isbs.Status.MarkDeployed()
+	r.isbSvc.Status.MarkDeployed()
 	return &dfv1.BufferServiceConfig{
 		Redis: &dfv1.RedisConfig{
-			SentinelURL: fmt.Sprintf("%s.%s.svc:%v", generateRedisServiceName(r.isbs), r.isbs.Namespace, sentinelPort),
+			SentinelURL: fmt.Sprintf("%s.%s.svc:%v", generateRedisServiceName(r.isbSvc), r.isbSvc.Namespace, sentinelPort),
 			MasterName:  dfv1.DefaultRedisSentinelMasterName,
 			User:        defaultUser,
 			Password: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: generateRedisCredentialSecretName(r.isbs),
+					Name: generateRedisCredentialSecretName(r.isbSvc),
 				},
 				Key: dfv1.RedisAuthSecretKey,
 			},
 			SentinelPassword: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: generateRedisCredentialSecretName(r.isbs),
+					Name: generateRedisCredentialSecretName(r.isbSvc),
 				},
 				Key: dfv1.RedisAuthSecretKey,
 			},
@@ -139,11 +139,11 @@ func (r *redisInstaller) createAuthCredentialSecret(ctx context.Context) error {
 	password := sharedutil.RandomString(16)
 	obj := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateRedisCredentialSecretName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateRedisCredentialSecretName(r.isbSvc),
 			Labels:    r.labels,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -151,7 +151,7 @@ func (r *redisInstaller) createAuthCredentialSecret(ctx context.Context) error {
 			dfv1.RedisAuthSecretKey: []byte(password),
 		},
 	}
-	if _, err := r.kubeClient.CoreV1().Secrets(r.isbs.Namespace).Get(ctx, generateRedisCredentialSecretName(r.isbs), metav1.GetOptions{}); err != nil {
+	if _, err := r.kubeClient.CoreV1().Secrets(r.isbSvc.Namespace).Get(ctx, generateRedisCredentialSecretName(r.isbSvc), metav1.GetOptions{}); err != nil {
 		if apierrors.IsNotFound(err) {
 			if err := r.client.Create(ctx, obj); err != nil {
 				return fmt.Errorf("failed to create redis auth credential secret, err: %w", err)
@@ -178,11 +178,11 @@ func (r *redisInstaller) createScriptsConfigMap(ctx context.Context) error {
 		RedisPort           int32
 		SentinelPort        int32
 	}{
-		ServiceName:         generateRedisServiceName(r.isbs),
-		HeadlessServiceName: generateRedisHeadlessServiceName(r.isbs),
-		StatefulSetName:     generateRedisStatefulSetName(r.isbs),
-		Namespace:           r.isbs.Namespace,
-		Replicas:            r.isbs.Spec.Redis.Native.GetReplicas(),
+		ServiceName:         generateRedisServiceName(r.isbSvc),
+		HeadlessServiceName: generateRedisHeadlessServiceName(r.isbSvc),
+		StatefulSetName:     generateRedisStatefulSetName(r.isbSvc),
+		Namespace:           r.isbSvc.Namespace,
+		Replicas:            r.isbSvc.Spec.Redis.Native.GetReplicas(),
 		RedisPort:           redisPort,
 		SentinelPort:        sentinelPort,
 	}
@@ -200,14 +200,14 @@ func (r *redisInstaller) createScriptsConfigMap(ctx context.Context) error {
 	hash := sharedutil.MustHash(data)
 	obj := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateScriptsConfigMapName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateScriptsConfigMapName(r.isbSvc),
 			Labels:    r.labels,
 			Annotations: map[string]string{
 				dfv1.KeyHash: hash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Data: data,
@@ -249,14 +249,14 @@ func (r *redisInstaller) createHealthConfigMap(ctx context.Context) error {
 	hash := sharedutil.MustHash(data)
 	obj := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateHealthConfigMapName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateHealthConfigMapName(r.isbSvc),
 			Labels:    r.labels,
 			Annotations: map[string]string{
 				dfv1.KeyHash: hash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Data: data,
@@ -301,7 +301,7 @@ func (r *redisInstaller) createConfConfigMap(ctx context.Context) error {
 			sentinelConf = x.Sentinel
 		}
 	}
-	if x := r.isbs.Spec.Redis.Native.Settings; x != nil {
+	if x := r.isbSvc.Spec.Redis.Native.Settings; x != nil {
 		if x.Redis != "" {
 			redisConf = x.Redis
 		}
@@ -328,12 +328,12 @@ func (r *redisInstaller) createConfConfigMap(ctx context.Context) error {
 		Quorum              int
 	}{
 		SentinelPort:        sentinelPort,
-		StatefulSetName:     generateRedisStatefulSetName(r.isbs),
-		HeadlessServiceName: generateRedisHeadlessServiceName(r.isbs),
-		Namespace:           r.isbs.Namespace,
+		StatefulSetName:     generateRedisStatefulSetName(r.isbSvc),
+		HeadlessServiceName: generateRedisHeadlessServiceName(r.isbSvc),
+		Namespace:           r.isbSvc.Namespace,
 		SentinelSettings:    sentinelConf,
 		RedisPort:           redisPort,
-		Quorum:              r.isbs.Spec.Redis.Native.GetReplicas() / 2,
+		Quorum:              r.isbSvc.Spec.Redis.Native.GetReplicas() / 2,
 	}); err != nil {
 		return fmt.Errorf("failed to parse sentinel config template, error: %w", err)
 	}
@@ -375,14 +375,14 @@ func (r *redisInstaller) createConfConfigMap(ctx context.Context) error {
 	hash := sharedutil.MustHash(data)
 	obj := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateRedisConfigMapName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateRedisConfigMapName(r.isbSvc),
 			Labels:    r.labels,
 			Annotations: map[string]string{
 				dfv1.KeyHash: hash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Data: data,
@@ -411,7 +411,7 @@ func (r *redisInstaller) createConfConfigMap(ctx context.Context) error {
 }
 
 func (r *redisInstaller) createRedisService(ctx context.Context) error {
-	spec := r.isbs.Spec.Redis.Native.GetServiceSpec(dfv1.GetRedisServiceSpecReq{
+	spec := r.isbSvc.Spec.Redis.Native.GetServiceSpec(dfv1.GetRedisServiceSpecReq{
 		Labels:                r.labels,
 		RedisContainerPort:    redisPort,
 		SentinelContainerPort: sentinelPort,
@@ -419,14 +419,14 @@ func (r *redisInstaller) createRedisService(ctx context.Context) error {
 	hash := sharedutil.MustHash(spec)
 	obj := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateRedisServiceName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateRedisServiceName(r.isbSvc),
 			Labels:    r.labels,
 			Annotations: map[string]string{
 				dfv1.KeyHash: hash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Spec: spec,
@@ -455,7 +455,7 @@ func (r *redisInstaller) createRedisService(ctx context.Context) error {
 }
 
 func (r *redisInstaller) createRedisHeadlessService(ctx context.Context) error {
-	spec := r.isbs.Spec.Redis.Native.GetHeadlessServiceSpec(dfv1.GetRedisServiceSpecReq{
+	spec := r.isbSvc.Spec.Redis.Native.GetHeadlessServiceSpec(dfv1.GetRedisServiceSpecReq{
 		Labels:                r.labels,
 		RedisContainerPort:    redisPort,
 		SentinelContainerPort: sentinelPort,
@@ -463,14 +463,14 @@ func (r *redisInstaller) createRedisHeadlessService(ctx context.Context) error {
 	hash := sharedutil.MustHash(spec)
 	obj := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateRedisHeadlessServiceName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateRedisHeadlessServiceName(r.isbSvc),
 			Labels:    r.labels,
 			Annotations: map[string]string{
 				dfv1.KeyHash: hash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Spec: spec,
@@ -499,12 +499,12 @@ func (r *redisInstaller) createRedisHeadlessService(ctx context.Context) error {
 }
 
 func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
-	redisVersion, err := r.config.GetRedisVersion(r.isbs.Spec.Redis.Native.Version)
+	redisVersion, err := r.config.GetRedisVersion(r.isbSvc.Spec.Redis.Native.Version)
 	if err != nil {
 		return fmt.Errorf("failed to get redis version, err: %w", err)
 	}
-	spec := r.isbs.Spec.Redis.Native.GetStatefulSetSpec(dfv1.GetRedisStatefulSetSpecReq{
-		ServiceName:               generateRedisHeadlessServiceName(r.isbs),
+	spec := r.isbSvc.Spec.Redis.Native.GetStatefulSetSpec(dfv1.GetRedisStatefulSetSpecReq{
+		ServiceName:               generateRedisHeadlessServiceName(r.isbSvc),
 		Labels:                    r.labels,
 		RedisImage:                redisVersion.RedisImage,
 		SentinelImage:             redisVersion.SentinelImage,
@@ -513,24 +513,24 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 		RedisContainerPort:        redisPort,
 		SentinelContainerPort:     sentinelPort,
 		RedisMetricsContainerPort: redisMetricsPort,
-		CredentialSecretName:      generateRedisCredentialSecretName(r.isbs),
+		CredentialSecretName:      generateRedisCredentialSecretName(r.isbSvc),
 		TLSEnabled:                false,
-		PvcNameIfNeeded:           generateRedisPVCName(r.isbs),
-		ConfConfigMapName:         generateRedisConfigMapName(r.isbs),
-		HealthConfigMapName:       generateHealthConfigMapName(r.isbs),
-		ScriptsConfigMapName:      generateScriptsConfigMapName(r.isbs),
+		PvcNameIfNeeded:           generateRedisPVCName(r.isbSvc),
+		ConfConfigMapName:         generateRedisConfigMapName(r.isbSvc),
+		HealthConfigMapName:       generateHealthConfigMapName(r.isbSvc),
+		ScriptsConfigMapName:      generateScriptsConfigMapName(r.isbSvc),
 	})
 	hash := sharedutil.MustHash(spec)
 	obj := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateRedisStatefulSetName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateRedisStatefulSetName(r.isbSvc),
 			Labels:    r.labels,
 			Annotations: map[string]string{
 				dfv1.KeyHash: hash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Spec: spec,
@@ -586,7 +586,7 @@ func (r *redisInstaller) uninstallPVCs(ctx context.Context) error {
 func (r *redisInstaller) getPVCs(ctx context.Context) ([]corev1.PersistentVolumeClaim, error) {
 	pvcl := &corev1.PersistentVolumeClaimList{}
 	err := r.client.List(ctx, pvcl, &client.ListOptions{
-		Namespace:     r.isbs.Namespace,
+		Namespace:     r.isbSvc.Namespace,
 		LabelSelector: labels.SelectorFromSet(r.labels),
 	})
 	if err != nil {
@@ -595,34 +595,34 @@ func (r *redisInstaller) getPVCs(ctx context.Context) ([]corev1.PersistentVolume
 	return pvcl.Items, nil
 }
 
-func generateRedisServiceName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-redis-svc", isbs.Name)
+func generateRedisServiceName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-redis-svc", isbSvc.Name)
 }
 
-func generateRedisHeadlessServiceName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-redis-svc-headless", isbs.Name)
+func generateRedisHeadlessServiceName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-redis-svc-headless", isbSvc.Name)
 }
 
-func generateRedisConfigMapName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-redis-config", isbs.Name)
+func generateRedisConfigMapName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-redis-config", isbSvc.Name)
 }
 
-func generateScriptsConfigMapName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-redis-scripts", isbs.Name)
+func generateScriptsConfigMapName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-redis-scripts", isbSvc.Name)
 }
 
-func generateHealthConfigMapName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-redis-health", isbs.Name)
+func generateHealthConfigMapName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-redis-health", isbSvc.Name)
 }
 
-func generateRedisStatefulSetName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-redis", isbs.Name)
+func generateRedisStatefulSetName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-redis", isbSvc.Name)
 }
 
-func generateRedisCredentialSecretName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-redis-auth", isbs.Name)
+func generateRedisCredentialSecretName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-redis-auth", isbSvc.Name)
 }
 
-func generateRedisPVCName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-redis-vol", isbs.Name)
+func generateRedisPVCName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-redis-vol", isbSvc.Name)
 }
