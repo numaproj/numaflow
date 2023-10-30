@@ -134,7 +134,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
 	podInfo := strings.Split(key, PodInfoSeparator)
-	if len(podInfo) != 4 {
+	if len(podInfo) != 3 {
 		return fmt.Errorf("invalid key %q", key)
 	}
 	vertexName := podInfo[1]
