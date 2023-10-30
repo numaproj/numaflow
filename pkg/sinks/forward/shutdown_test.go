@@ -66,8 +66,13 @@ func TestShutDown(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1), WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1), WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data but buffer is not full even though we are not reading
@@ -99,8 +104,13 @@ func TestShutDown(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1), WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1), WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data such that the fromBufferPartition can be empty, that is toBuffer gets full

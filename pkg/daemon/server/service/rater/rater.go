@@ -28,6 +28,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
@@ -133,15 +134,14 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
 	podInfo := strings.Split(key, PodInfoSeparator)
-	if len(podInfo) != 4 {
+	if len(podInfo) != 3 {
 		return fmt.Errorf("invalid key %q", key)
 	}
 	vertexName := podInfo[1]
-	vertexType := podInfo[3]
 	podName := strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-")
 	var podReadCount *PodReadCount
 	if r.podTracker.IsActive(key) {
-		podReadCount = r.getPodReadCounts(vertexName, vertexType, podName)
+		podReadCount = r.getPodReadCounts(vertexName, podName)
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podName)
 		}
@@ -216,17 +216,8 @@ func sleep(ctx context.Context, duration time.Duration) {
 
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
-func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodReadCount {
-	metricNames := map[string]string{
-		keyVertexTypeReduce: "reduce_isb_reader_data_read",
-		keyVertexTypeSource: "source_forwarder_read_total",
-		keyVertexTypeSink:   "sink_forwarder_data_read",
-	}
-
-	readTotalMetricName, ok := metricNames[vertexType]
-	if !ok {
-		readTotalMetricName = "forwarder_data_read"
-	}
+func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
+	readTotalMetricName := "forwarder_data_read_total"
 
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
@@ -250,7 +241,7 @@ func (r *Rater) getPodReadCounts(vertexName, vertexType, podName string) *PodRea
 		for _, ele := range metricsList {
 			var partitionName string
 			for _, label := range ele.Label {
-				if label.GetName() == "partition_name" {
+				if label.GetName() == metrics.LabelPartitionName {
 					partitionName = label.GetValue()
 					break
 				}

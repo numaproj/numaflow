@@ -91,7 +91,7 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, n, writers, fsd, transformerApplier, fetchWM, n, toVertexPublisherStores, idleManager, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance, n, writers, fsd, transformerApplier, fetchWM, n, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

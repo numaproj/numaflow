@@ -32,6 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -125,7 +126,7 @@ func (t *testIdleForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 
 func TestNewDataForward(t *testing.T) {
 	var (
-		testName        = "sink_forward"
+		testName        = "forward"
 		batchSize int64 = 10
 	)
 
@@ -146,6 +147,11 @@ func TestNewDataForward(t *testing.T) {
 			},
 		}}
 
+		vertexInstance := &dfv1.VertexInstance{
+			Vertex:  vertex,
+			Replica: 0,
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
@@ -153,7 +159,7 @@ func TestNewDataForward(t *testing.T) {
 
 		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 		fetchWatermark := &testForwardFetcher{}
-		f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(1))
+		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(1))
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -228,11 +234,16 @@ func TestNewDataForward(t *testing.T) {
 			},
 		}}
 
+		vertexInstance := &dfv1.VertexInstance{
+			Vertex:  vertex,
+			Replica: 0,
+		}
+
 		fetchWatermark := &testIdleForwardFetcher{}
 		publishWatermark := map[string]publish.Publisher{
 			testVertexName: &testForwarderPublisher{},
 		}
-		f, err := NewDataForward(vertex, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(1))
+		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(1))
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -306,11 +317,16 @@ func TestWriteToBuffer(t *testing.T) {
 				},
 			}}
 
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
 			fetchWatermark := &testForwardFetcher{}
 			publishWatermark := map[string]publish.Publisher{
 				"to1": &testForwarderPublisher{},
 			}
-			f, err := NewDataForward(vertex, fromStep, buffer, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1))
+			f, err := NewDataForward(vertexInstance, fromStep, buffer, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1))
 
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
@@ -348,39 +364,39 @@ func TestWriteToBuffer(t *testing.T) {
 
 func validateMetrics(batchSize int64) (err error) {
 	metadata := `
-		# HELP sink_forwarder_data_read Total number of Data Messages Read
-		# TYPE sink_forwarder_data_read counter
+		# HELP forwarder_data_read_total Total number of Data Messages Read
+		# TYPE forwarder_data_read_total counter
 		`
 	expected := `
-		sink_forwarder_data_read{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		forwarder_data_read_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex",vertex_type="Sink"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
 
-	err = testutil.CollectAndCompare(readMessagesCount, strings.NewReader(metadata+expected), "sink_forwarder_data_read")
+	err = testutil.CollectAndCompare(metrics.ReadDataMessagesCount, strings.NewReader(metadata+expected), "forwarder_data_read_total")
 	if err != nil {
 		return err
 	}
 
 	writeMetadata := `
-		# HELP sink_forwarder_write_total Total number of Messages Written
-		# TYPE sink_forwarder_write_total counter
+		# HELP forwarder_write_total Total number of Messages Written
+		# TYPE forwarder_write_total counter
 		`
 	writeExpected := `
-		sink_forwarder_write_total{partition_name="testVertex",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
+		forwarder_write_total{partition_name="testVertex",pipeline="testPipeline",replica="0",vertex="testVertex",vertex_type="Sink"} ` + fmt.Sprintf("%d", batchSize) + `
 	`
-	err = testutil.CollectAndCompare(writeMessagesCount, strings.NewReader(writeMetadata+writeExpected), "sink_forwarder_write_total")
+	err = testutil.CollectAndCompare(metrics.WriteMessagesCount, strings.NewReader(writeMetadata+writeExpected), "forwarder_write_total")
 	if err != nil {
 		return err
 	}
 
 	ackMetadata := `
-		# HELP sink_forwarder_ack_total Total number of Messages Acknowledged
-		# TYPE sink_forwarder_ack_total counter
+		# HELP forwarder_ack_total Total number of Messages Acknowledged
+		# TYPE forwarder_ack_total counter
 		`
 	ackExpected := `
-		sink_forwarder_ack_total{partition_name="from",pipeline="testPipeline",vertex="testVertex"} ` + fmt.Sprintf("%d", batchSize) + `
+		forwarder_ack_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex",vertex_type="Sink"} ` + fmt.Sprintf("%d", batchSize) + `
 	`
 
-	err = testutil.CollectAndCompare(ackMessagesCount, strings.NewReader(ackMetadata+ackExpected), "sink_forwarder_ack_total")
+	err = testutil.CollectAndCompare(metrics.AckMessagesCount, strings.NewReader(ackMetadata+ackExpected), "forwarder_ack_total")
 	if err != nil {
 		return err
 	}
@@ -389,7 +405,7 @@ func validateMetrics(batchSize int64) (err error) {
 }
 
 func metricsReset() {
-	readMessagesCount.Reset()
-	writeMessagesCount.Reset()
-	ackMessagesCount.Reset()
+	metrics.ReadDataMessagesCount.Reset()
+	metrics.WriteMessagesCount.Reset()
+	metrics.AckMessagesCount.Reset()
 }

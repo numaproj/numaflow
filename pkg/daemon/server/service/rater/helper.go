@@ -24,17 +24,6 @@ import (
 
 const (
 	indexNotFound = -1
-
-	// The following string set is used to identify the vertex type of pod
-
-	// keyVertexTypeReduce is the vertex type string for reduce vertex
-	keyVertexTypeReduce = "reduce"
-	// keyVertexTypeSource is the vertex type string for a source vertex
-	keyVertexTypeSource = "source"
-	// keyVertexTypeSink is the vertex type string for a sink vertex
-	keyVertexTypeSink = "sink"
-	// keyVertexTypeOther is the vertex type string for other vertices
-	keyVertexTypeOther = "other"
 )
 
 // UpdateCount updates the count of processed messages for a pod at a given time
