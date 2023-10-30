@@ -43,7 +43,7 @@ func TestJetStreamBadInstallation(t *testing.T) {
 		badIsbs.Spec.JetStream = nil
 		installer := &jetStreamInstaller{
 			client: fake.NewClientBuilder().Build(),
-			isbs:   badIsbs,
+			isbSvc: badIsbs,
 			config: fakeConfig,
 			labels: testLabels,
 			logger: zaptest.NewLogger(t).Sugar(),
@@ -74,7 +74,7 @@ func TestJetStreamCreateObjects(t *testing.T) {
 	i := &jetStreamInstaller{
 		client:     cl,
 		kubeClient: k8sfake.NewSimpleClientset(),
-		isbs:       testJetStreamIsbSvc,
+		isbSvc:     testJetStreamIsbSvc,
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
@@ -82,7 +82,7 @@ func TestJetStreamCreateObjects(t *testing.T) {
 
 	t.Run("test create sts", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createStatefulSet(ctx)
 		assert.NoError(t, err)
 		sts := &appv1.StatefulSet{}
@@ -98,7 +98,7 @@ func TestJetStreamCreateObjects(t *testing.T) {
 
 	t.Run("test create svc", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createService(ctx)
 		assert.NoError(t, err)
 		svc := &corev1.Service{}
@@ -110,7 +110,7 @@ func TestJetStreamCreateObjects(t *testing.T) {
 
 	t.Run("test create auth secrets", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createSecrets(ctx)
 		assert.NoError(t, err)
 		s := &corev1.Secret{}
@@ -135,7 +135,7 @@ func TestJetStreamCreateObjects(t *testing.T) {
 
 	t.Run("test create configmap", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
-		i.isbs = testObj
+		i.isbSvc = testObj
 		err := i.createConfigMap(ctx)
 		assert.NoError(t, err)
 		c := &corev1.ConfigMap{}
@@ -152,7 +152,7 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 	i := &jetStreamInstaller{
 		client:     cl,
 		kubeClient: k8sfake.NewSimpleClientset(),
-		isbs:       testJetStreamIsbSvc,
+		isbSvc:     testJetStreamIsbSvc,
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
