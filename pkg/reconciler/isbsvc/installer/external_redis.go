@@ -25,26 +25,26 @@ import (
 )
 
 type externalRedisInstaller struct {
-	isbs   *dfv1.InterStepBufferService
+	isbSvc *dfv1.InterStepBufferService
 	logger *zap.SugaredLogger
 }
 
-func NewExternalRedisInstaller(isbs *dfv1.InterStepBufferService, logger *zap.SugaredLogger) Installer {
+func NewExternalRedisInstaller(isbSvc *dfv1.InterStepBufferService, logger *zap.SugaredLogger) Installer {
 	return &externalRedisInstaller{
-		isbs:   isbs,
-		logger: logger.With("isbs", isbs.Name),
+		isbSvc: isbSvc,
+		logger: logger.With("isbsvc", isbSvc.Name),
 	}
 }
 
 func (eri *externalRedisInstaller) Install(ctx context.Context) (*dfv1.BufferServiceConfig, error) {
-	if eri.isbs.Spec.Redis == nil || eri.isbs.Spec.Redis.External == nil {
+	if eri.isbSvc.Spec.Redis == nil || eri.isbSvc.Spec.Redis.External == nil {
 		return nil, fmt.Errorf("invalid InterStepBufferService spec, no external config")
 	}
-	eri.isbs.Status.SetType(dfv1.ISBSvcTypeRedis)
-	eri.isbs.Status.MarkConfigured()
-	eri.isbs.Status.MarkDeployed()
+	eri.isbSvc.Status.SetType(dfv1.ISBSvcTypeRedis)
+	eri.isbSvc.Status.MarkConfigured()
+	eri.isbSvc.Status.MarkDeployed()
 	eri.logger.Info("Using external redis config")
-	return &dfv1.BufferServiceConfig{Redis: eri.isbs.Spec.Redis.External}, nil
+	return &dfv1.BufferServiceConfig{Redis: eri.isbSvc.Spec.Redis.External}, nil
 }
 
 func (eri *externalRedisInstaller) Uninstall(ctx context.Context) error {

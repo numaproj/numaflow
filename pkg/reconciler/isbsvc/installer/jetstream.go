@@ -57,38 +57,44 @@ var (
 type jetStreamInstaller struct {
 	client     client.Client
 	kubeClient kubernetes.Interface
-	isbs       *dfv1.InterStepBufferService
+	isbSvc     *dfv1.InterStepBufferService
 	config     *reconciler.GlobalConfig
 	labels     map[string]string
 	logger     *zap.SugaredLogger
 }
 
-func NewJetStreamInstaller(client client.Client, kubeClient kubernetes.Interface, isbs *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
+func NewJetStreamInstaller(client client.Client, kubeClient kubernetes.Interface, isbSvc *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
 	return &jetStreamInstaller{
 		client:     client,
 		kubeClient: kubeClient,
-		isbs:       isbs,
+		isbSvc:     isbSvc,
 		config:     config,
 		labels:     labels,
-		logger:     logger.With("isbs", isbs.Name),
+		logger:     logger.With("isbsvc", isbSvc.Name),
 	}
 }
 
 func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceConfig, error) {
-	if js := r.isbs.Spec.JetStream; js == nil {
-		return nil, fmt.Errorf("invalid jetstream isbs spec")
+	if js := r.isbSvc.Spec.JetStream; js == nil {
+		return nil, fmt.Errorf("invalid jetstream ISB Service spec")
 	}
-	r.isbs.Status.SetType(dfv1.ISBSvcTypeJetStream)
+	r.isbSvc.Status.SetType(dfv1.ISBSvcTypeJetStream)
 	// merge
 	v := viper.New()
 	v.SetConfigType("yaml")
 	if err := v.ReadConfig(bytes.NewBufferString(r.config.ISBSvc.JetStream.BufferConfig)); err != nil {
 		return nil, fmt.Errorf("invalid jetstream buffer config in global configuration, %w", err)
 	}
-	if x := r.isbs.Spec.JetStream.BufferConfig; x != nil {
+	if x := r.isbSvc.Spec.JetStream.BufferConfig; x != nil {
 		if err := v.MergeConfig(bytes.NewBufferString(*x)); err != nil {
 			return nil, fmt.Errorf("failed to merge customized buffer config, %w", err)
 		}
+	}
+	if r.isbSvc.Spec.JetStream.GetReplicas() < 3 {
+		// Replica can not > 1 with non-cluster mode
+		v.Set("otbucket.replicas", 1)
+		v.Set("procbucket.replicas", 1)
+		v.Set("stream.replicas", 1)
 	}
 	b, err := yaml.Marshal(v.AllSettings())
 	if err != nil {
@@ -97,52 +103,52 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 
 	if err := r.createSecrets(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream auth secrets", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("JetStreamAuthSecretsFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("JetStreamAuthSecretsFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream ConfigMap", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("JetStreamConfigMapFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("JetStreamConfigMapFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createService(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream Service", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("JetStreamServiceFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("JetStreamServiceFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createStatefulSet(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream StatefulSet", zap.Error(err))
-		r.isbs.Status.MarkDeployFailed("JetStreamStatefulSetFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("JetStreamStatefulSetFailed", err.Error())
 		return nil, err
 	}
-	r.isbs.Status.MarkDeployed()
+	r.isbSvc.Status.MarkDeployed()
 	return &dfv1.BufferServiceConfig{
 		JetStream: &dfv1.JetStreamConfig{
-			URL: fmt.Sprintf("nats://%s.%s.svc:%s", generateJetStreamServiceName(r.isbs), r.isbs.Namespace, strconv.Itoa(int(clientPort))),
+			URL: fmt.Sprintf("nats://%s.%s.svc:%s", generateJetStreamServiceName(r.isbSvc), r.isbSvc.Namespace, strconv.Itoa(int(clientPort))),
 			Auth: &dfv1.NatsAuth{
 				Basic: &dfv1.BasicAuth{
 					User: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: generateJetStreamClientAuthSecretName(r.isbs),
+							Name: generateJetStreamClientAuthSecretName(r.isbSvc),
 						},
 						Key: dfv1.JetStreamClientAuthSecretUserKey,
 					},
 					Password: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: generateJetStreamClientAuthSecretName(r.isbs),
+							Name: generateJetStreamClientAuthSecretName(r.isbSvc),
 						},
 						Key: dfv1.JetStreamClientAuthSecretPasswordKey,
 					},
 				},
 			},
 			StreamConfig: string(b),
-			TLSEnabled:   r.isbs.Spec.JetStream.TLS,
+			TLSEnabled:   r.isbSvc.Spec.JetStream.TLS,
 		},
 	}, nil
 }
 
 func (r *jetStreamInstaller) createService(ctx context.Context) error {
-	spec := r.isbs.Spec.JetStream.GetServiceSpec(dfv1.GetJetStreamServiceSpecReq{
+	spec := r.isbSvc.Spec.JetStream.GetServiceSpec(dfv1.GetJetStreamServiceSpecReq{
 		Labels:      r.labels,
 		MetricsPort: metricsPort,
 		ClusterPort: clusterPort,
@@ -152,14 +158,14 @@ func (r *jetStreamInstaller) createService(ctx context.Context) error {
 	hash := sharedutil.MustHash(spec)
 	obj := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateJetStreamServiceName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateJetStreamServiceName(r.isbSvc),
 			Labels:    r.labels,
 			Annotations: map[string]string{
 				dfv1.KeyHash: hash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Spec: spec,
@@ -188,12 +194,12 @@ func (r *jetStreamInstaller) createService(ctx context.Context) error {
 }
 
 func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
-	jsVersion, err := r.config.GetJetStreamVersion(r.isbs.Spec.JetStream.Version)
+	jsVersion, err := r.config.GetJetStreamVersion(r.isbSvc.Spec.JetStream.Version)
 	if err != nil {
 		return fmt.Errorf("failed to get jetstream version, err: %w", err)
 	}
-	spec := r.isbs.Spec.JetStream.GetStatefulSetSpec(dfv1.GetJetStreamStatefulSetSpecReq{
-		ServiceName:                generateJetStreamServiceName(r.isbs),
+	spec := r.isbSvc.Spec.JetStream.GetStatefulSetSpec(dfv1.GetJetStreamStatefulSetSpecReq{
+		ServiceName:                generateJetStreamServiceName(r.isbSvc),
 		Labels:                     r.labels,
 		NatsImage:                  jsVersion.NatsImage,
 		MetricsExporterImage:       jsVersion.MetricsExporterImage,
@@ -202,23 +208,23 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 		MonitorPort:                monitorPort,
 		ClientPort:                 clientPort,
 		MetricsPort:                metricsPort,
-		ServerAuthSecretName:       generateJetStreamServerSecretName(r.isbs),
-		ServerEncryptionSecretName: generateJetStreamServerSecretName(r.isbs),
-		ConfigMapName:              generateJetStreamConfigMapName(r.isbs),
-		PvcNameIfNeeded:            generateJetStreamPVCName(r.isbs),
+		ServerAuthSecretName:       generateJetStreamServerSecretName(r.isbSvc),
+		ServerEncryptionSecretName: generateJetStreamServerSecretName(r.isbSvc),
+		ConfigMapName:              generateJetStreamConfigMapName(r.isbSvc),
+		PvcNameIfNeeded:            generateJetStreamPVCName(r.isbSvc),
 		StartCommand:               jsVersion.StartCommand,
 	})
 	hash := sharedutil.MustHash(spec)
 	obj := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateJetStreamStatefulSetName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateJetStreamStatefulSetName(r.isbSvc),
 			Labels:    r.labels,
 			Annotations: map[string]string{
 				dfv1.KeyHash: hash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Spec: spec,
@@ -249,7 +255,7 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 	oldServerObjExisting, oldClientObjExisting := true, true
 
-	oldSObj, err := r.kubeClient.CoreV1().Secrets(r.isbs.Namespace).Get(ctx, generateJetStreamServerSecretName(r.isbs), metav1.GetOptions{})
+	oldSObj, err := r.kubeClient.CoreV1().Secrets(r.isbSvc.Namespace).Get(ctx, generateJetStreamServerSecretName(r.isbSvc), metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			oldServerObjExisting = false
@@ -258,7 +264,7 @@ func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 		}
 	}
 
-	oldCObj, err := r.kubeClient.CoreV1().Secrets(r.isbs.Namespace).Get(ctx, generateJetStreamClientAuthSecretName(r.isbs), metav1.GetOptions{})
+	oldCObj, err := r.kubeClient.CoreV1().Secrets(r.isbSvc.Namespace).Get(ctx, generateJetStreamClientAuthSecretName(r.isbSvc), metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			oldClientObjExisting = false
@@ -290,7 +296,7 @@ func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 	jsPass := sharedutil.RandomString(16)
 	sysPassword := sharedutil.RandomString(24)
 	authTlsConfig := ""
-	if r.isbs.Spec.JetStream.TLS {
+	if r.isbSvc.Spec.JetStream.TLS {
 		authTlsConfig = `tls {
   cert_file: "/etc/nats-config/server-cert.pem"
   key_file: "/etc/nats-config/server-key.pem"
@@ -318,8 +324,8 @@ func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 	certOrg := "io.numaproj"
 	// Generate server Cert
 	hosts := []string{
-		fmt.Sprintf("%s.%s.svc.cluster.local", generateJetStreamServiceName(r.isbs), r.isbs.Namespace),
-		fmt.Sprintf("%s.%s.svc", generateJetStreamServiceName(r.isbs), r.isbs.Namespace),
+		fmt.Sprintf("%s.%s.svc.cluster.local", generateJetStreamServiceName(r.isbSvc), r.isbSvc.Namespace),
+		fmt.Sprintf("%s.%s.svc", generateJetStreamServiceName(r.isbSvc), r.isbSvc.Namespace),
 	}
 	serverKeyPEM, serverCertPEM, caCertPEM, err := tls.CreateCerts(certOrg, hosts, time.Now().Add(10*365*24*time.Hour), true, false)
 	if err != nil {
@@ -327,8 +333,8 @@ func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 	}
 	// Generate cluster Cert
 	clusterNodeHosts := []string{
-		fmt.Sprintf("*.%s.%s.svc.cluster.local", generateJetStreamServiceName(r.isbs), r.isbs.Namespace),
-		fmt.Sprintf("*.%s.%s.svc", generateJetStreamServiceName(r.isbs), r.isbs.Namespace),
+		fmt.Sprintf("*.%s.%s.svc.cluster.local", generateJetStreamServiceName(r.isbSvc), r.isbSvc.Namespace),
+		fmt.Sprintf("*.%s.%s.svc", generateJetStreamServiceName(r.isbSvc), r.isbSvc.Namespace),
 	}
 	clusterKeyPEM, clusterCertPEM, clusterCACertPEM, err := tls.CreateCerts(certOrg, clusterNodeHosts, time.Now().Add(10*365*24*time.Hour), true, true)
 	if err != nil {
@@ -337,11 +343,11 @@ func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 
 	serverObj := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateJetStreamServerSecretName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateJetStreamServerSecretName(r.isbSvc),
 			Labels:    r.labels,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -359,11 +365,11 @@ func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 
 	clientAuthObj := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateJetStreamClientAuthSecretName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateJetStreamClientAuthSecretName(r.isbSvc),
 			Labels:    r.labels,
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -387,19 +393,19 @@ func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 
 func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	data := make(map[string]string)
-	svcName := generateJetStreamServiceName(r.isbs)
-	ssName := generateJetStreamStatefulSetName(r.isbs)
-	replicas := r.isbs.Spec.JetStream.GetReplicas()
+	svcName := generateJetStreamServiceName(r.isbSvc)
+	ssName := generateJetStreamStatefulSetName(r.isbSvc)
+	replicas := r.isbSvc.Spec.JetStream.GetReplicas()
 	routes := []string{}
 	for j := 0; j < replicas; j++ {
-		routes = append(routes, fmt.Sprintf("nats://%s-%s.%s.%s.svc:%s", ssName, strconv.Itoa(j), svcName, r.isbs.Namespace, strconv.Itoa(int(clusterPort))))
+		routes = append(routes, fmt.Sprintf("nats://%s-%s.%s.%s.svc:%s", ssName, strconv.Itoa(j), svcName, r.isbSvc.Namespace, strconv.Itoa(int(clusterPort))))
 	}
 	encryptionSettings := ""
-	if r.isbs.Spec.JetStream.Encryption {
+	if r.isbSvc.Spec.JetStream.Encryption {
 		encryptionSettings = "key: $JS_KEY"
 	}
 	clusterTLSConfig := ""
-	if r.isbs.Spec.JetStream.TLS {
+	if r.isbSvc.Spec.JetStream.TLS {
 		clusterTLSConfig = `
   tls {
     cert_file: "/etc/nats-config/cluster-server-cert.pem"
@@ -414,7 +420,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	if err := v.ReadConfig(bytes.NewBufferString(r.config.ISBSvc.JetStream.Settings)); err != nil {
 		return fmt.Errorf("invalid jetstream settings in global configuration, %w", err)
 	}
-	if x := r.isbs.Spec.JetStream.Settings; x != nil {
+	if x := r.isbSvc.Spec.JetStream.Settings; x != nil {
 		if err := v.MergeConfig(bytes.NewBufferString(*x)); err != nil {
 			return fmt.Errorf("failed to merge customized jetstream settings, %w", err)
 		}
@@ -439,7 +445,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 		EncryptionSettings string
 		TLSConfig          string
 	}{
-		ClusterName:        r.isbs.Name,
+		ClusterName:        r.isbSvc.Name,
 		MonitorPort:        strconv.Itoa(int(monitorPort)),
 		ClusterPort:        strconv.Itoa(int(clusterPort)),
 		ClientPort:         strconv.Itoa(int(clientPort)),
@@ -457,14 +463,14 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	hash := sharedutil.MustHash(data)
 	obj := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: r.isbs.Namespace,
-			Name:      generateJetStreamConfigMapName(r.isbs),
+			Namespace: r.isbSvc.Namespace,
+			Name:      generateJetStreamConfigMapName(r.isbSvc),
 			Labels:    r.labels,
 			Annotations: map[string]string{
 				dfv1.KeyHash: hash,
 			},
 			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(r.isbs.GetObjectMeta(), dfv1.ISBGroupVersionKind),
+				*metav1.NewControllerRef(r.isbSvc.GetObjectMeta(), dfv1.ISBGroupVersionKind),
 			},
 		},
 		Data: data,
@@ -520,7 +526,7 @@ func (r *jetStreamInstaller) uninstallPVCs(ctx context.Context) error {
 func (r *jetStreamInstaller) getPVCs(ctx context.Context) ([]corev1.PersistentVolumeClaim, error) {
 	pvcl := &corev1.PersistentVolumeClaimList{}
 	err := r.client.List(ctx, pvcl, &client.ListOptions{
-		Namespace:     r.isbs.Namespace,
+		Namespace:     r.isbSvc.Namespace,
 		LabelSelector: labels.SelectorFromSet(r.labels),
 	})
 	if err != nil {
@@ -529,26 +535,26 @@ func (r *jetStreamInstaller) getPVCs(ctx context.Context) ([]corev1.PersistentVo
 	return pvcl.Items, nil
 }
 
-func generateJetStreamServerSecretName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-js-server", isbs.Name)
+func generateJetStreamServerSecretName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-js-server", isbSvc.Name)
 }
 
-func generateJetStreamClientAuthSecretName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-js-client-auth", isbs.Name)
+func generateJetStreamClientAuthSecretName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-js-client-auth", isbSvc.Name)
 }
 
-func generateJetStreamServiceName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-js-svc", isbs.Name)
+func generateJetStreamServiceName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-js-svc", isbSvc.Name)
 }
 
-func generateJetStreamStatefulSetName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-js", isbs.Name)
+func generateJetStreamStatefulSetName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-js", isbSvc.Name)
 }
 
-func generateJetStreamConfigMapName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-js-config", isbs.Name)
+func generateJetStreamConfigMapName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-js-config", isbSvc.Name)
 }
 
-func generateJetStreamPVCName(isbs *dfv1.InterStepBufferService) string {
-	return fmt.Sprintf("isbsvc-%s-js-vol", isbs.Name)
+func generateJetStreamPVCName(isbSvc *dfv1.InterStepBufferService) string {
+	return fmt.Sprintf("isbsvc-%s-js-vol", isbSvc.Name)
 }
