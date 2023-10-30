@@ -182,6 +182,7 @@ func (p *processAndForward) whereToStep() map[string][][]isb.Message {
 			metrics.PlatformError.With(map[string]string{
 				metrics.LabelVertex:             p.vertexName,
 				metrics.LabelPipeline:           p.pipelineName,
+				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 			}).Inc()
 			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.Strings("keys", msg.Keys), zap.Error(err), zap.Any("partitionID", p.PartitionID))
@@ -247,6 +248,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 			metrics.WriteMessagesError.With(map[string]string{
 				metrics.LabelVertex:             p.vertexName,
 				metrics.LabelPipeline:           p.pipelineName,
+				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 				metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(float64(len(failedMessages)))
 			return false, nil
@@ -257,24 +259,28 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 	metrics.DropMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(float64(len(resultMessages) - writeCount))
 
 	metrics.DropBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(dropBytes)
 
 	metrics.WriteMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(float64(writeCount))
 
 	metrics.WriteBytesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 		metrics.LabelPartitionName:      p.toBuffers[edgeName][partition].GetName()}).Add(writeBytes)
 	return offsets, ctxClosedErr

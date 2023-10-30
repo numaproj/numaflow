@@ -137,6 +137,7 @@ func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 			metrics.UDFError.With(map[string]string{
 				metrics.LabelVertex:             op.vertexName,
 				metrics.LabelPipeline:           op.pipelineName,
+				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
 			}).Inc()
 			op.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))

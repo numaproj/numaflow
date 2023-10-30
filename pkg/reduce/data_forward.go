@@ -188,6 +188,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.ReadMessagesError.With(map[string]string{
 			metrics.LabelVertex:             df.vertexName,
 			metrics.LabelPipeline:           df.pipelineName,
+			metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 			metrics.LabelPartitionName:      df.fromBufferPartition.GetName()}).Inc()
 	}
@@ -260,6 +261,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	metrics.ReadBytesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 	}).Add(float64(totalBytes))
@@ -320,12 +322,14 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 	metrics.ReadDataMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 	}).Add(float64(len(dataMessages)))
 	metrics.ReadMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 	}).Add(float64(len(messages)))
@@ -538,6 +542,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 					metrics.AckMessageError.With(map[string]string{
 						metrics.LabelVertex:             df.vertexName,
 						metrics.LabelPipeline:           df.pipelineName,
+						metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 						metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 					}).Inc()
@@ -557,6 +562,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 				metrics.AckMessagesCount.With(map[string]string{
 					metrics.LabelVertex:             df.vertexName,
 					metrics.LabelPipeline:           df.pipelineName,
+					metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 					metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 				}).Inc()

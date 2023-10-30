@@ -25,6 +25,7 @@ const (
 	LabelPipeline           = "pipeline"
 	LabelVertex             = "vertex"
 	LabelVertexReplicaIndex = "replica"
+	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"
 
 	LabelReason = "reason"
@@ -37,91 +38,91 @@ var (
 		Subsystem: "forwarder",
 		Name:      "read_total",
 		Help:      "Total number of Messages Read",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// ReadDataMessagesCount is used to indicate the number of data messages read
 	ReadDataMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "data_read_total",
 		Help:      "Total number of Data Messages Read",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// ReadBytesCount is to indicate the number of bytes read
 	ReadBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "read_bytes_total",
 		Help:      "Total number of bytes read",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// ReadMessagesError is used to indicate the number of errors messages read
 	ReadMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "read_error_total",
 		Help:      "Total number of Read Errors",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// WriteMessagesCount is used to indicate the number of messages written
 	WriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "write_total",
 		Help:      "Total number of Messages Written",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// WriteBytesCount is to indicate the number of bytes written
 	WriteBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "write_bytes_total",
 		Help:      "Total number of bytes written",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// WriteMessagesError is used to indicate the number of errors messages written
 	WriteMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "write_error_total",
 		Help:      "Total number of Write Errors",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// DropMessagesCount is used to indicate the number of messages dropped
 	DropMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "drop_total",
 		Help:      "Total number of Messages Dropped",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// DropBytesCount is to indicate the number of bytes dropped
 	DropBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "drop_bytes_total",
 		Help:      "Total number of Bytes Dropped",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// AckMessagesCount is used to indicate the number of  messages acknowledged
 	AckMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "ack_total",
 		Help:      "Total number of Messages Acknowledged",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// AckMessageError is used to indicate the errors in the number of  messages acknowledged
 	AckMessageError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "ack_error_total",
 		Help:      "Total number of Acknowledged Errors",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// UDFError is used to indicate the number of UDF errors
 	UDFError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "udf_error_total",
 		Help:      "Total number of UDF Errors",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
 
 	// PlatformError is used to indicate the number of Internal/Platform errors
 	PlatformError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "platform_error_total",
 		Help:      "Total number of platform Errors",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
 
 	// ForwardAChunkProcessingTime is a histogram to Observe forwardAChunk Processing times as a whole
 	ForwardAChunkProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -129,7 +130,7 @@ var (
 		Name:      "forward_chunk_processing_time",
 		Help:      "Processing times of the entire forward a chunk (100 microseconds to 20 minutes)",
 		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
 
 	// UDFProcessingTime is a histogram to Observe UDF Processing times as a whole
 	UDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -137,7 +138,7 @@ var (
 		Name:      "udf_processing_time",
 		Help:      "Processing times of UDF (100 microseconds to 15 minutes)",
 		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 10),
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
 
 	// ConcurrentUDFProcessingTime is a histogram to Observe UDF Processing times as a whole
 	ConcurrentUDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -145,21 +146,21 @@ var (
 		Name:      "concurrent_udf_processing_time",
 		Help:      "Processing times of Concurrent UDF (100 microseconds to 20 minutes)",
 		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
 
 	// UDFReadMessagesCount is used to indicate the number of messages read by UDF
 	UDFReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "udf_read_total",
 		Help:      "Total number of Messages Read by UDF",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// UDFWriteMessagesCount is used to indicate the number of messages written by UDF
 	UDFWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "udf_write_total",
 		Help:      "Total number of Messages Written by UDF",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 )
 
 // Source forwarder specific metrics
