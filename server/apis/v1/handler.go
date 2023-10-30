@@ -273,6 +273,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	client, err := h.getDaemonClient(ns, pipeline)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
+		return
 	}
 
 	var (
@@ -540,6 +541,7 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	client, err := h.getDaemonClient(ns, pipeline)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
+		return
 	}
 
 	buffers, err := client.ListPipelineBuffers(context.Background(), pipeline)
@@ -558,6 +560,7 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	client, err := h.getDaemonClient(ns, pipeline)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
+		return
 	}
 
 	watermarks, err := client.GetPipelineWatermarks(context.Background(), pipeline)
@@ -635,6 +638,7 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 	client, err := h.getDaemonClient(ns, pipeline)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
+		return
 	}
 
 	var results = make(map[string][]*daemon.VertexMetrics)
