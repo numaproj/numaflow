@@ -22,6 +22,13 @@ Then use one of the following options to create a local Kubernete Cluster:
 
 You will also need `kubectl` to manage the cluster. [Follow these steps to install kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/). In case you need a refresher, all the `kubectl` commands used in this quick start guide can be found in the [kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/).
 
+### Metrics Server
+Please install the metrics server if your local Kubernetes cluster does not bring it by default (e.g., Kind).
+Without the [metrics-server](https://github.com/kubernetes-sigs/metrics-server), you will not be able to see the pods in 
+the UI.
+
+You can follow the [metrics-server instruction](./development/development.md#metrics-server).
+
 ## Installing Numaflow
 
 Once you have completed all the prerequisites, run the following command lines to install Numaflow and start the [Inter-Step Buffer Service](./core-concepts/inter-step-buffer-service.md) that handles communication between vertices.
