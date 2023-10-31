@@ -2225,7 +2225,13 @@ simple-pipeline-in-0-rhpjm<span class="w">                   </span><span class=
 <span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;mkwnN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707963034<span class="o">}</span>
 <span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;jk4nN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707963534<span class="o">}</span>
 </code></pre></div>
-<p>Numaflow also comes with a built-in user interface. To port forward the UI, run the following command.</p>
+<p>Numaflow also comes with a built-in user interface.</p>
+<p><strong>NOTE</strong>: Please install the metrics server if your local Kubernetes cluster does not bring it by default (e.g., Kind). 
+You can install it by running the below command.</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml<span class="w"> </span>
+kubectl<span class="w"> </span>patch<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>deployment<span class="w"> </span>metrics-server<span class="w"> </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;[{&quot;op&quot;:&quot;add&quot;,&quot;path&quot;:&quot;/spec/template/spec/containers/0/args/-&quot;,&quot;value&quot;:&quot;--kubelet-insecure-tls&quot;}]&#39;</span>
+</code></pre></div>
+<p>To port forward the UI, run the following command.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Port forward the UI to https://localhost:8443/</span>
 kubectl<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span class="w"> </span>port-forward<span class="w"> </span>deployment/numaflow-server<span class="w"> </span><span class="m">8443</span>:8443
 </code></pre></div>

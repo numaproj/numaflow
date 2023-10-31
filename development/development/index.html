@@ -1867,6 +1867,19 @@
     Example: Create a local Kubernetes cluster with kind
   </a>
   
+    <nav class="md-nav" aria-label="Example: Create a local Kubernetes cluster with kind">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metrics-server" class="md-nav__link">
+    Metrics Server
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2089,6 +2102,19 @@
     Example: Create a local Kubernetes cluster with kind
   </a>
   
+    <nav class="md-nav" aria-label="Example: Create a local Kubernetes cluster with kind">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metrics-server" class="md-nav__link">
+    Metrics Server
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2138,6 +2164,13 @@ kind<span class="w"> </span>create<span class="w"> </span>cluster
 
 <span class="c1"># Get kubeconfig for the cluster</span>
 kind<span class="w"> </span><span class="nb">export</span><span class="w"> </span>kubeconfig
+</code></pre></div>
+<h4 id="metrics-server">Metrics Server<a class="headerlink" href="#metrics-server" title="Permanent link">&para;</a></h4>
+<p>Please install the metrics server if your local Kubernetes cluster does not bring it by default (e.g., Kind).
+Without the <a href="https://github.com/kubernetes-sigs/metrics-server">metrics-server</a>, we will not be able to see the pods in 
+the UI.</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml<span class="w"> </span>
+kubectl<span class="w"> </span>patch<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>deployment<span class="w"> </span>metrics-server<span class="w"> </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;[{&quot;op&quot;:&quot;add&quot;,&quot;path&quot;:&quot;/spec/template/spec/containers/0/args/-&quot;,&quot;value&quot;:&quot;--kubelet-insecure-tls&quot;}]&#39;</span>
 </code></pre></div>
 <h3 id="useful-commands">Useful Commands<a class="headerlink" href="#useful-commands" title="Permanent link">&para;</a></h3>
 <ul>
