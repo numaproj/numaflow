@@ -1,4 +1,4 @@
-import { useCallback, useContext, useMemo, createContext } from "react";
+import React, { useCallback, useContext, useMemo, createContext } from "react";
 import { useParams } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
@@ -58,14 +58,26 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
   }, [graphRefresh, summaryRefresh]);
 
   const handleK8sEventsClick = useCallback(() => {
-    if (!namespaceId || !setSidebarProps) {
+    if (!namespaceId || !pipelineId || !setSidebarProps) {
       return;
+    }
+    const vertexMap = new Map<string, string[]>();
+    if (vertices?.length) {
+      vertexMap.set(
+        pipelineId,
+        vertices.map((v) => v.id)
+      );
     }
     setSidebarProps({
       type: SidebarType.NAMESPACE_K8s,
-      k8sEventsProps: { namespaceId },
+      k8sEventsProps: {
+        namespaceId,
+        pipelineId,
+        headerText: "Pipeline K8s Events",
+        vertexFilterOptions: vertexMap,
+      },
     });
-  }, [namespaceId, setSidebarProps]);
+  }, [namespaceId, pipelineId, setSidebarProps, vertices]);
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (summaryLoading) {
