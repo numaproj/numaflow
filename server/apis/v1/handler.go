@@ -819,7 +819,8 @@ func getAllNamespaces(h *handler) ([]string, error) {
 	}
 	var res []string
 	for _, ns := range namespaces.Items {
-		// skip kube system namespaces
+		// skip kube system namespaces because users are not supposed to create pipelines in them
+		// see https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/#initial-namespaces
 		if name := ns.Name; name != metav1.NamespaceSystem && name != metav1.NamespacePublic && name != "kube-node-lease" {
 			res = append(res, ns.Name)
 		}
