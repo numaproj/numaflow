@@ -96,7 +96,7 @@ export function ClusterNamespaceListing({
             <Grid
               key={`ns-${ns.name}`}
               item
-              xl={3}
+              xl={4}
               lg={4}
               md={6}
               sm={12}
