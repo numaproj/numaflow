@@ -16157,6 +16157,7 @@ rules:
   - configmaps
   - services
   - persistentvolumeclaims
+  - namespaces
   verbs:
   - get
   - list
