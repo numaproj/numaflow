@@ -102,7 +102,7 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
             sx={{
               display: "flex",
               flexDirection: "column",
-              width: "12rem"
+              width: "12rem",
             }}
           >
             <div className="pipeline-summary-text">
@@ -121,6 +121,7 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
                 <div
                   className="pipeline-onclick-events"
                   onClick={handleSpecClick}
+                  data-testid="pipeline-spec-click"
                 >
                   View/Edit Specs
                 </div>
