@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -104,6 +103,7 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 func (d *DexObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
 	var userInfo authn.UserInfo
 	cookies := c.Request.Cookies()
+	fmt.Println("Authenticate : Cookies from request:", cookies)
 	tokenString, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve user identity token: %v", err)
@@ -256,16 +256,9 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	path := "/"
-	if d.baseHref != "" {
-		path = strings.TrimRight(strings.TrimLeft(d.baseHref, "/"), "/")
-	}
-	cookiePath := fmt.Sprintf("path=/%s", path)
-	flags := []string{cookiePath, "SameSite=lax", "httpOnly"}
-	cookies, err := common.MakeCookieMetadata(common.UserIdentityCookieName, string(tokenStr), flags...)
+	cookies, err := common.MakeCookieMetadata(common.UserIdentityCookieName, string(tokenStr))
 	for _, cookie := range cookies {
-		fmt.Println(cookie)
-		c.Writer.Header().Add("Set-Cookie", cookie)
+		c.SetCookie(cookie.Key, cookie.Value, common.StateCookieMaxAge, "/", "", true, true)
 	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }

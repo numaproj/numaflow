@@ -9,33 +9,31 @@ import (
 )
 
 const (
-	maxCookieLength = 4093
+	maxCookieLength = 4096
+	maxValueLength  = maxCookieLength - 100
 	// max number of chunks a cookie can be broken into
 	maxCookieNumber = 10
 )
 
-// MakeCookieMetadata generates a string representing a Web cookie.  Yum!
-func MakeCookieMetadata(key, value string, flags ...string) ([]string, error) {
-	attributes := strings.Join(flags, "; ")
+type IdentityCookie struct {
+	Key   string
+	Value string
+}
 
-	// cookie: name=value; attributes and key: key-(i) e.g. numaflow.token-1
-	maxValueLength := maxCookieValueLength(key, attributes)
+// MakeCookieMetadata generates a string representing a Web cookie.  Yum!
+func MakeCookieMetadata(key, value string) ([]IdentityCookie, error) {
 	numberOfCookies := int(math.Ceil(float64(len(value)) / float64(maxValueLength)))
 	if numberOfCookies > maxCookieNumber {
 		return nil, fmt.Errorf("the authentication token is %d characters long and requires %d cookies but the max number of cookies is %d. Contact your Argo CD administrator to increase the max number of cookies", len(value), numberOfCookies, maxCookieNumber)
 	}
-
-	return splitCookie(key, value, attributes), nil
+	return splitCookie(key, value), nil
 }
 
 // browser has limit on size of cookie, currently 4kb. In order to
 // support cookies longer than 4kb, we split cookie into multiple 4kb chunks.
-// first chunk will be of format numaflow.token=<numberOfChunks>:token; attributes
-func splitCookie(key, value, attributes string) []string {
-	var cookies []string
+func splitCookie(key, value string) []IdentityCookie {
+	var cookies []IdentityCookie
 	valueLength := len(value)
-	// cookie: name=value; attributes and key: key-(i) e.g. numaflow.token-1
-	maxValueLength := maxCookieValueLength(key, attributes)
 	numberOfChunks := int(math.Ceil(float64(valueLength) / float64(maxValueLength)))
 
 	var end int
@@ -45,24 +43,30 @@ func splitCookie(key, value, attributes string) []string {
 			end = valueLength
 		}
 
-		var cookie string
+		var cookie IdentityCookie
 		if j == 0 && numberOfChunks == 1 {
-			cookie = fmt.Sprintf("%s=%s", key, value[i:end])
+			cookie = IdentityCookie{
+				Key:   key,
+				Value: value[i:end],
+			}
 		} else if j == 0 {
-			cookie = fmt.Sprintf("%s=%d:%s", key, numberOfChunks, value[i:end])
+			cookie = IdentityCookie{
+				Key:   key,
+				Value: fmt.Sprintf("%d:%s", numberOfChunks, value[i:end]),
+			}
 		} else {
-			cookie = fmt.Sprintf("%s-%d=%s", key, j, value[i:end])
-		}
-		if attributes != "" {
-			cookie = fmt.Sprintf("%s; %s", cookie, attributes)
+			cookie = IdentityCookie{
+				Key:   fmt.Sprintf("%s-%d", key, j),
+				Value: value[i:end],
+			}
 		}
 		cookies = append(cookies, cookie)
 	}
 	return cookies
 }
 
-// JoinCookies combines chunks of cookie based on key as prefix. It returns cookie
-// value as string. cookieString is of format key1=value1; key2=value2; key3=value3
+// JoinCookies combines chunks of cookie based on Key as prefix. It returns cookie
+// Value as string. cookieString is of format key1=value1; key2=value2; key3=value3
 // first chunk will be of format numaflow.token=<numberOfChunks>:token; attributes
 func JoinCookies(key string, cookieList []*http.Cookie) (string, error) {
 	cookies := make(map[string]string)
