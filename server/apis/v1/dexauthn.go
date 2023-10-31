@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -41,6 +42,7 @@ type DexObject struct {
 	clientID    string
 	issuerURL   string
 	redirectURI string
+	baseHref    string
 	// offlineAsScope defines whether the provider uses "offline_access" scope to
 	// request a refresh token or uses "access_type=offline" (e.g. Google)
 	offlineAsScope bool
@@ -66,6 +68,7 @@ func NewDexObject(baseURL string, baseHref string, proxyURL string) (*DexObject,
 		clientID:       common.AppClientID,
 		issuerURL:      issuerURL,
 		redirectURI:    redirectURI,
+		baseHref:       baseHref,
 		offlineAsScope: true,
 		client:         client,
 	}, nil
@@ -214,6 +217,11 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
+	if rawIDToken == "" {
+		errMsg := "Failed to get id_token: empty raw ID Token"
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 
 	idToken, err := d.verify(r.Context(), rawIDToken)
 	if err != nil {
@@ -243,7 +251,17 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.SetCookie(common.UserIdentityCookieName, string(tokenStr), common.UserIdentityCookieMaxAge, "/", "", true, true)
+
+	path := "/"
+	if d.baseHref != "" {
+		path = strings.TrimRight(strings.TrimLeft(d.baseHref, "/"), "/")
+	}
+	cookiePath := fmt.Sprintf("path=/%s", path)
+	flags := []string{cookiePath, "SameSite=lax", "httpOnly"}
+	cookies, err := common.MakeCookieMetadata(common.UserIdentityCookieName, string(tokenStr), flags...)
+	for _, cookie := range cookies {
+		c.Writer.Header().Add("Set-Cookie", cookie)
+	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
