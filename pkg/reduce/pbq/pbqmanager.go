@@ -41,8 +41,11 @@ import (
 type registeredWindow struct {
 	startTime time.Time
 	endTime   time.Time
-	count     *atomic.Int32
+	// count how many slots do we have for this window. currently we only use slot-0, so count is always 1
+	count *atomic.Int32
 }
+
+var _ window.AlignedWindower = (*registeredWindow)(nil)
 
 func (r *registeredWindow) StartTime() time.Time {
 	return r.startTime
