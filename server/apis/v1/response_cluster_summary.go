@@ -72,8 +72,8 @@ type NamespaceSummary struct {
 	IsbServiceSummary IsbServiceSummary `json:"isbServiceSummary"`
 }
 
-// NewClusterSummary creates a new NamespaceSummary object with the given specifications.
-func NewClusterSummary(namespace string, pipelineSummary PipelineSummary,
+// NewNamespaceSummary creates a new NamespaceSummary object with the given specifications.
+func NewNamespaceSummary(namespace string, pipelineSummary PipelineSummary,
 	isbSummary IsbServiceSummary) NamespaceSummary {
 	return NamespaceSummary{
 		IsEmpty:           !(pipelineSummary.hasPipeline() || isbSummary.hasIsbService()),

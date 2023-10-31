@@ -203,7 +203,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		}
 	}
 	for name, summary := range namespaceSummaryMap {
-		clusterSummary = append(clusterSummary, NewClusterSummary(name, summary.pipelineSummary, summary.isbsvcSummary))
+		clusterSummary = append(clusterSummary, NewNamespaceSummary(name, summary.pipelineSummary, summary.isbsvcSummary))
 	}
 
 	// sort the cluster summary by namespace in alphabetical order,
