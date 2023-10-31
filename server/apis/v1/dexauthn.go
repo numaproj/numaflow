@@ -103,11 +103,15 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 
 func (d *DexObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
 	var userInfo authn.UserInfo
-	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
+	cookies := c.Request.Cookies()
+	tokenString, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user identity token from cookie: %v", err)
+		return nil, fmt.Errorf("failed to retrieve user identity token: %v", err)
 	}
-	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
+	if tokenString == "" {
+		return nil, fmt.Errorf("failed to retrieve user identity token: empty token")
+	}
+	if err = json.Unmarshal([]byte(tokenString), &userInfo); err != nil {
 		return nil, fmt.Errorf("failed to parse user identity token: %v", err)
 	}
 	_, err = d.verify(c, userInfo.IDToken)
