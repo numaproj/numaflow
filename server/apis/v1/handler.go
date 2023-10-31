@@ -377,12 +377,6 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 	}
 
 	// cleanup client after successfully deleting pipeline
-	client, err := h.getDaemonClient(ns, pipeline)
-	if err != nil || client == nil {
-		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
-		return
-	}
-	client.Close()
 	h.daemonClientsCache.Remove(daemonSvcAddress(ns, pipeline))
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
