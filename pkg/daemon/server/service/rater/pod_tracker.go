@@ -131,22 +131,22 @@ func (pt *PodTracker) GetActivePodsCount() int {
 	return pt.activePods.Length()
 }
 
-// PodInfo represents the information of a pod that is used for tracking the processing rate
-type PodInfo struct {
+// podInfo represents the information of a pod that is used for tracking the processing rate
+type podInfo struct {
 	pipelineName string
 	vertexName   string
 	podName      string
 }
 
-func (pt *PodTracker) GetPodInfo(key string) (*PodInfo, error) {
-	podInfo := strings.Split(key, podInfoSeparator)
-	if len(podInfo) != 3 {
+func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
+	pi := strings.Split(key, podInfoSeparator)
+	if len(pi) != 3 {
 		return nil, fmt.Errorf("invalid key %q", key)
 	}
-	return &PodInfo{
-		pipelineName: podInfo[0],
-		vertexName:   podInfo[1],
-		podName:      strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-"),
+	return &podInfo{
+		pipelineName: pi[0],
+		vertexName:   pi[1],
+		podName:      strings.Join([]string{pi[0], pi[1], pi[2]}, "-"),
 	}, nil
 }
 
