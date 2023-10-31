@@ -23,6 +23,10 @@ type ActiveStatus struct {
 	Critical int `json:"Critical"`
 }
 
+func (as *ActiveStatus) isEmpty() bool {
+	return as.Healthy == 0 && as.Warning == 0 && as.Critical == 0
+}
+
 func (as *ActiveStatus) increment(status string) {
 	if status == PipelineStatusHealthy {
 		as.Healthy++
@@ -39,27 +43,40 @@ type PipelineSummary struct {
 	Inactive int          `json:"inactive"`
 }
 
+func (ps *PipelineSummary) hasPipeline() bool {
+	return ps.Inactive > 0 || !ps.Active.isEmpty()
+}
+
 // IsbServiceSummary summarizes the number of active and inactive ISB Service.
 type IsbServiceSummary struct {
 	Active   ActiveStatus `json:"active"`
 	Inactive int          `json:"inactive"`
 }
 
-// ClusterSummaryResponse is a list of ClusterSummary
-// of all the namespaces in a cluster wrapped in a list.
-type ClusterSummaryResponse []ClusterSummary
+func (is *IsbServiceSummary) hasIsbService() bool {
+	return is.Inactive > 0 || !is.Active.isEmpty()
+}
 
-// ClusterSummary summarizes information for a given namespace.
-type ClusterSummary struct {
+// ClusterSummaryResponse is a list of NamespaceSummary
+// of all the namespaces in a cluster wrapped in a list.
+type ClusterSummaryResponse []NamespaceSummary
+
+// NamespaceSummary summarizes information for a given namespace.
+type NamespaceSummary struct {
+	// IsEmpty indicates whether there are numaflow resources in the namespace.
+	// resources include pipelines and ISB services.
+	IsEmpty bool `json:"isEmpty"`
+	// Namespace is the name of the namespace.
 	Namespace         string            `json:"namespace"`
 	PipelineSummary   PipelineSummary   `json:"pipelineSummary"`
 	IsbServiceSummary IsbServiceSummary `json:"isbServiceSummary"`
 }
 
-// NewClusterSummary creates a new ClusterSummary object with the given specifications.
+// NewClusterSummary creates a new NamespaceSummary object with the given specifications.
 func NewClusterSummary(namespace string, pipelineSummary PipelineSummary,
-	isbSummary IsbServiceSummary) ClusterSummary {
-	return ClusterSummary{
+	isbSummary IsbServiceSummary) NamespaceSummary {
+	return NamespaceSummary{
+		IsEmpty:           !(pipelineSummary.hasPipeline() || isbSummary.hasIsbService()),
 		Namespace:         namespace,
 		PipelineSummary:   pipelineSummary,
 		IsbServiceSummary: isbSummary,
