@@ -283,7 +283,8 @@ const Flow = (props: FlowProps) => {
       preventScrolling={!isLocked}
       panOnDrag={!isLocked}
       panOnScroll={isPanOnScrollLocked}
-      maxZoom={2.75}
+      minZoom={0.1}
+      maxZoom={3.1}
     >
       <Panel
         position="top-left"
@@ -440,7 +441,7 @@ const Flow = (props: FlowProps) => {
               stroke="#D4D7DC"
             />
             <text x="50%" y="50%" className={"zoom-percent-text"}>
-              {(((zoomLevel - 0.5) / 1.5) * 100).toFixed(0)}%
+              {(((zoomLevel - 0.1) / 2) * 100).toFixed(0)}%
             </text>
           </g>
         </svg>
