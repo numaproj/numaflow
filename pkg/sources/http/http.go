@@ -200,7 +200,7 @@ func New(
 		}
 	}
 
-	h.forwarder, err = sourceforward.NewDataForward(vertexInstance.Vertex, h, writers, fsd, transformerApplier, fetchWM, h, toVertexPublisherStores, idleManager, forwardOpts...)
+	h.forwarder, err = sourceforward.NewDataForward(vertexInstance, h, writers, fsd, transformerApplier, fetchWM, h, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err

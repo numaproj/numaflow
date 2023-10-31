@@ -23,11 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/numaproj/numaflow/pkg/forward"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
@@ -36,6 +33,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
 
 type myForwardTest struct {
@@ -131,7 +130,7 @@ func TestOrderedProcessing(t *testing.T) {
 				kw := keyed.NewKeyedWindow(_partition.Start, _partition.End)
 				kw.AddSlot(_partition.Slot)
 
-				_, _ = pbqManager.CreateNewPBQ(ctx, _partition, kw)
+				_, _ = pbqManager.CreateNewPBQ(ctx, _partition)
 				t := op.SchedulePnF(cCtx, _partition)
 				op.InsertTask(t)
 			}

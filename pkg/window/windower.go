@@ -36,8 +36,9 @@ type AlignedKeyedWindower interface {
 	// AddSlot adds a slot to the window. Slots are hash-ranges for keys.
 	AddSlot(string)
 	// Partitions returns an array of partition ids
+	// partitionId is a combination of start and end time of the window and the slot
 	Partitions() []partition.ID
-	// Slots returns an array of keys
+	// Slots returns an array of slots
 	Slots() []string
 }
 

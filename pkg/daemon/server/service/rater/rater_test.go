@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package server
+package rater
 
 import (
 	"bytes"
@@ -48,9 +48,9 @@ func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 			// the test uses an abstract vertex without specifying vertex type, meaning it's neither source nor reduce,
 			// hence the default forwarder metric name "forwarder_data_read" is used to retrieve the metric
 			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
-# HELP forwarder_data_read Total number of Messages Read
-# TYPE forwarder_data_read counter
-forwarder_data_read{buffer="input",pipeline="simple-pipeline",vertex="input",partition_name="p-v-0"} %d
+# HELP forwarder_data_read_total Total number of Messages Read
+# TYPE forwarder_data_read_total counter
+forwarder_data_read_total{buffer="input",pipeline="simple-pipeline",vertex="input",replica="0",partition_name="p-v-0"} %d
 `, m.podOneCount))))}
 		return resp, nil
 	} else if url == "https://p-v-1.p-v-headless.default.svc:2469/metrics" {
@@ -58,9 +58,9 @@ forwarder_data_read{buffer="input",pipeline="simple-pipeline",vertex="input",par
 		resp := &http.Response{
 			StatusCode: 200,
 			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
-# HELP forwarder_data_read Total number of Messages Read
-# TYPE forwarder_data_read counter
-forwarder_data_read{buffer="input",pipeline="simple-pipeline",vertex="input", partition_name="p-v-1"} %d
+# HELP forwarder_data_read_total Total number of Messages Read
+# TYPE forwarder_data_read_total counter
+forwarder_data_read_total{buffer="input",pipeline="simple-pipeline",vertex="input",replica="0",partition_name="p-v-1"} %d
 `, m.podTwoCount))))}
 		return resp, nil
 	} else {

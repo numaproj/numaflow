@@ -50,7 +50,7 @@ func WithLogger(log *zap.SugaredLogger) Option {
 }
 
 // NewToLog returns ToLog type.
-func NewToLog(vertex *dfv1.Vertex,
+func NewToLog(vertexInstance *dfv1.VertexInstance,
 	fromBuffer isb.BufferReader,
 	fetchWatermark fetch.Fetcher,
 	publishWatermark publish.Publisher,
@@ -58,9 +58,9 @@ func NewToLog(vertex *dfv1.Vertex,
 	opts ...Option) (*ToLog, error) {
 
 	toLog := new(ToLog)
-	name := vertex.Spec.Name
+	name := vertexInstance.Vertex.Spec.Name
 	toLog.name = name
-	toLog.pipelineName = vertex.Spec.PipelineName
+	toLog.pipelineName = vertexInstance.Vertex.Spec.PipelineName
 	// use opts in future for specifying logger format etc
 	for _, o := range opts {
 		if err := o(toLog); err != nil {
@@ -72,13 +72,13 @@ func NewToLog(vertex *dfv1.Vertex,
 	}
 
 	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(toLog.logger)}
-	if x := vertex.Spec.Limits; x != nil {
+	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
 
-	isdf, err := sinkforward.NewDataForward(vertex, fromBuffer, toLog, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
+	isdf, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, toLog, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}
