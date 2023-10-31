@@ -64,14 +64,7 @@ func (h *noAuthHandler) Logout(c *gin.Context) {
 		if !strings.HasPrefix(cookie.Name, common.UserIdentityCookieName) {
 			continue
 		}
-
-		numaflowCookie := http.Cookie{
-			Name:  cookie.Name,
-			Value: "",
-		}
-
-		numaflowCookie.Path = fmt.Sprintf("/%s", strings.TrimRight(strings.TrimLeft(h.dexObj.baseHref, "/"), "/"))
-		c.Writer.Header().Add("Set-Cookie", numaflowCookie.String())
+		c.SetCookie(cookie.Name, "", -1, "/", "", true, true)
 	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
