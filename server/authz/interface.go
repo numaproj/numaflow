@@ -14,7 +14,10 @@ type Authorizer interface {
 	// scope is the scope of the authorization.
 	// Authorize trusts that the user is already authenticated and directly uses the groups to authorize the user.
 	// please don't use gin to get the user information again.
-	Authorize(c *gin.Context, userIdentityToken *authn.UserInfo, scope string) bool
+	// Authorize returns true if the user is authorized, otherwise false.
+	// Authorize also returns the policy count of the user. The policy count is used to check if there are any policies
+	// defined for the given user, if not we will allocate a default policy for the user.
+	Authorize(c *gin.Context, userIdentityToken *authn.UserInfo, scope string) (bool, int)
 	// GetConfig returns the config file of the authorizer. We use a config file to store the policy params
 	// so that we can change the policy without restarting the server. The config file is in the format of yaml.
 	// The config file is read by viper.

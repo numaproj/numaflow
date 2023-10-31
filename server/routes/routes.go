@@ -70,6 +70,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		configReader.OnConfigChange(func(in fsnotify.Event) {
 			authz.ConfigFileReload(in, authorizer)
 		})
+
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(authorizer, dexObj))
 	}
@@ -169,13 +170,27 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			logger.Infow("Requested scopes for Auth", "scopes", scopes)
 			// Check if the user is authorized to execute the requested action.
 			isAuthorized := false
+			policyCount := 0
+			cnt := 0
 			for _, scope := range scopes {
-				isAuthorized = authorizer.Authorize(c, userInfo, scope)
+				isAuthorized, cnt = authorizer.Authorize(c, userInfo, scope)
+				policyCount += cnt
 				if isAuthorized {
 					// If the user is authorized, continue the request.
 					c.Next()
 					return
 				}
+			}
+			// If the user does not have any policy defined, allocate a default policy for the user.
+			if policyCount == 0 {
+				logger.Infow("No policy defined for the user, allocating default policy")
+				isAuthorized, _ = authorizer.Authorize(c, userInfo, authz.ScopeDefault)
+				if isAuthorized {
+					// If the user is authorized, continue the request.
+					c.Next()
+					return
+				}
+
 			}
 			// If the user is not authorized, return an error.
 			if !isAuthorized {
