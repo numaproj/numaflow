@@ -19,30 +19,37 @@ export function SummaryTitledValue({
     <Box
       sx={{
         display: "flex",
-        flexDirection: "column",
+        flexDirection: "row",
         alignItems: "center",
         flexGrow: 1,
         justifyContent: "center",
       }}
     >
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          flexGrow: 1,
+          paddingLeft: "1rem"
+        }}
+      >
+        <span className="summary-titled-value-title">{title}</span>
+        <span className="summary-titled-value-value">{value}</span>
+      </Box>
       {tooltip && (
         <Box
           sx={{
             display: "flex",
             flexDirection: "row",
             alignItems: "right",
-            width: "100%",
+            height: "100%",
             justifyContent: "flex-end",
-            paddingRight: "0.2rem",
-            marginBottom: "-1rem",
             marginRight: "1rem",
           }}
         >
           <Help tooltip={tooltip} />
         </Box>
       )}
-      <span className="summary-titled-value-title">{title}</span>
-      <span className="summary-titled-value-value">{value}</span>
     </Box>
   );
 }

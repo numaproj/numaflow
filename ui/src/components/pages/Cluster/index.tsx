@@ -11,7 +11,11 @@ import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { useClusterSummaryFetch } from "../../../utils/fetchWrappers/clusterSummaryFetch";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
-import {ISB_SERVICES_STATUS_TOOLTIP, ISB_SERVICES_TOOLTIP, PIPELINE_STATUS_TOOLTIP} from "../../../utils";
+import {
+  ISB_SERVICES_STATUS_TOOLTIP,
+  ISB_SERVICES_TOOLTIP,
+  PIPELINE_STATUS_TOOLTIP,
+} from "../../../utils";
 
 import "./style.css";
 
@@ -76,7 +80,7 @@ export function Cluster() {
               healthy: data.pipelinesHealthyCount,
               warning: data.pipelinesWarningCount,
               critical: data.pipelinesCriticalCount,
-              tooltip: PIPELINE_STATUS_TOOLTIP
+              tooltip: PIPELINE_STATUS_TOOLTIP,
             },
           },
         ],
@@ -90,7 +94,7 @@ export function Cluster() {
             titledValueProps: {
               title: "ISB SERVICES",
               value: data.isbsCount,
-              tooltip: ISB_SERVICES_TOOLTIP
+              tooltip: ISB_SERVICES_TOOLTIP,
             },
           },
           {
@@ -102,7 +106,7 @@ export function Cluster() {
               healthy: data.isbsHealthyCount,
               warning: data.isbsWarningCount,
               critical: data.isbsCriticalCount,
-              tooltip: ISB_SERVICES_STATUS_TOOLTIP
+              tooltip: ISB_SERVICES_STATUS_TOOLTIP,
             },
           },
         ],

@@ -13,9 +13,8 @@ export function PipelineISBSummaryStatus({ isbData }) {
         display: "flex",
         flexDirection: "column",
         marginTop: "0.375rem",
-        alignItems: "center",
         flexGrow: 1,
-        justifyContent: "center",
+        paddingLeft: "1rem"
       }}
     >
       <Box sx={{ display: "flex", flexDirection: "row" }}>

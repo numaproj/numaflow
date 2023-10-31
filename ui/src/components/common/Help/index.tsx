@@ -1,8 +1,8 @@
 import HelpIcon from "@mui/icons-material/Help";
-import Tooltip from "@mui/material/Tooltip";
+import { HTMLlTooltip } from "../../../utils";
 export const Help = ({ tooltip }) => {
   return (
-    <Tooltip title={tooltip} arrow>
+    <HTMLlTooltip title={tooltip} arrow>
       <HelpIcon
         sx={{
           fontSize: 14,
@@ -10,6 +10,6 @@ export const Help = ({ tooltip }) => {
           color: "#b2b2b2",
         }}
       />
-    </Tooltip>
+    </HTMLlTooltip>
   );
 };

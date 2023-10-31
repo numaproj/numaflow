@@ -1,3 +1,4 @@
+import React from "react";
 import { Pod, PodDetail, ResourceUsage } from "../types/declarations/pods";
 import circleCheck from "../../src/images/checkmark-circle.png";
 import circleDash from "../../src/images/circle-dash.png";
@@ -6,6 +7,8 @@ import warning from "../../src/images/warning-circle.png";
 import critical from "../../src/images/critical.png";
 import moment from "moment";
 import { IsbServiceSpec } from "../types/declarations/pipeline";
+import { styled } from "@mui/material/styles";
+import Tooltip, { tooltipClasses, TooltipProps } from "@mui/material/Tooltip";
 
 // global constants
 export const ALL = "All";
@@ -344,10 +347,36 @@ export const timeAgo = (timestamp: string) => {
   return time;
 };
 
-export const PIPELINE_STATUS_TOOLTIP = "Pipeline health is determined by backpressure. Active pipelines are running, while non-active pipelines are failed, pausing, paused, or deleting."
-export const ISB_SERVICES_TOOLTIP = "Inter State Buffer Services are used to transfer data between vertices in a pipeline.";
-export const ISB_SERVICES_STATUS_TOOLTIP = "The health of ISB Services is determined by processing requests. Active ISB Services are currently running, while non-active ISB Services are either failed or pending."
-export const MAX_LAG_TOOLTIP = "Max lag is the longest delay between the most recent watermark processed and the current time."
-export const ERRORS_TOOLTIP = "Errors that occur when attempting to retrieve data";
+export const PIPELINE_STATUS_TOOLTIP =
+  "Pipeline health is determined by backpressure. Active pipelines are running, while non-active pipelines are failed, pausing, paused, or deleting.";
+export const ISB_SERVICES_TOOLTIP =
+  "Inter State Buffer Services are used to transfer data between vertices in a pipeline.";
+export const ISB_SERVICES_STATUS_TOOLTIP = (
+  <React.Fragment>
+    <>
+      <b>Healthy:</b>&nbsp; The ISB service is operating optimally. No issues or
+      anomalies detected.
+      <hr />
+      <b>Warning:</b>&nbsp; The ISB service is experiencing minor issues or
+      degradation within the data processing pipeline. Consider monitoring and
+      further investigation.
+      <hr />
+      <b>Critical:</b>&nbsp; The ISB service is in a critical state. Immediate
+      attention required.
+    </>
+  </React.Fragment>
+);
+export const MAX_LAG_TOOLTIP =
+  "Max lag is the amount of time between the oldest and newest data that is being processed on.";
+export const ERRORS_TOOLTIP =
+  "Errors that occur when attempting to retrieve data";
 // export const PIPELINES_TOOLTIP = "Pipelines list"
 // export const ISB_TOOLTIP = "Inter State Buffer services list"
+
+export const HTMLlTooltip = styled(({ className, ...props }: TooltipProps) => (
+  <Tooltip {...props} classes={{ popper: className }} />
+))(() => ({
+  [`& .${tooltipClasses.tooltip}`]: {
+    fontSize: 14,
+  },
+}));

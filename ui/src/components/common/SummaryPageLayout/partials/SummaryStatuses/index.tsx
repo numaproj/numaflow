@@ -36,30 +36,21 @@ export function SummaryStatuses({
     <Box
       sx={{
         display: "flex",
-        flexDirection: "column",
-        marginTop: "0.375rem",
+        flexDirection: "row",
         alignItems: "center",
         flexGrow: 1,
         justifyContent: "center",
       }}
     >
-      {tooltip && (
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "right",
-            width: "100%",
-            justifyContent: "flex-end",
-            paddingRight: "0.2rem",
-            marginBottom: "-1rem",
-            marginRight: "1rem",
-          }}
-        >
-          <Help tooltip={tooltip} />
-        </Box>
-      )}
-      <Box sx={{ width: "fit-content" }}>
+      <Box
+        sx={{
+          width: "fit-content",
+          flexGrow: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingLeft: "1rem",
+        }}
+      >
         <span className="summary-statuses-title">{title}</span>
         <Box
           sx={{ display: "flex", flexDirection: "row", marginTop: "0.3125rem" }}
@@ -125,6 +116,21 @@ export function SummaryStatuses({
           )}
         </Box>
       </Box>
+      {tooltip && (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "right",
+            justifyContent: "flex-end",
+            paddingRight: "0.2rem",
+            marginRight: "1rem",
+            height: "100%"
+          }}
+        >
+          <Help tooltip={tooltip} />
+        </Box>
+      )}
     </Box>
   );
 }
