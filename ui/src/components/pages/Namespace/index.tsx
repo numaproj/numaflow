@@ -14,6 +14,10 @@ import { SidebarType } from "../../common/SlidingSidebar";
 import { NamespacePipelineListing } from "./partials/NamespacePipelineListing";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { NamespaceSummaryData } from "../../../types/declarations/namespace";
+import {
+  ISB_SERVICES_STATUS_TOOLTIP, ISB_SERVICES_TOOLTIP,
+  PIPELINE_STATUS_TOOLTIP,
+} from "../../../utils";
 
 import "./style.css";
 
@@ -100,6 +104,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: 0,
               warning: 0,
               critical: 0,
+              tooltip: PIPELINE_STATUS_TOOLTIP,
             },
           },
         ],
@@ -113,6 +118,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
             titledValueProps: {
               title: "ISB SERVICES",
               value: 0,
+              tooltip: ISB_SERVICES_TOOLTIP
             },
           },
           {
@@ -124,6 +130,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: 0,
               warning: 0,
               critical: 0,
+              tooltip: ISB_SERVICES_STATUS_TOOLTIP,
             },
           },
         ],
@@ -186,6 +193,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: data.pipelinesHealthyCount,
               warning: data.pipelinesWarningCount,
               critical: data.pipelinesCriticalCount,
+              tooltip: PIPELINE_STATUS_TOOLTIP,
             },
           },
         ],
@@ -199,6 +207,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
             titledValueProps: {
               title: "ISB SERVICES",
               value: data.isbsCount,
+              tooltip: ISB_SERVICES_TOOLTIP
             },
           },
           {
@@ -210,6 +219,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: data.isbsHealthyCount,
               warning: data.isbsWarningCount,
               critical: data.isbsCriticalCount,
+              tooltip: ISB_SERVICES_STATUS_TOOLTIP,
             },
           },
         ],
