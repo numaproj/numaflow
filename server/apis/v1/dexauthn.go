@@ -104,20 +104,17 @@ func (d *DexObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
 	var userInfo authn.UserInfo
 	cookies := c.Request.Cookies()
 	fmt.Println("Authenticate : Cookies from request:", cookies)
-	tokenString, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
+	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve user identity token: %v", err)
 	}
-	if tokenString == "" {
+	if userIdentityTokenStr == "" {
 		return nil, fmt.Errorf("failed to retrieve user identity token: empty token")
 	}
-	if err = json.Unmarshal([]byte(tokenString), &userInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse user identity token: %v", err)
+	if err = json.Unmarshal([]byte(userIdentityTokenStr), userInfo); err != nil {
+		return nil, fmt.Errorf("user is not authenticated, err: %s", err.Error())
 	}
-	_, err = d.verify(c, userInfo.IDToken)
-	if err != nil {
-		return nil, err
-	}
+	userInfo = authn.NewUserInfo(userInfo.IDTokenClaims, userInfo.IDToken, userInfo.RefreshToken)
 	return &userInfo, nil
 }
 
@@ -260,7 +257,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 	for _, cookie := range cookies {
 		c.SetCookie(cookie.Key, cookie.Value, common.StateCookieMaxAge, "/", "", true, true)
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, claims))
 }
 
 // generateRandomNumber is for generating state nonce. This piece of code was obtained without much change from the argo-cd repository.

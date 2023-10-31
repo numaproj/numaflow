@@ -87,12 +87,21 @@ func NewHandler() (*handler, error) {
 
 // AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
-	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
+
+	cookies := c.Request.Cookies()
+	fmt.Println("Authenticate : Cookies from request:", cookies)
+	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
 		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
+	if userIdentityTokenStr == "" {
+		errMsg := "user is not authenticated, err: empty Token"
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	userInfo := &authn.UserInfo{}
 	if err = json.Unmarshal([]byte(userIdentityTokenStr), userInfo); err != nil {
 		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
