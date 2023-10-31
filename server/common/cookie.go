@@ -18,7 +18,7 @@ const (
 func MakeCookieMetadata(key, value string, flags ...string) ([]string, error) {
 	attributes := strings.Join(flags, "; ")
 
-	// cookie: name=value; attributes and key: key-(i) e.g. argocd.token-1
+	// cookie: name=value; attributes and key: key-(i) e.g. numaflow.token-1
 	maxValueLength := maxCookieValueLength(key, attributes)
 	numberOfCookies := int(math.Ceil(float64(len(value)) / float64(maxValueLength)))
 	if numberOfCookies > maxCookieNumber {
@@ -30,11 +30,11 @@ func MakeCookieMetadata(key, value string, flags ...string) ([]string, error) {
 
 // browser has limit on size of cookie, currently 4kb. In order to
 // support cookies longer than 4kb, we split cookie into multiple 4kb chunks.
-// first chunk will be of format argocd.token=<numberOfChunks>:token; attributes
+// first chunk will be of format numaflow.token=<numberOfChunks>:token; attributes
 func splitCookie(key, value, attributes string) []string {
 	var cookies []string
 	valueLength := len(value)
-	// cookie: name=value; attributes and key: key-(i) e.g. argocd.token-1
+	// cookie: name=value; attributes and key: key-(i) e.g. numaflow.token-1
 	maxValueLength := maxCookieValueLength(key, attributes)
 	numberOfChunks := int(math.Ceil(float64(valueLength) / float64(maxValueLength)))
 
@@ -63,7 +63,7 @@ func splitCookie(key, value, attributes string) []string {
 
 // JoinCookies combines chunks of cookie based on key as prefix. It returns cookie
 // value as string. cookieString is of format key1=value1; key2=value2; key3=value3
-// first chunk will be of format argocd.token=<numberOfChunks>:token; attributes
+// first chunk will be of format numaflow.token=<numberOfChunks>:token; attributes
 func JoinCookies(key string, cookieList []*http.Cookie) (string, error) {
 	cookies := make(map[string]string)
 	for _, cookie := range cookieList {

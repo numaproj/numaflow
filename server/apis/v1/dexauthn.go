@@ -264,6 +264,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 	flags := []string{cookiePath, "SameSite=lax", "httpOnly"}
 	cookies, err := common.MakeCookieMetadata(common.UserIdentityCookieName, string(tokenStr), flags...)
 	for _, cookie := range cookies {
+		fmt.Println(cookie)
 		c.Writer.Header().Add("Set-Cookie", cookie)
 	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))

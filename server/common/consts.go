@@ -20,6 +20,6 @@ const (
 	AppClientID              = "numaflow-server-app"
 	StateCookieName          = "numaflow-oauthstate"
 	StateCookieMaxAge        = 60 * 5
-	UserIdentityCookieName   = "numaflow-token"
+	UserIdentityCookieName   = "numaflow.token"
 	UserIdentityCookieMaxAge = 60 * 60
 )
