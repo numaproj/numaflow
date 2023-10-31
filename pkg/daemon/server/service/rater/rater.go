@@ -37,6 +37,8 @@ type Ratable interface {
 	GetRates(vertexName, partitionName string) map[string]float64
 }
 
+var _ Ratable = (*Rater)(nil)
+
 // CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
 // e.g., if the current time is 12:00:07,
 // the retrieved count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
