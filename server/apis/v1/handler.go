@@ -732,38 +732,46 @@ func (h *handler) streamLogs(c *gin.Context, stream io.ReadCloser) {
 }
 
 // GetNamespaceEvents gets a list of events for the given namespace.
+// It supports filtering by object type and object name.
+// If objectType and objectName are specified in the request, only the events that match both will be returned.
+// If objectType and objectName are not specified, all the events for the given name space will be returned.
+// Events are sorted by timestamp in descending order.
 func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	ns := c.Param("namespace")
-
+	objType := c.DefaultQuery("objectType", "")
+	objName := c.DefaultQuery("objectName", "")
+	if (objType == "" && objName != "") || (objType != "" && objName == "") {
+		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: "+
+			"please either specify both objectType and objectName or not specify.", ns))
+		return
+	}
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	events, err := h.kubeClient.CoreV1().Events(ns).List(context.Background(), metav1.ListOptions{
+	var err error
+	var events *corev1.EventList
+	if events, err = h.kubeClient.CoreV1().Events(ns).List(context.Background(), metav1.ListOptions{
 		Limit:    limit,
 		Continue: c.Query("continue"),
-	})
-	if err != nil {
+	}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: %s", ns, err.Error()))
 		return
 	}
-
 	var (
 		response          []K8sEventsResponse
 		defaultTimeObject time.Time
 	)
-
 	for _, event := range events.Items {
 		if event.LastTimestamp.Time == defaultTimeObject {
 			continue
 		}
-		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
-		response = append(response, newEvent)
+		if (objType == "" && objName == "") ||
+			(strings.EqualFold(event.InvolvedObject.Kind, objType) && strings.EqualFold(event.InvolvedObject.Name, objName)) {
+			newEvent := NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+			response = append(response, newEvent)
+		}
 	}
-
-	// sort the events by timestamp
-	// from most recent events to older events
 	sort.Slice(response, func(i int, j int) bool {
 		return response[i].TimeStamp >= response[j].TimeStamp
 	})
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 

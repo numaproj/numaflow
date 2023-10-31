@@ -92,7 +92,18 @@ This should generate an output like the sample below:
 2022/08/25 23:59:39 (out) {"Data":"jk4nN/a7Dhc=","Createdts":1661471978707963534}
 ```
 
-Numaflow also comes with a built-in user interface. To port forward the UI, run the following command.
+
+Numaflow also comes with a built-in user interface.
+
+**NOTE**: Please install the metrics server if your local Kubernetes cluster does not bring it by default (e.g., Kind). 
+You can install it by running the below command.
+
+```shell
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 
+kubectl patch -n kube-system deployment metrics-server --type=json -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+```
+
+To port forward the UI, run the following command.
 
 ```shell
 # Port forward the UI to https://localhost:8443/
