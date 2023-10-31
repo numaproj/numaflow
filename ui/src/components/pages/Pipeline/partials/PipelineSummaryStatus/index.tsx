@@ -4,7 +4,11 @@ import { useParams } from "react-router-dom";
 import { SidebarType } from "../../../../common/SlidingSidebar";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
-import { DurationString } from "../../../../../utils";
+import {
+  DurationString,
+  HTMLlTooltip,
+  MAX_LAG_TOOLTIP,
+} from "../../../../../utils";
 import { ViewType } from "../../../../common/SpecEditor";
 
 import "./style.css";
@@ -51,9 +55,8 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
         display: "flex",
         flexDirection: "column",
         marginTop: "0.375rem",
-        alignItems: "center",
         flexGrow: 1,
-        justifyContent: "center",
+        paddingLeft: "1rem"
       }}
     >
       <Box sx={{ width: "fit-content" }}>
@@ -102,18 +105,24 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
             sx={{
               display: "flex",
               flexDirection: "column",
-              width: "12rem"
+              width: "12rem",
             }}
           >
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
-                <div>
-                  <span className="pipeline-summary-subtitle">Max lag:</span>
-                  <span className="pipeline-summary-text">
-                    {" "}
-                    {DurationString(lag)}
-                  </span>
-                </div>
+                <HTMLlTooltip
+                  title={MAX_LAG_TOOLTIP}
+                  placement="top-start"
+                  arrow
+                >
+                  <div>
+                    <span className="pipeline-summary-subtitle">Max lag:</span>
+                    <span className="pipeline-summary-text">
+                      {" "}
+                      {lag < 0 ? "Unavailable now" : DurationString(lag)}
+                    </span>
+                  </div>
+                </HTMLlTooltip>
               </span>
             </div>
             <div className="pipeline-summary-text">
@@ -121,6 +130,7 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
                 <div
                   className="pipeline-onclick-events"
                   onClick={handleSpecClick}
+                  data-testid="pipeline-spec-click"
                 >
                   View/Edit Specs
                 </div>
