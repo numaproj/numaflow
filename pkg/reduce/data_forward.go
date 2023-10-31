@@ -287,7 +287,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID parti
 		}
 		pbqErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func() (done bool, err error) {
 			var attempt int
-			q, pbqErr = df.pbqManager.CreateNewPBQ(ctx, partitionID, kw)
+			q, pbqErr = df.pbqManager.CreateNewPBQ(ctx, partitionID)
 			if pbqErr != nil {
 				attempt += 1
 				df.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.String("partitionID", partitionID.String()), zap.Error(pbqErr))
