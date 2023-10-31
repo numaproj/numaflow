@@ -11,30 +11,51 @@ import Pagination from "@mui/material/Pagination";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import ToggleButton from "@mui/material/ToggleButton";
 import CircularProgress from "@mui/material/CircularProgress";
+import Select, { SelectChangeEvent } from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 import { K8sEvent } from "../../../../../types/declarations/namespace";
+import { ErrorDisplay } from "../../../ErrorDisplay";
 import { useNamespaceK8sEventsFetch } from "../../../../../utils/fetchWrappers/namespaceK8sEventsFetch";
 
 import "./style.css";
 
 const MAX_PAGE_SIZE = 6;
+const DEFAULT_FILTER_VALUE = "All";
 
 export interface K8sEventsProps {
   namespaceId: string;
+  pipelineId?: string;
+  vertexId?: string;
+  headerText?: string;
   excludeHeader?: boolean;
   square?: boolean;
+  pipelineFilterOptions?: string[];
+  vertexFilterOptions?: Map<string, string[]>;
 }
 
 export function K8sEvents({
   namespaceId,
+  pipelineId,
+  vertexId,
+  headerText = "Namespace K8s Events",
   excludeHeader = false,
   square = false,
+  pipelineFilterOptions = [],
+  vertexFilterOptions = new Map<string, string[]>(),
 }: K8sEventsProps) {
+  const [selectedPipeline, setSelectedPipeline] =
+    useState<string>(DEFAULT_FILTER_VALUE);
+  const [selectedVertex, setSelectedVertex] =
+    useState<string>(DEFAULT_FILTER_VALUE);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
-  const [filteredEvents, setFilteredEvents] = React.useState<K8sEvent[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<K8sEvent[]>([]);
   const { data, loading, error } = useNamespaceK8sEventsFetch({
     namespace: namespaceId,
+    pipeline:
+      selectedPipeline === DEFAULT_FILTER_VALUE ? pipelineId : selectedPipeline,
+    vertex: selectedVertex === DEFAULT_FILTER_VALUE ? vertexId : selectedVertex,
   });
 
   // Update filtered events based on page selected and filter
@@ -85,11 +106,22 @@ export function K8sEvents({
     []
   );
 
-  const typeCounts = useMemo(() => {
-    if (!data) {
-      return undefined;
-    }
+  const handlePipelineFilterChange = useCallback(
+    (e: SelectChangeEvent<string>) => {
+      setSelectedPipeline(e.target.value);
+      setSelectedVertex(DEFAULT_FILTER_VALUE);
+    },
+    []
+  );
 
+  const handleVertexFilterChange = useCallback(
+    (e: SelectChangeEvent<string>) => {
+      setSelectedVertex(e.target.value);
+    },
+    []
+  );
+
+  const typeCounts = useMemo(() => {
     return (
       <ToggleButtonGroup
         value={typeFilter}
@@ -110,7 +142,7 @@ export function K8sEvents({
           >
             <span className="namespace-k8s-type-count-text">Normal</span>
             <div className="namespace-k8s-type-count-badge normal">
-              {data.normalCount}
+              {data?.normalCount || 0}
             </div>
           </Box>
         </ToggleButton>
@@ -128,7 +160,7 @@ export function K8sEvents({
           >
             <span className="namespace-k8s-type-count-text">Warning</span>
             <div className="namespace-k8s-type-count-badge warn">
-              {data.warningCount}
+              {data?.warningCount || 0}
             </div>
           </Box>
         </ToggleButton>
@@ -137,8 +169,38 @@ export function K8sEvents({
   }, [data, typeFilter, handleTypeFilterChange]);
 
   const table = useMemo(() => {
-    if (!data) {
-      return <Box>No Events</Box>;
+    if (loading) {
+      return (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100%",
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      );
+    }
+    if (error) {
+      return (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            width: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <ErrorDisplay
+            title="Error loading events"
+            message={error}
+          />
+        </Box>
+      );
     }
     return (
       <Box
@@ -199,7 +261,178 @@ export function K8sEvents({
         </Box>
       </Box>
     );
-  }, [data, page, totalPages, filteredEvents, handlePageChange]);
+  }, [
+    error,
+    loading,
+    data,
+    page,
+    totalPages,
+    filteredEvents,
+    handlePageChange,
+  ]);
+
+  const filters = useMemo(() => {
+    const selectContainerStyle = {
+      display: "flex",
+      flexDirection: "column",
+      marginRight: "0.5rem",
+    };
+    const selectStyle = {
+      background: "#fff",
+      border: "1px solid #6B6C72",
+      height: "2.125rem",
+    };
+    if (vertexId) {
+      // Given vertex, no filters
+      return undefined;
+    }
+    if (pipelineId) {
+      // Pipeline given
+      if (
+        !vertexFilterOptions.has(pipelineId) ||
+        !vertexFilterOptions.get(pipelineId)?.length
+      ) {
+        // No vertex options
+        return undefined;
+      }
+      // Vertex options available
+      return (
+        <Box sx={selectContainerStyle}>
+          <label style={{ color: "#6B6C72" }}>Vertex</label>
+          <Select
+            label="Vertex"
+            defaultValue={DEFAULT_FILTER_VALUE}
+            value={selectedVertex}
+            inputProps={{
+              name: "Vertex",
+              id: "Vertex",
+            }}
+            style={selectStyle}
+            onChange={handleVertexFilterChange}
+          >
+            {(vertexFilterOptions.has(pipelineId)
+              ? [
+                  DEFAULT_FILTER_VALUE,
+                  ...(vertexFilterOptions.get(pipelineId) || []),
+                ]
+              : [DEFAULT_FILTER_VALUE]
+            ).map((pipeline) => (
+              <MenuItem key={pipeline} value={pipeline}>
+                {pipeline}
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+      );
+    }
+    // No pipeline given
+    if (!pipelineFilterOptions.length) {
+      // No filter options
+      return undefined;
+    }
+    if (
+      !selectedPipeline ||
+      !vertexFilterOptions.has(selectedPipeline) ||
+      !vertexFilterOptions.get(selectedPipeline)?.length
+    ) {
+      // No pipeline selected or one selected and no vertex options, just show pipeline selector
+      return (
+        <Box sx={selectContainerStyle}>
+          <label style={{ color: "#6B6C72" }}>Pipeline</label>
+          <Select
+            label="Pipeline"
+            defaultValue={DEFAULT_FILTER_VALUE}
+            value={selectedPipeline}
+            inputProps={{
+              name: "Pipeline",
+              id: "Pipeline",
+            }}
+            style={selectStyle}
+            onChange={handlePipelineFilterChange}
+          >
+            {[DEFAULT_FILTER_VALUE, ...pipelineFilterOptions].map(
+              (pipeline) => (
+                <MenuItem key={pipeline} value={pipeline}>
+                  {pipeline}
+                </MenuItem>
+              )
+            )}
+          </Select>
+        </Box>
+      );
+    }
+    // Pipeline selected and vertex options available
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+        }}
+      >
+        <Box sx={selectContainerStyle}>
+          <label style={{ color: "#6B6C72" }}>Pipeline</label>
+          <Select
+            label="Pipeline"
+            defaultValue={DEFAULT_FILTER_VALUE}
+            value={selectedPipeline}
+            inputProps={{
+              name: "Pipeline",
+              id: "Pipeline",
+            }}
+            style={selectStyle}
+            onChange={handlePipelineFilterChange}
+          >
+            {[DEFAULT_FILTER_VALUE, ...pipelineFilterOptions].map(
+              (pipeline) => (
+                <MenuItem key={pipeline} value={pipeline}>
+                  {pipeline}
+                </MenuItem>
+              )
+            )}
+          </Select>
+        </Box>
+        <Box sx={selectContainerStyle}>
+          <label style={{ color: "#6B6C72" }}>Vertex</label>
+          <Select
+            label="Vertex"
+            defaultValue={DEFAULT_FILTER_VALUE}
+            value={selectedVertex}
+            inputProps={{
+              name: "Vertex",
+              id: "Vertex",
+            }}
+            style={selectStyle}
+            onChange={handleVertexFilterChange}
+          >
+            {(vertexFilterOptions.has(selectedPipeline)
+              ? [
+                  DEFAULT_FILTER_VALUE,
+                  ...(vertexFilterOptions.get(selectedPipeline) || []),
+                ]
+              : [DEFAULT_FILTER_VALUE]
+            ).map((pipeline) => (
+              <MenuItem key={pipeline} value={pipeline}>
+                {pipeline}
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+      </Box>
+    );
+  }, [
+    vertexId,
+    pipelineId,
+    pipelineFilterOptions,
+    vertexFilterOptions,
+    selectedPipeline,
+    selectedVertex,
+    handlePipelineFilterChange,
+    handleVertexFilterChange,
+  ]);
+
+  if (vertexId && !pipelineId) {
+    return <Box>Missing Props</Box>;
+  }
 
   return (
     <Box
@@ -210,7 +443,7 @@ export function K8sEvents({
       }}
     >
       {!excludeHeader && (
-        <span className="namespace-k8s-title">K8s Events</span>
+        <span className="namespace-k8s-title">{headerText}</span>
       )}
       <Paper
         sx={{
@@ -218,19 +451,15 @@ export function K8sEvents({
           flexDirection: "column",
           padding: "1rem",
           marginTop: excludeHeader ? "0" : "2rem",
+          height: "100%",
         }}
         square={square}
         elevation={0}
       >
-        {loading && (
-          <Box sx={{ display: "flex", justifyContent: "center" }}>
-            <CircularProgress />
-          </Box>
-        )}
-        {error && (
-          <span className="namespace-k8s-error">{`Error loading events: ${error}`}</span>
-        )}
-        {typeCounts}
+        <Box sx={{ display: "flex", flexDirection: "row" }}>
+          {filters}
+          {typeCounts}
+        </Box>
         {table}
       </Paper>
     </Box>
