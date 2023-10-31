@@ -30,10 +30,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// PodInfoSeparator is used as a separator such that the worker can split the pod key
+// podInfoSeparator is used as a separator such that the worker can split the pod key
 // to get the pipeline name, vertex name, pod index and vertex type.
 // "*" is chosen because it is not allowed in all the above fields.
-const PodInfoSeparator = "*"
+const podInfoSeparator = "*"
 
 // PodTracker maintains a set of active pods for a pipeline
 // It periodically sends http requests to pods to check if they are still active
@@ -131,9 +131,28 @@ func (pt *PodTracker) GetActivePodsCount() int {
 	return pt.activePods.Length()
 }
 
+// PodInfo represents the information of a pod that is used for tracking the processing rate
+type PodInfo struct {
+	pipelineName string
+	vertexName   string
+	podName      string
+}
+
+func (pt *PodTracker) GetPodInfo(key string) (*PodInfo, error) {
+	podInfo := strings.Split(key, podInfoSeparator)
+	if len(podInfo) != 3 {
+		return nil, fmt.Errorf("invalid key %q", key)
+	}
+	return &PodInfo{
+		pipelineName: podInfo[0],
+		vertexName:   podInfo[1],
+		podName:      strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-"),
+	}, nil
+}
+
 func (pt *PodTracker) getPodKey(index int, vertexName string) string {
 	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
-	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index)}, PodInfoSeparator)
+	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index)}, podInfoSeparator)
 }
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {

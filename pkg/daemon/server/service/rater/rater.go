@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/prometheus/common/expfmt"
@@ -133,24 +132,22 @@ func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
 func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error {
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
-	podInfo := strings.Split(key, PodInfoSeparator)
-	if len(podInfo) != 3 {
-		return fmt.Errorf("invalid key %q", key)
+	podInfo, err := r.podTracker.GetPodInfo(key)
+	if err != nil {
+		return err
 	}
-	vertexName := podInfo[1]
-	podName := strings.Join([]string{podInfo[0], podInfo[1], podInfo[2]}, "-")
 	var podReadCount *PodReadCount
 	if r.podTracker.IsActive(key) {
-		podReadCount = r.getPodReadCounts(vertexName, podName)
+		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName)
 		if podReadCount == nil {
-			log.Debugf("Failed retrieving total podReadCount for pod %s", podName)
+			log.Debugf("Failed retrieving total podReadCount for pod %s", podInfo.podName)
 		}
 	} else {
-		log.Debugf("Pod %s does not exist, updating it with nil...", podName)
+		log.Debugf("Pod %s does not exist, updating it with nil...", podInfo.podName)
 		podReadCount = nil
 	}
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
-	UpdateCount(r.timestampedPodCounts[vertexName], now, podReadCount)
+	UpdateCount(r.timestampedPodCounts[podInfo.vertexName], now, podReadCount)
 	return nil
 }
 
