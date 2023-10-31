@@ -182,24 +182,9 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 	// since we still want to pass these empty namespaces to the frontend, we add them here.
 	for _, ns := range namespaces {
 		if _, ok := namespaceSummaryMap[ns]; !ok {
-			namespaceSummaryMap[ns] = namespaceSummary{
-				pipelineSummary: PipelineSummary{
-					Active: ActiveStatus{
-						Healthy:  0,
-						Warning:  0,
-						Critical: 0,
-					},
-					Inactive: 0,
-				},
-				isbsvcSummary: IsbServiceSummary{
-					Active: ActiveStatus{
-						Healthy:  0,
-						Warning:  0,
-						Critical: 0,
-					},
-					Inactive: 0,
-				},
-			}
+			// if the namespace is not in the namespaceSummaryMap, it means it has neither pipeline nor isbsvc
+			// taking advantage of golang by default initializing the struct with zero value
+			namespaceSummaryMap[ns] = namespaceSummary{}
 		}
 	}
 	for name, summary := range namespaceSummaryMap {
