@@ -30,8 +30,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// podInfoSeparator is used as a separator such that the worker can split the pod key
-// to get the pipeline name, vertex name, pod index and vertex type.
+// podInfoSeparator is used as a separator to split the pod key
+// to get the pipeline name, vertex name, and pod index.
 // "*" is chosen because it is not allowed in all the above fields.
 const podInfoSeparator = "*"
 
