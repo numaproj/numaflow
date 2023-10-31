@@ -284,7 +284,13 @@ export function VertexDetails({
         hidden={tabValue !== K8S_EVENTS_TAB_INDEX}
       >
         {tabValue === K8S_EVENTS_TAB_INDEX && (
-          <K8sEvents namespaceId={namespaceId} excludeHeader square />
+          <K8sEvents
+            namespaceId={namespaceId}
+            pipelineId={pipelineId}
+            vertexId={vertexId}
+            excludeHeader
+            square
+          />
         )}
       </div>
       {buffers && (

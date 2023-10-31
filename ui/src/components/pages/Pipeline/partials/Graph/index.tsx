@@ -174,10 +174,22 @@ const Flow = (props: FlowProps) => {
     undefined
   );
   const [statusPayload, setStatusPayload] = useState<any>(undefined);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
-  const [timer, setTimer] = useState<any>(undefined);
+  const [timer, setTimer] = useState<number | undefined>(undefined);
 
+  const handleTimer = useCallback(() => {
+    if (timer) {
+      clearInterval(timer);
+    }
+    const dateString = new Date().toISOString();
+    const time = timeAgo(dateString);
+    setTimerDateStamp(time);
+    const pauseTimer = setInterval(() => {
+      const time = timeAgo(dateString);
+      setTimerDateStamp(time);
+    }, 1000);
+    setTimer(pauseTimer);
+  }, [timer]);
   const handlePlayClick = useCallback(() => {
     handleTimer();
     setStatusPayload({
@@ -187,7 +199,7 @@ const Flow = (props: FlowProps) => {
         },
       },
     });
-  }, []);
+  }, [handleTimer]);
 
   const handlePauseClick = useCallback(() => {
     handleTimer();
@@ -198,18 +210,7 @@ const Flow = (props: FlowProps) => {
         },
       },
     });
-  }, []);
-
-  const handleTimer = useCallback(() => {
-    const dateString = new Date().toISOString();
-    const time = timeAgo(dateString);
-    setTimerDateStamp(time);
-    const pauseTimer = setInterval(() => {
-      const time = timeAgo(dateString);
-      setTimerDateStamp(time);
-    }, 1000);
-    setTimer(pauseTimer);
-  }, []);
+  }, [handleTimer]);
 
   useEffect(() => {
     const patchStatus = async () => {
@@ -245,14 +246,12 @@ const Flow = (props: FlowProps) => {
       statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
       data?.pipeline?.status?.phase === PAUSED
     ) {
-      clearInterval(timer);
       setStatusPayload(undefined);
     }
     if (
       statusPayload?.spec?.lifecycle?.desiredPhase === RUNNING &&
       data?.pipeline?.status?.phase === RUNNING
     ) {
-      clearInterval(timer);
       setStatusPayload(undefined);
     }
   }, [data]);
@@ -283,7 +282,8 @@ const Flow = (props: FlowProps) => {
       preventScrolling={!isLocked}
       panOnDrag={!isLocked}
       panOnScroll={isPanOnScrollLocked}
-      maxZoom={2.75}
+      minZoom={0.1}
+      maxZoom={3.1}
     >
       <Panel
         position="top-left"
@@ -440,7 +440,7 @@ const Flow = (props: FlowProps) => {
               stroke="#D4D7DC"
             />
             <text x="50%" y="50%" className={"zoom-percent-text"}>
-              {(((zoomLevel - 0.5) / 1.5) * 100).toFixed(0)}%
+              {(((zoomLevel - 0.1) / 2) * 100).toFixed(0)}%
             </text>
           </g>
         </svg>

@@ -22,14 +22,12 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/metrics"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
-	"github.com/numaproj/numaflow/pkg/window"
-
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 var ErrCOB = errors.New("error while writing to pbq, pbq is closed")
@@ -47,7 +45,6 @@ type PBQ struct {
 	options       *options
 	manager       *Manager
 	log           *zap.SugaredLogger
-	kw            window.AlignedKeyedWindower
 	mu            sync.Mutex
 }
 

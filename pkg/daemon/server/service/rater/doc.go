@@ -14,15 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package rater provides the functionality to calculate the processing rate of each vertex partition.
+// The processing rate is calculated based on the metric forwarder_data_read_total.
 package rater
-
-import (
-	"testing"
-
-	"go.uber.org/goleak"
-)
-
-// apply go leak verification to all tests in this package
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
-}

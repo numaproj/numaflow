@@ -14,6 +14,10 @@ import { SidebarType } from "../../common/SlidingSidebar";
 import { NamespacePipelineListing } from "./partials/NamespacePipelineListing";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { NamespaceSummaryData } from "../../../types/declarations/namespace";
+import {
+  ISB_SERVICES_STATUS_TOOLTIP, ISB_SERVICES_TOOLTIP,
+  PIPELINE_STATUS_TOOLTIP,
+} from "../../../utils";
 
 import "./style.css";
 
@@ -49,15 +53,35 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
       loadOnRefresh: false,
       addError,
     });
+
   const handleK8sEventsClick = useCallback(() => {
     if (!namespaceId || !setSidebarProps) {
       return;
     }
+    const pipelines: string[] = [];
+    const vertexMap = new Map<string, string[]>();
+    if (pipelineRawData) {
+      Object.keys(pipelineRawData).forEach((pipelineId) => {
+        pipelines.push(pipelineId);
+        const vertices =
+          pipelineRawData[pipelineId]?.pipeline?.spec?.vertices || [];
+        vertices.forEach((vertex: any) => {
+          const listing = vertexMap.get(pipelineId) || [];
+          listing.push(vertex.name);
+          vertexMap.set(pipelineId, listing);
+        });
+      });
+    }
     setSidebarProps({
       type: SidebarType.NAMESPACE_K8s,
-      k8sEventsProps: { namespaceId },
+      k8sEventsProps: {
+        namespaceId,
+        pipelineFilterOptions: pipelines,
+        vertexFilterOptions: vertexMap,
+      },
     });
-  }, [namespaceId, setSidebarProps]);
+  }, [namespaceId, setSidebarProps, pipelineRawData]);
+
   const defaultPipelinesData = useMemo(() => {
     return [
       // Pipelines collection
@@ -80,6 +104,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: 0,
               warning: 0,
               critical: 0,
+              tooltip: PIPELINE_STATUS_TOOLTIP,
             },
           },
         ],
@@ -93,6 +118,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
             titledValueProps: {
               title: "ISB SERVICES",
               value: 0,
+              tooltip: ISB_SERVICES_TOOLTIP
             },
           },
           {
@@ -104,6 +130,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: 0,
               warning: 0,
               critical: 0,
+              tooltip: ISB_SERVICES_STATUS_TOOLTIP,
             },
           },
         ],
@@ -166,6 +193,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: data.pipelinesHealthyCount,
               warning: data.pipelinesWarningCount,
               critical: data.pipelinesCriticalCount,
+              tooltip: PIPELINE_STATUS_TOOLTIP,
             },
           },
         ],
@@ -179,6 +207,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
             titledValueProps: {
               title: "ISB SERVICES",
               value: data.isbsCount,
+              tooltip: ISB_SERVICES_TOOLTIP
             },
           },
           {
@@ -190,6 +219,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
               healthy: data.isbsHealthyCount,
               warning: data.isbsWarningCount,
               critical: data.isbsCriticalCount,
+              tooltip: ISB_SERVICES_STATUS_TOOLTIP,
             },
           },
         ],
@@ -240,6 +270,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
         </Box>
       );
     }
+
     return (
       <NamespacePipelineListing
         namespace={namespaceId || ""}
