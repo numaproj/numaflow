@@ -23,7 +23,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -40,8 +39,6 @@ type jetStreamStore struct {
 	kvName            string
 	client            *jsclient.NATSClient
 	kv                nats.KeyValue
-	kvwTimer          *time.Timer
-	kvLock            sync.RWMutex
 	previousFetchTime time.Time
 	doneCh            chan struct{}
 
@@ -68,14 +65,13 @@ func NewKVJetStreamKVStore(ctx context.Context, kvName string, client *jsclient.
 	}
 
 	var jsStore = &jetStreamStore{
-		ctx:      ctx,
-		kvName:   kvName,
-		kv:       kvStore,
-		client:   client,
-		kvwTimer: time.NewTimer(kvOpts.watcherCreationThreshold),
-		opts:     kvOpts,
-		doneCh:   make(chan struct{}),
-		log:      logging.FromContext(ctx).With("kvName", kvName),
+		ctx:    ctx,
+		kvName: kvName,
+		kv:     kvStore,
+		client: client,
+		opts:   kvOpts,
+		doneCh: make(chan struct{}),
+		log:    logging.FromContext(ctx).With("kvName", kvName),
 	}
 
 	return jsStore, nil
@@ -105,8 +101,6 @@ func (k kvEntry) Operation() kvs.KVWatchOp {
 
 // GetAllKeys returns all the keys in the key-value store.
 func (jss *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
-	jss.kvLock.RLock()
-	defer jss.kvLock.RUnlock()
 	keys, err := jss.kv.Keys()
 	if err != nil {
 		return nil, err
@@ -116,36 +110,28 @@ func (jss *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
 
 // GetValue returns the value for a given key.
 func (jss *jetStreamStore) GetValue(_ context.Context, k string) ([]byte, error) {
-	jss.kvLock.RLock()
-	defer jss.kvLock.RUnlock()
-	kvEntry, err := jss.kv.Get(k)
+	keyValueEntry, err := jss.kv.Get(k)
 	if err != nil {
 		return []byte(""), err
 	}
 
-	val := kvEntry.Value()
+	val := keyValueEntry.Value()
 	return val, err
 }
 
 // GetStoreName returns the store name.
 func (jss *jetStreamStore) GetStoreName() string {
-	jss.kvLock.RLock()
-	defer jss.kvLock.RUnlock()
 	return jss.kv.Bucket()
 }
 
 // DeleteKey deletes the key from the JS key-value store.
 func (jss *jetStreamStore) DeleteKey(_ context.Context, k string) error {
-	jss.kvLock.RLock()
-	defer jss.kvLock.RUnlock()
 	// will return error if nats connection is closed
 	return jss.kv.Delete(k)
 }
 
 // PutKV puts an element to the JS key-value store.
 func (jss *jetStreamStore) PutKV(_ context.Context, k string, v []byte) error {
-	jss.kvLock.RLock()
-	defer jss.kvLock.RUnlock()
 	// will return error if nats connection is closed
 	_, err := jss.kv.Put(k, v)
 	return err
@@ -161,6 +147,8 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 	// create a new watcher, it will keep retrying until the context is done
 	// returns nil if the context is done
 	kvWatcher := jss.newWatcher(ctx)
+	kvwTimer := time.NewTimer(jss.opts.watcherCreationThreshold)
+
 	var updates = make(chan kvs.KVEntry)
 	var stopped = make(chan struct{})
 	go func() {
@@ -182,10 +170,10 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 			case value, ok := <-kvWatcher.Updates():
 				// we are getting updates from the watcher, reset the timer
 				// drain the timer channel if it is not empty before resetting
-				if !jss.kvwTimer.Stop() {
-					<-jss.kvwTimer.C
+				if !kvwTimer.Stop() {
+					<-kvwTimer.C
 				}
-				jss.kvwTimer.Reset(jss.opts.watcherCreationThreshold)
+				kvwTimer.Reset(jss.opts.watcherCreationThreshold)
 
 				jss.log.Debugw("Received a value from the watcher", zap.String("watcher", jss.GetKVName()), zap.Any("value", value), zap.Bool("ok", ok))
 				if !ok {
@@ -223,7 +211,7 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 						op:    kvs.KVDelete,
 					}
 				}
-			case <-jss.kvwTimer.C:
+			case <-kvwTimer.C:
 				// if the timer expired, it means that the watcher is not receiving any updates
 				kvLastUpdatedTime := jss.lastUpdateKVTime()
 
@@ -242,7 +230,7 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 					err = tempWatcher.Stop()
 				}
 				// reset the timer, since we have drained the timer channel its safe to reset it
-				jss.kvwTimer.Reset(jss.opts.watcherCreationThreshold)
+				kvwTimer.Reset(jss.opts.watcherCreationThreshold)
 
 			case <-jss.doneCh:
 				jss.log.Infow("Stopping WatchAll", zap.String("watcher", jss.GetKVName()))
