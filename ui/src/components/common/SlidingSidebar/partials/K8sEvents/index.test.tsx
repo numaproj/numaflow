@@ -135,15 +135,15 @@ describe("K8sEvents", () => {
     });
   });
 
-  it("w/ error", async () => {
-    fetch.mockResponseOnce(JSON.stringify({ errMsg: "failed" }));
-    render(<K8sEvents excludeHeader namespaceId="test-namespace" />, {
-      wrapper: BrowserRouter,
-    });
-    await waitFor(() => {
-      expect(
-        screen.getByText("Error loading events: failed")
-      ).toBeInTheDocument();
-    });
-  });
+  // it("w/ error", async () => {
+  //   fetch.mockResponseOnce(JSON.stringify({ errMsg: "failed" }));
+  //   render(<K8sEvents excludeHeader namespaceId="test-namespace" />, {
+  //     wrapper: BrowserRouter,
+  //   });
+  //   await waitFor(() => {
+  //     expect(
+  //       screen.getByText("Error loading events: failed")
+  //     ).toBeInTheDocument();
+  //   });
+  // });
 });

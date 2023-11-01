@@ -29,7 +29,10 @@ export default function AccountMenu() {
 
   return (
     <React.Fragment>
-      <Box sx={{ display: "flex", alignItems: "center", textAlign: "center" }}>
+      <Box
+        sx={{ display: "flex", alignItems: "center", textAlign: "center" }}
+        data-testid="account-menu"
+      >
         <IconButton onClick={handleLogout} size="small" sx={{ ml: 2 }}>
           <Chip
             label="Log out"

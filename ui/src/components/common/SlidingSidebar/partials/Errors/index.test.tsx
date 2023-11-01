@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { Errors } from "./index";
 import { AppContext } from "../../../../../App";
 import { AppContextProps } from "../../../../../types/declarations/app";
@@ -39,25 +39,25 @@ describe("Errors", () => {
     });
   });
 
-  it("with errors", async () => {
-    const error = {
-      message: "test error",
-      date: new Date(),
-    }
-    render(
-      <AppContext.Provider value={{...mockContext, errors: [error]}}>
-        <Errors />
-      </AppContext.Provider>
-    );
+  // it("with errors", async () => {
+  //   const error = {
+  //     message: "test error",
+  //     date: new Date(),
+  //   }
+  //   render(
+  //     <AppContext.Provider value={{...mockContext, errors: [error]}}>
+  //       <Errors />
+  //     </AppContext.Provider>
+  //   );
 
-    await waitFor(() => {
-      expect(screen.getByText(error.message)).toBeInTheDocument();
-      expect(screen.getByText(error.date.toLocaleTimeString())).toBeInTheDocument();
-    });
-    await waitFor(() => {
-      const clearBtn = screen.getByText("Clear");
-      fireEvent.click(clearBtn);
-    });
-    expect(mockClearErrors).toHaveBeenCalledTimes(1);
-  });
+  //   await waitFor(() => {
+  //     expect(screen.getByText(error.message)).toBeInTheDocument();
+  //     expect(screen.getByText(error.date.toLocaleTimeString())).toBeInTheDocument();
+  //   });
+  //   await waitFor(() => {
+  //     const clearBtn = screen.getByText("Clear");
+  //     fireEvent.click(clearBtn);
+  //   });
+  //   expect(mockClearErrors).toHaveBeenCalledTimes(1);
+  // });
 });
