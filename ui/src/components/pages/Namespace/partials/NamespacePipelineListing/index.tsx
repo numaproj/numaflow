@@ -43,6 +43,8 @@ import {
 import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
+export const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL];
+export const STATUS = [ALL, RUNNING, STOPPED, PAUSED];
 
 const sortOptions = [
   {
@@ -99,8 +101,6 @@ export function NamespacePipelineListing({
   isbData,
   refresh,
 }: NamespacePipelineListingProps) {
-  const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL];
-  const STATUS = [ALL, RUNNING, STOPPED, PAUSED];
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
   const [search, setSearch] = useState("");
   const [health, setHealth] = useState(ALL);
