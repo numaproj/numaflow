@@ -1,5 +1,6 @@
 export interface ClusterNamespaceSummary {
   name: string;
+  isEmpty: boolean;
   pipelinesCount: number;
   pipelinesActiveCount: number;
   pipelinesInactiveCount: number;
