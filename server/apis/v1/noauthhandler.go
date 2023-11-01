@@ -53,7 +53,7 @@ func (h *noAuthHandler) Logout(c *gin.Context) {
 	tokenString, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if strings.HasPrefix(err.Error(), common.InvalidCookieError) {
 		errMsg := fmt.Sprintf("Failed to retrieve user identity token: %v", err)
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		c.JSON(http.StatusBadRequest, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	if tokenString == "" {
