@@ -155,17 +155,19 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			return
 		}
 		// Get the route map from the context. Key is in the format "method:path".
-		routeMapKey := fmt.Sprintf("%s:%s", c.Request.Method, c.FullPath())
+		routeMapKey := authz.GetRouteMapKey(c)
 		// Check if the route requires authorization.
 		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuthZ {
-			// If the user is not authorized, return an error.
-			if isAuthorized, _ := authorizer.Authorize(c, userInfo.IDTokenClaims.Groups); !isAuthorized {
-				errMsg := "User is not authorized to execute the requested action"
-				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
-				c.Abort()
-			} else {
+			// Check if the user is authorized to execute the requested action.
+			isAuthorized := authorizer.Authorize(c, userInfo)
+			if isAuthorized {
 				// If the user is authorized, continue the request.
 				c.Next()
+			} else {
+				// If the user is not authorized, return an error.
+				errMsg := "user is not authorized to execute the requested action"
+				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
+				c.Abort()
 			}
 		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuthZ {
 			// If the route does not require AuthZ, skip the AuthZ check.
@@ -176,7 +178,6 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			errMsg := "Invalid route"
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
-			return
 		}
 	}
 }
