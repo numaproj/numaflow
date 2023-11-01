@@ -41,3 +41,15 @@ func LookupEnvIntOr(key string, defaultValue int) int {
 		return defaultValue
 	}
 }
+
+func LookupEnvBoolOr(key string, defaultValue bool) bool {
+	if valStr, existing := os.LookupEnv(key); existing && valStr != "" {
+		val, err := strconv.ParseBool(valStr)
+		if err != nil {
+			panic(fmt.Errorf("invalid value for env variable %q, value %q", key, valStr))
+		}
+		return val
+	} else {
+		return defaultValue
+	}
+}
