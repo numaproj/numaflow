@@ -52,11 +52,11 @@ func (h *noAuthHandler) Logout(c *gin.Context) {
 	cookies := c.Request.Cookies()
 	tokenString, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to retrieve user identity token: %v", err)
+		errMsg := fmt.Sprintf("Failed to retrieve user identity token: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 	}
 	if tokenString == "" {
-		errMsg := "failed to retrieve user identity token: empty token"
+		errMsg := "Failed to retrieve user identity token: empty token"
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 	}
 

@@ -148,7 +148,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 		// Authenticate the user.
 		userInfo, err := authenticator.Authenticate(c)
 		if err != nil {
-			errMsg := fmt.Sprintf("failed to authenticate user: %v", err)
+			errMsg := fmt.Sprintf("Failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 			return
@@ -159,7 +159,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuthZ {
 			// If the user is not authorized, return an error.
 			if isAuthorized, _ := authorizer.Authorize(c, userInfo.IDTokenClaims.Groups); !isAuthorized {
-				errMsg := "user is not authorized to execute the requested action"
+				errMsg := "User is not authorized to execute the requested action"
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
 			} else {
@@ -172,7 +172,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 		} else {
 			// If the route is not present in the route map, return an error.
 			logger.Errorw("route not present in routeMap", "route", routeMapKey)
-			errMsg := "invalid route"
+			errMsg := "Invalid route"
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 			return

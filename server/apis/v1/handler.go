@@ -92,31 +92,31 @@ func (h *handler) AuthInfo(c *gin.Context) {
 	cookies := c.Request.Cookies()
 	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
-		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
+		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	if userIdentityTokenStr == "" {
-		errMsg := "user is not authenticated, err: empty Token"
+		errMsg := "User is not authenticated, err: empty Token"
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	var userInfo authn.UserInfo
 	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
-		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
+		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
 	idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to verify ID token: %s", err)
+		errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 	var claims authn.IDTokenClaims
 	if err = idToken.Claims(&claims); err != nil {
-		errMsg := fmt.Sprintf("error decoding ID token claims: %s", err)
+		errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
