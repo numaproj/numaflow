@@ -48,7 +48,7 @@ type DexObject struct {
 }
 
 // NewDexObject returns a new DexObject.
-func NewDexObject(baseURL string, baseHref string, proxyURL string) (*DexObject, error) {
+func NewDexObject(baseURL string, baseHref string, dexURL string) (*DexObject, error) {
 	issuerURL, err := url.JoinPath(baseURL, "/dex")
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func NewDexObject(baseURL string, baseHref string, proxyURL string) (*DexObject,
 	client.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	client.Transport = NewDexRewriteURLRoundTripper(proxyURL, client.Transport)
+	client.Transport = NewDexRewriteURLRoundTripper(dexURL, client.Transport)
 	return &DexObject{
 		clientID:       common.AppClientID,
 		issuerURL:      issuerURL,
@@ -100,17 +100,27 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 
 func (d *DexObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
 	var userInfo authn.UserInfo
-	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
+	cookies := c.Request.Cookies()
+	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user identity token from cookie: %v", err)
+		return nil, fmt.Errorf("failed to retrieve user identity token: %v", err)
+	}
+	if userIdentityTokenStr == "" {
+		return nil, fmt.Errorf("failed to retrieve user identity token: empty token")
 	}
 	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse user identity token: %v", err)
+		return nil, fmt.Errorf("user is not authenticated, err: %s", err.Error())
 	}
-	_, err = d.verify(c, userInfo.IDToken)
+	idToken, err := d.verify(c.Request.Context(), userInfo.IDToken)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to verify ID token: %w", err)
 	}
+
+	var claims authn.IDTokenClaims
+	if err = idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("error decoding ID token claims: %w", err)
+	}
+	userInfo = authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
 	return &userInfo, nil
 }
 
@@ -214,17 +224,8 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-
-	idToken, err := d.verify(r.Context(), rawIDToken)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to verify ID token: %v", err)
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-
-	var claims authn.IDTokenClaims
-	if err := idToken.Claims(&claims); err != nil {
-		errMsg := fmt.Sprintf("error decoding ID token claims: %v", err)
+	if rawIDToken == "" {
+		errMsg := "Failed to get id_token: empty raw ID Token"
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
@@ -236,14 +237,24 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	res := authn.NewUserInfo(claims, rawIDToken, refreshToken)
+	// no need to include claims in the cookie
+	res := authn.NewUserInfo(nil, rawIDToken, refreshToken)
 	tokenStr, err := json.Marshal(res)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to convert to token string: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	c.SetCookie(common.UserIdentityCookieName, string(tokenStr), common.UserIdentityCookieMaxAge, "/", "", true, true)
+
+	cookies, err := common.MakeCookieMetadata(common.UserIdentityCookieName, string(tokenStr))
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to create cookies: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	for _, cookie := range cookies {
+		c.SetCookie(cookie.Key, cookie.Value, common.StateCookieMaxAge, "/", "", true, true)
+	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
@@ -277,7 +288,6 @@ func NewDexReverseProxy(target string) func(c *gin.Context) {
 		proxyUrl, _ := url.Parse(target)
 		c.Request.URL.Path = c.Param("name")
 		proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
-		fmt.Println("proxy", proxyUrl, c.Request.URL.Path)
 		proxy.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}

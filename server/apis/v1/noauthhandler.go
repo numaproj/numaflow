@@ -17,7 +17,9 @@ limitations under the License.
 package v1
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -47,6 +49,22 @@ func (h *noAuthHandler) Callback(c *gin.Context) {
 
 // Logout is used to remove auth cookie ending a user's session.
 func (h *noAuthHandler) Logout(c *gin.Context) {
-	c.SetCookie(common.UserIdentityCookieName, "", -1, "/", "", true, true)
+	cookies := c.Request.Cookies()
+	tokenString, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to retrieve user identity token: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	}
+	if tokenString == "" {
+		errMsg := "Failed to retrieve user identity token: empty token"
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+	}
+
+	for _, cookie := range cookies {
+		if !strings.HasPrefix(cookie.Name, common.UserIdentityCookieName) {
+			continue
+		}
+		c.SetCookie(cookie.Name, "", -1, "/", "", true, true)
+	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
