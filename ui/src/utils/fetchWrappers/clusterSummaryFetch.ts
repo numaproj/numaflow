@@ -50,6 +50,7 @@ const rawDataToClusterSummary = (
     // Add ns summary to array
     nameSpaceSummaries.push({
       name: ns.namespace || DEFAULT_NS_NAME,
+      isEmpty: !!ns.isEmpty,
       pipelinesCount: nsPipelinesCount,
       pipelinesActiveCount: nsPipelinesActiveCount,
       pipelinesInactiveCount: nsPipelinesInactiveCount,
