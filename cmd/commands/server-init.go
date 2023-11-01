@@ -23,6 +23,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 func NewServerInitCommand() *cobra.Command {
@@ -53,7 +55,7 @@ func NewServerInitCommand() *cobra.Command {
 		},
 	}
 
-	command.Flags().StringVar(&baseHref, "base-href", "/", "Base href for Numaflow server, defaults to '/'.")
+	command.Flags().StringVar(&baseHref, "base-href", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/"), "Base href for Numaflow server, defaults to '/'.")
 	return command
 }
 
