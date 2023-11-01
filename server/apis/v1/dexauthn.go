@@ -103,7 +103,6 @@ func (d *DexObject) oauth2Config(scopes []string) (*oauth2.Config, error) {
 func (d *DexObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
 	var userInfo authn.UserInfo
 	cookies := c.Request.Cookies()
-	fmt.Println("Authenticate : Cookies from request:", cookies)
 	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve user identity token: %v", err)
@@ -254,6 +253,11 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 	}
 
 	cookies, err := common.MakeCookieMetadata(common.UserIdentityCookieName, string(tokenStr))
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to create cookies: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 	for _, cookie := range cookies {
 		c.SetCookie(cookie.Key, cookie.Value, common.StateCookieMaxAge, "/", "", true, true)
 	}
@@ -290,7 +294,6 @@ func NewDexReverseProxy(target string) func(c *gin.Context) {
 		proxyUrl, _ := url.Parse(target)
 		c.Request.URL.Path = c.Param("name")
 		proxy := httputil.NewSingleHostReverseProxy(proxyUrl)
-		fmt.Println("proxy", proxyUrl, c.Request.URL.Path)
 		proxy.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}

@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
 
 const (
 	maxCookieLength = 4096
-	maxValueLength  = maxCookieLength - 100
+	maxValueLength  = maxCookieLength - 500
 	// max number of chunks a cookie can be broken into
 	maxCookieNumber = 10
 )
@@ -29,8 +30,8 @@ func MakeCookieMetadata(key, value string) ([]IdentityCookie, error) {
 	return splitCookie(key, value), nil
 }
 
-// browser has limit on size of cookie, currently 4kb. In order to
-// support cookies longer than 4kb, we split cookie into multiple 4kb chunks.
+// splitCookie splits a cookie because browser requires cookie to be < 4kb.
+// In order to support cookies longer than 4kb, we split cookie into multiple chunks.
 func splitCookie(key, value string) []IdentityCookie {
 	var cookies []IdentityCookie
 	valueLength := len(value)
@@ -47,7 +48,7 @@ func splitCookie(key, value string) []IdentityCookie {
 		if j == 0 && numberOfChunks == 1 {
 			cookie = IdentityCookie{
 				Key:   key,
-				Value: value[i:end],
+				Value: value,
 			}
 		} else if j == 0 {
 			cookie = IdentityCookie{
@@ -74,7 +75,8 @@ func JoinCookies(key string, cookieList []*http.Cookie) (string, error) {
 		if !strings.HasPrefix(cookie.Name, key) {
 			continue
 		}
-		cookies[cookie.Name] = cookie.Value
+		val, _ := url.QueryUnescape(cookie.Value)
+		cookies[cookie.Name] = val
 	}
 
 	var sb strings.Builder
@@ -88,11 +90,11 @@ func JoinCookies(key string, cookieList []*http.Cookie) (string, error) {
 	}
 	parts := strings.Split(token, ":")
 
-	if len(parts) == 2 {
+	if len(parts) >= 2 {
 		if numOfChunks, err = strconv.Atoi(parts[0]); err != nil {
 			return "", err
 		}
-		sb.WriteString(parts[1])
+		sb.WriteString(strings.Join(parts[1:], ":"))
 	} else if len(parts) == 1 {
 		numOfChunks = 1
 		sb.WriteString(parts[0])
@@ -104,11 +106,4 @@ func JoinCookies(key string, cookieList []*http.Cookie) (string, error) {
 		sb.WriteString(cookies[fmt.Sprintf("%s-%d", key, i)])
 	}
 	return sb.String(), nil
-}
-
-func maxCookieValueLength(key, attributes string) int {
-	if len(attributes) > 0 {
-		return maxCookieLength - (len(key) + 3) - (len(attributes) + 2)
-	}
-	return maxCookieLength - (len(key) + 3)
 }
