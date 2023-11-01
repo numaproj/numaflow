@@ -62,10 +62,11 @@ type handler struct {
 	metricsClient      *metricsversiond.Clientset
 	numaflowClient     dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache *lru.Cache
+	dexObj             *DexObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler() (*handler, error) {
+func NewHandler(dexObj *DexObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -88,24 +89,49 @@ func NewHandler() (*handler, error) {
 		metricsClient:      metricsClient,
 		numaflowClient:     numaflowClient,
 		daemonClientsCache: daemonClientsCache,
+		dexObj:         dexObj,
 	}, nil
 }
 
 // AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
-	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
+	if h.dexObj == nil {
+		errMsg := "User is not authenticated: missing Dex"
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+	}
+	cookies := c.Request.Cookies()
+	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
-		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
+		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	userInfo := &authn.UserInfo{}
-	if err = json.Unmarshal([]byte(userIdentityTokenStr), userInfo); err != nil {
-		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
+	if userIdentityTokenStr == "" {
+		errMsg := "User is not authenticated, err: empty Token"
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	res := authn.NewUserInfo(userInfo.IDTokenClaims, userInfo.IDToken, userInfo.RefreshToken)
+	var userInfo authn.UserInfo
+	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
+		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
+	idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	var claims authn.IDTokenClaims
+	if err = idToken.Claims(&claims); err != nil {
+		errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
+	res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
@@ -119,8 +145,15 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
 }
 
-// GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
+// GetClusterSummary summarizes information of all the namespaces in a cluster except the kube system namespaces
+// and wrapped the result in a list.
 func (h *handler) GetClusterSummary(c *gin.Context) {
+	namespaces, err := getAllNamespaces(h)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
+		return
+	}
+
 	type namespaceSummary struct {
 		pipelineSummary PipelineSummary
 		isbsvcSummary   IsbServiceSummary
@@ -177,9 +210,25 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 
 	// get cluster summary
 	var clusterSummary ClusterSummaryResponse
-	for name, summary := range namespaceSummaryMap {
-		clusterSummary = append(clusterSummary, NewClusterSummary(name, summary.pipelineSummary, summary.isbsvcSummary))
+	// at this moment, if a namespace has neither pipeline nor isbsvc, it will not be included in the namespacedSummaryMap.
+	// since we still want to pass these empty namespaces to the frontend, we add them here.
+	for _, ns := range namespaces {
+		if _, ok := namespaceSummaryMap[ns]; !ok {
+			// if the namespace is not in the namespaceSummaryMap, it means it has neither pipeline nor isbsvc
+			// taking advantage of golang by default initializing the struct with zero value
+			namespaceSummaryMap[ns] = namespaceSummary{}
+		}
 	}
+	for name, summary := range namespaceSummaryMap {
+		clusterSummary = append(clusterSummary, NewNamespaceSummary(name, summary.pipelineSummary, summary.isbsvcSummary))
+	}
+
+	// sort the cluster summary by namespace in alphabetical order,
+	// such that for first-time user, they get to see the default namespace first hence know where to start
+	sort.Slice(clusterSummary, func(i, j int) bool {
+		return clusterSummary[i].Namespace < clusterSummary[j].Namespace
+	})
+
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, clusterSummary))
 }
 
@@ -789,28 +838,21 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
+// except the kube system namespaces
 func getAllNamespaces(h *handler) ([]string, error) {
-	l, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
+	namespaces, err := h.kubeClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-	m := make(map[string]bool)
-	for _, pl := range l.Items {
-		m[pl.Namespace] = true
+	var res []string
+	for _, ns := range namespaces.Items {
+		// skip kube system namespaces because users are not supposed to create pipelines in them
+		// see https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/#initial-namespaces
+		if name := ns.Name; name != metav1.NamespaceSystem && name != metav1.NamespacePublic && name != "kube-node-lease" {
+			res = append(res, ns.Name)
+		}
 	}
-
-	isbsvc, err := h.numaflowClient.InterStepBufferServices("").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	for _, isb := range isbsvc.Items {
-		m[isb.Namespace] = true
-	}
-	var namespaces []string
-	for k := range m {
-		namespaces = append(namespaces, k)
-	}
-	return namespaces, nil
+	return res, nil
 }
 
 // getPipelines is a utility used to fetch all the pipelines in a given namespace
