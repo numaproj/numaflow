@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.0.0-rc2 (2023-11-01)
+
+ * [8a7dc592](https://github.com/numaproj/numaflow/commit/8a7dc5920c143aeaca06ff9c5cfc633102bac7d6) Update manifests to v1.0.0-rc2
+ * [8ed52b39](https://github.com/numaproj/numaflow/commit/8ed52b39c086532bc5b8e1a53352718219c718c6) feat: add scopes to authorization (#1288)
+ * [eebe623f](https://github.com/numaproj/numaflow/commit/eebe623f8464e37dc2e5674966917c142bb92441) fix: logout fix (#1310)
+ * [9c34c27f](https://github.com/numaproj/numaflow/commit/9c34c27fb1a16e78bdbf1be16ad321fd71f1801b) fix: Split cookie to meet the cookie length requirement (#1305)
+ * [c6073b17](https://github.com/numaproj/numaflow/commit/c6073b17c7e664095549774f6b578e205b86a1a4) chore(deps): bump github.com/nats-io/nats-server/v2 from 2.10.3 to 2.10.4 (#1307)
+ * [b1bb6575](https://github.com/numaproj/numaflow/commit/b1bb65751aad08bbf3ff697f4f102ecbdbb09d92) add tooltips (#1289)
+ * [40ca1705](https://github.com/numaproj/numaflow/commit/40ca1705b6086c5683d67f8d5adc1805258c291e) fix: fixed the timer not clearing issue (#1303)
+ * [2a91668d](https://github.com/numaproj/numaflow/commit/2a91668d021c5346daab2188ba5353c84b3e9815) feat: k8s events filtering and cluster summary card fixes  (#1297)
+ * [4929a1e4](https://github.com/numaproj/numaflow/commit/4929a1e4543549f8698d3d1510364353662d9816) fix: graph overflow with large height (#1301)
+ * [8cc04a77](https://github.com/numaproj/numaflow/commit/8cc04a77a0c12bc550f3783cb31274493094e996) doc: need metrics server (#1296)
+ * [05b19400](https://github.com/numaproj/numaflow/commit/05b19400509cfeead2c96f52c6d33a243257c507) refactor: unified metrics names for forwarders (#1290)
+ * [5475e682](https://github.com/numaproj/numaflow/commit/5475e68205fe8899ae2f93bd73281e3e109e3e48) feat: added separate colors for sideInput and dynamic legend (#1292)
+ * [052201e0](https://github.com/numaproj/numaflow/commit/052201e0b803e0a57d562056d28d9b3b605728da) feat: add tabs to display pipelines and isb services (#1293)
+ * [9e1ea4f0](https://github.com/numaproj/numaflow/commit/9e1ea4f07bbb1642f3d670c9c2398b58f262be06) fix: more sidebar testing (#1287)
+ * [d018af50](https://github.com/numaproj/numaflow/commit/d018af50bec64c1012a27d51fd407a548a364118) refactor: create interfaces for AuthN and AuthZ (#1286)
+ * [ada5ea4d](https://github.com/numaproj/numaflow/commit/ada5ea4d73c0ec11852328104d2cd386b288a81b) fix: tests for utils (#1283)
+
+### Contributors
+
+ * Bradley Behnke
+ * Darshan Simha
+ * Derek Wang
+ * Juanlu Yu
+ * Keran Yang
+ * Sidhant Kohli
+ * Vedant Gupta
+ * Vigith Maurice
+ * dependabot[bot]
+ * mshakira
+
 ## v1.0.0-rc1 (2023-10-26)
 
  * [0ff1f58f](https://github.com/numaproj/numaflow/commit/0ff1f58fa371795a321c414c94a40c6b08ca32fe) Update manifests to v1.0.0-rc1
