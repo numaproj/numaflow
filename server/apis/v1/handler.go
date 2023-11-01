@@ -90,7 +90,7 @@ func NewHandler(dexObj *DexObject) (*handler, error) {
 // AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
 	if h.dexObj == nil {
-		errMsg := fmt.Sprintf("User is not authenticated: missing Dex")
+		errMsg := "User is not authenticated: missing Dex"
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 	}
 	cookies := c.Request.Cookies()
