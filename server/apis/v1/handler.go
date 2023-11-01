@@ -978,11 +978,14 @@ func daemonSvcAddress(ns, pipeline string) string {
 }
 
 func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClient, error) {
-	dClient, _ := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline))
-	if dClient == nil {
+	dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline))
+	if !ok {
 		dClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 		if err != nil {
 			return nil, err
+		}
+		if dClient == nil {
+			return nil, fmt.Errorf("nil client")
 		}
 		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
 	}
