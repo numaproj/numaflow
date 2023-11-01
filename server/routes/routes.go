@@ -64,9 +64,9 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(authorizer, dexObj))
-		v1Routes(r1Group, nil)
-	} else {
 		v1Routes(r1Group, dexObj)
+	} else {
+		v1Routes(r1Group, nil)
 	}
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
