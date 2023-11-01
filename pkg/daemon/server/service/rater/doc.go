@@ -14,12 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package common
-
-const (
-	AppClientID              = "numaflow-server-app"
-	StateCookieName          = "numaflow-oauthstate"
-	StateCookieMaxAge        = 60 * 5
-	UserIdentityCookieName   = "numaflow.token"
-	UserIdentityCookieMaxAge = 60 * 60
-)
+// Package rater provides the functionality to calculate the processing rate of each vertex partition.
+// The processing rate is calculated based on the metric forwarder_data_read_total.
+package rater

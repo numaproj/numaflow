@@ -130,7 +130,7 @@ func TestOrderedProcessing(t *testing.T) {
 				kw := keyed.NewKeyedWindow(_partition.Start, _partition.End)
 				kw.AddSlot(_partition.Slot)
 
-				_, _ = pbqManager.CreateNewPBQ(ctx, _partition, kw)
+				_, _ = pbqManager.CreateNewPBQ(ctx, _partition)
 				t := op.SchedulePnF(cCtx, _partition)
 				op.InsertTask(t)
 			}

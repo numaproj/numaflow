@@ -48,7 +48,6 @@ type ServerOptions struct {
 	BaseHref         string
 	DisableAuth      bool
 	DexServerAddr    string
-	DexProxyAddr     string
 	ServerAddr       string
 }
 
@@ -83,7 +82,6 @@ func (s *server) Start() {
 		routes.AuthInfo{
 			DisableAuth:   s.options.DisableAuth,
 			DexServerAddr: s.options.DexServerAddr,
-			DexProxyAddr:  s.options.DexProxyAddr,
 			ServerAddr:    s.options.ServerAddr,
 		},
 		s.options.BaseHref,
@@ -100,7 +98,6 @@ func (s *server) Start() {
 			"version", numaflow.GetVersion(),
 			"disable-auth", s.options.DisableAuth,
 			"dex-server-addr", s.options.DexServerAddr,
-			"dex-proxy-addr", s.options.DexProxyAddr,
 			"server-addr", s.options.ServerAddr)
 		if err := server.ListenAndServe(); err != nil {
 			panic(err)
@@ -116,7 +113,6 @@ func (s *server) Start() {
 			"version", numaflow.GetVersion(),
 			"disable-auth", s.options.DisableAuth,
 			"dex-server-addr", s.options.DexServerAddr,
-			"dex-proxy-addr", s.options.DexProxyAddr,
 			"server-addr", s.options.ServerAddr)
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			panic(err)

@@ -35,12 +35,12 @@ type IDTokenClaims struct {
 // UserInfo includes information about the user identity
 // It holds the IDTokenClaims, IDToken and RefreshToken for the user
 type UserInfo struct {
-	IDTokenClaims IDTokenClaims `json:"id_token_claims"`
-	IDToken       string        `json:"id_token"`
-	RefreshToken  string        `json:"refresh_token"`
+	IDTokenClaims *IDTokenClaims `json:"id_token_claims,omitempty"`
+	IDToken       string         `json:"id_token"`
+	RefreshToken  string         `json:"refresh_token"`
 }
 
-func NewUserInfo(itc IDTokenClaims, idToken string, refreshToken string) UserInfo {
+func NewUserInfo(itc *IDTokenClaims, idToken string, refreshToken string) UserInfo {
 	return UserInfo{
 		IDTokenClaims: itc,
 		IDToken:       idToken,

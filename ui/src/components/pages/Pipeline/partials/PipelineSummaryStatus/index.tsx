@@ -130,6 +130,7 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
                 <div
                   className="pipeline-onclick-events"
                   onClick={handleSpecClick}
+                  data-testid="pipeline-spec-click"
                 >
                   View/Edit Specs
                 </div>
