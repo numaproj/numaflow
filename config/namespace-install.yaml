@@ -16292,6 +16292,13 @@ metadata:
 ---
 apiVersion: v1
 data:
+  server.disable.auth: "true"
+kind: ConfigMap
+metadata:
+  name: numaflow-server-cmd-params-config
+---
+apiVersion: v1
+data:
   rbac-conf.yaml: |
     policy.default: role:readonly
     # The scopes field controls which authentication scopes to examine during rbac enforcement.
@@ -16480,13 +16487,60 @@ spec:
       containers:
       - args:
         - server
-        - --disable-auth=true
         - --namespaced
         env:
         - name: NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: NUMAFLOW_SERVER_INSECURE
+          valueFrom:
+            configMapKeyRef:
+              key: server.insecure
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_PORT_NUMBER
+          valueFrom:
+            configMapKeyRef:
+              key: server.port
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_NAMESPACED
+          valueFrom:
+            configMapKeyRef:
+              key: server.namespaced
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_MANAGED_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              key: server.managed.namespace
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_BASE_HREF
+          valueFrom:
+            configMapKeyRef:
+              key: server.base.href
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_DISABLE_AUTH
+          valueFrom:
+            configMapKeyRef:
+              key: server.disable.auth
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_DEX_SERVER_ADDR
+          valueFrom:
+            configMapKeyRef:
+              key: server.dex.server
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              key: server.address
+              name: numaflow-server-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
@@ -16516,6 +16570,13 @@ spec:
       initContainers:
       - args:
         - server-init
+        env:
+        - name: NUMAFLOW_SERVER_BASE_HREF
+          valueFrom:
+            configMapKeyRef:
+              key: server.base.href
+              name: numaflow-server-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         name: server-init
