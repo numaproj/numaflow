@@ -179,6 +179,5 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 		}
-		return
 	}
 }

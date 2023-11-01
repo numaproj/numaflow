@@ -64,6 +64,7 @@ func NewCasbinObject() (*CasbinObject, error) {
 	if err != nil {
 		return nil, err
 	}
+	logger.Infow("Auth Scopes", "scopes", currentScopes)
 	// Watch for changes in the config file.
 	configReader.WatchConfig()
 	configReader.OnConfigChange(func(in fsnotify.Event) {
@@ -118,9 +119,7 @@ func getSubjectFromScope(scopes []string, userIdentityToken *authn.UserInfo) []s
 	var scopedList []string
 	// If the scope is group, fetch the groups from the user identity token.
 	if slices.Contains(scopes, ScopeGroup) {
-		for _, group := range userIdentityToken.IDTokenClaims.Groups {
-			scopedList = append(scopedList, group)
-		}
+		scopedList = append(scopedList, userIdentityToken.IDTokenClaims.Groups...)
 	}
 	// If the scope is email, fetch the email from the user identity token.
 	if slices.Contains(scopes, ScopeEmail) {
