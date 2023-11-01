@@ -28,6 +28,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/server/authn"
@@ -38,6 +39,9 @@ var (
 	rbacModel     string
 	logger        = logging.NewLogger()
 	userPermCount map[string]int
+	currentScopes []string
+	policyDefault string
+	configReader  *viper.Viper
 )
 
 const (
@@ -45,10 +49,7 @@ const (
 )
 
 type CasbinObject struct {
-	enforcer      *casbin.Enforcer
-	config        *viper.Viper
-	currentScopes []string
-	policyDefault string
+	enforcer *casbin.Enforcer
 }
 
 func NewCasbinObject() (*CasbinObject, error) {
@@ -56,55 +57,76 @@ func NewCasbinObject() (*CasbinObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	configReader := viper.New()
+	configReader = viper.New()
 	configReader.SetConfigFile(rbacPropertiesPath)
 	err = configReader.ReadInConfig()
-	currentScopes := getRBACScopes(configReader)
+	currentScopes = getRBACScopes(configReader)
 	if err != nil {
 		return nil, err
 	}
+	// Watch for changes in the config file.
+	configReader.WatchConfig()
+	configReader.OnConfigChange(func(in fsnotify.Event) {
+		ConfigFileReload(in)
+	})
 	// Set the default policy for authorization.
-	policyDefault := getDefaultPolicy(configReader)
+	policyDefault = getDefaultPolicy(configReader)
 
 	return &CasbinObject{
-		enforcer:      enforcer,
-		config:        configReader,
-		currentScopes: currentScopes,
-		policyDefault: policyDefault,
+		enforcer: enforcer,
 	}, nil
-}
-
-// GetConfig returns the config file of the authorizer. We use a config file to store the policy params
-func (cas *CasbinObject) GetConfig() *viper.Viper {
-	return cas.config
-}
-
-// GetScopes returns the scopes for the authorizer.
-func (cas *CasbinObject) GetScopes() []string {
-	return cas.currentScopes
-}
-
-// setScopes sets the scopes for the authorizer.
-func (cas *CasbinObject) setScopes(scopes []string) {
-	cas.currentScopes = scopes
 }
 
 // Authorize checks if a user is authorized to access the resource.
 // It returns true if the user is authorized, otherwise false.
 // It also returns the policy count of the user. The policy count is used to check if there are any policies defined
 // for the given user, if not we will allocate a default policy for the user.
-func (cas *CasbinObject) Authorize(c *gin.Context, userIdentityToken *authn.UserInfo, scope string) (bool, int) {
-	switch scope {
-	case ScopeGroup:
-		return enforceGroups(cas.enforcer, c, userIdentityToken)
-	case ScopeEmail:
-		return enforceEmail(cas.enforcer, c, userIdentityToken)
-	case ScopeDefault:
-		return enforceDefault(cas.enforcer, c, cas.policyDefault)
-	default:
-		logger.Errorw("invalid scope provided in config", "scope", scope)
+func (cas *CasbinObject) Authorize(c *gin.Context, userIdentityToken *authn.UserInfo) bool {
+	// Get the scopes to check from the policy.
+	scopedList := getSubjectFromScope(currentScopes, userIdentityToken)
+	// Get the resource, object and action from the request.
+	resource := extractResource(c)
+	object := extractObject(c)
+	action := c.Request.Method
+	userHasPolicies := false
+	// Check for the given scoped list if the user is authorized using any of the subjects in the list.
+	for _, scopedSubject := range scopedList {
+		// Check if the user has permissions in the policy for the given scoped subject.
+		userHasPolicies = userHasPolicies || getPermissionCount(cas.enforcer, scopedSubject)
+		ok := enforceCheck(cas.enforcer, scopedSubject, resource, object, action)
+		if ok {
+			return ok
+		}
 	}
-	return false, 0
+	// If the user does not have any policy defined, allocate a default policy for the user.
+	if !userHasPolicies {
+		logger.Infow("No policy defined for the user, allocating default policy",
+			"DefaultPolicy", policyDefault)
+		ok := enforceCheck(cas.enforcer, policyDefault, resource, object, action)
+		if ok {
+			return ok
+		}
+	}
+	return false
+}
+
+// getSubjectFromScope returns the subjects in the request for the given scopes.
+// The scopes are the params used to check the authentication params to check if the
+// user is authorized to access the resource. For any new scope, add the scope to the
+// rbac properties file and add the scope to the cases below.
+func getSubjectFromScope(scopes []string, userIdentityToken *authn.UserInfo) []string {
+	var scopedList []string
+	// If the scope is group, fetch the groups from the user identity token.
+	if slices.Contains(scopes, ScopeGroup) {
+		for _, group := range userIdentityToken.IDTokenClaims.Groups {
+			scopedList = append(scopedList, group)
+		}
+	}
+	// If the scope is email, fetch the email from the user identity token.
+	if slices.Contains(scopes, ScopeEmail) {
+		scopedList = append(scopedList, userIdentityToken.IDTokenClaims.Email)
+	}
+	return scopedList
 }
 
 // getEnforcer initializes the Casbin Enforcer with the model and policy.
@@ -225,65 +247,32 @@ func getRBACScopes(config *viper.Viper) []string {
 		scope = strings.TrimSpace(scope)
 		retList = append(retList, scope)
 	}
-
 	return retList
 }
 
-// enforceGroups checks if the groups assigned to the user form the authentication system has permission based on the
-// Casbin model and policy.
-func enforceGroups(enforcer *casbin.Enforcer, c *gin.Context, userIdentityToken *authn.UserInfo) (bool, int) {
-	groups := userIdentityToken.IDTokenClaims.Groups
-	resource := extractResource(c)
-	object := extractObject(c)
-	action := c.Request.Method
-	policyCount := 0
-	// Check if the user has permission for any of the groups.
-	for _, group := range groups {
-		policyCount += getPermissionCount(enforcer, group)
-		// Get the user from the group. The group is in the format "group:role".
-		// Check if the user has permission using Casbin Enforcer.
-		if enforceCheck(enforcer, group, resource, object, action) {
-			return true, policyCount
-		}
-	}
-	return false, policyCount
-}
-
-// enforceEmail checks if the email assigned to the user form the authentication system has permission based on the
-// Casbin model and policy.
-func enforceEmail(enforcer *casbin.Enforcer, c *gin.Context, userIdentityToken *authn.UserInfo) (bool, int) {
-	email := userIdentityToken.IDTokenClaims.Email
-	resource := extractResource(c)
-	object := extractObject(c)
-	action := c.Request.Method
-	policyCount := getPermissionCount(enforcer, email)
-	// Check if the user has permission based on the email.
-	return enforceCheck(enforcer, email, resource, object, action), policyCount
-}
-
 // enforceCheck checks if the user has permission based on the Casbin model and policy.
+// It returns true if the user is authorized, otherwise false.
 func enforceCheck(enforcer *casbin.Enforcer, user, resource, object, action string) bool {
 	ok, _ := enforcer.Enforce(user, resource, object, action)
 	return ok
 }
 
 // ConfigFileReload is used to reload the config file when it is changed. This is used to reload the policy without
-// restarting the server. The config file is in the format of yaml.
-func ConfigFileReload(e fsnotify.Event, authorizer *CasbinObject) {
+// restarting the server. The config file is in the format of yaml. The config file is read by viper.
+func ConfigFileReload(e fsnotify.Event) {
 	logger.Infow("RBAC conf file updated:", "fileName", e.Name)
-	conf := authorizer.GetConfig()
-	err := conf.ReadInConfig()
+	err := configReader.ReadInConfig()
 	if err != nil {
 		return
 	}
 	// update the scopes
-	currentScopes := getRBACScopes(conf)
-	authorizer.setScopes(currentScopes)
+	newScopes := getRBACScopes(configReader)
+	currentScopes = newScopes
 	// update the default policy
-	authorizer.policyDefault = getDefaultPolicy(conf)
+	policyDefault = getDefaultPolicy(configReader)
 	// clear the userPermCount cache
 	userPermCount = make(map[string]int)
-	logger.Infow("Auth Scopes Updated", "scopes", authorizer.GetScopes())
+	logger.Infow("Auth Scopes Updated", "scopes", currentScopes)
 }
 
 // getDefaultPolicy returns the default policy from the rbac properties file. The default policy is used when the
@@ -298,33 +287,28 @@ func getDefaultPolicy(config *viper.Viper) string {
 	return defaultPolicy.(string)
 }
 
-// getPermissionCount returns the number of permissions for a user.
-func getPermissionCount(enforcer *casbin.Enforcer, user string) int {
+// getPermissionCount returns if there are permissions defined for a user in the RBAC policy.
+// If the user has permissions in the policy, it returns true, otherwise false.
+func getPermissionCount(enforcer *casbin.Enforcer, user string) bool {
 	// check if user exists in userPermCount
 	if userPermCount == nil {
 		userPermCount = make(map[string]int)
 	}
-	if userPermCount[user] != 0 {
-		return userPermCount[user]
+	val, ok := userPermCount[user]
+	// If the key exists
+	if ok {
+		// Return true if the user has permissions in the policy
+		// and false if the user does not have permissions in the policy.
+		return val > 0
 	}
 	// get the permissions for the user
 	cnt, err := enforcer.GetImplicitPermissionsForUser(user)
 	if err != nil {
 		logger.Errorw("Failed to get permissions for user", "user", user, "error", err)
-		return 0
+		return false
 	}
 	count := len(cnt)
 	// store the count in userPermCount
 	userPermCount[user] = count
-	return count
-}
-
-// enforceDefault checks if the user has permission based on the Casbin model and policy.
-func enforceDefault(enforcer *casbin.Enforcer, c *gin.Context, user string) (bool, int) {
-	resource := extractResource(c)
-	object := extractObject(c)
-	action := c.Request.Method
-	policyCount := getPermissionCount(enforcer, user)
-	// Check if the user has permission based on the email.
-	return enforceCheck(enforcer, user, resource, object, action), policyCount
+	return count > 0
 }

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -64,13 +63,6 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		if err != nil {
 			panic(err)
 		}
-		configReader := authorizer.GetConfig()
-		// Watch for changes in the config file.
-		configReader.WatchConfig()
-		configReader.OnConfigChange(func(in fsnotify.Event) {
-			authz.ConfigFileReload(in, authorizer)
-		})
-
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(authorizer, dexObj))
 	}
@@ -165,35 +157,14 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 		routeMapKey := authz.GetRouteMapKey(c)
 		// Check if the route requires authorization.
 		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuthZ {
-			// Get the scopes to check from the policy.
-			scopes := authorizer.GetScopes()
-			logger.Infow("Requested scopes for Auth", "scopes", scopes)
 			// Check if the user is authorized to execute the requested action.
-			isAuthorized := false
-			policyCount := 0
-			cnt := 0
-			for _, scope := range scopes {
-				isAuthorized, cnt = authorizer.Authorize(c, userInfo, scope)
-				policyCount += cnt
-				if isAuthorized {
-					// If the user is authorized, continue the request.
-					c.Next()
-					return
-				}
-			}
-			// If the user does not have any policy defined, allocate a default policy for the user.
-			if policyCount == 0 {
-				logger.Infow("No policy defined for the user, allocating default policy")
-				isAuthorized, _ = authorizer.Authorize(c, userInfo, authz.ScopeDefault)
-				if isAuthorized {
-					// If the user is authorized, continue the request.
-					c.Next()
-					return
-				}
-
-			}
-			// If the user is not authorized, return an error.
-			if !isAuthorized {
+			isAuthorized := authorizer.Authorize(c, userInfo)
+			if isAuthorized {
+				// If the user is authorized, continue the request.
+				c.Next()
+				return
+			} else {
+				// If the user is not authorized, return an error.
 				errMsg := "user is not authorized to execute the requested action"
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
