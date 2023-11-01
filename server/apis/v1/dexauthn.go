@@ -256,7 +256,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 	for _, cookie := range cookies {
-		c.SetCookie(cookie.Key, cookie.Value, common.StateCookieMaxAge, "/", "", true, true)
+		c.SetCookie(cookie.Key, cookie.Value, common.UserIdentityCookieMaxAge, "/", "", true, true)
 	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
