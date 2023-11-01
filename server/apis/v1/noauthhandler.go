@@ -51,6 +51,7 @@ func (h *noAuthHandler) Logout(c *gin.Context) {
 	cookies := c.Request.Cookies()
 	tokenString, _ := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if tokenString == "" {
+		// no numaflow.token found, return directly
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
