@@ -89,7 +89,7 @@ func NewHandler(dexObj *DexObject) (*handler, error) {
 		metricsClient:      metricsClient,
 		numaflowClient:     numaflowClient,
 		daemonClientsCache: daemonClientsCache,
-		dexObj:         dexObj,
+		dexObj:             dexObj,
 	}, nil
 }
 
