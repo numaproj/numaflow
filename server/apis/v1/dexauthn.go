@@ -152,6 +152,7 @@ func (d *DexObject) handleLogin(c *gin.Context) {
 		if err != nil {
 			errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
 			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+			return
 		}
 		authCodeURL = oauth2Config.AuthCodeURL(stateNonce)
 	} else {
@@ -159,6 +160,7 @@ func (d *DexObject) handleLogin(c *gin.Context) {
 		if err != nil {
 			errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
 			c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+			return
 		}
 		authCodeURL = oauth2Config.AuthCodeURL(stateNonce, oauth2.AccessTypeOffline)
 	}
@@ -178,6 +180,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to get oauth2 config %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
 	}
 	stateCookie, err := c.Cookie(common.StateCookieName)
 	if err != nil {
