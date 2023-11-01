@@ -41,7 +41,6 @@ type DexObject struct {
 	clientID    string
 	issuerURL   string
 	redirectURI string
-	baseHref    string
 	// offlineAsScope defines whether the provider uses "offline_access" scope to
 	// request a refresh token or uses "access_type=offline" (e.g. Google)
 	offlineAsScope bool
@@ -67,7 +66,6 @@ func NewDexObject(baseURL string, baseHref string, proxyURL string) (*DexObject,
 		clientID:       common.AppClientID,
 		issuerURL:      issuerURL,
 		redirectURI:    redirectURI,
-		baseHref:       baseHref,
 		offlineAsScope: true,
 		client:         client,
 	}, nil
