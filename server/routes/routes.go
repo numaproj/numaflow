@@ -169,7 +169,6 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
 			}
-      return
 		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuthZ {
 			// If the route does not require AuthZ, skip the AuthZ check.
 			c.Next()
@@ -179,7 +178,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			errMsg := "Invalid route"
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
-			return
 		}
+		return
 	}
 }
