@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -49,7 +50,12 @@ func (h *noAuthHandler) Callback(c *gin.Context) {
 // Logout is used to remove auth cookie ending a user's session.
 func (h *noAuthHandler) Logout(c *gin.Context) {
 	cookies := c.Request.Cookies()
-	tokenString, _ := common.JoinCookies(common.UserIdentityCookieName, cookies)
+	tokenString, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
+	if strings.HasPrefix(err.Error(), common.InvalidCookieError) {
+		errMsg := fmt.Sprintf("Failed to retrieve user identity token: %v", err)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
 	if tokenString == "" {
 		// no numaflow.token found, return directly
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
