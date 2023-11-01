@@ -16,6 +16,12 @@ const (
 	maxCookieNumber = 10
 )
 
+type InvalidCookieError struct {
+	Key string
+}
+
+func (e *InvalidCookieError) Error() string { return "invalid cookie for key:" + e.Key }
+
 type IdentityCookie struct {
 	Key   string
 	Value string
@@ -90,7 +96,7 @@ func JoinCookies(key string, cookieList []*http.Cookie) (string, error) {
 		}
 		sb.WriteString(strings.Join(parts[1:], ":"))
 	} else {
-		return "", fmt.Errorf("invalid cookie for key %s", key)
+		return "", &InvalidCookieError{Key: key}
 	}
 
 	for i := 1; i < numOfChunks; i++ {

@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -51,15 +52,18 @@ func (h *noAuthHandler) Callback(c *gin.Context) {
 func (h *noAuthHandler) Logout(c *gin.Context) {
 	cookies := c.Request.Cookies()
 	tokenString, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
-	if err != nil {
+	var invalidCookieE *common.InvalidCookieError
+	if errors.As(err, &invalidCookieE) {
 		errMsg := fmt.Sprintf("Failed to retrieve user identity token: %v", err)
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		c.JSON(http.StatusBadRequest, NewNumaflowAPIResponse(&errMsg, nil))
+		return
 	}
 	if tokenString == "" {
-		errMsg := "Failed to retrieve user identity token: empty token"
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		// no numaflow.token found, return directly
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+		return
 	}
-
+	// if there's any numaflow.token cookie, delete
 	for _, cookie := range cookies {
 		if !strings.HasPrefix(cookie.Name, common.UserIdentityCookieName) {
 			continue
