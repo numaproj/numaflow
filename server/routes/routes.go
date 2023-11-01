@@ -66,7 +66,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(authorizer, dexObj))
 	}
-	v1Routes(r1Group)
+	v1Routes(r1Group, dexObj)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})
@@ -87,8 +87,8 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject) {
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
 // for the route along with an entry in the RouteMap in auth/route_map.go.
-func v1Routes(r gin.IRouter) {
-	handler, err := v1.NewHandler()
+func v1Routes(r gin.IRouter, dexObj *v1.DexObject) {
+	handler, err := v1.NewHandler(dexObj)
 	if err != nil {
 		panic(err)
 	}

@@ -60,10 +60,11 @@ type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
+	dexObj         *DexObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler() (*handler, error) {
+func NewHandler(dexObj *DexObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -82,6 +83,7 @@ func NewHandler() (*handler, error) {
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
+		dexObj:         dexObj,
 	}, nil
 }
 
@@ -105,7 +107,21 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	res := authn.NewUserInfo(userInfo.IDTokenClaims, userInfo.IDToken, userInfo.RefreshToken)
+
+	idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to verify ID token: %s", err)
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	var claims authn.IDTokenClaims
+	if err = idToken.Claims(&claims); err != nil {
+		errMsg := fmt.Sprintf("error decoding ID token claims: %s", err)
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
+	res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 

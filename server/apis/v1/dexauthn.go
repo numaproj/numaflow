@@ -113,7 +113,16 @@ func (d *DexObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
 	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
 		return nil, fmt.Errorf("user is not authenticated, err: %s", err.Error())
 	}
-	userInfo = authn.NewUserInfo(userInfo.IDTokenClaims, userInfo.IDToken, userInfo.RefreshToken)
+	idToken, err := d.verify(c.Request.Context(), userInfo.IDToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify ID token: %w", err)
+	}
+
+	var claims authn.IDTokenClaims
+	if err = idToken.Claims(&claims); err != nil {
+		return nil, fmt.Errorf("error decoding ID token claims: %w", err)
+	}
+	userInfo = authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
 	return &userInfo, nil
 }
 
@@ -223,20 +232,6 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	idToken, err := d.verify(r.Context(), rawIDToken)
-	if err != nil {
-		errMsg := fmt.Sprintf("Failed to verify ID token: %v", err)
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-
-	var claims authn.IDTokenClaims
-	if err := idToken.Claims(&claims); err != nil {
-		errMsg := fmt.Sprintf("error decoding ID token claims: %v", err)
-		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-
 	var refreshToken string
 	if refreshToken, ok = token.Extra("refresh_token").(string); !ok {
 		errMsg := "Failed to convert refresh_token"
@@ -244,7 +239,8 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
-	res := authn.NewUserInfo(claims, rawIDToken, refreshToken)
+	// no need to include claims in the cookie
+	res := authn.NewUserInfo(nil, rawIDToken, refreshToken)
 	tokenStr, err := json.Marshal(res)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to convert to token string: %v", err)
@@ -261,7 +257,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 	for _, cookie := range cookies {
 		c.SetCookie(cookie.Key, cookie.Value, common.StateCookieMaxAge, "/", "", true, true)
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, claims))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
 // generateRandomNumber is for generating state nonce. This piece of code was obtained without much change from the argo-cd repository.

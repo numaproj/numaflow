@@ -43,14 +43,8 @@ func splitCookie(key, value string) []IdentityCookie {
 		if end > valueLength {
 			end = valueLength
 		}
-
 		var cookie IdentityCookie
-		if j == 0 && numberOfChunks == 1 {
-			cookie = IdentityCookie{
-				Key:   key,
-				Value: value,
-			}
-		} else if j == 0 {
+		if j == 0 {
 			cookie = IdentityCookie{
 				Key:   key,
 				Value: fmt.Sprintf("%d:%s", numberOfChunks, value[i:end]),
@@ -95,9 +89,6 @@ func JoinCookies(key string, cookieList []*http.Cookie) (string, error) {
 			return "", err
 		}
 		sb.WriteString(strings.Join(parts[1:], ":"))
-	} else if len(parts) == 1 {
-		numOfChunks = 1
-		sb.WriteString(parts[0])
 	} else {
 		return "", fmt.Errorf("invalid cookie for key %s", key)
 	}
