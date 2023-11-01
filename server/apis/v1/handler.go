@@ -60,10 +60,11 @@ type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
+	dexObj         *DexObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler() (*handler, error) {
+func NewHandler(dexObj *DexObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -82,24 +83,49 @@ func NewHandler() (*handler, error) {
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
+		dexObj:         dexObj,
 	}, nil
 }
 
 // AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
-	userIdentityTokenStr, err := c.Cookie(common.UserIdentityCookieName)
+	if h.dexObj == nil {
+		errMsg := "User is not authenticated: missing Dex"
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+	}
+	cookies := c.Request.Cookies()
+	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 	if err != nil {
-		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
+		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	userInfo := &authn.UserInfo{}
-	if err = json.Unmarshal([]byte(userIdentityTokenStr), userInfo); err != nil {
-		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
+	if userIdentityTokenStr == "" {
+		errMsg := "User is not authenticated, err: empty Token"
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	res := authn.NewUserInfo(userInfo.IDTokenClaims, userInfo.IDToken, userInfo.RefreshToken)
+	var userInfo authn.UserInfo
+	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
+		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
+	idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	var claims authn.IDTokenClaims
+	if err = idToken.Claims(&claims); err != nil {
+		errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
+	res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 

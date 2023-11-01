@@ -37,7 +37,6 @@ type SystemInfo struct {
 type AuthInfo struct {
 	DisableAuth   bool   `json:"disableAuth"`
 	DexServerAddr string `json:"dexServerAddr"`
-	DexProxyAddr  string `json:"dexProxyAddr"`
 	ServerAddr    string `json:"serverAddr"`
 }
 
@@ -47,7 +46,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
-	dexObj, err := v1.NewDexObject(authInfo.ServerAddr, baseHref, authInfo.DexProxyAddr)
+	dexObj, err := v1.NewDexObject(authInfo.ServerAddr, baseHref, authInfo.DexServerAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -65,8 +64,10 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(authorizer, dexObj))
+		v1Routes(r1Group, dexObj)
+	} else {
+		v1Routes(r1Group, nil)
 	}
-	v1Routes(r1Group)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})
@@ -87,8 +88,8 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject) {
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
 // for the route along with an entry in the RouteMap in auth/route_map.go.
-func v1Routes(r gin.IRouter) {
-	handler, err := v1.NewHandler()
+func v1Routes(r gin.IRouter, dexObj *v1.DexObject) {
+	handler, err := v1.NewHandler(dexObj)
 	if err != nil {
 		panic(err)
 	}
@@ -148,7 +149,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 		// Authenticate the user.
 		userInfo, err := authenticator.Authenticate(c)
 		if err != nil {
-			errMsg := fmt.Sprintf("failed to authenticate user: %v", err)
+			errMsg := fmt.Sprintf("Failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 			return
@@ -162,21 +163,20 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			if isAuthorized {
 				// If the user is authorized, continue the request.
 				c.Next()
-				return
 			} else {
 				// If the user is not authorized, return an error.
 				errMsg := "user is not authorized to execute the requested action"
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
-
 			}
+      return
 		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuthZ {
 			// If the route does not require AuthZ, skip the AuthZ check.
 			c.Next()
 		} else {
 			// If the route is not present in the route map, return an error.
 			logger.Errorw("route not present in routeMap", "route", routeMapKey)
-			errMsg := "invalid route"
+			errMsg := "Invalid route"
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 			return
