@@ -13,9 +13,14 @@ const (
 	maxCookieLength = 4096
 	maxValueLength  = maxCookieLength - 500
 	// max number of chunks a cookie can be broken into
-	maxCookieNumber    = 10
-	InvalidCookieError = "invalid cookie for key"
+	maxCookieNumber = 10
 )
+
+type InvalidCookieError struct {
+	Key string
+}
+
+func (e *InvalidCookieError) Error() string { return "invalid cookie for key:" + e.Key }
 
 type IdentityCookie struct {
 	Key   string
@@ -91,7 +96,7 @@ func JoinCookies(key string, cookieList []*http.Cookie) (string, error) {
 		}
 		sb.WriteString(strings.Join(parts[1:], ":"))
 	} else {
-		return "", fmt.Errorf("%s:%s", InvalidCookieError, key)
+		return "", &InvalidCookieError{Key: key}
 	}
 
 	for i := 1; i < numOfChunks; i++ {
