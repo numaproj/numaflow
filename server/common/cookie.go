@@ -25,7 +25,7 @@ type IdentityCookie struct {
 func MakeCookieMetadata(key, value string) ([]IdentityCookie, error) {
 	numberOfCookies := int(math.Ceil(float64(len(value)) / float64(maxValueLength)))
 	if numberOfCookies > maxCookieNumber {
-		return nil, fmt.Errorf("the authentication token is %d characters long and requires %d cookies but the max number of cookies is %d. Contact your Argo CD administrator to increase the max number of cookies", len(value), numberOfCookies, maxCookieNumber)
+		return nil, fmt.Errorf("the authentication token is %d characters long and requires %d cookies but the max number of cookies is %d", len(value), numberOfCookies, maxCookieNumber)
 	}
 	return splitCookie(key, value), nil
 }
