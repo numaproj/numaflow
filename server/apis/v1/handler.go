@@ -99,8 +99,8 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
-	userInfo := &authn.UserInfo{}
-	if err = json.Unmarshal([]byte(userIdentityTokenStr), userInfo); err != nil {
+	var userInfo authn.UserInfo
+	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
 		errMsg := fmt.Sprintf("user is not authenticated, err: %s", err.Error())
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return

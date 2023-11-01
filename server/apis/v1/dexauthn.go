@@ -110,7 +110,7 @@ func (d *DexObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
 	if userIdentityTokenStr == "" {
 		return nil, fmt.Errorf("failed to retrieve user identity token: empty token")
 	}
-	if err = json.Unmarshal([]byte(userIdentityTokenStr), userInfo); err != nil {
+	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
 		return nil, fmt.Errorf("user is not authenticated, err: %s", err.Error())
 	}
 	userInfo = authn.NewUserInfo(userInfo.IDTokenClaims, userInfo.IDToken, userInfo.RefreshToken)
