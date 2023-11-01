@@ -37,7 +37,6 @@ type SystemInfo struct {
 type AuthInfo struct {
 	DisableAuth   bool   `json:"disableAuth"`
 	DexServerAddr string `json:"dexServerAddr"`
-	DexProxyAddr  string `json:"dexProxyAddr"`
 	ServerAddr    string `json:"serverAddr"`
 }
 
@@ -47,7 +46,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
-	dexObj, err := v1.NewDexObject(authInfo.ServerAddr, baseHref, authInfo.DexProxyAddr)
+	dexObj, err := v1.NewDexObject(authInfo.ServerAddr, baseHref, authInfo.DexServerAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -65,8 +64,10 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(authorizer, dexObj))
+		v1Routes(r1Group, nil)
+	} else {
+		v1Routes(r1Group, dexObj)
 	}
-	v1Routes(r1Group, dexObj)
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})

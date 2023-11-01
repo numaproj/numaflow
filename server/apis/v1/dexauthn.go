@@ -48,7 +48,7 @@ type DexObject struct {
 }
 
 // NewDexObject returns a new DexObject.
-func NewDexObject(baseURL string, baseHref string, proxyURL string) (*DexObject, error) {
+func NewDexObject(baseURL string, baseHref string, dexURL string) (*DexObject, error) {
 	issuerURL, err := url.JoinPath(baseURL, "/dex")
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func NewDexObject(baseURL string, baseHref string, proxyURL string) (*DexObject,
 	client.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	client.Transport = NewDexRewriteURLRoundTripper(proxyURL, client.Transport)
+	client.Transport = NewDexRewriteURLRoundTripper(dexURL, client.Transport)
 	return &DexObject{
 		clientID:       common.AppClientID,
 		issuerURL:      issuerURL,
