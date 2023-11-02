@@ -124,6 +124,21 @@
     align-items: center;
 }
 
+.generator_handle {
+    top: 60%;
+    left: 82.5%;
+    background: none;
+}
+
+.generator_node {
+    background: #F8F8FB;
+    padding: 1rem 1.5rem 1rem 1.5rem;
+    margin-left: -1.5rem;
+    border-radius: 1.25rem;
+    border: 0.0625rem solid #DAE3E8;
+    color: #6B6C72;
+}
+
 .react-flow__handle-bottom {
     z-index: -1;
     margin: -0.2rem;
