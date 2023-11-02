@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
@@ -50,6 +51,7 @@ type CasbinObject struct {
 	currentScopes []string
 	policyDefault string
 	configReader  *viper.Viper
+	permCountLock *sync.RWMutex
 }
 
 func NewCasbinObject() (*CasbinObject, error) {
@@ -75,6 +77,7 @@ func NewCasbinObject() (*CasbinObject, error) {
 		currentScopes: currentScopes,
 		policyDefault: policyDefault,
 		configReader:  configReader,
+		permCountLock: &sync.RWMutex{},
 	}
 
 	// Watch for changes in the config file.
@@ -101,7 +104,7 @@ func (cas *CasbinObject) Authorize(c *gin.Context, userInfo *authn.UserInfo) boo
 	// Check for the given scoped list if the user is authorized using any of the subjects in the list.
 	for _, scopedSubject := range scopedList {
 		// Check if the user has permissions in the policy for the given scoped subject.
-		userHasPolicies = userHasPolicies || hasPermissionsDefined(cas.enforcer, scopedSubject, cas.userPermCount)
+		userHasPolicies = userHasPolicies || cas.hasPermissionsDefined(scopedSubject)
 		if ok := enforceCheck(cas.enforcer, scopedSubject, resource, object, action); ok {
 			return ok
 		}
@@ -295,12 +298,12 @@ func getDefaultPolicy(config *viper.Viper) string {
 // We have a cache userPermCount to store the count of permissions for a user. If the user has permissions in the
 // policy, we store the count in the cache and return based on the value.
 // If the user does not have permissions in the policy, we add it to the cache before returning
-func hasPermissionsDefined(enforcer *casbin.Enforcer, user string, userPermCount map[string]int) bool {
+func (cas *CasbinObject) hasPermissionsDefined(user string) bool {
 	// check if user exists in userPermCount
-	if userPermCount == nil {
-		userPermCount = make(map[string]int)
+	if cas.userPermCount == nil {
+		cas.userPermCount = make(map[string]int)
 	}
-	val, ok := userPermCount[user]
+	val, ok := cas.getPermCount(user)
 	// If the key exists
 	if ok {
 		// Return true if the user has permissions in the policy
@@ -308,13 +311,28 @@ func hasPermissionsDefined(enforcer *casbin.Enforcer, user string, userPermCount
 		return val > 0
 	}
 	// get the permissions for the user
-	cnt, err := enforcer.GetImplicitPermissionsForUser(user)
+	cnt, err := cas.enforcer.GetImplicitPermissionsForUser(user)
 	if err != nil {
 		logger.Errorw("Failed to get permissions for user", "user", user, "error", err)
 		return false
 	}
 	count := len(cnt)
 	// store the count in userPermCount
-	userPermCount[user] = count
+	cas.updatePermCount(user, count)
 	return count > 0
+}
+
+// updatePermCount updates the permission count for the user in the cache.
+func (cas *CasbinObject) updatePermCount(user string, count int) {
+	cas.permCountLock.Lock()
+	defer cas.permCountLock.Unlock()
+	cas.userPermCount[user] = count
+}
+
+// getPermCount returns the permission count for the user from the cache.
+func (cas *CasbinObject) getPermCount(user string) (int, bool) {
+	cas.permCountLock.RLock()
+	defer cas.permCountLock.RUnlock()
+	val, ok := cas.userPermCount[user]
+	return val, ok
 }
