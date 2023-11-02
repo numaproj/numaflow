@@ -217,7 +217,7 @@ const CustomEdge: FC<EdgeProps> = ({
               title={
                 <div className={"edge-tooltip"}>
                   <div>Watermark</div>
-                  {data?.edgeWatermark?.WMFetchTime < 0 ? (
+                  {getMinWM < 0 ? (
                     <div>Not Available</div>
                   ) : (
                     <>
