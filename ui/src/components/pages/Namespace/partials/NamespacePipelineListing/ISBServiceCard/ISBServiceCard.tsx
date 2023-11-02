@@ -48,7 +48,7 @@ export function ISBServiceCard({
     setSidebarProps({
       type: SidebarType.ISB_UPDATE,
       specEditorProps: {
-        initialYaml: data?.isbService?.spec,
+        initialYaml: data?.isbService,
         namespaceId: namespace,
         isbId: data?.name,
         viewType: ViewType.EDIT,
