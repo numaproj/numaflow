@@ -31,7 +31,7 @@ import {
   ASC,
   CRITICAL,
   DELETING,
-  DESC,
+  DESC, FAILED,
   HEALTHY,
   INACTIVE,
   LAST_CREATED_SORT,
@@ -56,6 +56,7 @@ export const STATUS = [
   PAUSING,
   PAUSED,
   DELETING,
+  FAILED,
   UNKNOWN,
 ];
 
