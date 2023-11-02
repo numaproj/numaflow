@@ -992,7 +992,7 @@ func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClie
 
 	client, ok := dClient.(*daemonclient.DaemonClient)
 	if !ok {
-		return nil, nil
+		return nil, fmt.Errorf("failed to get client")
 	}
 
 	return client, nil
