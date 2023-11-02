@@ -64,6 +64,7 @@ export function DebouncedSearchInput({
         ),
       }}
       onChange={handleInputChange}
+      data-testid="debounced-search-input"
     />
   );
 }
