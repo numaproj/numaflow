@@ -70,7 +70,7 @@ const CustomNode: FC<NodeProps> = ({
   const {
     highlightValues,
     setHighlightValues,
-    // setHidden,
+    setHidden,
     sideInputNodes,
     // handleNodeClick,
     sideInputEdges,
@@ -213,45 +213,45 @@ const CustomNode: FC<NodeProps> = ({
     [sideInputEdges, data, sideInputNodes, setHighlightValues]
   );
 
-  // const handleMouseOver = useCallback(
-  //   (e) => {
-  //     const targetId = e.target.id;
-  //     let source: string;
-  //
-  //     sideInputNodes.forEach((_, node) => {
-  //       const possibleEdge = `${node}-${data?.name}`;
-  //       if (
-  //         sideInputEdges.has(possibleEdge) &&
-  //         sideInputEdges.get(possibleEdge) === targetId
-  //       ) {
-  //         source = node;
-  //       }
-  //     });
-  //     setHidden((prevState) => {
-  //       const updatedState = {};
-  //       Object.keys(prevState).forEach((key) => {
-  //         updatedState[key] = true;
-  //       });
-  //       updatedState[source] = false;
-  //       return updatedState;
-  //     });
-  //     const updatedHighlightedState = {};
-  //     updatedHighlightedState[source] = true;
-  //     setHighlightValues(updatedHighlightedState);
-  //   },
-  //   [data, sideInputNodes, sideInputEdges, setHidden, setHighlightValues]
-  // );
-  //
-  // const handleMouseOut = useCallback(() => {
-  //   setHidden((prevState) => {
-  //     const updatedState = {};
-  //     Object.keys(prevState).forEach((key) => {
-  //       updatedState[key] = true;
-  //     });
-  //     return updatedState;
-  //   });
-  //   setHighlightValues({});
-  // }, [setHidden, setHighlightValues]);
+  const handleMouseOver = useCallback(
+    (e) => {
+      const targetId = e.target.id;
+      let source: string;
+
+      sideInputNodes.forEach((_, node) => {
+        const possibleEdge = `${node}-${data?.name}`;
+        if (
+          sideInputEdges.has(possibleEdge) &&
+          sideInputEdges.get(possibleEdge) === targetId
+        ) {
+          source = node;
+        }
+      });
+      setHidden((prevState) => {
+        const updatedState = {};
+        Object.keys(prevState).forEach((key) => {
+          updatedState[key] = true;
+        });
+        updatedState[source] = false;
+        return updatedState;
+      });
+      const updatedHighlightedState = {};
+      updatedHighlightedState[source] = true;
+      setHighlightValues(updatedHighlightedState);
+    },
+    [data, sideInputNodes, sideInputEdges, setHidden, setHighlightValues]
+  );
+
+  const handleMouseOut = useCallback(() => {
+    setHidden((prevState) => {
+      const updatedState = {};
+      Object.keys(prevState).forEach((key) => {
+        updatedState[key] = true;
+      });
+      return updatedState;
+    });
+    setHighlightValues({});
+  }, [setHidden, setHighlightValues]);
 
   return (
     <div data-testid={data?.name}>
@@ -390,8 +390,8 @@ const CustomNode: FC<NodeProps> = ({
               ...blurHandle(`3-${idx}`),
             }}
             width={22}
-            // onMouseOver={handleMouseOver}
-            // onMouseOut={handleMouseOut}
+            onMouseOver={handleMouseOver}
+            onMouseOut={handleMouseOut}
             onClick={handleInputClick}
           />
         );
