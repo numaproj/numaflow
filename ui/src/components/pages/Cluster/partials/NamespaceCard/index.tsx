@@ -5,6 +5,7 @@ import Grid from "@mui/material/Grid";
 import { Link } from "react-router-dom";
 import { NamespaceCardProps } from "../../../../../types/declarations/cluster";
 import { StatusCounts } from "../../../../common/StatusCounts/StatusCounts";
+import { ACTIVE, INACTIVE } from "../../../../../utils";
 
 import "./style.css";
 
@@ -59,7 +60,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                 {data?.pipelinesActiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
-                Active
+                {ACTIVE}
               </span>
             </Box>
           </Grid>
@@ -69,7 +70,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                 {data?.pipelinesInactiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
-                Non-Active
+                {INACTIVE}
               </span>
             </Box>
           </Grid>
@@ -137,7 +138,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                 {data?.isbsActiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
-                Active
+                {ACTIVE}
               </span>
             </Box>
           </Grid>
@@ -147,7 +148,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
                 {data?.isbsInactiveCount}
               </span>
               <span className="namespace-card-section-text-16-normal namespace-card-group-spacing">
-                Non-Active
+                {INACTIVE}
               </span>
             </Box>
           </Grid>

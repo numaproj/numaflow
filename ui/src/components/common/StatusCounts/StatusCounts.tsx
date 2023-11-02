@@ -29,7 +29,11 @@ export function StatusCounts(counts: StatusCountsProps) {
             <Box sx={{ display: "flex", flexDirection: "column" }}>
               <Box sx={{ display: "flex", flexDirection: "row" }}>
                 <img
-                  src={IconsStatusMap[key]}
+                  src={
+                    counts.counts[key] > 0
+                      ? IconsStatusMap[key]
+                      : IconsStatusMap[`${key}0`]
+                  }
                   alt={key}
                   className="status-icon-img"
                 />

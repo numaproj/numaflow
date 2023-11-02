@@ -34,7 +34,7 @@ import {
   DESC,
   FAILED,
   HEALTHY,
-  INACTIVE,
+  INACTIVE_STATTUS,
   LAST_CREATED_SORT,
   LAST_UPDATED_SORT,
   PAUSED,
@@ -49,7 +49,14 @@ import {
 import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
-export const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL, INACTIVE, UNKNOWN];
+export const HEALTH = [
+  ALL,
+  HEALTHY,
+  WARNING,
+  CRITICAL,
+  INACTIVE_STATTUS,
+  UNKNOWN,
+];
 export const STATUS = [
   ALL,
   RUNNING,
