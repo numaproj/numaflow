@@ -100,7 +100,7 @@ export function SlidingSidebar({
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
       : pageWidth * 0.75
   );
-  const [minWidth, _] = useState<number>(0);
+  const [minWidth] = useState<number>(0);
   const [modalOnClose, setModalOnClose] = useState<
     SpecEditorModalProps | undefined
   >();
@@ -303,7 +303,7 @@ export function SlidingSidebar({
             display: "flex",
             flexDirection: "row",
             justifyContent: "flex-end",
-            marginBottom: "-2rem"
+            marginBottom: "-2rem",
           }}
         >
           <IconButton data-testid="close-button" onClick={handleClose}>
