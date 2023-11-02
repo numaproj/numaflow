@@ -108,7 +108,7 @@ const getLayoutedElements = (
   // setting nodes excepts generators and assigning generator height after remaining nodes are laid out
   let max_pos = 0;
   nodes.forEach((node) => {
-    if (node?.data?.type !== "sideInput") {
+    if (node?.data?.type !== "sideInput" && node?.data?.type !== "generator") {
       const nodeWithPosition = dagreGraph.node(node.id);
       max_pos = Math.max(max_pos, nodeWithPosition.y);
     }
@@ -116,7 +116,7 @@ const getLayoutedElements = (
   let cnt = 2;
   nodes.forEach((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
-    if (node?.data?.type === "sideInput") {
+    if (node?.data?.type === "sideInput" || node?.data?.type === "generator") {
       nodeWithPosition.x = nodeWidth;
       nodeWithPosition.y = max_pos + nodeHeight * 0.75 * cnt;
       cnt++;
