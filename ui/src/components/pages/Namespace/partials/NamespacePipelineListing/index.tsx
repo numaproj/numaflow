@@ -31,7 +31,8 @@ import {
   ASC,
   CRITICAL,
   DELETING,
-  DESC, FAILED,
+  DESC,
+  FAILED,
   HEALTHY,
   INACTIVE,
   LAST_CREATED_SORT,
@@ -437,6 +438,7 @@ export function NamespacePipelineListing({
 
   const handleCreatePipelineComplete = useCallback(() => {
     refresh();
+    setTabValue(PIPELINE);
     if (!setSidebarProps) {
       return;
     }
@@ -464,6 +466,7 @@ export function NamespacePipelineListing({
 
   const handleCreateISBComplete = useCallback(() => {
     refresh();
+    setTabValue(ISB_SERVICES);
     if (!setSidebarProps) {
       return;
     }
