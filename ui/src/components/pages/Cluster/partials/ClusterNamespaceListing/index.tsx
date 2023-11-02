@@ -55,7 +55,7 @@ export function ClusterNamespaceListing({
       );
     }
     // Sort by name
-    filtered.sort((a, b) => (a.name > b.name ? 1 : -1));
+    filtered?.sort((a, b) => (a.name > b.name ? 1 : -1));
 
     //Filter based on the empty pipelines filter
     if (namespaceFilter === WITH_PIPELINES) {

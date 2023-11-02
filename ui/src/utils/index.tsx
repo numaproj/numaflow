@@ -5,6 +5,9 @@ import circleDash from "../../src/images/circle-dash.png";
 import heartFill from "../../src/images/heart-fill.png";
 import warning from "../../src/images/warning-circle.png";
 import critical from "../../src/images/critical.png";
+import heartFill0 from "../../src/images/heart-fill0.png";
+import warning0 from "../../src/images/warning0.png";
+import critical0 from "../../src/images/critical0.png";
 import moment from "moment";
 import { IsbServiceSpec } from "../types/declarations/pipeline";
 import { styled } from "@mui/material/styles";
@@ -13,10 +16,14 @@ import Tooltip, { tooltipClasses, TooltipProps } from "@mui/material/Tooltip";
 // global constants
 export const ALL = "All";
 export const RUNNING = "Running";
-export const ACTIVE = "active";
-export const INACTIVE = "inactive";
+export const ACTIVE = "Running";
+export const INACTIVE = "Not-Running";
+export const INACTIVE_STATTUS = "inactive";
 export const HEALTHY = "healthy";
 export const WARNING = "warning";
+export const CRITICAL0 = "critical0";
+export const HEALTHY0 = "healthy0";
+export const WARNING0 = "warning0";
 export const CRITICAL = "critical";
 export const SUCCEEDED = "Succeeded";
 export const FAILED = "Failed";
@@ -234,9 +241,13 @@ export const IconsStatusMap = {
   [PAUSED]: circleDash,
   [ACTIVE]: circleCheck,
   [INACTIVE]: circleDash,
+  [INACTIVE_STATTUS]: circleDash,
   [HEALTHY]: heartFill,
   [WARNING]: warning,
   [CRITICAL]: critical,
+  [HEALTHY0]: heartFill0,
+  [WARNING0]: warning0,
+  [CRITICAL0]: critical0,
   [STOPPED]: circleDash,
   [UNKNOWN]: circleDash,
 };
@@ -247,7 +258,7 @@ interface StatusStringType {
 
 export const StatusString: StatusStringType = {
   [ALL]: "All",
-  [RUNNING]: "Active",
+  [RUNNING]: "Running",
   [SUCCEEDED]: "Succeeded",
   [FAILED]: "Failed",
   [PENDING]: "Pending",
@@ -255,22 +266,29 @@ export const StatusString: StatusStringType = {
   [DELETING]: "Deleting",
   [PAUSED]: "Paused",
   [STOPPED]: "Stopped",
-  [ACTIVE]: "Active",
+  [ACTIVE]: "Running",
   [INACTIVE]: "Inactive",
+  [INACTIVE_STATTUS]: "Inactive",
   [HEALTHY]: "Healthy",
   [WARNING]: "Warning",
   [CRITICAL]: "Critical",
   [UNKNOWN]: "Unknown",
+  [WARNING0]: "Warning",
+  [CRITICAL0]: "Critical",
+  [HEALTHY0]: "Healthy",
 };
 
 export const ISBStatusString: StatusStringType = {
-  [RUNNING]: "Active",
+  [RUNNING]: "Running",
   [FAILED]: "Failed",
   [PENDING]: "Pending",
   [HEALTHY]: "Healthy",
   [WARNING]: "Warning",
   [CRITICAL]: "Critical",
   [UNKNOWN]: "Unknown",
+  [WARNING0]: "Warning",
+  [CRITICAL0]: "Critical",
+  [HEALTHY0]: "Healthy",
 };
 
 // returns the duration string in the format of 1d 2hr 3min 4sec 5ms

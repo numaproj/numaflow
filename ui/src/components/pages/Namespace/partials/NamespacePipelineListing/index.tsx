@@ -34,7 +34,7 @@ import {
   DESC,
   FAILED,
   HEALTHY,
-  INACTIVE,
+  INACTIVE_STATTUS,
   LAST_CREATED_SORT,
   LAST_UPDATED_SORT,
   PAUSED,
@@ -49,7 +49,14 @@ import {
 import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
-export const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL, INACTIVE, UNKNOWN];
+export const HEALTH = [
+  ALL,
+  HEALTHY,
+  WARNING,
+  CRITICAL,
+  INACTIVE_STATTUS,
+  UNKNOWN,
+];
 export const STATUS = [
   ALL,
   RUNNING,
@@ -148,7 +155,7 @@ export function NamespacePipelineListing({
     }
     // Sorting
     if (orderBy.value === ALPHABETICAL_SORT) {
-      filtered.sort((a: PipelineData, b: PipelineData) => {
+      filtered?.sort((a: PipelineData, b: PipelineData) => {
         if (orderBy.sortOrder === ASC) {
           return a.name > b.name ? 1 : -1;
         } else {
@@ -156,7 +163,7 @@ export function NamespacePipelineListing({
         }
       });
     } else if (orderBy.value === LAST_UPDATED_SORT) {
-      filtered.sort((a: PipelineData, b: PipelineData) => {
+      filtered?.sort((a: PipelineData, b: PipelineData) => {
         if (orderBy.sortOrder === ASC) {
           return a?.pipeline?.status?.lastUpdated >
             b?.pipeline?.status?.lastUpdated
@@ -170,7 +177,7 @@ export function NamespacePipelineListing({
         }
       });
     } else {
-      filtered.sort((a: PipelineData, b: PipelineData) => {
+      filtered?.sort((a: PipelineData, b: PipelineData) => {
         if (orderBy.sortOrder === ASC) {
           return Date.parse(a?.pipeline?.metadata?.creationTimestamp) >
             Date.parse(b?.pipeline?.metadata?.creationTimestamp)
@@ -247,7 +254,7 @@ export function NamespacePipelineListing({
     }
     // Sorting
     if (orderBy.value === ALPHABETICAL_SORT) {
-      filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
+      filtered?.sort((a: ISBServicesListing, b: ISBServicesListing) => {
         if (orderBy.sortOrder === ASC) {
           return a.name > b.name ? 1 : -1;
         } else {
@@ -255,37 +262,49 @@ export function NamespacePipelineListing({
         }
       });
     } else if (orderBy.value === LAST_UPDATED_SORT) {
-      filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
+      filtered?.sort((a: ISBServicesListing, b: ISBServicesListing) => {
         if (orderBy.sortOrder === ASC) {
+          if (!a?.isbService?.status?.conditions) {
+            return 1;
+          }
+          if (!b?.isbService?.status?.conditions) {
+            return -1;
+          }
           return new Date(
             a?.isbService?.status?.conditions[
               a?.isbService?.status?.conditions?.length - 1
-            ].lastTransitionTime
+            ]?.lastTransitionTime
           ) >
             new Date(
               b?.isbService?.status?.conditions[
                 b?.isbService?.status?.conditions?.length - 1
-              ].lastTransitionTime
+              ]?.lastTransitionTime
             )
             ? 1
             : -1;
         } else {
+          if (!a?.isbService?.status?.conditions) {
+            return -1;
+          }
+          if (!b?.isbService?.status?.conditions) {
+            return 1;
+          }
           return new Date(
             a?.isbService?.status?.conditions[
               a?.isbService?.status?.conditions?.length - 1
-            ].lastTransitionTime
+            ]?.lastTransitionTime
           ) <
             new Date(
               b?.isbService?.status?.conditions[
                 b?.isbService?.status?.conditions?.length - 1
-              ].lastTransitionTime
+              ]?.lastTransitionTime
             )
             ? 1
             : -1;
         }
       });
     } else {
-      filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
+      filtered?.sort((a: ISBServicesListing, b: ISBServicesListing) => {
         if (orderBy.sortOrder === ASC) {
           return new Date(a?.isbService?.metadata?.creationTimestamp) >
             new Date(b?.isbService?.metadata?.creationTimestamp)
