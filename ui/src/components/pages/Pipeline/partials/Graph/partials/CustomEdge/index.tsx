@@ -217,8 +217,14 @@ const CustomEdge: FC<EdgeProps> = ({
               title={
                 <div className={"edge-tooltip"}>
                   <div>Watermark</div>
-                  <div>{new Date(getMinWM).toISOString()}</div>
-                  <div>{getDelay}</div>
+                  {data?.edgeWatermark?.WMFetchTime < 0 ? (
+                    <div>Not Available</div>
+                  ) : (
+                    <>
+                      <div>{new Date(getMinWM).toISOString()}</div>
+                      <div>{getDelay}</div>
+                    </>
+                  )}
                 </div>
               }
               arrow
