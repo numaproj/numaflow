@@ -53,7 +53,6 @@ export const PodsHeatMap = ({
           };
           // check if details?.containerMap is an array
           details?.containerMap &&
-            Array.isArray(details?.containerMap) &&
             details?.containerMap?.forEach((value, key) => {
               const resourceUsage = getPodContainerUsePercentages(
                 pod,
