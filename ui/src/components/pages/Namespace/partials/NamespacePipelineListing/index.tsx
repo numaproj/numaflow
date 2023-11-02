@@ -30,21 +30,35 @@ import {
   ALPHABETICAL_SORT,
   ASC,
   CRITICAL,
-  DESC,
+  DELETING,
+  DESC, FAILED,
   HEALTHY,
+  INACTIVE,
   LAST_CREATED_SORT,
   LAST_UPDATED_SORT,
   PAUSED,
+  PAUSING,
   RUNNING,
+  StatusString,
   STOPPED,
+  UNKNOWN,
   WARNING,
 } from "../../../../../utils";
 
 import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
-export const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL];
-export const STATUS = [ALL, RUNNING, STOPPED, PAUSED];
+export const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL, INACTIVE, UNKNOWN];
+export const STATUS = [
+  ALL,
+  RUNNING,
+  STOPPED,
+  PAUSING,
+  PAUSED,
+  DELETING,
+  FAILED,
+  UNKNOWN,
+];
 
 const sortOptions = [
   {
@@ -143,11 +157,13 @@ export function NamespacePipelineListing({
     } else if (orderBy.value === LAST_UPDATED_SORT) {
       filtered.sort((a: PipelineData, b: PipelineData) => {
         if (orderBy.sortOrder === ASC) {
-          return a.pipeline.status.lastUpdated > b.pipeline.status.lastUpdated
+          return a?.pipeline?.status?.lastUpdated >
+            b?.pipeline?.status?.lastUpdated
             ? 1
             : -1;
         } else {
-          return a.pipeline.status.lastUpdated < b.pipeline.status.lastUpdated
+          return a?.pipeline?.status?.lastUpdated <
+            b?.pipeline?.status?.lastUpdated
             ? 1
             : -1;
         }
@@ -155,13 +171,13 @@ export function NamespacePipelineListing({
     } else {
       filtered.sort((a: PipelineData, b: PipelineData) => {
         if (orderBy.sortOrder === ASC) {
-          return Date.parse(a.pipeline.metadata.creationTimestamp) >
-            Date.parse(b.pipeline.metadata.creationTimestamp)
+          return Date.parse(a?.pipeline?.metadata?.creationTimestamp) >
+            Date.parse(b?.pipeline?.metadata?.creationTimestamp)
             ? 1
             : -1;
         } else {
-          return Date.parse(a.pipeline.metadata.creationTimestamp) <
-            Date.parse(b.pipeline.metadata.creationTimestamp)
+          return Date.parse(a?.pipeline?.metadata?.creationTimestamp) <
+            Date.parse(b?.pipeline?.metadata?.creationTimestamp)
             ? 1
             : -1;
         }
@@ -170,7 +186,8 @@ export function NamespacePipelineListing({
     //Filter by health
     if (health !== "All") {
       filtered = filtered.filter((p) => {
-        if (p.status.toLowerCase() === health.toLowerCase()) {
+        const status = p?.status || UNKNOWN;
+        if (status.toLowerCase() === health.toLowerCase()) {
           return true;
         } else {
           return false;
@@ -181,7 +198,8 @@ export function NamespacePipelineListing({
     //Filter by status
     if (status !== "All") {
       filtered = filtered.filter((p) => {
-        if (p.pipeline.status.phase.toLowerCase() === status.toLowerCase()) {
+        const currentStatus = p?.pipeline?.status?.phase || UNKNOWN;
+        if (currentStatus.toLowerCase() === status.toLowerCase()) {
           return true;
         } else {
           return false;
@@ -239,26 +257,26 @@ export function NamespacePipelineListing({
       filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
         if (orderBy.sortOrder === ASC) {
           return new Date(
-            a.isbService.status.conditions[
-              a.isbService.status.conditions.length - 1
+            a?.isbService?.status?.conditions[
+              a?.isbService?.status?.conditions?.length - 1
             ].lastTransitionTime
           ) >
             new Date(
-              b.isbService.status.conditions[
-                b.isbService.status.conditions.length - 1
+              b?.isbService?.status?.conditions[
+                b?.isbService?.status?.conditions?.length - 1
               ].lastTransitionTime
             )
             ? 1
             : -1;
         } else {
           return new Date(
-            a.isbService.status.conditions[
-              a.isbService.status.conditions.length - 1
+            a?.isbService?.status?.conditions[
+              a?.isbService?.status?.conditions?.length - 1
             ].lastTransitionTime
           ) <
             new Date(
-              b.isbService.status.conditions[
-                b.isbService.status.conditions.length - 1
+              b?.isbService?.status?.conditions[
+                b?.isbService?.status?.conditions?.length - 1
               ].lastTransitionTime
             )
             ? 1
@@ -268,13 +286,13 @@ export function NamespacePipelineListing({
     } else {
       filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
         if (orderBy.sortOrder === ASC) {
-          return new Date(a.isbService.metadata.creationTimestamp) >
-            new Date(b.isbService.metadata.creationTimestamp)
+          return new Date(a?.isbService?.metadata?.creationTimestamp) >
+            new Date(b?.isbService?.metadata?.creationTimestamp)
             ? 1
             : -1;
         } else {
-          return new Date(a.isbService.metadata.creationTimestamp) <
-            new Date(b.isbService.metadata.creationTimestamp)
+          return new Date(a?.isbService?.metadata?.creationTimestamp) <
+            new Date(b?.isbService?.metadata?.creationTimestamp)
             ? 1
             : -1;
         }
@@ -283,7 +301,8 @@ export function NamespacePipelineListing({
     //Filter by health
     if (health !== "All") {
       filtered = filtered.filter((p: ISBServicesListing) => {
-        if (p.status.toLowerCase() === health.toLowerCase()) {
+        const status = p?.status || UNKNOWN;
+        if (status.toLowerCase() === health.toLowerCase()) {
           return true;
         } else {
           return false;
@@ -294,7 +313,8 @@ export function NamespacePipelineListing({
     //Filter by status
     if (status !== "All") {
       filtered = filtered.filter((p: ISBServicesListing) => {
-        if (p.isbService.status.phase.toLowerCase() === status.toLowerCase()) {
+        const currentStatus = p?.isbService?.status?.phase || UNKNOWN;
+        if (currentStatus.toLowerCase() === status.toLowerCase()) {
           return true;
         } else {
           return false;
@@ -561,7 +581,7 @@ export function NamespacePipelineListing({
                   value={status}
                   sx={{ textTransform: "capitalize" }}
                 >
-                  {status}
+                  {StatusString[status]}
                 </MenuItem>
               ))}
             </Select>

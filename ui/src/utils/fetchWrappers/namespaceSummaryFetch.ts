@@ -11,74 +11,70 @@ const rawDataToNamespaceSummary = (
   rawPipelineData: any[],
   rawIsbData: any[]
 ): NamespaceSummaryData | undefined => {
-  if (
-    !rawPipelineData ||
-    !Array.isArray(rawPipelineData) ||
-    !rawIsbData ||
-    !Array.isArray(rawIsbData)
-  ) {
-    return undefined;
-  }
-  const pipelinesCount = rawPipelineData.length;
+  const pipelinesCount = Array.isArray(rawPipelineData)
+    ? rawPipelineData.length
+    : 0;
   let pipelinesActiveCount = 0;
   let pipelinesInactiveCount = 0;
   let pipelinesHealthyCount = 0;
   let pipelinesWarningCount = 0;
   let pipelinesCriticalCount = 0;
-  const isbsCount = rawIsbData.length;
+  const isbsCount = Array.isArray(rawIsbData) ? rawIsbData.length : 0;
   let isbsActiveCount = 0;
   let isbsInactiveCount = 0;
   let isbsHealthyCount = 0;
   let isbsWarningCount = 0;
   let isbsCriticalCount = 0;
   const pipelineSummaries: NamespacePipelineSummary[] = [];
-  rawPipelineData.forEach((pipeline: any) => {
-    switch (pipeline.status) {
-      case "healthy":
-        pipelinesActiveCount++;
-        pipelinesHealthyCount++;
-        break;
-      case "warning":
-        pipelinesActiveCount++;
-        pipelinesWarningCount++;
-        break;
-      case "critical":
-        pipelinesActiveCount++;
-        pipelinesCriticalCount++;
-        break;
-      case "inactive":
-        pipelinesInactiveCount++;
-        break;
-      default:
-        break;
-    }
-    // Add pipeline summary to array
-    pipelineSummaries.push({
-      name: pipeline.name,
-      status: pipeline.status,
+  Array.isArray(rawPipelineData) &&
+    rawPipelineData?.forEach((pipeline: any) => {
+      switch (pipeline.status) {
+        case "healthy":
+          pipelinesActiveCount++;
+          pipelinesHealthyCount++;
+          break;
+        case "warning":
+          pipelinesActiveCount++;
+          pipelinesWarningCount++;
+          break;
+        case "critical":
+          pipelinesActiveCount++;
+          pipelinesCriticalCount++;
+          break;
+        case "inactive":
+          pipelinesInactiveCount++;
+          break;
+        default:
+          break;
+      }
+      // Add pipeline summary to array
+      pipelineSummaries.push({
+        name: pipeline.name,
+        status: pipeline.status,
+      });
     });
-  });
-  rawIsbData.forEach((isb: any) => {
-    switch (isb.status) {
-      case "healthy":
-        isbsActiveCount++;
-        isbsHealthyCount++;
-        break;
-      case "warning":
-        isbsActiveCount++;
-        isbsWarningCount++;
-        break;
-      case "critical":
-        isbsActiveCount++;
-        isbsCriticalCount++;
-        break;
-      case "inactive":
-        isbsInactiveCount++;
-        break;
-      default:
-        break;
-    }
-  });
+  Array.isArray(rawIsbData) &&
+    rawIsbData?.forEach((isb: any) => {
+      switch (isb.status) {
+        case "healthy":
+          isbsActiveCount++;
+          isbsHealthyCount++;
+          break;
+        case "warning":
+          isbsActiveCount++;
+          isbsWarningCount++;
+          break;
+        case "critical":
+          isbsActiveCount++;
+          isbsCriticalCount++;
+          break;
+        case "inactive":
+          isbsInactiveCount++;
+          break;
+        default:
+          break;
+      }
+    });
   // TODO how to map ISB to pipeline?
   return {
     pipelinesCount,
@@ -120,7 +116,7 @@ export const useNamespaceSummaryFetch = ({
     data: undefined,
     loading: true,
     error: undefined,
-    refresh
+    refresh,
   });
 
   const {
