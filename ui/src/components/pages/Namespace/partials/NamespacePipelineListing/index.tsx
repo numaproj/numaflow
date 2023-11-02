@@ -30,12 +30,14 @@ import {
   ALPHABETICAL_SORT,
   ASC,
   CRITICAL,
+  DELETING,
   DESC,
   HEALTHY,
   INACTIVE,
   LAST_CREATED_SORT,
   LAST_UPDATED_SORT,
   PAUSED,
+  PAUSING,
   RUNNING,
   StatusString,
   STOPPED,
@@ -47,7 +49,15 @@ import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
 export const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL, INACTIVE, UNKNOWN];
-export const STATUS = [ALL, RUNNING, STOPPED, PAUSED, UNKNOWN];
+export const STATUS = [
+  ALL,
+  RUNNING,
+  STOPPED,
+  PAUSING,
+  PAUSED,
+  DELETING,
+  UNKNOWN,
+];
 
 const sortOptions = [
   {
