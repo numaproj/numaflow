@@ -349,11 +349,12 @@ func (h *handler) GetPipeline(c *gin.Context) {
 		}
 	}
 	// if the data hasn't arrived the sink vertex
-	// use 0 instead of the initial watermark value -1
+	// set the lag to be -1
 	if minWM == -1 {
-		minWM = 0
+		lag = -1
+	} else {
+		lag = maxWM - minWM
 	}
-	lag = maxWM - minWM
 
 	pipelineResp := NewPipelineInfo(status, &lag, pl)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pipelineResp))
