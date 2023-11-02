@@ -199,7 +199,7 @@ spec:
               key: server.address
               name: numaflow-server-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.0.0-rc2
+        image: quay.io/numaproj/numaflow:v1.0.0-rc3
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -235,7 +235,7 @@ spec:
               key: server.base.href
               name: numaflow-server-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.0.0-rc2
+        image: quay.io/numaproj/numaflow:v1.0.0-rc3
         imagePullPolicy: Always
         name: server-init
         volumeMounts:
