@@ -158,12 +158,12 @@ export function NamespacePipelineListing({
       filtered.sort((a: PipelineData, b: PipelineData) => {
         if (orderBy.sortOrder === ASC) {
           return a?.pipeline?.status?.lastUpdated >
-            b.pipeline?.status?.lastUpdated
+            b?.pipeline?.status?.lastUpdated
             ? 1
             : -1;
         } else {
           return a?.pipeline?.status?.lastUpdated <
-            b.pipeline?.status?.lastUpdated
+            b?.pipeline?.status?.lastUpdated
             ? 1
             : -1;
         }
@@ -172,7 +172,7 @@ export function NamespacePipelineListing({
       filtered.sort((a: PipelineData, b: PipelineData) => {
         if (orderBy.sortOrder === ASC) {
           return Date.parse(a?.pipeline?.metadata?.creationTimestamp) >
-            Date.parse(b.pipeline?.metadata?.creationTimestamp)
+            Date.parse(b?.pipeline?.metadata?.creationTimestamp)
             ? 1
             : -1;
         } else {
