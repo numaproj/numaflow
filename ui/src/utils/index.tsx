@@ -371,7 +371,7 @@ export const timeAgo = (timestamp: string) => {
 };
 
 export const PIPELINE_STATUS_TOOLTIP =
-  "Pipeline health is determined by backpressure. Active pipelines are running, while non-active pipelines are failed, pausing, paused, or deleting.";
+  "Running pipeline health is determined by backpressure. Non-Running pipelines are failed, pausing, paused, or deleting.";
 export const ISB_SERVICES_TOOLTIP =
   "Inter State Buffer Services are used to transfer data between vertices in a pipeline.";
 export const ISB_SERVICES_STATUS_TOOLTIP = (
