@@ -100,7 +100,7 @@ export function PipelineCard({
         setSidebarProps({
           type: SidebarType.ISB_UPDATE,
           specEditorProps: {
-            initialYaml: isbData?.isbService?.spec,
+            initialYaml: isbData?.isbService,
             namespaceId: namespace,
             isbId: isbData?.name,
             viewType: ViewType.EDIT,
