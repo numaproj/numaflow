@@ -43,7 +43,7 @@ export interface SpecEditorProps {
   initialYaml?: any; // Value initally loaded into view. Object instance of spec or string.
   loading?: boolean; // Show spinner
   viewType?: ViewType; // Allow editing
-  allowNonMutatedSubmit?: boolean // Allow submit without content being changed
+  allowNonMutatedSubmit?: boolean; // Allow submit without content being changed
   onValidate?: (value: string) => void;
   onSubmit?: (value: string) => void;
   onResetApplied?: () => void;
@@ -261,6 +261,7 @@ export function SpecEditor({
               variant="contained"
               disabled={loading || statusShowing}
               sx={btnStyle}
+              data-testid="spec-editor-edit-btn"
             >
               {editable ? "View" : "Edit"}
             </Button>
@@ -274,10 +275,16 @@ export function SpecEditor({
             Reset
           </Button>
           <Button
-            disabled={(!mutated && !allowNonMutatedSubmit) || loading || !editable || statusShowing}
+            disabled={
+              (!mutated && !allowNonMutatedSubmit) ||
+              loading ||
+              !editable ||
+              statusShowing
+            }
             onClick={handleValidate}
             variant="contained"
             sx={{ marginLeft: "0.5rem", ...btnStyle }}
+            data-testid="spec-editor-validate-button"
           >
             Validate
           </Button>
@@ -333,7 +340,10 @@ export function SpecEditor({
       />
     );
     const loadingIcon = (
-      <CircularProgress size={27} sx={{ marginRight: "1rem", marginLeft: "0.1875rem" }} />
+      <CircularProgress
+        size={27}
+        sx={{ marginRight: "1rem", marginLeft: "0.1875rem" }}
+      />
     );
     const containerStyle = {
       display: "flex",
@@ -431,6 +441,7 @@ export function SpecEditor({
         flexDirection: "column",
         height: "100%",
       }}
+      data-testid="spec-editor"
     >
       <Paper
         elevation={0}
