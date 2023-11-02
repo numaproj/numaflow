@@ -56,7 +56,7 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
         flexDirection: "column",
         marginTop: "0.375rem",
         flexGrow: 1,
-        paddingLeft: "1rem"
+        paddingLeft: "1rem",
       }}
     >
       <Box sx={{ width: "fit-content" }}>
@@ -119,7 +119,10 @@ export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
                     <span className="pipeline-summary-subtitle">Max lag:</span>
                     <span className="pipeline-summary-text">
                       {" "}
-                      {lag < 0 ? "Unavailable now" : DurationString(lag)}
+                      {/* TODO: to remove the hack */}
+                      {lag < 0 || lag > 1698893050690
+                        ? "Unavailable now"
+                        : DurationString(lag)}
                     </span>
                   </div>
                 </HTMLlTooltip>

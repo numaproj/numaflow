@@ -227,16 +227,17 @@ export function a11yProps(index: number) {
 export const IconsStatusMap = {
   [RUNNING]: circleCheck,
   [SUCCEEDED]: circleCheck,
-  [FAILED]: circleCheck,
-  [PAUSING]: circleCheck,
-  [DELETING]: circleCheck,
-  [PENDING]: circleCheck,
-  [PAUSED]: circleCheck,
+  [FAILED]: critical,
+  [PAUSING]: circleDash,
+  [DELETING]: circleDash,
+  [PENDING]: circleDash,
+  [PAUSED]: circleDash,
   [ACTIVE]: circleCheck,
   [INACTIVE]: circleDash,
   [HEALTHY]: heartFill,
   [WARNING]: warning,
   [CRITICAL]: critical,
+  [STOPPED]: circleDash,
   [UNKNOWN]: circleDash,
 };
 
@@ -245,6 +246,7 @@ interface StatusStringType {
 }
 
 export const StatusString: StatusStringType = {
+  [ALL]: "All",
   [RUNNING]: "Active",
   [SUCCEEDED]: "Succeeded",
   [FAILED]: "Failed",
@@ -252,6 +254,7 @@ export const StatusString: StatusStringType = {
   [PAUSING]: "Pausing",
   [DELETING]: "Deleting",
   [PAUSED]: "Paused",
+  [STOPPED]: "Stopped",
   [ACTIVE]: "Active",
   [INACTIVE]: "Inactive",
   [HEALTHY]: "Healthy",

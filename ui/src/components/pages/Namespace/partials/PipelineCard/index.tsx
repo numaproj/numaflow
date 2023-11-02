@@ -140,6 +140,7 @@ export function PipelineCard({
 
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
   const isbStatus = isbData?.isbService?.status?.phase || UNKNOWN;
+  const isbHealthStatus = isbData?.status || UNKNOWN;
   const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
   const handleTimer = useCallback(() => {
     const dateString = new Date().toISOString();
@@ -308,7 +309,10 @@ export function PipelineCard({
                 }}
               >
                 <CircularProgress
-                  sx={{ width: "1.25rem !important", height: "1.25rem !important" }}
+                  sx={{
+                    width: "1.25rem !important",
+                    height: "1.25rem !important",
+                  }}
                 />{" "}
                 <Box
                   sx={{
@@ -474,7 +478,7 @@ export function PipelineCard({
               <span>{isbData?.name}</span>
               <span>{isbType}</span>
               <span>
-                {isbType && isbData?.isbService?.spec[isbType]
+                {isbType !== UNKNOWN && isbData?.isbService?.spec[isbType]
                   ? isbData?.isbService?.spec[isbType].replicas
                   : UNKNOWN}
               </span>
@@ -515,7 +519,7 @@ export function PipelineCard({
                 className={"pipeline-logo"}
               />
               <img
-                src={IconsStatusMap[isbData?.status]}
+                src={IconsStatusMap[isbHealthStatus]}
                 alt="Health"
                 className={"pipeline-logo"}
               />
@@ -529,7 +533,7 @@ export function PipelineCard({
               }}
             >
               <span>{ISBStatusString[isbStatus]}</span>
-              <span>{ISBStatusString[isbData?.status]}</span>
+              <span>{ISBStatusString[isbHealthStatus]}</span>
             </Box>
           </Grid>
           <Grid
