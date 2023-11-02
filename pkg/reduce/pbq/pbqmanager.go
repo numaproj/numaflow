@@ -37,10 +37,22 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// RegisteredWindow to track the number of windows for a start and end time.
-type RegisteredWindow struct {
-	window.AlignedKeyedWindower
+// registeredWindow to track the number of windows for a start and end time.
+type registeredWindow struct {
+	startTime time.Time
+	endTime   time.Time
+	// count how many slots do we have for this window. currently we only use slot-0, so count is always 1
 	count *atomic.Int32
+}
+
+var _ window.AlignedWindower = (*registeredWindow)(nil)
+
+func (r *registeredWindow) StartTime() time.Time {
+	return r.startTime
+}
+
+func (r *registeredWindow) EndTime() time.Time {
+	return r.endTime
 }
 
 // Manager helps in managing the lifecycle of PBQ instances
@@ -52,7 +64,7 @@ type Manager struct {
 	pbqOptions    *options
 	pbqMap        map[string]*PBQ
 	log           *zap.SugaredLogger
-	yetToBeClosed *window.SortedWindowList[*RegisteredWindow]
+	yetToBeClosed *window.SortedWindowList[*registeredWindow]
 	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
@@ -79,14 +91,14 @@ func NewManager(ctx context.Context, vertexName string, pipelineName string, vr 
 		pbqMap:        make(map[string]*PBQ),
 		pbqOptions:    pbqOpts,
 		log:           logging.FromContext(ctx),
-		yetToBeClosed: window.NewSortedWindowList[*RegisteredWindow](),
+		yetToBeClosed: window.NewSortedWindowList[*registeredWindow](),
 	}
 
 	return pbqManager, nil
 }
 
 // CreateNewPBQ creates new pbq for a partition
-func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID, win window.AlignedKeyedWindower) (ReadWriteCloser, error) {
+func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
 	persistentStore, err := m.storeProvider.CreateStore(ctx, partitionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a PBQ store, %w", err)
@@ -103,7 +115,6 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID, wi
 		PartitionID:   partitionID,
 		options:       m.pbqOptions,
 		manager:       m,
-		kw:            win,
 		log:           logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 	m.register(partitionID, p)
@@ -208,9 +219,10 @@ func (m *Manager) ShutDown(ctx context.Context) {
 
 // register is intended to be used by PBQ to register itself with the manager.
 func (m *Manager) register(partitionID partition.ID, p *PBQ) {
-	ww := &RegisteredWindow{
-		AlignedKeyedWindower: p.kw,
-		count:                atomic.NewInt32(0),
+	ww := &registeredWindow{
+		startTime: partitionID.Start,
+		endTime:   partitionID.End,
+		count:     atomic.NewInt32(0),
 	}
 
 	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
@@ -235,10 +247,12 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 func (m *Manager) deregister(partitionID partition.ID) error {
 
 	m.Lock()
-	ww := &RegisteredWindow{
-		AlignedKeyedWindower: m.pbqMap[partitionID.String()].kw,
-		count:                atomic.NewInt32(0),
+	ww := &registeredWindow{
+		startTime: partitionID.Start,
+		endTime:   partitionID.End,
+		count:     atomic.NewInt32(0),
 	}
+
 	delete(m.pbqMap, partitionID.String())
 	m.Unlock()
 
@@ -295,7 +309,7 @@ func (m *Manager) Replay(ctx context.Context) {
 // conservative. PBQManager's view of next window to be materialized is conservative as it is on the reading side.
 // We SHOULD NOT use NextWindowToBeMaterialized to write data to because it could fail (channel could have been closed but
 // GC is yet to happen), this function should only be on readonly path.
-func (m *Manager) NextWindowToBeMaterialized() window.AlignedKeyedWindower {
+func (m *Manager) NextWindowToBeMaterialized() window.AlignedWindower {
 	if m.yetToBeClosed.Len() == 0 {
 		return nil
 	}

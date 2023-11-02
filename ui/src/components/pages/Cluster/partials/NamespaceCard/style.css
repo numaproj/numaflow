@@ -3,6 +3,9 @@
   font-style: normal;
   font-weight: 400;
   color: #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .namespace-card-section-title {
@@ -42,5 +45,5 @@
 }
 
 .namespace-card-group-spacing {
-  margin-left: 5px;
+  margin-left: 0.3125rem;
 }

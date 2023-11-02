@@ -2,6 +2,10 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: numaflow-server-role
+  labels:
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
+    app.kubernetes.io/component: numaflow-ux
 rules:
   - apiGroups:
       - numaflow.numaproj.io
@@ -35,6 +39,7 @@ rules:
       - configmaps
       - services
       - persistentvolumeclaims
+      - namespaces
     verbs:
       - get
       - list

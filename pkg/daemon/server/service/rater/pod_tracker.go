@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package server
+package rater
 
 import (
 	"context"
@@ -30,10 +30,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// PodInfoSeparator is used as a separator such that the worker can split the pod key
-// to get the pipeline name, vertex name, pod index and vertex type.
+// podInfoSeparator is used as a separator to split the pod key
+// to get the pipeline name, vertex name, and pod index.
 // "*" is chosen because it is not allowed in all the above fields.
-const PodInfoSeparator = "*"
+const podInfoSeparator = "*"
 
 // PodTracker maintains a set of active pods for a pipeline
 // It periodically sends http requests to pods to check if they are still active
@@ -98,10 +98,9 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 
 func (pt *PodTracker) updateActivePods() {
 	for _, v := range pt.pipeline.Spec.Vertices {
-		vType := getVertexType(v)
 		for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
 			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
-			podKey := pt.getPodKey(i, v.Name, vType)
+			podKey := pt.getPodKey(i, v.Name)
 			if pt.isActive(v.Name, podName) {
 				pt.activePods.PushBack(podKey)
 			} else {
@@ -110,19 +109,6 @@ func (pt *PodTracker) updateActivePods() {
 		}
 	}
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
-}
-
-func getVertexType(v v1alpha1.AbstractVertex) string {
-	switch {
-	case v.IsReduceUDF():
-		return keyVertexTypeReduce
-	case v.IsASource():
-		return keyVertexTypeSource
-	case v.IsASink():
-		return keyVertexTypeSink
-	default:
-		return keyVertexTypeOther
-	}
 }
 
 // LeastRecentlyUsed returns the least recently used pod from the active pod list.
@@ -145,9 +131,28 @@ func (pt *PodTracker) GetActivePodsCount() int {
 	return pt.activePods.Length()
 }
 
-func (pt *PodTracker) getPodKey(index int, vertexName string, vertexType string) string {
+// podInfo represents the information of a pod that is used for tracking the processing rate
+type podInfo struct {
+	pipelineName string
+	vertexName   string
+	podName      string
+}
+
+func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
+	pi := strings.Split(key, podInfoSeparator)
+	if len(pi) != 3 {
+		return nil, fmt.Errorf("invalid key %q", key)
+	}
+	return &podInfo{
+		pipelineName: pi[0],
+		vertexName:   pi[1],
+		podName:      strings.Join([]string{pi[0], pi[1], pi[2]}, "-"),
+	}, nil
+}
+
+func (pt *PodTracker) getPodKey(index int, vertexName string) string {
 	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
-	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index), vertexType}, PodInfoSeparator)
+	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index)}, podInfoSeparator)
 }
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {

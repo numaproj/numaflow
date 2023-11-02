@@ -64,6 +64,7 @@ describe("Custom Pods hook", () => {
           "default",
           "simple-pipeline",
           "cat",
+          undefined,
           jest.fn() as Dispatch<SetStateAction<Pod | undefined>>,
           jest.fn() as Dispatch<SetStateAction<string | undefined>>
         )
@@ -86,6 +87,7 @@ describe("Custom Pods hook", () => {
           "default",
           "simple-pipeline",
           "cat",
+          undefined,
           jest.fn() as Dispatch<SetStateAction<Pod | undefined>>,
           jest.fn() as Dispatch<SetStateAction<string | undefined>>
         )
@@ -106,6 +108,7 @@ describe("Custom Pods hook", () => {
           "default",
           "simple-pipeline",
           "cat",
+          undefined,
           jest.fn() as Dispatch<SetStateAction<Pod | undefined>>,
           jest.fn() as Dispatch<SetStateAction<string | undefined>>
         )

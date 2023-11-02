@@ -28,6 +28,7 @@ import (
 	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
+	v1 "github.com/numaproj/numaflow/server/apis/v1"
 	"github.com/numaproj/numaflow/server/routes"
 )
 
@@ -35,29 +36,69 @@ var (
 	rewritePathPrefixes = []string{
 		"/namespaces",
 		"/pipelines",
+		"/login",
 	}
 )
 
-func Start(insecure bool, port int, namespaced bool, managedNamespace string, baseHref string) {
+type ServerOptions struct {
+	Insecure         bool
+	Port             int
+	Namespaced       bool
+	ManagedNamespace string
+	BaseHref         string
+	DisableAuth      bool
+	DexServerAddr    string
+	ServerAddr       string
+}
+
+type server struct {
+	options ServerOptions
+}
+
+func NewServer(opts ServerOptions) *server {
+	return &server{
+		options: opts,
+	}
+}
+
+func (s *server) Start() {
 	logger := logging.NewLogger().Named("server")
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.RedirectTrailingSlash = true
-	router.Use(static.Serve(baseHref, static.LocalFile("./ui/build", true)))
-	if baseHref != "/" {
+	router.Use(static.Serve(s.options.BaseHref, static.LocalFile("./ui/build", true)))
+	if s.options.BaseHref != "/" {
 		router.NoRoute(func(c *gin.Context) {
 			c.File("./ui/build/index.html")
 		})
 	}
-	routes.Routes(router, routes.SystemInfo{ManagedNamespace: managedNamespace, Namespaced: namespaced})
+	router.Any("/dex/*name", v1.NewDexReverseProxy(s.options.DexServerAddr))
+	routes.Routes(
+		router,
+		routes.SystemInfo{
+			ManagedNamespace: s.options.ManagedNamespace,
+			Namespaced:       s.options.Namespaced,
+			Version:          numaflow.GetVersion().String()},
+		routes.AuthInfo{
+			DisableAuth:   s.options.DisableAuth,
+			DexServerAddr: s.options.DexServerAddr,
+			ServerAddr:    s.options.ServerAddr,
+		},
+		s.options.BaseHref,
+	)
 	router.Use(UrlRewrite(router))
 	server := http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", s.options.Port),
 		Handler: router,
 	}
 
-	if insecure {
-		logger.Infow("Starting server (TLS disabled) on "+server.Addr, "version", numaflow.GetVersion())
+	if s.options.Insecure {
+		logger.Infow(
+			"Starting server (TLS disabled) on "+server.Addr,
+			"version", numaflow.GetVersion(),
+			"disable-auth", s.options.DisableAuth,
+			"dex-server-addr", s.options.DexServerAddr,
+			"server-addr", s.options.ServerAddr)
 		if err := server.ListenAndServe(); err != nil {
 			panic(err)
 		}
@@ -67,8 +108,12 @@ func Start(insecure bool, port int, namespaced bool, managedNamespace string, ba
 			panic(err)
 		}
 		server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*cert}, MinVersion: tls.VersionTLS12}
-
-		logger.Infow("Starting server on "+server.Addr, "version", numaflow.GetVersion())
+		logger.Infow(
+			"Starting server on "+server.Addr,
+			"version", numaflow.GetVersion(),
+			"disable-auth", s.options.DisableAuth,
+			"dex-server-addr", s.options.DexServerAddr,
+			"server-addr", s.options.ServerAddr)
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			panic(err)
 		}

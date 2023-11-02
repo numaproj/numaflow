@@ -29,7 +29,7 @@ func TestExternalRedisInstallation(t *testing.T) {
 		badIsbs := testExternalRedisIsbSvc.DeepCopy()
 		badIsbs.Spec.Redis = nil
 		installer := &externalRedisInstaller{
-			isbs:   badIsbs,
+			isbSvc: badIsbs,
 			logger: zaptest.NewLogger(t).Sugar(),
 		}
 		_, err := installer.Install(context.TODO())
@@ -39,7 +39,7 @@ func TestExternalRedisInstallation(t *testing.T) {
 	t.Run("good installation", func(t *testing.T) {
 		goodIsbs := testExternalRedisIsbSvc.DeepCopy()
 		installer := &externalRedisInstaller{
-			isbs:   goodIsbs,
+			isbSvc: goodIsbs,
 			logger: zaptest.NewLogger(t).Sugar(),
 		}
 		c, err := installer.Install(context.TODO())
@@ -52,7 +52,7 @@ func TestExternalRedisInstallation(t *testing.T) {
 func TestExternalRedisUninstallation(t *testing.T) {
 	obj := testExternalRedisIsbSvc.DeepCopy()
 	installer := &externalRedisInstaller{
-		isbs:   obj,
+		isbSvc: obj,
 		logger: zaptest.NewLogger(t).Sugar(),
 	}
 	err := installer.Uninstall(context.TODO())

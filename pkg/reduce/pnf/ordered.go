@@ -126,7 +126,7 @@ func (op *OrderedProcessor) SchedulePnF(
 		doneCh: doneCh,
 		pf:     pf,
 	}
-	partitionsInFlight.With(map[string]string{
+	metrics.ReducePartitionsInFlight.With(map[string]string{
 		metrics.LabelVertex:             op.vertexName,
 		metrics.LabelPipeline:           op.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
@@ -145,9 +145,10 @@ func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 	err := t.pf.Process(ctx)
 	if err != nil {
 		if errors.Is(err, ctx.Err()) {
-			udfError.With(map[string]string{
+			metrics.UDFError.With(map[string]string{
 				metrics.LabelVertex:             op.vertexName,
 				metrics.LabelPipeline:           op.pipelineName,
+				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),
 			}).Inc()
 			op.log.Infow("ReduceOp exiting", zap.String("partitionID", t.pf.PartitionID.String()), zap.Error(ctx.Err()))
@@ -224,7 +225,7 @@ outerLoop:
 				rm := currElement
 				currElement = currElement.Next()
 				op.taskQueue.Remove(rm)
-				partitionsInFlight.With(map[string]string{
+				metrics.ReducePartitionsInFlight.With(map[string]string{
 					metrics.LabelVertex:             op.vertexName,
 					metrics.LabelPipeline:           op.pipelineName,
 					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(op.vertexReplica)),

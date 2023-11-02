@@ -1,14 +1,6 @@
 import React from "react";
-import {
-  render,
-  screen,
-  waitFor,
-  fireEvent,
-  within,
-  getByTestId,
-} from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import userEvent from "@testing-library/user-event";
 import { PipelineCard } from "./index";
 import { AppContext } from "../../../../../App";
 import { BrowserRouter } from "react-router-dom";
@@ -652,8 +644,8 @@ describe("PipelineCard", () => {
     const button = within(wrapperNode).getByRole("button");
 
     fireEvent.mouseDown(button);
-    expect(screen.getByText("ISB")).toBeInTheDocument();
-    screen.getAllByText("ISB")[0].click();
+    expect(screen.getByText("ISB Service")).toBeInTheDocument();
+    screen.getAllByText("ISB Service")[0].click();
 
     expect(screen.getByText("simple-pipeline")).toBeInTheDocument();
   });

@@ -1,5 +1,109 @@
 # Changelog
 
+## v1.0.0-rc2 (2023-11-01)
+
+ * [8a7dc592](https://github.com/numaproj/numaflow/commit/8a7dc5920c143aeaca06ff9c5cfc633102bac7d6) Update manifests to v1.0.0-rc2
+ * [8ed52b39](https://github.com/numaproj/numaflow/commit/8ed52b39c086532bc5b8e1a53352718219c718c6) feat: add scopes to authorization (#1288)
+ * [eebe623f](https://github.com/numaproj/numaflow/commit/eebe623f8464e37dc2e5674966917c142bb92441) fix: logout fix (#1310)
+ * [9c34c27f](https://github.com/numaproj/numaflow/commit/9c34c27fb1a16e78bdbf1be16ad321fd71f1801b) fix: Split cookie to meet the cookie length requirement (#1305)
+ * [c6073b17](https://github.com/numaproj/numaflow/commit/c6073b17c7e664095549774f6b578e205b86a1a4) chore(deps): bump github.com/nats-io/nats-server/v2 from 2.10.3 to 2.10.4 (#1307)
+ * [b1bb6575](https://github.com/numaproj/numaflow/commit/b1bb65751aad08bbf3ff697f4f102ecbdbb09d92) add tooltips (#1289)
+ * [40ca1705](https://github.com/numaproj/numaflow/commit/40ca1705b6086c5683d67f8d5adc1805258c291e) fix: fixed the timer not clearing issue (#1303)
+ * [2a91668d](https://github.com/numaproj/numaflow/commit/2a91668d021c5346daab2188ba5353c84b3e9815) feat: k8s events filtering and cluster summary card fixes  (#1297)
+ * [4929a1e4](https://github.com/numaproj/numaflow/commit/4929a1e4543549f8698d3d1510364353662d9816) fix: graph overflow with large height (#1301)
+ * [8cc04a77](https://github.com/numaproj/numaflow/commit/8cc04a77a0c12bc550f3783cb31274493094e996) doc: need metrics server (#1296)
+ * [05b19400](https://github.com/numaproj/numaflow/commit/05b19400509cfeead2c96f52c6d33a243257c507) refactor: unified metrics names for forwarders (#1290)
+ * [5475e682](https://github.com/numaproj/numaflow/commit/5475e68205fe8899ae2f93bd73281e3e109e3e48) feat: added separate colors for sideInput and dynamic legend (#1292)
+ * [052201e0](https://github.com/numaproj/numaflow/commit/052201e0b803e0a57d562056d28d9b3b605728da) feat: add tabs to display pipelines and isb services (#1293)
+ * [9e1ea4f0](https://github.com/numaproj/numaflow/commit/9e1ea4f07bbb1642f3d670c9c2398b58f262be06) fix: more sidebar testing (#1287)
+ * [d018af50](https://github.com/numaproj/numaflow/commit/d018af50bec64c1012a27d51fd407a548a364118) refactor: create interfaces for AuthN and AuthZ (#1286)
+ * [ada5ea4d](https://github.com/numaproj/numaflow/commit/ada5ea4d73c0ec11852328104d2cd386b288a81b) fix: tests for utils (#1283)
+
+### Contributors
+
+ * Bradley Behnke
+ * Darshan Simha
+ * Derek Wang
+ * Juanlu Yu
+ * Keran Yang
+ * Sidhant Kohli
+ * Vedant Gupta
+ * Vigith Maurice
+ * dependabot[bot]
+ * mshakira
+
+## v1.0.0-rc1 (2023-10-26)
+
+ * [0ff1f58f](https://github.com/numaproj/numaflow/commit/0ff1f58fa371795a321c414c94a40c6b08ca32fe) Update manifests to v1.0.0-rc1
+ * [16c3fc3c](https://github.com/numaproj/numaflow/commit/16c3fc3c55911688f0478b2d3966d0f6229d59e1) fix: incorrect image version for  namespaced numaflow-server (#1282)
+ * [18d62935](https://github.com/numaproj/numaflow/commit/18d6293589a56ae7d7fc398871eec95564d0c41f) fix: ISBCreate test and fetch mock setup (#1279)
+ * [9325140c](https://github.com/numaproj/numaflow/commit/9325140c81e9dee50c407ab93fb1fd4510d95992) fix: update dex to work with basehref (#1278)
+ * [36610a5a](https://github.com/numaproj/numaflow/commit/36610a5ac107815460b1ba1dbb375d253925a372) feat: AuthN/AuthZ for Numaflow UI (#1234)
+ * [730552e8](https://github.com/numaproj/numaflow/commit/730552e8dc3acdcfc8607dc3f2875459ee9cc373) fix(doc): hpa api version (#1274)
+ * [c103427b](https://github.com/numaproj/numaflow/commit/c103427b553bda96b103e57bb1cd0e44e9a72cd2) fix: updating example.md (#1262)
+ * [c1725b18](https://github.com/numaproj/numaflow/commit/c1725b1848a5fba88eead794e61dff125f49d06b) Feat/side input tests (#1257)
+ * [5554bd65](https://github.com/numaproj/numaflow/commit/5554bd6572f62be9a0cff1fa74ab8d6896fcf1a6) chore(deps): bump google.golang.org/grpc from 1.57.0 to 1.57.1 (#1268)
+ * [b86b2254](https://github.com/numaproj/numaflow/commit/b86b22541272474b8985be41aa0efb5826a5fce2) fix(UI): pod selection fix (#1266)
+ * [07a7b8ea](https://github.com/numaproj/numaflow/commit/07a7b8eace4b08cf33696f35aafed3754cd257e5) doc: Numaflow high level security (#1264)
+ * [308acf2f](https://github.com/numaproj/numaflow/commit/308acf2f05df81e9c413025bcecb9645287e9546) fix: fixed the ns-summary page to allow creation of pipeline when no … (#1263)
+ * [ce737732](https://github.com/numaproj/numaflow/commit/ce737732a2b6f6748514555e4299b7efee8b7250) Unit tests graph page (#1250)
+ * [639a9364](https://github.com/numaproj/numaflow/commit/639a936438e0ee8312d5c0534c5c3ddd46ecd24c) feat: Add e2e test for map sideinput, Fixes #1192 (#1211)
+ * [7b32af34](https://github.com/numaproj/numaflow/commit/7b32af34a7ab545bdc1b37b15f152538b83f5f1b) feat: get current status of ISB service (#1199)
+ * [5c7fc90e](https://github.com/numaproj/numaflow/commit/5c7fc90e633a8114cb681884ceae1e66c1d688b7) Summary view fixes (#1253)
+ * [53aed68d](https://github.com/numaproj/numaflow/commit/53aed68d49c0901230517504512e71745fb7fb2e) chore(deps): bump github.com/nats-io/nats-server/v2 from 2.9.19 to 2.9.23 (#1232)
+ * [30382995](https://github.com/numaproj/numaflow/commit/303829955202784af8eee8bf37cc54d108f3b123) fix: updated div's with box and removed unwanted css (#1236)
+ * [8b50f36c](https://github.com/numaproj/numaflow/commit/8b50f36ca12b5c5045d8a32c6d4b62ef4219d6f4) chore(deps): bump @babel/traverse from 7.23.0 to 7.23.2 in /ui (#1221)
+ * [7a3ca76a](https://github.com/numaproj/numaflow/commit/7a3ca76a2ec7d3b0f06f7bc7e26e310b02685bb9) Update kafka.md (#1218)
+ * [e49a1811](https://github.com/numaproj/numaflow/commit/e49a1811094824d3b004efb3905ce716956616ad) Update generator.md (#1217)
+ * [9785eb07](https://github.com/numaproj/numaflow/commit/9785eb0707cad8d1384c78b58e12feb00f2ec48e) Update map.md (#1219)
+ * [a874478a](https://github.com/numaproj/numaflow/commit/a874478a2920b5a68b6d246c56a3d468b5dedc5e) feat: UI 1.0 CRUD (#1181)
+ * [d34fcc47](https://github.com/numaproj/numaflow/commit/d34fcc47fcfa94fc5ad2d16ca51a27d9c39748da) fix: get isbsvc kind apiversion (#1220)
+ * [74f4d980](https://github.com/numaproj/numaflow/commit/74f4d9809fde734cfca87db3675ec3d9d5e03ac7) Update kafka.md (#1215)
+ * [7d5fe51f](https://github.com/numaproj/numaflow/commit/7d5fe51ff7b1dfc6d95bb3688e03fa207d412ba2) Update generator.md (#1214)
+ * [b6adac15](https://github.com/numaproj/numaflow/commit/b6adac15cf62d82402f4bf6dff8fa6ee06f8b5a1) Update overview.md (#1213)
+ * [0748449d](https://github.com/numaproj/numaflow/commit/0748449d9d1ce094a23a557c8951f5e0e34d8f56) feat: add udsource python e2e (#1204)
+ * [fea29657](https://github.com/numaproj/numaflow/commit/fea29657f22ff89bccbf9f389ab983b1d901ddd9) doc: roadmap (#1208)
+ * [d7630553](https://github.com/numaproj/numaflow/commit/d76305532bf5b920a13c508794f4ed61e30f6fb4) Namespace card status bar changes 0.11 (#1206)
+ * [19a523aa](https://github.com/numaproj/numaflow/commit/19a523aa89df2e44a43e77e258ebf24b75de56ea) feat: added unit tests for PipelineCard component (#1205)
+ * [6a50f130](https://github.com/numaproj/numaflow/commit/6a50f1301e4a76236aee58b73dd6b0cf7cc3b761) pods component error fix (#1203)
+ * [a07e78f7](https://github.com/numaproj/numaflow/commit/a07e78f73032618296823a5bbea2dcf222122909) fix: updated image styles to a class (#1202)
+ * [71c048eb](https://github.com/numaproj/numaflow/commit/71c048ebe39d08389e88087673ce514f2f6c6bc6) feat: Changed the status bar component to an icon based component (#1198)
+ * [13264e3f](https://github.com/numaproj/numaflow/commit/13264e3fedd2bcb0c50b290db383943db50b64f3) fix(SERVER): restructure pod details component (#1189)
+ * [1bbdcad8](https://github.com/numaproj/numaflow/commit/1bbdcad88ca9bc225ca8e38898c190e7cc5724d9) feat: updated the legend to a collapsible one on the top left (#1196)
+ * [910243bd](https://github.com/numaproj/numaflow/commit/910243bd7998cc088c5cad296ec4427f6c585f50) chore(deps): bump golang.org/x/net from 0.12.0 to 0.17.0 (#1190)
+ * [57af20e5](https://github.com/numaproj/numaflow/commit/57af20e5ce7291757c171629ccdee82b8532d384) feat: API Delete ISBSVC validation (#1182)
+ * [2e1fd701](https://github.com/numaproj/numaflow/commit/2e1fd70177daf8f2c6fa47b2bf5f00b7fca50897) added BCubed to the user list (#1184)
+ * [b962f8e3](https://github.com/numaproj/numaflow/commit/b962f8e3164d2fd9bb8b3806f511decbe11a4244) feat: add timeout for pausing pipeline. Fixes #992 (#1138)
+ * [ef62c5ca](https://github.com/numaproj/numaflow/commit/ef62c5ca6a1127ee8d58b61737770185891f49cc) feat: Jetstream support for replica of 1 Fixes #944 (#1177)
+ * [80294989](https://github.com/numaproj/numaflow/commit/80294989be83478520f96d6f4ad911839cbb9f43) doc: minor clean up of JOIN doc (#1175)
+ * [d4b5f1b2](https://github.com/numaproj/numaflow/commit/d4b5f1b2600c52264a3fb90504af8dc53740f99b) fix: incorrect side inputs watch logic (#1164)
+ * [00e6b6ae](https://github.com/numaproj/numaflow/commit/00e6b6ae691fda77f71c8932997dea994693576d) fix: not considered as back pressured when onFull is discardLatest (#1153)
+ * [8b0d8cef](https://github.com/numaproj/numaflow/commit/8b0d8cef902442cc7302f5dbe9577b00e085abaf) fix(SERVER): handle states when status is unknown (#1154)
+ * [31b1aacd](https://github.com/numaproj/numaflow/commit/31b1aacdb1c335cd7c69dccdb83e7c1fdc7c58cc) fix(SERVER): fix key warning (#1152)
+
+### Contributors
+
+ * Bradley Behnke
+ * Caroline Dikibo
+ * Chandan Kumar
+ * Darshan Simha
+ * Darshan Simha U
+ * Dennis Sosa
+ * Derek Wang
+ * Dillen Padhiar
+ * Joel Millage
+ * Jorvaulx
+ * Juanlu Yu
+ * Kayla Nussbaum
+ * Shubham Dixit
+ * Sidhant Kohli
+ * TASNEEM KOUSHAR
+ * Vigith Maurice
+ * aruwanip
+ * bpcarey01
+ * dependabot[bot]
+ * mshakira
+
 ## v0.11.0 (2023-10-13)
 
  * [fbf51b2d](https://github.com/numaproj/numaflow/commit/fbf51b2db59f259d925471d40eede930441d9e71) Update manifests to v0.11.0

@@ -27,6 +27,7 @@ import {
   AccordionSummary,
   Typography,
   AccordionDetails,
+  Tooltip,
 } from "@mui/material";
 import IconButton from "@mui/material/IconButton";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -50,6 +51,7 @@ import {
   timeAgo,
 } from "../../../../../utils";
 import { ErrorIndicator } from "../../../../common/ErrorIndicator";
+import { CollapseContext } from "../../../../common/SummaryPageLayout";
 import lock from "../../../../../images/lock.svg";
 import unlock from "../../../../../images/unlock.svg";
 import scrollToggle from "../../../../../images/move-arrows.svg";
@@ -61,8 +63,8 @@ import source from "../../../../../images/source.png";
 import map from "../../../../../images/map.png";
 import reduce from "../../../../../images/reduce.png";
 import sink from "../../../../../images/sink.png";
-import input from "../../../../../images/input.svg";
-import generator from "../../../../../images/generator.svg";
+import input from "../../../../../images/input0.svg";
+import generator from "../../../../../images/generator0.svg";
 
 import "reactflow/dist/style.css";
 import "./style.css";
@@ -116,7 +118,7 @@ const getLayoutedElements = (
     const nodeWithPosition = dagreGraph.node(node.id);
     if (node?.data?.type === "sideInput") {
       nodeWithPosition.x = nodeWidth;
-      nodeWithPosition.y = max_pos + nodeHeight * cnt;
+      nodeWithPosition.y = max_pos + nodeHeight * 0.75 * cnt;
       cnt++;
     }
     node.targetPosition = isHorizontal ? Position.Left : Position.Top;
@@ -138,6 +140,10 @@ const Flow = (props: FlowProps) => {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const [isLocked, setIsLocked] = useState(false);
   const [isPanOnScrollLocked, setIsPanOnScrollLocked] = useState(false);
+  const [isMap, setIsMap] = useState(false);
+  const [isReduce, setIsReduce] = useState(false);
+  const [isSideInput, setIsSideInput] = useState(false);
+  const isCollapsed = useContext(CollapseContext);
   const {
     nodes,
     edges,
@@ -146,6 +152,9 @@ const Flow = (props: FlowProps) => {
     handleNodeClick,
     handleEdgeClick,
     handlePaneClick,
+    refresh,
+    namespaceId,
+    data,
   } = props;
 
   const onIsLockedChange = useCallback(
@@ -159,6 +168,104 @@ const Flow = (props: FlowProps) => {
   const onFullScreen = useCallback(() => fitView(), [zoomLevel]);
   const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomLevel]);
   const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomLevel]);
+
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [successMessage, setSuccessMessage] = useState<string | undefined>(
+    undefined
+  );
+  const [statusPayload, setStatusPayload] = useState<any>(undefined);
+  const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
+  const [timer, setTimer] = useState<number | undefined>(undefined);
+
+  const handleTimer = useCallback(() => {
+    if (timer) {
+      clearInterval(timer);
+    }
+    const dateString = new Date().toISOString();
+    const time = timeAgo(dateString);
+    setTimerDateStamp(time);
+    const pauseTimer = setInterval(() => {
+      const time = timeAgo(dateString);
+      setTimerDateStamp(time);
+    }, 1000);
+    setTimer(pauseTimer);
+  }, [timer]);
+  const handlePlayClick = useCallback(() => {
+    handleTimer();
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: RUNNING,
+        },
+      },
+    });
+  }, [handleTimer]);
+
+  const handlePauseClick = useCallback(() => {
+    handleTimer();
+    setStatusPayload({
+      spec: {
+        lifecycle: {
+          desiredPhase: PAUSED,
+        },
+      },
+    });
+  }, [handleTimer]);
+
+  useEffect(() => {
+    const patchStatus = async () => {
+      try {
+        const response = await fetch(
+          `/api/v1/namespaces/${namespaceId}/pipelines/${data?.pipeline?.metadata?.name}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(statusPayload),
+          }
+        );
+        const error = await getAPIResponseError(response);
+        if (error) {
+          setError(error);
+        } else {
+          refresh();
+          setSuccessMessage("Status updated successfully");
+        }
+      } catch (e) {
+        setError(e);
+      }
+    };
+    if (statusPayload) {
+      patchStatus();
+    }
+  }, [statusPayload]);
+
+  useEffect(() => {
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
+      data?.pipeline?.status?.phase === PAUSED
+    ) {
+      setStatusPayload(undefined);
+    }
+    if (
+      statusPayload?.spec?.lifecycle?.desiredPhase === RUNNING &&
+      data?.pipeline?.status?.phase === RUNNING
+    ) {
+      setStatusPayload(undefined);
+    }
+  }, [data]);
+
+  useEffect(() => {
+    nodes.forEach((node) => {
+      if (node?.data?.type === "sideInput") {
+        setIsSideInput(true);
+      }
+      if (node?.data?.type === "udf") {
+        node.data?.nodeInfo?.udf?.groupBy ? setIsReduce(true) : setIsMap(true);
+      }
+    });
+  }, [nodes]);
 
   return (
     <ReactFlow
@@ -175,29 +282,146 @@ const Flow = (props: FlowProps) => {
       preventScrolling={!isLocked}
       panOnDrag={!isLocked}
       panOnScroll={isPanOnScrollLocked}
-      maxZoom={2.75}
+      minZoom={0.1}
+      maxZoom={3.1}
     >
+      <Panel
+        position="top-left"
+        style={{ marginTop: isCollapsed ? "3rem" : "6.75rem" }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "row",
+          }}
+        >
+          <Button
+            variant="contained"
+            data-testid="resume"
+            sx={{
+              height: "2rem",
+              width: "5rem",
+              fontWeight: "bold",
+            }}
+            onClick={handlePlayClick}
+            disabled={data?.pipeline?.status?.phase === RUNNING}
+          >
+            Resume
+          </Button>
+          <Button
+            variant="contained"
+            data-testid="pause"
+            sx={{
+              height: "2rem",
+              width: "5rem",
+              marginLeft: "1rem",
+              fontWeight: "bold",
+            }}
+            onClick={handlePauseClick}
+            disabled={
+              data?.pipeline?.status?.phase === PAUSED ||
+              data?.pipeline?.status?.phase === PAUSING
+            }
+          >
+            Pause
+          </Button>
+          <Box sx={{ marginLeft: "1rem" }}>
+            {error && statusPayload ? (
+              <Alert
+                severity="error"
+                sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
+              >
+                {error}
+              </Alert>
+            ) : successMessage &&
+              statusPayload &&
+              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                data?.pipeline?.status?.phase !== PAUSED) ||
+                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                  data?.pipeline?.status?.phase !== RUNNING)) ? (
+              <div
+                style={{
+                  borderRadius: "0.8125rem",
+                  width: "14.25rem",
+                  background: "#F0F0F0",
+                  display: "flex",
+                  flexDirection: "row",
+                  padding: "0.5rem",
+                  color: "#516F91",
+                  alignItems: "center",
+                }}
+              >
+                <CircularProgress
+                  sx={{
+                    width: "1.25rem !important",
+                    height: "1.25rem !important",
+                  }}
+                />{" "}
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <span style={{ marginLeft: "1rem" }}>
+                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
+                      ? "Pipeline Pausing..."
+                      : "Pipeline Resuming..."}
+                  </span>
+                  <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
+                </Box>
+              </div>
+            ) : (
+              ""
+            )}
+          </Box>
+        </Box>
+      </Panel>
+      <Panel
+        position="top-right"
+        style={{ marginTop: isCollapsed ? "0.5rem" : "6.75rem" }}
+      >
+        <ErrorIndicator />
+      </Panel>
       <Panel position="bottom-left" className={"interaction"}>
-        <IconButton onClick={onIsLockedChange}>
-          <img src={isLocked ? lock : unlock} alt={"lock-unlock"} />
-        </IconButton>
-        <IconButton onClick={onIsPanOnScrollLockedChange}>
-          <img
-            src={isPanOnScrollLocked ? closedHand : scrollToggle}
-            alt={"panOnScrollLock"}
-          />
-        </IconButton>
+        <Tooltip
+          title={isLocked ? "Unlock Graph" : "Lock Graph"}
+          placement={"top"}
+          arrow
+        >
+          <IconButton onClick={onIsLockedChange}>
+            <img src={isLocked ? lock : unlock} alt={"lock-unlock"} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip
+          title={isPanOnScrollLocked ? "Zoom On Scroll" : "Pan on Scroll"}
+          placement={"top"}
+          arrow
+        >
+          <IconButton onClick={onIsPanOnScrollLockedChange}>
+            <img
+              src={isPanOnScrollLocked ? closedHand : scrollToggle}
+              alt={"panOnScrollLock"}
+            />
+          </IconButton>
+        </Tooltip>
         <div className={"divider"} />
-        <IconButton onClick={onFullScreen}>
-          <img src={fullscreen} alt={"fullscreen"} />
-        </IconButton>
+        <Tooltip title={"Fit Graph"} placement={"top"} arrow>
+          <IconButton onClick={onFullScreen}>
+            <img src={fullscreen} alt={"fullscreen"} />
+          </IconButton>
+        </Tooltip>
         <div className={"divider"} />
-        <IconButton onClick={onZoomIn}>
-          <img src={zoomInIcon} alt="zoom-in" />
-        </IconButton>
-        <IconButton onClick={onZoomOut}>
-          <img src={zoomOutIcon} alt="zoom-out" />
-        </IconButton>
+        <Tooltip title={"Zoom In"} placement={"top"} arrow>
+          <IconButton onClick={onZoomIn}>
+            <img src={zoomInIcon} alt="zoom-in" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={"Zoom Out"} placement="top" arrow>
+          <IconButton onClick={onZoomOut}>
+            <img src={zoomOutIcon} alt="zoom-out" />
+          </IconButton>
+        </Tooltip>
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="54"
@@ -216,12 +440,16 @@ const Flow = (props: FlowProps) => {
               stroke="#D4D7DC"
             />
             <text x="50%" y="50%" className={"zoom-percent-text"}>
-              {(((zoomLevel - 0.5) / 1.5) * 100).toFixed(0)}%
+              {(((zoomLevel - 0.1) / 2) * 100).toFixed(0)}%
             </text>
           </g>
         </svg>
       </Panel>
-      <Panel position="top-left" className={"legend"}>
+      <Panel
+        position="top-left"
+        className={"legend"}
+        style={{ marginTop: isCollapsed ? "5.75rem" : "9.5rem" }}
+      >
         <Accordion>
           <AccordionSummary
             expandIcon={<ExpandMoreIcon />}
@@ -235,26 +463,34 @@ const Flow = (props: FlowProps) => {
               <img src={source} alt={"source"} />
               <div className={"legend-text"}>Source</div>
             </div>
-            <div className={"legend-title"}>
-              <img src={map} alt={"map"} />
-              <div className={"legend-text"}>Map</div>
-            </div>
-            <div className={"legend-title"}>
-              <img src={reduce} alt={"reduce"} />
-              <div className={"legend-text"}>Reduce</div>
-            </div>
+            {isMap && (
+              <div className={"legend-title"}>
+                <img src={map} alt={"map"} />
+                <div className={"legend-text"}>Map</div>
+              </div>
+            )}
+            {isReduce && (
+              <div className={"legend-title"}>
+                <img src={reduce} alt={"reduce"} />
+                <div className={"legend-text"}>Reduce</div>
+              </div>
+            )}
             <div className={"legend-title"}>
               <img src={sink} alt={"sink"} />
               <div className={"legend-text"}>Sink</div>
             </div>
-            <div className={"legend-title"}>
-              <img src={input} width={22} alt={"input"} />
-              <div className={"legend-text"}>Input</div>
-            </div>
-            <div className={"legend-title"}>
-              <img src={generator} width={22} alt={"generator"} />
-              <div className={"legend-text"}>Generator</div>
-            </div>
+            {isSideInput && (
+              <div className={"legend-title"}>
+                <img src={input} width={22} alt={"input"} />
+                <div className={"legend-text"}>Input</div>
+              </div>
+            )}
+            {isSideInput && (
+              <div className={"legend-title"}>
+                <img src={generator} width={22} alt={"generator"} />
+                <div className={"legend-text"}>Generator</div>
+              </div>
+            )}
           </AccordionDetails>
         </Accordion>
       </Panel>
@@ -293,14 +529,6 @@ export default function Graph(props: GraphProps) {
   const [sideEdges, setSideEdges] = useState<Map<string, string>>(new Map());
   const initialHiddenValue = getHiddenValue(layoutedEdges);
   const [hidden, setHidden] = useState(initialHiddenValue);
-  const [error, setError] = useState<string | undefined>(undefined);
-  const [successMessage, setSuccessMessage] = useState<string | undefined>(
-    undefined
-  );
-  const [statusPayload, setStatusPayload] = useState<any>(undefined);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
-  const [timer, setTimer] = useState<any>(undefined);
 
   useEffect(() => {
     const nodeSet = new Map();
@@ -518,186 +746,9 @@ export default function Graph(props: GraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showSpec, setShowSpec] = useState(true);
 
-  const handlePlayClick = useCallback(() => {
-    handleTimer();
-    setStatusPayload({
-      spec: {
-        lifecycle: {
-          desiredPhase: RUNNING,
-        },
-      },
-    });
-  }, []);
-
-  const handlePauseClick = useCallback(() => {
-    handleTimer();
-    setStatusPayload({
-      spec: {
-        lifecycle: {
-          desiredPhase: PAUSED,
-        },
-      },
-    });
-  }, []);
-
-  const handleTimer = useCallback(() => {
-    const dateString = new Date().toISOString();
-    const time = timeAgo(dateString);
-    setTimerDateStamp(time);
-    const pauseTimer = setInterval(() => {
-      const time = timeAgo(dateString);
-      setTimerDateStamp(time);
-    }, 1000);
-    setTimer(pauseTimer);
-  }, []);
-
-  useEffect(() => {
-    const patchStatus = async () => {
-      try {
-        const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${data?.pipeline?.metadata?.name}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(statusPayload),
-          }
-        );
-        const error = await getAPIResponseError(response);
-        if (error) {
-          setError(error);
-        } else {
-          refresh();
-          setSuccessMessage("Status updated successfully");
-        }
-      } catch (e) {
-        setError(e);
-      }
-    };
-    if (statusPayload) {
-      patchStatus();
-    }
-  }, [statusPayload]);
-
-  useEffect(() => {
-    if (
-      statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED &&
-      data?.pipeline?.status?.phase === PAUSED
-    ) {
-      clearInterval(timer);
-      setStatusPayload(undefined);
-    }
-    if (
-      statusPayload?.spec?.lifecycle?.desiredPhase === RUNNING &&
-      data?.pipeline?.status?.phase === RUNNING
-    ) {
-      clearInterval(timer);
-      setStatusPayload(undefined);
-    }
-  }, [data]);
-
   return (
-    <div style={{ height: "85%" }}>
+    <div style={{ height: "100%" }}>
       <div className="Graph" data-testid="graph">
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-            }}
-          >
-            <Button
-              variant="contained"
-              sx={{
-                marginTop: "1rem",
-                marginLeft: "1rem",
-                width: "80px",
-                fontWeight: "bold",
-              }}
-              onClick={handlePlayClick}
-              disabled={data?.pipeline?.status?.phase === RUNNING}
-            >
-              Resume
-            </Button>
-            <Button
-              variant="contained"
-              sx={{
-                marginTop: "1rem",
-                marginLeft: "1rem",
-                width: "80px",
-                fontWeight: "bold",
-              }}
-              onClick={handlePauseClick}
-              disabled={
-                data?.pipeline?.status?.phase === PAUSED ||
-                data?.pipeline?.status?.phase === PAUSING
-              }
-            >
-              Pause
-            </Button>
-            <Button sx={{ height: "35px", marginTop: "1rem" }}>
-              {" "}
-              {error && statusPayload ? (
-                <Alert
-                  severity="error"
-                  sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
-                >
-                  {error}
-                </Alert>
-              ) : successMessage &&
-                statusPayload &&
-                ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
-                  data?.pipeline?.status?.phase !== PAUSED) ||
-                  (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
-                    data?.pipeline?.status?.phase !== RUNNING)) ? (
-                <div
-                  style={{
-                    borderRadius: "13px",
-                    width: "228px",
-                    background: "#F0F0F0",
-                    display: "flex",
-                    flexDirection: "row",
-                    marginLeft: "1rem",
-                    marginTop: "1rem",
-                    padding: "0.5rem",
-                    color: "#516F91",
-                    alignItems: "center",
-                  }}
-                >
-                  <CircularProgress
-                    sx={{ width: "20px !important", height: "20px !important" }}
-                  />{" "}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    <span style={{ marginLeft: "1rem" }}>
-                      {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
-                        ? "Pipeline Pausing..."
-                        : "Pipeline Resuming..."}
-                    </span>
-                    <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
-                  </Box>
-                </div>
-              ) : (
-                ""
-              )}
-            </Button>
-          </Box>
-          <Box sx={{ marginRight: "1rem" }}>
-            <ErrorIndicator />
-          </Box>
-        </Box>
         <HighlightContext.Provider
           value={{
             highlightValues,
@@ -719,6 +770,9 @@ export default function Graph(props: GraphProps) {
                 handleEdgeClick,
                 handlePaneClick,
                 setSidebarProps,
+                refresh,
+                namespaceId,
+                data,
               }}
             />
           </ReactFlowProvider>

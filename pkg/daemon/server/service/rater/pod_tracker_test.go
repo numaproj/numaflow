@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package server
+package rater
 
 import (
 	"bytes"
@@ -118,8 +118,25 @@ func TestPodTracker_Start(t *testing.T) {
 	cancel()
 	wg.Wait()
 
-	assert.Equal(t, "p*v*0*other", tracker.LeastRecentlyUsed())
-	assert.Equal(t, "p*v*1*other", tracker.LeastRecentlyUsed())
-	assert.Equal(t, true, tracker.IsActive("p*v*4*other"))
-	assert.Equal(t, false, tracker.IsActive("p*v*5*other"))
+	assert.Equal(t, "p*v*0", tracker.LeastRecentlyUsed())
+	assert.Equal(t, "p*v*1", tracker.LeastRecentlyUsed())
+	assert.Equal(t, true, tracker.IsActive("p*v*4"))
+	assert.Equal(t, false, tracker.IsActive("p*v*5"))
+}
+
+func TestPodTracker_GetPodInfo(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+	tracker := NewPodTracker(ctx, nil, WithRefreshInterval(time.Second))
+	// error scenario - more than 3 fields
+	podInfo, err := tracker.GetPodInfo("p*v*0*1")
+	assert.Nilf(t, podInfo, "podInfo should be nil")
+	assert.ErrorContains(t, err, "invalid key")
+
+	// common scenario - get the pod info
+	podInfo, err = tracker.GetPodInfo("p*v*0")
+	assert.Nilf(t, err, "error should be nil")
+	assert.Equal(t, "p", podInfo.pipelineName)
+	assert.Equal(t, "v", podInfo.vertexName)
+	assert.Equal(t, "p-v-0", podInfo.podName)
 }

@@ -19,6 +19,7 @@ package v1
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -44,6 +45,8 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/server/authn"
+	"github.com/numaproj/numaflow/server/common"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
 
@@ -57,10 +60,11 @@ type handler struct {
 	kubeClient     kubernetes.Interface
 	metricsClient  *metricsversiond.Clientset
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
+	dexObj         *DexObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler() (*handler, error) {
+func NewHandler(dexObj *DexObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -79,7 +83,50 @@ func NewHandler() (*handler, error) {
 		kubeClient:     kubeClient,
 		metricsClient:  metricsClient,
 		numaflowClient: numaflowClient,
+		dexObj:         dexObj,
 	}, nil
+}
+
+// AuthInfo loads and returns auth info from cookie
+func (h *handler) AuthInfo(c *gin.Context) {
+	if h.dexObj == nil {
+		errMsg := "User is not authenticated: missing Dex"
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+	}
+	cookies := c.Request.Cookies()
+	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
+	if err != nil {
+		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	if userIdentityTokenStr == "" {
+		errMsg := "User is not authenticated, err: empty Token"
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	var userInfo authn.UserInfo
+	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
+		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
+	idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+	var claims authn.IDTokenClaims
+	if err = idToken.Claims(&claims); err != nil {
+		errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
+	res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
@@ -92,8 +139,15 @@ func (h *handler) ListNamespaces(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, namespaces))
 }
 
-// GetClusterSummary summarizes information of all the namespaces in a cluster and wrapped the result in a list.
+// GetClusterSummary summarizes information of all the namespaces in a cluster except the kube system namespaces
+// and wrapped the result in a list.
 func (h *handler) GetClusterSummary(c *gin.Context) {
+	namespaces, err := getAllNamespaces(h)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all namespaces, %s", err.Error()))
+		return
+	}
+
 	type namespaceSummary struct {
 		pipelineSummary PipelineSummary
 		isbsvcSummary   IsbServiceSummary
@@ -150,9 +204,25 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 
 	// get cluster summary
 	var clusterSummary ClusterSummaryResponse
-	for name, summary := range namespaceSummaryMap {
-		clusterSummary = append(clusterSummary, NewClusterSummary(name, summary.pipelineSummary, summary.isbsvcSummary))
+	// at this moment, if a namespace has neither pipeline nor isbsvc, it will not be included in the namespacedSummaryMap.
+	// since we still want to pass these empty namespaces to the frontend, we add them here.
+	for _, ns := range namespaces {
+		if _, ok := namespaceSummaryMap[ns]; !ok {
+			// if the namespace is not in the namespaceSummaryMap, it means it has neither pipeline nor isbsvc
+			// taking advantage of golang by default initializing the struct with zero value
+			namespaceSummaryMap[ns] = namespaceSummary{}
+		}
 	}
+	for name, summary := range namespaceSummaryMap {
+		clusterSummary = append(clusterSummary, NewNamespaceSummary(name, summary.pipelineSummary, summary.isbsvcSummary))
+	}
+
+	// sort the cluster summary by namespace in alphabetical order,
+	// such that for first-time user, they get to see the default namespace first hence know where to start
+	sort.Slice(clusterSummary, func(i, j int) bool {
+		return clusterSummary[i].Namespace < clusterSummary[j].Namespace
+	})
+
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, clusterSummary))
 }
 
@@ -438,7 +508,7 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, resp))
 }
 
-// UpdateInterStepBufferService is used to update the spec of the interstep buffer service
+// UpdateInterStepBufferService is used to delete the inter-step buffer service
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 	// dryRun is used to check if the operation is just a validation or an actual update
@@ -710,38 +780,46 @@ func (h *handler) streamLogs(c *gin.Context, stream io.ReadCloser) {
 }
 
 // GetNamespaceEvents gets a list of events for the given namespace.
+// It supports filtering by object type and object name.
+// If objectType and objectName are specified in the request, only the events that match both will be returned.
+// If objectType and objectName are not specified, all the events for the given name space will be returned.
+// Events are sorted by timestamp in descending order.
 func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	ns := c.Param("namespace")
-
+	objType := c.DefaultQuery("objectType", "")
+	objName := c.DefaultQuery("objectName", "")
+	if (objType == "" && objName != "") || (objType != "" && objName == "") {
+		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: "+
+			"please either specify both objectType and objectName or not specify.", ns))
+		return
+	}
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	events, err := h.kubeClient.CoreV1().Events(ns).List(context.Background(), metav1.ListOptions{
+	var err error
+	var events *corev1.EventList
+	if events, err = h.kubeClient.CoreV1().Events(ns).List(context.Background(), metav1.ListOptions{
 		Limit:    limit,
 		Continue: c.Query("continue"),
-	})
-	if err != nil {
+	}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: %s", ns, err.Error()))
 		return
 	}
-
 	var (
 		response          []K8sEventsResponse
 		defaultTimeObject time.Time
 	)
-
 	for _, event := range events.Items {
 		if event.LastTimestamp.Time == defaultTimeObject {
 			continue
 		}
-		var newEvent = NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
-		response = append(response, newEvent)
+		if (objType == "" && objName == "") ||
+			(strings.EqualFold(event.InvolvedObject.Kind, objType) && strings.EqualFold(event.InvolvedObject.Name, objName)) {
+			newEvent := NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+			response = append(response, newEvent)
+		}
 	}
-
-	// sort the events by timestamp
-	// from most recent events to older events
 	sort.Slice(response, func(i int, j int) bool {
 		return response[i].TimeStamp >= response[j].TimeStamp
 	})
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
@@ -759,28 +837,21 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
+// except the kube system namespaces
 func getAllNamespaces(h *handler) ([]string, error) {
-	l, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
+	namespaces, err := h.kubeClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-	m := make(map[string]bool)
-	for _, pl := range l.Items {
-		m[pl.Namespace] = true
+	var res []string
+	for _, ns := range namespaces.Items {
+		// skip kube system namespaces because users are not supposed to create pipelines in them
+		// see https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/#initial-namespaces
+		if name := ns.Name; name != metav1.NamespaceSystem && name != metav1.NamespacePublic && name != "kube-node-lease" {
+			res = append(res, ns.Name)
+		}
 	}
-
-	isbsvc, err := h.numaflowClient.InterStepBufferServices("").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	for _, isb := range isbsvc.Items {
-		m[isb.Namespace] = true
-	}
-	var namespaces []string
-	for k := range m {
-		namespaces = append(namespaces, k)
-	}
-	return namespaces, nil
+	return res, nil
 }
 
 // getPipelines is a utility used to fetch all the pipelines in a given namespace

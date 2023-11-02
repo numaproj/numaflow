@@ -14,7 +14,7 @@ import "./style.css";
 
 const INITIAL_VALUE = `#
 # This manifest is intended for demonstration purpose, it's not suitable for production.
-# Check https://numaflow.numaproj.io/user-guide/inter-step-buffer-service/ to figure out reliable configuration for production.
+# Check https://numaflow.numaproj.io/core-concepts/inter-step-buffer-service/ to figure out reliable configuration for production.
 #
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: InterStepBufferService
@@ -238,6 +238,7 @@ export function ISBCreate({
         onMutatedChange={handleMutationChange}
         statusIndicator={status}
         validationMessage={validationMessage}
+        allowNonMutatedSubmit
       />
     </Box>
   );

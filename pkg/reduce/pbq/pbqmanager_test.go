@@ -22,8 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/window/keyed"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
@@ -54,17 +55,11 @@ func TestManager_ListPartitions(t *testing.T) {
 		Slot:  "slot-2",
 	}
 
-	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-	kwOne.AddSlot("slot-1")
-
-	kwTwo := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-	kwOne.AddSlot("slot-2")
-
 	var pq1, pq2 ReadWriteCloser
-	pq1, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
+	pq1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 
-	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo, kwTwo)
+	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo)
 	assert.NoError(t, err)
 
 	assert.Len(t, pbqManager.ListPartitions(), 2)
@@ -97,7 +92,7 @@ func TestManager_GetPBQ(t *testing.T) {
 	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
 	kwOne.AddSlot("slot-1")
 
-	pb1, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
+	pb1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 
 	// get the created pbq
@@ -125,7 +120,7 @@ func TestPBQFlow(t *testing.T) {
 	kwOne.AddSlot("slot-1")
 
 	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
+	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 
 	msgsCount := 5
@@ -189,7 +184,7 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 
 	// create a pbq backed with no op store
 	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
+	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	msgsCount := 50
 	var wg sync.WaitGroup
 
@@ -249,7 +244,7 @@ func TestManager_Replay(t *testing.T) {
 	kwOne.AddSlot("slot-1")
 
 	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition, kwOne)
+	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -351,29 +346,17 @@ func TestManager_NextWindowToBeClosed(t *testing.T) {
 		Slot:  "slot-2",
 	}
 
-	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-	kwOne.AddSlot("slot-1")
-
-	kwTwo := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-	kwOne.AddSlot("slot-2")
-
-	kwThree := keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(240, 0))
-	kwOne.AddSlot("slot-1")
-
-	kwFour := keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(240, 0))
-	kwOne.AddSlot("slot-2")
-
 	var pq1, pq2, pq3, pq4 ReadWriteCloser
-	pq1, err = pbqManager.CreateNewPBQ(ctx, partitionOne, kwOne)
+	pq1, err = pbqManager.CreateNewPBQ(ctx, partitionOne)
 	assert.NoError(t, err)
 
-	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo, kwTwo)
+	pq2, err = pbqManager.CreateNewPBQ(ctx, partitionTwo)
 	assert.NoError(t, err)
 
-	pq3, err = pbqManager.CreateNewPBQ(ctx, partitionThree, kwThree)
+	pq3, err = pbqManager.CreateNewPBQ(ctx, partitionThree)
 	assert.NoError(t, err)
 
-	pq4, err = pbqManager.CreateNewPBQ(ctx, partitionFour, kwFour)
+	pq4, err = pbqManager.CreateNewPBQ(ctx, partitionFour)
 	assert.NoError(t, err)
 
 	aw := pbqManager.NextWindowToBeMaterialized()

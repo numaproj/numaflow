@@ -13,11 +13,39 @@ import { AppContextProps } from "../../../types/declarations/app";
 import { SidebarType } from "../../common/SlidingSidebar";
 import { NamespacePipelineListing } from "./partials/NamespacePipelineListing";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
+import { NamespaceSummaryData } from "../../../types/declarations/namespace";
+import {
+  ISB_SERVICES_STATUS_TOOLTIP, ISB_SERVICES_TOOLTIP,
+  PIPELINE_STATUS_TOOLTIP,
+} from "../../../utils";
 
 import "./style.css";
 
-export function Namespaces() {
-  const { namespaceId } = useParams();
+const defaultNamespaceSummaryData: NamespaceSummaryData = {
+  pipelinesCount: 0,
+  pipelinesActiveCount: 0,
+  pipelinesInactiveCount: 0,
+  pipelinesHealthyCount: 0,
+  pipelinesWarningCount: 0,
+  pipelinesCriticalCount: 0,
+  isbsCount: 0,
+  isbsActiveCount: 0,
+  isbsInactiveCount: 0,
+  isbsHealthyCount: 0,
+  isbsWarningCount: 0,
+  isbsCriticalCount: 0,
+  pipelineSummaries: [],
+  pipelineRawData: null,
+  isbRawData: null,
+};
+
+export interface NamespaceProps {
+  namespaceId?: string;
+}
+
+export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
+  const { namespaceId: nsIdParam } = useParams();
+  const namespaceId = nsIdProp || nsIdParam;
   const { setSidebarProps, addError } = useContext<AppContextProps>(AppContext);
   const { data, pipelineRawData, isbRawData, loading, error, refresh } =
     useNamespaceSummaryFetch({
@@ -30,11 +58,93 @@ export function Namespaces() {
     if (!namespaceId || !setSidebarProps) {
       return;
     }
+    const pipelines: string[] = [];
+    const vertexMap = new Map<string, string[]>();
+    if (pipelineRawData) {
+      Object.keys(pipelineRawData).forEach((pipelineId) => {
+        pipelines.push(pipelineId);
+        const vertices =
+          pipelineRawData[pipelineId]?.pipeline?.spec?.vertices || [];
+        vertices.forEach((vertex: any) => {
+          const listing = vertexMap.get(pipelineId) || [];
+          listing.push(vertex.name);
+          vertexMap.set(pipelineId, listing);
+        });
+      });
+    }
     setSidebarProps({
       type: SidebarType.NAMESPACE_K8s,
-      k8sEventsProps: { namespaceId },
+      k8sEventsProps: {
+        namespaceId,
+        pipelineFilterOptions: pipelines,
+        vertexFilterOptions: vertexMap,
+      },
     });
-  }, [namespaceId, setSidebarProps]);
+  }, [namespaceId, setSidebarProps, pipelineRawData]);
+
+  const defaultPipelinesData = useMemo(() => {
+    return [
+      // Pipelines collection
+      {
+        type: SummarySectionType.COLLECTION,
+        collectionSections: [
+          {
+            type: SummarySectionType.TITLED_VALUE,
+            titledValueProps: {
+              title: "PIPELINES",
+              value: 0,
+            },
+          },
+          {
+            type: SummarySectionType.STATUSES,
+            statusesProps: {
+              title: "PIPELINES STATUS",
+              active: 0,
+              inActive: 0,
+              healthy: 0,
+              warning: 0,
+              critical: 0,
+              tooltip: PIPELINE_STATUS_TOOLTIP,
+            },
+          },
+        ],
+      },
+      // ISBs collection
+      {
+        type: SummarySectionType.COLLECTION,
+        collectionSections: [
+          {
+            type: SummarySectionType.TITLED_VALUE,
+            titledValueProps: {
+              title: "ISB SERVICES",
+              value: 0,
+              tooltip: ISB_SERVICES_TOOLTIP
+            },
+          },
+          {
+            type: SummarySectionType.STATUSES,
+            statusesProps: {
+              title: "ISB SERVICES STATUS",
+              active: 0,
+              inActive: 0,
+              healthy: 0,
+              warning: 0,
+              critical: 0,
+              tooltip: ISB_SERVICES_STATUS_TOOLTIP,
+            },
+          },
+        ],
+      },
+      {
+        type: SummarySectionType.CUSTOM,
+        customComponent: (
+          <div className="namespace-k8s-events" onClick={handleK8sEventsClick}>
+            K8s Events
+          </div>
+        ),
+      },
+    ];
+  }, [handleK8sEventsClick]);
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (loading) {
@@ -60,7 +170,7 @@ export function Namespaces() {
       ];
     }
     if (!data) {
-      return [];
+      return defaultPipelinesData;
     }
     return [
       // Pipelines collection
@@ -83,6 +193,7 @@ export function Namespaces() {
               healthy: data.pipelinesHealthyCount,
               warning: data.pipelinesWarningCount,
               critical: data.pipelinesCriticalCount,
+              tooltip: PIPELINE_STATUS_TOOLTIP,
             },
           },
         ],
@@ -96,6 +207,7 @@ export function Namespaces() {
             titledValueProps: {
               title: "ISB SERVICES",
               value: data.isbsCount,
+              tooltip: ISB_SERVICES_TOOLTIP
             },
           },
           {
@@ -107,6 +219,7 @@ export function Namespaces() {
               healthy: data.isbsHealthyCount,
               warning: data.isbsWarningCount,
               critical: data.isbsCriticalCount,
+              tooltip: ISB_SERVICES_STATUS_TOOLTIP,
             },
           },
         ],
@@ -157,18 +270,11 @@ export function Namespaces() {
         </Box>
       );
     }
-    if (!data) {
-      return (
-        <ErrorDisplay
-          title="Error loading namespace pipelines"
-          message="No resources found."
-        />
-      );
-    }
+
     return (
       <NamespacePipelineListing
         namespace={namespaceId || ""}
-        data={data}
+        data={data ? data : defaultNamespaceSummaryData}
         pipelineData={pipelineRawData}
         isbData={isbRawData}
         refresh={refresh}

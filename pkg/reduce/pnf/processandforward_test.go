@@ -123,7 +123,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 
 	// create a pbq for a partition
 	var simplePbq pbq.ReadWriteCloser
-	simplePbq, err = pbqManager.CreateNewPBQ(ctx, testPartition, kw)
+	simplePbq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)
 
 	// write messages to pbq
@@ -398,7 +398,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	// create a pbq for a partition
 	pw, otStore := buildPublisherMapAndOTStore(toBuffers)
 	var simplePbq pbq.Reader
-	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition, kw)
+	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition)
 
 	resultPayload, _ := json.Marshal(PayloadForTest{
 		Key:   "result_payload",

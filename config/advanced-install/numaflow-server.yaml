@@ -7,6 +7,10 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-server-role
 rules:
 - apiGroups:
@@ -41,6 +45,7 @@ rules:
   - configmaps
   - services
   - persistentvolumeclaims
+  - namespaces
   verbs:
   - get
   - list
@@ -66,6 +71,10 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
   name: numaflow-server-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -74,6 +83,36 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: numaflow-server-sa
+  namespace: numaflow-system
+---
+apiVersion: v1
+data:
+  server.disable.auth: "true"
+kind: ConfigMap
+metadata:
+  name: numaflow-server-cmd-params-config
+  namespace: numaflow-system
+---
+apiVersion: v1
+data:
+  rbac-conf.yaml: |
+    policy.default: role:readonly
+    # The scopes field controls which authentication scopes to examine during rbac enforcement.
+    # We can have multiple scopes, and the first scope that matches with the policy will be used.
+    # The default value is "groups", which means that the groups field of the user's token will be examined
+    # The other possible value is "email", which means that the email field of the user's token will be examined
+    # It can be provided as a comma-separated list, e.g "groups,email"
+    # policy.scopes: groups,email
+  rbac-policy.csv: |
+    # Policies go here
+    p, role:admin, *, *, *
+    p, role:readonly, *, *, GET
+    # Groups go here
+    # g, admin, role:admin
+    # g, my-github-org:my-github-team, role:readonly
+kind: ConfigMap
+metadata:
+  name: numaflow-server-rbac-config
   namespace: numaflow-system
 ---
 apiVersion: v1
@@ -87,6 +126,7 @@ spec:
     targetPort: 8443
   selector:
     app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
     app.kubernetes.io/part-of: numaflow
   type: ClusterIP
 ---
@@ -100,11 +140,13 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: numaflow-ux
+      app.kubernetes.io/name: numaflow-ux
       app.kubernetes.io/part-of: numaflow
   template:
     metadata:
       labels:
         app.kubernetes.io/component: numaflow-ux
+        app.kubernetes.io/name: numaflow-ux
         app.kubernetes.io/part-of: numaflow
     spec:
       containers:
@@ -115,6 +157,54 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: NUMAFLOW_SERVER_INSECURE
+          valueFrom:
+            configMapKeyRef:
+              key: server.insecure
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_PORT_NUMBER
+          valueFrom:
+            configMapKeyRef:
+              key: server.port
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_NAMESPACED
+          valueFrom:
+            configMapKeyRef:
+              key: server.namespaced
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_MANAGED_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              key: server.managed.namespace
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_BASE_HREF
+          valueFrom:
+            configMapKeyRef:
+              key: server.base.href
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_DISABLE_AUTH
+          valueFrom:
+            configMapKeyRef:
+              key: server.disable.auth
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_DEX_SERVER_ADDR
+          valueFrom:
+            configMapKeyRef:
+              key: server.dex.server
+              name: numaflow-server-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              key: server.address
+              name: numaflow-server-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
@@ -139,9 +229,18 @@ spec:
         - mountPath: /ui/build/index.html
           name: env-volume
           subPath: index.html
+        - mountPath: /etc/numaflow
+          name: rbac-config
       initContainers:
       - args:
         - server-init
+        env:
+        - name: NUMAFLOW_SERVER_BASE_HREF
+          valueFrom:
+            configMapKeyRef:
+              key: server.base.href
+              name: numaflow-server-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         name: server-init
@@ -155,3 +254,6 @@ spec:
       volumes:
       - emptyDir: {}
         name: env-volume
+      - configMap:
+          name: numaflow-server-rbac-config
+        name: rbac-config

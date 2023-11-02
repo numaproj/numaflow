@@ -221,7 +221,7 @@ func NewMemGen(
 	genSrc.sourcePublishWM = genSrc.buildSourceWatermarkPublisher(publishWMStores)
 
 	// we pass in the context to forwarder as well so that it can shut down when we cancelFn the context
-	forwarder, err := sourceforward.NewDataForward(vertexInstance.Vertex, genSrc, writers, fsd, transformerApplier, fetchWM, genSrc, toVertexPublisherStores, idleManager, forwardOpts...)
+	forwarder, err := sourceforward.NewDataForward(vertexInstance, genSrc, writers, fsd, transformerApplier, fetchWM, genSrc, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		return nil, err
 	}

@@ -11,9 +11,8 @@ export function PipelineStatus({ status, healthStatus }) {
         display: "flex",
         flexDirection: "column",
         marginTop: "0.375rem",
-        alignItems: "center",
         flexGrow: 1,
-        justifyContent: "center",
+        paddingLeft: "1rem"
       }}
     >
       <Box sx={{ width: "fit-content" }}>

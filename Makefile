@@ -117,7 +117,7 @@ test-udsource-e2e:
 test-transformer-e2e:
 test-diamond-e2e:
 test-sideinput-e2e:
-test-%: 
+test-%:
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
@@ -303,14 +303,16 @@ check-version-warning:
 
 .PHONY: update-manifests-version
 update-manifests-version:
-	cat config/base/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/base_kustomization.yaml
-	mv /tmp/base_kustomization.yaml config/base/kustomization.yaml
-	cat config/advanced-install/namespaced-controller/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/base_kustomization.yaml
-	mv /tmp/base_kustomization.yaml config/advanced-install/namespaced-controller/kustomization.yaml
-	cat config/advanced-install/numaflow-server/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/base_kustomization.yaml
-	mv /tmp/base_kustomization.yaml config/advanced-install/numaflow-server/kustomization.yaml
-	cat config/extensions/webhook/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/base_kustomization.yaml
-	mv /tmp/base_kustomization.yaml config/extensions/webhook/kustomization.yaml
+	cat config/base/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/tmp_kustomization.yaml
+	mv /tmp/tmp_kustomization.yaml config/base/kustomization.yaml
+	cat config/advanced-install/namespaced-controller/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/tmp_kustomization.yaml
+	mv /tmp/tmp_kustomization.yaml config/advanced-install/namespaced-controller/kustomization.yaml
+	cat config/advanced-install/namespaced-numaflow-server/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/tmp_kustomization.yaml
+	mv /tmp/tmp_kustomization.yaml config/advanced-install/namespaced-numaflow-server/kustomization.yaml
+	cat config/advanced-install/numaflow-server/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/tmp_kustomization.yaml
+	mv /tmp/tmp_kustomization.yaml config/advanced-install/numaflow-server/kustomization.yaml
+	cat config/extensions/webhook/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/tmp_kustomization.yaml
+	mv /tmp/tmp_kustomization.yaml config/extensions/webhook/kustomization.yaml
 	cat Makefile | sed 's/^VERSION?=.*/VERSION?=$(VERSION)/' | sed 's/^BASE_VERSION:=.*/BASE_VERSION:=$(VERSION)/' > /tmp/ae_makefile
 	mv /tmp/ae_makefile Makefile
 

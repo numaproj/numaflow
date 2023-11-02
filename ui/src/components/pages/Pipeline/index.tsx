@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useMemo } from "react";
+import React, { useCallback, useContext, useMemo, createContext } from "react";
 import { useParams } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
@@ -22,10 +22,18 @@ import { SidebarType } from "../../common/SlidingSidebar";
 
 import "./style.css";
 
-export function Pipeline() {
-  // TODO needs to be able to be given namespaceId from parent for NS only install
-  const { namespaceId, pipelineId } = useParams();
-  const { addError } = useContext<AppContextProps>(AppContext);
+export interface PipelineProps {
+  namespaceId?: string;
+}
+
+export const GeneratorColorContext = createContext<Map<string, string>>(
+  new Map()
+);
+
+export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
+  const { namespaceId: nsIdParam, pipelineId } = useParams();
+  const namespaceId = nsIdProp || nsIdParam;
+  const { addError, setSidebarProps } = useContext<AppContextProps>(AppContext);
   const {
     data,
     loading: summaryLoading,
@@ -37,6 +45,7 @@ export function Pipeline() {
     pipeline,
     vertices,
     edges,
+    generatorToColorIdxMap,
     pipelineErr,
     buffersErr,
     loading,
@@ -47,17 +56,28 @@ export function Pipeline() {
     graphRefresh();
     summaryRefresh();
   }, [graphRefresh, summaryRefresh]);
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
 
   const handleK8sEventsClick = useCallback(() => {
-    if (!namespaceId || !setSidebarProps) {
+    if (!namespaceId || !pipelineId || !setSidebarProps) {
       return;
+    }
+    const vertexMap = new Map<string, string[]>();
+    if (vertices?.length) {
+      vertexMap.set(
+        pipelineId,
+        vertices.map((v) => v.id)
+      );
     }
     setSidebarProps({
       type: SidebarType.NAMESPACE_K8s,
-      k8sEventsProps: { namespaceId },
+      k8sEventsProps: {
+        namespaceId,
+        pipelineId,
+        headerText: "Pipeline K8s Events",
+        vertexFilterOptions: vertexMap,
+      },
     });
-  }, [namespaceId, setSidebarProps]);
+  }, [namespaceId, pipelineId, setSidebarProps, vertices]);
 
   const summarySections: SummarySection[] = useMemo(() => {
     if (summaryLoading) {
@@ -181,18 +201,21 @@ export function Pipeline() {
       );
     }
     return (
-      <Graph
-        data={{
-          edges: edges,
-          vertices: vertices,
-          pipeline: pipeline,
-        }}
-        namespaceId={namespaceId}
-        pipelineId={pipelineId}
-        refresh={refresh}
-      />
+      <GeneratorColorContext.Provider value={generatorToColorIdxMap}>
+        <Graph
+          data={{
+            edges: edges,
+            vertices: vertices,
+            pipeline: pipeline,
+          }}
+          namespaceId={namespaceId}
+          pipelineId={pipelineId}
+          refresh={refresh}
+        />
+      </GeneratorColorContext.Provider>
     );
   }, [
+    generatorToColorIdxMap,
     pipelineErr,
     buffersErr,
     loading,
@@ -206,6 +229,7 @@ export function Pipeline() {
 
   return (
     <SummaryPageLayout
+      excludeContentMargin={true}
       contentPadding={false}
       contentHideOverflow
       collapsable

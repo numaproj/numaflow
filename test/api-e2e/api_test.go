@@ -22,19 +22,24 @@ type APISuite struct {
 func (s *APISuite) TestGetSysInfo() {
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
-		panic("failed to find the nuamflow-server pod")
+		panic("failed to find the numaflow-server pod")
 	}
 	stopPortForward := s.StartPortForward(numaflowServerPodName, 8443)
 
 	sysinfoBody := HTTPExpect(s.T(), "https://localhost:8443").GET("/api/v1/sysinfo").
 		Expect().
 		Status(200).Body().Raw()
-	var sysinfoExpect = `{"data":{"managedNamespace":"numaflow-system","namespaced":false,"version":""}}`
+	var sysinfoExpect = `{"data":{"managedNamespace":"numaflow-system","namespaced":false`
 	assert.Contains(s.T(), sysinfoBody, sysinfoExpect)
+	assert.Contains(s.T(), sysinfoBody, "Version")
+	assert.Contains(s.T(), sysinfoBody, "BuildDate")
+	assert.Contains(s.T(), sysinfoBody, "GoVersion")
+	assert.Contains(s.T(), sysinfoBody, "Platform")
 	stopPortForward()
 }
 
 func (s *APISuite) TestISBSVC() {
+
 	var err error
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
@@ -56,11 +61,25 @@ func (s *APISuite) TestISBSVC() {
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), listISBSVCBody, testISBSVCName)
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
 		Expect().
 		Status(200).Body().Raw()
+	for !strings.Contains(getISBSVCBody, `"status":"healthy"`) {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				s.T().Fatalf("failed to get namespaces/isb-services: %v", ctx.Err())
+			}
+		default:
+			time.Sleep(100 * time.Millisecond)
+			getISBSVCBody = HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
+				Expect().
+				Status(200).Body().Raw()
+		}
+	}
 	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCName))
-	assert.Contains(s.T(), getISBSVCBody, `"status":"inactive"`)
 
 	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
 		Expect().
@@ -72,6 +91,7 @@ func (s *APISuite) TestISBSVC() {
 }
 
 func (s *APISuite) TestISBSVCReplica1() {
+
 	var err error
 	numaflowServerPodName := s.GetNumaflowServerPodName()
 	if numaflowServerPodName == "" {
@@ -93,11 +113,25 @@ func (s *APISuite) TestISBSVCReplica1() {
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), listISBSVCBody, testISBSVCReplica1Name)
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	getISBSVCBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
 		Expect().
 		Status(200).Body().Raw()
+	for !strings.Contains(getISBSVCBody, `"status":"healthy"`) {
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.DeadlineExceeded {
+				s.T().Fatalf("failed to get namespaces/isb-services: %v", ctx.Err())
+			}
+		default:
+			time.Sleep(100 * time.Millisecond)
+			getISBSVCBody = HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
+				Expect().
+				Status(200).Body().Raw()
+		}
+	}
 	assert.Contains(s.T(), getISBSVCBody, fmt.Sprintf(`"name":"%s"`, testISBSVCReplica1Name))
-	assert.Contains(s.T(), getISBSVCBody, `"status":"inactive"`)
 
 	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8443").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
 		Expect().
@@ -141,7 +175,7 @@ func (s *APISuite) TestPipeline0() {
 	clusterSummaryBody := HTTPExpect(s.T(), "https://localhost:8443").GET("/api/v1/cluster-summary").
 		Expect().
 		Status(200).Body().Raw()
-	var clusterSummaryExpect = `{"namespace":"numaflow-system","pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
+	var clusterSummaryExpect = `{"isEmpty":false,"namespace":"numaflow-system","pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
 	assert.Contains(s.T(), clusterSummaryBody, clusterSummaryExpect)
 
 	listPipelineBody := HTTPExpect(s.T(), "https://localhost:8443").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).
