@@ -13,7 +13,7 @@ import "./style.css";
 export interface ProcessingRatesProps {
   vertexId: string;
   pipelineId: string;
-  vertexMetrics: any[];
+  vertexMetrics: any;
 }
 
 export function ProcessingRates({

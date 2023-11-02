@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.0.0-rc3 (2023-11-01)
+
+ * [6ab96b18](https://github.com/numaproj/numaflow/commit/6ab96b1823a1de438cb1fb6a3733282fe4468fc1) Update manifests to v1.0.0-rc3
+ * [4ffda383](https://github.com/numaproj/numaflow/commit/4ffda3834fae7c2487cafd61855f6da520b07276) feat: cache daemon client for each pipeline (#1276)
+ * [5a7d739e](https://github.com/numaproj/numaflow/commit/5a7d739e233c0632aa8b36628687cd35f5a449d4) fix: rc2 UI fixes (#1317)
+ * [cbd810bc](https://github.com/numaproj/numaflow/commit/cbd810bc4b1835d55de0d4641313d44ec79ab2fe) feat: added filtering based on number, status and health of pipelines… (#1312)
+ * [491c8786](https://github.com/numaproj/numaflow/commit/491c87867a05eaaac2e0f6cc4526aa490cfdc81b) fix: user identity cookie max age (#1316)
+
+### Contributors
+
+ * Darshan Simha
+ * Derek Wang
+ * Dillen Padhiar
+ * Juanlu Yu
+ * mshakira
+
 ## v1.0.0-rc2 (2023-11-01)
 
  * [8a7dc592](https://github.com/numaproj/numaflow/commit/8a7dc5920c143aeaca06ff9c5cfc633102bac7d6) Update manifests to v1.0.0-rc2
