@@ -118,9 +118,9 @@ export function SlidingSidebar({
   }, [parentCloseIndicator, lastCloseIndicator]);
 
   // Set min width by type
-  useEffect(() => {
-    setMinWidth(MIN_WIDTH_BY_TYPE[type] || 0);
-  }, [type]);
+  // useEffect(() => {
+  //   setMinWidth(MIN_WIDTH_BY_TYPE[type] || 0);
+  // }, [type]);
 
   // Don't allow width greater then pageWidth
   useEffect(() => {
