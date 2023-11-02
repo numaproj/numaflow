@@ -76,6 +76,7 @@ export function PipelineCard({
 
   const handleUpdateComplete = useCallback(() => {
     refresh();
+    setPipelineAbleToLoad(false);
     if (!setSidebarProps) {
       return;
     }
