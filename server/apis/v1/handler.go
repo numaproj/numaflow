@@ -547,6 +547,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		return
 	}
 	isbSVC.Spec = updatedSpec.Spec
+	isbSVC.ObjectMeta.Labels = updatedSpec.ObjectMeta.Labels
 	updatedISBSvc, err := h.numaflowClient.InterStepBufferServices(ns).Update(context.Background(), isbSVC, metav1.UpdateOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %s", ns, isbsvcName, err.Error()))
