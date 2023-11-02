@@ -32,10 +32,12 @@ import {
   CRITICAL,
   DESC,
   HEALTHY,
+  INACTIVE,
   LAST_CREATED_SORT,
   LAST_UPDATED_SORT,
   PAUSED,
-  RUNNING, StatusString,
+  RUNNING,
+  StatusString,
   STOPPED,
   UNKNOWN,
   WARNING,
@@ -44,7 +46,7 @@ import {
 import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
-export const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL, UNKNOWN];
+export const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL, INACTIVE, UNKNOWN];
 export const STATUS = [ALL, RUNNING, STOPPED, PAUSED, UNKNOWN];
 
 const sortOptions = [
@@ -144,11 +146,13 @@ export function NamespacePipelineListing({
     } else if (orderBy.value === LAST_UPDATED_SORT) {
       filtered.sort((a: PipelineData, b: PipelineData) => {
         if (orderBy.sortOrder === ASC) {
-          return a?.pipeline?.status?.lastUpdated > b.pipeline?.status?.lastUpdated
+          return a?.pipeline?.status?.lastUpdated >
+            b.pipeline?.status?.lastUpdated
             ? 1
             : -1;
         } else {
-          return a?.pipeline?.status?.lastUpdated < b.pipeline?.status?.lastUpdated
+          return a?.pipeline?.status?.lastUpdated <
+            b.pipeline?.status?.lastUpdated
             ? 1
             : -1;
         }
