@@ -26,9 +26,9 @@ namespace: numaflow-system
 
 ## Namespace Scope
 
-A namespace installation only watches and executes pipelines in the namespace it is installed (typically `numaflow-system`).
+A namespace scoped installation only watches and executes pipelines in the namespace it is installed (typically `numaflow-system`).
 
-Configure the ConfigMap `numaflow-controller-cmd-params-config` and `numaflow-server-cmd-params-config` to achieve namespace scope installation.
+Configure the ConfigMap `numaflow-controller-cmd-params-config` and `numaflow-server-cmd-params-config` to achieve namespace scoped installation.
 
 ```yaml
 apiVersion: v1
