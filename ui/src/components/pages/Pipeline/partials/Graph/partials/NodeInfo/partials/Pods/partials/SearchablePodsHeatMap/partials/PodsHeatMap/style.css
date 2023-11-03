@@ -22,6 +22,7 @@
 
 .hexagon-tooltip {
   transform: translate(10%, -75%);
+  z-index: 10;
 }
 
 .hexagon-tooltip-table {

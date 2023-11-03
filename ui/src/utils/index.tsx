@@ -18,7 +18,7 @@ export const ALL = "All";
 export const RUNNING = "Running";
 export const ACTIVE = "Running";
 export const INACTIVE = "Not-Running";
-export const INACTIVE_STATTUS = "inactive";
+export const INACTIVE_STATUS = "inactive";
 export const HEALTHY = "healthy";
 export const WARNING = "warning";
 export const CRITICAL0 = "critical0";
@@ -241,7 +241,7 @@ export const IconsStatusMap = {
   [PAUSED]: circleDash,
   [ACTIVE]: circleCheck,
   [INACTIVE]: circleDash,
-  [INACTIVE_STATTUS]: circleDash,
+  [INACTIVE_STATUS]: circleDash,
   [HEALTHY]: heartFill,
   [WARNING]: warning,
   [CRITICAL]: critical,
@@ -268,7 +268,7 @@ export const StatusString: StatusStringType = {
   [STOPPED]: "Stopped",
   [ACTIVE]: "Running",
   [INACTIVE]: "Inactive",
-  [INACTIVE_STATTUS]: "Inactive",
+  [INACTIVE_STATUS]: "Inactive",
   [HEALTHY]: "Healthy",
   [WARNING]: "Warning",
   [CRITICAL]: "Critical",
