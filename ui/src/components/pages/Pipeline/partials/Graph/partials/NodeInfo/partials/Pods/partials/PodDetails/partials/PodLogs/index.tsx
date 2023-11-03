@@ -79,7 +79,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
   const [negateSearch, setNegateSearch] = useState<boolean>(false);
   const [paused, setPaused] = useState<boolean>(false);
   const [colorMode, setColorMode] = useState<string>("light");
-  const [logsOrder, setLogsOrder] = useState<string>("asc");
+  const [logsOrder, setLogsOrder] = useState<string>("desc");
 
   useEffect(() => {
     // reset logs in memory on any log source change
