@@ -17,6 +17,7 @@ import {
   CRITICAL,
   HEALTHY,
   INACTIVE,
+  INACTIVE_STATUS,
   NO_PIPELINES,
   WARNING,
   WITH_PIPELINES,
@@ -72,6 +73,8 @@ export function ClusterNamespaceListing({
         return ns.pipelinesWarningCount > 0;
       } else if (healthFilter === CRITICAL) {
         return ns.pipelinesCriticalCount > 0;
+      } else if (healthFilter === INACTIVE_STATUS) {
+        return ns.pipelinesInactiveCount > 0;
       } else {
         return true;
       }
