@@ -16383,7 +16383,7 @@ data:
     true\n"
 kind: ConfigMap
 metadata:
-  name: numaflow-dex-server
+  name: numaflow-dex-server-config
   namespace: numaflow-system
 ---
 apiVersion: v1
@@ -16565,7 +16565,7 @@ spec:
           items:
           - key: config.yaml
             path: config.yaml
-          name: numaflow-dex-server
+          name: numaflow-dex-server-config
         name: config
 ---
 apiVersion: apps/v1
