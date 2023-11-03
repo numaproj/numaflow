@@ -9,20 +9,6 @@ resources:
   - ../../base/numaflow-server
   - ../../cluster-install/rbac/numaflow-server
 
-patchesStrategicMerge:
-  # For release scripts
-  - |
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: numaflow-server
-    spec:
-      template:
-        spec:
-          containers:
-            - name: main
-              image: quay.io/numaproj/numaflow:latest
-
 namespace: numaflow-system
 
 images:
