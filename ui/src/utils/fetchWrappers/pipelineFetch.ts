@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Options, useFetch } from "./fetch";
 import { PipelineSummaryFetchResult } from "../../types/declarations/pipeline";
+import {DEFAULT_ISB} from "../index";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
@@ -107,7 +108,7 @@ export const usePipelineSummaryFetch = ({
           pipelineData.data?.pipeline?.spec?.interStepBufferServiceName
         );
       } else {
-        setIsb("default");
+        setIsb(DEFAULT_ISB);
       }
     }
     if (pipelineData && isbData) {
