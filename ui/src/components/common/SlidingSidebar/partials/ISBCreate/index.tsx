@@ -12,6 +12,8 @@ import { getAPIResponseError } from "../../../../../utils";
 
 import "./style.css";
 
+const LATEST_JETSTREAM_VERSION = "2.10.3";
+
 const INITIAL_VALUE = `#
 # This manifest is intended for demonstration purpose, it's not suitable for production.
 # Check https://numaflow.numaproj.io/core-concepts/inter-step-buffer-service/ to figure out reliable configuration for production.
@@ -184,6 +186,10 @@ export function ISBCreate({
         message: "Error: no spec provided.",
       });
       return;
+    }
+    //Replace latest with actual version in parsed yaml
+    if (parsed.spec.jetstream.version === "latest") {
+      parsed.spec.jetstream.version = LATEST_JETSTREAM_VERSION;
     }
     setSubmitPayload(parsed);
     setValidationMessage(undefined);
