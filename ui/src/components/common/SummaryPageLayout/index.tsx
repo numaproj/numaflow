@@ -167,6 +167,7 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
             flexDirection: "row",
             flexGrow: "1",
           }}
+          key={key}
         >
           {component}
           <div
@@ -321,6 +322,7 @@ export function SummaryPageLayout({
           ? { height: "100%", overflow: "hidden" }
           : { height: "100%" }
       }
+      data-testid="summary-page-layout"
     >
       {summary}
       <Box

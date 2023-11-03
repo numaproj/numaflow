@@ -22,7 +22,7 @@ export interface StatusIndicatorProps {
 }
 export function StatusIndicator({ status }: StatusIndicatorProps) {
   return (
-    <svg height="10" width="10">
+    <svg height="10" width="10" data-testid={status}>
       <circle cx="5" cy="5" r="4" fill={IndicatorColorMap[status]} />
     </svg>
   );
