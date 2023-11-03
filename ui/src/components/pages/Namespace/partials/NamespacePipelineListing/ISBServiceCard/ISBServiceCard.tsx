@@ -118,9 +118,14 @@ export function ISBServiceCard({
         <Box
           sx={{
             display: "flex",
+            background: "#F9F9F9",
             flexDirection: "row",
             flexGrow: 1,
+            padding: "1rem",
+            paddingTop: "0",
             width: "100%",
+            borderBottomLeftRadius: "1rem",
+            borderBottomRightRadius: "1rem",
           }}
         >
           <Grid
