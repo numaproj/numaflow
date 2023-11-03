@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.0.0-rc4 (2023-11-03)
+
+ * [e94b563f](https://github.com/numaproj/numaflow/commit/e94b563f44a0469fc88bed0351d14e7587c0fb61) Update manifests to v1.0.0-rc4
+ * [14757afc](https://github.com/numaproj/numaflow/commit/14757afcc6d76603e8229357671d2092bab30f33) fix(SERVER): fix styles for ISB cards
+ * [fc90920b](https://github.com/numaproj/numaflow/commit/fc90920b93315830d24d0e16c5754823b9f7b3b7) fix(SERVER): fix styles for ISB cards
+ * [8bf275bd](https://github.com/numaproj/numaflow/commit/8bf275bd33c465276a1b714c4c2f5a7024f96c42) fix(SERVER): fix for pagination issue
+ * [2e8cff7a](https://github.com/numaproj/numaflow/commit/2e8cff7acb824ec76d07876651717c297407929e) fix(SERVER): namespace inout filtering space alignment
+ * [c77fb0fc](https://github.com/numaproj/numaflow/commit/c77fb0fcf66397642271b20bd86f9732110f8d19) fix(SERVER): pipeline card style fix
+ * [52d9370f](https://github.com/numaproj/numaflow/commit/52d9370f585f7984834dbd11c257c9fefb9b137f) fix: block pipeline load post update (#1333)
+ * [2307660f](https://github.com/numaproj/numaflow/commit/2307660f731a370929811dd584b3ad16383c3e1f) fix: full isb spec in edit (#1331)
+ * [a70c77b9](https://github.com/numaproj/numaflow/commit/a70c77b93b4b8e7d5688a7cbabbba35392b1ea80) RC2.0 UI fixes (#1329)
+ * [02281f38](https://github.com/numaproj/numaflow/commit/02281f38fdbe84f6d28ad2414a47636135f093f5) feat: container for generator vertices (#1321)
+ * [feb4977a](https://github.com/numaproj/numaflow/commit/feb4977a9e806ec1dcf4b79e04f2991338df60c9) fix: create isb should move to isb tab (#1323)
+ * [e05132ef](https://github.com/numaproj/numaflow/commit/e05132ef9b2a9d9d2ffd500a9c8ddc5c5bee9b2f) fix: max lag (#1319)
+
+### Contributors
+
+ * Bradley Behnke
+ * Darshan Simha
+ * Derek Wang
+ * Juanlu Yu
+ * Shakira M
+ * Vedant Gupta
+ * mshakira
+
 ## v1.0.0-rc3 (2023-11-01)
 
  * [6ab96b18](https://github.com/numaproj/numaflow/commit/6ab96b1823a1de438cb1fb6a3733282fe4468fc1) Update manifests to v1.0.0-rc3
