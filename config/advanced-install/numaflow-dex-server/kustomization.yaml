@@ -7,4 +7,3 @@ kind: Kustomization
 
 resources:
   - ../../base/dex
-
