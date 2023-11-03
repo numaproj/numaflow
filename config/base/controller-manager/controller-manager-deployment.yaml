@@ -45,6 +45,12 @@ spec:
                   name: numaflow-controller-cmd-params-config
                   key: controller.managed.namespace
                   optional: true
+            - name: NUMAFLOW_LEADER_ELECTION_DISABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-controller-cmd-params-config
+                  key: controller.disable.leader.election
+                  optional: true
           volumeMounts:
             - mountPath: /etc/numaflow
               name: controller-config-volume

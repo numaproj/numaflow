@@ -13,7 +13,8 @@ data:
   # server.namespaced: "false"
   #
   ### The namespace that the server watches when "server.namespaced" is true.
-  # server.managed.namespace=numaflow-system
+  # server.managed.namespace: numaflow-system
+  #
   ### Base href for Numaflow server, defaults to '/'.
   # server.base.href: "/"
   #

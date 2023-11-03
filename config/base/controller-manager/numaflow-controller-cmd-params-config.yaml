@@ -7,5 +7,8 @@ data:
   # controller.namespaced: "false"
   #
   ### The namespace that the controller watches when "controller.namespaced" is true.
-  # controller.managed.namespace=numaflow-system
+  # controller.managed.namespace: numaflow-system
+  #
+  ### Where to disable leader election for the controller, defaults to false
+  # controller.disable.leader.election: "false"
  

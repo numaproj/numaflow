@@ -28,7 +28,29 @@ namespace: numaflow-system
 
 A namespace installation only watches and executes pipelines in the namespace it is installed (typically `numaflow-system`).
 
-Add an argument `--namespaced` to the `numaflow-controller` and `numaflow-server` deployments to achieve namespace scope installation.
+Configure the ConfigMap `numaflow-controller-cmd-params-config` and `numaflow-server-cmd-params-config` to achieve namespace scope installation.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-controller-cmd-params-config
+data:
+  # Whether to run in namespaced scope, defaults to false.
+  controller.namespaced: "true"
+```
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-server-cmd-params-config
+data:
+  # Whether to run in namespaced scope, defaults to false.
+  server.namespaced: "true"
+```
+
+Another approach to do namespace scoped installation is to add an argument `--namespaced` to the `numaflow-controller` and `numaflow-server` deployments. This approach takes precedence over the ConfigMap approach.
 
 ```
       - args:
@@ -61,7 +83,33 @@ namespace: numaflow-system
 
 A managed namespace installation watches and executes pipelines in a specific namespace.
 
-To do managed namespace installation, besides `--namespaced`, add `--managed-namespace` and the specific namespace to the `numaflow-controller` and `numaflow-server` deployment arguments.
+To do managed namespace installation, configure the ConfigMap `numaflow-controller-cmd-params-config` and `numaflow-server-cmd-params-config` as following.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-controller-cmd-params-config
+data:
+  # Whether to run in namespaced scope, defaults to false.
+  controller.namespaced: "true"
+  # The namespace that the controller watches when "controller.namespaced" is true.
+  controller.managed.namespace: numaflow-system
+```
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-server-cmd-params-config
+data:
+  # Whether to run in namespaced scope, defaults to false.
+  server.namespaced: "true"
+  # The namespace that the server watches when "server.namespaced" is true.
+  server.managed.namespace: numaflow-system
+```
+
+Similarly, another approach is to add `--managed-namespace` and the specific namespace to the `numaflow-controller` and `numaflow-server` deployment arguments. This approach takes precedence over the ConfigMap approach.
 
 ```
       - args:
@@ -74,11 +122,16 @@ To do managed namespace installation, besides `--namespaced`, add `--managed-nam
 
 By default, the Numaflow controller is installed with `Active-Passive` HA strategy enabled, which means you can run the controller with multiple replicas (defaults to 1 in the manifests).
 
-To turn off HA, add the following environment variable to the deployment spec.
+To turn off HA, configure the ConfigMap `numaflow-controller-cmd-params-config` as following.
 
-```
-      name: NUMAFLOW_LEADER_ELECTION_DISABLED
-      value: "true"
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-controller-cmd-params-config
+data:
+  # Where to disable leader election for the controller, defaults to false
+  controller.disable.leader.election: "true"
 ```
 
 If HA is turned off, the controller deployment should not run with multiple replicas.

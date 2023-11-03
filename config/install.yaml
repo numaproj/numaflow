@@ -16502,6 +16502,12 @@ spec:
               key: controller.managed.namespace
               name: numaflow-controller-cmd-params-config
               optional: true
+        - name: NUMAFLOW_LEADER_ELECTION_DISABLED
+          valueFrom:
+            configMapKeyRef:
+              key: controller.disable.leader.election
+              name: numaflow-controller-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
