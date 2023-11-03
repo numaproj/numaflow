@@ -102,9 +102,9 @@ export const usePipelineSummaryFetch = ({
       return;
     }
     if (pipelineData) {
-      if (pipelineData.data?.data?.pipeline?.spec?.interStepBufferServiceName) {
+      if (pipelineData.data?.pipeline?.spec?.interStepBufferServiceName) {
         setIsb(
-          pipelineData.data?.data?.pipeline?.spec?.interStepBufferServiceName
+          pipelineData.data?.pipeline?.spec?.interStepBufferServiceName
         );
       } else {
         setIsb("default");
@@ -133,6 +133,7 @@ export const usePipelineSummaryFetch = ({
     options,
     refresh,
     addError,
+    isb,
   ]);
   return results;
 };

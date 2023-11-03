@@ -12,7 +12,7 @@ import { AppContextProps } from "../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../App";
 import { SidebarType } from "../../../../../common/SlidingSidebar";
 import { ViewType } from "../../../../../common/SpecEditor";
-import pipelineIcon from "../../../../../../images/pipeline.png";
+import isbIcon from "../../../../../../images/isb.png";
 import { ISBServicesListing } from "../ISBServiceTypes";
 
 export interface DeleteProps {
@@ -106,7 +106,7 @@ export function ISBServiceCard({
         >
           <img
             className="pipeline-card-icon"
-            src={pipelineIcon}
+            src={isbIcon}
             alt="pipeline icon"
           />
           <Box
