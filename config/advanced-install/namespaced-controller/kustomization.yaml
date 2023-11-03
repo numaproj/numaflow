@@ -11,7 +11,7 @@ resources:
 
 images:
   - name: quay.io/numaproj/numaflow
-    newTag: v1.0.0-rc4
+    newTag: v1.0.0
 
 patchesStrategicMerge:
   - |-
@@ -26,7 +26,7 @@ patchesStrategicMerge:
             - name: controller-manager
               env:
                 - name: NUMAFLOW_IMAGE
-                  value: quay.io/numaproj/numaflow:v1.0.0-rc4
+                  value: quay.io/numaproj/numaflow:v1.0.0
 
 patches:
   - patch: |-

@@ -13,7 +13,7 @@ namespace: numaflow-system
 
 images:
   - name: quay.io/numaproj/numaflow
-    newTag: v1.0.0-rc4
+    newTag: v1.0.0
 
 patchesStrategicMerge:
   - |-
