@@ -520,29 +520,34 @@ export function NamespacePipelineListing({
       }}
     >
       <Box
-        sx={{ display: "flex", flexDirection: "row", alignItems: "flex-start" }}
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
       >
-        <DebouncedSearchInput
-          placeHolder={
-            tabValue === PIPELINE
-              ? "Search for pipeline"
-              : "Search for ISB service"
-          }
-          onChange={setSearch}
-        />
         <Box
           sx={{
             display: "flex",
             flexDirection: "row",
-            flexGrow: 1,
-            marginLeft: "2rem",
+            alignItems: "flex-start",
+            width: "100%"
           }}
         >
+          <DebouncedSearchInput
+            placeHolder={
+              tabValue === PIPELINE
+                ? "Search for pipeline"
+                : "Search for ISB service"
+            }
+            onChange={setSearch}
+          />
+
           <Box
             sx={{
               display: "flex",
               flexDirection: "column",
-              flexGrow: 0.15,
+              marginLeft: "1rem",
             }}
           >
             <label style={{ color: "#6B6C72" }}>Health</label>
@@ -558,7 +563,6 @@ export function NamespacePipelineListing({
                 background: "#fff",
                 border: "1px solid #6B6C72",
                 height: "2.125rem",
-                marginRight: "0.5rem",
               }}
               onChange={handleHealthFilterChange}
             >
@@ -577,8 +581,7 @@ export function NamespacePipelineListing({
             sx={{
               display: "flex",
               flexDirection: "column",
-              flexGrow: 0.15,
-              marginRight: "20rem",
+              marginLeft: "1rem",
             }}
           >
             <label style={{ color: "#6B6C72" }}>Status</label>
