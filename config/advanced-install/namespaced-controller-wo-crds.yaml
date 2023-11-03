@@ -124,6 +124,13 @@ subjects:
 ---
 apiVersion: v1
 data:
+  controller.namespaced: "true"
+kind: ConfigMap
+metadata:
+  name: numaflow-controller-cmd-params-config
+---
+apiVersion: v1
+data:
   controller-config.yaml: |
     isbsvc:
       redis:
@@ -281,14 +288,25 @@ spec:
       containers:
       - args:
         - controller
-        - --namespaced
         env:
-        - name: NUMAFLOW_IMAGE
-          value: quay.io/numaproj/numaflow:latest
         - name: NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: NUMAFLOW_IMAGE
+          value: quay.io/numaproj/numaflow:latest
+        - name: NUMAFLOW_CONTROLLER_NAMESPACED
+          valueFrom:
+            configMapKeyRef:
+              key: controller.namespaced
+              name: numaflow-controller-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_CONTROLLER_MANAGED_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              key: controller.managed.namespace
+              name: numaflow-controller-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:

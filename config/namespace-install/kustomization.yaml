@@ -5,18 +5,18 @@ resources:
   - ../base
   - rbac
 
-patches:
-  - patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --namespaced
-    target:
-      kind: Deployment
-      name: numaflow-controller
-  - patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --namespaced
-    target:
-      kind: Deployment
-      name: numaflow-server
+patchesStrategicMerge:
+  - |
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: numaflow-controller-cmd-params-config
+    data:
+      controller.namespaced: "true"
+  - |
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: numaflow-server-cmd-params-config
+    data:
+      server.namespaced: "true"

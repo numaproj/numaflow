@@ -3,5 +3,6 @@ kind: Kustomization
 
 resources:
   - numaflow-sa.yaml
+  - numaflow-controller-cmd-params-config.yaml
   - numaflow-controller-config.yaml
   - controller-manager-deployment.yaml
