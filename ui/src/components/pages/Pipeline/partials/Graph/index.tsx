@@ -448,7 +448,10 @@ const Flow = (props: FlowProps) => {
       <Panel
         position="top-left"
         className={"legend"}
-        style={{ marginTop: isCollapsed ? "5.75rem" : "9.5rem" }}
+        style={{
+          marginTop: isCollapsed ? "5.75rem" : "9.5rem",
+          cursor: "default",
+        }}
       >
         <Accordion>
           <AccordionSummary
