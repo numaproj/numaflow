@@ -228,8 +228,9 @@ export function PipelineCard({
         sx={{
           display: "flex",
           flexDirection: "column",
-          padding: "1.5rem",
+          // padding: "1.5rem",
           width: "100%",
+          borderRadius: "1rem"
         }}
       >
         <Box
@@ -237,6 +238,10 @@ export function PipelineCard({
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
+            paddingTop: "1rem",
+            paddingLeft: "1rem",
+            paddingRight: "1rem",
+            paddingBottom: "0.8rem",
             alignItems: "center",
           }}
         >
@@ -390,9 +395,14 @@ export function PipelineCard({
         <Box
           sx={{
             display: "flex",
+            background: "#F9F9F9",
             flexDirection: "row",
             flexGrow: 1,
+            padding: "1rem",
+            paddingTop: "0",
             width: "100%",
+            borderBottomLeftRadius: "1rem",
+            borderBottomRightRadius: "1rem",
           }}
         >
           <Grid
@@ -401,6 +411,7 @@ export function PipelineCard({
             sx={{
               background: "#F9F9F9",
               marginTop: "0.625rem",
+              marginLeft: "0",
               flexWrap: "no-wrap",
             }}
           >
@@ -448,6 +459,7 @@ export function PipelineCard({
           </Grid>
 
           <Grid
+
             container
             spacing={2}
             sx={{
