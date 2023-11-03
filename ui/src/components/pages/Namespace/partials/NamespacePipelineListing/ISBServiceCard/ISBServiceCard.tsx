@@ -82,8 +82,8 @@ export function ISBServiceCard({
         sx={{
           display: "flex",
           flexDirection: "column",
-          padding: "1.5rem",
           width: "100%",
+          borderRadius: "1rem"
         }}
       >
         <Box
@@ -91,6 +91,10 @@ export function ISBServiceCard({
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
+            paddingTop: "1rem",
+            paddingLeft: "1rem",
+            paddingRight: "1rem",
+            paddingBottom: "0.8rem",
             alignItems: "center",
           }}
         >
