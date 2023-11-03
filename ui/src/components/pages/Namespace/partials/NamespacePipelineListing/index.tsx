@@ -585,6 +585,7 @@ export function NamespacePipelineListing({
               display: "flex",
               flexDirection: "column",
               marginLeft: "1rem",
+              marginRight: "20rem"
             }}
           >
             <label style={{ color: "#6B6C72" }}>Status</label>
