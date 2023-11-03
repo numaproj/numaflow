@@ -35,6 +35,7 @@ export const UNKNOWN = "Unknown";
 export const STOPPED = "Stopped";
 export const WITH_PIPELINES = "With Pipelines";
 export const NO_PIPELINES = "No Pipelines";
+export const DEFAULT_ISB = "default";
 
 // ISB types
 export const JETSTREAM = "jetstream";

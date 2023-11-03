@@ -10,7 +10,6 @@ import {
   ClusterNamespaceListingProps,
   ClusterNamespaceSummary,
 } from "../../../../../types/declarations/cluster";
-import { HEALTH } from "../../../Namespace/partials/NamespacePipelineListing";
 import {
   ACTIVE,
   ALL,
@@ -26,6 +25,8 @@ import {
 import "./style.css";
 
 const MAX_PAGE_SIZE = 6;
+
+const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL, INACTIVE_STATUS];
 
 export function ClusterNamespaceListing({
   data,
