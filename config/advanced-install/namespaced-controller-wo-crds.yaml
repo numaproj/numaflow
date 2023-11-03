@@ -289,12 +289,12 @@ spec:
       - args:
         - controller
         env:
+        - name: NUMAFLOW_IMAGE
+          value: quay.io/numaproj/numaflow:latest
         - name: NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        - name: NUMAFLOW_IMAGE
-          value: quay.io/numaproj/numaflow:latest
         - name: NUMAFLOW_CONTROLLER_NAMESPACED
           valueFrom:
             configMapKeyRef:
