@@ -75,6 +75,12 @@ export function ISBServiceCard({
 
   const isbType = GetISBType(data?.isbService?.spec) || UNKNOWN;
   const isbStatus = data?.isbService?.status?.phase || UNKNOWN;
+  const isbSize =
+    isbType !== UNKNOWN && data?.isbService?.spec[isbType]
+      ? data?.isbService?.spec[isbType].replicas
+        ? data?.isbService?.spec[isbType].replicas
+        : 3
+      : UNKNOWN;
 
   return (
     <>
@@ -83,7 +89,7 @@ export function ISBServiceCard({
           display: "flex",
           flexDirection: "column",
           width: "100%",
-          borderRadius: "1rem"
+          borderRadius: "1rem",
         }}
       >
         <Box
@@ -145,45 +151,6 @@ export function ISBServiceCard({
                 paddingLeft: "1rem",
               }}
             >
-              <span>ISB Services:</span>
-              <span>ISB Type:</span>
-              <span>ISB Size:</span>
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
-              }}
-            >
-              <span>{data?.name}</span>
-              <span>{isbType}</span>
-              <span>
-                {isbType && data?.isbService?.spec[isbType]
-                  ? data?.isbService?.spec[isbType].replicas
-                  : UNKNOWN}
-              </span>
-            </Box>
-          </Grid>
-
-          <Grid
-            container
-            spacing={2}
-            sx={{
-              background: "#F9F9F9",
-              marginTop: "0.625rem",
-              flexWrap: "no-wrap",
-            }}
-          >
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
-              }}
-            >
               <span>Status:</span>
               <span>Health:</span>
             </Box>
@@ -216,6 +183,40 @@ export function ISBServiceCard({
             >
               <span>{ISBStatusString[isbStatus]}</span>
               <span>{ISBStatusString[data?.status]}</span>
+            </Box>
+          </Grid>
+          <Grid
+            container
+            spacing={2}
+            sx={{
+              background: "#F9F9F9",
+              marginTop: "0.625rem",
+              flexWrap: "no-wrap",
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>Name:</span>
+              <span>Type:</span>
+              <span>Size:</span>
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>{data?.name}</span>
+              <span>{isbType}</span>
+              <span>{isbSize}</span>
             </Box>
           </Grid>
           <Grid
