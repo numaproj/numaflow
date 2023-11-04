@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.0 (2023-11-03)
+
+ * [78134e8f](https://github.com/numaproj/numaflow/commit/78134e8f0396cb5d4acb7fe6d8cbcd2768f80f5a) Update manifests to v1.0.0
+ * [660ff501](https://github.com/numaproj/numaflow/commit/660ff5010b2191de4c015bccc7a4ad4be1e81388) fix: rc-4 bug bash bug fixes (#1343)
+ * [ceed5def](https://github.com/numaproj/numaflow/commit/ceed5def03c4d1d9c011b4839b2606a7741a39f3) fix(UI): rc-0.4 fixes (#1342)
+
+### Contributors
+
+ * Darshan Simha
+ * Derek Wang
+ * mshakira
+
 ## v1.0.0-rc4 (2023-11-03)
 
  * [e94b563f](https://github.com/numaproj/numaflow/commit/e94b563f44a0469fc88bed0351d14e7587c0fb61) Update manifests to v1.0.0-rc4
