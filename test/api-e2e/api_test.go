@@ -172,6 +172,12 @@ func (s *APISuite) TestPipeline0() {
 	assert.Contains(s.T(), createPipeline1, createPipelineSuccessExpect)
 	assert.Contains(s.T(), createPipeline2, createPipelineSuccessExpect)
 
+	patchPipeline1 := HTTPExpect(s.T(), "https://localhost:8443").PATCH(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).WithBytes(testPipeline1Patch).
+		Expect().
+		Status(200).Body().Raw()
+	var patchPipelineSuccessExpect = `{"data":null}`
+	assert.Contains(s.T(), patchPipeline1, patchPipelineSuccessExpect)
+
 	clusterSummaryBody := HTTPExpect(s.T(), "https://localhost:8443").GET("/api/v1/cluster-summary").
 		Expect().
 		Status(200).Body().Raw()

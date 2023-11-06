@@ -51,8 +51,9 @@ var (
         ]
     }
 }`)
-	testPipeline2Name = "test-pipeline-2"
-	testPipeline2     = []byte(`
+	testPipeline1Patch = []byte(`{"spec": {"lifecycle": {"desiredPhase": "Paused"}}}`)
+	testPipeline2Name  = "test-pipeline-2"
+	testPipeline2      = []byte(`
 {
     "apiVersion": "numaflow.numaproj.io/v1alpha1",
     "kind": "Pipeline",

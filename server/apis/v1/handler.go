@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -439,6 +440,12 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 	patchSpec, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to parse request body, %s", err.Error()))
+		return
+	}
+
+	err = validatePipelinePatch(patchSpec)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q, %s", pipeline, err.Error()))
 		return
 	}
 
@@ -971,6 +978,26 @@ func validateNamespace(h *handler, pipeline *dfv1.Pipeline, ns string) error {
 		errMsg := fmt.Errorf("namespace mismatch, expected %s", ns)
 		return errMsg
 	}
+	return nil
+}
+
+// validatePipelinePatch is used to validate the patch for a pipeline
+func validatePipelinePatch(patch []byte) error {
+
+	var patchSpec dfv1.Pipeline
+	var emptySpec dfv1.Pipeline
+
+	// check that patch is correctly formatted for pipeline
+	if err := json.Unmarshal(patch, &patchSpec); err != nil {
+		return err
+	}
+
+	// compare patch to empty pipeline spec to check that only lifecycle is being patched
+	patchSpec.Spec.Lifecycle = dfv1.Lifecycle{}
+	if !reflect.DeepEqual(patchSpec, emptySpec) {
+		return fmt.Errorf("patch spec is invalid")
+	}
+
 	return nil
 }
 
