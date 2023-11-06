@@ -38,6 +38,15 @@ export function PipelineUpdate({
     pipelineId: updatedPipelineId,
     active: !!updatedPipelineId,
   });
+
+  // Call update complete on dismount if pipeline was updated
+  useEffect(() => {
+    return () => {
+      if (updatedPipelineId) {
+        onUpdateComplete && onUpdateComplete();
+      }
+    };
+  }, [updatedPipelineId, onUpdateComplete]);
   
   // Track update process and close on completion
   useEffect(() => {

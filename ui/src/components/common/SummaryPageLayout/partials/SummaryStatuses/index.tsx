@@ -4,6 +4,7 @@ import { StatusBar } from "../../../StatusBar";
 import { Help } from "../../../Help";
 import circleCheck from "../../../../../images/checkmark-circle.png";
 import circleDash from "../../../../../images/circle-dash.png";
+import { ACTIVE, INACTIVE } from "../../../../../utils";
 
 import "./style.css";
 
@@ -27,8 +28,8 @@ export function SummaryStatuses({
   healthy,
   warning,
   critical,
-  activeText = "Active",
-  inAcitveText = "Non-Active",
+  activeText = ACTIVE,
+  inAcitveText = INACTIVE,
   tooltip,
   linkComponent,
 }: SummaryStatusesProps) {
@@ -125,7 +126,7 @@ export function SummaryStatuses({
             justifyContent: "flex-end",
             paddingRight: "0.2rem",
             marginRight: "1rem",
-            height: "100%"
+            height: "100%",
           }}
         >
           <Help tooltip={tooltip} />

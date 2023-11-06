@@ -205,6 +205,7 @@ manifests: crds
 	kubectl kustomize config/advanced-install/namespaced-numaflow-server > config/advanced-install/namespaced-numaflow-server.yaml
 	kubectl kustomize config/advanced-install/numaflow-server > config/advanced-install/numaflow-server.yaml
 	kubectl kustomize config/advanced-install/minimal-crds > config/advanced-install/minimal-crds.yaml
+	kubectl kustomize config/advanced-install/numaflow-dex-server > config/advanced-install/numaflow-dex-server.yaml
 	kubectl kustomize config/extensions/webhook > config/validating-webhook-install.yaml
 
 $(GOPATH)/bin/golangci-lint:
