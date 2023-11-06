@@ -290,6 +290,7 @@ describe("SpecEditor", () => {
         loading={false}
         viewType={1}
         allowNonMutatedSubmit={false}
+        mutationKey="45"
       />
     );
     expect(screen.getByTestId("spec-editor")).toBeInTheDocument();
