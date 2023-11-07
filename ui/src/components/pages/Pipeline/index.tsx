@@ -84,7 +84,12 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
       return [
         {
           type: SummarySectionType.CUSTOM,
-          customComponent: <CircularProgress key="pipeline-summary-spinner" />,
+          customComponent: (
+            <CircularProgress
+              key="pipeline-summary-spinner"
+              data-testid={"pipeline-summary-loading"}
+            />
+          ),
         },
       ];
     }
@@ -150,7 +155,11 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
       {
         type: SummarySectionType.CUSTOM,
         customComponent: (
-          <div className="namespace-k8s-events" onClick={handleK8sEventsClick}>
+          <div
+            className="namespace-k8s-events"
+            onClick={handleK8sEventsClick}
+            data-testid={"pipeline-k8s-events"}
+          >
             K8s Events
           </div>
         ),
@@ -195,6 +204,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
             justifyContent: "center",
             alignItems: "center",
           }}
+          data-testid={"pipeline-loading"}
         >
           <CircularProgress />
         </Box>
