@@ -177,7 +177,8 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
         </Box>
       );
     } else {
-      components.push(component);
+      // Assigning key to the last component
+      components.push(<Box key={key}>{component}</Box>);
     }
   });
   return (
