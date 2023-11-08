@@ -24,10 +24,10 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 var ErrCOB = errors.New("error while writing to pbq, pbq is closed")
@@ -39,7 +39,7 @@ type PBQ struct {
 	pipelineName  string
 	vertexReplica int32
 	store         store.Store
-	output        chan *isb.ReadMessage
+	output        chan *window.TimedWindowOperation
 	cob           bool // cob to avoid panic in case writes happen after close of book
 	PartitionID   partition.ID
 	options       *options
@@ -51,19 +51,25 @@ type PBQ struct {
 var _ ReadWriteCloser = (*PBQ)(nil)
 
 // Write writes message to pbq and persistent store
-func (p *PBQ) Write(ctx context.Context, message *isb.ReadMessage) error {
+func (p *PBQ) Write(ctx context.Context, message *window.TimedWindowOperation) error {
 	// if cob we should return
 	if p.cob {
-		p.log.Errorw("Failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.Header), zap.Any("message", message))
+		p.log.Errorw("Failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.IsbMessage.Header), zap.Any("message", message))
 		return nil
 	}
 	var writeErr error
 	// we need context to get out of blocking write
 	select {
 	case p.output <- message:
+		// RETHINK: I am not sure if we should be doing this here. We should probably do this in the writer.
+		if message.Event == window.Delete {
+			close(p.output)
+		}
 		// this store.Write is an `inSync` flush (if need be). The performance will be very bad but the system is correct.
 		// TODO: shortly in the near future we will move to async writes.
-		writeErr = p.store.Write(message)
+		if message.IsbMessage != nil {
+			writeErr = p.store.Write(message.IsbMessage)
+		}
 	case <-ctx.Done():
 		// closing the output channel will not cause panic, since its inside select case
 		// ctx.Done implicitly means write hasn't succeeded.
@@ -98,7 +104,7 @@ func (p *PBQ) Close() error {
 
 // ReadCh exposes read channel to read messages from PBQ
 // close on read channel indicates COB
-func (p *PBQ) ReadCh() <-chan *isb.ReadMessage {
+func (p *PBQ) ReadCh() <-chan *window.TimedWindowOperation {
 	return p.output
 }
 
@@ -126,7 +132,12 @@ readLoop:
 		for _, msg := range readMessages {
 			// select to avoid infinite blocking while writing to output channel
 			select {
-			case p.output <- msg:
+			//FIXME empty window op doesn't work. We need to fix this.
+			case p.output <- &window.TimedWindowOperation{
+				IsbMessage: msg,
+				Event:      window.Append,
+				Windows:    nil,
+			}:
 			case <-ctx.Done():
 				break readLoop
 			}

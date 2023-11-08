@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -33,7 +32,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/window"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -41,11 +39,30 @@ import (
 type registeredWindow struct {
 	startTime time.Time
 	endTime   time.Time
-	// count how many slots do we have for this window. currently we only use slot-0, so count is always 1
-	count *atomic.Int32
+	slot      string
 }
 
-var _ window.AlignedWindower = (*registeredWindow)(nil)
+func (r *registeredWindow) Slot() string {
+	return r.slot
+}
+
+func (r *registeredWindow) Partition() *partition.ID {
+	return &partition.ID{
+		Start: r.startTime,
+		End:   r.endTime,
+		Slot:  r.slot,
+	}
+}
+
+func (r *registeredWindow) Merge(tw window.TimedWindow) {}
+
+func (r *registeredWindow) Expand(endTime time.Time) {
+	if endTime.After(r.endTime) {
+		r.endTime = endTime
+	}
+}
+
+var _ window.TimedWindow = (*registeredWindow)(nil)
 
 func (r *registeredWindow) StartTime() time.Time {
 	return r.startTime
@@ -110,7 +127,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 		pipelineName:  m.pipelineName,
 		vertexReplica: m.vertexReplica,
 		store:         persistentStore,
-		output:        make(chan *isb.ReadMessage),
+		output:        make(chan *window.TimedWindowOperation),
 		cob:           false,
 		PartitionID:   partitionID,
 		options:       m.pbqOptions,
@@ -222,11 +239,9 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 	ww := &registeredWindow{
 		startTime: partitionID.Start,
 		endTime:   partitionID.End,
-		count:     atomic.NewInt32(0),
 	}
 
 	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
-	ww.count.Add(1)
 
 	m.Lock()
 	defer m.Unlock()
@@ -250,7 +265,6 @@ func (m *Manager) deregister(partitionID partition.ID) error {
 	ww := &registeredWindow{
 		startTime: partitionID.Start,
 		endTime:   partitionID.End,
-		count:     atomic.NewInt32(0),
 	}
 
 	delete(m.pbqMap, partitionID.String())
@@ -258,12 +272,8 @@ func (m *Manager) deregister(partitionID partition.ID) error {
 
 	// update yetToBeClosed list
 	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
-	ww.count.Sub(1)
 
-	// if count is 0, delete from yetToBeClosed list
-	if ww.count.Load() == 0 {
-		m.yetToBeClosed.DeleteWindow(ww)
-	}
+	m.yetToBeClosed.Delete(ww)
 
 	activePartitionCount.With(map[string]string{
 		metrics.LabelVertex:             m.vertexName,

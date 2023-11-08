@@ -74,7 +74,7 @@ func (i IdentityReducer) AsyncApplyReduce(ctx context.Context, partitionID *part
 }
 
 func TestOrderedProcessing(t *testing.T) {
-	// Test Reducer returns the messages as is
+	// Test ReduceStreamer returns the messages as is
 	identityReducer := IdentityReducer{}
 	to1 := simplebuffer.NewInMemoryBuffer("to1", 100, 0)
 	toSteps := map[string][]isb.BufferWriter{

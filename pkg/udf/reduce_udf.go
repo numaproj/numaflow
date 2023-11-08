@@ -62,7 +62,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		fromBuffer         string
 		err                error
 		natsClientPool     *jsclient.ClientPool
-		windower           window.Windower
+		windower           window.TimedWindower
 		fromVertexWmStores map[string]store.WatermarkStore
 		toVertexWmStores   map[string]store.WatermarkStore
 		idleManager        wmb.IdleManager
@@ -82,9 +82,9 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
 
 	if f != nil {
-		windower = fixed.NewFixed(f.Length.Duration)
+		windower = fixed.NewWindower(f.Length.Duration)
 	} else if s != nil {
-		windower = sliding.NewSliding(s.Length.Duration, s.Slide.Duration)
+		windower = sliding.NewWindower(s.Length.Duration, s.Slide.Duration)
 	}
 
 	if windower == nil {
@@ -256,11 +256,12 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}
 
+	//FIXME we need to fix this
 	// read the persisted messages before reading the messages from ISB
-	err = dataForwarder.ReplayPersistedMessages(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to read and process persisted messages, %w", err)
-	}
+	//err = dataForwarder.ReplayPersistedMessages(ctx)
+	//if err != nil {
+	//	return fmt.Errorf("failed to read and process persisted messages, %w", err)
+	//}
 
 	// start reading the ISB messages.
 	wg := &sync.WaitGroup{}

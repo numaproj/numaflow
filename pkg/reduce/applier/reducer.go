@@ -21,11 +21,12 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // ReduceApplier applies the HTTPBasedUDF on the read message and gives back a new message. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type ReduceApplier interface {
-	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error)
-	AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) (<-chan []*isb.WriteMessage, <-chan error)
+	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowOperation) ([]*isb.WriteMessage, error)
+	AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowOperation) (<-chan []*isb.WriteMessage, <-chan error)
 }

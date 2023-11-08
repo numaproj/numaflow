@@ -21,20 +21,42 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 type TestWindow struct {
-	Start time.Time
-	End   time.Time
+	start time.Time
+	end   time.Time
+	slot  string
 }
 
 func (t *TestWindow) StartTime() time.Time {
-	return t.Start
+	return t.start
 }
 
 func (t *TestWindow) EndTime() time.Time {
-	return t.End
+	return t.end
 }
+
+func (t *TestWindow) Slot() string {
+	return t.slot
+}
+
+func (t *TestWindow) Partition() *partition.ID {
+	return &partition.ID{
+		Start: t.start,
+		End:   t.end,
+		Slot:  t.slot,
+	}
+}
+
+func (t *TestWindow) Merge(tw TimedWindow) {
+	//TODO implement me
+	panic("implement me")
+}
+
+// TODO add tests to cover different slot values
 
 func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 	tests := []struct {
@@ -48,13 +70,15 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 			name:  "FirstWindow",
 			given: []*TestWindow{},
 			input: &TestWindow{
-				Start: time.Unix(0, 0),
-				End:   time.Unix(60, 0),
+				start: time.Unix(0, 0),
+				end:   time.Unix(60, 0),
+				slot:  "slot-0",
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(0, 0),
-					End:   time.Unix(60, 0),
+					start: time.Unix(0, 0),
+					end:   time.Unix(60, 0),
+					slot:  "slot-0",
 				},
 			},
 			isPresent: false,
@@ -63,22 +87,26 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 			name: "late_window",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+					slot:  "slot-0",
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(60, 0),
-				End:   time.Unix(120, 0),
+				start: time.Unix(60, 0),
+				end:   time.Unix(120, 0),
+				slot:  "slot-0",
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
+					start: time.Unix(60, 0),
+					end:   time.Unix(120, 0),
+					slot:  "slot-0",
 				},
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+					slot:  "slot-0",
 				},
 			},
 			isPresent: false,
@@ -87,22 +115,26 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 			name: "early_window",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+					slot:  "slot-0",
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(240, 0),
-				End:   time.Unix(300, 0),
+				start: time.Unix(240, 0),
+				end:   time.Unix(300, 0),
+				slot:  "slot-0",
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+					slot:  "slot-0",
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
+					slot:  "slot-0",
 				},
 			},
 			isPresent: false,
@@ -111,30 +143,30 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 			name: "insert_middle",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(180, 0),
-				End:   time.Unix(240, 0),
+				start: time.Unix(180, 0),
+				end:   time.Unix(240, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			isPresent: false,
@@ -143,34 +175,34 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 			name: "already_present",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(180, 0),
-				End:   time.Unix(240, 0),
+				start: time.Unix(180, 0),
+				end:   time.Unix(240, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			isPresent: true,
@@ -183,8 +215,8 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 			setup(windows, tt.given)
 			ret, isPresent := windows.InsertIfNotPresent(tt.input)
 			assert.Equal(t, tt.isPresent, isPresent)
-			assert.Equal(t, tt.input.Start, ret.StartTime())
-			assert.Equal(t, tt.input.End, ret.EndTime())
+			assert.Equal(t, tt.input.start, ret.StartTime())
+			assert.Equal(t, tt.input.end, ret.EndTime())
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
 			nodes := windows.Items()
 			i := 0
@@ -208,23 +240,23 @@ func TestSortedWindowList_RemoveWindows(t *testing.T) {
 			name: "remove_windows",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: time.Unix(180, 0),
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 			},
 		},
@@ -258,30 +290,30 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 			name: "delete_middle",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(180, 0),
-				End:   time.Unix(240, 0),
+				start: time.Unix(180, 0),
+				end:   time.Unix(240, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 		},
@@ -289,30 +321,30 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 			name: "delete_first",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(120, 0),
-				End:   time.Unix(180, 0),
+				start: time.Unix(120, 0),
+				end:   time.Unix(180, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 		},
@@ -320,30 +352,30 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 			name: "delete_last",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
 				},
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(240, 0),
-				End:   time.Unix(300, 0),
+				start: time.Unix(240, 0),
+				end:   time.Unix(300, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
 				},
 				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
 				},
 			},
 		},
@@ -353,7 +385,7 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			windows := NewSortedWindowList[*TestWindow]()
 			setup(windows, tt.given)
-			windows.DeleteWindow(tt.input)
+			windows.Delete(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
 			nodes := windows.Items()
 			i := 0
@@ -377,13 +409,13 @@ func TestSortedWindowList_InsertFront(t *testing.T) {
 			name:  "insert_empty",
 			given: []*TestWindow{},
 			input: &TestWindow{
-				Start: time.Unix(240, 0),
-				End:   time.Unix(300, 0),
+				start: time.Unix(240, 0),
+				end:   time.Unix(300, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 		},
@@ -391,18 +423,18 @@ func TestSortedWindowList_InsertFront(t *testing.T) {
 			name: "insert_equal",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(240, 0),
-				End:   time.Unix(300, 0),
+				start: time.Unix(240, 0),
+				end:   time.Unix(300, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 		},
@@ -410,18 +442,18 @@ func TestSortedWindowList_InsertFront(t *testing.T) {
 			name: "insert_greater",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(300, 0),
-				End:   time.Unix(360, 0),
+				start: time.Unix(300, 0),
+				end:   time.Unix(360, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 		},
@@ -455,13 +487,13 @@ func TestSortedWindowList_InsertBack(t *testing.T) {
 			name:  "insert_empty",
 			given: []*TestWindow{},
 			input: &TestWindow{
-				Start: time.Unix(240, 0),
-				End:   time.Unix(300, 0),
+				start: time.Unix(240, 0),
+				end:   time.Unix(300, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 		},
@@ -469,18 +501,18 @@ func TestSortedWindowList_InsertBack(t *testing.T) {
 			name: "insert_equal",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(240, 0),
-				End:   time.Unix(300, 0),
+				start: time.Unix(240, 0),
+				end:   time.Unix(300, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 		},
@@ -488,18 +520,18 @@ func TestSortedWindowList_InsertBack(t *testing.T) {
 			name: "insert_smaller",
 			given: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 			input: &TestWindow{
-				Start: time.Unix(120, 0),
-				End:   time.Unix(180, 0),
+				start: time.Unix(120, 0),
+				end:   time.Unix(180, 0),
 			},
 			expectedWindows: []*TestWindow{
 				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
 				},
 			},
 		},

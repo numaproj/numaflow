@@ -19,6 +19,7 @@ package window
 import (
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
@@ -55,4 +56,71 @@ type Windower interface {
 	// NextWindowToBeClosed returns the next window yet to be closed.
 	// will be used by the data forwarder to check if the late message can be considered for processing.
 	NextWindowToBeClosed() AlignedKeyedWindower
+}
+
+type TimedWindower interface {
+	// AssignWindows assigns the event to the window based on give window configuration.
+	AssignWindows(message *isb.ReadMessage) []*TimedWindowOperation
+	// CloseWindows closes the windows that are past the watermark
+	CloseWindows(time time.Time) []*TimedWindowOperation
+	// NextWindowToBeClosed returns the next window yet to be closed.
+	NextWindowToBeClosed() TimedWindow
+}
+
+type TimedWindow interface {
+	// StartTime returns the start time of the window
+	StartTime() time.Time
+	// EndTime returns the end time of the window
+	EndTime() time.Time
+	// Slot returns the slot to which the window belongs
+	Slot() string
+	// Partition returns the unique partition id of the window
+	// could be combination of startTime, endTime and slot
+	Partition() *partition.ID
+	// Merge merges the window with the new window
+	Merge(tw TimedWindow)
+	// Expand expands the window end time to the new endTime
+	Expand(endTime time.Time)
+}
+
+// TimedWindowOperation represents the operation on the window
+type TimedWindowOperation struct {
+	// event type of the operation on the windows
+	Event Event
+	// IsbMessage represents the isb message
+	IsbMessage *isb.ReadMessage
+	// ID represents the partition id
+	// this is to map to the pbq instance to which the message should be assigned
+	ID *partition.ID
+	// windows is the list of windows on which the operation is performed
+	Windows []TimedWindow
+}
+
+// Event represents the event type of the operation on the window
+type Event int
+
+const (
+	Create Event = iota
+	Delete
+	Close
+	Merge
+	Append
+	Expand
+)
+
+func (e Event) String() string {
+	switch e {
+	case Create:
+		return "Create"
+	case Delete:
+		return "Delete"
+	case Close:
+		return "Close"
+	case Merge:
+		return "Merge"
+	case Append:
+		return "Append"
+	default:
+		return "Unknown"
+	}
 }

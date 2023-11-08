@@ -341,7 +341,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 		return nil
 	}
 
-	dropMessagesCount.With(map[string]string{
+	metrics.DropMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
