@@ -522,6 +522,7 @@ export function NamespacePipelineListing({
         flexDirection: "column",
         padding: "0 2.625rem",
       }}
+      data-testid="namespace-pipeline-listing"
     >
       <Box
         sx={{
