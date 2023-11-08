@@ -60,9 +60,9 @@ type Windower interface {
 
 type TimedWindower interface {
 	// AssignWindows assigns the event to the window based on give window configuration.
-	AssignWindows(message *isb.ReadMessage) []*TimedWindowOperation
+	AssignWindows(message *isb.ReadMessage) []*TimedWindowRequest
 	// CloseWindows closes the windows that are past the watermark
-	CloseWindows(time time.Time) []*TimedWindowOperation
+	CloseWindows(time time.Time) []*TimedWindowRequest
 	// NextWindowToBeClosed returns the next window yet to be closed.
 	NextWindowToBeClosed() TimedWindow
 }
@@ -83,8 +83,8 @@ type TimedWindow interface {
 	Expand(endTime time.Time)
 }
 
-// TimedWindowOperation represents the operation on the window
-type TimedWindowOperation struct {
+// TimedWindowRequest represents the operation on the window
+type TimedWindowRequest struct {
 	// event type of the operation on the windows
 	Event Event
 	// IsbMessage represents the isb message
@@ -100,7 +100,7 @@ type TimedWindowOperation struct {
 type Event int
 
 const (
-	Create Event = iota
+	Open Event = iota
 	Delete
 	Close
 	Merge
@@ -110,8 +110,8 @@ const (
 
 func (e Event) String() string {
 	switch e {
-	case Create:
-		return "Create"
+	case Open:
+		return "Open"
 	case Delete:
 		return "Delete"
 	case Close:

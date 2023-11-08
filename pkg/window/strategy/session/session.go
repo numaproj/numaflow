@@ -97,21 +97,21 @@ func NewWindower(gap time.Duration) window.TimedWindower {
 // AssignWindows returns a map of partition id to window message. Partition id is used to
 // identify the pbq instance to which the message should be assigned. Window message contains
 // the isb message and the window operation. Window operation contains the event type and the
-// if the window is newly created the operation is set to Create, if the window is already present
+// if the window is newly created the operation is set to Open, if the window is already present
 // the operation is set to Append.
-func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowOperation {
+func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	sessionPartition := GlobalPartition
 
 	// TODO: slot should be extracted based on the key
 	sessionPartition.Slot = "slot-0"
 	combinedKey := strings.Join(message.Keys, delimiter)
-	windowOperations := make([]*window.TimedWindowOperation, 0)
+	windowOperations := make([]*window.TimedWindowRequest, 0)
 
 	if list, ok := w.entries[combinedKey]; !ok {
 		win := NewWindow(message.EventTime, w.gap, message)
 		list = window.NewSortedWindowList[window.TimedWindow]()
 		list.InsertFront(win)
-		windowOperations = append(windowOperations, createWindowOperation(message, window.Create, []window.TimedWindow{win}, &sessionPartition))
+		windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &sessionPartition))
 		w.entries[combinedKey] = list
 	} else {
 		win, isPresent := list.FindWindowForTime(message.EventTime)
@@ -126,15 +126,15 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 		} else {
 			win = NewWindow(message.EventTime, w.gap, message)
 			list.InsertFront(win)
-			windowOperations = append(windowOperations, createWindowOperation(message, window.Create, []window.TimedWindow{win}, &sessionPartition))
+			windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &sessionPartition))
 		}
 	}
 
 	return windowOperations
 }
 
-func createWindowOperation(message *isb.ReadMessage, event window.Event, windows []window.TimedWindow, id *partition.ID) *window.TimedWindowOperation {
-	return &window.TimedWindowOperation{
+func createWindowOperation(message *isb.ReadMessage, event window.Event, windows []window.TimedWindow, id *partition.ID) *window.TimedWindowRequest {
+	return &window.TimedWindowRequest{
 		IsbMessage: message,
 		Event:      event,
 		Windows:    windows,
@@ -146,13 +146,13 @@ func createWindowOperation(message *isb.ReadMessage, event window.Event, windows
 // CloseWindows returns a map of partition id to window message which should be closed.
 // Partition id is used to identify the pbq instance to which the message should be assigned.
 // Window message contains operation. Window operation contains the delete event type.
-func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowOperation {
+func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 	sessionPartition := GlobalPartition
 
 	// TODO: slot should be extracted based on the key
 	sessionPartition.Slot = "slot-0"
 
-	windowOperations := make([]*window.TimedWindowOperation, 0)
+	windowOperations := make([]*window.TimedWindowRequest, 0)
 	for _, list := range w.entries {
 		closedWindows := list.RemoveWindows(time)
 		mergedWindows := windowsThatCanBeMerged(closedWindows)

@@ -127,7 +127,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 		pipelineName:  m.pipelineName,
 		vertexReplica: m.vertexReplica,
 		store:         persistentStore,
-		output:        make(chan *window.TimedWindowOperation),
+		output:        make(chan *window.TimedWindowRequest),
 		cob:           false,
 		PartitionID:   partitionID,
 		options:       m.pbqOptions,

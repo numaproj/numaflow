@@ -111,10 +111,10 @@ func NewWindower(length time.Duration, slide time.Duration) window.TimedWindower
 // AssignWindows returns a map of partition id to window message. Partition id is used to
 // identify the pbq instance to which the message should be assigned. Window message contains
 // the isb message and the window operation. Window operation contains the event type and the
-// if the window is newly created the operation is set to Create, if the window is already present
+// if the window is newly created the operation is set to Open, if the window is already present
 // the operation is set to Append.
-func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowOperation {
-	windowOperations := make([]*window.TimedWindowOperation, 0)
+func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
+	windowOperations := make([]*window.TimedWindowRequest, 0)
 
 	// use the highest integer multiple of slide length which is less than the eventTime
 	// as the start time for the window. For example if the eventTime is 810 and slide
@@ -134,14 +134,14 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	// we will add the element to 600-700 window and not to the 500-600 window.
 	for !startTime.After(message.EventTime) && endTime.After(message.EventTime) {
 		win, isPresent := w.entries.InsertIfNotPresent(NewWindow(startTime, endTime, message))
-		operation := &window.TimedWindowOperation{
+		operation := &window.TimedWindowRequest{
 			IsbMessage: message,
 			Event:      window.Append,
 			Windows:    []window.TimedWindow{win},
 			ID:         win.Partition(),
 		}
 		if !isPresent {
-			operation.Event = window.Create
+			operation.Event = window.Open
 		}
 		windowOperations = append(windowOperations, operation)
 		startTime = startTime.Add(-w.slide)
@@ -155,11 +155,11 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 // CloseWindows returns a map of partition id to window message which should be closed.
 // Partition id is used to identify the pbq instance to which the message should be assigned.
 // Window message contains operation. Window operation contains the delete event type.
-func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowOperation {
-	windowOperations := make([]*window.TimedWindowOperation, 0)
+func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
+	windowOperations := make([]*window.TimedWindowRequest, 0)
 	closedWindows := w.entries.RemoveWindows(time)
 	for _, win := range closedWindows {
-		operation := &window.TimedWindowOperation{
+		operation := &window.TimedWindowRequest{
 			IsbMessage: nil,
 			Event:      window.Delete,
 			Windows:    []window.TimedWindow{win},
@@ -189,7 +189,7 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 //	// Although the worst case time complexity is O(n), because of the time based ordering and
 //	// since the elements are rarely out of order, the amortized complexity works out to be closer to O(1)
 //	// Because most of the keys are expected to be associated with the most recent window, we always start
-//	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
+//	// the traversal from the tail of the list for Get and Open Operations. For Remove Operations, since
 //	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 //	// from the Head.
 //	entries *window.SortedWindowList[window.AlignedKeyedWindower]

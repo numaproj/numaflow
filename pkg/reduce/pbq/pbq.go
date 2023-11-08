@@ -39,7 +39,7 @@ type PBQ struct {
 	pipelineName  string
 	vertexReplica int32
 	store         store.Store
-	output        chan *window.TimedWindowOperation
+	output        chan *window.TimedWindowRequest
 	cob           bool // cob to avoid panic in case writes happen after close of book
 	PartitionID   partition.ID
 	options       *options
@@ -51,7 +51,7 @@ type PBQ struct {
 var _ ReadWriteCloser = (*PBQ)(nil)
 
 // Write writes message to pbq and persistent store
-func (p *PBQ) Write(ctx context.Context, message *window.TimedWindowOperation) error {
+func (p *PBQ) Write(ctx context.Context, message *window.TimedWindowRequest) error {
 	// if cob we should return
 	if p.cob {
 		p.log.Errorw("Failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.IsbMessage.Header), zap.Any("message", message))
@@ -104,7 +104,7 @@ func (p *PBQ) Close() error {
 
 // ReadCh exposes read channel to read messages from PBQ
 // close on read channel indicates COB
-func (p *PBQ) ReadCh() <-chan *window.TimedWindowOperation {
+func (p *PBQ) ReadCh() <-chan *window.TimedWindowRequest {
 	return p.output
 }
 
@@ -133,7 +133,7 @@ readLoop:
 			// select to avoid infinite blocking while writing to output channel
 			select {
 			//FIXME empty window op doesn't work. We need to fix this.
-			case p.output <- &window.TimedWindowOperation{
+			case p.output <- &window.TimedWindowRequest{
 				IsbMessage: msg,
 				Event:      window.Append,
 				Windows:    nil,

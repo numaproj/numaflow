@@ -109,31 +109,31 @@ func NewWindower(length time.Duration) window.TimedWindower {
 // AssignWindows returns a map of partition id to window message. Partition id is used to
 // identify the pbq instance to which the message should be assigned. Window message contains
 // the isb message and the window operation. Window operation contains the event type and the
-// if the window is newly created the operation is set to Create, if the window is already present
+// if the window is newly created the operation is set to Open, if the window is already present
 // the operation is set to Append.
-func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowOperation {
+func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	win, isPresent := w.entries.InsertIfNotPresent(NewWindow(w.length, message))
-	winOp := &window.TimedWindowOperation{
+	winOp := &window.TimedWindowRequest{
 		Event:      window.Append,
 		Windows:    []window.TimedWindow{win},
 		IsbMessage: message,
 		ID:         win.Partition(),
 	}
 	if !isPresent {
-		winOp.Event = window.Create
+		winOp.Event = window.Open
 	}
-	return []*window.TimedWindowOperation{winOp}
+	return []*window.TimedWindowRequest{winOp}
 }
 
 // CloseWindows closes the windows that are past the watermark.
 // CloseWindows returns a map of partition id to window message which should be closed.
 // Partition id is used to identify the pbq instance to which the message should be assigned.
 // Window message contains operation. Window operation contains the delete event type.
-func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowOperation {
-	winOperations := make([]*window.TimedWindowOperation, 0)
+func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
+	winOperations := make([]*window.TimedWindowRequest, 0)
 	closedWindows := w.entries.RemoveWindows(time)
 	for _, win := range closedWindows {
-		winOp := &window.TimedWindowOperation{
+		winOp := &window.TimedWindowRequest{
 			IsbMessage: nil,
 			Event:      window.Delete,
 			Windows:    []window.TimedWindow{win},
@@ -163,7 +163,7 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 //	// Although the worst case time complexity is O(n), because of the time based ordering and
 //	// since the elements are rarely out of order, the amortized complexity works out to be closer to O(1)
 //	// Because most of the keys are expected to be associated with the most recent window, we always start
-//	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
+//	// the traversal from the tail of the list for Get and Open Operations. For Remove Operations, since
 //	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 //	// from the Head.
 //	entries *window.SortedWindowList[window.AlignedKeyedWindower]

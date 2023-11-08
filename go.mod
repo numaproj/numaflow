@@ -29,7 +29,7 @@ require (
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe
 	github.com/nats-io/nats-server/v2 v2.10.4
 	github.com/nats-io/nats.go v1.31.0
-	github.com/numaproj/numaflow-go v0.5.1
+	github.com/numaproj/numaflow-go v0.5.3-0.20231107120450-05e425d6bb71
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.37.0
 	github.com/redis/go-redis/v9 v9.0.3
@@ -39,7 +39,7 @@ require (
 	github.com/spf13/cobra v1.6.0
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.8.4
-	go.uber.org/atomic v1.9.0
+	go.uber.org/atomic v1.11.0
 	go.uber.org/goleak v1.2.1
 	go.uber.org/multierr v1.7.0
 	go.uber.org/zap v1.24.0

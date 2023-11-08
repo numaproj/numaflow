@@ -74,7 +74,7 @@ func (u *GRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 }
 
 // ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowOperation) ([]*isb.WriteMessage, error) {
+func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) ([]*isb.WriteMessage, error) {
 	var (
 		result     *reducepb.ReduceResponse
 		err        error
@@ -174,7 +174,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 
 // AsyncApplyReduce accepts a channel of isbMessages and returns the aggregated result asynchronously on the responseCh channel
 // and any error on the errCh channel, it doesn't wait for the output of all the keys to be available.
-func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowOperation) (<-chan []*isb.WriteMessage, <-chan error) {
+func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (<-chan []*isb.WriteMessage, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan []*isb.WriteMessage)

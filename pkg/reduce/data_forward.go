@@ -156,7 +156,7 @@ func (df *DataForward) Start() {
 //	df.log.Infow("Partitions to be replayed ", zap.Int("count", len(partitions)), zap.Any("partitions", partitions))
 //
 //	for _, p := range partitions {
-//		// Create keyed window for a given partition
+//		// Open keyed window for a given partition
 //		// so that the window can be closed when the watermark
 //		// crosses the window.
 //
@@ -465,7 +465,7 @@ messagesLoop:
 
 // writeToPBQ writes to the PBQ. It will return error only if it is not failing to write to PBQ and is in a continuous
 // error loop, and we have received ctx.Done() via SIGTERM.
-func (df *DataForward) writeToPBQ(ctx context.Context, winOp *window.TimedWindowOperation) error {
+func (df *DataForward) writeToPBQ(ctx context.Context, winOp *window.TimedWindowRequest) error {
 	defer func(t time.Time) {
 		metrics.PBQWriteTime.With(map[string]string{
 			metrics.LabelVertex:             df.vertexName,
