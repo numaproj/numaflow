@@ -78,6 +78,7 @@ type BufferWriterInformation interface {
 // SourceWatermarkPublisher publishes source watermarks based on a list of isb.ReadMessage
 type SourceWatermarkPublisher interface {
 	PublishSourceWatermarks([]*ReadMessage)
+	// add a publishIdleWatermarks method
 }
 
 // Offset is an interface used in the ReadMessage referencing offset information.

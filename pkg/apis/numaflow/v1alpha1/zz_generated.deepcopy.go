@@ -2345,6 +2345,16 @@ func (in *Watermark) DeepCopyInto(out *Watermark) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
+	if in.IdleDuration != nil {
+		in, out := &in.IdleDuration, &out.IdleDuration
+		*out = new(metav1.Duration)
+		**out = **in
+	}
+	if in.IdleIncrement != nil {
+		in, out := &in.IdleIncrement, &out.IdleIncrement
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	return
 }
 

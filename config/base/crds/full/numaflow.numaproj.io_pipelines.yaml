@@ -8656,6 +8656,10 @@ spec:
                   disabled:
                     default: false
                     type: boolean
+                  idleDuration:
+                    type: string
+                  idleIncrement:
+                    type: string
                   maxDelay:
                     default: 0s
                     type: string

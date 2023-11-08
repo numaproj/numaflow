@@ -150,6 +150,10 @@ func (isdf *DataForward) Start() <-chan struct{} {
 		}
 	}()
 
+	//   []     []    []
+
+	// source(12) -> v2 -> v3
+
 	go func() {
 		wg.Wait()
 		// clean up resources for source reader and all the writers if any.
@@ -199,6 +203,17 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// at-least-once semantics for reading, during the restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
 	readMessages, err := isdf.reader.Read(ctx, isdf.opts.readBatchSize)
+
+	// source fetcher doesn't care about the offsets
+	// isdf.wmFetcher.ComputeWatermark(0, 0)
+
+	// vertexInstance.Vertex.Spec.Watermark.IdleIncrement
+	// track lastUpdatedWatermarkTime
+	//
+	// if len(readMessages) == 0 {
+	//		isdf.srcWMPublisher.PulishIdleWatermark(lastFetchedValue + userProvidedValue)
+	// 		write the logic to publish idle watermark
+	// }
 	if err != nil {
 		isdf.opts.logger.Warnw("failed to read from source", zap.Error(err))
 		metrics.ReadMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()

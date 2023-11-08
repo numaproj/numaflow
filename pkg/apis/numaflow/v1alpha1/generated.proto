@@ -1351,6 +1351,10 @@ message Watermark {
   // +kubebuilder:default="0s"
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxDelay = 2;
+
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration idleDuration = 3;
+
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration idleIncrement = 4;
 }
 
 // Window describes windowing strategy

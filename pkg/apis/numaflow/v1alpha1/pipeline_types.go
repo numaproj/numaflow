@@ -499,6 +499,10 @@ type Watermark struct {
 	// +kubebuilder:default="0s"
 	// +optional
 	MaxDelay *metav1.Duration `json:"maxDelay,omitempty" protobuf:"bytes,2,opt,name=maxDelay"`
+
+	IdleDuration *metav1.Duration `json:"idleDuration,omitempty" protobuf:"bytes,3,opt,name=idleDuration"`
+
+	IdleIncrement *metav1.Duration `json:"idleIncrement,omitempty" protobuf:"bytes,4,opt,name=idleIncrement"`
 }
 
 // GetMaxDelay returns the configured max delay with a default value.

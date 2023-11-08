@@ -19769,6 +19769,12 @@
           "description": "Disabled toggles the watermark propagation, defaults to false.",
           "type": "boolean"
         },
+        "idleDuration": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "idleIncrement": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
         "maxDelay": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
           "description": "Maximum delay allowed for watermark calculation, defaults to \"0s\", which means no delay."
