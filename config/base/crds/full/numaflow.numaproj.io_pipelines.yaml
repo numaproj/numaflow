@@ -8656,10 +8656,18 @@ spec:
                   disabled:
                     default: false
                     type: boolean
-                  idleDuration:
-                    type: string
-                  idleIncrement:
-                    type: string
+                  idleSource:
+                    default:
+                      MaxWait: "-1"
+                      MinIncrement: "-1"
+                    properties:
+                      maxWait:
+                        default: "-1"
+                        type: string
+                      minIncrement:
+                        default: "-1"
+                        type: string
+                    type: object
                   maxDelay:
                     default: 0s
                     type: string

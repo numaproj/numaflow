@@ -1973,6 +1973,54 @@ ISBSvcType (<code>string</code> alias)
 </p>
 <p>
 </p>
+<h3 id="numaflow.numaproj.io/v1alpha1.IdleSource">
+IdleSource
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Watermark">Watermark</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>maxWait</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<p>
+MaxWait is the wait duration before progressing the watermark in idle
+case.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>minIncrement</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<p>
+MinIncrement is the time duration for increment the
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.InterStepBufferService">
 InterStepBufferService
 </h3>
@@ -3253,7 +3301,7 @@ Watermark enables watermark progression across the entire pipeline.
 <td>
 <em>(Optional)</em>
 <p>
-Templates is used to customize additional kubernetes resources required
+Templates are used to customize additional kubernetes resources required
 for the Pipeline
 </p>
 </td>
@@ -3469,7 +3517,7 @@ Watermark enables watermark progression across the entire pipeline.
 <td>
 <em>(Optional)</em>
 <p>
-Templates is used to customize additional kubernetes resources required
+Templates are used to customize additional kubernetes resources required
 for the Pipeline
 </p>
 </td>
@@ -5398,20 +5446,16 @@ means no delay.
 </tr>
 <tr>
 <td>
-<code>idleDuration</code></br> <em>
-<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
-Kubernetes meta/v1.Duration </a> </em>
+<code>idleSource</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.IdleSource"> IdleSource </a>
+</em>
 </td>
 <td>
-</td>
-</tr>
-<tr>
-<td>
-<code>idleIncrement</code></br> <em>
-<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
-Kubernetes meta/v1.Duration </a> </em>
-</td>
-<td>
+<em>(Optional)</em>
+<p>
+IdleSource defines the idle watermark properties, it could be configured
+in case source is idling.
+</p>
 </td>
 </tr>
 </tbody>

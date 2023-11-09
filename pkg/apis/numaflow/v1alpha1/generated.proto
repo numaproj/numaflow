@@ -521,6 +521,16 @@ message HTTPSource {
   optional bool service = 2;
 }
 
+message IdleSource {
+  // MaxWait is the wait duration before progressing the watermark in idle case.
+  // +kubebuilder:default="-1"
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxWait = 1;
+
+  // MinIncrement is the time duration for increment the
+  // +kubebuilder:default="-1"
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration minIncrement = 4;
+}
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=isbsvc
@@ -904,7 +914,7 @@ message PipelineSpec {
   // +optional
   optional Watermark watermark = 6;
 
-  // Templates is used to customize additional kubernetes resources required for the Pipeline
+  // Templates are used to customize additional kubernetes resources required for the Pipeline
   // +optional
   optional Templates templates = 7;
 
@@ -1352,9 +1362,10 @@ message Watermark {
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxDelay = 2;
 
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration idleDuration = 3;
-
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration idleIncrement = 4;
+  // IdleSource defines the idle watermark properties, it could be configured in case source is idling.
+  // +kubebuilder:default={"MaxWait": "-1", "MinIncrement": "-1"}
+  // +optional
+  optional IdleSource idleSource = 3;
 }
 
 // Window describes windowing strategy

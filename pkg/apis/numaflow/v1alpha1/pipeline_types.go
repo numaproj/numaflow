@@ -453,7 +453,7 @@ type PipelineSpec struct {
 	// +kubebuilder:default={"disabled": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,6,opt,name=watermark"`
-	// Templates is used to customize additional kubernetes resources required for the Pipeline
+	// Templates are used to customize additional kubernetes resources required for the Pipeline
 	// +optional
 	Templates *Templates `json:"templates,omitempty" protobuf:"bytes,7,opt,name=templates"`
 	// SideInputs defines the Side Inputs of a pipeline.
@@ -499,10 +499,19 @@ type Watermark struct {
 	// +kubebuilder:default="0s"
 	// +optional
 	MaxDelay *metav1.Duration `json:"maxDelay,omitempty" protobuf:"bytes,2,opt,name=maxDelay"`
+	// IdleSource defines the idle watermark properties, it could be configured in case source is idling.
+	// +kubebuilder:default={"MaxWait": "-1", "MinIncrement": "-1"}
+	// +optional
+	IdleSource *IdleSource `json:"idleSource,omitempty" protobuf:"bytes,3,opt,name=idleSource"`
+}
 
-	IdleDuration *metav1.Duration `json:"idleDuration,omitempty" protobuf:"bytes,3,opt,name=idleDuration"`
-
-	IdleIncrement *metav1.Duration `json:"idleIncrement,omitempty" protobuf:"bytes,4,opt,name=idleIncrement"`
+type IdleSource struct {
+	// MaxWait is the wait duration before progressing the watermark in idle case.
+	// +kubebuilder:default="-1"
+	MaxWait *metav1.Duration `json:"maxWait,omitempty" protobuf:"bytes,1,opt,name=maxWait"`
+	// MinIncrement is the time duration for increment the
+	// +kubebuilder:default="-1"
+	MinIncrement *metav1.Duration `json:"minIncrement,omitempty" protobuf:"bytes,4,opt,name=minIncrement"`
 }
 
 // GetMaxDelay returns the configured max delay with a default value.
@@ -511,6 +520,30 @@ func (wm Watermark) GetMaxDelay() time.Duration {
 		return wm.MaxDelay.Duration
 	}
 	return time.Duration(0)
+}
+
+func (wm Watermark) GetIdleSource() *IdleSource {
+	if wm.IdleSource != nil {
+		return wm.IdleSource
+	}
+
+	return nil
+}
+
+func (is IdleSource) GetMaxWait() time.Duration {
+	if is.MaxWait != nil {
+		return is.MaxWait.Duration
+	}
+
+	return time.Duration(-1)
+}
+
+func (is IdleSource) GetMinIncrement() time.Duration {
+	if is.MinIncrement != nil {
+		return is.MinIncrement.Duration
+	}
+
+	return time.Duration(-1)
 }
 
 type Templates struct {

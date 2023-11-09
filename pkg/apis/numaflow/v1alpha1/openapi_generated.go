@@ -55,6 +55,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetVertexPodSpecReq":            schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy":                        schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource":                     schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource":                     schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferService":         schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceList":     schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceList(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceSpec":     schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceSpec(ref),
@@ -1777,6 +1778,32 @@ func schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref common.ReferenceCallback) 
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"maxWait": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxWait is the wait duration before progressing the watermark in idle case.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"minIncrement": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MinIncrement is the time duration for increment the",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3077,7 +3104,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 					},
 					"templates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Templates is used to customize additional kubernetes resources required for the Pipeline",
+							Description: "Templates are used to customize additional kubernetes resources required for the Pipeline",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates"),
 						},
 					},
@@ -4758,21 +4785,17 @@ func schema_pkg_apis_numaflow_v1alpha1_Watermark(ref common.ReferenceCallback) c
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
-					"idleDuration": {
+					"idleSource": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
-						},
-					},
-					"idleIncrement": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Description: "IdleSource defines the idle watermark properties, it could be configured in case source is idling.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 

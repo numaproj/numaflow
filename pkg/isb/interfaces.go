@@ -24,6 +24,7 @@ package isb
 
 import (
 	"context"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"io"
 	"math"
 )
@@ -78,7 +79,8 @@ type BufferWriterInformation interface {
 // SourceWatermarkPublisher publishes source watermarks based on a list of isb.ReadMessage
 type SourceWatermarkPublisher interface {
 	PublishSourceWatermarks([]*ReadMessage)
-	// add a publishIdleWatermarks method
+
+	PublishIdleWatermarks(wmb.Watermark)
 }
 
 // Offset is an interface used in the ReadMessage referencing offset information.

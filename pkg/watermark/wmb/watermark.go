@@ -50,3 +50,7 @@ func (w Watermark) Before(t time.Time) bool {
 func (w Watermark) BeforeWatermark(compare Watermark) bool {
 	return w.Before(time.Time(compare))
 }
+
+func (w Watermark) Add(t time.Duration) time.Time {
+	return time.Time(w).Add(t)
+}

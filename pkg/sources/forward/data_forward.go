@@ -63,6 +63,7 @@ type DataForward struct {
 	vertexName     string
 	pipelineName   string
 	vertexReplica  int32
+	Watermark      dfv1.Watermark
 	// idleManager manages the idle watermark status.
 	idleManager wmb.IdleManager
 	Shutdown
@@ -108,6 +109,7 @@ func NewDataForward(
 		vertexName:           vertexInstance.Vertex.Spec.Name,
 		pipelineName:         vertexInstance.Vertex.Spec.PipelineName,
 		vertexReplica:        vertexInstance.Replica,
+		Watermark:            vertexInstance.Vertex.Spec.Watermark,
 		idleManager:          idleManager,
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
@@ -206,14 +208,21 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 
 	// source fetcher doesn't care about the offsets
 	// isdf.wmFetcher.ComputeWatermark(0, 0)
+	lastUpdatedWM := isdf.wmFetcher.ComputeWatermark(nil, 0)
 
+	currentTime := time.Now()
 	// vertexInstance.Vertex.Spec.Watermark.IdleIncrement
 	// track lastUpdatedWatermarkTime
 	//
-	// if len(readMessages) == 0 {
-	//		isdf.srcWMPublisher.PulishIdleWatermark(lastFetchedValue + userProvidedValue)
-	// 		write the logic to publish idle watermark
-	// }
+	maxWait := isdf.Watermark.IdleSource.GetMaxWait()
+	minIncrement := isdf.Watermark.IdleSource.GetMinIncrement()
+
+	if len(readMessages) == 0 && currentTime.Sub(time.Time(lastUpdatedWM)) > maxWait {
+		// publish Idle watermark
+		updatedWM := lastUpdatedWM.Add(minIncrement)
+
+		//		isdf.srcWMPublisher.PulishIdleWatermark(lastFetchedValue + userProvidedValue)
+	}
 	if err != nil {
 		isdf.opts.logger.Warnw("failed to read from source", zap.Error(err))
 		metrics.ReadMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
