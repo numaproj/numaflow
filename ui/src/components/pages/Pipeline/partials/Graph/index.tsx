@@ -175,7 +175,7 @@ const Flow = (props: FlowProps) => {
   );
   const [statusPayload, setStatusPayload] = useState<any>(undefined);
   const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
-  const [timer, setTimer] = useState<any>(undefined);
+  const [timer, setTimer] = useState<number | undefined>(undefined);
 
   const handleTimer = useCallback(() => {
     if (timer) {
