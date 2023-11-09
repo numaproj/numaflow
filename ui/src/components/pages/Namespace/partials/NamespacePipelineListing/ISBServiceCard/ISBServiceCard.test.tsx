@@ -213,7 +213,7 @@ describe("ISBServiceCard", () => {
 
     const deleteButton = screen.getByTestId("delete-isb");
     expect(deleteButton).toBeInTheDocument();
-    userEvent.click(deleteButton);
+    await userEvent.click(deleteButton);
     expect(
       screen.getByTestId("delete-confirmation-button")
     ).toBeInTheDocument();

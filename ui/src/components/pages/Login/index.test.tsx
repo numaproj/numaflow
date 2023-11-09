@@ -81,11 +81,12 @@ describe("Login", () => {
     });
   });
   it("should make API call on callback", async () => {
-    fetch.mockResponseOnce(JSON.stringify(mockData));
+    fetchMock.mockResponseOnce(JSON.stringify(mockData));
 
     // Mock the search params to simulate the conditions for handleCallback
     (useSearchParams as jest.Mock).mockReturnValue([
       new URLSearchParams("code=123&state=abc"),
+      () => {},
     ]);
 
     render(
