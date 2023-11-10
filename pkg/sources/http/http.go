@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -259,6 +260,13 @@ func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 		// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
 		h.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
 	}
+}
+
+func (h *httpSource) PublishIdleWatermarks(wm time.Time) {
+	// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
+	h.sourcePublishWM.PublishIdleWatermark(wmb.Watermark(wm), nil, 0) // Source publisher does not care about the offset
+
+	log.Println("++++++++++++++++++++++------> idle watermark published for http")
 }
 
 func (h *httpSource) Ack(_ context.Context, offsets []isb.Offset) []error {

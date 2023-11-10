@@ -1363,7 +1363,7 @@ message Watermark {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxDelay = 2;
 
   // IdleSource defines the idle watermark properties, it could be configured in case source is idling.
-  // +kubebuilder:default={"MaxWait": "-1", "MinIncrement": "-1"}
+  // +kubebuilder:default={"maxWait": "-1", "minIncrement": "-1"}
   // +optional
   optional IdleSource idleSource = 3;
 }

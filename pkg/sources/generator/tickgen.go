@@ -285,6 +285,11 @@ func (mg *memgen) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	mg.sourcePublishWM.PublishWatermark(wmb.Watermark(msgs[0].EventTime), nil, 0) // Source publisher does not care about the offset
 }
 
+func (mg *memgen) PublishIdleWatermarks(wm time.Time) {
+	// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
+	mg.sourcePublishWM.PublishIdleWatermark(wmb.Watermark(wm), nil, 0) // Source publisher does not care about the offset
+}
+
 // Ack acknowledges an array of offset.
 func (mg *memgen) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))

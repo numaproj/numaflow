@@ -257,6 +257,11 @@ func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 }
 
+func (ns *natsSource) PublishIdleWatermarks(wm time.Time) {
+	// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
+	ns.sourcePublishWM.PublishIdleWatermark(wmb.Watermark(wm), nil, 0) // Source publisher does not care about the offset
+}
+
 func (ns *natsSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }

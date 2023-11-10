@@ -24,9 +24,9 @@ package isb
 
 import (
 	"context"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"io"
 	"math"
+	"time"
 )
 
 const PendingNotAvailable = int64(math.MinInt64)
@@ -80,7 +80,7 @@ type BufferWriterInformation interface {
 type SourceWatermarkPublisher interface {
 	PublishSourceWatermarks([]*ReadMessage)
 
-	PublishIdleWatermarks(wmb.Watermark)
+	PublishIdleWatermarks(time.Time)
 }
 
 // Offset is an interface used in the ReadMessage referencing offset information.

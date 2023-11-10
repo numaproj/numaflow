@@ -8658,8 +8658,8 @@ spec:
                     type: boolean
                   idleSource:
                     default:
-                      MaxWait: "-1"
-                      MinIncrement: "-1"
+                      maxWait: "-1"
+                      minIncrement: "-1"
                     properties:
                       maxWait:
                         default: "-1"

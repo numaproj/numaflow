@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -205,27 +206,29 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// at-least-once semantics for reading, during the restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
 	readMessages, err := isdf.reader.Read(ctx, isdf.opts.readBatchSize)
+	if err != nil {
+		isdf.opts.logger.Warnw("failed to read from source", zap.Error(err))
+		metrics.ReadMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
+	}
 
 	// source fetcher doesn't care about the offsets
 	// isdf.wmFetcher.ComputeWatermark(0, 0)
 	lastUpdatedWM := isdf.wmFetcher.ComputeWatermark(nil, 0)
 
-	currentTime := time.Now()
 	// vertexInstance.Vertex.Spec.Watermark.IdleIncrement
 	// track lastUpdatedWatermarkTime
 	//
 	maxWait := isdf.Watermark.IdleSource.GetMaxWait()
 	minIncrement := isdf.Watermark.IdleSource.GetMinIncrement()
 
-	if len(readMessages) == 0 && currentTime.Sub(time.Time(lastUpdatedWM)) > maxWait {
+	if len(readMessages) == 0 && time.Now().Sub(time.Time(lastUpdatedWM)) > maxWait {
+		log.Println("--------------------> readMessages is 0 and publishing idle watermark")
 		// publish Idle watermark
 		updatedWM := lastUpdatedWM.Add(minIncrement)
 
+		isdf.srcWMPublisher.PublishIdleWatermarks(updatedWM)
+
 		//		isdf.srcWMPublisher.PulishIdleWatermark(lastFetchedValue + userProvidedValue)
-	}
-	if err != nil {
-		isdf.opts.logger.Warnw("failed to read from source", zap.Error(err))
-		metrics.ReadMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
 	}
 
 	// Process only if we have any read messages.

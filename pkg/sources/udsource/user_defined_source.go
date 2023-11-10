@@ -194,6 +194,12 @@ func (u *userDefinedSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 }
 
+func (u *userDefinedSource) PublishIdleWatermarks(wm time.Time) {
+	// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
+	//u.sourcePublishWM.PublishIdleWatermark(wmb.Watermark(wm), nil, 0) // Source publisher does not care about the offset
+	panic("implement me")
+}
+
 // loadSourceWatermarkPublisher does a lazy load on the watermark publisher
 func (u *userDefinedSource) loadSourceWatermarkPublisher(partitionID int32) publish.Publisher {
 	u.lock.Lock()

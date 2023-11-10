@@ -500,7 +500,7 @@ type Watermark struct {
 	// +optional
 	MaxDelay *metav1.Duration `json:"maxDelay,omitempty" protobuf:"bytes,2,opt,name=maxDelay"`
 	// IdleSource defines the idle watermark properties, it could be configured in case source is idling.
-	// +kubebuilder:default={"MaxWait": "-1", "MinIncrement": "-1"}
+	// +kubebuilder:default={"maxWait": "-1", "minIncrement": "-1"}
 	// +optional
 	IdleSource *IdleSource `json:"idleSource,omitempty" protobuf:"bytes,3,opt,name=idleSource"`
 }
