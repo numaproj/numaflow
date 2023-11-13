@@ -29,7 +29,8 @@ stream processing platforms.
 
 ## Roadmap
 
-- User-defined Source (v0.11)
+- Support for watermark progression even if the source is idling (1.1)
+- Session Window (1.2)
 
 ## Demo
 
