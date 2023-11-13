@@ -122,7 +122,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 					return
 				}
 
-				d := createDatum(msg)
+				d := createReduceRequest(msg)
 
 				// send the datum to datumCh channel, handle the case when the context is canceled
 				select {
@@ -172,12 +172,11 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 	}
 }
 
-// AsyncApplyReduce accepts a channel of isbMessages and returns the aggregated result asynchronously on the responseCh channel
-// and any error on the errCh channel, it doesn't wait for the output of all the keys to be available.
-func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (<-chan []*isb.WriteMessage, <-chan error) {
+// AsyncApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
+func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
-		responseCh = make(chan []*isb.WriteMessage)
+		responseCh = make(chan *window.TimedWindowResponse)
 		datumCh    = make(chan *reducepb.ReduceRequest)
 	)
 
@@ -201,7 +200,7 @@ func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *par
 					close(responseCh)
 					return
 				}
-				responseCh <- convertToWriteMessages(result, partitionID)
+				responseCh <- parseReduceResponse(result)
 			case err := <-reduceErrCh:
 				if err != nil {
 					errCh <- err
@@ -226,7 +225,7 @@ func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *par
 					return
 				}
 
-				d := createDatum(msg)
+				d := createReduceRequest(msg)
 
 				// send the datum to datumCh channel, handle the case when the context is canceled
 				datumCh <- d
@@ -240,15 +239,49 @@ func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *par
 	return responseCh, errCh
 }
 
-func createDatum(readMessage *isb.ReadMessage) *reducepb.ReduceRequest {
-	keys := readMessage.Keys
-	payload := readMessage.Body.Payload
-	parentMessageInfo := readMessage.MessageInfo
+func createReduceRequest(windowRequest *window.TimedWindowRequest) *reducepb.ReduceRequest {
+	var windowOp reducepb.ReduceRequest_WindowOperation_Event
+	var partitions []*reducepb.Partition
+
+	for _, w := range windowRequest.Windows {
+		partitions = append(partitions, &reducepb.Partition{
+			Start: timestamppb.New(w.StartTime()),
+			End:   timestamppb.New(w.EndTime()),
+			Slot:  w.Slot(),
+		})
+	}
+	// for fixed and sliding window event can be either open, close or append
+	switch windowRequest.Event {
+	case window.Open:
+		println("window open event for window - ", partitions[0].String())
+		windowOp = reducepb.ReduceRequest_WindowOperation_OPEN
+	case window.Close:
+		println("window close event for window - ", partitions[0].String())
+		windowOp = reducepb.ReduceRequest_WindowOperation_CLOSE
+	case window.Delete:
+		println("window close event for window - ", partitions[0].String())
+		windowOp = reducepb.ReduceRequest_WindowOperation_CLOSE
+	default:
+		println("window append event for window - ", partitions[0].String())
+		windowOp = reducepb.ReduceRequest_WindowOperation_APPEND
+	}
+
+	var payload = &reducepb.ReduceRequest_Payload{}
+	if windowRequest.ReadMessage != nil {
+		payload = &reducepb.ReduceRequest_Payload{
+			Keys:      windowRequest.ReadMessage.Keys,
+			Value:     windowRequest.ReadMessage.Payload,
+			EventTime: timestamppb.New(windowRequest.ReadMessage.MessageInfo.EventTime),
+			Watermark: timestamppb.New(windowRequest.ReadMessage.Watermark),
+		}
+	}
+
 	var d = &reducepb.ReduceRequest{
-		Keys:      keys,
-		Value:     payload,
-		EventTime: timestamppb.New(parentMessageInfo.EventTime),
-		Watermark: timestamppb.New(readMessage.Watermark),
+		Payload: payload,
+		Operation: &reducepb.ReduceRequest_WindowOperation{
+			Event:      windowOp,
+			Partitions: partitions,
+		},
 	}
 	return d
 }
@@ -290,26 +323,37 @@ func convertToUdfError(err error) ApplyUDFErr {
 	}
 }
 
-func convertToWriteMessages(response *reducepb.ReduceResponse, partitionID *partition.ID) []*isb.WriteMessage {
+func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowResponse {
 	taggedMessages := make([]*isb.WriteMessage, 0)
-	for _, response := range response.GetResults() {
-		keys := response.Keys
+	for _, result := range response.GetResults() {
+		keys := result.Keys
 		taggedMessage := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
-						EventTime: partitionID.End.Add(-1 * time.Millisecond),
+						EventTime: response.EventTime.AsTime(),
 						IsLate:    false,
 					},
 					Keys: keys,
 				},
 				Body: isb.Body{
-					Payload: response.Value,
+					Payload: result.Value,
 				},
 			},
-			Tags: response.Tags,
+			Tags: result.Tags,
 		}
 		taggedMessages = append(taggedMessages, taggedMessage)
 	}
-	return taggedMessages
+
+	// we don't care about the combined key which was used demultiplexing in sdk side
+	// because for fixed and sliding we don't track keys.
+	return &window.TimedWindowResponse{
+		WriteMessages: taggedMessages,
+		ID: &partition.ID{
+			Start: response.GetPartition().GetStart().AsTime(),
+			End:   response.GetPartition().GetEnd().AsTime(),
+			Slot:  response.GetPartition().GetSlot(),
+		},
+		CombinedKey: "",
+	}
 }

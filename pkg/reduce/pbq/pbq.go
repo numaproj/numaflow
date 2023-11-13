@@ -18,7 +18,6 @@ package pbq
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"sync"
 
@@ -29,8 +28,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/window"
 )
-
-var ErrCOB = errors.New("error while writing to pbq, pbq is closed")
 
 // PBQ Buffer queue which is backed with a persisted store, each partition
 // will have a PBQ associated with it
@@ -54,7 +51,7 @@ var _ ReadWriteCloser = (*PBQ)(nil)
 func (p *PBQ) Write(ctx context.Context, message *window.TimedWindowRequest) error {
 	// if cob we should return
 	if p.cob {
-		p.log.Errorw("Failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.IsbMessage.Header), zap.Any("message", message))
+		p.log.Errorw("Failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.ReadMessage.Header), zap.Any("message", message))
 		return nil
 	}
 	var writeErr error
@@ -67,8 +64,8 @@ func (p *PBQ) Write(ctx context.Context, message *window.TimedWindowRequest) err
 		}
 		// this store.Write is an `inSync` flush (if need be). The performance will be very bad but the system is correct.
 		// TODO: shortly in the near future we will move to async writes.
-		if message.IsbMessage != nil {
-			writeErr = p.store.Write(message.IsbMessage)
+		if message.ReadMessage != nil {
+			writeErr = p.store.Write(message.ReadMessage)
 		}
 	case <-ctx.Done():
 		// closing the output channel will not cause panic, since its inside select case
@@ -134,9 +131,9 @@ readLoop:
 			select {
 			//FIXME empty window op doesn't work. We need to fix this.
 			case p.output <- &window.TimedWindowRequest{
-				IsbMessage: msg,
-				Event:      window.Append,
-				Windows:    nil,
+				ReadMessage: msg,
+				Event:       window.Append,
+				Windows:     nil,
 			}:
 			case <-ctx.Done():
 				break readLoop

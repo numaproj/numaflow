@@ -95,15 +95,18 @@ func (w *Window) Expand(endTime time.Time) {
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
 	// Length is the temporal length of the window.
-	length  time.Duration
-	slide   time.Duration
-	entries *window.SortedWindowList[window.TimedWindow]
+	length        time.Duration
+	slide         time.Duration
+	activeWindows *window.SortedWindowListByEndTime[window.TimedWindow]
+	closedWindows *window.SortedWindowListByEndTime[window.TimedWindow]
 }
 
 func NewWindower(length time.Duration, slide time.Duration) window.TimedWindower {
 	return &Windower{
-		length: length,
-		slide:  slide,
+		length:        length,
+		slide:         slide,
+		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
 	}
 }
 
@@ -133,12 +136,12 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	// so given windows 500-600 and 600-700 and the event time is 600
 	// we will add the element to 600-700 window and not to the 500-600 window.
 	for !startTime.After(message.EventTime) && endTime.After(message.EventTime) {
-		win, isPresent := w.entries.InsertIfNotPresent(NewWindow(startTime, endTime, message))
+		win, isPresent := w.activeWindows.InsertIfNotPresent(NewWindow(startTime, endTime, message))
 		operation := &window.TimedWindowRequest{
-			IsbMessage: message,
-			Event:      window.Append,
-			Windows:    []window.TimedWindow{win},
-			ID:         win.Partition(),
+			ReadMessage: message,
+			Event:       window.Append,
+			Windows:     []window.TimedWindow{win},
+			ID:          win.Partition(),
 		}
 		if !isPresent {
 			operation.Event = window.Open
@@ -157,22 +160,41 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 // Window message contains operation. Window operation contains the delete event type.
 func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 	windowOperations := make([]*window.TimedWindowRequest, 0)
-	closedWindows := w.entries.RemoveWindows(time)
+	closedWindows := w.activeWindows.RemoveWindows(time)
 	for _, win := range closedWindows {
 		operation := &window.TimedWindowRequest{
-			IsbMessage: nil,
-			Event:      window.Delete,
-			Windows:    []window.TimedWindow{win},
-			ID:         win.Partition(),
+			ReadMessage: nil,
+			Event:       window.Delete,
+			Windows:     []window.TimedWindow{win},
+			ID:          win.Partition(),
 		}
 		windowOperations = append(windowOperations, operation)
+		w.closedWindows.InsertBack(win)
 	}
 	return windowOperations
 }
 
 // NextWindowToBeClosed returns the next window yet to be closed.
 func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
-	return w.entries.Front()
+	return w.activeWindows.Front()
+}
+
+// DeleteWindows deletes the windows from the closed windows list
+func (w *Windower) DeleteWindows(response *window.TimedWindowResponse) {
+	w.closedWindows.Delete(&Window{
+		startTime: response.ID.Start,
+		endTime:   response.ID.End,
+		slot:      response.ID.Slot,
+	})
+}
+
+// OldestClosedWindowEndTime returns the end time of the oldest closed window.
+func (w *Windower) OldestClosedWindowEndTime() time.Time {
+	if win := w.closedWindows.Front(); win != nil {
+		return win.EndTime()
+	} else {
+		return time.UnixMilli(-1)
+	}
 }
 
 //// Sliding implements sliding windows
@@ -182,7 +204,7 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 //	// offset between successive windows.
 //	// successive windows are phased out by this duration.
 //	Slide time.Duration
-//	// entries is the list of active windows that are currently being tracked.
+//	// activeWindows is the list of active windows that are currently being tracked.
 //	// windows are sorted in chronological order with the earliest window at the head of the list.
 //	// list.List is implemented as a doubly linked list which allows us to traverse the nodes in
 //	// both the directions.
@@ -192,7 +214,7 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 //	// the traversal from the tail of the list for Get and Open Operations. For Remove Operations, since
 //	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
 //	// from the Head.
-//	entries *window.SortedWindowList[window.AlignedKeyedWindower]
+//	activeWindows *window.SortedWindowListByStartTime[window.AlignedKeyedWindower]
 //}
 //
 //var _ window.Windower = (*Sliding)(nil)
@@ -202,7 +224,7 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 //	return &Sliding{
 //		Length:  length,
 //		Slide:   slide,
-//		entries: window.NewSortedWindowList[window.AlignedKeyedWindower](),
+//		activeWindows: window.NewSortedWindowList[window.AlignedKeyedWindower](),
 //	}
 //}
 //
@@ -238,17 +260,17 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 //
 //// InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window
 //func (s *Sliding) InsertIfNotPresent(kw window.AlignedKeyedWindower) (window.AlignedKeyedWindower, bool) {
-//	return s.entries.InsertIfNotPresent(kw)
+//	return s.activeWindows.InsertIfNotPresent(kw)
 //}
 //
 //func (s *Sliding) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
-//	return s.entries.RemoveWindows(wm)
+//	return s.activeWindows.RemoveWindows(wm)
 //}
 //
 //// NextWindowToBeClosed returns the next window which is yet to be closed.
 //func (s *Sliding) NextWindowToBeClosed() window.AlignedKeyedWindower {
-//	if s.entries.Len() == 0 {
+//	if s.activeWindows.Len() == 0 {
 //		return nil
 //	}
-//	return s.entries.Front()
+//	return s.activeWindows.Front()
 //}

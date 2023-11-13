@@ -208,8 +208,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 
-		nextWinAsSeenByReader := df.pbqManager.NextWindowToBeMaterialized()
-		if nextWinAsSeenByReader == nil {
+		oldestClosedWindowEndTime := df.windower.OldestClosedWindowEndTime()
+		if oldestClosedWindowEndTime == time.UnixMilli(-1) {
 			// if all the windows are closed already, and the len(readBatch) == 0
 			// then it means there's an idle situation
 			// in this case, send idle watermark to all the toBuffer partitions
@@ -224,7 +224,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// if toBeClosed window exists, and the watermark we fetch has already passed the endTime of this window
 			// then it means the overall dataflow of the pipeline has already reached a later time point
 			// so we can close the window and process the data in this window
-			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); nextWinAsSeenByReader.EndTime().Before(watermark) {
+			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); oldestClosedWindowEndTime.Before(watermark) {
 				windowOperations := df.windower.CloseWindows(watermark)
 				for _, op := range windowOperations {
 					err = df.writeToPBQ(ctx, op)
@@ -371,9 +371,9 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 	}
 
 	// solve Reduce withholding of watermark where we do not send WM until the window is closed.
-	if nextWinAsSeenByReader := df.pbqManager.NextWindowToBeMaterialized(); nextWinAsSeenByReader != nil {
+	if oldestClosedWindowEndTime := df.windower.OldestClosedWindowEndTime(); oldestClosedWindowEndTime != time.UnixMilli(-1) {
 		// minus 1 ms because if it's the same as the end time the window would have already been closed
-		if watermark := time.Time(wm).Add(-1 * time.Millisecond); nextWinAsSeenByReader.EndTime().After(watermark) {
+		if watermark := time.Time(wm).Add(-1 * time.Millisecond); oldestClosedWindowEndTime.After(watermark) {
 			// publish idle watermark so that the next vertex doesn't need to wait for the window to close to
 			// start processing data whose watermark is smaller than the endTime of the toBeClosed window
 
@@ -486,7 +486,7 @@ func (df *DataForward) writeToPBQ(ctx context.Context, winOp *window.TimedWindow
 	err := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
 		rErr := q.Write(context.Background(), winOp)
 		if rErr != nil {
-			df.log.Errorw("Failed to write message", zap.String("msgOffSet", winOp.IsbMessage.ReadOffset.String()), zap.String("partitionID", winOp.ID.String()), zap.Error(rErr))
+			df.log.Errorw("Failed to write message", zap.String("msgOffSet", winOp.ReadMessage.ReadOffset.String()), zap.String("partitionID", winOp.ID.String()), zap.Error(rErr))
 			metrics.PBQWriteErrorCount.With(map[string]string{
 				metrics.LabelVertex:             df.vertexName,
 				metrics.LabelPipeline:           df.pipelineName,

@@ -1,19 +1,3 @@
-/*
-Copyright 2022 The Numaproj Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package window
 
 import (
@@ -22,39 +6,24 @@ import (
 	"time"
 )
 
-// SortedWindowListByStartTime is a thread safe list implementation, which is sorted by window start time
+// SortedWindowListByEndTime is a thread safe list implementation, which is sorted by window end time
 // from lowest to highest
-type SortedWindowListByStartTime[W TimedWindow] struct {
+type SortedWindowListByEndTime[W TimedWindow] struct {
 	windows []W
 	lock    *sync.RWMutex
 }
 
-// NewSortedWindowList implements a window list ordered by the start time. The Front/Head of the list will always have the smallest
-// element while the End/Tail will have the largest element (start time).
-func NewSortedWindowList[W TimedWindow]() *SortedWindowListByStartTime[W] {
-	return &SortedWindowListByStartTime[W]{
+// NewSortedWindowListByEndTime implements a window list ordered by the end time. The Front/Head of the list will always have the smallest
+// element while the End/Tail will have the largest element (end time).
+func NewSortedWindowListByEndTime[W TimedWindow]() *SortedWindowListByEndTime[W] {
+	return &SortedWindowListByEndTime[W]{
 		windows: make([]W, 0),
 		lock:    &sync.RWMutex{},
 	}
 }
 
-// InsertFront inserts a window to the front of the list.
-func (s *SortedWindowListByStartTime[W]) InsertFront(window W) bool {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	// Check if the window can be inserted at the front
-	if len(s.windows) != 0 && (s.windows[0].EndTime().Before(window.EndTime())) {
-		return false
-	}
-
-	// Insert the window at the front
-	s.windows = append([]W{window}, s.windows...)
-	return true
-}
-
-// InsertBack inserts a window to the end of the list.
-func (s *SortedWindowListByStartTime[W]) InsertBack(window W) bool {
+// InsertBack inserts a window to the back of the list.
+func (s *SortedWindowListByEndTime[W]) InsertBack(window W) bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -68,14 +37,29 @@ func (s *SortedWindowListByStartTime[W]) InsertBack(window W) bool {
 	return true
 }
 
+// InsertFront inserts a window to the front of the list.
+func (s *SortedWindowListByEndTime[W]) InsertFront(window W) bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	// Check if the window can be inserted at the front
+	if len(s.windows) != 0 && (s.windows[0].EndTime().Before(window.EndTime())) {
+		return false
+	}
+
+	// Insert the window at the front
+	s.windows = append([]W{window}, s.windows...)
+	return true
+}
+
 // Insert inserts a window to the list.
-func (s *SortedWindowListByStartTime[W]) Insert(window W) {
+func (s *SortedWindowListByEndTime[W]) Insert(window W) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	// Find the index where the window should be inserted
 	index := sort.Search(len(s.windows), func(i int) bool {
-		return !s.windows[i].StartTime().Before(window.StartTime())
+		return !s.windows[i].EndTime().Before(window.EndTime())
 	})
 
 	// Insert the window at the middle position
@@ -84,13 +68,14 @@ func (s *SortedWindowListByStartTime[W]) Insert(window W) {
 }
 
 // InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window.
-func (s *SortedWindowListByStartTime[W]) InsertIfNotPresent(window W) (W, bool) {
+func (s *SortedWindowListByEndTime[W]) InsertIfNotPresent(window W) (W, bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	// Find the index where the window should be inserted
 	index := sort.Search(len(s.windows), func(i int) bool {
-		return !s.windows[i].StartTime().Before(window.StartTime())
+		var x = !s.windows[i].EndTime().Before(window.EndTime())
+		return x
 	})
 
 	updatedIndex := index
@@ -101,7 +86,7 @@ func (s *SortedWindowListByStartTime[W]) InsertIfNotPresent(window W) (W, bool) 
 			return s.windows[i], true
 		}
 
-		if s.windows[i].StartTime().After(window.StartTime()) {
+		if s.windows[i].EndTime().After(window.EndTime()) {
 			updatedIndex = i
 			break
 		}
@@ -116,7 +101,7 @@ func (s *SortedWindowListByStartTime[W]) InsertIfNotPresent(window W) (W, bool) 
 }
 
 // Delete deletes a window from the list.
-func (s *SortedWindowListByStartTime[W]) Delete(window W) (deleted bool) {
+func (s *SortedWindowListByEndTime[W]) Delete(window W) (deleted bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -124,7 +109,7 @@ func (s *SortedWindowListByStartTime[W]) Delete(window W) (deleted bool) {
 
 	// Find the index of the window to be deleted
 	index := sort.Search(len(s.windows), func(i int) bool {
-		return !s.windows[i].StartTime().Before(window.StartTime())
+		return !s.windows[i].EndTime().Before(window.EndTime())
 	})
 
 	// Delete the window if it is present in the list
@@ -135,7 +120,7 @@ func (s *SortedWindowListByStartTime[W]) Delete(window W) (deleted bool) {
 			break
 		}
 
-		if s.windows[i].StartTime().After(window.StartTime()) {
+		if s.windows[i].EndTime().After(window.EndTime()) {
 			break
 		}
 	}
@@ -143,7 +128,7 @@ func (s *SortedWindowListByStartTime[W]) Delete(window W) (deleted bool) {
 }
 
 // RemoveWindows removes a set of windows smaller than or equal to the given time.
-func (s *SortedWindowListByStartTime[W]) RemoveWindows(t time.Time) []W {
+func (s *SortedWindowListByEndTime[W]) RemoveWindows(t time.Time) []W {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -162,14 +147,14 @@ func (s *SortedWindowListByStartTime[W]) RemoveWindows(t time.Time) []W {
 }
 
 // Len returns the length of the window.
-func (s *SortedWindowListByStartTime[W]) Len() int {
+func (s *SortedWindowListByEndTime[W]) Len() int {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	return len(s.windows)
 }
 
 // Front returns the smallest element from the list.
-func (s *SortedWindowListByStartTime[W]) Front() W {
+func (s *SortedWindowListByEndTime[W]) Front() W {
 	var front W
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -180,7 +165,7 @@ func (s *SortedWindowListByStartTime[W]) Front() W {
 }
 
 // Back returns the largest element from the list.
-func (s *SortedWindowListByStartTime[W]) Back() W {
+func (s *SortedWindowListByEndTime[W]) Back() W {
 	var back W
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -191,7 +176,7 @@ func (s *SortedWindowListByStartTime[W]) Back() W {
 }
 
 // Items returns the entire window list.
-func (s *SortedWindowListByStartTime[W]) Items() []W {
+func (s *SortedWindowListByEndTime[W]) Items() []W {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
@@ -202,12 +187,12 @@ func (s *SortedWindowListByStartTime[W]) Items() []W {
 }
 
 // FindWindowForTime finds a window for a given time.
-func (s *SortedWindowListByStartTime[W]) FindWindowForTime(t time.Time) (W, bool) {
+func (s *SortedWindowListByEndTime[W]) FindWindowForTime(t time.Time) (W, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
 	index := sort.Search(len(s.windows), func(i int) bool {
-		return !s.windows[i].StartTime().Before(t)
+		return !s.windows[i].EndTime().Before(t)
 	})
 
 	for i := index; i < len(s.windows); i++ {
@@ -215,7 +200,7 @@ func (s *SortedWindowListByStartTime[W]) FindWindowForTime(t time.Time) (W, bool
 			return s.windows[i], true
 		}
 
-		if s.windows[i].StartTime().After(t) {
+		if s.windows[i].EndTime().After(t) {
 			break
 		}
 	}

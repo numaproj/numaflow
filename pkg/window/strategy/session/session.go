@@ -82,14 +82,16 @@ func (w *Window) Expand(endTime time.Time) {
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
 	// Length is the temporal length of the window.
-	gap     time.Duration
-	entries map[string]*window.SortedWindowList[window.TimedWindow]
+	gap           time.Duration
+	activeWindows map[string]*window.SortedWindowListByEndTime[window.TimedWindow]
+	closedWindows *window.SortedWindowListByEndTime[window.TimedWindow]
 }
 
 func NewWindower(gap time.Duration) window.TimedWindower {
 	return &Windower{
-		gap:     gap,
-		entries: make(map[string]*window.SortedWindowList[window.TimedWindow]),
+		gap:           gap,
+		activeWindows: make(map[string]*window.SortedWindowListByEndTime[window.TimedWindow]),
+		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
 	}
 }
 
@@ -107,12 +109,12 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	combinedKey := strings.Join(message.Keys, delimiter)
 	windowOperations := make([]*window.TimedWindowRequest, 0)
 
-	if list, ok := w.entries[combinedKey]; !ok {
+	if list, ok := w.activeWindows[combinedKey]; !ok {
 		win := NewWindow(message.EventTime, w.gap, message)
-		list = window.NewSortedWindowList[window.TimedWindow]()
+		list = window.NewSortedWindowListByEndTime[window.TimedWindow]()
 		list.InsertFront(win)
 		windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &sessionPartition))
-		w.entries[combinedKey] = list
+		w.activeWindows[combinedKey] = list
 	} else {
 		win, isPresent := list.FindWindowForTime(message.EventTime)
 		if isPresent {
@@ -135,10 +137,10 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 
 func createWindowOperation(message *isb.ReadMessage, event window.Event, windows []window.TimedWindow, id *partition.ID) *window.TimedWindowRequest {
 	return &window.TimedWindowRequest{
-		IsbMessage: message,
-		Event:      event,
-		Windows:    windows,
-		ID:         id,
+		ReadMessage: message,
+		Event:       event,
+		Windows:     windows,
+		ID:          id,
 	}
 }
 
@@ -153,19 +155,19 @@ func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 	sessionPartition.Slot = "slot-0"
 
 	windowOperations := make([]*window.TimedWindowRequest, 0)
-	for _, list := range w.entries {
+	for _, list := range w.activeWindows {
 		closedWindows := list.RemoveWindows(time)
+		if len(closedWindows) == 0 {
+			continue
+		}
 		mergedWindows := windowsThatCanBeMerged(closedWindows)
 		for _, windows := range mergedWindows {
-			if len(windows) == 1 {
-				windowOperations = append(windowOperations, createWindowOperation(nil, window.Close, windows, &sessionPartition))
-			} else {
+			// if len of windows is greater than 1, check if any of the windows can be merged
+			if len(windows) > 1 {
 				windowOperations = append(windowOperations, createWindowOperation(nil, window.Merge, windows, &sessionPartition))
 			}
-		}
-		// TODO: invoke merge op if there are any windows that are merged
-		for _, win := range closedWindows {
-			windowOperations = append(windowOperations, createWindowOperation(nil, window.Close, []window.TimedWindow{win}, &sessionPartition))
+			windowOperations = append(windowOperations, createWindowOperation(nil, window.Close, []window.TimedWindow{windows[0]}, &sessionPartition))
+			w.closedWindows.Insert(windows[0])
 		}
 	}
 
@@ -179,6 +181,22 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 		startTime: time.UnixMilli(-1),
 		endTime:   time.UnixMilli(-1),
 		slot:      "slot-0",
+	}
+}
+
+func (w *Windower) DeleteWindows(response *window.TimedWindowResponse) {
+	w.closedWindows.Delete(&Window{
+		startTime: response.ID.Start,
+		endTime:   response.ID.End,
+		slot:      response.ID.Slot,
+	})
+}
+
+func (w *Windower) OldestClosedWindowEndTime() time.Time {
+	if win := w.closedWindows.Front(); win != nil {
+		return win.EndTime()
+	} else {
+		return time.UnixMilli(-1)
 	}
 }
 

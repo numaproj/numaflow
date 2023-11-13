@@ -95,13 +95,18 @@ func (w *Window) Expand(endTime time.Time) {
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
 	// Length is the temporal length of the window.
-	length  time.Duration
-	entries *window.SortedWindowList[window.TimedWindow]
+	length time.Duration
+	// we track all the active windows, we store the windows sorted by start time
+	// so its easy to find the window
+	activeWindows *window.SortedWindowListByEndTime[window.TimedWindow]
+	closedWindows *window.SortedWindowListByEndTime[window.TimedWindow]
 }
 
 func NewWindower(length time.Duration) window.TimedWindower {
 	return &Windower{
-		length: length,
+		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		length:        length,
 	}
 }
 
@@ -112,12 +117,12 @@ func NewWindower(length time.Duration) window.TimedWindower {
 // if the window is newly created the operation is set to Open, if the window is already present
 // the operation is set to Append.
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
-	win, isPresent := w.entries.InsertIfNotPresent(NewWindow(w.length, message))
+	win, isPresent := w.activeWindows.InsertIfNotPresent(NewWindow(w.length, message))
 	winOp := &window.TimedWindowRequest{
-		Event:      window.Append,
-		Windows:    []window.TimedWindow{win},
-		IsbMessage: message,
-		ID:         win.Partition(),
+		Event:       window.Append,
+		Windows:     []window.TimedWindow{win},
+		ReadMessage: message,
+		ID:          win.Partition(),
 	}
 	if !isPresent {
 		winOp.Event = window.Open
@@ -131,83 +136,38 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 // Window message contains operation. Window operation contains the delete event type.
 func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 	winOperations := make([]*window.TimedWindowRequest, 0)
-	closedWindows := w.entries.RemoveWindows(time)
+	closedWindows := w.activeWindows.RemoveWindows(time)
 	for _, win := range closedWindows {
 		winOp := &window.TimedWindowRequest{
-			IsbMessage: nil,
-			Event:      window.Delete,
-			Windows:    []window.TimedWindow{win},
-			ID:         win.Partition(),
+			ReadMessage: nil,
+			Event:       window.Delete,
+			Windows:     []window.TimedWindow{win},
+			ID:          win.Partition(),
 		}
 		winOperations = append(winOperations, winOp)
+		w.closedWindows.InsertBack(win)
 	}
 	return winOperations
 }
 
 // NextWindowToBeClosed returns the next window yet to be closed.
 func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
-	return w.entries.Front()
+	return w.activeWindows.Front()
 }
 
-//// Fixed implements Fixed window.
-//// Fixed maintains the state of active windows
-//// All the operations in Fixed (see window.Windower) order the entries in the ascending order of start time.
-//// So the earliest window is at the front and the oldest window is at the end.
-//type Fixed struct {
-//	// Length is the temporal length of the window.
-//	Length time.Duration
-//	// entries is the list of active windows that are currently being tracked.
-//	// windows are sorted in chronological order with the earliest window at the head of the list.
-//	// list.List is implemented as a doubly linked list which allows us to traverse the nodes in
-//	// both the directions.
-//	// Although the worst case time complexity is O(n), because of the time based ordering and
-//	// since the elements are rarely out of order, the amortized complexity works out to be closer to O(1)
-//	// Because most of the keys are expected to be associated with the most recent window, we always start
-//	// the traversal from the tail of the list for Get and Open Operations. For Remove Operations, since
-//	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
-//	// from the Head.
-//	entries *window.SortedWindowList[window.AlignedKeyedWindower]
-//}
-//
-//var _ window.Windower = (*Fixed)(nil)
-//
-//// NewFixed returns a Fixed windower.
-//func NewFixed(length time.Duration) window.Windower {
-//	return &Fixed{
-//		Length:  length,
-//		entries: window.NewSortedWindowList[window.AlignedKeyedWindower](),
-//	}
-//}
-//
-//// AssignWindow assigns a window for the given eventTime.
-//func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower {
-//	start := eventTime.Truncate(f.Length)
-//	end := start.Add(f.Length)
-//
-//	// Assignment of windows should follow a Left inclusive and right exclusive
-//	// principle. Since we use truncate here, it is guaranteed that any element
-//	// on the boundary will automatically fall in to the window to the right
-//	// of the boundary thereby satisfying the requirement.
-//	return []window.AlignedKeyedWindower{
-//		keyed.NewKeyedWindow(start, end),
-//	}
-//}
-//
-//// InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window
-//func (f *Fixed) InsertIfNotPresent(kw window.AlignedKeyedWindower) (aw window.AlignedKeyedWindower, isPresent bool) {
-//	return f.entries.InsertIfNotPresent(kw)
-//}
-//
-//// RemoveWindows returns an array of keyed windows that are before the current watermark.
-//// So these windows can be closed.
-//func (f *Fixed) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
-//	return f.entries.RemoveWindows(wm)
-//}
-//
-//// NextWindowToBeClosed returns the next window which is yet to be closed.
-//func (f *Fixed) NextWindowToBeClosed() window.AlignedKeyedWindower {
-//	if f.entries.Len() == 0 {
-//		return nil
-//	}
-//	return f.entries.Front()
-//}
+// DeleteWindows deletes the windows from the closed windows list
+func (w *Windower) DeleteWindows(response *window.TimedWindowResponse) {
+	w.closedWindows.Delete(&Window{
+		startTime: response.ID.Start,
+		endTime:   response.ID.End,
+		slot:      response.ID.Slot,
+	})
+}
+
+func (w *Windower) OldestClosedWindowEndTime() time.Time {
+	if win := w.closedWindows.Front(); win != nil {
+		return win.EndTime()
+	} else {
+		return time.UnixMilli(-1)
+	}
+}

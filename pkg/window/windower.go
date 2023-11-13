@@ -65,6 +65,10 @@ type TimedWindower interface {
 	CloseWindows(time time.Time) []*TimedWindowRequest
 	// NextWindowToBeClosed returns the next window yet to be closed.
 	NextWindowToBeClosed() TimedWindow
+	// DeleteWindows deletes the windows from the closed windows list
+	DeleteWindows(response *TimedWindowResponse)
+	// OldestClosedWindowEndTime returns the end time of the oldest closed window
+	OldestClosedWindowEndTime() time.Time
 }
 
 type TimedWindow interface {
@@ -87,13 +91,23 @@ type TimedWindow interface {
 type TimedWindowRequest struct {
 	// event type of the operation on the windows
 	Event Event
-	// IsbMessage represents the isb message
-	IsbMessage *isb.ReadMessage
+	// ReadMessage represents the isb message
+	ReadMessage *isb.ReadMessage
 	// ID represents the partition id
 	// this is to map to the pbq instance to which the message should be assigned
 	ID *partition.ID
 	// windows is the list of windows on which the operation is performed
 	Windows []TimedWindow
+}
+
+type TimedWindowResponse struct {
+	// ReadMessage represents the isb message
+	WriteMessages []*isb.WriteMessage
+	// ID represents the partition id to which the response belongs
+	ID *partition.ID
+	// combinedKey represents the combined key of the window
+	// which was used for demultiplexing the request in server
+	CombinedKey string
 }
 
 // Event represents the event type of the operation on the window
@@ -120,6 +134,31 @@ func (e Event) String() string {
 		return "Merge"
 	case Append:
 		return "Append"
+	default:
+		return "Unknown"
+	}
+}
+
+// Strategy represents the windowing strategy
+type Strategy int
+
+const (
+	Fixed Strategy = iota
+	Sliding
+	Session
+	Global
+)
+
+func (s Strategy) String() string {
+	switch s {
+	case Fixed:
+		return "Fixed"
+	case Sliding:
+		return "Sliding"
+	case Session:
+		return "Session"
+	case Global:
+		return "Global"
 	default:
 		return "Unknown"
 	}

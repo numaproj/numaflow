@@ -248,7 +248,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		opts = append(opts, reduce.WithAllowedLateness(allowedLateness.Duration))
 	}
 
-	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, reduceHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager)
+	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, reduceHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower)
 
 	// for reduce, we read only from one partition
 	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)

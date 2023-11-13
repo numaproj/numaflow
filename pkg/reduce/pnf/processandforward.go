@@ -42,9 +42,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// ProcessAndForward reads messages from pbq, invokes udf using grpc, forwards the results to ISB, and then publishes
+// ProcessAndForward reads messages from pbq, invokes reduceApplier using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
 type ProcessAndForward struct {
 	vertexName     string
@@ -60,6 +61,7 @@ type ProcessAndForward struct {
 	wmPublishers   map[string]publish.Publisher
 	idleManager    wmb.IdleManager
 	pbqManager     *pbq.Manager
+	windower       window.TimedWindower
 }
 
 // newProcessAndForward will return a new ProcessAndForward instance
@@ -74,7 +76,8 @@ func newProcessAndForward(ctx context.Context,
 	whereToDecider forward.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
 	idleManager wmb.IdleManager,
-	manager *pbq.Manager) *ProcessAndForward {
+	manager *pbq.Manager,
+	windower window.TimedWindower) *ProcessAndForward {
 
 	pf := &ProcessAndForward{
 		vertexName:     vertexName,
@@ -89,6 +92,7 @@ func newProcessAndForward(ctx context.Context,
 		wmPublishers:   pw,
 		idleManager:    idleManager,
 		pbqManager:     manager,
+		windower:       windower,
 	}
 
 	return pf
@@ -126,7 +130,7 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 // the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
 // manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
 func (p *ProcessAndForward) AsyncProcessForward(ctx context.Context) {
-	resultMessagesCh, errCh := p.UDF.AsyncApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
+	responseCh, errCh := p.UDF.AsyncApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 
 outerLoop:
 	for {
@@ -138,11 +142,11 @@ outerLoop:
 				return
 			}
 			p.log.Panic("Got an error while invoking AsyncApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
-		case resultMessages, ok := <-resultMessagesCh:
-			if !ok || resultMessages == nil {
+		case response, ok := <-responseCh:
+			if !ok || response == nil {
 				break outerLoop
 			}
-			messagesToStep := p.whereToStep(resultMessages)
+			messagesToStep := p.whereToStep(response.WriteMessages)
 			// store write offsets to publish watermark
 			writeOffsets := make(map[string][][]isb.Offset)
 			for toVertexName, toVertexBuffer := range p.toBuffers {
@@ -175,12 +179,15 @@ outerLoop:
 			// publish watermark, we publish window end time as watermark
 			// but if there's a window that's about to be closed which has a end time before the current window end time,
 			// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
-			nextWindowToBeClosed := p.pbqManager.NextWindowToBeMaterialized()
-			if nextWindowToBeClosed != nil && nextWindowToBeClosed.EndTime().Before(p.PartitionID.End) {
-				p.publishWM(ctx, wmb.Watermark(nextWindowToBeClosed.EndTime().Add(-1*time.Millisecond)), writeOffsets)
+			oldestClosedWindowEndTime := p.windower.OldestClosedWindowEndTime()
+			if oldestClosedWindowEndTime != time.UnixMilli(-1) && oldestClosedWindowEndTime.Before(p.PartitionID.End) {
+				p.publishWM(ctx, wmb.Watermark(oldestClosedWindowEndTime.Add(-1*time.Millisecond)), writeOffsets)
 			} else {
 				p.publishWM(ctx, wmb.Watermark(p.PartitionID.End.Add(-1*time.Millisecond)), writeOffsets)
 			}
+
+			// delete the closed windows which are tracked by the windower
+			p.windower.DeleteWindows(response)
 			// TODO: should we consider compacting the pbq here? Since we have successfully processed all the messages for a window + key.
 			// it could be a async call, we don't need to wait for it to finish.
 		}

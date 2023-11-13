@@ -1,19 +1,18 @@
-///*
-//Copyright 2022 The Numaproj Authors.
+// /*
+// Copyright 2022 The Numaproj Authors.
 //
-//Licensed under the Apache License, Version 2.0 (the "License");
-//you may not use this file except in compliance with the License.
-//You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
-//Unless required by applicable law or agreed to in writing, software
-//distributed under the License is distributed on an "AS IS" BASIS,
-//WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//See the License for the specific language governing permissions and
-//limitations under the License.
-//*/
-//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// */
 package fixed
 
 //
@@ -51,7 +50,7 @@ package fixed
 //					End:   time.Time{},
 //					Slot:  "",
 //				}: &window.Message{
-//					IsbMessage: buildReadMessage(baseTime),
+//					ReadMessage: buildReadMessage(baseTime),
 //
 //				}
 //			},
@@ -253,8 +252,8 @@ package fixed
 //			assert.Equal(t, tt.isPresent, isPresent)
 //			assert.Equal(t, tt.input.Start, ret.StartTime())
 //			assert.Equal(t, tt.input.End, ret.EndTime())
-//			assert.Equal(t, len(tt.expectedWindows), windows.entries.Len())
-//			nodes := windows.entries.Items()
+//			assert.Equal(t, len(tt.expectedWindows), windows.activeWindows.Len())
+//			nodes := windows.activeWindows.Items()
 //			i := 0
 //			for _, kw := range tt.expectedWindows {
 //				assert.Equal(t, kw.StartTime(), nodes[i].StartTime())
@@ -400,9 +399,9 @@ package fixed
 //}
 //
 //func setup(windows *Fixed, wins []*keyed.AlignedKeyedWindow) {
-//	windows.entries = window.NewSortedWindowList[window.AlignedKeyedWindower]()
+//	windows.activeWindows = window.NewSortedWindowList[window.AlignedKeyedWindower]()
 //	for _, win := range wins {
-//		windows.entries.InsertBack(win)
+//		windows.activeWindows.InsertBack(win)
 //	}
 //}
 //

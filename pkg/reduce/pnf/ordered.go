@@ -28,6 +28,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
+	"github.com/numaproj/numaflow/pkg/window"
 
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -58,11 +59,12 @@ type OrderedProcessor struct {
 	taskDone            chan struct{}
 	taskQueue           *list.List
 	pbqManager          *pbq.Manager
-	udf                 applier.ReduceApplier
+	reduceApplier       applier.ReduceApplier
 	toBuffers           map[string][]isb.BufferWriter
 	whereToDecider      forward.ToWhichStepDecider
 	watermarkPublishers map[string]publish.Publisher
 	idleManager         wmb.IdleManager
+	windower            window.TimedWindower
 	log                 *zap.SugaredLogger
 }
 
@@ -74,7 +76,8 @@ func NewOrderedProcessor(ctx context.Context,
 	pbqManager *pbq.Manager,
 	whereToDecider forward.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,
-	idleManager wmb.IdleManager) *OrderedProcessor {
+	idleManager wmb.IdleManager,
+	windower window.TimedWindower) *OrderedProcessor {
 
 	of := &OrderedProcessor{
 		vertexName:          vertexInstance.Vertex.Spec.Name,
@@ -83,11 +86,12 @@ func NewOrderedProcessor(ctx context.Context,
 		taskDone:            make(chan struct{}),
 		taskQueue:           list.New(),
 		pbqManager:          pbqManager,
-		udf:                 udf,
+		reduceApplier:       udf,
 		toBuffers:           toBuffers,
 		whereToDecider:      whereToDecider,
 		watermarkPublishers: watermarkPublishers,
 		idleManager:         idleManager,
+		windower:            windower,
 		log:                 logging.FromContext(ctx),
 	}
 
@@ -108,7 +112,7 @@ func (op *OrderedProcessor) AsyncSchedulePnF(ctx context.Context,
 	partitionID partition.ID,
 	pbq pbq.ReadWriteCloser,
 ) {
-	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager)
+	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.reduceApplier, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager, op.windower)
 	go pf.AsyncProcessForward(ctx)
 }
 
@@ -119,7 +123,7 @@ func (op *OrderedProcessor) SchedulePnF(
 	pbq pbq.ReadWriteCloser,
 ) *ForwardTask {
 
-	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.udf, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager)
+	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.reduceApplier, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager, op.windower)
 
 	doneCh := make(chan struct{})
 	t := &ForwardTask{

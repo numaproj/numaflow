@@ -286,8 +286,8 @@ package sliding
 //			assert.Equal(t, isNew, tt.isPresent)
 //			assert.Equal(t, tt.input.StartTime(), ret.StartTime())
 //			assert.Equal(t, tt.input.EndTime(), ret.EndTime())
-//			assert.Equal(t, len(tt.expectedWindows), windows.entries.Len())
-//			nodes := windows.entries.Items()
+//			assert.Equal(t, len(tt.expectedWindows), windows.activeWindows.Len())
+//			nodes := windows.activeWindows.Items()
 //			i := 0
 //			for _, kw := range tt.expectedWindows {
 //				assert.Equal(t, kw.StartTime(), nodes[i].StartTime())
@@ -321,8 +321,8 @@ package sliding
 //}
 //
 //func setup(windows *Sliding, wins []*keyed.AlignedKeyedWindow) {
-//	windows.entries = window.NewSortedWindowList[window.AlignedKeyedWindower]()
+//	windows.activeWindows = window.NewSortedWindowList[window.AlignedKeyedWindower]()
 //	for _, win := range wins {
-//		windows.entries.InsertBack(win)
+//		windows.activeWindows.InsertBack(win)
 //	}
 //}
