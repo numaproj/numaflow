@@ -145,7 +145,7 @@ export function Cluster() {
             alignItems: "center",
           }}
         >
-          <CircularProgress />
+          <CircularProgress data-testid="cluster-loading-icon" />
         </Box>
       );
     }

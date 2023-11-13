@@ -37,7 +37,8 @@ full-featured stream processing platforms.
 
 ## Roadmap
 
-- Numaflow UI with CRUD and 1.0 Release (11/01/2023)
+- Support for watermark progression even if the source is idling (1.1)
+- Session Window (1.2)
 
 ## Demo
 
