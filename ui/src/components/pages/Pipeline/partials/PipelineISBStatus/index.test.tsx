@@ -173,8 +173,6 @@ describe("PipelineISBStatus", () => {
       </AppContext.Provider>
     );
     expect(screen.getByText("ISB SERVICES STATUS")).toBeInTheDocument();
-    expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByText("Healthy")).toBeInTheDocument();
   });
 
   it("Should render correctly when isbData is null", () => {

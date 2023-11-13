@@ -148,7 +148,7 @@ export function ISBUpdate({
       });
       return;
     }
-    setValidationPayload({ spec: { ...parsed } });
+    setValidationPayload(parsed);
     setValidationMessage(undefined);
   }, []);
 
@@ -170,7 +170,7 @@ export function ISBUpdate({
       });
       return;
     }
-    setSubmitPayload({ spec: { ...parsed } });
+    setSubmitPayload(parsed);
     setValidationMessage(undefined);
   }, []);
 

@@ -76,6 +76,7 @@ export function PipelineCard({
 
   const handleUpdateComplete = useCallback(() => {
     refresh();
+    setPipelineAbleToLoad(false);
     if (!setSidebarProps) {
       return;
     }
@@ -100,7 +101,7 @@ export function PipelineCard({
         setSidebarProps({
           type: SidebarType.ISB_UPDATE,
           specEditorProps: {
-            initialYaml: isbData?.isbService?.spec,
+            initialYaml: isbData?.isbService,
             namespaceId: namespace,
             isbId: isbData?.name,
             viewType: ViewType.EDIT,
@@ -139,6 +140,12 @@ export function PipelineCard({
   }, []);
 
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
+  const isbSize =
+    isbType !== UNKNOWN && isbData?.isbService?.spec[isbType]
+      ? isbData?.isbService?.spec[isbType].replicas
+        ? isbData?.isbService?.spec[isbType].replicas
+        : 3
+      : UNKNOWN;
   const isbStatus = isbData?.isbService?.status?.phase || UNKNOWN;
   const isbHealthStatus = isbData?.status || UNKNOWN;
   const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
@@ -227,8 +234,9 @@ export function PipelineCard({
         sx={{
           display: "flex",
           flexDirection: "column",
-          padding: "1.5rem",
+          // padding: "1.5rem",
           width: "100%",
+          borderRadius: "1rem",
         }}
       >
         <Box
@@ -236,6 +244,10 @@ export function PipelineCard({
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
+            paddingTop: "1rem",
+            paddingLeft: "1rem",
+            paddingRight: "1rem",
+            paddingBottom: "0.8rem",
             alignItems: "center",
           }}
         >
@@ -389,9 +401,14 @@ export function PipelineCard({
         <Box
           sx={{
             display: "flex",
+            background: "#F9F9F9",
             flexDirection: "row",
             flexGrow: 1,
+            padding: "1rem",
+            paddingTop: "0",
             width: "100%",
+            borderBottomLeftRadius: "1rem",
+            borderBottomRightRadius: "1rem",
           }}
         >
           <Grid
@@ -400,6 +417,7 @@ export function PipelineCard({
             sx={{
               background: "#F9F9F9",
               marginTop: "0.625rem",
+              marginLeft: "0",
               flexWrap: "no-wrap",
             }}
           >
@@ -445,7 +463,6 @@ export function PipelineCard({
               <span>{StatusString[statusData?.status]}</span>
             </Box>
           </Grid>
-
           <Grid
             container
             spacing={2}
@@ -463,45 +480,7 @@ export function PipelineCard({
                 paddingLeft: "1rem",
               }}
             >
-              <span>ISB Services:</span>
-              <span>ISB Type:</span>
-              <span>ISB Size:</span>
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
-              }}
-            >
-              <span>{isbData?.name}</span>
-              <span>{isbType}</span>
-              <span>
-                {isbType !== UNKNOWN && isbData?.isbService?.spec[isbType]
-                  ? isbData?.isbService?.spec[isbType].replicas
-                  : UNKNOWN}
-              </span>
-            </Box>
-          </Grid>
-
-          <Grid
-            container
-            spacing={2}
-            sx={{
-              background: "#F9F9F9",
-              marginTop: "0.625rem",
-              flexWrap: "no-wrap",
-            }}
-          >
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
-              }}
-            >
+              <span style={{ fontWeight: "500" }}>ISB Services</span>
               <span>Status:</span>
               <span>Health:</span>
             </Box>
@@ -513,16 +492,45 @@ export function PipelineCard({
                 paddingLeft: "1rem",
               }}
             >
-              <img
-                src={IconsStatusMap[isbStatus]}
-                alt="Status"
-                className={"pipeline-logo"}
-              />
-              <img
-                src={IconsStatusMap[isbHealthStatus]}
-                alt="Health"
-                className={"pipeline-logo"}
-              />
+              <Box sx={{ display: "flex", flexDirection: "row" }}>&nbsp;</Box>
+              <Box sx={{ display: "flex", flexDirection: "row" }}>
+                <img
+                  src={IconsStatusMap[isbStatus]}
+                  alt="Status"
+                  className={"pipeline-logo"}
+                />
+                &nbsp; &nbsp;<span>{ISBStatusString[isbStatus]}</span>
+              </Box>
+              <Box sx={{ display: "flex", flexDirection: "row" }}>
+                <img
+                  src={IconsStatusMap[isbHealthStatus]}
+                  alt="Health"
+                  className={"pipeline-logo"}
+                />
+                &nbsp; &nbsp;<span>{ISBStatusString[isbHealthStatus]}</span>
+              </Box>
+            </Box>
+          </Grid>
+          <Grid
+            container
+            spacing={2}
+            sx={{
+              background: "#F9F9F9",
+              marginTop: "0.625rem",
+              flexWrap: "no-wrap",
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>Name:</span>
+              <span>Type:</span>
+              <span>Size:</span>
             </Box>
             <Box
               sx={{
@@ -532,8 +540,9 @@ export function PipelineCard({
                 paddingLeft: "1rem",
               }}
             >
-              <span>{ISBStatusString[isbStatus]}</span>
-              <span>{ISBStatusString[isbHealthStatus]}</span>
+              <span>{isbData?.name}</span>
+              <span>{isbType}</span>
+              <span>{isbSize}</span>
             </Box>
           </Grid>
           <Grid

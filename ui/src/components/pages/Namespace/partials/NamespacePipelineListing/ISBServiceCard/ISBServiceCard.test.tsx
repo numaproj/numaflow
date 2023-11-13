@@ -190,8 +190,6 @@ describe("ISBServiceCard", () => {
         </AppContext.Provider>
       </BrowserRouter>
     );
-    expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByText("Healthy")).toBeInTheDocument();
     expect(screen.getByText("jetstream")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
   });

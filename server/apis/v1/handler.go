@@ -639,6 +639,8 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 		inputVertexName = c.Param("vertex")
 		pipeline        = c.Param("pipeline")
 		ns              = c.Param("namespace")
+		// dryRun is used to check if the operation is just a validation or an actual create
+		dryRun = strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 	)
 
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
@@ -670,6 +672,22 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 			pl.Spec.Vertices[index] = requestBody
 			break
 		}
+	}
+	err = validateNamespace(h, pl, ns)
+	if err != nil {
+		h.respondWithError(c, err.Error())
+		return
+	}
+	pl.Namespace = ns
+	err = validatePipelineSpec(h, nil, pl, ValidTypeCreate)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", err.Error()))
+		return
+	}
+	// if Validation flag "dryRun" is set to true, return without creating the pipeline
+	if dryRun {
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+		return
 	}
 
 	if _, err := h.numaflowClient.Pipelines(ns).Update(context.Background(), pl, metav1.UpdateOptions{}); err != nil {

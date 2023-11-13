@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
@@ -46,7 +47,7 @@ const (
 
 type CasbinObject struct {
 	enforcer      *casbin.Enforcer
-	userPermCount map[string]int
+	userPermCount *sync.Map
 	currentScopes []string
 	policyDefault string
 	configReader  *viper.Viper
@@ -67,11 +68,10 @@ func NewCasbinObject() (*CasbinObject, error) {
 	logger.Infow("Auth Scopes", "scopes", currentScopes)
 	// Set the default policy for authorization.
 	policyDefault := getDefaultPolicy(configReader)
-	userPermCount := make(map[string]int)
 
 	cas := &CasbinObject{
 		enforcer:      enforcer,
-		userPermCount: userPermCount,
+		userPermCount: &sync.Map{},
 		currentScopes: currentScopes,
 		policyDefault: policyDefault,
 		configReader:  configReader,
@@ -101,14 +101,14 @@ func (cas *CasbinObject) Authorize(c *gin.Context, userInfo *authn.UserInfo) boo
 	// Check for the given scoped list if the user is authorized using any of the subjects in the list.
 	for _, scopedSubject := range scopedList {
 		// Check if the user has permissions in the policy for the given scoped subject.
-		userHasPolicies = userHasPolicies || hasPermissionsDefined(cas.enforcer, scopedSubject, cas.userPermCount)
+		userHasPolicies = userHasPolicies || cas.hasPermissionsDefined(scopedSubject)
 		if ok := enforceCheck(cas.enforcer, scopedSubject, resource, object, action); ok {
 			return ok
 		}
 	}
 	// If the user does not have any policy defined, allocate a default policy for the user.
 	if !userHasPolicies {
-		logger.Infow("No policy defined for the user, allocating default policy",
+		logger.Debugw("No policy defined for the user, allocating default policy",
 			"DefaultPolicy", cas.policyDefault)
 		ok := enforceCheck(cas.enforcer, cas.policyDefault, resource, object, action)
 		if ok {
@@ -277,7 +277,8 @@ func (cas *CasbinObject) configFileReload(e fsnotify.Event) {
 	// update the default policy
 	cas.policyDefault = getDefaultPolicy(cas.configReader)
 	// clear the userPermCount cache
-	cas.userPermCount = make(map[string]int)
+	cas.userPermCount = &sync.Map{}
+
 	logger.Infow("Auth Scopes Updated", "scopes", cas.currentScopes)
 }
 
@@ -295,26 +296,24 @@ func getDefaultPolicy(config *viper.Viper) string {
 // We have a cache userPermCount to store the count of permissions for a user. If the user has permissions in the
 // policy, we store the count in the cache and return based on the value.
 // If the user does not have permissions in the policy, we add it to the cache before returning
-func hasPermissionsDefined(enforcer *casbin.Enforcer, user string, userPermCount map[string]int) bool {
+func (cas *CasbinObject) hasPermissionsDefined(user string) bool {
 	// check if user exists in userPermCount
-	if userPermCount == nil {
-		userPermCount = make(map[string]int)
-	}
-	val, ok := userPermCount[user]
+	val, ok := cas.userPermCount.Load(user)
 	// If the key exists
 	if ok {
 		// Return true if the user has permissions in the policy
 		// and false if the user does not have permissions in the policy.
-		return val > 0
+		return val.(bool)
 	}
 	// get the permissions for the user
-	cnt, err := enforcer.GetImplicitPermissionsForUser(user)
+	cnt, err := cas.enforcer.GetImplicitPermissionsForUser(user)
 	if err != nil {
 		logger.Errorw("Failed to get permissions for user", "user", user, "error", err)
 		return false
 	}
-	count := len(cnt)
+	// If the user has permissions in the policy, len(cnt) > 0
+	hasPerms := len(cnt) > 0
 	// store the count in userPermCount
-	userPermCount[user] = count
-	return count > 0
+	cas.userPermCount.Store(user, hasPerms)
+	return hasPerms
 }

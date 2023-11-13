@@ -48,8 +48,9 @@ export function DebouncedSearchInput({
     <TextField
       sx={{
         background: "#FFFFFF",
-        width: "50%",
+        flexGrow: "2",
         maxWidth: "39.375rem",
+        minWidth: "15.625rem",
         border: "1px solid #6B6C72",
         borderRadius: "0.25rem",
       }}
