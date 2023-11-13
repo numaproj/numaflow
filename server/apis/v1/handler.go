@@ -449,7 +449,6 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 		return
 	}
 
-	// TODO: validate the patched data as well, e.g. only allow lifecycle to be patched
 	if _, err := h.numaflowClient.Pipelines(ns).Patch(context.Background(), pipeline, types.MergePatchType, patchSpec, metav1.PatchOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q, %s", pipeline, err.Error()))
 		return
