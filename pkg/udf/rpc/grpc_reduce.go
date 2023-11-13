@@ -74,7 +74,7 @@ func (u *GRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 }
 
 // ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) ([]*isb.WriteMessage, error) {
+func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
 	var (
 		result     *reducepb.ReduceResponse
 		err        error
@@ -145,27 +145,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 				return nil, convertToUdfError(err)
 			}
 		case result = <-responseCh:
-			taggedMessages := make([]*isb.WriteMessage, 0)
-			for _, response := range result.GetResults() {
-				keys := response.Keys
-				taggedMessage := &isb.WriteMessage{
-					Message: isb.Message{
-						Header: isb.Header{
-							MessageInfo: isb.MessageInfo{
-								EventTime: partitionID.End.Add(-1 * time.Millisecond),
-								IsLate:    false,
-							},
-							Keys: keys,
-						},
-						Body: isb.Body{
-							Payload: response.Value,
-						},
-					},
-					Tags: response.Tags,
-				}
-				taggedMessages = append(taggedMessages, taggedMessage)
-			}
-			return taggedMessages, nil
+			return parseReduceResponse(result), nil
 		case <-ctx.Done():
 			return nil, convertToUdfError(ctx.Err())
 		}
@@ -251,18 +231,14 @@ func createReduceRequest(windowRequest *window.TimedWindowRequest) *reducepb.Red
 		})
 	}
 	// for fixed and sliding window event can be either open, close or append
-	switch windowRequest.Event {
+	switch windowRequest.Operation {
 	case window.Open:
-		println("window open event for window - ", partitions[0].String())
 		windowOp = reducepb.ReduceRequest_WindowOperation_OPEN
 	case window.Close:
-		println("window close event for window - ", partitions[0].String())
 		windowOp = reducepb.ReduceRequest_WindowOperation_CLOSE
 	case window.Delete:
-		println("window close event for window - ", partitions[0].String())
 		windowOp = reducepb.ReduceRequest_WindowOperation_CLOSE
 	default:
-		println("window append event for window - ", partitions[0].String())
 		windowOp = reducepb.ReduceRequest_WindowOperation_APPEND
 	}
 

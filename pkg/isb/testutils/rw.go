@@ -28,6 +28,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // PayloadForTest is a dummy payload for testing.
@@ -60,6 +61,20 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 	}
 
 	return messages
+}
+
+// BuildTestWindowRequests builds test window.TimedWindowRequest which can be used for testing.
+func BuildTestWindowRequests(count int64, startTime time.Time, windowOp window.Operation) []window.TimedWindowRequest {
+	var readMessages = BuildTestReadMessages(count, startTime)
+	var windowRequests = make([]window.TimedWindowRequest, count)
+
+	for idx, readMessage := range readMessages {
+		windowRequests[idx] = window.TimedWindowRequest{
+			ReadMessage: &readMessage,
+			Operation:   windowOp,
+		}
+	}
+	return windowRequests
 }
 
 // BuildTestReadMessages builds test isb.ReadMessage which can be used for testing.

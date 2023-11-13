@@ -62,6 +62,12 @@ func (s *SortedWindowListByEndTime[W]) Insert(window W) {
 		return !s.windows[i].EndTime().Before(window.EndTime())
 	})
 
+	// Insert the window at the end of the list, since it is the largest
+	if index == len(s.windows) {
+		s.windows = append(s.windows, window)
+		return
+	}
+
 	// Insert the window at the middle position
 	s.windows = append(s.windows[:index+1], s.windows[index:]...)
 	s.windows[index] = window
@@ -192,11 +198,11 @@ func (s *SortedWindowListByEndTime[W]) FindWindowForTime(t time.Time) (W, bool) 
 	defer s.lock.RUnlock()
 
 	index := sort.Search(len(s.windows), func(i int) bool {
-		return !s.windows[i].EndTime().Before(t)
+		return !s.windows[i].EndTime().After(t)
 	})
 
 	for i := index; i < len(s.windows); i++ {
-		if !s.windows[i].StartTime().Before(t) && s.windows[i].EndTime().After(t) {
+		if !s.windows[i].StartTime().After(t) && s.windows[i].EndTime().After(t) {
 			return s.windows[i], true
 		}
 

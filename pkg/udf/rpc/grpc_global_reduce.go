@@ -73,8 +73,8 @@ func (u *GRPCBasedGlobalReduce) WaitUntilReady(ctx context.Context) error {
 }
 
 // ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *GRPCBasedGlobalReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) ([]*isb.WriteMessage, error) {
-	return nil, fmt.Errorf("not implemented")
+func (u *GRPCBasedGlobalReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
+	return nil, fmt.Errorf("only async is supported for global reduce")
 }
 
 // AsyncApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
@@ -156,7 +156,7 @@ func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *global
 		})
 	}
 	// for fixed and sliding window event can be either open, close or append
-	switch windowRequest.Event {
+	switch windowRequest.Operation {
 	case window.Open:
 		windowOp = globalreducepb.GlobalReduceRequest_WindowOperation_OPEN
 	case window.Close:

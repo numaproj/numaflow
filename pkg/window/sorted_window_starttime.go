@@ -29,9 +29,9 @@ type SortedWindowListByStartTime[W TimedWindow] struct {
 	lock    *sync.RWMutex
 }
 
-// NewSortedWindowList implements a window list ordered by the start time. The Front/Head of the list will always have the smallest
+// NewSortedWindowListByStartTime implements a window list ordered by the start time. The Front/Head of the list will always have the smallest
 // element while the End/Tail will have the largest element (start time).
-func NewSortedWindowList[W TimedWindow]() *SortedWindowListByStartTime[W] {
+func NewSortedWindowListByStartTime[W TimedWindow]() *SortedWindowListByStartTime[W] {
 	return &SortedWindowListByStartTime[W]{
 		windows: make([]W, 0),
 		lock:    &sync.RWMutex{},
@@ -77,6 +77,12 @@ func (s *SortedWindowListByStartTime[W]) Insert(window W) {
 	index := sort.Search(len(s.windows), func(i int) bool {
 		return !s.windows[i].StartTime().Before(window.StartTime())
 	})
+
+	// Insert the window at the end of the list, since it is the largest
+	if index == len(s.windows) {
+		s.windows = append(s.windows, window)
+		return
+	}
 
 	// Insert the window at the middle position
 	s.windows = append(s.windows[:index+1], s.windows[index:]...)
@@ -206,12 +212,17 @@ func (s *SortedWindowListByStartTime[W]) FindWindowForTime(t time.Time) (W, bool
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
+	// find a window that starts before the given time
 	index := sort.Search(len(s.windows), func(i int) bool {
-		return !s.windows[i].StartTime().Before(t)
+		return !s.windows[i].StartTime().After(t)
 	})
 
+	println("index - ", index)
+	println("len - ", len(s.windows))
+
 	for i := index; i < len(s.windows); i++ {
-		if !s.windows[i].StartTime().Before(t) && s.windows[i].EndTime().After(t) {
+		if !s.windows[i].StartTime().After(t) && s.windows[i].EndTime().After(t) {
+			println("found")
 			return s.windows[i], true
 		}
 

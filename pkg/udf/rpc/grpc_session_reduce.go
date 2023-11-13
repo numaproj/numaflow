@@ -73,7 +73,7 @@ func (u *GRPCBasedSessionReduce) WaitUntilReady(ctx context.Context) error {
 }
 
 // ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *GRPCBasedSessionReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) ([]*isb.WriteMessage, error) {
+func (u *GRPCBasedSessionReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -156,7 +156,7 @@ func createSessionReduceRequest(windowRequest *window.TimedWindowRequest) *sessi
 		})
 	}
 	// for fixed and sliding window event can be either open, close or append
-	switch windowRequest.Event {
+	switch windowRequest.Operation {
 	case window.Open:
 		windowOp = sessionreducepb.SessionReduceRequest_WindowOperation_OPEN
 	case window.Close:

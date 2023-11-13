@@ -47,25 +47,25 @@ type PBQ struct {
 
 var _ ReadWriteCloser = (*PBQ)(nil)
 
-// Write writes message to pbq and persistent store
-func (p *PBQ) Write(ctx context.Context, message *window.TimedWindowRequest) error {
+// Write accepts a window request and writes it to the PBQ, only the isb message is written to the store
+func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) error {
 	// if cob we should return
 	if p.cob {
-		p.log.Errorw("Failed to write message to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", message.ReadMessage.Header), zap.Any("message", message))
+		p.log.Errorw("Failed to write request to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", request.ReadMessage.Header), zap.Any("request", request))
+		return nil
+	}
+	// RETHINK: I am not sure if we should be doing this here. We should probably do this in the writer.
+	// if the window operation is delete, we should close the output channel and return
+	if request != nil && request.Operation == window.Delete {
+		close(p.output)
 		return nil
 	}
 	var writeErr error
 	// we need context to get out of blocking write
 	select {
-	case p.output <- message:
-		// RETHINK: I am not sure if we should be doing this here. We should probably do this in the writer.
-		if message.Event == window.Delete {
-			close(p.output)
-		}
-		// this store.Write is an `inSync` flush (if need be). The performance will be very bad but the system is correct.
-		// TODO: shortly in the near future we will move to async writes.
-		if message.ReadMessage != nil {
-			writeErr = p.store.Write(message.ReadMessage)
+	case p.output <- request:
+		if request.ReadMessage != nil {
+			writeErr = p.store.Write(request.ReadMessage)
 		}
 	case <-ctx.Done():
 		// closing the output channel will not cause panic, since its inside select case
@@ -99,7 +99,7 @@ func (p *PBQ) Close() error {
 	return nil
 }
 
-// ReadCh exposes read channel to read messages from PBQ
+// ReadCh exposes read channel to read the window requests from the PBQ
 // close on read channel indicates COB
 func (p *PBQ) ReadCh() <-chan *window.TimedWindowRequest {
 	return p.output
@@ -118,6 +118,7 @@ func (p *PBQ) GC() error {
 
 // replayRecordsFromStore replays store messages when replay flag is set during start up time. It replays by reading from
 // the store and writing to the PBQ channel.
+// FIXME: works only for fixed and sliding window
 func (p *PBQ) replayRecordsFromStore(ctx context.Context) {
 	size := p.options.readBatchSize
 readLoop:
@@ -129,10 +130,10 @@ readLoop:
 		for _, msg := range readMessages {
 			// select to avoid infinite blocking while writing to output channel
 			select {
-			//FIXME empty window op doesn't work. We need to fix this.
+			//FIXME only works for fixed and sliding window
 			case p.output <- &window.TimedWindowRequest{
 				ReadMessage: msg,
-				Event:       window.Append,
+				Operation:   window.Append,
 				Windows:     nil,
 			}:
 			case <-ctx.Done():

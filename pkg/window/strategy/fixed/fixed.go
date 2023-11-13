@@ -35,8 +35,10 @@ type Window struct {
 	startTime time.Time
 	endTime   time.Time
 	slot      string
+	keys      []string
 }
 
+// NewWindow returns a new window for the given message.
 func NewWindow(length time.Duration, message *isb.ReadMessage) window.TimedWindow {
 	start := message.EventTime.Truncate(length)
 	end := start.Add(length)
@@ -48,6 +50,15 @@ func NewWindow(length time.Duration, message *isb.ReadMessage) window.TimedWindo
 		startTime: start,
 		endTime:   end,
 		slot:      slot,
+		keys:      message.Keys,
+	}
+}
+
+func NewWindowFromPartition(id *partition.ID) window.TimedWindow {
+	return &Window{
+		startTime: id.Start,
+		endTime:   id.End,
+		slot:      id.Slot,
 	}
 }
 
@@ -61,6 +72,10 @@ func (w *Window) EndTime() time.Time {
 
 func (w *Window) Slot() string {
 	return w.slot
+}
+
+func (w *Window) Keys() []string {
+	return w.keys
 }
 
 func (w *Window) Partition() *partition.ID {
@@ -99,6 +114,9 @@ type Windower struct {
 	// we track all the active windows, we store the windows sorted by start time
 	// so its easy to find the window
 	activeWindows *window.SortedWindowListByEndTime[window.TimedWindow]
+	// closedWindows is a list of closed windows which are yet to be GCed
+	// we need to track the close windows because while publishing the watermark
+	// for a fixed window, we need to compare the watermark with the oldest closed window
 	closedWindows *window.SortedWindowListByEndTime[window.TimedWindow]
 }
 
@@ -110,6 +128,10 @@ func NewWindower(length time.Duration) window.TimedWindower {
 	}
 }
 
+func (w *Windower) Strategy() window.Strategy {
+	return window.Fixed
+}
+
 // AssignWindows assigns the event to the window based on give window configuration.
 // AssignWindows returns a map of partition id to window message. Partition id is used to
 // identify the pbq instance to which the message should be assigned. Window message contains
@@ -119,28 +141,32 @@ func NewWindower(length time.Duration) window.TimedWindower {
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	win, isPresent := w.activeWindows.InsertIfNotPresent(NewWindow(w.length, message))
 	winOp := &window.TimedWindowRequest{
-		Event:       window.Append,
+		Operation:   window.Append,
 		Windows:     []window.TimedWindow{win},
 		ReadMessage: message,
 		ID:          win.Partition(),
 	}
 	if !isPresent {
-		winOp.Event = window.Open
+		winOp.Operation = window.Open
 	}
 	return []*window.TimedWindowRequest{winOp}
 }
 
+// InsertWindow inserts window to the list of active windows
+func (w *Windower) InsertWindow(tw window.TimedWindow) {
+	w.activeWindows.InsertIfNotPresent(tw)
+}
+
 // CloseWindows closes the windows that are past the watermark.
-// CloseWindows returns a map of partition id to window message which should be closed.
-// Partition id is used to identify the pbq instance to which the message should be assigned.
-// Window message contains operation. Window operation contains the delete event type.
+// returns a list of TimedWindowRequests, each request contains the window operation and the window
+// which needs to be closed.
 func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 	winOperations := make([]*window.TimedWindowRequest, 0)
 	closedWindows := w.activeWindows.RemoveWindows(time)
 	for _, win := range closedWindows {
 		winOp := &window.TimedWindowRequest{
 			ReadMessage: nil,
-			Event:       window.Delete,
+			Operation:   window.Delete,
 			Windows:     []window.TimedWindow{win},
 			ID:          win.Partition(),
 		}
@@ -155,8 +181,8 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 	return w.activeWindows.Front()
 }
 
-// DeleteWindows deletes the windows from the closed windows list
-func (w *Windower) DeleteWindows(response *window.TimedWindowResponse) {
+// DeleteClosedWindows deletes the windows from the closed windows list
+func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
 	w.closedWindows.Delete(&Window{
 		startTime: response.ID.Start,
 		endTime:   response.ID.End,
@@ -164,6 +190,7 @@ func (w *Windower) DeleteWindows(response *window.TimedWindowResponse) {
 	})
 }
 
+// OldestClosedWindowEndTime returns the end time of the oldest closed window.
 func (w *Windower) OldestClosedWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()

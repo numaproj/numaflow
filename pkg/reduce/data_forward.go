@@ -50,6 +50,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
+	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 )
 
 // DataForward is responsible for reading and forwarding the message from ISB to PBQ.
@@ -143,40 +145,38 @@ func (df *DataForward) Start() {
 	}
 }
 
-// FIXME replay is not supported yet, I have to figure out how to do it
 // ReplayPersistedMessages replays persisted messages, because during boot up, it has to replay the data from the persistent store of
 // PBQ before it can start reading from ISB. ReplayPersistedMessages will return only after the replay has been completed.
-//func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
-//	// start the PBQManager which discovers and builds the state from persistent store of the PBQ.
-//	partitions, err := df.pbqManager.GetExistingPartitions(ctx)
-//	if err != nil {
-//		return err
-//	}
-//
-//	df.log.Infow("Partitions to be replayed ", zap.Int("count", len(partitions)), zap.Any("partitions", partitions))
-//
-//	for _, p := range partitions {
-//		// Open keyed window for a given partition
-//		// so that the window can be closed when the watermark
-//		// crosses the window.
-//
-//		alignedKeyedWindow := keyed.NewKeyedWindow(p.Start, p.End)
-//
-//		// insert the window to the list of active windows, since the active window list is in-memory
-//		keyedWindow, _ := df.windower.InsertIfNotPresent(alignedKeyedWindow)
-//
-//		// add slots to the window, so that when a new message with the watermark greater than
-//		// the window end time comes, slots will not be lost and the windows will be closed as expected
-//		keyedWindow.AddSlot(p.Slot)
-//
-//		// create and invoke process and forward for the partition
-//		df.associatePBQAndPnF(ctx, p)
-//	}
-//
-//	// replays the data (replay internally writes the data from persistent store on to the PBQ)
-//	df.pbqManager.Replay(ctx)
-//	return nil
-//}
+func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
+	// start the PBQManager which discovers and builds the state from persistent store of the PBQ.
+	partitions, err := df.pbqManager.GetExistingPartitions(ctx)
+	if err != nil {
+		return err
+	}
+
+	df.log.Infow("Partitions to be replayed ", zap.Int("count", len(partitions)), zap.Any("partitions", partitions))
+
+	for _, p := range partitions {
+		// Open keyed window for a given partition
+		// so that the window can be closed when the watermark
+		// crosses the window.
+		var timedWindow window.TimedWindow
+
+		if df.windower.Strategy() == window.Fixed {
+			timedWindow = fixed.NewWindowFromPartition(&p)
+		} else if df.windower.Strategy() == window.Sliding {
+			timedWindow = sliding.NewWindowFromPartition(&p)
+		}
+
+		df.windower.InsertWindow(timedWindow)
+
+		df.associatePBQAndPnF(ctx, &p)
+	}
+
+	// replays the data (replay internally writes the data from persistent store on to the PBQ)
+	df.pbqManager.Replay(ctx)
+	return nil
+}
 
 // forwardAChunk reads a chunk of messages from isb and assigns watermark to messages
 // and writes the messages to pbq

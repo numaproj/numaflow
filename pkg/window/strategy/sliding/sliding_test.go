@@ -15,314 +15,298 @@
 // */
 package sliding
 
-//
-//import (
-//	"testing"
-//	"time"
-//
-//	"github.com/stretchr/testify/assert"
-//
-//	"github.com/numaproj/numaflow/pkg/window"
-//	"github.com/numaproj/numaflow/pkg/window/keyed"
-//)
-//
-//// TestSliding_AssignWindow tests the assignment of element to a set of windows
-//func TestSliding_AssignWindow(t *testing.T) {
-//	baseTime := time.Unix(600, 0)
-//
-//	tests := []struct {
-//		name      string
-//		length    time.Duration
-//		slide     time.Duration
-//		eventTime time.Time
-//		expected  []window.AlignedKeyedWindower
-//	}{
-//		{
-//			name:      "length divisible by slide",
-//			length:    time.Minute,
-//			slide:     20 * time.Second,
-//			eventTime: baseTime.Add(10 * time.Second),
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
-//				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
-//				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
-//			},
-//		},
-//		{
-//			name:      "length not divisible by slide",
-//			length:    time.Minute,
-//			slide:     40 * time.Second,
-//			eventTime: baseTime.Add(10 * time.Second),
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
-//				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
-//			},
-//		},
-//		{
-//			name:      "prime slide",
-//			length:    time.Minute,
-//			slide:     41 * time.Second,
-//			eventTime: baseTime.Add(10 * time.Second),
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(574, 0), time.Unix(634, 0)),
-//			},
-//		},
-//		{
-//			name:      "element eq start time",
-//			length:    time.Minute,
-//			slide:     20 * time.Second,
-//			eventTime: baseTime,
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
-//				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
-//				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
-//			},
-//		},
-//		{
-//			name:      "element eq end time",
-//			length:    time.Minute,
-//			slide:     20 * time.Second,
-//			eventTime: baseTime.Add(time.Minute),
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(660, 0), time.Unix(720, 0)),
-//				keyed.NewKeyedWindow(time.Unix(640, 0), time.Unix(700, 0)),
-//				keyed.NewKeyedWindow(time.Unix(620, 0), time.Unix(680, 0)),
-//			},
-//		},
-//		{
-//			name:      "element on right",
-//			length:    time.Minute,
-//			slide:     20 * time.Second,
-//			eventTime: baseTime.Add(time.Nanosecond),
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
-//				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
-//				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
-//			},
-//		},
-//		{
-//			name:      "element on left",
-//			length:    time.Minute,
-//			slide:     20 * time.Second,
-//			eventTime: baseTime.Add(-time.Nanosecond),
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
-//				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(620, 0)),
-//				keyed.NewKeyedWindow(time.Unix(540, 0), time.Unix(600, 0)),
-//			},
-//		},
-//		{
-//			name:      "element on a window boundary",
-//			length:    time.Minute,
-//			slide:     20 * time.Second,
-//			eventTime: baseTime.Add(20 * time.Second),
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(620, 0), time.Unix(680, 0)),
-//				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
-//				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
-//			},
-//		},
-//		{
-//			name:      "element on a window boundary plus one",
-//			length:    time.Minute,
-//			slide:     20 * time.Second,
-//			eventTime: baseTime.Add(21 * time.Second),
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(620, 0), time.Unix(680, 0)),
-//				keyed.NewKeyedWindow(time.Unix(600, 0), time.Unix(660, 0)),
-//				keyed.NewKeyedWindow(time.Unix(580, 0), time.Unix(640, 0)),
-//			},
-//		},
-//		{
-//			name:      "length not divisible by slide test 1",
-//			length:    time.Second * 600,
-//			slide:     70 * time.Second,
-//			eventTime: baseTime.Add(210 * time.Second), // 810
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(770, 0), time.Unix(1370, 0)),
-//				keyed.NewKeyedWindow(time.Unix(700, 0), time.Unix(1300, 0)),
-//				keyed.NewKeyedWindow(time.Unix(630, 0), time.Unix(1230, 0)),
-//				keyed.NewKeyedWindow(time.Unix(560, 0), time.Unix(1160, 0)),
-//				keyed.NewKeyedWindow(time.Unix(490, 0), time.Unix(1090, 0)),
-//				keyed.NewKeyedWindow(time.Unix(420, 0), time.Unix(1020, 0)),
-//				keyed.NewKeyedWindow(time.Unix(350, 0), time.Unix(950, 0)),
-//				keyed.NewKeyedWindow(time.Unix(280, 0), time.Unix(880, 0)),
-//			},
-//		},
-//		{
-//			name:      "length not divisible by slide test 2",
-//			length:    time.Second * 600,
-//			slide:     70 * time.Second,
-//			eventTime: baseTime.Add(610 * time.Second), // 1210
-//			expected: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(1190, 0), time.Unix(1790, 0)),
-//				keyed.NewKeyedWindow(time.Unix(1120, 0), time.Unix(1720, 0)),
-//				keyed.NewKeyedWindow(time.Unix(1050, 0), time.Unix(1650, 0)),
-//				keyed.NewKeyedWindow(time.Unix(980, 0), time.Unix(1580, 0)),
-//				keyed.NewKeyedWindow(time.Unix(910, 0), time.Unix(1510, 0)),
-//				keyed.NewKeyedWindow(time.Unix(840, 0), time.Unix(1440, 0)),
-//				keyed.NewKeyedWindow(time.Unix(770, 0), time.Unix(1370, 0)),
-//				keyed.NewKeyedWindow(time.Unix(700, 0), time.Unix(1300, 0)),
-//				keyed.NewKeyedWindow(time.Unix(630, 0), time.Unix(1230, 0)),
-//			},
-//		},
-//	}
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			s := NewSliding(tt.length, tt.slide)
-//			got := s.AssignWindow(tt.eventTime)
-//			assert.Len(t, got, len(tt.expected))
-//			assert.Equal(t, tt.expected, got)
-//		})
-//	}
-//}
-//
-//func TestAligned_CreateWindow(t *testing.T) {
-//	windows := NewSliding(60*time.Second, 20*time.Second)
-//	tests := []struct {
-//		name            string
-//		given           []*keyed.AlignedKeyedWindow
-//		input           *keyed.AlignedKeyedWindow
-//		expectedWindows []window.AlignedKeyedWindower
-//		isPresent       bool
-//	}{
-//		{
-//			name:  "FirstWindow",
-//			given: []*keyed.AlignedKeyedWindow{},
-//			input: keyed.NewKeyedWindow(time.Unix(0, 0), time.Unix(60, 0)),
-//			expectedWindows: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(0, 0), time.Unix(60, 0)),
-//			},
-//			isPresent: false,
-//		},
-//		{
-//			name: "overlapping_windows",
-//			given: []*keyed.AlignedKeyedWindow{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//			},
-//			input: keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//			expectedWindows: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//			},
-//			isPresent: false,
-//		},
-//		{
-//			name: "early_window",
-//			given: []*keyed.AlignedKeyedWindow{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//			},
-//			input: keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
-//			expectedWindows: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
-//			},
-//			isPresent: false,
-//		},
-//		{
-//			name: "insert_middle",
-//			given: []*keyed.AlignedKeyedWindow{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
-//			},
-//			input: keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//			expectedWindows: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
-//			},
-//			isPresent: false,
-//		},
-//		{
-//			name: "existing_windows",
-//			given: []*keyed.AlignedKeyedWindow{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
-//			},
-//			input: keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//			expectedWindows: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
-//			},
-//			isPresent: true,
-//		},
-//		{
-//			name: "existing_early_window",
-//			given: []*keyed.AlignedKeyedWindow{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
-//			},
-//			input: keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//			expectedWindows: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
-//			},
-//			isPresent: true,
-//		},
-//		{
-//			name: "existing_latest_window",
-//			given: []*keyed.AlignedKeyedWindow{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
-//			},
-//			input: keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
-//			expectedWindows: []window.AlignedKeyedWindower{
-//				keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//				keyed.NewKeyedWindow(time.Unix(140, 0), time.Unix(200, 0)),
-//				keyed.NewKeyedWindow(time.Unix(160, 0), time.Unix(220, 0)),
-//			},
-//			isPresent: true,
-//		},
-//	}
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			setup(windows, tt.given)
-//			ret, isNew := windows.InsertIfNotPresent(tt.input)
-//			assert.Equal(t, isNew, tt.isPresent)
-//			assert.Equal(t, tt.input.StartTime(), ret.StartTime())
-//			assert.Equal(t, tt.input.EndTime(), ret.EndTime())
-//			assert.Equal(t, len(tt.expectedWindows), windows.activeWindows.Len())
-//			nodes := windows.activeWindows.Items()
-//			i := 0
-//			for _, kw := range tt.expectedWindows {
-//				assert.Equal(t, kw.StartTime(), nodes[i].StartTime())
-//				assert.Equal(t, kw.EndTime(), nodes[i].EndTime())
-//				i += 1
-//			}
-//		})
-//	}
-//}
-//
-//func TestSliding_RemoveWindows(t *testing.T) {
-//	var (
-//		length          = time.Second * 60
-//		slide           = time.Second * 10
-//		slidWin         = NewSliding(length, slide)
-//		eventTime       = time.Unix(60, 0)
-//		expectedWindows = []window.AlignedKeyedWindower{
-//			keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
-//			keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-//			keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
-//			keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
-//		}
-//	)
-//	for i := 0; i < 10000; i++ {
-//		win := keyed.NewKeyedWindow(eventTime, eventTime.Add(length))
-//		slidWin.InsertIfNotPresent(win)
-//		eventTime = eventTime.Add(length)
-//	}
-//	closeWin := slidWin.RemoveWindows(time.Unix(300, 0))
-//	assert.Equal(t, closeWin, expectedWindows)
-//}
-//
-//func setup(windows *Sliding, wins []*keyed.AlignedKeyedWindow) {
-//	windows.activeWindows = window.NewSortedWindowList[window.AlignedKeyedWindower]()
-//	for _, win := range wins {
-//		windows.activeWindows.InsertBack(win)
-//	}
-//}
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/window"
+)
+
+func TestSliding_AssignWindowsLengthDivisibleBySlide(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+	windower := NewWindower(time.Minute, 20*time.Second)
+
+	readMsg := buildReadMessage(baseTime.Add(10 * time.Second))
+	windowRequests := windower.AssignWindows(readMsg)
+
+	// since this is the first message, the window operation should be open
+	assert.Equal(t, 3, len(windowRequests))
+	assert.Equal(t, baseTime, windowRequests[0].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(60*time.Second), windowRequests[0].Windows[0].EndTime())
+	assert.Equal(t, &partition.ID{
+		Start: baseTime,
+		End:   baseTime.Add(60 * time.Second),
+		Slot:  "slot-0",
+	}, windowRequests[0].Windows[0].Partition())
+	assert.Equal(t, window.Open, windowRequests[0].Operation)
+
+	assert.Equal(t, baseTime.Add(-20*time.Second), windowRequests[1].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(40*time.Second), windowRequests[1].Windows[0].EndTime())
+	assert.Equal(t, &partition.ID{
+		Start: baseTime.Add(-20 * time.Second),
+		End:   baseTime.Add(40 * time.Second),
+		Slot:  "slot-0",
+	}, windowRequests[1].Windows[0].Partition())
+	assert.Equal(t, window.Open, windowRequests[1].Operation)
+
+	assert.Equal(t, baseTime.Add(-40*time.Second), windowRequests[2].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(20*time.Second), windowRequests[2].Windows[0].EndTime())
+	assert.Equal(t, &partition.ID{
+		Start: baseTime.Add(-40 * time.Second),
+		End:   baseTime.Add(20 * time.Second),
+		Slot:  "slot-0",
+	}, windowRequests[2].Windows[0].Partition())
+	assert.Equal(t, window.Open, windowRequests[2].Operation)
+
+	readMsg = buildReadMessage(baseTime.Add(1 * time.Second))
+	windowRequests = windower.AssignWindows(readMsg)
+
+	assert.Equal(t, 3, len(windowRequests))
+	assert.Equal(t, window.Append, windowRequests[0].Operation)
+	assert.Equal(t, window.Append, windowRequests[1].Operation)
+	assert.Equal(t, window.Append, windowRequests[2].Operation)
+}
+
+// TODO add more tests to cover AssignWindow edge cases
+func TestSliding_AssignWindowsLengthNotDivisibleBySlide(t *testing.T) {
+	// length 60s, slide 40s
+	baseTime := time.Unix(600, 0)
+	windower := NewWindower(time.Minute, 40*time.Second)
+
+	readMsg := buildReadMessage(baseTime.Add(10 * time.Second))
+	windowRequests := windower.AssignWindows(readMsg)
+
+	// since this is the first message, the window operation should be open
+	assert.Equal(t, 2, len(windowRequests))
+	assert.Equal(t, time.Unix(600, 0), windowRequests[0].Windows[0].StartTime())
+	assert.Equal(t, time.Unix(660, 0), windowRequests[0].Windows[0].EndTime())
+	assert.Equal(t, &partition.ID{
+		Start: time.Unix(600, 0),
+		End:   time.Unix(660, 0),
+		Slot:  "slot-0",
+	}, windowRequests[0].Windows[0].Partition())
+	assert.Equal(t, window.Open, windowRequests[0].Operation)
+
+	assert.Equal(t, time.Unix(560, 0), windowRequests[1].Windows[0].StartTime())
+	assert.Equal(t, time.Unix(620, 0), windowRequests[1].Windows[0].EndTime())
+	assert.Equal(t, &partition.ID{
+		Start: time.Unix(560, 0),
+		End:   time.Unix(620, 0),
+		Slot:  "slot-0",
+	}, windowRequests[1].Windows[0].Partition())
+	assert.Equal(t, window.Open, windowRequests[1].Operation)
+
+	readMsg = buildReadMessage(baseTime.Add(1 * time.Second))
+	windowRequests = windower.AssignWindows(readMsg)
+
+	assert.Equal(t, 2, len(windowRequests))
+	assert.Equal(t, window.Append, windowRequests[0].Operation)
+	assert.Equal(t, window.Append, windowRequests[1].Operation)
+}
+
+func TestSliding_InsertWindow(t *testing.T) {
+	win := &Window{
+		startTime: time.UnixMilli(60000),
+		endTime:   time.UnixMilli(60000 + 60*1000),
+		slot:      "slot-0",
+	}
+
+	windower := &Windower{
+		length:        60 * time.Second,
+		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+	}
+
+	windower.InsertWindow(win)
+
+	// since this is the first time the window is inserted, the active windows should be 1
+	assert.Equal(t, 1, windower.activeWindows.Len())
+
+	windower.InsertWindow(win)
+
+	// since this is the second time we are inserting the same window, the active windows should be 1
+	assert.Equal(t, 1, windower.activeWindows.Len())
+
+	win = &Window{
+		startTime: time.UnixMilli(120000),
+		endTime:   time.UnixMilli(120000 + 60*1000),
+		slot:      "slot-0",
+	}
+
+	windower.InsertWindow(win)
+
+	// since this is a different window, the active windows should be 2
+	assert.Equal(t, 2, windower.activeWindows.Len())
+}
+
+func TestSliding_CloseWindows(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+
+	win1 := &Window{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
+	}
+	win2 := &Window{
+		startTime: baseTime.Add(-10 * time.Second),
+		endTime:   baseTime.Add(50 * time.Second),
+	}
+	win3 := &Window{
+		startTime: baseTime.Add(-20 * time.Second),
+		endTime:   baseTime.Add(40 * time.Second),
+	}
+
+	windower := NewWindower(60*time.Second, 10*time.Second)
+
+	windower.InsertWindow(win1)
+	windower.InsertWindow(win2)
+	windower.InsertWindow(win3)
+
+	// close the window with end time less than baseTime + 120 seconds
+	windowRequests := windower.CloseWindows(baseTime.Add(120 * time.Second))
+
+	assert.Equal(t, 3, len(windowRequests))
+
+	assert.Equal(t, window.Delete, windowRequests[0].Operation)
+	assert.Equal(t, baseTime.Add(-20*time.Second), windowRequests[0].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(40*time.Second), windowRequests[0].Windows[0].EndTime())
+
+	assert.Equal(t, window.Delete, windowRequests[1].Operation)
+	assert.Equal(t, baseTime.Add(-10*time.Second), windowRequests[1].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(50*time.Second), windowRequests[1].Windows[0].EndTime())
+
+	assert.Equal(t, window.Delete, windowRequests[2].Operation)
+	assert.Equal(t, baseTime, windowRequests[2].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(60*time.Second), windowRequests[2].Windows[0].EndTime())
+
+}
+
+func TestSliding_DeleteWindows(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+
+	win1 := &Window{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
+	}
+	win2 := &Window{
+		startTime: baseTime.Add(-10 * time.Second),
+		endTime:   baseTime.Add(50 * time.Second),
+	}
+	win3 := &Window{
+		startTime: baseTime.Add(-20 * time.Second),
+		endTime:   baseTime.Add(40 * time.Second),
+	}
+
+	windower := &Windower{
+		length:        60 * time.Second,
+		slide:         10 * time.Second,
+		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+	}
+
+	// insert the windows
+	windower.InsertWindow(win1)
+	windower.InsertWindow(win2)
+	windower.InsertWindow(win3)
+
+	// close all the windows
+	windower.CloseWindows(baseTime.Add(120 * time.Second))
+
+	// delete one of the windows
+	windower.DeleteClosedWindows(&window.TimedWindowResponse{
+		ID: &partition.ID{
+			Start: baseTime,
+			End:   baseTime.Add(60 * time.Second),
+			Slot:  "slot-0",
+		},
+	})
+
+	// since we deleted one of the windows, the closed windows should be 2
+	assert.Equal(t, 2, windower.closedWindows.Len())
+}
+
+func TestSliding_OldestClosedWindowEndTime(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+
+	win1 := &Window{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
+	}
+	win2 := &Window{
+		startTime: baseTime.Add(-10 * time.Second),
+		endTime:   baseTime.Add(50 * time.Second),
+	}
+	win3 := &Window{
+		startTime: baseTime.Add(-20 * time.Second),
+		endTime:   baseTime.Add(40 * time.Second),
+	}
+
+	windower := &Windower{
+		length:        60 * time.Second,
+		slide:         10 * time.Second,
+		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+	}
+
+	// insert the windows
+	windower.InsertWindow(win1)
+	windower.InsertWindow(win2)
+	windower.InsertWindow(win3)
+
+	// close all the windows
+	windower.CloseWindows(baseTime.Add(180 * time.Second))
+
+	// oldest closed window is (60000, 120000)
+	assert.Equal(t, baseTime.Add(40*time.Second), windower.OldestClosedWindowEndTime())
+}
+
+func TestSliding_NextWindowToBeClosed(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+
+	win1 := &Window{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
+	}
+	win2 := &Window{
+		startTime: baseTime.Add(-10 * time.Second),
+		endTime:   baseTime.Add(50 * time.Second),
+	}
+	win3 := &Window{
+		startTime: baseTime.Add(-20 * time.Second),
+		endTime:   baseTime.Add(40 * time.Second),
+	}
+
+	windower := &Windower{
+		length:        60 * time.Second,
+		slide:         10 * time.Second,
+		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+	}
+
+	// insert the windows
+	windower.InsertWindow(win1)
+	windower.InsertWindow(win2)
+	windower.InsertWindow(win3)
+
+	// next window to be closed is (60000, 120000)
+	assert.Equal(t, baseTime.Add(-20*time.Second), windower.NextWindowToBeClosed().StartTime())
+	assert.Equal(t, baseTime.Add(40*time.Second), windower.NextWindowToBeClosed().EndTime())
+}
+
+func buildReadMessage(time time.Time) *isb.ReadMessage {
+	return &isb.ReadMessage{
+		Message: isb.Message{
+			Header: isb.Header{
+				MessageInfo: isb.MessageInfo{
+					EventTime: time,
+				},
+			},
+		},
+	}
+}

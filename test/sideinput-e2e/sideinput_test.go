@@ -56,7 +56,7 @@ func (s *SideInputSuite) TestSimpleMapSideInputPipeline() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("map")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("map")).WithHeader("X-Numaflow-Operation-Time", eventTime))
 			}
 		}
 	}()

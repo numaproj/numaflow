@@ -53,7 +53,7 @@ type ProcessAndForward struct {
 	vertexReplica  int32
 	PartitionID    partition.ID
 	UDF            applier.ReduceApplier
-	writeMessages  []*isb.WriteMessage
+	windowResponse *window.TimedWindowResponse
 	pbqReader      pbq.Reader
 	log            *zap.SugaredLogger
 	toBuffers      map[string][]isb.BufferWriter
@@ -110,7 +110,7 @@ func newProcessAndForward(ctx context.Context,
 // now we got a message with et 86, and wm 86 we can materialize the window 60 - 85
 // and publish the watermark as 85
 
-// Process method reads messages from the supplied PBQ, invokes UDF to reduce the writeMessages.
+// Process method reads messages from the supplied PBQ, invokes UDF to reduce the windowResponse.
 func (p *ProcessAndForward) Process(ctx context.Context) error {
 	var err error
 	defer func(t time.Time) {
@@ -121,13 +121,13 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 		}).Observe(float64(time.Since(t).Milliseconds()))
 	}(time.Now())
 
-	// blocking call, only returns the writeMessages after it has read all the messages from pbq
-	p.writeMessages, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
+	// blocking call, only returns the windowResponse after it has read all the requests from pbq
+	p.windowResponse, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 	return err
 }
 
-// AsyncProcessForward reads messages from the supplied PBQ, invokes UDF to reduce the writeMessages, and then forwards
-// the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
+// AsyncProcessForward reads messages from the supplied PBQ, invokes UDF to reduce the windowResponse, and then forwards
+// the windowResponse to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
 // manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
 func (p *ProcessAndForward) AsyncProcessForward(ctx context.Context) {
 	responseCh, errCh := p.UDF.AsyncApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
@@ -187,7 +187,7 @@ outerLoop:
 			}
 
 			// delete the closed windows which are tracked by the windower
-			p.windower.DeleteWindows(response)
+			p.windower.DeleteClosedWindows(response)
 			// TODO: should we consider compacting the pbq here? Since we have successfully processed all the messages for a window + key.
 			// it could be a async call, we don't need to wait for it to finish.
 		}
@@ -216,7 +216,7 @@ func (p *ProcessAndForward) Forward(ctx context.Context) error {
 	// millisecond is the lowest granularity currently supported.
 	processorWM := wmb.Watermark(p.PartitionID.End.Add(-1 * time.Millisecond))
 
-	messagesToStep := p.whereToStep(p.writeMessages)
+	messagesToStep := p.whereToStep(p.windowResponse.WriteMessages)
 
 	// store write offsets to publish watermark
 	writeOffsets := make(map[string][][]isb.Offset)

@@ -29,6 +29,7 @@ type TestWindow struct {
 	start time.Time
 	end   time.Time
 	slot  string
+	keys  []string
 }
 
 func (t *TestWindow) StartTime() time.Time {
@@ -59,6 +60,10 @@ func (t *TestWindow) Merge(tw TimedWindow) {
 func (t *TestWindow) Expand(et time.Time) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (t *TestWindow) Keys() []string {
+	return t.keys
 }
 
 // TODO add tests to cover different slot values
@@ -216,7 +221,7 @@ func TestSortedWindowList_InsertIfNotPresent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowList[*TestWindow]()
+			windows := NewSortedWindowListByStartTime[*TestWindow]()
 			setup(windows, tt.given)
 			ret, isPresent := windows.InsertIfNotPresent(tt.input)
 			assert.Equal(t, tt.isPresent, isPresent)
@@ -269,7 +274,7 @@ func TestSortedWindowList_RemoveWindows(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowList[*TestWindow]()
+			windows := NewSortedWindowListByStartTime[*TestWindow]()
 			setup(windows, tt.given)
 			removedWindows := windows.RemoveWindows(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), len(removedWindows))
@@ -388,7 +393,7 @@ func TestSortedWindowList_DeleteWindow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowList[*TestWindow]()
+			windows := NewSortedWindowListByStartTime[*TestWindow]()
 			setup(windows, tt.given)
 			windows.Delete(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
@@ -470,7 +475,7 @@ func TestSortedWindowList_InsertFront(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowList[*TestWindow]()
+			windows := NewSortedWindowListByStartTime[*TestWindow]()
 			setup(windows, tt.given)
 			windows.InsertFront(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
@@ -552,7 +557,7 @@ func TestSortedWindowList_InsertBack(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowList[*TestWindow]()
+			windows := NewSortedWindowListByStartTime[*TestWindow]()
 			setup(windows, tt.given)
 			windows.InsertBack(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
@@ -567,8 +572,304 @@ func TestSortedWindowList_InsertBack(t *testing.T) {
 	}
 }
 
+func TestSortedWindowListByStartTime_Insert(t *testing.T) {
+	tests := []struct {
+		name            string
+		given           []*TestWindow
+		input           *TestWindow
+		expectedWindows []*TestWindow
+		isPresent       bool
+	}{
+		{
+			name:  "FirstWindow",
+			given: []*TestWindow{},
+			input: &TestWindow{
+				start: time.Unix(0, 0),
+				end:   time.Unix(60, 0),
+				slot:  "slot-0",
+			},
+			expectedWindows: []*TestWindow{
+				{
+					start: time.Unix(0, 0),
+					end:   time.Unix(60, 0),
+					slot:  "slot-0",
+				},
+			},
+			isPresent: false,
+		},
+		{
+			name: "late_window",
+			given: []*TestWindow{
+				{
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+					slot:  "slot-0",
+				},
+			},
+			input: &TestWindow{
+				start: time.Unix(60, 0),
+				end:   time.Unix(120, 0),
+				slot:  "slot-0",
+			},
+			expectedWindows: []*TestWindow{
+				{
+					start: time.Unix(60, 0),
+					end:   time.Unix(120, 0),
+					slot:  "slot-0",
+				},
+				{
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+					slot:  "slot-0",
+				},
+			},
+			isPresent: false,
+		},
+		{
+			name: "early_window",
+			given: []*TestWindow{
+				{
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+					slot:  "slot-0",
+				},
+			},
+			input: &TestWindow{
+				start: time.Unix(240, 0),
+				end:   time.Unix(300, 0),
+				slot:  "slot-0",
+			},
+			expectedWindows: []*TestWindow{
+				{
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+					slot:  "slot-0",
+				},
+				{
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
+					slot:  "slot-0",
+				},
+			},
+			isPresent: false,
+		},
+		{
+			name: "insert_middle",
+			given: []*TestWindow{
+				{
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+				},
+				{
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
+				},
+			},
+			input: &TestWindow{
+				start: time.Unix(180, 0),
+				end:   time.Unix(240, 0),
+			},
+			expectedWindows: []*TestWindow{
+				{
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+				},
+				{
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
+				},
+				{
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
+				},
+			},
+			isPresent: false,
+		},
+		{
+			name: "already_present",
+			given: []*TestWindow{
+				{
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+				},
+				{
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
+				},
+				{
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
+				},
+			},
+			input: &TestWindow{
+				start: time.Unix(180, 0),
+				end:   time.Unix(240, 0),
+			},
+			expectedWindows: []*TestWindow{
+				{
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+				},
+				{
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
+				},
+				{
+					start: time.Unix(180, 0),
+					end:   time.Unix(240, 0),
+				},
+				{
+					start: time.Unix(240, 0),
+					end:   time.Unix(300, 0),
+				},
+			},
+			isPresent: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			windows := NewSortedWindowListByStartTime[*TestWindow]()
+			setup(windows, tt.given)
+			windows.Insert(tt.input)
+			assert.Equal(t, len(tt.expectedWindows), windows.Len())
+			nodes := windows.Items()
+			i := 0
+			for _, kw := range tt.expectedWindows {
+				assert.Equal(t, kw.StartTime(), nodes[i].StartTime())
+				assert.Equal(t, kw.EndTime(), nodes[i].EndTime())
+				i += 1
+			}
+		})
+	}
+}
+
+func TestSortedWindowListByStartTime_FindWindowForTime(t *testing.T) {
+	tests := []struct {
+		name           string
+		given          []*TestWindow
+		input          time.Time
+		expectedWindow *TestWindow
+		isPresent      bool
+	}{
+		{
+			name: "one_window",
+			given: []*TestWindow{
+				{
+					start: time.Unix(0, 0),
+					end:   time.Unix(60, 0),
+					slot:  "slot-0",
+				},
+			},
+			input: time.Unix(30, 0),
+			expectedWindow: &TestWindow{
+				start: time.Unix(0, 0),
+				end:   time.Unix(60, 0),
+				slot:  "slot-0",
+			},
+			isPresent: true,
+		},
+		{
+			name: "right_exclusive",
+			given: []*TestWindow{
+				{
+					start: time.Unix(0, 0),
+					end:   time.Unix(60, 0),
+					slot:  "slot-0",
+				},
+				{
+					start: time.Unix(120, 0),
+					end:   time.Unix(180, 0),
+					slot:  "slot-0",
+				},
+			},
+			input:          time.Unix(60, 0),
+			expectedWindow: &TestWindow{},
+			isPresent:      false,
+		},
+		{
+			name: "left_inclusive",
+			given: []*TestWindow{
+				{
+					start: time.Unix(0, 0),
+					end:   time.Unix(60, 0),
+					slot:  "slot-0",
+				},
+				{
+					start: time.Unix(60, 0),
+					end:   time.Unix(120, 0),
+					slot:  "slot-0",
+				},
+			},
+			input: time.Unix(60, 0),
+			expectedWindow: &TestWindow{
+				start: time.Unix(60, 0),
+				end:   time.Unix(120, 0),
+				slot:  "slot-0",
+			},
+			isPresent: true,
+		},
+		{
+			name: "multiple_present",
+			given: []*TestWindow{
+				{
+					start: time.Unix(60, 0),
+					end:   time.Unix(120, 0),
+				},
+				{
+					start: time.Unix(65, 0),
+					end:   time.Unix(85, 0),
+				},
+				{
+					start: time.Unix(70, 0),
+					end:   time.Unix(130, 0),
+				},
+			},
+			input: time.Unix(60, 0),
+			expectedWindow: &TestWindow{
+				start: time.Unix(60, 0),
+				end:   time.Unix(120, 0),
+			},
+			isPresent: true,
+		},
+		{
+			name: "last_present",
+			given: []*TestWindow{
+				{
+					start: time.Unix(68, 0),
+					end:   time.Unix(80, 0),
+				},
+				{
+					start: time.Unix(77, 0),
+					end:   time.Unix(79, 0),
+				},
+				{
+					start: time.Unix(89, 0),
+					end:   time.Unix(99, 0),
+				},
+			},
+			input: time.Unix(90, 0),
+			expectedWindow: &TestWindow{
+				start: time.Unix(89, 0),
+				end:   time.Unix(99, 0),
+			},
+			isPresent: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			windows := NewSortedWindowListByStartTime[*TestWindow]()
+			setup(windows, tt.given)
+			win, isPresent := windows.FindWindowForTime(tt.input)
+			assert.Equal(t, tt.isPresent, isPresent)
+			assert.Equal(t, win, tt.expectedWindow)
+		})
+	}
+}
+
 func setup(windows *SortedWindowListByStartTime[*TestWindow], wins []*TestWindow) {
 	for _, win := range wins {
-		windows.InsertBack(win)
+		windows.Insert(win)
 	}
 }

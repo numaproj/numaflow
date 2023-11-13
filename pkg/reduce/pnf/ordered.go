@@ -49,7 +49,7 @@ type ForwardTask struct {
 	pf     *ProcessAndForward
 }
 
-// OrderedProcessor orders the forwarding of the writeMessages of the execution of the tasks, even though the tasks itself are
+// OrderedProcessor orders the forwarding of the windowResponse of the execution of the tasks, even though the tasks itself are
 // run concurrently in an out of ordered fashion.
 type OrderedProcessor struct {
 	vertexName    string
@@ -143,7 +143,7 @@ func (op *OrderedProcessor) SchedulePnF(
 }
 
 // reduceOp invokes the reduce function. The reducer is a long-running function since we stream in the data and it has
-// to wait for the close-of-book on the PBQ to materialize the writeMessages.
+// to wait for the close-of-book on the PBQ to materialize the windowResponse.
 func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 	start := time.Now()
 	err := t.pf.Process(ctx)
@@ -175,7 +175,7 @@ func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 	}
 }
 
-// forward monitors the ForwardTask queue, as soon as the ForwardTask at the head of the queue has been completed, the writeMessages is
+// forward monitors the ForwardTask queue, as soon as the ForwardTask at the head of the queue has been completed, the windowResponse is
 // forwarded to the next ISB. It keeps doing this for forever or until ctx.Done() happens.
 func (op *OrderedProcessor) forward(ctx context.Context) {
 	var currElement *list.Element
