@@ -212,23 +212,17 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	// source fetcher doesn't care about the offsets
-	// isdf.wmFetcher.ComputeWatermark(0, 0)
 	lastUpdatedWM := isdf.wmFetcher.ComputeWatermark(nil, 0)
 
-	// vertexInstance.Vertex.Spec.Watermark.IdleIncrement
-	// track lastUpdatedWatermarkTime
-	//
 	maxWait := isdf.Watermark.IdleSource.GetMaxWait()
 	minIncrement := isdf.Watermark.IdleSource.GetMinIncrement()
 
 	if len(readMessages) == 0 && time.Now().Sub(time.Time(lastUpdatedWM)) > maxWait {
-		log.Println("--------------------> readMessages is 0 and publishing idle watermark")
-		// publish Idle watermark
+		log.Println("--------------------> publishing idle watermark")
+
 		updatedWM := lastUpdatedWM.Add(minIncrement)
 
 		isdf.srcWMPublisher.PublishIdleWatermarks(updatedWM)
-
-		//		isdf.srcWMPublisher.PulishIdleWatermark(lastFetchedValue + userProvidedValue)
 	}
 
 	// Process only if we have any read messages.

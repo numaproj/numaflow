@@ -266,7 +266,7 @@ func (h *httpSource) PublishIdleWatermarks(wm time.Time) {
 	// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
 	h.sourcePublishWM.PublishIdleWatermark(wmb.Watermark(wm), nil, 0) // Source publisher does not care about the offset
 
-	log.Println("++++++++++++++++++++++------> idle watermark published for http")
+	log.Println("++++++++++++++++++++++------> idle watermark published for http:", wm)
 }
 
 func (h *httpSource) Ack(_ context.Context, offsets []isb.Offset) []error {
