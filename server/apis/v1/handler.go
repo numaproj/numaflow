@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -442,7 +443,12 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 		return
 	}
 
-	// TODO: validate the patched data as well, e.g. only allow lifecycle to be patched
+	err = validatePipelinePatch(patchSpec)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q, %s", pipeline, err.Error()))
+		return
+	}
+
 	if _, err := h.numaflowClient.Pipelines(ns).Patch(context.Background(), pipeline, types.MergePatchType, patchSpec, metav1.PatchOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to patch pipeline %q, %s", pipeline, err.Error()))
 		return
@@ -989,6 +995,26 @@ func validateNamespace(h *handler, pipeline *dfv1.Pipeline, ns string) error {
 		errMsg := fmt.Errorf("namespace mismatch, expected %s", ns)
 		return errMsg
 	}
+	return nil
+}
+
+// validatePipelinePatch is used to validate the patch for a pipeline
+func validatePipelinePatch(patch []byte) error {
+
+	var patchSpec dfv1.Pipeline
+	var emptySpec dfv1.Pipeline
+
+	// check that patch is correctly formatted for pipeline
+	if err := json.Unmarshal(patch, &patchSpec); err != nil {
+		return err
+	}
+
+	// compare patch to empty pipeline spec to check that only lifecycle is being patched
+	patchSpec.Spec.Lifecycle = dfv1.Lifecycle{}
+	if !reflect.DeepEqual(patchSpec, emptySpec) {
+		return fmt.Errorf("only spec.lifecycle is allowed for patching")
+	}
+
 	return nil
 }
 
