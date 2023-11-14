@@ -470,7 +470,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	isValid := validateISBSVCSpec(h, nil, &isbsvcSpec, ValidTypeCreate)
+	isValid := validateISBSVCSpec(nil, &isbsvcSpec, ValidTypeCreate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service spec, %s", isValid.Error()))
 		return
@@ -522,7 +522,6 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, resp))
 }
 
-// UpdateInterStepBufferService is used to delete the inter-step buffer service
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 	// dryRun is used to check if the operation is just a validation or an actual update
@@ -541,13 +540,13 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
-	err = validateISBSVCSpec(h, isbSVC, &updatedSpec, ValidTypeUpdate)
+	err = validateISBSVCSpec(isbSVC, &updatedSpec, ValidTypeUpdate)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate interstepbuffer service spec, %s", err.Error()))
 		return
 	}
 
-	// If Validation flag is set to true, return without updating the ISB service
+	// If the validation flag is set to true, return without updating the ISB service
 	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
@@ -558,16 +557,13 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %s", ns, isbsvcName, err.Error()))
 		return
 	}
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, updatedISBSvc))
 }
 
-// DeleteInterStepBufferService is used to update the spec of the inter step buffer service
 func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 
 	pipelines, err := h.numaflowClient.Pipelines(ns).List(context.Background(), metav1.ListOptions{})
-	// Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get pipelines in namespace %q, %s", ns, err.Error()))
 		return
@@ -969,11 +965,20 @@ func validatePipelineSpec(h *handler, oldPipeline *dfv1.Pipeline, newPipeline *d
 }
 
 // validateISBSVCSpec is used to validate the ISB service spec
-func validateISBSVCSpec(h *handler, prevSpec *dfv1.InterStepBufferService,
+func validateISBSVCSpec(prevSpec *dfv1.InterStepBufferService,
 	newSpec *dfv1.InterStepBufferService, validType string) error {
-	ns := newSpec.Namespace
-	isbClient := h.numaflowClient.InterStepBufferServices(ns)
-	valid := validator.NewISBServiceValidator(h.kubeClient, isbClient, prevSpec, newSpec)
+	// UI-specific validations
+	if validType == ValidTypeUpdate && prevSpec != nil {
+		if prevSpec.Namespace != newSpec.Namespace {
+			return fmt.Errorf("updating an inter-step buffer service's namespace is not allowed, expected %s", prevSpec.Namespace)
+		}
+		if prevSpec.Name != newSpec.Name {
+			return fmt.Errorf("updating an inter-step buffer service's name is not allowed, expected %s", prevSpec.Name)
+		}
+	}
+
+	// the rest of the code leverages the webhook validator to validate the ISB service spec.
+	valid := validator.NewISBServiceValidator(prevSpec, newSpec)
 	var resp *admissionv1.AdmissionResponse
 	switch validType {
 	case ValidTypeCreate:

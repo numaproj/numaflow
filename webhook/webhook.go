@@ -101,7 +101,7 @@ func (ac *AdmissionController) Run(ctx context.Context) error {
 	serverStartErrCh := make(chan struct{})
 	go func() {
 		if err := server.ListenAndServeTLS("", ""); err != nil {
-			logger.Errorw("ListenAndServeTLS for admission webhook erorred out", zap.Error(err))
+			logger.Errorw("ListenAndServeTLS for admission webhook errored out", zap.Error(err))
 			close(serverStartErrCh)
 		}
 	}()
@@ -111,7 +111,6 @@ func (ac *AdmissionController) Run(ctx context.Context) error {
 	case <-serverStartErrCh:
 		return fmt.Errorf("webhook server failed to start")
 	}
-
 }
 
 // Register registers the validating admission webhook
