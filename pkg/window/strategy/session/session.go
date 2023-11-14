@@ -80,6 +80,15 @@ func (w *Window) Merge(tw window.TimedWindow) {
 	}
 }
 
+func cloneWindow(win window.TimedWindow) *Window {
+	return &Window{
+		startTime: win.StartTime(),
+		endTime:   win.EndTime(),
+		slot:      win.Slot(),
+		keys:      win.Keys(),
+	}
+}
+
 func (w *Window) Expand(endTime time.Time) {
 	if endTime.After(w.endTime) {
 		w.endTime = endTime
@@ -93,7 +102,7 @@ type Windower struct {
 	// activeWindows is a map of keys to list of active windows
 	// key is join of all the keys of the message, since session is per key
 	// we need to maintain a list of windows per key
-	activeWindows map[string]*window.SortedWindowListByStartTime[window.TimedWindow]
+	activeWindows map[string]*window.SortedWindowListByEndTime[window.TimedWindow]
 
 	// closedWindows is a list of closed windows which are yet to be GCed
 	// we need to track the close windows because while publishing the watermark
@@ -104,7 +113,7 @@ type Windower struct {
 func NewWindower(gap time.Duration) window.TimedWindower {
 	return &Windower{
 		gap:           gap,
-		activeWindows: make(map[string]*window.SortedWindowListByStartTime[window.TimedWindow]),
+		activeWindows: make(map[string]*window.SortedWindowListByEndTime[window.TimedWindow]),
 		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
 	}
 }
@@ -126,7 +135,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	// if the window is not present, create a new window
 	if list, ok := w.activeWindows[combinedKey]; !ok {
 		win := NewWindow(message.EventTime, w.gap, message)
-		list = window.NewSortedWindowListByStartTime[window.TimedWindow]()
+		list = window.NewSortedWindowListByEndTime[window.TimedWindow]()
 		// since its the first window, we can insert it at the front
 		list.InsertFront(win)
 		windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &sessionPartition))
@@ -162,7 +171,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 func (w *Windower) InsertWindow(tw window.TimedWindow) {
 	combinedKey := strings.Join(tw.Keys(), delimiter)
 	if list, ok := w.activeWindows[combinedKey]; !ok {
-		list = window.NewSortedWindowListByStartTime[window.TimedWindow]()
+		list = window.NewSortedWindowListByEndTime[window.TimedWindow]()
 		list.InsertFront(tw)
 		w.activeWindows[combinedKey] = list
 	} else {
@@ -202,13 +211,13 @@ func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 			// so we need to send a merge operation to the server
 			if len(windows) > 1 {
 				windowOperations = append(windowOperations, createWindowOperation(nil, window.Merge, windows, &sessionPartition))
-				var mergedWindow = windows[0]
+				var mergedWindow = cloneWindow(windows[0])
 				for _, win := range windows {
 					mergedWindow.Merge(win)
 				}
 				// we should close the merged window, because we are merging the closed windows
 				windowOperations = append(windowOperations, createWindowOperation(nil, window.Close, []window.TimedWindow{mergedWindow}, &sessionPartition))
-				w.closedWindows.InsertBack(mergedWindow)
+				w.closedWindows.Insert(mergedWindow)
 			} else {
 				// we should always close the first window
 				windowOperations = append(windowOperations, createWindowOperation(nil, window.Close, []window.TimedWindow{windows[0]}, &sessionPartition))
@@ -270,12 +279,13 @@ func windowsThatCanBeMerged(windows []window.TimedWindow) [][]window.TimedWindow
 		// Initialize a slice to hold the current window and any subsequent mergeable windows
 		merged := []window.TimedWindow{windows[i]}
 		// Set the first window to be the current window
-		first := windows[i]
+		first := cloneWindow(windows[i])
 		// Check if the end time of the first window is after the start time of the next window
 		// If it is, add the next window to the merged slice and update the end time of the first window
-		for i+1 < len(mWindows) && first.EndTime().After(windows[i+1].StartTime()) {
-			merged = append(merged, windows[i+1])
-			first.Merge(windows[i+1])
+		i++
+		for i < len(windows) && first.EndTime().After(windows[i].StartTime()) {
+			merged = append(merged, windows[i])
+			first.Merge(windows[i])
 			i++
 		}
 		// Add the merged slice to the slice of all mergeable windows

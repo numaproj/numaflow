@@ -28,7 +28,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/noop"
 	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
 
 func TestManager_ListPartitions(t *testing.T) {
@@ -84,9 +83,6 @@ func TestManager_GetPBQ(t *testing.T) {
 		End:   time.Unix(120, 0),
 		Slot:  "slot-1",
 	}
-
-	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-	kwOne.AddSlot("slot-1")
 
 	pb1, err = pbqManager.CreateNewPBQ(ctx, testPartition)
 	assert.NoError(t, err)

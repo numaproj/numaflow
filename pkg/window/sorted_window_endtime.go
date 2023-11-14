@@ -198,7 +198,7 @@ func (s *SortedWindowListByEndTime[W]) FindWindowForTime(t time.Time) (W, bool) 
 	defer s.lock.RUnlock()
 
 	index := sort.Search(len(s.windows), func(i int) bool {
-		return !s.windows[i].EndTime().After(t)
+		return !s.windows[i].EndTime().Before(t)
 	})
 
 	for i := index; i < len(s.windows); i++ {

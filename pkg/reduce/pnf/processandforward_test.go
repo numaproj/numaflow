@@ -23,6 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1/reducemock"
 
@@ -30,6 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
+	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
@@ -40,16 +44,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
-
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 const (
@@ -112,8 +110,6 @@ func TestProcessAndForward_Process(t *testing.T) {
 		End:   time.UnixMilli(120000),
 		Slot:  "partition-1",
 	}
-	kw := keyed.NewKeyedWindow(time.UnixMilli(60000), time.UnixMilli(120000))
-	kw.AddSlot("partition-1")
 
 	var err error
 	var pbqManager *pbq.Manager
@@ -394,8 +390,6 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		End:   time.UnixMilli(120000),
 		Slot:  key,
 	}
-	kw := keyed.NewKeyedWindow(time.UnixMilli(60000), time.UnixMilli(120000))
-	kw.AddSlot(key)
 
 	// create a pbq for a partition
 	pw, otStore := buildPublisherMapAndOTStore(toBuffers)
