@@ -1012,7 +1012,7 @@ func validatePipelinePatch(patch []byte) error {
 	// compare patch to empty pipeline spec to check that only lifecycle is being patched
 	patchSpec.Spec.Lifecycle = dfv1.Lifecycle{}
 	if !reflect.DeepEqual(patchSpec, emptySpec) {
-		return fmt.Errorf("patch spec is invalid")
+		return fmt.Errorf("only spec.lifecycle is allowed for patching")
 	}
 
 	return nil

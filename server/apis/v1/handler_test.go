@@ -34,6 +34,6 @@ func TestValidatePipelinePatch(t *testing.T) {
 
 	err = validatePipelinePatch([]byte(invalidPatchSpec))
 	assert.Error(t, err)
-	assert.Equal(t, "patch spec is invalid", err.Error())
+	assert.Equal(t, "only spec.lifecycle is allowed for patching", err.Error())
 
 }
