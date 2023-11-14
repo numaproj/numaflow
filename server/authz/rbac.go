@@ -45,21 +45,38 @@ const (
 	emptyString = ""
 )
 
+// CasbinObject is the struct that implements the Authorizer interface.
+// It contains the Casbin Enforcer, the current scopes, the default policy and the config reader.
+// The config reader is used to watch for changes in the config file.
+// The Casbin Enforcer is used to enforce the authorization policy.
+// The current scopes are used to determine the user identity token to be used for authorization.
+// policyDefault is the default policy to be used when the requested resource is not present in the policy.
+// userPermCount is a cache to store the count of permissions for a user. If the user has permissions in the
+// policy, we store the count in the cache and return based on the value.
 type CasbinObject struct {
 	enforcer      *casbin.Enforcer
 	userPermCount *sync.Map
 	currentScopes []string
 	policyDefault string
 	configReader  *viper.Viper
+	opts          *options
 }
 
-func NewCasbinObject() (*CasbinObject, error) {
-	enforcer, err := getEnforcer()
+// NewCasbinObject returns a new CasbinObject. It initializes the Casbin Enforcer with the model and policy.
+// It also initializes the config reader to watch for changes in the config file.
+func NewCasbinObject(inputOptions ...Option) (*CasbinObject, error) {
+	// Set the default options.
+	var opts = DefaultOptions()
+	// Apply the input options.
+	for _, inputOption := range inputOptions {
+		inputOption(opts)
+	}
+	enforcer, err := getEnforcer(opts.policyMapPath)
 	if err != nil {
 		return nil, err
 	}
 	configReader := viper.New()
-	configReader.SetConfigFile(rbacPropertiesPath)
+	configReader.SetConfigFile(opts.rbacPropertiesPath)
 	err = configReader.ReadInConfig()
 	if err != nil {
 		return nil, err
@@ -75,6 +92,7 @@ func NewCasbinObject() (*CasbinObject, error) {
 		currentScopes: currentScopes,
 		policyDefault: policyDefault,
 		configReader:  configReader,
+		opts:          opts,
 	}
 
 	// Watch for changes in the config file.
@@ -136,12 +154,12 @@ func getSubjectFromScope(scopes []string, userInfo *authn.UserInfo) []string {
 }
 
 // getEnforcer initializes the Casbin Enforcer with the model and policy.
-func getEnforcer() (*casbin.Enforcer, error) {
+func getEnforcer(policyFilePath string) (*casbin.Enforcer, error) {
 	modelRBAC, err := model.NewModelFromString(rbacModel)
 	if err != nil {
 		return nil, err
 	}
-	a := fileadapter.NewAdapter(policyMapPath)
+	a := fileadapter.NewAdapter(policyFilePath)
 
 	// Initialize the Casbin Enforcer with the model and policies.
 	enforcer, err := casbin.NewEnforcer(modelRBAC, a)
@@ -224,7 +242,7 @@ func extractObject(c *gin.Context) string {
 	return emptyString
 }
 
-// getRbacProperty is used to read the rbacPropertiesPath file path and extract the policy provided as argument,
+// getRbacProperty is used to read the RBAC property file path and extract the policy provided as argument,
 func getRbacProperty(property string, config *viper.Viper) interface{} {
 	val := config.Get(property)
 	if val == nil {

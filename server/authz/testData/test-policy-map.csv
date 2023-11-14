@@ -1,0 +1,8 @@
+# Policies go here
+p, role:admin, *, *, *
+p, role:readonly, *, *, GET
+p, test@test.com, *, *, POST
+# Groups go here
+g, admin, role:admin
+g, readonly, role:readonly
+# g, my-github-org:my-github-team, role:readonly
