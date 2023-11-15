@@ -954,7 +954,7 @@ func validatePipelineSpec(h *handler, oldPipeline *dfv1.Pipeline, newPipeline *d
 // validateISBSVCSpec is used to validate the ISB service spec
 func validateISBSVCSpec(prevSpec *dfv1.InterStepBufferService,
 	newSpec *dfv1.InterStepBufferService, validType string) error {
-	// UI-specific validations
+	// UI-specific validations: updating namespace and name from UI is not allowed
 	if validType == ValidTypeUpdate && prevSpec != nil {
 		if prevSpec.Namespace != newSpec.Namespace {
 			return fmt.Errorf("updating an inter-step buffer service's namespace is not allowed, expected %s", prevSpec.Namespace)
