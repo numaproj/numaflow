@@ -176,7 +176,7 @@ export const useClusterSummaryFetch = ({
       });
       return;
     }
-  }, [fetchData, fetchLoading, fetchError, loadOnRefresh, options, addError]);
+  }, [fetchData, fetchLoading, fetchError, loadOnRefresh, options]);
 
   return results;
 };
