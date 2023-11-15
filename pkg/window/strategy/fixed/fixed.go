@@ -194,6 +194,8 @@ func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
 func (w *Windower) OldestClosedWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()
+	} else if win = w.activeWindows.Front(); win != nil {
+		return win.EndTime()
 	} else {
 		return time.UnixMilli(-1)
 	}

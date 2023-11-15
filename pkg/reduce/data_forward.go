@@ -179,7 +179,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 }
 
 // forwardAChunk reads a chunk of messages from isb and assigns watermark to messages
-// and writes the messages to pbq
+// and writes the windowRequests to pbq
 func (df *DataForward) forwardAChunk(ctx context.Context) {
 	readMessages, err := df.fromBufferPartition.Read(ctx, df.opts.readBatchSize)
 	totalBytes := 0
@@ -209,6 +209,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		oldestClosedWindowEndTime := df.windower.OldestClosedWindowEndTime()
+		// if there are no closed windows, that means
 		if oldestClosedWindowEndTime == time.UnixMilli(-1) {
 			// if all the windows are closed already, and the len(readBatch) == 0
 			// then it means there's an idle situation
@@ -301,6 +302,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
+		println("Creating new PnF - id - ", partitionID.String())
 		df.of.AsyncSchedulePnF(ctx, *partitionID, q)
 		//df.udfInvocationTracking[partitionID] = t
 		df.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
@@ -400,8 +402,8 @@ messagesLoop:
 		if message.IsLate {
 			// we should be able to get the late message in as long as there is an open window
 			nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
-			// if there is no window open, drop the message
-			if nextWinAsSeenByWriter == nil {
+			// if there is no window open or if its a session window(window end time is max int), drop the message
+			if nextWinAsSeenByWriter == nil || nextWinAsSeenByWriter.EndTime() == time.UnixMilli(math.MaxInt64) {
 				df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
 				writtenMessages = append(writtenMessages, message)
 				continue

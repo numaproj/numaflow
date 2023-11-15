@@ -250,11 +250,11 @@ outerLoop:
 // Shutdown closes all the partitions of the buffer.
 func (op *OrderedProcessor) Shutdown() {
 	for _, buffer := range op.toBuffers {
-		for _, partition := range buffer {
-			if err := partition.Close(); err != nil {
-				op.log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", partition.GetName()))
+		for _, p := range buffer {
+			if err := p.Close(); err != nil {
+				op.log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", p.GetName()))
 			} else {
-				op.log.Infow("Closed partition writer", zap.String("bufferTo", partition.GetName()))
+				op.log.Infow("Closed partition writer", zap.String("bufferTo", p.GetName()))
 			}
 		}
 	}

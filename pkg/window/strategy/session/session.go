@@ -1,6 +1,23 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package session
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -11,11 +28,11 @@ import (
 
 var delimiter = ":"
 
-// GlobalPartition is a global partition for session window.
+// Partition is a common partition for session window.
 // session windows share a common pbq, this partition is used to identify the pbq instance.
-var GlobalPartition = partition.ID{
-	Start: time.UnixMilli(-1),
-	End:   time.UnixMilli(-1),
+var Partition = partition.ID{
+	Start: time.UnixMilli(0),
+	End:   time.UnixMilli(math.MaxInt64),
 	Slot:  "slot-0",
 }
 
@@ -125,7 +142,7 @@ func (w *Windower) Strategy() window.Strategy {
 
 // AssignWindows assigns the event to the window based on give window configuration.
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
-	sessionPartition := GlobalPartition
+	sessionPartition := Partition
 
 	// TODO: slot should be extracted based on the key
 	sessionPartition.Slot = "slot-0"
@@ -191,7 +208,7 @@ func createWindowOperation(message *isb.ReadMessage, event window.Operation, win
 // CloseWindows closes the windows that are past the watermark.
 // also merges the windows that should be merged
 func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
-	sessionPartition := GlobalPartition
+	sessionPartition := Partition
 
 	// TODO: slot should be extracted based on the key
 	sessionPartition.Slot = "slot-0"
@@ -230,12 +247,12 @@ func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 }
 
 // NextWindowToBeClosed returns the next window yet to be closed.
-// since session window is not based on time, we return a global window
+// since session window is not based on time, we return a common window
 func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 	return &Window{
-		startTime: time.UnixMilli(-1),
-		endTime:   time.UnixMilli(-1),
-		slot:      "slot-0",
+		startTime: Partition.Start,
+		endTime:   Partition.End,
+		slot:      Partition.Slot,
 	}
 }
 

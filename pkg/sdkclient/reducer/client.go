@@ -139,6 +139,8 @@ outputLoop:
 				return nil, err
 			}
 			finalResponse.Results = append(finalResponse.Results, resp.Results...)
+			finalResponse.Partition = resp.Partition
+			finalResponse.EventTime = resp.EventTime
 		}
 	}
 
@@ -203,7 +205,7 @@ func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *reduce
 				return
 			default:
 				resp, recvErr = stream.Recv()
-				// if the stream is closed, close the responseCh and errCh channels and return
+				// if the stream is closed, close the responseCh return
 				if recvErr == io.EOF {
 					close(responseCh)
 					return

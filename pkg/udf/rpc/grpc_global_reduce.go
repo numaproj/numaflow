@@ -107,11 +107,12 @@ func (u *GRPCBasedGlobalReduce) AsyncApplyReduce(ctx context.Context, partitionI
 				}
 				responseCh <- parseGlobalReduceResponse(result)
 			case err := <-reduceErrCh:
-				if err != nil {
-					errCh <- err
+				if err == ctx.Err() {
+					return
 				}
-			case <-ctx.Done():
-				return
+				if err != nil {
+					errCh <- convertToUdfError(err)
+				}
 			}
 		}
 	}()
@@ -133,7 +134,11 @@ func (u *GRPCBasedGlobalReduce) AsyncApplyReduce(ctx context.Context, partitionI
 				d := createGlobalReduceRequest(msg)
 
 				// send the datum to requestCh channel, handle the case when the context is canceled
-				requestCh <- d
+				select {
+				case <-ctx.Done():
+					return
+				case requestCh <- d:
+				}
 
 			case <-ctx.Done(): // if the context is done, return
 				return

@@ -1,6 +1,22 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package session
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -38,7 +54,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	assert.Equal(t, 1, len(windowOperations[0].Windows))
 	assert.Equal(t, baseTime, windowOperations[0].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(gap), windowOperations[0].Windows[0].EndTime())
-	assert.Equal(t, &GlobalPartition, windowOperations[0].ID)
+	assert.Equal(t, &Partition, windowOperations[0].ID)
 
 	// 2nd message should be assigned to the same window, since key is same
 	message = buildReadMessage(baseTime.Add(5*time.Second), []string{"key1"})
@@ -52,7 +68,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	// 0th index we should have the old window, and 1st index we should have the new window
 	assert.Equal(t, baseTime.Add(gap), windowOperations[0].Windows[0].EndTime())
 	assert.Equal(t, message.EventTime.Add(gap), windowOperations[0].Windows[1].EndTime())
-	assert.Equal(t, &GlobalPartition, windowOperations[0].ID)
+	assert.Equal(t, &Partition, windowOperations[0].ID)
 
 	// 3rd message should be assigned to a new window, since key is different
 	message = buildReadMessage(baseTime, []string{"key2"})
@@ -64,7 +80,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	assert.Equal(t, 1, len(windowOperations[0].Windows))
 	assert.Equal(t, baseTime, windowOperations[0].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(gap), windowOperations[0].Windows[0].EndTime())
-	assert.Equal(t, &GlobalPartition, windowOperations[0].ID)
+	assert.Equal(t, &Partition, windowOperations[0].ID)
 
 	// 4th message should be assigned to a new window, because of the gap duration
 	message = buildReadMessage(baseTime.Add(20*time.Second), []string{"key2"})
@@ -76,7 +92,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	assert.Equal(t, 1, len(windowOperations[0].Windows))
 	assert.Equal(t, baseTime.Add(20*time.Second), windowOperations[0].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(30*time.Second), windowOperations[0].Windows[0].EndTime())
-	assert.Equal(t, &GlobalPartition, windowOperations[0].ID)
+	assert.Equal(t, &Partition, windowOperations[0].ID)
 }
 
 func TestSession_InsertWindow(t *testing.T) {
@@ -423,8 +439,8 @@ func TestWindower_NextWindowToBeClosed(t *testing.T) {
 	windower.InsertWindow(win2)
 	windower.InsertWindow(win3)
 
-	assert.Equal(t, time.UnixMilli(-1), windower.NextWindowToBeClosed().StartTime())
-	assert.Equal(t, time.UnixMilli(-1), windower.NextWindowToBeClosed().EndTime())
+	assert.Equal(t, time.UnixMilli(0), windower.NextWindowToBeClosed().StartTime())
+	assert.Equal(t, time.UnixMilli(math.MaxInt64), windower.NextWindowToBeClosed().EndTime())
 }
 
 func buildReadMessage(time time.Time, keys []string) *isb.ReadMessage {

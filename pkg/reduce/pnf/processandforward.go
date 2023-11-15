@@ -135,8 +135,6 @@ func (p *ProcessAndForward) AsyncProcessForward(ctx context.Context) {
 outerLoop:
 	for {
 		select {
-		case <-ctx.Done():
-			return
 		case err := <-errCh:
 			if err == ctx.Err() {
 				return

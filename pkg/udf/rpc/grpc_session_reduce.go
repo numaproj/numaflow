@@ -107,11 +107,13 @@ func (u *GRPCBasedSessionReduce) AsyncApplyReduce(ctx context.Context, partition
 				}
 				responseCh <- parseSessionReduceResponse(result)
 			case err := <-reduceErrCh:
-				if err != nil {
+				if err == ctx.Err() {
 					errCh <- err
+					return
 				}
-			case <-ctx.Done():
-				return
+				if err != nil {
+					errCh <- convertToUdfError(err)
+				}
 			}
 		}
 	}()
@@ -133,7 +135,11 @@ func (u *GRPCBasedSessionReduce) AsyncApplyReduce(ctx context.Context, partition
 				d := createSessionReduceRequest(msg)
 
 				// send the datum to requestCh channel, handle the case when the context is canceled
-				requestCh <- d
+				select {
+				case <-ctx.Done():
+					return
+				case requestCh <- d:
+				}
 
 			case <-ctx.Done(): // if the context is done, return
 				return
