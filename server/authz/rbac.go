@@ -288,10 +288,13 @@ func enforceCheck(enforcer *casbin.Enforcer, user, resource, object, action stri
 // restarting the server. The config file is in the format of yaml. The config file is read by viper.
 func (cas *CasbinObject) configFileReload(e fsnotify.Event) {
 	logger.Infow("RBAC conf file updated:", "fileName", e.Name)
+	cas.rwMutex.RLock()
 	err := cas.configReader.ReadInConfig()
 	if err != nil {
+		cas.rwMutex.RUnlock()
 		return
 	}
+	cas.rwMutex.RUnlock()
 	// update the scopes
 	newScopes := getRBACScopes(cas.configReader)
 	cas.setCurrentScopes(newScopes)
