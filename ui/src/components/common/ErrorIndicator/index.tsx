@@ -39,7 +39,7 @@ export function ErrorIndicator() {
           ) : (
             <ErrorOutlineIcon sx={{ color: "#6B6C72" }} />
           )}
-          {errors.length ? (
+          {errors?.length ? (
             <span className="error-indicator-text">Error occurred</span>
           ) : undefined}
         </Box>

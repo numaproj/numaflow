@@ -167,6 +167,7 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
             flexDirection: "row",
             flexGrow: "1",
           }}
+          key={key}
         >
           {component}
           <div
@@ -176,7 +177,8 @@ const getSummaryComponent = (summarySections: SummarySection[]) => {
         </Box>
       );
     } else {
-      components.push(component);
+      // Assigning key to the last component
+      components.push(<Box key={key}>{component}</Box>);
     }
   });
   return (
@@ -321,6 +323,7 @@ export function SummaryPageLayout({
           ? { height: "100%", overflow: "hidden" }
           : { height: "100%" }
       }
+      data-testid="summary-page-layout"
     >
       {summary}
       <Box

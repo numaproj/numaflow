@@ -30,11 +30,12 @@ import {
   ALPHABETICAL_SORT,
   ASC,
   CRITICAL,
+  DEFAULT_ISB,
   DELETING,
   DESC,
   FAILED,
   HEALTHY,
-  INACTIVE_STATTUS,
+  INACTIVE_STATUS,
   LAST_CREATED_SORT,
   LAST_UPDATED_SORT,
   PAUSED,
@@ -54,7 +55,7 @@ export const HEALTH = [
   HEALTHY,
   WARNING,
   CRITICAL,
-  INACTIVE_STATTUS,
+  INACTIVE_STATUS,
   UNKNOWN,
 ];
 export const STATUS = [
@@ -414,8 +415,8 @@ export function NamespacePipelineListing({
           filteredPipelines.map((p: PipelineData) => {
             const isbName = pipelineData
               ? pipelineData[p.name]?.pipeline?.spec
-                  ?.interStepBufferServiceName || "default"
-              : "default";
+                  ?.interStepBufferServiceName || DEFAULT_ISB
+              : DEFAULT_ISB;
             return (
               <Grid key={`pipeline-${p.name}`} item xs={12}>
                 <PipelineCard
@@ -521,6 +522,7 @@ export function NamespacePipelineListing({
         flexDirection: "column",
         padding: "0 2.625rem",
       }}
+      data-testid="namespace-pipeline-listing"
     >
       <Box
         sx={{
@@ -585,7 +587,7 @@ export function NamespacePipelineListing({
               display: "flex",
               flexDirection: "column",
               marginLeft: "1rem",
-              marginRight: "20rem"
+              marginRight: "20rem",
             }}
           >
             <label style={{ color: "#6B6C72" }}>Status</label>

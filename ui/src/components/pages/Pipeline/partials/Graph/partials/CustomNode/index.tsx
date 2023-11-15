@@ -164,6 +164,7 @@ const CustomNode: FC<NodeProps> = ({
                 borderBottomLeftRadius: "1rem",
                 ...genStyle(""),
               }}
+              data-testid={`sideInput-${data?.name}`}
             >
               <img
                 src={generatorImage[generatorToColorMap.get(data?.name)]}
