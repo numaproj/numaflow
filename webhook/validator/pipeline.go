@@ -67,7 +67,7 @@ func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.Adm
 	return AllowedResponse()
 }
 
-func (v *pipelineValidator) ValidateUpdate(ctx context.Context) *admissionv1.AdmissionResponse {
+func (v *pipelineValidator) ValidateUpdate(_ context.Context) *admissionv1.AdmissionResponse {
 	// check that the new pipeline spec is valid
 	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
 		return DeniedResponse(err.Error())
