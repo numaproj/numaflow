@@ -156,6 +156,7 @@ const mockComponentData = {
     },
   ],
 };
+const mockRefresh = jest.fn();
 
 describe("SummaryPageLayout", () => {
   it("Renders", () => {
@@ -166,7 +167,7 @@ describe("SummaryPageLayout", () => {
           <NamespaceListingWrapper
             namespace={""}
             data={mockComponentData}
-            refresh={() => {}}
+            refresh={mockRefresh}
           />
         }
       />
