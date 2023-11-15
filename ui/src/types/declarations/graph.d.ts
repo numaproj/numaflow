@@ -42,5 +42,4 @@ export interface HighlightContextProps {
   highlightValues: { [key: string]: boolean };
   setHighlightValues: Dispatch<SetStateAction<{ [key: string]: boolean }>>;
   setHidden: Dispatch<SetStateAction<{ [key: string]: boolean }>>;
-  handleNodeClick: (e: any, node: Node<any, string>) => void;
 }

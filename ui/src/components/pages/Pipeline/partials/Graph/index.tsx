@@ -762,7 +762,6 @@ export default function Graph(props: GraphProps) {
             highlightValues,
             setHighlightValues,
             setHidden,
-            handleNodeClick,
             sideInputNodes: sideNodes,
             sideInputEdges: sideEdges,
           }}
