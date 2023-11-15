@@ -42,7 +42,7 @@ full-featured stream processing platforms.
 
 ## Demo
 
-[![Numaflow Demo](https://img.youtube.com/vi/hJS714arX6Q/0.jpg)](https://youtu.be/hJS714arX6Q)
+[![Numaflow Demo](https://img.youtube.com/vi/TOqKOYX0nrE/0.jpg)](https://youtu.be/TOqKOYX0nrE)
 
 ## Resources
 
