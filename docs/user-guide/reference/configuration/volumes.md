@@ -1,8 +1,8 @@
 # Volumes
 
-`Volumes` can be mounted to [`udf`](../../user-defined-functions/map/map.md) or [`udsink`](../../sinks/user-defined-sinks.md) containers.
+`Volumes` can be mounted to [`udsource`](../../sources/user-defined-sources.md), [`udf`](../../user-defined-functions/map/map.md) or [`udsink`](../../sinks/user-defined-sinks.md) containers.
 
-Following example shows how to mount a ConfigMap to an `udf` vertex and an `udsink` vertex.
+Following example shows how to mount a ConfigMap to an `udsource` vertex, an `udf` vertex and an `udsink` vertex.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -11,6 +11,18 @@ metadata:
   name: my-pipeline
 spec:
   vertices:
+    - name: my-source
+      volumes:
+        - name: my-udsource-config
+          configMap:
+            name: udsource-config
+      source:
+        udsource:
+          container:
+            image: my-source:latest
+            volumeMounts:
+              - mountPath: /path/to/my-source-config
+                name: my-udsource-config
     - name: my-udf
       volumes:
         - name: my-udf-config
