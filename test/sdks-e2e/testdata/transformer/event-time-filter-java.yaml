@@ -10,7 +10,7 @@ spec:
         transformer:
           container:
             # Filter messages based on event time, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter
-            image: quay.io/numaio/numaflow-java/mapt-event-time-filter-function:v0.5.2
+            image: quay.io/numaio/numaflow-java/mapt-event-time-filter-function:v0.5.6
     - name: sink-within-2022
       scale:
         min: 1
