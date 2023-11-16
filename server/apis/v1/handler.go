@@ -463,6 +463,14 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 		return
 	}
 
+	// if the namespace is not specified in the request body, set it to the namespace in the URL
+	// otherwise, validate the namespace in the request body against the namespace in the URL
+	if isbsvcNs := isbsvcSpec.Namespace; isbsvcNs != "" && !representSameNamespace(isbsvcNs, ns) {
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s, got %s", ns, isbsvcNs))
+		return
+	}
+	isbsvcSpec.Namespace = ns
+
 	isValid := validateISBSVCSpec(nil, &isbsvcSpec, ValidTypeCreate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service spec, %s", isValid.Error()))
