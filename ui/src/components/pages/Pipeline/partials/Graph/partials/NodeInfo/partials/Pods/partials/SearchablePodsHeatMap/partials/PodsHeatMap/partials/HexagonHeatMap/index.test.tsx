@@ -1,27 +1,35 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom";
 import HexagonHeatMap from "./index";
 
 const data = [
   {
     name: "simple-pipeline-input-0",
+    type: "cpu",
   },
   {
     name: "simple-pipeline-input-1",
+    type: "cpu",
   },
   {
     name: "simple-pipeline-input-2",
+    type: "cpu",
   },
   {
     name: "simple-pipeline-input-3",
+    type: "cpu",
   },
   {
     name: "simple-pipeline-input-4",
+    type: "cpu",
   },
   {
     name: "simple-pipeline-input-5",
+    type: "cpu",
   },
   {
     name: "simple-pipeline-input-6",
+    type: "cpu",
   },
 ];
 const handleClick = jest.fn();
@@ -38,10 +46,14 @@ describe("HexagonHeatMap", () => {
       />
     );
     expect(
-      screen.getByTestId("hexagon_simple-pipeline-input-0-undefined")
+      screen.getByTestId("hexagon_simple-pipeline-input-0-cpu")
     ).toBeInTheDocument();
     expect(
-      screen.getByTestId("hexagon_simple-pipeline-input-0-undefined")
+      screen.getByTestId("hexagonImage_simple-pipeline-input-0-cpu")
     ).toBeVisible();
+    const ele = screen.getByTestId("hexagonImage_simple-pipeline-input-0-cpu");
+    fireEvent.click(ele);
+    fireEvent.mouseMove(ele);
+    fireEvent.mouseOut(ele);
   });
 });
