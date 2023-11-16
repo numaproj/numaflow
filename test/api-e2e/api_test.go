@@ -178,7 +178,7 @@ func (s *APISuite) TestPipeline0() {
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), pausePipeline1, patchPipelineSuccessExpect)
 
-	resumePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").PATCH(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).WithBytes([]byte(testPipeline1Resume)).
+	resumePipeline1 := HTTPExpect(s.T(), "https://localhost:8443").PATCH(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).WithBytes(testPipeline1Resume).
 		Expect().
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), resumePipeline1, patchPipelineSuccessExpect)
