@@ -245,8 +245,10 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 		return
 	}
 
-	if !representSameNamespace(pipelineSpec.Namespace, ns) {
-		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s", ns))
+	// if the namespace is not specified in the request body, set it to the namespace in the URL
+	// otherwise, validate the namespace in the request body against the namespace in the URL
+	if plNs := pipelineSpec.Namespace; plNs != "" && !representSameNamespace(plNs, ns) {
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s, got %s", ns, plNs))
 		return
 	}
 	pipelineSpec.Namespace = ns
@@ -380,7 +382,7 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 
 	// validate the namespace of the request
 	if !representSameNamespace(updatedSpec.Namespace, ns) {
-		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s", ns))
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s, got %s", ns, updatedSpec.Namespace))
 		return
 	}
 
@@ -659,7 +661,7 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 	}
 
 	if !representSameNamespace(pl.Namespace, ns) {
-		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s", ns))
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s, got %s", ns, pl.Namespace))
 		return
 	}
 	pl.Namespace = ns
