@@ -37,9 +37,8 @@ import (
 
 var (
 	//go:embed rbac-model.conf
-	rbacModel  string
-	logger     = logging.NewLogger()
-	configLock = &sync.RWMutex{}
+	rbacModel string
+	logger    = logging.NewLogger()
 )
 
 const (
@@ -62,7 +61,6 @@ type CasbinObject struct {
 	configReader  *viper.Viper
 	opts          *options
 	rwMutex       *sync.RWMutex
-	configLock    *sync.RWMutex
 }
 
 // NewCasbinObject returns a new CasbinObject. It initializes the Casbin Enforcer with the model and policy.
@@ -80,13 +78,10 @@ func NewCasbinObject(inputOptions ...Option) (*CasbinObject, error) {
 	}
 	configReader := viper.New()
 	configReader.SetConfigFile(opts.rbacPropertiesPath)
-	configLock.Lock()
 	err = configReader.ReadInConfig()
 	if err != nil {
-		configLock.Unlock()
 		return nil, err
 	}
-	configLock.Unlock()
 	currentScopes := getRBACScopes(configReader)
 	logger.Infow("Auth Scopes", "scopes", currentScopes)
 	// Set the default policy for authorization.
@@ -100,7 +95,6 @@ func NewCasbinObject(inputOptions ...Option) (*CasbinObject, error) {
 		configReader:  configReader,
 		opts:          opts,
 		rwMutex:       &sync.RWMutex{},
-		configLock:    configLock,
 	}
 
 	// Watch for changes in the config file.
@@ -254,8 +248,6 @@ func extractObject(c *gin.Context) string {
 
 // getRbacProperty is used to read the RBAC property file path and extract the policy provided as argument,
 func getRbacProperty(property string, config *viper.Viper) interface{} {
-	configLock.RLock()
-	defer configLock.RUnlock()
 	val := config.Get(property)
 	if val == nil {
 		return emptyString
@@ -297,13 +289,10 @@ func enforceCheck(enforcer *casbin.Enforcer, user, resource, object, action stri
 // restarting the server. The config file is in the format of yaml. The config file is read by viper.
 func (cas *CasbinObject) configFileReload(e fsnotify.Event) {
 	logger.Infow("RBAC conf file updated:", "fileName", e.Name)
-	cas.configLock.Lock()
 	err := cas.configReader.ReadInConfig()
 	if err != nil {
-		cas.configLock.Unlock()
 		return
 	}
-	cas.configLock.Unlock()
 	// update the scopes
 	newScopes := getRBACScopes(cas.configReader)
 	cas.setCurrentScopes(newScopes)

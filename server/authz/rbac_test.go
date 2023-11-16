@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -15,10 +16,11 @@ import (
 )
 
 const (
-	testPolicyMapPath    = "testData/test-policy-map.csv"
-	testPropertyFilePath = "testData/test-rbac-conf.yaml"
-	testUrlPath          = "/test"
-	testEmail            = "test@test.com"
+	testPolicyMapPath          = "testData/test-policy-map.csv"
+	testPropertyFilePath       = "testData/test-rbac-conf.yaml"
+	testPropertyReloadFilePath = "testData/test-rbac-conf-reload.yaml"
+	testUrlPath                = "/test"
+	testEmail                  = "test@test.com"
 )
 
 var (
@@ -179,7 +181,7 @@ func TestNamespaces(t *testing.T) {
 func TestConfigFileReload(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	authorizer, err := NewCasbinObject(WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
+	authorizer, err := NewCasbinObject(WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyReloadFilePath))
 	assert.NoError(t, err)
 
 	// Test that the authorizer is not nil
@@ -189,15 +191,7 @@ func TestConfigFileReload(t *testing.T) {
 	defaultPolicy := authorizer.getDefaultPolicy()
 	assert.Equal(t, "role:readonly", defaultPolicy)
 
-	// Change the config file path to test data
-	authorizer.configLock.Lock()
-	authorizer.configReader.Set(RbacPropertyScopes, ScopeEmail)
-	err = authorizer.configReader.WriteConfig()
-	if err != nil {
-		authorizer.configLock.Unlock()
-		return
-	}
-	authorizer.configLock.Unlock()
+	dataOrig, err := os.ReadFile(testPropertyReloadFilePath) //read the contents of source file
 
 	// Reload the RBAC properties
 	scopes := authorizer.getCurrentScopes()
@@ -213,15 +207,18 @@ func TestConfigFileReload(t *testing.T) {
 	}
 	assert.Equal(t, "email", scopes[0])
 
-	// Change the config file path to test data
-	authorizer.configLock.Lock()
-	authorizer.configReader.Set(RbacPropertyScopes, ScopeGroup)
-	err = authorizer.configReader.WriteConfig()
+	data, err := os.ReadFile(testPropertyFilePath) //read the contents of source file
 	if err != nil {
-		authorizer.configLock.Unlock()
+		fmt.Println("Error reading file:", err)
 		return
 	}
-	authorizer.configLock.Unlock()
+	err = os.WriteFile(testPropertyReloadFilePath, data, 0644) //write the content to destination file
+	if err != nil {
+		fmt.Println("Error writing file:", err)
+		return
+	}
+	fmt.Println("File copied successfully")
+
 	scopes = authorizer.getCurrentScopes()
 	for scopes[0] != "groups" {
 		fmt.Println("Waiting for RBAC config to be reloaded")
@@ -234,6 +231,26 @@ func TestConfigFileReload(t *testing.T) {
 		}
 	}
 	assert.Equal(t, "groups", scopes[0])
+
+	err = os.WriteFile(testPropertyReloadFilePath, dataOrig, 0644) //write the content to destination file
+	if err != nil {
+		fmt.Println("Error writing file:", err)
+		return
+	}
+	fmt.Println("File copied successfully")
+
+	scopes = authorizer.getCurrentScopes()
+	for scopes[0] != "email" {
+		fmt.Println("Waiting for RBAC config to be reloaded")
+		select {
+		case <-ctx.Done():
+			break
+		default:
+			time.Sleep(10 * time.Millisecond)
+			scopes = authorizer.getCurrentScopes()
+		}
+	}
+	assert.Equal(t, "email", scopes[0])
 }
 
 // createTestGinContext is a helper function to create a test gin context.
