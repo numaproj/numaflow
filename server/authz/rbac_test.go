@@ -190,14 +190,14 @@ func TestConfigFileReload(t *testing.T) {
 	assert.Equal(t, "role:readonly", defaultPolicy)
 
 	// Change the config file path to test data
-	authorizer.rwMutex.Lock()
+	authorizer.configLock.Lock()
 	authorizer.configReader.Set(RbacPropertyScopes, ScopeEmail)
 	err = authorizer.configReader.WriteConfig()
 	if err != nil {
-		authorizer.rwMutex.Unlock()
+		authorizer.configLock.Unlock()
 		return
 	}
-	authorizer.rwMutex.Unlock()
+	authorizer.configLock.Unlock()
 
 	// Reload the RBAC properties
 	scopes := authorizer.getCurrentScopes()
@@ -214,14 +214,14 @@ func TestConfigFileReload(t *testing.T) {
 	assert.Equal(t, "email", scopes[0])
 
 	// Change the config file path to test data
-	authorizer.rwMutex.Lock()
+	authorizer.configLock.Lock()
 	authorizer.configReader.Set(RbacPropertyScopes, ScopeGroup)
 	err = authorizer.configReader.WriteConfig()
 	if err != nil {
-		authorizer.rwMutex.Unlock()
+		authorizer.configLock.Unlock()
 		return
 	}
-	authorizer.rwMutex.Unlock()
+	authorizer.configLock.Unlock()
 	scopes = authorizer.getCurrentScopes()
 	for scopes[0] != "groups" {
 		fmt.Println("Waiting for RBAC config to be reloaded")
