@@ -191,7 +191,8 @@ func TestConfigFileReload(t *testing.T) {
 	defaultPolicy := authorizer.getDefaultPolicy()
 	assert.Equal(t, "role:readonly", defaultPolicy)
 
-	dataOrig, err := os.ReadFile(testPropertyReloadFilePath) //read the contents of source file
+	//read the contents of source file
+	dataOrig, _ := os.ReadFile(testPropertyReloadFilePath)
 
 	// Reload the RBAC properties
 	scopes := authorizer.getCurrentScopes()
