@@ -8,7 +8,7 @@ metadata:
   name: default
 spec:
   jetstream:
-    version: 2.10.3 # Do NOT use "latest" in real deployment, check "numaflow-controller-config" ConfigMap to get available versions.
+    version: 2.9.19 # Do NOT use "latest" in real deployment, check "numaflow-controller-config" ConfigMap to get available versions.
     # Optional. Specifying "persistence" will create a PersistentVolumeClaim for data persistence, it works for most of Kubernetes 
     # clusters, including Kind, Minikube, K3s, etc, it's needed to run production workloads.
     persistence:

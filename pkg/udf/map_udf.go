@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -176,7 +177,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// create a conditional forwarder for each partition
-		getVertexPartitionIdx := GetPartitionedBufferIdx()
+		getVertexPartitionIdx := GetPartitionedBufferIdx(u.VertexInstance)
 		conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 			var result []forward.VertexBuffer
 
@@ -196,7 +197,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 					} else {
 						result = append(result, forward.VertexBuffer{
 							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, edge.GetToVertexPartitionCount()),
+							ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, int32(edge.GetToVertexPartitionCount())),
 						})
 					}
 				} else {
@@ -210,7 +211,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 						} else {
 							result = append(result, forward.VertexBuffer{
 								ToVertexName:         edge.To,
-								ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, edge.GetToVertexPartitionCount()),
+								ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, int32(edge.GetToVertexPartitionCount())),
 							})
 						}
 					}
@@ -304,11 +305,14 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 // GetPartitionedBufferIdx returns a function that returns a partitioned buffer index based on the toVertex name and the partition count
 // it distributes the messages evenly to the partitions of the toVertex based on the message count(round-robin)
-func GetPartitionedBufferIdx() func(toVertex string, toVertexPartitionCount int) int32 {
-	messagePerPartitionMap := make(map[string]int)
-	return func(toVertex string, toVertexPartitionCount int) int32 {
-		toVertexPartition := (messagePerPartitionMap[toVertex] + 1) % toVertexPartitionCount
-		messagePerPartitionMap[toVertex] = toVertexPartition
-		return int32(toVertexPartition)
+func GetPartitionedBufferIdx(vertexInstance *dfv1.VertexInstance) func(toVertex string, toVertexPartitionCount int32) int32 {
+	messagePerPartitionMap := make(map[string]*atomic.Int32)
+	for _, edge := range vertexInstance.Vertex.Spec.ToEdges {
+		messagePerPartitionMap[edge.To] = atomic.NewInt32(0)
+	}
+	return func(toVertex string, toVertexPartitionCount int32) int32 {
+		toVertexPartition := (messagePerPartitionMap[toVertex].Load() + 1) % toVertexPartitionCount
+		messagePerPartitionMap[toVertex].Store(toVertexPartition)
+		return toVertexPartition
 	}
 }

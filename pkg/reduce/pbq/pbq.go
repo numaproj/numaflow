@@ -27,22 +27,25 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
+	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 )
 
 // PBQ Buffer queue which is backed with a persisted store, each partition
 // will have a PBQ associated with it
 type PBQ struct {
-	vertexName    string
-	pipelineName  string
-	vertexReplica int32
-	store         store.Store
-	output        chan *window.TimedWindowRequest
-	cob           bool // cob to avoid panic in case writes happen after close of book
-	PartitionID   partition.ID
-	options       *options
-	manager       *Manager
-	log           *zap.SugaredLogger
-	mu            sync.Mutex
+	vertexName     string
+	pipelineName   string
+	vertexReplica  int32
+	store          store.Store
+	output         chan *window.TimedWindowRequest
+	cob            bool // cob to avoid panic in case writes happen after close of book
+	PartitionID    partition.ID
+	options        *options
+	manager        *Manager
+	windowStrategy window.Strategy
+	log            *zap.SugaredLogger
+	mu             sync.Mutex
 }
 
 var _ ReadWriteCloser = (*PBQ)(nil)
@@ -57,7 +60,7 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) err
 	// RETHINK: I am not sure if we should be doing this here. We should probably do this in the writer.
 	// if the window operation is delete, we should close the output channel and return
 	if request != nil && request.Operation == window.Delete {
-		close(p.output)
+		p.CloseOfBook()
 		return nil
 	}
 	var writeErr error
@@ -128,13 +131,22 @@ readLoop:
 			p.log.Errorw("Error while replaying records from store", zap.Any("ID", p.PartitionID), zap.Error(err))
 		}
 		for _, msg := range readMessages {
+			// FIXME: support for session window
+			var w window.TimedWindow
+			if p.windowStrategy == window.Fixed {
+				w = fixed.NewWindowFromPartition(&p.PartitionID)
+			} else if p.windowStrategy == window.Sliding {
+				w = sliding.NewWindowFromPartition(&p.PartitionID)
+			} else {
+				p.log.Errorw("Window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowStrategy))
+			}
 			// select to avoid infinite blocking while writing to output channel
 			select {
-			//FIXME only works for fixed and sliding window
 			case p.output <- &window.TimedWindowRequest{
 				ReadMessage: msg,
 				Operation:   window.Append,
-				Windows:     nil,
+				Windows:     []window.TimedWindow{w},
+				ID:          &p.PartitionID,
 			}:
 			case <-ctx.Done():
 				break readLoop

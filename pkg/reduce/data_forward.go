@@ -209,7 +209,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		oldestClosedWindowEndTime := df.windower.OldestClosedWindowEndTime()
-		// if there are no closed windows, that means
+		// -1 means there are no windows
 		if oldestClosedWindowEndTime == time.UnixMilli(-1) {
 			// if all the windows are closed already, and the len(readBatch) == 0
 			// then it means there's an idle situation
@@ -222,7 +222,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				}
 			}
 		} else {
-			// if toBeClosed window exists, and the watermark we fetch has already passed the endTime of this window
+			// if window exists, and the watermark we fetch has already passed the endTime of this window
 			// then it means the overall dataflow of the pipeline has already reached a later time point
 			// so we can close the window and process the data in this window
 			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); oldestClosedWindowEndTime.Before(watermark) {
@@ -234,7 +234,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 					}
 				}
 			} else {
-				// if toBeClosed window exists, but the watermark we fetch is still within the endTime of the window
+				// if window exists, but the watermark we fetch is still within the endTime of the window
 				// then we can't close the window because there could still be data after the idling situation ends
 				// so in this case, we publish an idle watermark
 				for toVertexName, toVertexBuffer := range df.toBuffers {
@@ -302,7 +302,6 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
-		println("Creating new PnF - id - ", partitionID.String())
 		df.of.AsyncSchedulePnF(ctx, *partitionID, q)
 		//df.udfInvocationTracking[partitionID] = t
 		df.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
@@ -311,7 +310,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 	return q
 }
 
-// process is one iteration of the read loop which writes the messages to the PBQs followed by acking the messages, and
+// process is one iteration of the read loop which writes create windows and writes window requests to the PBQs followed by acking the messages, and
 // then closing the windows that can closed.
 func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage) {
 	var dataMessages = make([]*isb.ReadMessage, 0, len(messages))
@@ -361,11 +360,12 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 	// we can invoke remove windows only once per batch
 	wm := wmb.Watermark(successfullyWrittenMessages[0].Watermark)
 
-	windowOperations := df.windower.CloseWindows(time.Time(wm).Add(-1 * df.opts.allowedLateness))
+	closedWindowOps := df.windower.CloseWindows(time.Time(wm).Add(-1 * df.opts.allowedLateness))
 
-	df.log.Debugw("Windows eligible for closing", zap.Int("length", len(windowOperations)), zap.Time("watermark", time.Time(wm)))
+	df.log.Debugw("Windows eligible for closing", zap.Int("length", len(closedWindowOps)), zap.Time("watermark", time.Time(wm)))
 
-	for _, winOp := range windowOperations {
+	// write the close window operations to PBQ
+	for _, winOp := range closedWindowOps {
 		err = df.writeToPBQ(ctx, winOp)
 		if err != nil {
 			df.log.Errorw("Failed to write close signal to PBQ", zap.Error(err))
@@ -391,7 +391,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 	}
 }
 
-// writeMessagesToWindows write the messages to each window that message belongs to. Each window is backed by a PBQ.
+// writeMessagesToWindows write the messages to each window that message belongs to. Each window partition is backed by a PBQ.
 func (df *DataForward) writeMessagesToWindows(ctx context.Context, messages []*isb.ReadMessage) ([]*isb.ReadMessage, error) {
 	var err error
 	var writtenMessages = make([]*isb.ReadMessage, 0, len(messages))
@@ -511,7 +511,6 @@ func (df *DataForward) writeToPBQ(ctx context.Context, winOp *window.TimedWindow
 			metrics.LabelPipeline:           df.pipelineName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		}).Inc()
-		//df.log.Debugw("Successfully wrote the message", zap.String("msgOffSet", winOp.ReadOffset.String()), zap.String("partitionID", p.String()))
 		return true, nil
 	})
 

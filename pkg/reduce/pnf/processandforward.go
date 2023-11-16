@@ -139,7 +139,9 @@ outerLoop:
 			if err == ctx.Err() {
 				return
 			}
-			p.log.Panic("Got an error while invoking AsyncApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
+			if err != nil {
+				p.log.Panic("Got an error while invoking AsyncApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
+			}
 		case response, ok := <-responseCh:
 			if !ok || response == nil {
 				break outerLoop

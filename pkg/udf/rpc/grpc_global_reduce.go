@@ -107,6 +107,8 @@ func (u *GRPCBasedGlobalReduce) AsyncApplyReduce(ctx context.Context, partitionI
 				}
 				responseCh <- parseGlobalReduceResponse(result)
 			case err := <-reduceErrCh:
+				// ctx.Done() event will be handled by the AsyncReduceFn method
+				// so we don't need a separate case for ctx.Done() here
 				if err == ctx.Err() {
 					return
 				}

@@ -422,7 +422,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 	// create pbqManager
 	pbqManager, err = pbq.NewManager(child, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	publisher := map[string]publish.Publisher{
@@ -510,7 +510,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -722,7 +722,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -803,7 +803,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -888,7 +888,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -970,7 +970,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -1052,7 +1052,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -1155,7 +1155,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -1245,7 +1245,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(cctx, "reduce", pipelineName, 0, storeProvider,
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher
@@ -1339,7 +1339,7 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 	// create pbq manager
 	var pbqManager *pbq.Manager
 	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create in memory watermark publisher and fetcher

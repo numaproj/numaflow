@@ -115,7 +115,7 @@ func TestProcessAndForward_Process(t *testing.T) {
 	var pbqManager *pbq.Manager
 
 	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
-		pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
 	// create a pbq for a partition
@@ -182,7 +182,7 @@ func TestProcessAndForward_Forward(t *testing.T) {
 
 	var pbqManager *pbq.Manager
 
-	pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores())
+	pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(), window.Fixed)
 
 	test1Buffer11 := simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0)
 	test1Buffer12 := simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1)
@@ -372,7 +372,7 @@ func TestWriteToBuffer(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			var pbqManager *pbq.Manager
-			pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores())
+			pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(), window.Fixed)
 			toBuffer := map[string][]isb.BufferWriter{
 				"buffer": value.buffers,
 			}

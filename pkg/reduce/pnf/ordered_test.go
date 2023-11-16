@@ -129,7 +129,7 @@ func TestOrderedProcessing(t *testing.T) {
 			// although this could be declared outside, since we are using common naming scheme for partitions,
 			// things will go haywire.
 			pbqManager, _ := pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
-				pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
+				window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 
 			windower := fixed.NewWindower(60 * time.Second)
 			op := NewOrderedProcessor(ctx, keyedVertex, identityReducer, toSteps, pbqManager, myForwardTest{}, pw, idleManager, windower)

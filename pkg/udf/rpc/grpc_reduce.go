@@ -176,12 +176,14 @@ func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *par
 			select {
 			case result, ok := <-resultCh:
 				if !ok || result == nil {
-					// if the resultCh channel is closed, close the responseCh and errCh channels and return
+					// if the resultCh channel is closed, close the responseCh and return
 					close(responseCh)
 					return
 				}
 				responseCh <- parseReduceResponse(result)
 			case err := <-reduceErrCh:
+				// ctx.Done() event will be handled by the AsyncReduceFn method
+				// so we don't need a separate case for ctx.Done() here
 				if err == ctx.Err() {
 					errCh <- err
 					return
@@ -215,7 +217,7 @@ func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *par
 					return
 				}
 
-			case <-ctx.Done(): // if the context is done, return
+			case <-ctx.Done(): // if the context is done, don't send any more datum to datumCh channel
 				return
 			}
 		}
@@ -235,14 +237,13 @@ func createReduceRequest(windowRequest *window.TimedWindowRequest) *reducepb.Red
 			Slot:  w.Slot(),
 		})
 	}
-	// for fixed and sliding window event can be either open, close or append
+	// for fixed and sliding window event can be either open or append
+	// since closing the pbq channel is like a close event for the window
+	// when pbq channel is closed, grpc client stream will be closed and
+	// server will consider the grpc client stream as closed event for the window
 	switch windowRequest.Operation {
 	case window.Open:
 		windowOp = reducepb.ReduceRequest_WindowOperation_OPEN
-	case window.Close:
-		windowOp = reducepb.ReduceRequest_WindowOperation_CLOSE
-	case window.Delete:
-		windowOp = reducepb.ReduceRequest_WindowOperation_CLOSE
 	default:
 		windowOp = reducepb.ReduceRequest_WindowOperation_APPEND
 	}
@@ -326,7 +327,7 @@ func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowR
 		taggedMessages = append(taggedMessages, taggedMessage)
 	}
 
-	// we don't care about the combined key which was used demultiplexing in sdk side
+	// we don't care about the combined key which was used for demultiplexing in sdk side
 	// because for fixed and sliding we don't track keys.
 	return &window.TimedWindowResponse{
 		WriteMessages: taggedMessages,

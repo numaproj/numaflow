@@ -154,7 +154,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
-	getVertexPartition := GetPartitionedBufferIdx()
+	getVertexPartition := GetPartitionedBufferIdx(u.VertexInstance)
 	conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
 		var result []forward.VertexBuffer
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
@@ -173,7 +173,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 				} else {
 					result = append(result, forward.VertexBuffer{
 						ToVertexName:         edge.To,
-						ToVertexPartitionIdx: getVertexPartition(edge.To, edge.GetToVertexPartitionCount()),
+						ToVertexPartitionIdx: getVertexPartition(edge.To, int32(edge.GetToVertexPartitionCount())),
 					})
 				}
 			} else {
@@ -187,7 +187,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 					} else {
 						result = append(result, forward.VertexBuffer{
 							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: getVertexPartition(edge.To, edge.GetToVertexPartitionCount()),
+							ToVertexPartitionIdx: getVertexPartition(edge.To, int32(edge.GetToVertexPartitionCount())),
 						})
 					}
 				}
@@ -232,7 +232,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	storeProvider := wal.NewWALStores(u.VertexInstance, wal.WithStorePath(dfv1.DefaultStorePath), wal.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 
-	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeProvider)
+	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeProvider, windower.Strategy())
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)
@@ -256,12 +256,11 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}
 
-	//FIXME we need to fix this
 	// read the persisted messages before reading the messages from ISB
-	//err = dataForwarder.ReplayPersistedMessages(ctx)
-	//if err != nil {
-	//	return fmt.Errorf("failed to read and process persisted messages, %w", err)
-	//}
+	err = dataForwarder.ReplayPersistedMessages(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to read and process persisted messages, %w", err)
+	}
 
 	// start reading the ISB messages.
 	wg := &sync.WaitGroup{}
