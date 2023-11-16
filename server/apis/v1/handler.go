@@ -244,8 +244,9 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to pipeline spec, %s", err.Error()))
 		return
 	}
-	if err := validateNamespace(&pipelineSpec, ns); err != nil {
-		h.respondWithError(c, err.Error())
+
+	if !representSameNamespace(pipelineSpec.Namespace, ns) {
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s", ns))
 		return
 	}
 	pipelineSpec.Namespace = ns
@@ -377,9 +378,9 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 		return
 	}
 
-	// Validate the namespace of the request
-	if err = validateNamespace(&updatedSpec, ns); err != nil {
-		h.respondWithError(c, err.Error())
+	// validate the namespace of the request
+	if !representSameNamespace(updatedSpec.Namespace, ns) {
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s", ns))
 		return
 	}
 
@@ -656,9 +657,9 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 			break
 		}
 	}
-	err = validateNamespace(pl, ns)
-	if err != nil {
-		h.respondWithError(c, err.Error())
+
+	if !representSameNamespace(pl.Namespace, ns) {
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s", ns))
 		return
 	}
 	pl.Namespace = ns
@@ -956,7 +957,7 @@ func validateISBSVCSpec(prevSpec *dfv1.InterStepBufferService,
 	newSpec *dfv1.InterStepBufferService, validType string) error {
 	// UI-specific validations: updating namespace and name from UI is not allowed
 	if validType == ValidTypeUpdate && prevSpec != nil {
-		if prevSpec.Namespace != newSpec.Namespace {
+		if !representSameNamespace(prevSpec.Namespace, newSpec.Namespace) {
 			return fmt.Errorf("updating an inter-step buffer service's namespace is not allowed, expected %s", prevSpec.Namespace)
 		}
 		if prevSpec.Name != newSpec.Name {
@@ -980,14 +981,10 @@ func validateISBSVCSpec(prevSpec *dfv1.InterStepBufferService,
 	return nil
 }
 
-// validateNamespace is used to validate the namespace for a pipeline spec
-// For a request, the namespace provided as parameter should be same as the namespace in the pipeline spec
-func validateNamespace(pipeline *dfv1.Pipeline, ns string) error {
-	if pipeline.Namespace != "" && pipeline.Namespace != ns {
-		errMsg := fmt.Errorf("namespace mismatch, expected %s", ns)
-		return errMsg
-	}
-	return nil
+// representSameNamespace is used to check if two namespaces are the same
+func representSameNamespace(ns1, ns2 string) bool {
+	// in k8s object metadata, an empty namespace is equivalent to "default" namespace
+	return ns1 == ns2 || ns1 == "" && ns2 == "default" || ns1 == "default" && ns2 == ""
 }
 
 // bindJson is used to bind the request body to a given object
