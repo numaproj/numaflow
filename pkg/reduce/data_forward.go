@@ -348,6 +348,7 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 	if len(successfullyWrittenMessages) == 0 {
 		return
 	}
+
 	// ack successful messages
 	df.ackMessages(ctx, successfullyWrittenMessages)
 
@@ -397,7 +398,8 @@ func (df *DataForward) writeMessagesToWindows(ctx context.Context, messages []*i
 	var writtenMessages = make([]*isb.ReadMessage, 0, len(messages))
 	var failedMessages = make([]*isb.ReadMessage, 0)
 
-	for _, message := range messages {
+readLoop:
+	for i, message := range messages {
 		if df.shouldDropMessage(message) {
 			writtenMessages = append(writtenMessages, message)
 			continue
@@ -415,18 +417,13 @@ func (df *DataForward) writeMessagesToWindows(ctx context.Context, messages []*i
 				// this error will ONLY BE set if we are in a erroring loop and ctx.Done() has been invoked.
 				if err != nil {
 					df.log.Errorw("Failed to write message, asked to stop trying", zap.Any("msgOffSet", message.ReadOffset.String()), zap.String("partitionID", partitionID.String()), zap.Error(err))
-					failedMessages = append(failedMessages, message)
-					break
+					failedMessages = append(failedMessages, messages[i:]...)
+					break readLoop
 				}
-			}
-			if err != nil {
-				break
 			}
 		}
 
-		if err == nil {
-			writtenMessages = append(writtenMessages, message)
-		}
+		writtenMessages = append(writtenMessages, message)
 	}
 
 	return writtenMessages, failedMessages, err
