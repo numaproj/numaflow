@@ -352,9 +352,11 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 	// ack successful messages
 	df.ackMessages(ctx, successfullyWrittenMessages)
 
-	// non-ack the failed messages, so that they will be retried in the next iteration
+	// no-ack the failed messages, so that they will be retried in the next iteration
 	// if we don't do this, the failed messages will be retried after the ackWait time
-	// which will cause correctness issues
+	// which will cause correctness issues. We want these messages to be immediately retried.
+	// When a message is retried, the offset remains the same, so an old message might jump out of the offset-timeline and cause the watermark to be -1.
+	// The correctness is violated because the queue offset and message order are no longer monotonically increasing for those failed messages.
 	df.noAckMessages(ctx, failedMessages)
 
 	// close any windows that need to be closed.
@@ -590,7 +592,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 	wg.Wait()
 }
 
-// noAckMessages non-acks all the read offsets of failed messages.
+// noAckMessages no-acks all the read offsets of failed messages.
 func (df *DataForward) noAckMessages(ctx context.Context, failedMessages []*isb.ReadMessage) {
 	var readOffsets []isb.Offset
 	for _, m := range failedMessages {
