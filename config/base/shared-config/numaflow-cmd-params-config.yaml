@@ -9,7 +9,7 @@ data:
   ### The namespace that the controller and the UX server watch when "namespaced" is true.
   # managed.namespace: numaflow-system
   #
-  ### Where to disable leader election for the controller, defaults to false
+  ### Whether to disable leader election for the controller, defaults to false
   # controller.disable.leader.election: "false"
   #
   ### Whether to disable TLS for UX server.

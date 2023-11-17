@@ -108,7 +108,7 @@ kind: ConfigMap
 metadata:
   name: numaflow-cmd-params-config
 data:
-  # Where to disable leader election for the controller, defaults to false
+  # Whether to disable leader election for the controller, defaults to false
   controller.disable.leader.election: "true"
 ```
 
