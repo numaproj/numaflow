@@ -180,17 +180,26 @@ outerLoop:
 			// but if there's a window that's about to be closed which has a end time before the current window end time,
 			// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
 			oldestClosedWindowEndTime := p.windower.OldestClosedWindowEndTime()
-			if oldestClosedWindowEndTime != time.UnixMilli(-1) && oldestClosedWindowEndTime.Before(p.PartitionID.End) {
+			if oldestClosedWindowEndTime != time.UnixMilli(-1) && oldestClosedWindowEndTime.Before(response.ID.End) {
 				p.publishWM(ctx, wmb.Watermark(oldestClosedWindowEndTime.Add(-1*time.Millisecond)), writeOffsets)
 			} else {
 				p.publishWM(ctx, wmb.Watermark(p.PartitionID.End.Add(-1*time.Millisecond)), writeOffsets)
 			}
 
-			// delete the closed windows which are tracked by the windower
-			p.windower.DeleteClosedWindows(response)
-			// TODO: should we consider compacting the pbq here? Since we have successfully processed all the messages for a window + key.
-			// it could be a async call, we don't need to wait for it to finish.
+			// since we track window for every key, we need to delete the closed windows
+			// every time we receive a response from the UDF.
+			if p.windower.Strategy() == window.Session {
+				// delete the closed windows which are tracked by the windower
+				p.windower.DeleteClosedWindows(&window.TimedWindowResponse{ID: &p.PartitionID})
+			}
 		}
+	}
+
+	// since we don't track the windows for every key, we need to delete the closed windows
+	// once we have received all the responses from the UDF.
+	if p.windower.Strategy() == window.Fixed || p.windower.Strategy() == window.Sliding {
+		// delete the closed windows which are tracked by the windower
+		p.windower.DeleteClosedWindows(&window.TimedWindowResponse{ID: &p.PartitionID})
 	}
 
 	// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
