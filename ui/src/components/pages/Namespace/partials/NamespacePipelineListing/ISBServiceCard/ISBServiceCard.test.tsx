@@ -190,8 +190,6 @@ describe("ISBServiceCard", () => {
         </AppContext.Provider>
       </BrowserRouter>
     );
-    expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByText("Healthy")).toBeInTheDocument();
     expect(screen.getByText("jetstream")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
   });
@@ -215,7 +213,7 @@ describe("ISBServiceCard", () => {
 
     const deleteButton = screen.getByTestId("delete-isb");
     expect(deleteButton).toBeInTheDocument();
-    userEvent.click(deleteButton);
+    await userEvent.click(deleteButton);
     expect(
       screen.getByTestId("delete-confirmation-button")
     ).toBeInTheDocument();

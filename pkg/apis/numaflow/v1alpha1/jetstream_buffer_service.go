@@ -17,7 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	fmt "fmt"
+	"fmt"
 	"strconv"
 
 	appv1 "k8s.io/api/apps/v1"

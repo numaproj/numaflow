@@ -20,22 +20,34 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 func TestValidateISBServiceCreate(t *testing.T) {
-	isbsvc := fakeISBSvc()
-	v := NewISBServiceValidator(fakeK8sClient, &fakeISBSvcClient, nil, isbsvc)
+	isbsvc := fakeRedisISBSvc()
+	v := NewISBServiceValidator(nil, isbsvc)
 	r := v.ValidateCreate(contextWithLogger(t))
 	assert.True(t, r.Allowed)
 }
 
 func TestValidateISBServiceUpdate(t *testing.T) {
-	isbsvc := fakeISBSvc()
-	t.Run("test ISBSvc spec change", func(t *testing.T) {
-		JetStreamISBSvc := fakeJetStreamISBSvc()
-		newISBSvc := JetStreamISBSvc.DeepCopy()
-		v := NewISBServiceValidator(fakeK8sClient, &fakeISBSvcClient, isbsvc, newISBSvc)
-		r := v.ValidateUpdate(contextWithLogger(t))
-		assert.False(t, r.Allowed)
-	})
+	testCases := []struct {
+		name string
+		old  *dfv1.InterStepBufferService
+		new  *dfv1.InterStepBufferService
+		want bool
+	}{
+		{name: "invalid new ISBSvc spec", old: fakeRedisISBSvc(), new: nil, want: false},
+		{name: "changing ISB Service type is not allowed - redis to jetstream", old: fakeRedisISBSvc(), new: fakeJetStreamISBSvc(), want: false},
+		{name: "changing ISB Service type is not allowed - jetstream to redis", old: fakeJetStreamISBSvc(), new: fakeRedisISBSvc(), want: false},
+		{name: "valid new ISBSvc spec", old: fakeRedisISBSvc(), new: fakeRedisISBSvc(), want: true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := NewISBServiceValidator(tc.old, tc.new)
+			r := v.ValidateUpdate(contextWithLogger(t))
+			assert.Equal(t, tc.want, r.Allowed)
+		})
+	}
 }

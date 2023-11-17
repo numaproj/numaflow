@@ -15,7 +15,8 @@ import { NamespacePipelineListing } from "./partials/NamespacePipelineListing";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { NamespaceSummaryData } from "../../../types/declarations/namespace";
 import {
-  ISB_SERVICES_STATUS_TOOLTIP, ISB_SERVICES_TOOLTIP,
+  ISB_SERVICES_STATUS_TOOLTIP,
+  ISB_SERVICES_TOOLTIP,
   PIPELINE_STATUS_TOOLTIP,
 } from "../../../utils";
 
@@ -118,7 +119,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
             titledValueProps: {
               title: "ISB SERVICES",
               value: 0,
-              tooltip: ISB_SERVICES_TOOLTIP
+              tooltip: ISB_SERVICES_TOOLTIP,
             },
           },
           {
@@ -207,7 +208,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
             titledValueProps: {
               title: "ISB SERVICES",
               value: data.isbsCount,
-              tooltip: ISB_SERVICES_TOOLTIP
+              tooltip: ISB_SERVICES_TOOLTIP,
             },
           },
           {
