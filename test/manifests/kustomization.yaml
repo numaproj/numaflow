@@ -46,7 +46,7 @@ patchesStrategicMerge:
     apiVersion: v1
     kind: ConfigMap
     metadata:
-      name: numaflow-controller-cmd-params-config
+      name: numaflow-cmd-params-config
     data:
       controller.disable.leader.election: "true"
 

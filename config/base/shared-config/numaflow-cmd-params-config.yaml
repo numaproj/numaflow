@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-cmd-params-config
+data:
+  ### Whether to run the controller and the UX server in namespaced scope, defaults to false.
+  # namespaced: "false"
+  #
+  ### The namespace that the controller and the UX server watch when "namespaced" is true.
+  # managed.namespace: numaflow-system
+  #
+  ### Where to disable leader election for the controller, defaults to false
+  # controller.disable.leader.election: "false"
+  #
+  ### Whether to disable TLS for UX server.
+  # server.insecure: "false"
+  #
+  ### Port to listen on for UX server, defaults to 8443 or 8080 if insecure is set.
+  # server.port: "8443"
+  #
+  ### Base href for Numaflow UX server, defaults to '/'.
+  # server.base.href: "/"
+  #
+  ### Whether to disable authentication and authorization for the UX server, defaults to false.
+  server.disable.auth: "true"
+  #
+  ### The address of the Dex server for authentication.
+  # server.dex.server: http://numaflow-dex-server:5556/dex
+  #
+  ### The external address of the Numaflow server. This is needed when using Dex for authentication.
+  # server.address: https://localhost:8443

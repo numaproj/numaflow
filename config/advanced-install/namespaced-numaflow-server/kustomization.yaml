@@ -1,11 +1,12 @@
 #
-# Controller only with namespaced install, witout CRD
+# Controller only with namespaced install, without CRD
 #
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  - ../../base/shared-config
   - ../../base/numaflow-server
   - ../../namespace-install/rbac/numaflow-server
 
@@ -18,7 +19,7 @@ patchesStrategicMerge:
     apiVersion: v1
     kind: ConfigMap
     metadata:
-      name: numaflow-server-cmd-params-config
+      name: numaflow-cmd-params-config
     data:
-      server.namespaced: "true"
+      namespaced: "true"
 

@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - crds/full
+  - shared-config
   - controller-manager
   - numaflow-server
   - dex

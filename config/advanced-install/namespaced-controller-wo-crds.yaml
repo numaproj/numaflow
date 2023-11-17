@@ -124,10 +124,11 @@ subjects:
 ---
 apiVersion: v1
 data:
-  controller.namespaced: "true"
+  namespaced: "true"
+  server.disable.auth: "true"
 kind: ConfigMap
 metadata:
-  name: numaflow-controller-cmd-params-config
+  name: numaflow-cmd-params-config
 ---
 apiVersion: v1
 data:
@@ -298,20 +299,20 @@ spec:
         - name: NUMAFLOW_CONTROLLER_NAMESPACED
           valueFrom:
             configMapKeyRef:
-              key: controller.namespaced
-              name: numaflow-controller-cmd-params-config
+              key: namespaced
+              name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_CONTROLLER_MANAGED_NAMESPACE
           valueFrom:
             configMapKeyRef:
-              key: controller.managed.namespace
-              name: numaflow-controller-cmd-params-config
+              key: managed.namespace
+              name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_LEADER_ELECTION_DISABLED
           valueFrom:
             configMapKeyRef:
               key: controller.disable.leader.election
-              name: numaflow-controller-cmd-params-config
+              name: numaflow-cmd-params-config
               optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
