@@ -45,21 +45,39 @@ const (
 	emptyString = ""
 )
 
+// CasbinObject is the struct that implements the Authorizer interface.
+// It contains the Casbin Enforcer, the current scopes, the default policy and the config reader.
+// The config reader is used to watch for changes in the config file.
+// The Casbin Enforcer is used to enforce the authorization policy.
+// The current scopes are used to determine the user identity token to be used for authorization.
+// policyDefault is the default policy to be used when the requested resource is not present in the policy.
+// userPermCount is a cache to store the count of permissions for a user. If the user has permissions in the
+// policy, we store the count in the cache and return based on the value.
 type CasbinObject struct {
 	enforcer      *casbin.Enforcer
 	userPermCount *sync.Map
 	currentScopes []string
 	policyDefault string
 	configReader  *viper.Viper
+	opts          *options
+	rwMutex       *sync.RWMutex
 }
 
-func NewCasbinObject() (*CasbinObject, error) {
-	enforcer, err := getEnforcer()
+// NewCasbinObject returns a new CasbinObject. It initializes the Casbin Enforcer with the model and policy.
+// It also initializes the config reader to watch for changes in the config file.
+func NewCasbinObject(inputOptions ...Option) (*CasbinObject, error) {
+	// Set the default options.
+	var opts = DefaultOptions()
+	// Apply the input options.
+	for _, inputOption := range inputOptions {
+		inputOption(opts)
+	}
+	enforcer, err := getEnforcer(opts.policyMapPath)
 	if err != nil {
 		return nil, err
 	}
 	configReader := viper.New()
-	configReader.SetConfigFile(rbacPropertiesPath)
+	configReader.SetConfigFile(opts.rbacPropertiesPath)
 	err = configReader.ReadInConfig()
 	if err != nil {
 		return nil, err
@@ -75,6 +93,8 @@ func NewCasbinObject() (*CasbinObject, error) {
 		currentScopes: currentScopes,
 		policyDefault: policyDefault,
 		configReader:  configReader,
+		opts:          opts,
+		rwMutex:       &sync.RWMutex{},
 	}
 
 	// Watch for changes in the config file.
@@ -92,7 +112,8 @@ func NewCasbinObject() (*CasbinObject, error) {
 // for the given user, if not we will allocate a default policy for the user.
 func (cas *CasbinObject) Authorize(c *gin.Context, userInfo *authn.UserInfo) bool {
 	// Get the scopes to check from the policy.
-	scopedList := getSubjectFromScope(cas.currentScopes, userInfo)
+	currentScopes := cas.getCurrentScopes()
+	scopedList := getSubjectFromScope(currentScopes, userInfo)
 	// Get the resource, object and action from the request.
 	resource := extractResource(c)
 	object := extractObject(c)
@@ -108,9 +129,10 @@ func (cas *CasbinObject) Authorize(c *gin.Context, userInfo *authn.UserInfo) boo
 	}
 	// If the user does not have any policy defined, allocate a default policy for the user.
 	if !userHasPolicies {
+		defaultPolicy := cas.getDefaultPolicy()
 		logger.Debugw("No policy defined for the user, allocating default policy",
-			"DefaultPolicy", cas.policyDefault)
-		ok := enforceCheck(cas.enforcer, cas.policyDefault, resource, object, action)
+			"DefaultPolicy", defaultPolicy)
+		ok := enforceCheck(cas.enforcer, defaultPolicy, resource, object, action)
 		if ok {
 			return ok
 		}
@@ -136,12 +158,12 @@ func getSubjectFromScope(scopes []string, userInfo *authn.UserInfo) []string {
 }
 
 // getEnforcer initializes the Casbin Enforcer with the model and policy.
-func getEnforcer() (*casbin.Enforcer, error) {
+func getEnforcer(policyFilePath string) (*casbin.Enforcer, error) {
 	modelRBAC, err := model.NewModelFromString(rbacModel)
 	if err != nil {
 		return nil, err
 	}
-	a := fileadapter.NewAdapter(policyMapPath)
+	a := fileadapter.NewAdapter(policyFilePath)
 
 	// Initialize the Casbin Enforcer with the model and policies.
 	enforcer, err := casbin.NewEnforcer(modelRBAC, a)
@@ -164,12 +186,12 @@ func patternMatch(args ...interface{}) (interface{}, error) {
 	if policy == MatchAll {
 		return true, nil
 	}
-	// pattern, namespace
+	// match as pattern
 	return path.Match(policy, req)
 }
 
 // stringMatch is used to match strings from the policy, if * is provided it will match all namespaces.
-// Otherwise, we will enforce based on the namespace provided.
+// Otherwise, we will enforce based on the string provided.
 func stringMatch(args ...interface{}) (interface{}, error) {
 	req, policy, err := extractArgs(args)
 	if err != nil {
@@ -180,7 +202,7 @@ func stringMatch(args ...interface{}) (interface{}, error) {
 	if policy == MatchAll {
 		return true, nil
 	}
-	// pattern, namespace
+	// match exact string
 	return policy == req, nil
 }
 
@@ -224,7 +246,7 @@ func extractObject(c *gin.Context) string {
 	return emptyString
 }
 
-// getRbacProperty is used to read the rbacPropertiesPath file path and extract the policy provided as argument,
+// getRbacProperty is used to read the RBAC property file path and extract the policy provided as argument,
 func getRbacProperty(property string, config *viper.Viper) interface{} {
 	val := config.Get(property)
 	if val == nil {
@@ -273,13 +295,14 @@ func (cas *CasbinObject) configFileReload(e fsnotify.Event) {
 	}
 	// update the scopes
 	newScopes := getRBACScopes(cas.configReader)
-	cas.currentScopes = newScopes
+	cas.setCurrentScopes(newScopes)
 	// update the default policy
-	cas.policyDefault = getDefaultPolicy(cas.configReader)
+	policyDefault := getDefaultPolicy(cas.configReader)
+	cas.setDefaultPolicy(policyDefault)
 	// clear the userPermCount cache
 	cas.userPermCount = &sync.Map{}
 
-	logger.Infow("Auth Scopes Updated", "scopes", cas.currentScopes)
+	logger.Infow("Auth Scopes Updated", "scopes", cas.getCurrentScopes())
 }
 
 // getDefaultPolicy returns the default policy from the rbac properties file. The default policy is used when the
@@ -316,4 +339,38 @@ func (cas *CasbinObject) hasPermissionsDefined(user string) bool {
 	// store the count in userPermCount
 	cas.userPermCount.Store(user, hasPerms)
 	return hasPerms
+}
+
+// setCurrentScopes sets the current scopes to the given scopes.
+// It is used to update the scopes when the config file is changed.
+// It is thread safe.
+func (cas *CasbinObject) setCurrentScopes(scopes []string) {
+	cas.rwMutex.Lock()
+	defer cas.rwMutex.Unlock()
+	cas.currentScopes = scopes
+}
+
+// getCurrentScopes returns the current scopes from the CasbinObject.
+// It is thread safe.
+func (cas *CasbinObject) getCurrentScopes() []string {
+	cas.rwMutex.RLock()
+	defer cas.rwMutex.RUnlock()
+	return cas.currentScopes
+}
+
+// setDefaultPolicy sets the default policy to the given policy.
+// It is used to update the default policy when the config file is changed.
+// It is thread safe.
+func (cas *CasbinObject) setDefaultPolicy(policy string) {
+	cas.rwMutex.Lock()
+	defer cas.rwMutex.Unlock()
+	cas.policyDefault = policy
+}
+
+// getDefaultPolicy returns the default policy from the CasbinObject.
+// It is thread safe.
+func (cas *CasbinObject) getDefaultPolicy() string {
+	cas.rwMutex.RLock()
+	defer cas.rwMutex.RUnlock()
+	return cas.policyDefault
 }
