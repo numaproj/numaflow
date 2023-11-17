@@ -273,7 +273,7 @@ func (ac *AdmissionController) admit(ctx context.Context, request *admissionv1.A
 
 // Generate cert secret
 func (ac *AdmissionController) generateSecret(ctx context.Context) (*corev1.Secret, error) {
-	hosts := []string{}
+	var hosts []string
 	hosts = append(hosts, fmt.Sprintf("%s.%s.svc.cluster.local", ac.Options.ServiceName, ac.Options.Namespace))
 	hosts = append(hosts, fmt.Sprintf("%s.%s.svc", ac.Options.ServiceName, ac.Options.Namespace))
 	serverKey, serverCert, caCert, err := commontls.CreateCerts(certOrg, hosts, time.Now().Add(10*365*24*time.Hour), true, false)

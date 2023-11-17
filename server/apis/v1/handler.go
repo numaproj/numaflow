@@ -634,7 +634,8 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 		dryRun = strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 	)
 
-	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
+	oldPipelineSpec, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
+	newPipelineSpec := oldPipelineSpec.DeepCopy()
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", ns,
 			pipeline, inputVertexName, err.Error()))
@@ -652,36 +653,37 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 		return
 	}
 
-	for index, vertex := range pl.Spec.Vertices {
+	for index, vertex := range newPipelineSpec.Spec.Vertices {
 		if vertex.Name == inputVertexName {
 			if vertex.GetVertexType() != requestBody.GetVertexType() {
 				h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: vertex type is immutable",
 					ns, pipeline, inputVertexName))
 				return
 			}
-			pl.Spec.Vertices[index] = requestBody
+			newPipelineSpec.Spec.Vertices[index] = requestBody
 			break
 		}
 	}
 
-	err = validatePipelineSpec(h, nil, pl, ValidTypeCreate)
+	err = validatePipelineSpec(h, oldPipelineSpec, newPipelineSpec, ValidTypeUpdate)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", err.Error()))
 		return
 	}
-	// if the validation flag "dryRun" is set to true, return without creating the pipeline
+	// if the validation flag "dryRun" is set to true, return without updating the pipeline
 	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
 
-	if _, err := h.numaflowClient.Pipelines(ns).Update(context.Background(), pl, metav1.UpdateOptions{}); err != nil {
+	oldPipelineSpec.Spec = newPipelineSpec.Spec
+	if _, err := h.numaflowClient.Pipelines(ns).Update(context.Background(), oldPipelineSpec, metav1.UpdateOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s",
 			ns, pipeline, inputVertexName, err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pl.Spec))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, oldPipelineSpec.Spec))
 }
 
 // GetVerticesMetrics is used to provide information about all the vertices for the given pipeline including processing rates.
