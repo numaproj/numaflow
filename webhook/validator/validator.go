@@ -57,8 +57,7 @@ func GetValidator(ctx context.Context, client kubernetes.Interface, NumaClient v
 				return nil, err
 			}
 		}
-		isbSvcClient := NumaClient.InterStepBufferServices(newSpec.Namespace)
-		return NewISBServiceValidator(client, isbSvcClient, oldSpec, newSpec), nil
+		return NewISBServiceValidator(oldSpec, newSpec), nil
 	case dfv1.PipelineGroupVersionKind.Kind:
 		var newSpec *dfv1.Pipeline
 		if len(newBytes) > 0 {
@@ -84,7 +83,7 @@ func GetValidator(ctx context.Context, client kubernetes.Interface, NumaClient v
 	}
 }
 
-// DeniedResponse constructs a denied AdmissionResonse
+// DeniedResponse constructs a denied AdmissionResponse
 func DeniedResponse(reason string, args ...interface{}) *admissionv1.AdmissionResponse {
 	result := apierrors.NewBadRequest(fmt.Sprintf(reason, args...)).Status()
 	return &admissionv1.AdmissionResponse{
@@ -93,7 +92,7 @@ func DeniedResponse(reason string, args ...interface{}) *admissionv1.AdmissionRe
 	}
 }
 
-// AllowedResponse constructs an allowed AdmissionResonse
+// AllowedResponse constructs an allowed AdmissionResponse
 func AllowedResponse() *admissionv1.AdmissionResponse {
 	return &admissionv1.AdmissionResponse{
 		Allowed: true,

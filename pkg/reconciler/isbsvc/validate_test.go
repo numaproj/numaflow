@@ -19,9 +19,10 @@ package isbsvc
 import (
 	"testing"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 var (
@@ -104,5 +105,19 @@ func TestValidateInterStepBuffer(t *testing.T) {
 		err := ValidateInterStepBufferService(isbs)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "is not defined")
+	})
+
+	t.Run("test nil ISB Service", func(t *testing.T) {
+		err := ValidateInterStepBufferService(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "nil ISB Service")
+	})
+
+	t.Run("test invalid name", func(t *testing.T) {
+		isbs := testJetStreamIsbs.DeepCopy()
+		isbs.Name = "UpperCaseName"
+		err := ValidateInterStepBufferService(isbs)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid ISB Service name")
 	})
 }
