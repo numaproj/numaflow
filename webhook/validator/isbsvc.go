@@ -18,9 +18,9 @@ package validator
 
 import (
 	"context"
-	"reflect"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	isbsvccontroller "github.com/numaproj/numaflow/pkg/reconciler/isbsvc"
@@ -51,24 +51,20 @@ func (v *isbsvcValidator) ValidateUpdate(_ context.Context) *admissionv1.Admissi
 	case v.oldISBService.Spec.JetStream != nil:
 		// check the type of ISB Service is not changed
 		if v.newISBService.Spec.Redis != nil {
-			return DeniedResponse("Can not change ISB Service type from Jetstream to Redis")
+			return DeniedResponse("can not change ISB Service type from Jetstream to Redis")
 		}
 		// check the persistence of ISB Service is not changed
-		if v.oldISBService.Spec.JetStream.Persistence == nil && v.newISBService.Spec.JetStream.Persistence != nil ||
-			v.oldISBService.Spec.JetStream.Persistence != nil && v.newISBService.Spec.JetStream.Persistence == nil ||
-			v.oldISBService.Spec.JetStream.Persistence != nil && v.newISBService.Spec.JetStream.Persistence != nil && !reflect.DeepEqual(v.oldISBService.Spec.JetStream.Persistence, v.newISBService.Spec.JetStream.Persistence) {
-			return DeniedResponse("Can not change persistence of Jetstream ISB Service")
+		if !equality.Semantic.DeepEqual(v.oldISBService.Spec.JetStream.Persistence, v.newISBService.Spec.JetStream.Persistence) {
+			return DeniedResponse("can not change persistence of Jetstream ISB Service")
 		}
 	case v.oldISBService.Spec.Redis != nil:
 		// check the type of ISB Service is not changed
 		if v.newISBService.Spec.JetStream != nil {
-			return DeniedResponse("Can not change ISB Service type from Redis to Jetstream")
+			return DeniedResponse("can not change ISB Service type from Redis to Jetstream")
 		}
 		// check the persistence of ISB Service is not changed
-		if v.oldISBService.Spec.Redis.Native.Persistence == nil && v.newISBService.Spec.Redis.Native.Persistence != nil ||
-			v.oldISBService.Spec.Redis.Native.Persistence != nil && v.newISBService.Spec.Redis.Native.Persistence == nil ||
-			v.oldISBService.Spec.Redis.Native.Persistence != nil && v.newISBService.Spec.Redis.Native.Persistence != nil && !reflect.DeepEqual(v.oldISBService.Spec.Redis.Native.Persistence, v.newISBService.Spec.Redis.Native.Persistence) {
-			return DeniedResponse("Can not change persistence of Redis ISB Service")
+		if !equality.Semantic.DeepEqual(v.oldISBService.Spec.Redis.Native.Persistence, v.newISBService.Spec.Redis.Native.Persistence) {
+			return DeniedResponse("can not change persistence of Redis ISB Service")
 		}
 	}
 	return AllowedResponse()
