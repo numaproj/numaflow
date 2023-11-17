@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	testPolicyMapPath          = "testData/test-policy-map.csv"
-	testPropertyFilePath       = "testData/test-rbac-conf.yaml"
-	testPropertyReloadFilePath = "testData/test-rbac-conf-reload.yaml"
+	testPolicyMapPath          = "testdata/test-policy-map.csv"
+	testPropertyFilePath       = "testdata/test-rbac-conf.yaml"
+	testPropertyReloadFilePath = "testdata/test-rbac-conf-reload.yaml"
 	testUrlPath                = "/test"
 	testEmail                  = "test@test.com"
 )
@@ -31,6 +31,7 @@ var (
 )
 
 // TestCreateAuthorizer is a test implementation of the NewCasbinObject function.
+// It checks that the authorizer is created correctly and the policies, configs are loaded correctly.
 func TestCreateAuthorizer(t *testing.T) {
 	authorizer, err := NewCasbinObject(WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
 	assert.NoError(t, err)
@@ -41,6 +42,15 @@ func TestCreateAuthorizer(t *testing.T) {
 	// Check the roles loaded from the policy map
 	roles := authorizer.enforcer.GetAllRoles()
 	assert.Equal(t, 2, len(roles))
+
+	// Check the default policy, which is set to "role:readonly" in the test data
+	defaultPolicy := authorizer.getDefaultPolicy()
+	assert.Equal(t, "role:readonly", defaultPolicy)
+
+	// Check the scopes loaded from the policy map
+	scopes := authorizer.getCurrentScopes()
+	assert.Equal(t, 1, len(scopes))
+	assert.Equal(t, "groups", scopes[0])
 }
 
 // TestAuthorize is a test implementation of the Authorize functionality.
@@ -88,11 +98,8 @@ func TestDefaultPolicy(t *testing.T) {
 	// Test that the authorizer is not nil
 	assert.NotNil(t, authorizer)
 
-	// Check the default policy, which is set to "role:readonly" in the test data
-	defaultPolicy := authorizer.getDefaultPolicy()
-	assert.Equal(t, "role:readonly", defaultPolicy)
-
 	// get a test gin context for GET request
+	// The current default policy is "role:readonly"
 	// The default policy allows only GET requests
 	// So, the GET request should be authorized
 	getRequest := mockHttpRequest("GET", "")
@@ -118,11 +125,7 @@ func TestScopes(t *testing.T) {
 	// Test that the authorizer is not nil
 	assert.NotNil(t, authorizer)
 
-	// Check the scopes loaded from the policy map
-	scopes := authorizer.getCurrentScopes()
-	assert.Equal(t, 1, len(scopes))
-	assert.Equal(t, "groups", scopes[0])
-
+	// Get a mock user info for read only group
 	userInfo := mockUserInfo(testEmail, groupReadOnly)
 
 	// get a test gin context for GET request
@@ -133,8 +136,10 @@ func TestScopes(t *testing.T) {
 	assert.True(t, isAuth)
 
 	// Change the scopes to "email"
-	authorizer.currentScopes = []string{"email"}
-	scopes = authorizer.getCurrentScopes()
+	authorizer.setCurrentScopes([]string{"email"})
+
+	// Check if the scopes are updated correctly
+	scopes := authorizer.getCurrentScopes()
 	assert.Equal(t, 1, len(scopes))
 	assert.Equal(t, "email", scopes[0])
 
@@ -147,7 +152,7 @@ func TestScopes(t *testing.T) {
 	isAuth = authorizer.Authorize(postRequest, userInfo)
 	assert.True(t, isAuth)
 
-	// PATCH requests are allowed for the test user email
+	// PATCH requests are not allowed for the test user email
 	patchRequest := mockHttpRequest("PATCH", "")
 	isAuth = authorizer.Authorize(patchRequest, userInfo)
 	assert.False(t, isAuth)
@@ -187,14 +192,10 @@ func TestConfigFileReload(t *testing.T) {
 	// Test that the authorizer is not nil
 	assert.NotNil(t, authorizer)
 
-	// Check the RBAC properties loaded from the config file
-	defaultPolicy := authorizer.getDefaultPolicy()
-	assert.Equal(t, "role:readonly", defaultPolicy)
-
 	//read the contents of source file
 	dataOrig, _ := os.ReadFile(testPropertyReloadFilePath)
 
-	// Reload the RBAC properties
+	// Load the RBAC properties
 	scopes := authorizer.getCurrentScopes()
 	for scopes[0] != "email" {
 		fmt.Println("Waiting for RBAC config to be reloaded")
@@ -208,18 +209,23 @@ func TestConfigFileReload(t *testing.T) {
 	}
 	assert.Equal(t, "email", scopes[0])
 
-	data, err := os.ReadFile(testPropertyFilePath) //read the contents of source file
+	//read the contents of source file
+	data, err := os.ReadFile(testPropertyFilePath)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return
 	}
-	err = os.WriteFile(testPropertyReloadFilePath, data, 0644) //write the content to destination file
+
+	// write the content to destination file, this will overwrite the content of policy file
+	// and the RBAC config should be reloaded
+	err = os.WriteFile(testPropertyReloadFilePath, data, 0644)
 	if err != nil {
 		fmt.Println("Error writing file:", err)
 		return
 	}
 	fmt.Println("File copied successfully")
 
+	// Check if the RBAC properties are reloaded correctly
 	scopes = authorizer.getCurrentScopes()
 	for scopes[0] != "groups" {
 		fmt.Println("Waiting for RBAC config to be reloaded")
@@ -233,13 +239,15 @@ func TestConfigFileReload(t *testing.T) {
 	}
 	assert.Equal(t, "groups", scopes[0])
 
-	err = os.WriteFile(testPropertyReloadFilePath, dataOrig, 0644) //write the content to destination file
+	// write the original content back to the file, this should trigger the RBAC config reload
+	err = os.WriteFile(testPropertyReloadFilePath, dataOrig, 0644)
 	if err != nil {
 		fmt.Println("Error writing file:", err)
 		return
 	}
 	fmt.Println("File copied successfully")
 
+	// Check if the RBAC properties are reloaded correctly
 	scopes = authorizer.getCurrentScopes()
 	for scopes[0] != "email" {
 		fmt.Println("Waiting for RBAC config to be reloaded")
