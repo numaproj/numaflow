@@ -13,9 +13,10 @@ const (
 )
 
 var (
-	fakeK8sClient      = fakeClient.NewSimpleClientset()
-	fakePipelineClient = fake.FakePipelines{}
-	fakeNumaClient     = fake.FakeNumaflowV1alpha1{}
+	fakeK8sClient        = fakeClient.NewSimpleClientset()
+	fakePipelineClient   = fake.FakePipelines{}
+	fakeNumaClient       = fake.FakeNumaflowV1alpha1{}
+	testStorageClassName = "test-sc"
 )
 
 func fakeRedisISBSvc() *dfv1.InterStepBufferService {
@@ -28,6 +29,9 @@ func fakeRedisISBSvc() *dfv1.InterStepBufferService {
 			Redis: &dfv1.RedisBufferService{
 				Native: &dfv1.NativeRedis{
 					Version: "6.2.6",
+					Persistence: &dfv1.PersistenceStrategy{
+						StorageClassName: &testStorageClassName,
+					},
 				},
 			},
 		},
@@ -43,6 +47,9 @@ func fakeJetStreamISBSvc() *dfv1.InterStepBufferService {
 		Spec: dfv1.InterStepBufferServiceSpec{
 			JetStream: &dfv1.JetStreamBufferService{
 				Version: "1.1.1",
+				Persistence: &dfv1.PersistenceStrategy{
+					StorageClassName: &testStorageClassName,
+				},
 			},
 		},
 	}
