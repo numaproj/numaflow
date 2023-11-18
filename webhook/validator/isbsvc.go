@@ -63,7 +63,7 @@ func (v *isbsvcValidator) ValidateUpdate(_ context.Context) *admissionv1.Admissi
 			return DeniedResponse("can not change ISB Service type from Redis to Jetstream")
 		}
 		// check the persistence of ISB Service is not changed
-		if !equality.Semantic.DeepEqual(v.oldISBService.Spec.Redis.Native.Persistence, v.newISBService.Spec.Redis.Native.Persistence) {
+		if oldRedisNative, newRedisNative := v.oldISBService.Spec.Redis.Native, v.newISBService.Spec.Redis.Native; oldRedisNative != nil && newRedisNative != nil && !equality.Semantic.DeepEqual(oldRedisNative.Persistence, newRedisNative.Persistence) {
 			return DeniedResponse("can not change persistence of Redis ISB Service")
 		}
 	}
