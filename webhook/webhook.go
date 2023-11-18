@@ -56,7 +56,7 @@ const (
 	certOrg = "io.numaproj"
 )
 
-// Webhook configuration
+// Options is the webhook configuration
 type Options struct {
 	WebhookName     string
 	ServiceName     string
@@ -68,7 +68,7 @@ type Options struct {
 	ClientAuth      tls.ClientAuthType
 }
 
-// Controller for validation webhook
+// AdmissionController is the validating admission webhook controller
 type AdmissionController struct {
 	Client     kubernetes.Interface
 	NumaClient v1alpha1.NumaflowV1alpha1Interface
@@ -256,7 +256,7 @@ func (ac *AdmissionController) admit(ctx context.Context, request *admissionv1.A
 		log.Infof("Operation not interested: %v %v", request.Kind, request.Operation)
 		return &admissionv1.AdmissionResponse{Allowed: true}
 	}
-	v, err := validator.GetValidator(ctx, ac.Client, ac.NumaClient, request.Kind, request.OldObject.Raw, request.Object.Raw)
+	v, err := validator.GetValidator(ctx, ac.NumaClient, request.Kind, request.OldObject.Raw, request.Object.Raw)
 	if err != nil {
 		return validator.DeniedResponse("failed to get a validator: %v", err)
 	}

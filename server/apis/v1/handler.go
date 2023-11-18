@@ -938,9 +938,8 @@ func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 // validatePipelineSpec is used to validate the pipeline spec during create and update
 func validatePipelineSpec(h *handler, oldPipeline *dfv1.Pipeline, newPipeline *dfv1.Pipeline, validType string) error {
 	ns := newPipeline.Namespace
-	pipeClient := h.numaflowClient.Pipelines(ns)
 	isbClient := h.numaflowClient.InterStepBufferServices(ns)
-	valid := validator.NewPipelineValidator(h.kubeClient, pipeClient, isbClient, oldPipeline, newPipeline)
+	valid := validator.NewPipelineValidator(isbClient, oldPipeline, newPipeline)
 	var resp *admissionv1.AdmissionResponse
 	switch validType {
 	case ValidTypeCreate:

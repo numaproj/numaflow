@@ -2,21 +2,14 @@ package validator
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	fakeClient "k8s.io/client-go/kubernetes/fake"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1/fake"
 )
 
-const (
-	testNamespace = "test-ns"
-)
+const testNamespace = "test-ns"
 
-var (
-	fakeK8sClient      = fakeClient.NewSimpleClientset()
-	fakePipelineClient = fake.FakePipelines{}
-	fakeNumaClient     = fake.FakeNumaflowV1alpha1{}
-)
+var fakeNumaClient = fake.FakeNumaflowV1alpha1{}
 
 func fakeRedisISBSvc() *dfv1.InterStepBufferService {
 	return &dfv1.InterStepBufferService{

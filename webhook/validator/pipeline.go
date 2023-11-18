@@ -22,7 +22,6 @@ import (
 
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
@@ -30,20 +29,14 @@ import (
 )
 
 type pipelineValidator struct {
-	client    kubernetes.Interface
-	pipeline  v1alpha1.PipelineInterface
-	isbClient v1alpha1.InterStepBufferServiceInterface
-
+	isbClient   v1alpha1.InterStepBufferServiceInterface
 	oldPipeline *dfv1.Pipeline
 	newPipeline *dfv1.Pipeline
 }
 
 // NewPipelineValidator returns a new PipelineValidator
-func NewPipelineValidator(client kubernetes.Interface, pipeline v1alpha1.PipelineInterface,
-	isbClient v1alpha1.InterStepBufferServiceInterface, old, new *dfv1.Pipeline) Validator {
+func NewPipelineValidator(isbClient v1alpha1.InterStepBufferServiceInterface, old, new *dfv1.Pipeline) Validator {
 	return &pipelineValidator{
-		client:      client,
-		pipeline:    pipeline,
 		isbClient:   isbClient,
 		oldPipeline: old,
 		newPipeline: new,
