@@ -92,9 +92,30 @@ func (v *pipelineValidator) checkISBSVCExists(ctx context.Context, isbSvcName st
 // it focuses on validating the update itself
 // (the validation for a single spec is done in pipeline controller)
 func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
-	// check that the ISB service name is NOT changed
+	// rule 1: the ISB service name shall not change
 	if new.Spec.InterStepBufferServiceName != old.Spec.InterStepBufferServiceName {
 		return fmt.Errorf("cannot update pipeline with different ISB service name")
 	}
+	// rule 2: if a vertex is updated, the update must be valid
+	// we consider that a vertex is updated if its name is the same but its spec is different
+	nameMap := make(map[string]*dfv1.AbstractVertex)
+	for _, v := range old.Spec.Vertices {
+		nameMap[v.Name] = &v
+	}
+	for _, v := range new.Spec.Vertices {
+		if oldV, ok := nameMap[v.Name]; ok {
+			if err := validateVertexUpdate(oldV, &v); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// validateVertexUpdate validates the update of a vertex
+// this method assumes that the old and new vertex specs are both valid
+// it focuses on validating the update itself
+func validateVertexUpdate(old, new *dfv1.AbstractVertex) error {
+	// TODO - implement it
 	return nil
 }
