@@ -2147,8 +2147,17 @@
 <span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-system</span>
 </code></pre></div>
 <h2 id="namespace-scope">Namespace Scope<a class="headerlink" href="#namespace-scope" title="Permanent link">&para;</a></h2>
-<p>A namespace installation only watches and executes pipelines in the namespace it is installed (typically <code>numaflow-system</code>).</p>
-<p>Add an argument <code>--namespaced</code> to the <code>numaflow-controller</code> and <code>numaflow-server</code> deployments to achieve namespace scope installation.</p>
+<p>A namespace scoped installation only watches and executes pipelines in the namespace it is installed (typically <code>numaflow-system</code>).</p>
+<p>Configure the ConfigMap <code>numaflow-cmd-params-config</code> to achieve namespace scoped installation.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># Whether to run in namespaced scope, defaults to false.</span>
+<span class="w">  </span><span class="nt">namespaced</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</code></pre></div>
+<p>Another approach to do namespace scoped installation is to add an argument <code>--namespaced</code> to the <code>numaflow-controller</code> and <code>numaflow-server</code> deployments. This approach takes precedence over the ConfigMap approach.</p>
 <div class="highlight"><pre><span></span><code>      - args:
         - --namespaced
 </code></pre></div>
@@ -2170,7 +2179,18 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 </code></pre></div>
 <h2 id="managed-namespace-scope">Managed Namespace Scope<a class="headerlink" href="#managed-namespace-scope" title="Permanent link">&para;</a></h2>
 <p>A managed namespace installation watches and executes pipelines in a specific namespace.</p>
-<p>To do managed namespace installation, besides <code>--namespaced</code>, add <code>--managed-namespace</code> and the specific namespace to the <code>numaflow-controller</code> and <code>numaflow-server</code> deployment arguments.</p>
+<p>To do managed namespace installation, configure the ConfigMap <code>numaflow-cmd-params-config</code> as following.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># Whether to run the controller and the UX server in namespaced scope, defaults to false.</span>
+<span class="w">  </span><span class="nt">namespaced</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">  </span><span class="c1"># The namespace that the controller and UX server watch when &quot;namespaced&quot; is true, defaults to the installation namespace.</span>
+<span class="w">  </span><span class="nt">managed.namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-system</span>
+</code></pre></div>
+<p>Similarly, another approach is to add <code>--managed-namespace</code> and the specific namespace to the <code>numaflow-controller</code> and <code>numaflow-server</code> deployment arguments. This approach takes precedence over the ConfigMap approach.</p>
 <div class="highlight"><pre><span></span><code>      - args:
         - --namespaced
         - --managed-namespace
@@ -2178,9 +2198,14 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 </code></pre></div>
 <h2 id="high-availability">High Availability<a class="headerlink" href="#high-availability" title="Permanent link">&para;</a></h2>
 <p>By default, the Numaflow controller is installed with <code>Active-Passive</code> HA strategy enabled, which means you can run the controller with multiple replicas (defaults to 1 in the manifests).</p>
-<p>To turn off HA, add the following environment variable to the deployment spec.</p>
-<div class="highlight"><pre><span></span><code>      name: NUMAFLOW_LEADER_ELECTION_DISABLED
-      value: &quot;true&quot;
+<p>To turn off HA, configure the ConfigMap <code>numaflow-cmd-params-config</code> as following.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># Whether to disable leader election for the controller, defaults to false</span>
+<span class="w">  </span><span class="nt">controller.disable.leader.election</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </code></pre></div>
 <p>If HA is turned off, the controller deployment should not run with multiple replicas.</p>
 
