@@ -126,6 +126,25 @@ func TestValidateISBServiceUpdate(t *testing.T) {
 					},
 				},
 			}, want: false},
+		{name: "changing redis isbsvc native from nil to non-nil", old: &dfv1.InterStepBufferService{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: testNamespace,
+				Name:      dfv1.DefaultISBSvcName,
+			},
+			Spec: dfv1.InterStepBufferServiceSpec{
+				Redis: &dfv1.RedisBufferService{Native: nil},
+			},
+		}, new: fakeRedisISBSvc(), want: false},
+		{name: "changing redis isbsvc native from non-nil to nil", old: fakeRedisISBSvc(),
+			new: &dfv1.InterStepBufferService{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: testNamespace,
+					Name:      dfv1.DefaultISBSvcName,
+				},
+				Spec: dfv1.InterStepBufferServiceSpec{
+					Redis: &dfv1.RedisBufferService{Native: nil},
+				},
+			}, want: false},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
