@@ -1,11 +1,12 @@
 #
-# Numaflow-server only with cluster install
+# UX server only with cluster install
 #
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  - ../../base/shared-config
   - ../../base/numaflow-server
   - ../../cluster-install/rbac/numaflow-server
 
@@ -15,17 +16,3 @@ images:
   - name: quay.io/numaproj/numaflow
     newTag: latest
 
-patchesStrategicMerge:
-  - |-
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: numaflow-server
-    spec:
-      template:
-        spec:
-          containers:
-            - name: main
-              image: quay.io/numaproj/numaflow:latest
-              args:
-              - "server"

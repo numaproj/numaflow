@@ -1,11 +1,12 @@
 #
-# Controller only with namespaced install, witout CRD
+# Controller only with namespaced install, without CRD
 #
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  - ../../base/shared-config
   - ../../base/numaflow-server
   - ../../namespace-install/rbac/numaflow-server
 
@@ -13,11 +14,12 @@ images:
   - name: quay.io/numaproj/numaflow
     newTag: latest
 
-patches:
-  - patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --namespaced
-    target:
-      kind: Deployment
-      name: numaflow-server
+patchesStrategicMerge:
+  - |
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: numaflow-cmd-params-config
+    data:
+      namespaced: "true"
+

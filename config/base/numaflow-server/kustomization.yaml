@@ -4,6 +4,5 @@ kind: Kustomization
 resources:
   - numaflow-server-sa.yaml
   - numaflow-server-rbac-config.yaml
-  - numaflow-server-cmd-params-config.yaml
   - numaflow-server-deployment.yaml
   - numaflow-server-service.yaml
