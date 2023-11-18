@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 func TestValidatePipelineCreate(t *testing.T) {
@@ -43,9 +45,40 @@ func TestValidatePipelineUpdate(t *testing.T) {
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
 	})
-	t.Run("test Pipeline interStepBufferServiceName change", func(t *testing.T) {
+	t.Run("test pipeline interStepBufferServiceName change", func(t *testing.T) {
 		newPipeline := pipeline.DeepCopy()
 		newPipeline.Spec.InterStepBufferServiceName = "change-name"
+		v := NewPipelineValidator(&fk, pipeline, newPipeline)
+		r := v.ValidateUpdate(contextWithLogger(t))
+		assert.False(t, r.Allowed)
+	})
+	t.Run("test should not change the type of a vertex", func(t *testing.T) {
+		newPipeline := pipeline.DeepCopy()
+		newPipeline.Spec.Vertices[0].Source = nil
+		newPipeline.Spec.Vertices[0].UDF = &dfv1.UDF{
+			Builtin: &dfv1.Function{
+				Name: "cat",
+			},
+		}
+		v := NewPipelineValidator(&fk, pipeline, newPipeline)
+		r := v.ValidateUpdate(contextWithLogger(t))
+		assert.False(t, r.Allowed)
+	})
+	t.Run("test should not change the partition count of a reduce vertex", func(t *testing.T) {
+		var oldPartitionCount, newPartitionCount int32 = 2, 3
+		newPipeline := pipeline.DeepCopy()
+		// in our test fake pipeline, the 3rd vertex is a reduce vertex
+		pipeline.Spec.Vertices[2].Partitions = &oldPartitionCount
+		newPipeline.Spec.Vertices[2].Partitions = &newPartitionCount
+		v := NewPipelineValidator(&fk, pipeline, newPipeline)
+		r := v.ValidateUpdate(contextWithLogger(t))
+		assert.False(t, r.Allowed)
+	})
+	t.Run("test should not change the persistent storage of a reduce vertex", func(t *testing.T) {
+		newPipeline := pipeline.DeepCopy()
+		newPipeline.Spec.Vertices[2].UDF.GroupBy.Storage = &dfv1.PBQStorage{
+			PersistentVolumeClaim: &dfv1.PersistenceStrategy{},
+		}
 		v := NewPipelineValidator(&fk, pipeline, newPipeline)
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)

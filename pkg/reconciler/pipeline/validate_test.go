@@ -87,7 +87,7 @@ var (
 							Window: dfv1.Window{
 								Fixed: &dfv1.FixedWindow{
 									Length: &metav1.Duration{
-										Duration: time.Duration(60 * time.Second),
+										Duration: 60 * time.Second,
 									},
 								},
 							},
@@ -112,7 +112,7 @@ var (
 							Window: dfv1.Window{
 								Fixed: &dfv1.FixedWindow{
 									Length: &metav1.Duration{
-										Duration: time.Duration(60 * time.Second),
+										Duration: 60 * time.Second,
 									},
 								},
 							},

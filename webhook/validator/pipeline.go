@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -69,6 +70,7 @@ func (v *pipelineValidator) ValidateUpdate(_ context.Context) *admissionv1.Admis
 	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
 		return DeniedResponse(err.Error())
 	}
+	// check that the update is valid
 	if err := validatePipelineUpdate(v.oldPipeline, v.newPipeline); err != nil {
 		return DeniedResponse(err.Error())
 	}
@@ -109,6 +111,8 @@ func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
 			}
 		}
 	}
+	// TODO - rule 3: if the structure of the pipeline is updated, the update must be valid
+	// e.g. a vertex is added or removed, an edge is added or removed or updated, etc.
 	return nil
 }
 
@@ -116,6 +120,17 @@ func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
 // this method assumes that the old and new vertex specs are both valid
 // it focuses on validating the update itself
 func validateVertexUpdate(old, new *dfv1.AbstractVertex) error {
-	// TODO - implement it
+	if o, n := old.GetVertexType(), new.GetVertexType(); o != n {
+		return fmt.Errorf("vertex type is immutable, vertex name: %s, expected type %s, got type %s", old.Name, o, n)
+	}
+	if old.GetVertexType() == dfv1.VertexTypeReduceUDF {
+		if o, n := old.GetPartitionCount(), new.GetPartitionCount(); o != n {
+			return fmt.Errorf("partition count is immutable for a reduce vertex, vertex name: %s, expected partition count %d, got partition count %d", old.Name, o, n)
+		}
+		// with both old and new vertex specs being reducer and valid, we can safely assume that the GroupBy field is not nil
+		if o, n := old.UDF.GroupBy.Storage, new.UDF.GroupBy.Storage; !equality.Semantic.DeepEqual(o, n) {
+			return fmt.Errorf("storage is immutable for a reduce vertex, vertex name: %s, expected storage %v, got storage %v", old.Name, o, n)
+		}
+	}
 	return nil
 }

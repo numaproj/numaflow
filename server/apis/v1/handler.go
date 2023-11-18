@@ -655,11 +655,6 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 	newPipelineSpec := oldPipelineSpec.DeepCopy()
 	for index, vertex := range newPipelineSpec.Spec.Vertices {
 		if vertex.Name == inputVertexName {
-			if vertex.GetVertexType() != requestBody.GetVertexType() {
-				h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: vertex type is immutable",
-					ns, pipeline, inputVertexName))
-				return
-			}
 			newPipelineSpec.Spec.Vertices[index] = requestBody
 			break
 		}
