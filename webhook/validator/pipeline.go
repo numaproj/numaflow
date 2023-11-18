@@ -61,13 +61,16 @@ func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.Adm
 }
 
 func (v *pipelineValidator) ValidateUpdate(_ context.Context) *admissionv1.AdmissionResponse {
+	// check that the old pipeline spec is valid
+	if err := pipelinecontroller.ValidatePipeline(v.oldPipeline); err != nil {
+		return DeniedResponse(err.Error())
+	}
 	// check that the new pipeline spec is valid
 	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
 		return DeniedResponse(err.Error())
 	}
-	// check that the ISB service name is NOT changed
-	if v.newPipeline.Spec.InterStepBufferServiceName != v.oldPipeline.Spec.InterStepBufferServiceName {
-		return DeniedResponse("Cannot update pipeline with different interStepBufferServiceName")
+	if err := validatePipelineUpdate(v.oldPipeline, v.newPipeline); err != nil {
+		return DeniedResponse(err.Error())
 	}
 	return AllowedResponse()
 }
@@ -80,6 +83,18 @@ func (v *pipelineValidator) checkISBSVCExists(ctx context.Context, isbSvcName st
 	}
 	if !isb.Status.IsReady() {
 		return fmt.Errorf("ISB service %q is not ready", isbSvcName)
+	}
+	return nil
+}
+
+// validatePipelineUpdate validates the update of a pipeline
+// this method assumes that the old and new pipeline specs are both valid
+// it focuses on validating the update itself
+// (the validation for a single spec is done in pipeline controller)
+func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
+	// check that the ISB service name is NOT changed
+	if new.Spec.InterStepBufferServiceName != old.Spec.InterStepBufferServiceName {
+		return fmt.Errorf("cannot update pipeline with different ISB service name")
 	}
 	return nil
 }
