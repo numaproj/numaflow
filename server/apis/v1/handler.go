@@ -635,7 +635,6 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 	)
 
 	oldPipelineSpec, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
-	newPipelineSpec := oldPipelineSpec.DeepCopy()
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", ns,
 			pipeline, inputVertexName, err.Error()))
@@ -653,6 +652,7 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 		return
 	}
 
+	newPipelineSpec := oldPipelineSpec.DeepCopy()
 	for index, vertex := range newPipelineSpec.Spec.Vertices {
 		if vertex.Name == inputVertexName {
 			if vertex.GetVertexType() != requestBody.GetVertexType() {
