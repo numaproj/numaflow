@@ -64,11 +64,11 @@ func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.Adm
 func (v *pipelineValidator) ValidateUpdate(_ context.Context) *admissionv1.AdmissionResponse {
 	// check that the old pipeline spec is valid
 	if err := pipelinecontroller.ValidatePipeline(v.oldPipeline); err != nil {
-		return DeniedResponse(err.Error())
+		return DeniedResponse(fmt.Sprintf("old pipeline spec is invalid: %s", err.Error()))
 	}
 	// check that the new pipeline spec is valid
 	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
-		return DeniedResponse(err.Error())
+		return DeniedResponse(fmt.Sprintf("new pipeline spec is invalid: %s", err.Error()))
 	}
 	// check that the update is valid
 	if err := validatePipelineUpdate(v.oldPipeline, v.newPipeline); err != nil {
@@ -100,13 +100,13 @@ func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
 	}
 	// rule 2: if a vertex is updated, the update must be valid
 	// we consider that a vertex is updated if its name is the same but its spec is different
-	nameMap := make(map[string]*dfv1.AbstractVertex)
+	nameMap := make(map[string]dfv1.AbstractVertex)
 	for _, v := range old.Spec.Vertices {
-		nameMap[v.Name] = &v
+		nameMap[v.Name] = v
 	}
 	for _, v := range new.Spec.Vertices {
 		if oldV, ok := nameMap[v.Name]; ok {
-			if err := validateVertexUpdate(oldV, &v); err != nil {
+			if err := validateVertexUpdate(oldV, v); err != nil {
 				return err
 			}
 		}
@@ -119,7 +119,7 @@ func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
 // validateVertexUpdate validates the update of a vertex
 // this method assumes that the old and new vertex specs are both valid
 // it focuses on validating the update itself
-func validateVertexUpdate(old, new *dfv1.AbstractVertex) error {
+func validateVertexUpdate(old, new dfv1.AbstractVertex) error {
 	if o, n := old.GetVertexType(), new.GetVertexType(); o != n {
 		return fmt.Errorf("vertex type is immutable, vertex name: %s, expected type %s, got type %s", old.Name, o, n)
 	}

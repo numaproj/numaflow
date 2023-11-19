@@ -77,6 +77,7 @@ func fakePipeline() *dfv1.Pipeline {
 									Duration: 60 * time.Second,
 								}},
 							},
+							Keyed: true,
 							Storage: &dfv1.PBQStorage{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},

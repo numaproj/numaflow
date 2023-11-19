@@ -39,11 +39,13 @@ func TestValidatePipelineUpdate(t *testing.T) {
 		v := NewPipelineValidator(&fk, pipeline, nil)
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
+		assert.Contains(t, r.Result.Message, "new pipeline spec is invalid")
 	})
 	t.Run("test invalid old pipeline spec", func(t *testing.T) {
 		v := NewPipelineValidator(&fk, nil, pipeline)
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
+		assert.Contains(t, r.Result.Message, "old pipeline spec is invalid")
 	})
 	t.Run("test pipeline interStepBufferServiceName change", func(t *testing.T) {
 		newPipeline := pipeline.DeepCopy()
@@ -51,18 +53,19 @@ func TestValidatePipelineUpdate(t *testing.T) {
 		v := NewPipelineValidator(&fk, pipeline, newPipeline)
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
+		assert.Contains(t, r.Result.Message, "different ISB service name")
 	})
 	t.Run("test should not change the type of a vertex", func(t *testing.T) {
 		newPipeline := pipeline.DeepCopy()
-		newPipeline.Spec.Vertices[0].Source = nil
-		newPipeline.Spec.Vertices[0].UDF = &dfv1.UDF{
-			Builtin: &dfv1.Function{
-				Name: "cat",
-			},
+		// in our test fake pipeline, the 3nd vertex is a reduce vertex
+		// change it to a map vertex, this ensures that the new pipeline is still valid but the update is not allowed
+		newPipeline.Spec.Vertices[2].UDF = &dfv1.UDF{
+			Builtin: &dfv1.Function{Name: "cat"},
 		}
 		v := NewPipelineValidator(&fk, pipeline, newPipeline)
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
+		assert.Contains(t, r.Result.Message, "vertex type is immutable")
 	})
 	t.Run("test should not change the partition count of a reduce vertex", func(t *testing.T) {
 		var oldPartitionCount, newPartitionCount int32 = 2, 3
@@ -73,6 +76,7 @@ func TestValidatePipelineUpdate(t *testing.T) {
 		v := NewPipelineValidator(&fk, pipeline, newPipeline)
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
+		assert.Contains(t, r.Result.Message, "partition count is immutable for a reduce vertex")
 	})
 	t.Run("test should not change the persistent storage of a reduce vertex", func(t *testing.T) {
 		newPipeline := pipeline.DeepCopy()
@@ -82,5 +86,6 @@ func TestValidatePipelineUpdate(t *testing.T) {
 		v := NewPipelineValidator(&fk, pipeline, newPipeline)
 		r := v.ValidateUpdate(contextWithLogger(t))
 		assert.False(t, r.Allowed)
+		assert.Contains(t, r.Result.Message, "storage is immutable for a reduce vertex")
 	})
 }
