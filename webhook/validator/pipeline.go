@@ -112,7 +112,8 @@ func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
 		}
 	}
 	// TODO - rule 3: if the structure of the pipeline is updated, the update must be valid
-	// e.g. a vertex is added or removed, an edge is added or removed or updated, etc.
+	// example of structure change can be a vertex is added or removed, an edge is added or removed or updated, etc.
+	// for now, we consider structure change as invalid
 	return nil
 }
 

@@ -51,7 +51,7 @@ Other validations include:
 
 Pipeline:
 
-1. cannot change the type of vertex 
+1. cannot change the type of an existing vertex 
 2. cannot change the partition count of a reduce vertex
 3. cannot change the storage class of a reduce vertex
 4. etc.
