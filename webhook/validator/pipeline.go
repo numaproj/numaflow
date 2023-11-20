@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
@@ -30,20 +30,14 @@ import (
 )
 
 type pipelineValidator struct {
-	client    kubernetes.Interface
-	pipeline  v1alpha1.PipelineInterface
-	isbClient v1alpha1.InterStepBufferServiceInterface
-
+	isbClient   v1alpha1.InterStepBufferServiceInterface
 	oldPipeline *dfv1.Pipeline
 	newPipeline *dfv1.Pipeline
 }
 
 // NewPipelineValidator returns a new PipelineValidator
-func NewPipelineValidator(client kubernetes.Interface, pipeline v1alpha1.PipelineInterface,
-	isbClient v1alpha1.InterStepBufferServiceInterface, old, new *dfv1.Pipeline) Validator {
+func NewPipelineValidator(isbClient v1alpha1.InterStepBufferServiceInterface, old, new *dfv1.Pipeline) Validator {
 	return &pipelineValidator{
-		client:      client,
-		pipeline:    pipeline,
 		isbClient:   isbClient,
 		oldPipeline: old,
 		newPipeline: new,
@@ -68,13 +62,16 @@ func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.Adm
 }
 
 func (v *pipelineValidator) ValidateUpdate(_ context.Context) *admissionv1.AdmissionResponse {
+	if v.oldPipeline == nil {
+		return DeniedResponse("old pipeline spec is nil")
+	}
 	// check that the new pipeline spec is valid
 	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
-		return DeniedResponse(err.Error())
+		return DeniedResponse(fmt.Sprintf("new pipeline spec is invalid: %s", err.Error()))
 	}
-	// check that the ISB service name is NOT changed
-	if v.newPipeline.Spec.InterStepBufferServiceName != v.oldPipeline.Spec.InterStepBufferServiceName {
-		return DeniedResponse("Cannot update pipeline with different interStepBufferServiceName")
+	// check that the update is valid
+	if err := validatePipelineUpdate(v.oldPipeline, v.newPipeline); err != nil {
+		return DeniedResponse(err.Error())
 	}
 	return AllowedResponse()
 }
@@ -87,6 +84,48 @@ func (v *pipelineValidator) checkISBSVCExists(ctx context.Context, isbSvcName st
 	}
 	if !isb.Status.IsReady() {
 		return fmt.Errorf("ISB service %q is not ready", isbSvcName)
+	}
+	return nil
+}
+
+// validatePipelineUpdate validates the update of a pipeline
+func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
+	// rule 1: the ISB service name shall not change
+	if new.Spec.InterStepBufferServiceName != old.Spec.InterStepBufferServiceName {
+		return fmt.Errorf("cannot update pipeline with different ISB service name")
+	}
+	// rule 2: if a vertex is updated, the update must be valid
+	// we consider that a vertex is updated if its name is the same but its spec is different
+	nameMap := make(map[string]dfv1.AbstractVertex)
+	for _, v := range old.Spec.Vertices {
+		nameMap[v.Name] = v
+	}
+	for _, v := range new.Spec.Vertices {
+		if oldV, ok := nameMap[v.Name]; ok {
+			if err := validateVertexUpdate(oldV, v); err != nil {
+				return err
+			}
+		}
+	}
+	// TODO - rule 3: if the structure of the pipeline is updated, the update must be valid
+	// example of structure change can be a vertex is added or removed, an edge is added or removed or updated, etc.
+	// for now, we consider structure change as valid
+	return nil
+}
+
+// validateVertexUpdate validates the update of a vertex
+func validateVertexUpdate(old, new dfv1.AbstractVertex) error {
+	if o, n := old.GetVertexType(), new.GetVertexType(); o != n {
+		return fmt.Errorf("vertex type is immutable, vertex name: %s, expected type %s, got type %s", old.Name, o, n)
+	}
+	if old.GetVertexType() == dfv1.VertexTypeReduceUDF {
+		if o, n := old.GetPartitionCount(), new.GetPartitionCount(); o != n {
+			return fmt.Errorf("partition count is immutable for a reduce vertex, vertex name: %s, expected partition count %d, got partition count %d", old.Name, o, n)
+		}
+		// with both old and new vertex specs being reducer, we can safely assume that the GroupBy field is not nil
+		if o, n := old.UDF.GroupBy.Storage, new.UDF.GroupBy.Storage; !equality.Semantic.DeepEqual(o, n) {
+			return fmt.Errorf("storage is immutable for a reduce vertex, vertex name: %s, expected storage %v, got storage %v", old.Name, o, n)
+		}
 	}
 	return nil
 }
