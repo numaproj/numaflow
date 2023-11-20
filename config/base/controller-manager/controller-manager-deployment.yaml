@@ -33,6 +33,24 @@ spec:
                   fieldPath: metadata.namespace
             - name: NUMAFLOW_IMAGE
               value: quay.io/numaproj/numaflow:latest
+            - name: NUMAFLOW_CONTROLLER_NAMESPACED
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: namespaced
+                  optional: true
+            - name: NUMAFLOW_CONTROLLER_MANAGED_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: managed.namespace
+                  optional: true
+            - name: NUMAFLOW_LEADER_ELECTION_DISABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: controller.disable.leader.election
+                  optional: true
           volumeMounts:
             - mountPath: /etc/numaflow
               name: controller-config-volume

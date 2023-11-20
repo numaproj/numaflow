@@ -121,7 +121,7 @@ test-%:
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
-	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
+	kubectl -n numaflow-system delete po e2e-api-pod --ignore-not-found=true
 	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
 	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$*
@@ -219,6 +219,7 @@ lint: $(GOPATH)/bin/golangci-lint
 .PHONY: start
 start: image
 	kubectl apply -f test/manifests/numaflow-ns.yaml
+	kubectl -n numaflow-system delete cm numaflow-cmd-params-config --ignore-not-found=true
 	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
 	kubectl -n numaflow-system wait -lapp.kubernetes.io/part-of=numaflow --for=condition=Ready --timeout 60s pod --all
 
