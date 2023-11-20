@@ -2219,14 +2219,14 @@ set of datasets for that key and boundary. The subdivision of dividing a huge
 window-based partition into smaller partitions by adding keys along with the
 window will help us horizontally scale the distribution.</p>
 <p>Keyed partitions are heavily used to aggregate data and are frequently seen
-throughout the processing pipeline. We could also convert and non-keyed problem
+throughout the processing pipeline. We could also convert a non-keyed problem
 to a set of keyed problems and apply a non-keyed function at the end. This will
 help solve the original problem in a scalable manner without affecting the
 result's completeness and/or accuracy.</p>
 <p>When a <code>keyed</code> window is used, an optional <code>partitions</code> can be specified in the
 vertex for parallel processing.</p>
 <h3 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h3>
-<p>Numaflow support both Keyed and Non-Keyed windows. We set <code>keyed</code> to either
+<p>Numaflow supports both Keyed and Non-Keyed windows. We set <code>keyed</code> to either
 <code>true</code> (keyed) or <code>false</code> (non-keyed). Please note that the non-keyed windows
 are not horizontally scalable as mentioned above.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>

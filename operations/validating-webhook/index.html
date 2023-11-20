@@ -2136,6 +2136,19 @@ Resource:<span class="w"> </span><span class="s2">&quot;numaflow.numaproj.io/v1a
 Name:<span class="w"> </span><span class="s2">&quot;simple-pipeline&quot;</span>,<span class="w"> </span>Namespace:<span class="w"> </span><span class="s2">&quot;numaflow-system&quot;</span>
 <span class="k">for</span>:<span class="w"> </span><span class="s2">&quot;examples/1-simple-pipeline.yaml&quot;</span>:<span class="w"> </span>error<span class="w"> </span>when<span class="w"> </span>patching<span class="w"> </span><span class="s2">&quot;examples/1-simple-pipeline.yaml&quot;</span>:<span class="w"> </span>admission<span class="w"> </span>webhook<span class="w"> </span><span class="s2">&quot;webhook.numaflow.numaproj.io&quot;</span><span class="w"> </span>denied<span class="w"> </span>the<span class="w"> </span>request:<span class="w"> </span>Cannot<span class="w"> </span>update<span class="w"> </span>pipeline<span class="w"> </span>with<span class="w"> </span>different<span class="w"> </span>interStepBufferServiceName
 </code></pre></div>
+<p>Other validations include:</p>
+<p>Pipeline:</p>
+<ol>
+<li>cannot change the type of an existing vertex </li>
+<li>cannot change the partition count of a reduce vertex</li>
+<li>cannot change the storage class of a reduce vertex</li>
+<li>etc.</li>
+</ol>
+<p>InterStepBufferService:</p>
+<ol>
+<li>cannot change the persistence configuration of an ISB Service</li>
+<li>etc.</li>
+</ol>
 
               
             </article>
