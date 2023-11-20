@@ -62,9 +62,8 @@ func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.Adm
 }
 
 func (v *pipelineValidator) ValidateUpdate(_ context.Context) *admissionv1.AdmissionResponse {
-	// check that the old pipeline spec is valid
-	if err := pipelinecontroller.ValidatePipeline(v.oldPipeline); err != nil {
-		return DeniedResponse(fmt.Sprintf("old pipeline spec is invalid: %s", err.Error()))
+	if v.oldPipeline == nil {
+		return DeniedResponse("old pipeline spec is nil")
 	}
 	// check that the new pipeline spec is valid
 	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
@@ -90,9 +89,6 @@ func (v *pipelineValidator) checkISBSVCExists(ctx context.Context, isbSvcName st
 }
 
 // validatePipelineUpdate validates the update of a pipeline
-// this method assumes that the old and new pipeline specs are both valid
-// it focuses on validating the update itself
-// (the validation for a single spec is done in pipeline controller)
 func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
 	// rule 1: the ISB service name shall not change
 	if new.Spec.InterStepBufferServiceName != old.Spec.InterStepBufferServiceName {
@@ -118,8 +114,6 @@ func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
 }
 
 // validateVertexUpdate validates the update of a vertex
-// this method assumes that the old and new vertex specs are both valid
-// it focuses on validating the update itself
 func validateVertexUpdate(old, new dfv1.AbstractVertex) error {
 	if o, n := old.GetVertexType(), new.GetVertexType(); o != n {
 		return fmt.Errorf("vertex type is immutable, vertex name: %s, expected type %s, got type %s", old.Name, o, n)
@@ -128,7 +122,7 @@ func validateVertexUpdate(old, new dfv1.AbstractVertex) error {
 		if o, n := old.GetPartitionCount(), new.GetPartitionCount(); o != n {
 			return fmt.Errorf("partition count is immutable for a reduce vertex, vertex name: %s, expected partition count %d, got partition count %d", old.Name, o, n)
 		}
-		// with both old and new vertex specs being reducer and valid, we can safely assume that the GroupBy field is not nil
+		// with both old and new vertex specs being reducer, we can safely assume that the GroupBy field is not nil
 		if o, n := old.UDF.GroupBy.Storage, new.UDF.GroupBy.Storage; !equality.Semantic.DeepEqual(o, n) {
 			return fmt.Errorf("storage is immutable for a reduce vertex, vertex name: %s, expected storage %v, got storage %v", old.Name, o, n)
 		}
