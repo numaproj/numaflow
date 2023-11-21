@@ -67,6 +67,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		fromVertexWmStores map[string]store.WatermarkStore
 		toVertexWmStores   map[string]store.WatermarkStore
 		idleManager        wmb.IdleManager
+		opts               []reduce.Option
 	)
 
 	log := logging.FromContext(ctx)
@@ -240,7 +241,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)
 	}
-	opts := []reduce.Option{}
+
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))

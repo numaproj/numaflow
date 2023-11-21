@@ -1036,24 +1036,11 @@ func TestSortedWindowListByEndTime_WindowToBeMerged(t *testing.T) {
 	windowList.Insert(win9)
 
 	outputWin, canBeMerged := windowList.WindowToBeMerged(testWin)
-	if canBeMerged {
-		println(outputWin.Partition().String())
-	}
+	assert.Equal(t, true, canBeMerged)
+	assert.Equal(t, win5.Partition().String(), outputWin.Partition().String())
 }
 
 func TestSortedWindowListByEndTime_WindowToBeMerged2(t *testing.T) {
-	// 545000-560000-slot-0
-
-	//562000-607000-slot-0
-	//581000-608000-slot-0
-	//561000-609000-slot-0
-	//563000-610000-slot-0
-	//557000-611000-slot-0
-	//564000-612000-slot-0
-	//577000-613000-slot-0
-	//560000-614000-slot-0
-	//654000-674000-slot-0
-
 	testWin := &TestWindow{
 		start: time.Unix(38, 0),
 		end:   time.Unix(48, 0),
@@ -1070,9 +1057,8 @@ func TestSortedWindowListByEndTime_WindowToBeMerged2(t *testing.T) {
 	windowList.Insert(win1)
 
 	outputWin, canBeMerged := windowList.WindowToBeMerged(testWin)
-	if canBeMerged {
-		println("yes - ", outputWin.Partition().String())
-	}
+	assert.Equal(t, true, canBeMerged)
+	assert.Equal(t, win1.Partition().String(), outputWin.Partition().String())
 }
 
 func setupWindows(windows *SortedWindowListByEndTime[*TestWindow], wins []*TestWindow) {

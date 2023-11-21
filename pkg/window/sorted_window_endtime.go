@@ -233,14 +233,21 @@ func (s *SortedWindowListByEndTime[W]) FindWindowForTime(t time.Time) (W, bool) 
 	return empty, false
 }
 
+// WindowToBeMerged finds a window to be merged with the given window.
+// It returns the window to be merged and a boolean indicating if a window was found.
 func (s *SortedWindowListByEndTime[W]) WindowToBeMerged(window W) (W, bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	var toBeMerged W
+
+	// find the first index of window whose end time is greater than or equal to the given window
 	index := sort.Search(len(s.windows), func(i int) bool {
 		return !s.windows[i].EndTime().Before(window.EndTime())
 	})
 
+	// since its only sorted by end time, we have to check for all the windows with the same end time greater than or equal to the given window
+	// for example if the windows are (60, 70), (50, 90) and (30, 100), if we are given a window (35,45) we should return (30,100)
+	// if we just check the window at index 0, we will return (60,70) which is incorrect
 	for i := index; i < len(s.windows); i++ {
 		if window.EndTime().After(s.windows[i].StartTime()) && window.Partition().Slot == s.windows[i].Partition().Slot &&
 			compareKeys(window.Keys(), s.windows[i].Keys()) {
@@ -248,6 +255,7 @@ func (s *SortedWindowListByEndTime[W]) WindowToBeMerged(window W) (W, bool) {
 		}
 	}
 
+	// we should also check if it can be merged with the window before the given window
 	if index-1 >= 0 && s.windows[index-1].EndTime().After(window.StartTime()) && window.Partition().Slot == s.windows[index-1].Partition().Slot &&
 		compareKeys(window.Keys(), s.windows[index-1].Keys()) {
 		return s.windows[index-1], true

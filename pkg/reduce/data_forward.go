@@ -146,7 +146,7 @@ func (df *DataForward) Start() {
 // ReplayPersistedMessages replays persisted messages, because during boot up, it has to replay the data from the persistent store of
 // PBQ before it can start reading from ISB. ReplayPersistedMessages will return only after the replay has been completed.
 func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
-	// TODO: fix replay for session windows
+	//TODO: fix replay for session windows
 	if df.windower.Strategy() == window.Session {
 		return nil
 	}
@@ -303,6 +303,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
+		//TODO: flag to enable/disable ordered processing, do we even need ordered processing?
 		df.of.AsyncSchedulePnF(ctx, *partitionID, q)
 		//df.udfInvocationTracking[partitionID] = t
 		df.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
