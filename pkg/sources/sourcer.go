@@ -17,7 +17,7 @@ limitations under the License.
 package sources
 
 import (
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
@@ -25,7 +25,7 @@ import (
 // This is intended to be consumed by a connector like isb.forward
 type Sourcer interface {
 	isb.BufferReader
-	forward.StarterStopper
+	forwarder.StarterStopper
 	isb.LagReader
 	isb.SourceWatermarkPublisher
 }

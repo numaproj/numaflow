@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package forward
+package forwarder
 
 // VertexBuffer points to the partition of a buffer owned by the vertex.
 type VertexBuffer struct {

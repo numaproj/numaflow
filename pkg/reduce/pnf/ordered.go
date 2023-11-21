@@ -29,7 +29,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
@@ -60,7 +60,7 @@ type OrderedProcessor struct {
 	pbqManager          *pbq.Manager
 	udf                 applier.ReduceApplier
 	toBuffers           map[string][]isb.BufferWriter
-	whereToDecider      forward.ToWhichStepDecider
+	whereToDecider      forwarder.ToWhichStepDecider
 	watermarkPublishers map[string]publish.Publisher
 	idleManager         wmb.IdleManager
 	log                 *zap.SugaredLogger
@@ -72,7 +72,7 @@ func NewOrderedProcessor(ctx context.Context,
 	udf applier.ReduceApplier,
 	toBuffers map[string][]isb.BufferWriter,
 	pbqManager *pbq.Manager,
-	whereToDecider forward.ToWhichStepDecider,
+	whereToDecider forwarder.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,
 	idleManager wmb.IdleManager) *OrderedProcessor {
 

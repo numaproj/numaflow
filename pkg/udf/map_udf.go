@@ -24,7 +24,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
@@ -34,6 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
+	"github.com/numaproj/numaflow/pkg/udf/forward"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
@@ -177,8 +178,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 		// create a conditional forwarder for each partition
 		getVertexPartitionIdx := GetPartitionedBufferIdx()
-		conditionalForwarder := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
-			var result []forward.VertexBuffer
+		conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string) ([]forwarder.VertexBuffer, error) {
+			var result []forwarder.VertexBuffer
 
 			if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 				return result, nil
@@ -189,12 +190,12 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
 					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-						result = append(result, forward.VertexBuffer{
+						result = append(result, forwarder.VertexBuffer{
 							ToVertexName:         edge.To,
 							ToVertexPartitionIdx: toVertexPartition,
 						})
 					} else {
-						result = append(result, forward.VertexBuffer{
+						result = append(result, forwarder.VertexBuffer{
 							ToVertexName:         edge.To,
 							ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, edge.GetToVertexPartitionCount()),
 						})
@@ -203,12 +204,12 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 					if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
 						if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 							toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-							result = append(result, forward.VertexBuffer{
+							result = append(result, forwarder.VertexBuffer{
 								ToVertexName:         edge.To,
 								ToVertexPartitionIdx: toVertexPartition,
 							})
 						} else {
-							result = append(result, forward.VertexBuffer{
+							result = append(result, forwarder.VertexBuffer{
 								ToVertexName:         edge.To,
 								ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, edge.GetToVertexPartitionCount()),
 							})
