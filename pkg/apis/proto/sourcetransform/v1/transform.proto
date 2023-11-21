@@ -1,0 +1,65 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+
+option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1";
+option java_package = "io.numaproj.numaflow.sourcetransformer.v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+package sourcetransformer.v1;
+
+service SourceTransform {
+  // SourceTransformFn applies a function to each request element.
+  // In addition to map function, SourceTransformFn also supports assigning a new event time to response.
+  // SourceTransformFn can be used only at source vertex by source data transformer.
+  rpc SourceTransformFn(SourceTransformRequest) returns (SourceTransformResponse);
+
+  // IsReady is the heartbeat endpoint for gRPC.
+  rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+/**
+ * SourceTransformerRequest represents a request element.
+ */
+message SourceTransformRequest {
+  repeated string keys = 1;
+  bytes value = 2;
+  google.protobuf.Timestamp event_time = 3;
+  google.protobuf.Timestamp watermark = 4;
+}
+
+/**
+ * SourceTransformerResponse represents a response element.
+ */
+message SourceTransformResponse {
+  message Result {
+    repeated string keys = 1;
+    bytes value = 2;
+    google.protobuf.Timestamp event_time = 3;
+    repeated string tags = 4;
+  }
+  repeated Result results = 1;
+}
+
+/**
+ * ReadyResponse is the health check result.
+ */
+message ReadyResponse {
+  bool ready = 1;
+}
