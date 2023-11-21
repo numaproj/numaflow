@@ -82,7 +82,7 @@ func NewHandler(dexObj *DexObject) (*handler, error) {
 	}
 	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
-	daemonClientsCache, _ := lru.NewWithEvict[string, *daemonclient.DaemonClient](100, func(key string, value *daemonclient.DaemonClient) {
+	daemonClientsCache, _ := lru.NewWithEvict[string, *daemonclient.DaemonClient](500, func(key string, value *daemonclient.DaemonClient) {
 		_ = value.Close()
 	})
 	return &handler{
