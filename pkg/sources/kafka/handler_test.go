@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -39,8 +39,8 @@ import (
 type myForwardToAllTest struct {
 }
 
-func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
-	return []forward.VertexBuffer{{
+func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+	return []forwarder.VertexBuffer{{
 		ToVertexName:         "test",
 		ToVertexPartitionIdx: 0,
 	}}, nil

@@ -28,7 +28,7 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1/reducemock"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
@@ -63,16 +63,16 @@ type forwardTest struct {
 	buffers []string
 }
 
-func (f *forwardTest) WhereTo(keys []string, _ []string) ([]forward.VertexBuffer, error) {
+func (f *forwardTest) WhereTo(keys []string, _ []string) ([]forwarder.VertexBuffer, error) {
 	if strings.Compare(keys[len(keys)-1], "test-forward-one") == 0 {
-		return []forward.VertexBuffer{{
+		return []forwarder.VertexBuffer{{
 			ToVertexName:         "buffer1",
 			ToVertexPartitionIdx: int32(f.count % 2),
 		}}, nil
 	} else if strings.Compare(keys[len(keys)-1], "test-forward-all") == 0 {
-		var steps []forward.VertexBuffer
+		var steps []forwarder.VertexBuffer
 		for _, buffer := range f.buffers {
-			steps = append(steps, forward.VertexBuffer{
+			steps = append(steps, forwarder.VertexBuffer{
 				ToVertexName:         buffer,
 				ToVertexPartitionIdx: int32(f.count % 2),
 			})
@@ -80,7 +80,7 @@ func (f *forwardTest) WhereTo(keys []string, _ []string) ([]forward.VertexBuffer
 		return steps, nil
 	}
 	f.count++
-	return []forward.VertexBuffer{}, nil
+	return []forwarder.VertexBuffer{}, nil
 }
 
 func (f forwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
