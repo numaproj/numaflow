@@ -82,6 +82,7 @@ const (
 	ComponentVertex           = "vertex"
 	ComponentJob              = "job"
 	ComponentSideInputManager = "side-inputs-manager"
+	ComponentUXServer         = "numaflow-ux"
 
 	// controllers
 	ControllerISBSvc   = "isbsvc-controller"
