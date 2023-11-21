@@ -42,7 +42,7 @@ func New(inputOptions ...Option) (Client, error) {
 		maxMessageSize:             sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
 		serverInfoFilePath:         sdkclient.ServerInfoFilePath,
 		tcpSockAddr:                sdkclient.TcpAddr,
-		udsSockAddr:                sdkclient.ReduceAddr,
+		udsSockAddr:                sdkclient.SessionReduceAddr,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 	}
 

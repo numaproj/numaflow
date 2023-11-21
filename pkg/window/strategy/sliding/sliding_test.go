@@ -109,7 +109,7 @@ func TestSliding_AssignWindowsLengthNotDivisibleBySlide(t *testing.T) {
 }
 
 func TestSliding_InsertWindow(t *testing.T) {
-	win := &Window{
+	win := &slidingWindow{
 		startTime: time.UnixMilli(60000),
 		endTime:   time.UnixMilli(60000 + 60*1000),
 		slot:      "slot-0",
@@ -130,7 +130,7 @@ func TestSliding_InsertWindow(t *testing.T) {
 	// since this is the second time we are inserting the same window, the active windows should be 1
 	assert.Equal(t, 1, windower.activeWindows.Len())
 
-	win = &Window{
+	win = &slidingWindow{
 		startTime: time.UnixMilli(120000),
 		endTime:   time.UnixMilli(120000 + 60*1000),
 		slot:      "slot-0",
@@ -145,16 +145,16 @@ func TestSliding_InsertWindow(t *testing.T) {
 func TestSliding_CloseWindows(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 
-	win1 := &Window{
+	win1 := &slidingWindow{
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 	}
-	win2 := &Window{
+	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
 	}
-	win3 := &Window{
+	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
 	}
@@ -187,16 +187,16 @@ func TestSliding_CloseWindows(t *testing.T) {
 func TestSliding_DeleteWindows(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 
-	win1 := &Window{
+	win1 := &slidingWindow{
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 	}
-	win2 := &Window{
+	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
 	}
-	win3 := &Window{
+	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
 	}
@@ -218,11 +218,11 @@ func TestSliding_DeleteWindows(t *testing.T) {
 
 	// delete one of the windows
 	windower.DeleteClosedWindows(&window.TimedWindowResponse{
-		ID: &partition.ID{
+		Window: window.NewWindowFromPartition(&partition.ID{
 			Start: baseTime,
 			End:   baseTime.Add(60 * time.Second),
 			Slot:  "slot-0",
-		},
+		}),
 	})
 
 	// since we deleted one of the windows, the closed windows should be 2
@@ -232,16 +232,16 @@ func TestSliding_DeleteWindows(t *testing.T) {
 func TestSliding_OldestClosedWindowEndTime(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 
-	win1 := &Window{
+	win1 := &slidingWindow{
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 	}
-	win2 := &Window{
+	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
 	}
-	win3 := &Window{
+	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
 	}
@@ -262,22 +262,22 @@ func TestSliding_OldestClosedWindowEndTime(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(180 * time.Second))
 
 	// oldest closed window is (60000, 120000)
-	assert.Equal(t, baseTime.Add(40*time.Second), windower.OldestClosedWindowEndTime())
+	assert.Equal(t, baseTime.Add(40*time.Second), windower.OldestWindowEndTime())
 }
 
 func TestSliding_NextWindowToBeClosed(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 
-	win1 := &Window{
+	win1 := &slidingWindow{
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 	}
-	win2 := &Window{
+	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
 	}
-	win3 := &Window{
+	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
 	}

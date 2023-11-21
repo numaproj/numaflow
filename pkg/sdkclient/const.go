@@ -5,6 +5,8 @@ const (
 	TcpAddr                   = ":55551"
 	MapAddr                   = "/var/run/numaflow/map.sock"
 	ReduceAddr                = "/var/run/numaflow/reduce.sock"
+	SessionReduceAddr         = "/var/run/numaflow/sessionreduce.sock"
+	GlobalReduceAddr          = "/var/run/numaflow/globalreduce.sock"
 	MapStreamAddr             = "/var/run/numaflow/mapstream.sock"
 	SourceAddr                = "/var/run/numaflow/source.sock"
 	SourceTransformerAddr     = "/var/run/numaflow/sourcetransform.sock"

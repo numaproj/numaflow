@@ -22,14 +22,15 @@ import (
 	"strings"
 	"sync"
 
-	"go.uber.org/zap"
-
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
+	"github.com/numaproj/numaflow/pkg/sdkclient/sessionreducer"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/window/strategy/session"
+
+	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -90,6 +91,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if windower == nil {
 		return fmt.Errorf("invalid window spec")
 	}
+
+	windower = session.NewWindower(f.Length.Duration)
 
 	fromBuffers := u.VertexInstance.Vertex.OwnedBuffers()
 	// choose the buffer that corresponds to this reduce processor because
@@ -200,12 +203,12 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	log = log.With("protocol", "uds-grpc-reduce-udf")
 
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
-	sdkClient, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
+	sdkClient, err := sessionreducer.New(sessionreducer.WithMaxMessageSize(maxMessageSize))
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
 
-	reduceHandler := rpc.NewUDSgRPCBasedReduce(sdkClient)
+	reduceHandler := rpc.NewGRPCBasedSessionReduce(sdkClient)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)
 	}

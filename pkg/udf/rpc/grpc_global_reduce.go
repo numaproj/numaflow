@@ -160,6 +160,7 @@ func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *global
 			Start: timestamppb.New(w.StartTime()),
 			End:   timestamppb.New(w.EndTime()),
 			Slot:  w.Slot(),
+			Keys:  w.Keys(),
 		})
 	}
 	// for fixed and sliding window event can be either open, close or append
@@ -195,32 +196,33 @@ func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *global
 func parseGlobalReduceResponse(response *globalreducepb.GlobalReduceResponse) *window.TimedWindowResponse {
 	taggedMessages := make([]*isb.WriteMessage, 0)
 	for _, result := range response.GetResults() {
-		keys := result.Keys
 		taggedMessage := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
-						EventTime: response.EventTime.AsTime(),
+						EventTime: response.GetEventTime().AsTime(),
 						IsLate:    false,
 					},
-					Keys: keys,
+					Keys: result.GetKeys(),
 				},
 				Body: isb.Body{
-					Payload: result.Value,
+					Payload: result.GetValue(),
 				},
 			},
-			Tags: result.Tags,
+			Tags: result.GetTags(),
 		}
 		taggedMessages = append(taggedMessages, taggedMessage)
 	}
 
 	return &window.TimedWindowResponse{
 		WriteMessages: taggedMessages,
-		ID: &partition.ID{
-			Start: response.GetPartition().GetStart().AsTime(),
-			End:   response.GetPartition().GetEnd().AsTime(),
-			Slot:  response.GetPartition().GetSlot(),
-		},
-		CombinedKey: response.CombinedKey,
+		Window: window.NewWindowFromPartitionAndKeys(
+			&partition.ID{
+				Start: response.GetPartition().GetStart().AsTime(),
+				End:   response.GetPartition().GetEnd().AsTime(),
+				Slot:  response.GetPartition().GetSlot(),
+			},
+			response.GetPartition().GetKeys(),
+		),
 	}
 }

@@ -104,7 +104,8 @@ func (s *SortedWindowListByEndTime[W]) InsertIfNotPresent(window W) (W, bool) {
 
 	// Check if the window is already present in the list
 	for i := index; i < len(s.windows); i++ {
-		if s.windows[i].Partition().String() == window.Partition().String() {
+		if s.windows[i].Partition().String() == window.Partition().String() &&
+			compareKeys(s.windows[i].Keys(), window.Keys()) {
 			return s.windows[i], true
 		}
 
@@ -136,7 +137,8 @@ func (s *SortedWindowListByEndTime[W]) Delete(window W) (deleted bool) {
 
 	// Delete the window if it is present in the list
 	for i := index; i < len(s.windows); i++ {
-		if s.windows[i].Partition().String() == window.Partition().String() {
+		if s.windows[i].Partition().String() == window.Partition().String() &&
+			compareKeys(s.windows[i].Keys(), window.Keys()) {
 			s.windows = append(s.windows[:i], s.windows[i+1:]...)
 			deleted = true
 			break
@@ -229,4 +231,41 @@ func (s *SortedWindowListByEndTime[W]) FindWindowForTime(t time.Time) (W, bool) 
 
 	var empty W
 	return empty, false
+}
+
+func (s *SortedWindowListByEndTime[W]) WindowToBeMerged(window W) (W, bool) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	var toBeMerged W
+	index := sort.Search(len(s.windows), func(i int) bool {
+		return !s.windows[i].EndTime().Before(window.EndTime())
+	})
+
+	for i := index; i < len(s.windows); i++ {
+		if window.EndTime().After(s.windows[i].StartTime()) && window.Partition().Slot == s.windows[i].Partition().Slot &&
+			compareKeys(window.Keys(), s.windows[i].Keys()) {
+			return s.windows[i], true
+		}
+	}
+
+	if index-1 >= 0 && s.windows[index-1].EndTime().After(window.StartTime()) && window.Partition().Slot == s.windows[index-1].Partition().Slot &&
+		compareKeys(window.Keys(), s.windows[index-1].Keys()) {
+		return s.windows[index-1], true
+	}
+
+	return toBeMerged, false
+}
+
+func compareKeys(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i, key := range a {
+		if key != b[i] {
+			return false
+		}
+	}
+
+	return true
 }

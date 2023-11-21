@@ -166,7 +166,7 @@ func (f CounterReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *pa
 				Tags:    nil,
 			},
 		},
-		ID: partitionID,
+		Window: window.NewWindowFromPartition(partitionID),
 	}
 	responseCh <- response
 	return responseCh, errCh
@@ -198,7 +198,7 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 				Tags:    nil,
 			},
 		},
-		ID: partitionID,
+		Window: window.NewWindowFromPartition(partitionID),
 	}, nil
 }
 
@@ -251,7 +251,7 @@ func (s SumReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *partit
 
 	response := &window.TimedWindowResponse{
 		WriteMessages: msgs,
-		ID:            partitionID,
+		Window:        window.NewWindowFromPartition(partitionID),
 	}
 	responseCh <- response
 	return responseCh, errCh
@@ -291,7 +291,7 @@ func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.I
 
 	return &window.TimedWindowResponse{
 		WriteMessages: msgs,
-		ID:            partitionID,
+		Window:        window.NewWindowFromPartition(partitionID),
 	}, nil
 }
 
@@ -341,7 +341,7 @@ func (m MaxReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *partit
 	}
 	response := &window.TimedWindowResponse{
 		WriteMessages: result,
-		ID:            partitionID,
+		Window:        window.NewWindowFromPartition(partitionID),
 	}
 	responseCh <- response
 	return responseCh, errCh
@@ -385,7 +385,7 @@ func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.I
 
 	return &window.TimedWindowResponse{
 		WriteMessages: result,
-		ID:            partitionID,
+		Window:        window.NewWindowFromPartition(partitionID),
 	}, nil
 }
 

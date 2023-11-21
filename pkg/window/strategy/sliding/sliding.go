@@ -29,8 +29,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// Window TimedWindow implementation for Sliding window.
-type Window struct {
+// slidingWindow TimedWindow implementation for Sliding window.
+type slidingWindow struct {
 	startTime time.Time
 	endTime   time.Time
 	slot      string
@@ -44,7 +44,7 @@ func NewWindow(startTime time.Time, endTime time.Time, message *isb.ReadMessage)
 	// slot := slotAssigner.AssignSlot(message.Key)
 	// for now we are using slot-0
 	slot := "slot-0"
-	return &Window{
+	return &slidingWindow{
 		startTime: startTime,
 		endTime:   endTime,
 		slot:      slot,
@@ -52,23 +52,23 @@ func NewWindow(startTime time.Time, endTime time.Time, message *isb.ReadMessage)
 	}
 }
 
-func (w *Window) StartTime() time.Time {
+func (w *slidingWindow) StartTime() time.Time {
 	return w.startTime
 }
 
-func (w *Window) EndTime() time.Time {
+func (w *slidingWindow) EndTime() time.Time {
 	return w.endTime
 }
 
-func (w *Window) Slot() string {
+func (w *slidingWindow) Slot() string {
 	return w.slot
 }
 
-func (w *Window) Keys() []string {
+func (w *slidingWindow) Keys() []string {
 	return w.keys
 }
 
-func (w *Window) Partition() *partition.ID {
+func (w *slidingWindow) Partition() *partition.ID {
 	return &partition.ID{
 		Start: w.startTime,
 		End:   w.endTime,
@@ -77,7 +77,7 @@ func (w *Window) Partition() *partition.ID {
 }
 
 // Merge merges the given window with the current window.
-func (w *Window) Merge(tw window.TimedWindow) {
+func (w *slidingWindow) Merge(tw window.TimedWindow) {
 	if w.slot != tw.Slot() {
 		panic("cannot merge windows with different slots")
 	}
@@ -91,7 +91,7 @@ func (w *Window) Merge(tw window.TimedWindow) {
 	}
 }
 
-func (w *Window) Expand(endTime time.Time) {
+func (w *slidingWindow) Expand(endTime time.Time) {
 	if endTime.After(w.endTime) {
 		w.endTime = endTime
 	}
@@ -117,15 +117,6 @@ func NewWindower(length time.Duration, slide time.Duration) window.TimedWindower
 		slide:         slide,
 		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
 		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
-	}
-}
-
-// NewWindowFromPartition returns a new window for the given partition.
-func NewWindowFromPartition(id *partition.ID) window.TimedWindow {
-	return &Window{
-		startTime: id.Start,
-		endTime:   id.End,
-		slot:      id.Slot,
 	}
 }
 
@@ -201,15 +192,11 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 
 // DeleteClosedWindows deletes the windows from the closed windows list
 func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
-	w.closedWindows.Delete(&Window{
-		startTime: response.ID.Start,
-		endTime:   response.ID.End,
-		slot:      response.ID.Slot,
-	})
+	w.closedWindows.Delete(response.Window)
 }
 
 // OldestClosedWindowEndTime returns the end time of the oldest closed window.
-func (w *Windower) OldestClosedWindowEndTime() time.Time {
+func (w *Windower) OldestWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()
 	} else if win = w.activeWindows.Front(); win != nil {

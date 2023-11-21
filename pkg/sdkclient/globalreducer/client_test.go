@@ -79,8 +79,7 @@ func TestClient_GlobalReduceFn(t *testing.T) {
 			End:   timestamppb.New(time.Unix(120, 0)),
 			Slot:  "slot-0",
 		},
-		EventTime:   timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
-		CombinedKey: "key-1",
+		EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 	}, nil).Times(1)
 	mockReduceClient.EXPECT().Recv().Return(&globalreducepb.GlobalReduceResponse{
 		Results: []*globalreducepb.GlobalReduceResponse_Result{
@@ -94,8 +93,7 @@ func TestClient_GlobalReduceFn(t *testing.T) {
 			End:   timestamppb.New(time.Unix(120, 0)),
 			Slot:  "slot-0",
 		},
-		EventTime:   timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
-		CombinedKey: "key-1",
+		EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 	}, io.EOF).Times(1)
 	mockClient.EXPECT().GlobalReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
@@ -121,8 +119,7 @@ func TestClient_GlobalReduceFn(t *testing.T) {
 				End:   timestamppb.New(time.Unix(120, 0)),
 				Slot:  "slot-0",
 			},
-			EventTime:   timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
-			CombinedKey: "key-1",
+			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 		}, response)
 	}
 }

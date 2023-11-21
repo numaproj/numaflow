@@ -36,8 +36,8 @@ type TimedWindower interface {
 	NextWindowToBeClosed() TimedWindow
 	// DeleteClosedWindows deletes the windows from the closed windows list
 	DeleteClosedWindows(response *TimedWindowResponse)
-	// OldestClosedWindowEndTime returns the end time of the oldest closed window
-	OldestClosedWindowEndTime() time.Time
+	// OldestWindowEndTime returns the end time of the oldest closed window
+	OldestWindowEndTime() time.Time
 }
 
 type TimedWindow interface {
@@ -58,6 +58,74 @@ type TimedWindow interface {
 	Expand(endTime time.Time)
 }
 
+// timedWindow implements TimedWindow
+type timedWindow struct {
+	startTime time.Time
+	endTime   time.Time
+	slot      string
+	keys      []string
+}
+
+// NewWindowFromPartition returns a new TimedWindow for the given partition id.
+func NewWindowFromPartition(id *partition.ID) TimedWindow {
+	return &timedWindow{
+		startTime: id.Start,
+		endTime:   id.End,
+		slot:      id.Slot,
+	}
+}
+
+// NewWindowFromPartitionAndKeys returns a new TimedWindow for the given partition id and keys.
+func NewWindowFromPartitionAndKeys(id *partition.ID, keys []string) TimedWindow {
+	return &timedWindow{
+		startTime: id.Start,
+		endTime:   id.End,
+		slot:      id.Slot,
+		keys:      keys,
+	}
+}
+
+func (w *timedWindow) StartTime() time.Time {
+	return w.startTime
+}
+
+func (w *timedWindow) EndTime() time.Time {
+	return w.endTime
+}
+
+func (w *timedWindow) Slot() string {
+	return w.slot
+}
+
+func (w *timedWindow) Keys() []string {
+	return w.keys
+}
+
+func (w *timedWindow) Partition() *partition.ID {
+	return &partition.ID{
+		Start: w.startTime,
+		End:   w.endTime,
+		Slot:  w.slot,
+	}
+}
+
+func (w *timedWindow) Merge(tw TimedWindow) {
+	// expand the start and end to accommodate the new window
+	if tw.StartTime().Before(w.startTime) {
+		w.startTime = tw.StartTime()
+	}
+
+	if tw.EndTime().After(w.endTime) {
+		w.endTime = tw.EndTime()
+	}
+}
+
+func (w *timedWindow) Expand(endTime time.Time) {
+	if endTime.After(w.endTime) {
+		w.endTime = endTime
+	}
+}
+
 // TimedWindowRequest represents the operation on the window
 type TimedWindowRequest struct {
 	// Operation of the operation on the windows
@@ -75,10 +143,7 @@ type TimedWindowResponse struct {
 	// ReadMessage represents the isb message
 	WriteMessages []*isb.WriteMessage
 	// ID represents the partition id to which the response belongs
-	ID *partition.ID
-	// combinedKey represents the combined key of the window
-	// which was used for demultiplexing the request in server
-	CombinedKey string
+	Window TimedWindow
 }
 
 // Operation represents the event type of the operation on the window
@@ -105,6 +170,8 @@ func (e Operation) String() string {
 		return "Merge"
 	case Append:
 		return "Append"
+	case Expand:
+		return "Expand"
 	default:
 		return "Unknown"
 	}

@@ -50,8 +50,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 )
 
 // DataForward is responsible for reading and forwarding the message from ISB to PBQ.
@@ -148,6 +146,10 @@ func (df *DataForward) Start() {
 // ReplayPersistedMessages replays persisted messages, because during boot up, it has to replay the data from the persistent store of
 // PBQ before it can start reading from ISB. ReplayPersistedMessages will return only after the replay has been completed.
 func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
+	// TODO: fix replay for session windows
+	if df.windower.Strategy() == window.Session {
+		return nil
+	}
 	// start the PBQManager which discovers and builds the state from persistent store of the PBQ.
 	partitions, err := df.pbqManager.GetExistingPartitions(ctx)
 	if err != nil {
@@ -162,10 +164,10 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 		// crosses the window.
 		var timedWindow window.TimedWindow
 
-		if df.windower.Strategy() == window.Fixed {
-			timedWindow = fixed.NewWindowFromPartition(&p)
-		} else if df.windower.Strategy() == window.Sliding {
-			timedWindow = sliding.NewWindowFromPartition(&p)
+		if df.windower.Strategy() == window.Fixed || df.windower.Strategy() == window.Sliding {
+			timedWindow = window.NewWindowFromPartition(&p)
+		} else {
+			continue
 		}
 
 		df.windower.InsertWindow(timedWindow)
@@ -209,7 +211,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// -1 means there are no windows
-		if oldestClosedWindowEndTime := df.windower.OldestClosedWindowEndTime(); oldestClosedWindowEndTime == time.UnixMilli(-1) {
+		if oldestClosedWindowEndTime := df.windower.OldestWindowEndTime(); oldestClosedWindowEndTime == time.UnixMilli(-1) {
 			// if all the windows are closed already, and the len(readBatch) == 0
 			// then it means there's an idle situation
 			// in this case, send idle watermark to all the toBuffer partitions
@@ -379,7 +381,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 	}
 
 	// solve Reduce withholding of watermark where we do not send WM until the window is closed.
-	oldestClosedWindowEndTime := df.windower.OldestClosedWindowEndTime()
+	oldestClosedWindowEndTime := df.windower.OldestWindowEndTime()
 	if oldestClosedWindowEndTime != time.UnixMilli(-1) {
 		// minus 1 ms because if it's the same as the end time the window would have already been closed
 		if watermark := time.Time(wm).Add(-1 * time.Millisecond); oldestClosedWindowEndTime.After(watermark) {

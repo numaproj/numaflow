@@ -27,8 +27,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
-	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 )
 
 // PBQ Buffer queue which is backed with a persisted store, each partition
@@ -54,7 +52,7 @@ var _ ReadWriteCloser = (*PBQ)(nil)
 func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) error {
 	// if cob we should return
 	if p.cob {
-		p.log.Errorw("Failed to write request to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("header", request.ReadMessage.Header), zap.Any("request", request))
+		p.log.Errorw("Failed to write request to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("request", request))
 		return nil
 	}
 	// RETHINK: I am not sure if we should be doing this here. We should probably do this in the writer.
@@ -133,12 +131,10 @@ readLoop:
 		for _, msg := range readMessages {
 			// FIXME: support for session window
 			var w window.TimedWindow
-			if p.windowStrategy == window.Fixed {
-				w = fixed.NewWindowFromPartition(&p.PartitionID)
-			} else if p.windowStrategy == window.Sliding {
-				w = sliding.NewWindowFromPartition(&p.PartitionID)
+			if p.windowStrategy == window.Fixed || p.windowStrategy == window.Sliding {
+				w = window.NewWindowFromPartition(&p.PartitionID)
 			} else {
-				p.log.Errorw("Window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowStrategy))
+				p.log.Errorw("session window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowStrategy))
 			}
 			// select to avoid infinite blocking while writing to output channel
 			select {

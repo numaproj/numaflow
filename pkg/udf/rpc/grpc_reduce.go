@@ -331,11 +331,10 @@ func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowR
 	// because for fixed and sliding we don't track keys.
 	return &window.TimedWindowResponse{
 		WriteMessages: taggedMessages,
-		ID: &partition.ID{
+		Window: window.NewWindowFromPartition(&partition.ID{
 			Start: response.GetPartition().GetStart().AsTime(),
 			End:   response.GetPartition().GetEnd().AsTime(),
 			Slot:  response.GetPartition().GetSlot(),
-		},
-		CombinedKey: "",
+		}),
 	}
 }

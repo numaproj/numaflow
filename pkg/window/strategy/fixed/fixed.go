@@ -30,23 +30,23 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// Window TimedWindow implementation for Fixed window.
-type Window struct {
+// fixedWindow TimedWindow implementation for Fixed window.
+type fixedWindow struct {
 	startTime time.Time
 	endTime   time.Time
 	slot      string
 	keys      []string
 }
 
-// NewWindow returns a new window for the given message.
-func NewWindow(length time.Duration, message *isb.ReadMessage) window.TimedWindow {
+// NewFixedWindow returns a new window for the given message.
+func NewFixedWindow(length time.Duration, message *isb.ReadMessage) window.TimedWindow {
 	start := message.EventTime.Truncate(length)
 	end := start.Add(length)
 	// TODO: slot should be extracted based on the key
 	// we can accept an interface SlotAssigner
 	// which will assign the slot based on the key
 	slot := "slot-0"
-	return &Window{
+	return &fixedWindow{
 		startTime: start,
 		endTime:   end,
 		slot:      slot,
@@ -54,31 +54,23 @@ func NewWindow(length time.Duration, message *isb.ReadMessage) window.TimedWindo
 	}
 }
 
-func NewWindowFromPartition(id *partition.ID) window.TimedWindow {
-	return &Window{
-		startTime: id.Start,
-		endTime:   id.End,
-		slot:      id.Slot,
-	}
-}
-
-func (w *Window) StartTime() time.Time {
+func (w *fixedWindow) StartTime() time.Time {
 	return w.startTime
 }
 
-func (w *Window) EndTime() time.Time {
+func (w *fixedWindow) EndTime() time.Time {
 	return w.endTime
 }
 
-func (w *Window) Slot() string {
+func (w *fixedWindow) Slot() string {
 	return w.slot
 }
 
-func (w *Window) Keys() []string {
+func (w *fixedWindow) Keys() []string {
 	return w.keys
 }
 
-func (w *Window) Partition() *partition.ID {
+func (w *fixedWindow) Partition() *partition.ID {
 	return &partition.ID{
 		Start: w.startTime,
 		End:   w.endTime,
@@ -86,7 +78,7 @@ func (w *Window) Partition() *partition.ID {
 	}
 }
 
-func (w *Window) Merge(tw window.TimedWindow) {
+func (w *fixedWindow) Merge(tw window.TimedWindow) {
 	if w.slot != tw.Slot() {
 		panic("cannot merge windows with different slots")
 	}
@@ -100,7 +92,7 @@ func (w *Window) Merge(tw window.TimedWindow) {
 	}
 }
 
-func (w *Window) Expand(endTime time.Time) {
+func (w *fixedWindow) Expand(endTime time.Time) {
 	if endTime.After(w.endTime) {
 		w.endTime = endTime
 	}
@@ -134,12 +126,12 @@ func (w *Windower) Strategy() window.Strategy {
 
 // AssignWindows assigns the event to the window based on give window configuration.
 // AssignWindows returns a map of partition id to window message. Partition id is used to
-// identify the pbq instance to which the message should be assigned. Window message contains
-// the isb message and the window operation. Window operation contains the event type and the
+// identify the pbq instance to which the message should be assigned. fixedWindow message contains
+// the isb message and the window operation. fixedWindow operation contains the event type and the
 // if the window is newly created the operation is set to Open, if the window is already present
 // the operation is set to Append.
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
-	win, isPresent := w.activeWindows.InsertIfNotPresent(NewWindow(w.length, message))
+	win, isPresent := w.activeWindows.InsertIfNotPresent(NewFixedWindow(w.length, message))
 	winOp := &window.TimedWindowRequest{
 		Operation:   window.Append,
 		Windows:     []window.TimedWindow{win},
@@ -183,15 +175,11 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 
 // DeleteClosedWindows deletes the windows from the closed windows list
 func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
-	w.closedWindows.Delete(&Window{
-		startTime: response.ID.Start,
-		endTime:   response.ID.End,
-		slot:      response.ID.Slot,
-	})
+	w.closedWindows.Delete(response.Window)
 }
 
 // OldestClosedWindowEndTime returns the end time of the oldest closed window.
-func (w *Windower) OldestClosedWindowEndTime() time.Time {
+func (w *Windower) OldestWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()
 	} else if win = w.activeWindows.Front(); win != nil {

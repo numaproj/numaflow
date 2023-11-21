@@ -951,6 +951,130 @@ func TestSortedWindowListByEndTime_FindWindowForTime(t *testing.T) {
 	}
 }
 
+func TestSortedWindowListByEndTime_WindowToBeMerged(t *testing.T) {
+	// 545000-560000-slot-0
+
+	//562000-607000-slot-0
+	//581000-608000-slot-0
+	//561000-609000-slot-0
+	//563000-610000-slot-0
+	//557000-611000-slot-0
+	//564000-612000-slot-0
+	//577000-613000-slot-0
+	//560000-614000-slot-0
+	//654000-674000-slot-0
+
+	testWin := &TestWindow{
+		start: time.Unix(545, 0),
+		end:   time.Unix(560, 0),
+		slot:  "slot-0",
+	}
+
+	win1 := &TestWindow{
+		start: time.Unix(562, 0),
+		end:   time.Unix(607, 0),
+		slot:  "slot-0",
+	}
+
+	win2 := &TestWindow{
+		start: time.Unix(581, 0),
+		end:   time.Unix(608, 0),
+		slot:  "slot-0",
+	}
+
+	win3 := &TestWindow{
+		start: time.Unix(561, 0),
+		end:   time.Unix(609, 0),
+		slot:  "slot-0",
+	}
+
+	win4 := &TestWindow{
+		start: time.Unix(563, 0),
+		end:   time.Unix(610, 0),
+		slot:  "slot-0",
+	}
+
+	win5 := &TestWindow{
+		start: time.Unix(559, 0),
+		end:   time.Unix(611, 0),
+		slot:  "slot-0",
+	}
+
+	win6 := &TestWindow{
+		start: time.Unix(564, 0),
+		end:   time.Unix(612, 0),
+		slot:  "slot-0",
+	}
+
+	win7 := &TestWindow{
+		start: time.Unix(577, 0),
+		end:   time.Unix(613, 0),
+		slot:  "slot-0",
+	}
+
+	win8 := &TestWindow{
+		start: time.Unix(560, 0),
+		end:   time.Unix(614, 0),
+		slot:  "slot-0",
+	}
+
+	win9 := &TestWindow{
+		start: time.Unix(654, 0),
+		end:   time.Unix(674, 0),
+		slot:  "slot-0",
+	}
+
+	windowList := NewSortedWindowListByEndTime[*TestWindow]()
+	windowList.Insert(win1)
+	windowList.Insert(win2)
+	windowList.Insert(win3)
+	windowList.Insert(win4)
+	windowList.Insert(win5)
+	windowList.Insert(win6)
+	windowList.Insert(win7)
+	windowList.Insert(win8)
+	windowList.Insert(win9)
+
+	outputWin, canBeMerged := windowList.WindowToBeMerged(testWin)
+	if canBeMerged {
+		println(outputWin.Partition().String())
+	}
+}
+
+func TestSortedWindowListByEndTime_WindowToBeMerged2(t *testing.T) {
+	// 545000-560000-slot-0
+
+	//562000-607000-slot-0
+	//581000-608000-slot-0
+	//561000-609000-slot-0
+	//563000-610000-slot-0
+	//557000-611000-slot-0
+	//564000-612000-slot-0
+	//577000-613000-slot-0
+	//560000-614000-slot-0
+	//654000-674000-slot-0
+
+	testWin := &TestWindow{
+		start: time.Unix(38, 0),
+		end:   time.Unix(48, 0),
+		slot:  "slot-0",
+	}
+
+	win1 := &TestWindow{
+		start: time.Unix(37, 0),
+		end:   time.Unix(47, 0),
+		slot:  "slot-0",
+	}
+
+	windowList := NewSortedWindowListByEndTime[*TestWindow]()
+	windowList.Insert(win1)
+
+	outputWin, canBeMerged := windowList.WindowToBeMerged(testWin)
+	if canBeMerged {
+		println("yes - ", outputWin.Partition().String())
+	}
+}
+
 func setupWindows(windows *SortedWindowListByEndTime[*TestWindow], wins []*TestWindow) {
 	for _, win := range wins {
 		windows.InsertBack(win)

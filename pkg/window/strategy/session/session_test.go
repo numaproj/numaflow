@@ -96,14 +96,14 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 }
 
 func TestSession_InsertWindow(t *testing.T) {
-	win1 := &Window{
+	win1 := &sessionWindow{
 		startTime: time.UnixMilli(60000),
 		endTime:   time.UnixMilli(60000 + 60*1000),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
 
-	win2 := &Window{
+	win2 := &sessionWindow{
 		startTime: time.UnixMilli(60000),
 		endTime:   time.UnixMilli(60000 + 60*1000),
 		slot:      "slot-0",
@@ -121,7 +121,7 @@ func TestSession_InsertWindow(t *testing.T) {
 	windower.InsertWindow(win2)
 	assert.Equal(t, 1, windower.activeWindows["key-2"].Len())
 
-	win2 = &Window{
+	win2 = &sessionWindow{
 		startTime: time.UnixMilli(120000),
 		endTime:   time.UnixMilli(120000 + 60*1000),
 		slot:      "slot-0",
@@ -137,16 +137,16 @@ func TestSession_InsertWindow(t *testing.T) {
 func TestSession_CloseWindowsWithoutMerge(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 
-	win1 := &Window{
+	win1 := &sessionWindow{
 		startTime: baseTime,
 		endTime:   baseTime.Add(10 * time.Second),
 		slot:      "slot-0",
 	}
-	win2 := &Window{
+	win2 := &sessionWindow{
 		startTime: baseTime.Add(30 * time.Second),
 		endTime:   baseTime.Add(59 * time.Second),
 	}
-	win3 := &Window{
+	win3 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
 	}
@@ -163,12 +163,12 @@ func TestSession_CloseWindowsWithoutMerge(t *testing.T) {
 	assert.Equal(t, 2, len(windowRequests))
 
 	assert.Equal(t, window.Close, windowRequests[0].Operation)
-	assert.Equal(t, baseTime, windowRequests[0].Windows[0].StartTime())
-	assert.Equal(t, baseTime.Add(10*time.Second), windowRequests[0].Windows[0].EndTime())
+	assert.Equal(t, baseTime.Add(30*time.Second), windowRequests[0].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(59*time.Second), windowRequests[0].Windows[0].EndTime())
 
 	assert.Equal(t, window.Close, windowRequests[1].Operation)
-	assert.Equal(t, baseTime.Add(30*time.Second), windowRequests[1].Windows[0].StartTime())
-	assert.Equal(t, baseTime.Add(59*time.Second), windowRequests[1].Windows[0].EndTime())
+	assert.Equal(t, baseTime, windowRequests[1].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(10*time.Second), windowRequests[1].Windows[0].EndTime())
 
 	windowRequests = windower.CloseWindows(baseTime.Add(120 * time.Second))
 	assert.Equal(t, 1, len(windowRequests))
@@ -182,17 +182,17 @@ func TestSession_CloseWindowsWithMerge(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 
 	// win1 and win2 should be merged
-	win1 := &Window{
+	win1 := &sessionWindow{
 		startTime: baseTime,
 		endTime:   baseTime.Add(20 * time.Second),
 		slot:      "slot-0",
 	}
-	win2 := &Window{
+	win2 := &sessionWindow{
 		startTime: baseTime.Add(11 * time.Second),
 		endTime:   baseTime.Add(59 * time.Second),
 		slot:      "slot-0",
 	}
-	win3 := &Window{
+	win3 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
 		slot:      "slot-0",
@@ -208,57 +208,58 @@ func TestSession_CloseWindowsWithMerge(t *testing.T) {
 	windowRequests := windower.CloseWindows(baseTime.Add(120 * time.Second))
 	assert.Equal(t, 3, len(windowRequests))
 
-	// merge operation should be performed first
-	assert.Equal(t, window.Merge, windowRequests[0].Operation)
-	assert.Equal(t, 2, len(windowRequests[0].Windows))
-	assert.Equal(t, baseTime, windowRequests[0].Windows[0].StartTime())
-	assert.Equal(t, baseTime.Add(20*time.Second), windowRequests[0].Windows[0].EndTime())
-	assert.Equal(t, baseTime.Add(11*time.Second), windowRequests[0].Windows[1].StartTime())
-	assert.Equal(t, baseTime.Add(59*time.Second), windowRequests[0].Windows[1].EndTime())
+	// close operation on the window which was not merged
+	assert.Equal(t, window.Close, windowRequests[0].Operation)
+	assert.Equal(t, baseTime.Add(60*time.Second), windowRequests[0].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(90*time.Second), windowRequests[0].Windows[0].EndTime())
 
-	// close operation on the merged window
-	assert.Equal(t, window.Close, windowRequests[1].Operation)
-	assert.Equal(t, baseTime, windowRequests[1].Windows[0].StartTime())
+	// merge operation should be performed first
+	assert.Equal(t, window.Merge, windowRequests[1].Operation)
+	assert.Equal(t, 2, len(windowRequests[1].Windows))
+
+	assert.Equal(t, baseTime, windowRequests[1].Windows[1].StartTime())
+	assert.Equal(t, baseTime.Add(20*time.Second), windowRequests[1].Windows[1].EndTime())
+	assert.Equal(t, baseTime.Add(11*time.Second), windowRequests[1].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(59*time.Second), windowRequests[1].Windows[0].EndTime())
 
-	// close operation on the window which was not merged
+	// close operation on the merged window
 	assert.Equal(t, window.Close, windowRequests[2].Operation)
-	assert.Equal(t, baseTime.Add(60*time.Second), windowRequests[2].Windows[0].StartTime())
-	assert.Equal(t, baseTime.Add(90*time.Second), windowRequests[2].Windows[0].EndTime())
+	assert.Equal(t, baseTime, windowRequests[2].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(59*time.Second), windowRequests[2].Windows[0].EndTime())
 
 	// test windows with different keys
-	win1 = &Window{
+	win1 = &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(89 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
-	win2 = &Window{
+	win2 = &sessionWindow{
 		startTime: baseTime.Add(50 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
-	win3 = &Window{
+	win3 = &sessionWindow{
 		startTime: baseTime.Add(30 * time.Second),
 		endTime:   baseTime.Add(150 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
 
-	win4 := &Window{
+	win4 := &sessionWindow{
 		startTime: baseTime.Add(30 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
 	}
-	win5 := &Window{
+	win5 := &sessionWindow{
 		startTime: baseTime.Add(40 * time.Second),
 		endTime:   baseTime.Add(80 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
 	}
-	win6 := &Window{
+	win6 := &sessionWindow{
 		startTime: baseTime.Add(10 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
 		slot:      "slot-0",
@@ -272,7 +273,7 @@ func TestSession_CloseWindowsWithMerge(t *testing.T) {
 	windower.InsertWindow(win5)
 	windower.InsertWindow(win6)
 
-	// close the window with end time less than baseTime + 120 seconds
+	// close the window with end time less than baseTime + 150 seconds
 	windowRequests = windower.CloseWindows(baseTime.Add(150 * time.Second))
 	assert.Equal(t, 4, len(windowRequests))
 	// merge operation for key-1
@@ -289,28 +290,111 @@ func TestSession_CloseWindowsWithMerge(t *testing.T) {
 	assert.Equal(t, window.Close, windowRequests[3].Operation)
 }
 
+func TestSession_CloseWindowsComplex(t *testing.T) {
+
+	//	 window -  60000-119000-slot-0
+	//	 window -  159000-218000-slot-0
+	//	 window -  258000-279000-slot-0
+	//	 window -  262000-317000-slot-0
+	//	 window -  357000-416000-slot-0
+	//	 window -  456000-515000-slot-0
+	// 	 window -  514000-573000-slot-0
+
+	win1 := &sessionWindow{
+		startTime: time.Unix(60, 0),
+		endTime:   time.Unix(119, 0),
+		slot:      "slot-0",
+		keys:      []string{"key-1"},
+	}
+
+	win2 := &sessionWindow{
+		startTime: time.Unix(159, 0),
+		endTime:   time.Unix(218, 0),
+		slot:      "slot-0",
+		keys:      []string{"key-1"},
+	}
+
+	win3 := &sessionWindow{
+		startTime: time.Unix(258, 0),
+		endTime:   time.Unix(279, 0),
+		slot:      "slot-0",
+		keys:      []string{"key-1"},
+	}
+
+	win4 := &sessionWindow{
+		startTime: time.Unix(262, 0),
+		endTime:   time.Unix(317, 0),
+		slot:      "slot-0",
+		keys:      []string{"key-1"},
+	}
+
+	win5 := &sessionWindow{
+		startTime: time.Unix(357, 0),
+		endTime:   time.Unix(416, 0),
+		slot:      "slot-0",
+		keys:      []string{"key-1"},
+	}
+
+	win6 := &sessionWindow{
+		startTime: time.Unix(456, 0),
+		endTime:   time.Unix(515, 0),
+		slot:      "slot-0",
+		keys:      []string{"key-1"},
+	}
+
+	win7 := &sessionWindow{
+		startTime: time.Unix(514, 0),
+		endTime:   time.Unix(573, 0),
+		slot:      "slot-0",
+		keys:      []string{"key-1"},
+	}
+
+	windower := &Windower{
+		gap:           10 * time.Second,
+		activeWindows: make(map[string]*window.SortedWindowListByEndTime[window.TimedWindow]),
+		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+	}
+
+	windower.InsertWindow(win1)
+	windower.InsertWindow(win2)
+	windower.InsertWindow(win3)
+	windower.InsertWindow(win4)
+	windower.InsertWindow(win5)
+	windower.InsertWindow(win6)
+	windower.InsertWindow(win7)
+
+	closeWindowOps := windower.CloseWindows(time.Unix(515, 0))
+
+	for _, windowOp := range closeWindowOps {
+		println(windowOp.Operation.String())
+		for _, win := range windowOp.Windows {
+			println(win.Partition().String(), " keys - ", win.Keys())
+		}
+	}
+}
+
 func TestSession_DeleteWindows(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 
-	win1 := &Window{
+	win1 := &sessionWindow{
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
-	win2 := &Window{
+	win2 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
-	win3 := &Window{
+	win3 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
 	}
-	win4 := &Window{
+	win4 := &sessionWindow{
 		startTime: baseTime.Add(120 * time.Second),
 		endTime:   baseTime.Add(180 * time.Second),
 		slot:      "slot-0",
@@ -334,24 +418,22 @@ func TestSession_DeleteWindows(t *testing.T) {
 
 	// delete one of the windows
 	windower.DeleteClosedWindows(&window.TimedWindowResponse{
-		ID: &partition.ID{
+		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
 			Start: baseTime,
 			End:   baseTime.Add(60 * time.Second),
 			Slot:  "slot-0",
-		},
-		CombinedKey: "key-1",
+		}, []string{"key-1"}),
 	})
 
 	// since we deleted one of the windows, the closed windows should be 3
 	assert.Equal(t, 3, windower.closedWindows.Len())
 
 	windower.DeleteClosedWindows(&window.TimedWindowResponse{
-		ID: &partition.ID{
+		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
 			Start: baseTime.Add(60 * time.Second),
 			End:   baseTime.Add(120 * time.Second),
 			Slot:  "slot-0",
-		},
-		CombinedKey: "key-2",
+		}, []string{"key-1"}),
 	})
 	// since we deleted two windows, the closed windows should be 2
 	assert.Equal(t, 2, windower.closedWindows.Len())
@@ -360,19 +442,19 @@ func TestSession_DeleteWindows(t *testing.T) {
 func TestWindower_OldestClosedWindowEndTime(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 
-	win1 := &Window{
+	win1 := &sessionWindow{
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
-	win2 := &Window{
+	win2 := &sessionWindow{
 		startTime: baseTime.Add(40 * time.Second),
 		endTime:   baseTime.Add(70 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
-	win3 := &Window{
+	win3 := &sessionWindow{
 		startTime: baseTime.Add(10 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
 		slot:      "slot-0",
@@ -395,38 +477,37 @@ func TestWindower_OldestClosedWindowEndTime(t *testing.T) {
 
 	// when we close the windows window (60, 120) and (100, 130) will be merged
 	// so the oldest window end time will be 130
-	assert.Equal(t, baseTime.Add(70*time.Second), windower.OldestClosedWindowEndTime())
+	assert.Equal(t, baseTime.Add(70*time.Second), windower.OldestWindowEndTime())
 
 	// delete one of the windows
 	windower.DeleteClosedWindows(&window.TimedWindowResponse{
-		ID: &partition.ID{
+		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
 			Start: baseTime,
 			End:   baseTime.Add(70 * time.Second),
 			Slot:  "slot-0",
-		},
-		CombinedKey: "key-1",
+		}, []string{"key-1"}),
 	})
 
 	// since we deleted (60, 130) window, now the oldest window end time will be 90
-	assert.Equal(t, baseTime.Add(90*time.Second), windower.OldestClosedWindowEndTime())
+	assert.Equal(t, baseTime.Add(90*time.Second), windower.OldestWindowEndTime())
 }
 
 func TestWindower_NextWindowToBeClosed(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 
-	win1 := &Window{
+	win1 := &sessionWindow{
 		startTime: baseTime,
 		endTime:   baseTime.Add(10 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
-	win2 := &Window{
+	win2 := &sessionWindow{
 		startTime: baseTime.Add(30 * time.Second),
 		endTime:   baseTime.Add(59 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
 	}
-	win3 := &Window{
+	win3 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
 		slot:      "slot-0",
