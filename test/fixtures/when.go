@@ -209,6 +209,28 @@ func (w *When) DaemonPodPortForward(pipelineName string, localPort, remotePort i
 	return w
 }
 
+func (w *When) UXServerPodPortForward(localPort, remotePort int) *When {
+	w.t.Helper()
+	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyComponent, dfv1.ComponentUXServer)
+	ctx := context.Background()
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting UX server pod name: %v", err)
+	}
+	podName := podList.Items[0].GetName()
+	w.t.Logf("UX server POD name: %s", podName)
+
+	stopCh := make(chan struct{}, 1)
+	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
+		w.t.Fatalf("Expected UX server pod port-forward: %v", err)
+	}
+	if w.portForwarderStopChannels == nil {
+		w.portForwarderStopChannels = make(map[string]chan struct{})
+	}
+	w.portForwarderStopChannels[podName] = stopCh
+	return w
+}
+
 func (w *When) TerminateAllPodPortForwards() *When {
 	w.t.Helper()
 	if len(w.portForwarderStopChannels) > 0 {
