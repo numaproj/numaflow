@@ -253,24 +253,31 @@ func validateUDF(udf dfv1.UDF) error {
 	if udf.GroupBy != nil {
 		f := udf.GroupBy.Window.Fixed
 		s := udf.GroupBy.Window.Sliding
+		ss := udf.GroupBy.Window.Session
 		storage := udf.GroupBy.Storage
-		if f == nil && s == nil {
+		if f == nil && s == nil && ss == nil {
 			return fmt.Errorf(`invalid "groupBy.window", no windowing strategy specified`)
 		}
-
 		if f != nil && s != nil {
 			return fmt.Errorf(`invalid "groupBy.window", either fixed or sliding is allowed, not both`)
 		}
-
+		if f != nil && ss != nil {
+			return fmt.Errorf(`invalid "groupBy.window", either fixed or session is allowed, not both`)
+		}
+		if s != nil && ss != nil {
+			return fmt.Errorf(`invalid "groupBy.window", either sliding or session is allowed, not both`)
+		}
 		if f != nil && f.Length == nil {
 			return fmt.Errorf(`invalid "groupBy.window.fixed", "length" is missing`)
 		}
-
 		if s != nil && (s.Length == nil) {
 			return fmt.Errorf(`invalid "groupBy.window.sliding", "length" is missing`)
 		}
 		if s != nil && (s.Slide == nil) {
 			return fmt.Errorf(`invalid "groupBy.window.sliding", "slide" is missing`)
+		}
+		if ss != nil && ss.Timeout == nil {
+			return fmt.Errorf(`invalid "groupBy.window.session", "timeout" is missing`)
 		}
 		if storage == nil {
 			return fmt.Errorf(`invalid "groupBy", "storage" is missing`)

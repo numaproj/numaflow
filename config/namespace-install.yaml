@@ -10468,6 +10468,11 @@ spec:
                                     length:
                                       type: string
                                   type: object
+                                session:
+                                  properties:
+                                    timeout:
+                                      type: string
+                                  type: object
                                 sliding:
                                   properties:
                                     length:
@@ -15123,6 +15128,11 @@ spec:
                           fixed:
                             properties:
                               length:
+                                type: string
+                            type: object
+                          session:
+                            properties:
+                              timeout:
                                 type: string
                             type: object
                           sliding:

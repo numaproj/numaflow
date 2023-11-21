@@ -132,6 +132,8 @@ type Window struct {
 	Fixed *FixedWindow `json:"fixed" protobuf:"bytes,1,opt,name=fixed"`
 	// +optional
 	Sliding *SlidingWindow `json:"sliding" protobuf:"bytes,2,opt,name=sliding"`
+	// +optional
+	Session *SessionWindow `json:"session" protobuf:"bytes,3,opt,name=session"`
 }
 
 // FixedWindow describes a fixed window
@@ -143,6 +145,11 @@ type FixedWindow struct {
 type SlidingWindow struct {
 	Length *metav1.Duration `json:"length,omitempty" protobuf:"bytes,1,opt,name=length"`
 	Slide  *metav1.Duration `json:"slide,omitempty" protobuf:"bytes,2,opt,name=slide"`
+}
+
+// SessionWindow describes a session window
+type SessionWindow struct {
+	Timeout *metav1.Duration `json:"timeout,omitempty" protobuf:"bytes,1,opt,name=timeout"`
 }
 
 // PBQStorage defines the persistence configuration for a vertex.

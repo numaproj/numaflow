@@ -1063,6 +1063,11 @@ message Scale {
   optional uint32 scaleDownCooldownSeconds = 11;
 }
 
+// SessionWindow describes a session window
+message SessionWindow {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
+}
+
 // SideInput defines information of a Side Input
 message SideInput {
   optional string name = 1;
@@ -1360,5 +1365,8 @@ message Window {
 
   // +optional
   optional SlidingWindow sliding = 2;
+
+  // +optional
+  optional SessionWindow session = 3;
 }
 

@@ -19063,6 +19063,15 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.SessionWindow": {
+      "description": "SessionWindow describes a session window",
+      "type": "object",
+      "properties": {
+        "timeout": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.SideInput": {
       "description": "SideInput defines information of a Side Input",
       "type": "object",
@@ -19759,6 +19768,9 @@
       "properties": {
         "fixed": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.FixedWindow"
+        },
+        "session": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SessionWindow"
         },
         "sliding": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SlidingWindow"

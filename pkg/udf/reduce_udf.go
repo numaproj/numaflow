@@ -82,18 +82,17 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
 	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
+	ss := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Session
 
 	if f != nil {
 		windower = fixed.NewWindower(f.Length.Duration)
 	} else if s != nil {
 		windower = sliding.NewWindower(s.Length.Duration, s.Slide.Duration)
-	}
-
-	if windower == nil {
+	} else if ss != nil {
+		windower = session.NewWindower(ss.Timeout.Duration)
+	} else {
 		return fmt.Errorf("invalid window spec")
 	}
-
-	windower = session.NewWindower(f.Length.Duration)
 
 	fromBuffers := u.VertexInstance.Vertex.OwnedBuffers()
 	// choose the buffer that corresponds to this reduce processor because
