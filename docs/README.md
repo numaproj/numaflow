@@ -29,11 +29,12 @@ stream processing platforms.
 
 ## Roadmap
 
-- User-defined Source (v0.11)
+- Support for watermark progression even if the source is idling (1.1)
+- Session Window (1.2)
 
 ## Demo
 
-[![Numaflow Demo](https://img.youtube.com/vi/hJS714arX6Q/0.jpg)](https://youtu.be/hJS714arX6Q)
+[![Numaflow Demo](https://img.youtube.com/vi/TOqKOYX0nrE/0.jpg)](https://youtu.be/TOqKOYX0nrE)
 
 ## Getting Started
 

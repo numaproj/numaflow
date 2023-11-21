@@ -12,7 +12,7 @@ import { AppContextProps } from "../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../App";
 import { SidebarType } from "../../../../../common/SlidingSidebar";
 import { ViewType } from "../../../../../common/SpecEditor";
-import pipelineIcon from "../../../../../../images/pipeline.png";
+import isbIcon from "../../../../../../images/isb.png";
 import { ISBServicesListing } from "../ISBServiceTypes";
 
 export interface DeleteProps {
@@ -48,7 +48,7 @@ export function ISBServiceCard({
     setSidebarProps({
       type: SidebarType.ISB_UPDATE,
       specEditorProps: {
-        initialYaml: data?.isbService?.spec,
+        initialYaml: data?.isbService,
         namespaceId: namespace,
         isbId: data?.name,
         viewType: ViewType.EDIT,
@@ -75,6 +75,12 @@ export function ISBServiceCard({
 
   const isbType = GetISBType(data?.isbService?.spec) || UNKNOWN;
   const isbStatus = data?.isbService?.status?.phase || UNKNOWN;
+  const isbSize =
+    isbType !== UNKNOWN && data?.isbService?.spec[isbType]
+      ? data?.isbService?.spec[isbType].replicas
+        ? data?.isbService?.spec[isbType].replicas
+        : 3
+      : UNKNOWN;
 
   return (
     <>
@@ -82,8 +88,8 @@ export function ISBServiceCard({
         sx={{
           display: "flex",
           flexDirection: "column",
-          padding: "1.5rem",
           width: "100%",
+          borderRadius: "1rem",
         }}
       >
         <Box
@@ -91,12 +97,16 @@ export function ISBServiceCard({
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
+            paddingTop: "1rem",
+            paddingLeft: "1rem",
+            paddingRight: "1rem",
+            paddingBottom: "0.8rem",
             alignItems: "center",
           }}
         >
           <img
             className="pipeline-card-icon"
-            src={pipelineIcon}
+            src={isbIcon}
             alt="pipeline icon"
           />
           <Box
@@ -114,50 +124,16 @@ export function ISBServiceCard({
         <Box
           sx={{
             display: "flex",
+            background: "#F9F9F9",
             flexDirection: "row",
             flexGrow: 1,
+            padding: "1rem",
+            paddingTop: "0",
             width: "100%",
+            borderBottomLeftRadius: "1rem",
+            borderBottomRightRadius: "1rem",
           }}
         >
-          <Grid
-            container
-            spacing={2}
-            sx={{
-              background: "#F9F9F9",
-              marginTop: "0.625rem",
-              flexWrap: "no-wrap",
-            }}
-          >
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
-              }}
-            >
-              <span>ISB Services:</span>
-              <span>ISB Type:</span>
-              <span>ISB Size:</span>
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
-              }}
-            >
-              <span>{data?.name}</span>
-              <span>{isbType}</span>
-              <span>
-                {isbType && data?.isbService?.spec[isbType]
-                  ? data?.isbService?.spec[isbType].replicas
-                  : UNKNOWN}
-              </span>
-            </Box>
-          </Grid>
-
           <Grid
             container
             spacing={2}
@@ -207,6 +183,40 @@ export function ISBServiceCard({
             >
               <span>{ISBStatusString[isbStatus]}</span>
               <span>{ISBStatusString[data?.status]}</span>
+            </Box>
+          </Grid>
+          <Grid
+            container
+            spacing={2}
+            sx={{
+              background: "#F9F9F9",
+              marginTop: "0.625rem",
+              flexWrap: "no-wrap",
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>Name:</span>
+              <span>Type:</span>
+              <span>Size:</span>
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                paddingTop: "1rem",
+                paddingLeft: "1rem",
+              }}
+            >
+              <span>{data?.name}</span>
+              <span>{isbType}</span>
+              <span>{isbSize}</span>
             </Box>
           </Grid>
           <Grid

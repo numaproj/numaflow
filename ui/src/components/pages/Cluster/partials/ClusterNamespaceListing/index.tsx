@@ -10,13 +10,13 @@ import {
   ClusterNamespaceListingProps,
   ClusterNamespaceSummary,
 } from "../../../../../types/declarations/cluster";
-import { HEALTH } from "../../../Namespace/partials/NamespacePipelineListing";
 import {
   ACTIVE,
   ALL,
   CRITICAL,
   HEALTHY,
   INACTIVE,
+  INACTIVE_STATUS,
   NO_PIPELINES,
   WARNING,
   WITH_PIPELINES,
@@ -25,6 +25,8 @@ import {
 import "./style.css";
 
 const MAX_PAGE_SIZE = 6;
+
+const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL, INACTIVE_STATUS];
 
 export function ClusterNamespaceListing({
   data,
@@ -55,7 +57,7 @@ export function ClusterNamespaceListing({
       );
     }
     // Sort by name
-    filtered.sort((a, b) => (a.name > b.name ? 1 : -1));
+    filtered?.sort((a, b) => (a.name > b.name ? 1 : -1));
 
     //Filter based on the empty pipelines filter
     if (namespaceFilter === WITH_PIPELINES) {
@@ -72,6 +74,8 @@ export function ClusterNamespaceListing({
         return ns.pipelinesWarningCount > 0;
       } else if (healthFilter === CRITICAL) {
         return ns.pipelinesCriticalCount > 0;
+      } else if (healthFilter === INACTIVE_STATUS) {
+        return ns.pipelinesInactiveCount > 0;
       } else {
         return true;
       }

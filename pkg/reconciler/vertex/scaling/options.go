@@ -34,7 +34,7 @@ func defaultOptions() *options {
 		workers:               20,
 		taskInterval:          30000,
 		backPressureThreshold: 0.9,
-		clientsCacheSize:      100,
+		clientsCacheSize:      500,
 	}
 }
 

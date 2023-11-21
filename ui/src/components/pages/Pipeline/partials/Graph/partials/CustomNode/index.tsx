@@ -149,44 +149,72 @@ const CustomNode: FC<NodeProps> = ({
       <Tooltip
         title={<div className={"node-tooltip"}>{data?.name}</div>}
         arrow
-        placement={"top-end"}
+        placement={"left"}
       >
         <div className={"sideInput_node"} onClick={handleClick}>
-          <div
-            className={"sideInput_node_ele"}
-            style={{
-              borderTopLeftRadius: "1rem",
-              borderBottomLeftRadius: "1rem",
-              ...genStyle(""),
-            }}
+          <Tooltip
+            title={<div className={"node-tooltip"}>Spec View</div>}
+            arrow
+            placement={"bottom-start"}
           >
-            <img
-              src={generatorImage[generatorToColorMap.get(data?.name)]}
-              alt={"generator"}
-              width={16}
-              height={16}
-              style={{ alignSelf: "center" }}
-            />
-          </div>
-          <div
-            className={"sideInput_node_ele"}
-            style={{
-              color: getSideInputColor(data?.name),
-              borderTopRightRadius: "1rem",
-              borderBottomRightRadius: "1rem",
-              ...genStyle("---"),
-            }}
+            <div
+              className={"sideInput_node_ele"}
+              style={{
+                borderTopLeftRadius: "1rem",
+                borderBottomLeftRadius: "1rem",
+                ...genStyle(""),
+              }}
+              data-testid={`sideInput-${data?.name}`}
+            >
+              <img
+                src={generatorImage[generatorToColorMap.get(data?.name)]}
+                alt={"generator"}
+                width={16}
+                height={16}
+                style={{ alignSelf: "center" }}
+              />
+            </div>
+          </Tooltip>
+          <Tooltip
+            title={<div className={"node-tooltip"}>Show Edges</div>}
+            arrow
+            placement={"bottom-start"}
           >
-            ---
-          </div>
+            <div
+              className={"sideInput_node_ele"}
+              style={{
+                color: getSideInputColor(data?.name),
+                borderTopRightRadius: "1rem",
+                borderBottomRightRadius: "1rem",
+                ...genStyle("---"),
+              }}
+            >
+              ---
+            </div>
+          </Tooltip>
           <Handle
+            className={"generator_handle"}
             type="source"
             id="2"
             position={Position.Right}
-            style={{ top: "60%", left: "35%" }}
           />
         </div>
       </Tooltip>
+    );
+  }
+
+  if (data?.type === "generator") {
+    return (
+      <div
+        className={"generator_node"}
+        style={{
+          height: `${(data?.sideInputCount + 1) * 3.4}rem`,
+          ...commonStyle,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        Generator
+      </div>
     );
   }
 
@@ -237,6 +265,7 @@ const CustomNode: FC<NodeProps> = ({
       });
       const updatedHighlightedState = {};
       updatedHighlightedState[source] = true;
+      updatedHighlightedState["---"] = true;
       setHighlightValues(updatedHighlightedState);
     },
     [data, sideInputNodes, sideInputEdges, setHidden, setHighlightValues]

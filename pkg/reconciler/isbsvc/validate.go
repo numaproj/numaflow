@@ -19,31 +19,39 @@ package isbsvc
 import (
 	"fmt"
 
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-// ValidateInterStepBufferService accepts an isbs and performs validation against it
-func ValidateInterStepBufferService(isbs *dfv1.InterStepBufferService) error {
-	if isbs.Spec.Redis != nil && isbs.Spec.JetStream != nil {
+// ValidateInterStepBufferService accepts an ISB Service and performs validation against it
+func ValidateInterStepBufferService(isbsvc *dfv1.InterStepBufferService) error {
+	if isbsvc == nil {
+		return fmt.Errorf("nil ISB Service")
+	}
+	if errs := k8svalidation.IsDNS1035Label(isbsvc.Name); len(errs) > 0 {
+		return fmt.Errorf("invalid ISB Service name %q, %v", isbsvc.Name, errs)
+	}
+	if isbsvc.Spec.Redis != nil && isbsvc.Spec.JetStream != nil {
 		return fmt.Errorf(`invalid spec: "spec.redis" and "spec.jetstream" can not be defined together`)
 	}
-	if isbs.Spec.Redis == nil && isbs.Spec.JetStream == nil {
+	if isbsvc.Spec.Redis == nil && isbsvc.Spec.JetStream == nil {
 		return fmt.Errorf(`invalid spec: either "spec.redis" or "spec.jetstream" needs to be specified`)
 	}
-	if isbs.Spec.Redis != nil {
-		if isbs.Spec.Redis.Native != nil && isbs.Spec.Redis.External != nil {
+	if isbsvc.Spec.Redis != nil {
+		if isbsvc.Spec.Redis.Native != nil && isbsvc.Spec.Redis.External != nil {
 			return fmt.Errorf(`"native" and "external" can not be defined together`)
 		}
-		if isbs.Spec.Redis.Native == nil && isbs.Spec.Redis.External == nil {
+		if isbsvc.Spec.Redis.Native == nil && isbsvc.Spec.Redis.External == nil {
 			return fmt.Errorf(`either "native" or "external" must be defined`)
 		}
-		if native := isbs.Spec.Redis.Native; native != nil {
+		if native := isbsvc.Spec.Redis.Native; native != nil {
 			if native.Version == "" {
 				return fmt.Errorf(`invalid spec: "spec.redis.native.version" is not defined`)
 			}
 		}
 	}
-	if x := isbs.Spec.JetStream; x != nil {
+	if x := isbsvc.Spec.JetStream; x != nil {
 		if x.Version == "" {
 			return fmt.Errorf(`invalid spec: "spec.jetstream.version" is not defined`)
 		}

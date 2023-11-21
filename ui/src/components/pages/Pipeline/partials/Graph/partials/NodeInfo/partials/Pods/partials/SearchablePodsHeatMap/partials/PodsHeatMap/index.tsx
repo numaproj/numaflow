@@ -136,6 +136,7 @@ export const PodsHeatMap = ({
                         container.cpuPercent || -1,
                         1
                       ),
+                      color: "#ffffff"
                     }}
                   >
                     {container.cpuPercent
@@ -151,6 +152,7 @@ export const PodsHeatMap = ({
                         container.memoryPercent || -1,
                         1
                       ),
+                      color: "#ffffff"
                     }}
                   >
                     {container.memoryPercent

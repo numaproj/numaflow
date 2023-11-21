@@ -56,7 +56,7 @@ const (
 	certOrg = "io.numaproj"
 )
 
-// Webhook configuration
+// Options is the webhook configuration
 type Options struct {
 	WebhookName     string
 	ServiceName     string
@@ -68,7 +68,7 @@ type Options struct {
 	ClientAuth      tls.ClientAuthType
 }
 
-// Controller for validation webhook
+// AdmissionController is the validating admission webhook controller
 type AdmissionController struct {
 	Client     kubernetes.Interface
 	NumaClient v1alpha1.NumaflowV1alpha1Interface
@@ -101,7 +101,7 @@ func (ac *AdmissionController) Run(ctx context.Context) error {
 	serverStartErrCh := make(chan struct{})
 	go func() {
 		if err := server.ListenAndServeTLS("", ""); err != nil {
-			logger.Errorw("ListenAndServeTLS for admission webhook erorred out", zap.Error(err))
+			logger.Errorw("ListenAndServeTLS for admission webhook errored out", zap.Error(err))
 			close(serverStartErrCh)
 		}
 	}()
@@ -111,7 +111,6 @@ func (ac *AdmissionController) Run(ctx context.Context) error {
 	case <-serverStartErrCh:
 		return fmt.Errorf("webhook server failed to start")
 	}
-
 }
 
 // Register registers the validating admission webhook
@@ -257,7 +256,7 @@ func (ac *AdmissionController) admit(ctx context.Context, request *admissionv1.A
 		log.Infof("Operation not interested: %v %v", request.Kind, request.Operation)
 		return &admissionv1.AdmissionResponse{Allowed: true}
 	}
-	v, err := validator.GetValidator(ctx, ac.Client, ac.NumaClient, request.Kind, request.OldObject.Raw, request.Object.Raw)
+	v, err := validator.GetValidator(ctx, ac.NumaClient, request.Kind, request.OldObject.Raw, request.Object.Raw)
 	if err != nil {
 		return validator.DeniedResponse("failed to get a validator: %v", err)
 	}
@@ -274,7 +273,7 @@ func (ac *AdmissionController) admit(ctx context.Context, request *admissionv1.A
 
 // Generate cert secret
 func (ac *AdmissionController) generateSecret(ctx context.Context) (*corev1.Secret, error) {
-	hosts := []string{}
+	var hosts []string
 	hosts = append(hosts, fmt.Sprintf("%s.%s.svc.cluster.local", ac.Options.ServiceName, ac.Options.Namespace))
 	hosts = append(hosts, fmt.Sprintf("%s.%s.svc", ac.Options.ServiceName, ac.Options.Namespace))
 	serverKey, serverCert, caCert, err := commontls.CreateCerts(certOrg, hosts, time.Now().Add(10*365*24*time.Hour), true, false)

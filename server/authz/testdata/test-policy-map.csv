@@ -1,0 +1,9 @@
+# Policies go here
+p, role:admin, *, *, *
+p, role:readonly, *, *, GET
+p, test@test.com, *, *, POST
+p, role:namespace, test_ns, *, *
+# Groups go here
+g, admin, role:admin
+g, readonly, role:readonly
+g, test@test.com, role:readonly

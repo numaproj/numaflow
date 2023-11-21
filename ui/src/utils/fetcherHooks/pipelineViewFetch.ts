@@ -493,9 +493,19 @@ export const usePipelineViewFetch = (
         newVertices.push(newNode);
       });
     }
-    //creating side input nodes
+    //creating side input nodes && wrapper generator node
     const generatorToColorIdx = new Map();
-    if (spec?.sideInputs) {
+    if (spec?.sideInputs && spec.sideInputs.length) {
+      const newNode = {} as Node;
+      newNode.id = "generator";
+      newNode.data = {
+        sideInputCount: spec.sideInputs.length,
+      };
+      newNode.position = { x: 0, y: 0 };
+      newNode.draggable = false;
+      newNode.type = "custom";
+      newNode.data.type = "generator";
+      newVertices.push(newNode);
       spec.sideInputs.forEach((sideInput, idx) => {
         const newNode = {} as Node;
         newNode.id = sideInput?.name;

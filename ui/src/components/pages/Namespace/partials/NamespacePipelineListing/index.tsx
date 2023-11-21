@@ -30,10 +30,12 @@ import {
   ALPHABETICAL_SORT,
   ASC,
   CRITICAL,
+  DEFAULT_ISB,
   DELETING,
-  DESC, FAILED,
+  DESC,
+  FAILED,
   HEALTHY,
-  INACTIVE,
+  INACTIVE_STATUS,
   LAST_CREATED_SORT,
   LAST_UPDATED_SORT,
   PAUSED,
@@ -48,7 +50,14 @@ import {
 import "./style.css";
 
 const MAX_PAGE_SIZE = 4;
-export const HEALTH = [ALL, HEALTHY, WARNING, CRITICAL, INACTIVE, UNKNOWN];
+export const HEALTH = [
+  ALL,
+  HEALTHY,
+  WARNING,
+  CRITICAL,
+  INACTIVE_STATUS,
+  UNKNOWN,
+];
 export const STATUS = [
   ALL,
   RUNNING,
@@ -138,91 +147,211 @@ export function NamespacePipelineListing({
   );
   // Update filtered pipelines based on search and page selected
   useEffect(() => {
-    let filtered: PipelineData[] = Object.values(
-      pipelineData ? pipelineData : {}
-    );
-    if (search) {
-      // Filter by search
-      filtered = filtered.filter((p: PipelineData) => p.name.includes(search));
-    }
-    // Sorting
-    if (orderBy.value === ALPHABETICAL_SORT) {
-      filtered.sort((a: PipelineData, b: PipelineData) => {
-        if (orderBy.sortOrder === ASC) {
-          return a.name > b.name ? 1 : -1;
-        } else {
-          return a.name < b.name ? 1 : -1;
-        }
-      });
-    } else if (orderBy.value === LAST_UPDATED_SORT) {
-      filtered.sort((a: PipelineData, b: PipelineData) => {
-        if (orderBy.sortOrder === ASC) {
-          return a?.pipeline?.status?.lastUpdated >
-            b?.pipeline?.status?.lastUpdated
-            ? 1
-            : -1;
-        } else {
-          return a?.pipeline?.status?.lastUpdated <
-            b?.pipeline?.status?.lastUpdated
-            ? 1
-            : -1;
-        }
-      });
-    } else {
-      filtered.sort((a: PipelineData, b: PipelineData) => {
-        if (orderBy.sortOrder === ASC) {
-          return Date.parse(a?.pipeline?.metadata?.creationTimestamp) >
-            Date.parse(b?.pipeline?.metadata?.creationTimestamp)
-            ? 1
-            : -1;
-        } else {
-          return Date.parse(a?.pipeline?.metadata?.creationTimestamp) <
-            Date.parse(b?.pipeline?.metadata?.creationTimestamp)
-            ? 1
-            : -1;
-        }
-      });
-    }
-    //Filter by health
-    if (health !== "All") {
-      filtered = filtered.filter((p) => {
-        const status = p?.status || UNKNOWN;
-        if (status.toLowerCase() === health.toLowerCase()) {
-          return true;
-        } else {
-          return false;
-        }
-      });
-    }
-
-    //Filter by status
-    if (status !== "All") {
-      filtered = filtered.filter((p) => {
-        const currentStatus = p?.pipeline?.status?.phase || UNKNOWN;
-        if (currentStatus.toLowerCase() === status.toLowerCase()) {
-          return true;
-        } else {
-          return false;
-        }
-      });
-    }
-    // Break list into pages
-    const pages = filtered.reduce((resultArray: any[], item, index) => {
-      const chunkIndex = Math.floor(index / MAX_PAGE_SIZE);
-      if (!resultArray[chunkIndex]) {
-        resultArray[chunkIndex] = [];
+    if (tabValue === PIPELINE) {
+      let filtered: PipelineData[] = Object.values(
+        pipelineData ? pipelineData : {}
+      );
+      if (search) {
+        // Filter by search
+        filtered = filtered.filter((p: PipelineData) =>
+          p.name.includes(search)
+        );
       }
-      resultArray[chunkIndex].push(item);
-      return resultArray;
-    }, []);
+      // Sorting
+      if (orderBy.value === ALPHABETICAL_SORT) {
+        filtered?.sort((a: PipelineData, b: PipelineData) => {
+          if (orderBy.sortOrder === ASC) {
+            return a.name > b.name ? 1 : -1;
+          } else {
+            return a.name < b.name ? 1 : -1;
+          }
+        });
+      } else if (orderBy.value === LAST_UPDATED_SORT) {
+        filtered?.sort((a: PipelineData, b: PipelineData) => {
+          if (orderBy.sortOrder === ASC) {
+            return a?.pipeline?.status?.lastUpdated >
+              b?.pipeline?.status?.lastUpdated
+              ? 1
+              : -1;
+          } else {
+            return a?.pipeline?.status?.lastUpdated <
+              b?.pipeline?.status?.lastUpdated
+              ? 1
+              : -1;
+          }
+        });
+      } else {
+        filtered?.sort((a: PipelineData, b: PipelineData) => {
+          if (orderBy.sortOrder === ASC) {
+            return Date.parse(a?.pipeline?.metadata?.creationTimestamp) >
+              Date.parse(b?.pipeline?.metadata?.creationTimestamp)
+              ? 1
+              : -1;
+          } else {
+            return Date.parse(a?.pipeline?.metadata?.creationTimestamp) <
+              Date.parse(b?.pipeline?.metadata?.creationTimestamp)
+              ? 1
+              : -1;
+          }
+        });
+      }
+      //Filter by health
+      if (health !== "All") {
+        filtered = filtered.filter((p) => {
+          const status = p?.status || UNKNOWN;
+          if (status.toLowerCase() === health.toLowerCase()) {
+            return true;
+          } else {
+            return false;
+          }
+        });
+      }
 
-    if (page > pages.length) {
-      // Reset to page 1 if current page is greater than total pages after filterting
-      setPage(1);
+      //Filter by status
+      if (status !== "All") {
+        filtered = filtered.filter((p) => {
+          const currentStatus = p?.pipeline?.status?.phase || UNKNOWN;
+          if (currentStatus.toLowerCase() === status.toLowerCase()) {
+            return true;
+          } else {
+            return false;
+          }
+        });
+      }
+      // Break list into pages
+      const pages = filtered.reduce((resultArray: any[], item, index) => {
+        const chunkIndex = Math.floor(index / MAX_PAGE_SIZE);
+        if (!resultArray[chunkIndex]) {
+          resultArray[chunkIndex] = [];
+        }
+        resultArray[chunkIndex].push(item);
+        return resultArray;
+      }, []);
+
+      if (page > pages.length) {
+        // Reset to page 1 if current page is greater than total pages after filterting
+        setPage(1);
+      }
+      // Set filtered namespaces with current page of pipelines
+      setFilteredPipelines(pages[page - 1] || []);
+      setTotalPages(pages.length);
+    } else {
+      let filtered: ISBServicesListing[] = Object.values(
+        isbData ? isbData : {}
+      );
+      if (search) {
+        // Filter by search
+        filtered = filtered.filter((p: ISBServicesListing) =>
+          p.name.includes(search)
+        );
+      }
+      // Sorting
+      if (orderBy.value === ALPHABETICAL_SORT) {
+        filtered?.sort((a: ISBServicesListing, b: ISBServicesListing) => {
+          if (orderBy.sortOrder === ASC) {
+            return a.name > b.name ? 1 : -1;
+          } else {
+            return a.name < b.name ? 1 : -1;
+          }
+        });
+      } else if (orderBy.value === LAST_UPDATED_SORT) {
+        filtered?.sort((a: ISBServicesListing, b: ISBServicesListing) => {
+          if (orderBy.sortOrder === ASC) {
+            if (!a?.isbService?.status?.conditions) {
+              return 1;
+            }
+            if (!b?.isbService?.status?.conditions) {
+              return -1;
+            }
+            return new Date(
+              a?.isbService?.status?.conditions[
+                a?.isbService?.status?.conditions?.length - 1
+              ]?.lastTransitionTime
+            ) >
+              new Date(
+                b?.isbService?.status?.conditions[
+                  b?.isbService?.status?.conditions?.length - 1
+                ]?.lastTransitionTime
+              )
+              ? 1
+              : -1;
+          } else {
+            if (!a?.isbService?.status?.conditions) {
+              return -1;
+            }
+            if (!b?.isbService?.status?.conditions) {
+              return 1;
+            }
+            return new Date(
+              a?.isbService?.status?.conditions[
+                a?.isbService?.status?.conditions?.length - 1
+              ]?.lastTransitionTime
+            ) <
+              new Date(
+                b?.isbService?.status?.conditions[
+                  b?.isbService?.status?.conditions?.length - 1
+                ]?.lastTransitionTime
+              )
+              ? 1
+              : -1;
+          }
+        });
+      } else {
+        filtered?.sort((a: ISBServicesListing, b: ISBServicesListing) => {
+          if (orderBy.sortOrder === ASC) {
+            return new Date(a?.isbService?.metadata?.creationTimestamp) >
+              new Date(b?.isbService?.metadata?.creationTimestamp)
+              ? 1
+              : -1;
+          } else {
+            return new Date(a?.isbService?.metadata?.creationTimestamp) <
+              new Date(b?.isbService?.metadata?.creationTimestamp)
+              ? 1
+              : -1;
+          }
+        });
+      }
+      //Filter by health
+      if (health !== "All") {
+        filtered = filtered.filter((p: ISBServicesListing) => {
+          const status = p?.status || UNKNOWN;
+          if (status.toLowerCase() === health.toLowerCase()) {
+            return true;
+          } else {
+            return false;
+          }
+        });
+      }
+
+      //Filter by status
+      if (status !== "All") {
+        filtered = filtered.filter((p: ISBServicesListing) => {
+          const currentStatus = p?.isbService?.status?.phase || UNKNOWN;
+          if (currentStatus.toLowerCase() === status.toLowerCase()) {
+            return true;
+          } else {
+            return false;
+          }
+        });
+      }
+      // Break list into pages
+      const pages = filtered.reduce((resultArray: any[], item, index) => {
+        const chunkIndex = Math.floor(index / MAX_PAGE_SIZE);
+        if (!resultArray[chunkIndex]) {
+          resultArray[chunkIndex] = [];
+        }
+        resultArray[chunkIndex].push(item);
+        return resultArray;
+      }, []);
+
+      if (page > pages.length) {
+        // Reset to page 1 if current page is greater than total pages after filterting
+        setPage(1);
+      }
+      // Set filtered namespaces with current page of pipelines
+      setFilteredISBServices(pages[page - 1] || []);
+      setTotalPages(pages.length);
     }
-    // Set filtered namespaces with current page of pipelines
-    setFilteredPipelines(pages[page - 1] || []);
-    setTotalPages(pages.length);
   }, [
     data,
     search,
@@ -234,111 +363,6 @@ export function NamespacePipelineListing({
     status,
     tabValue,
   ]);
-
-  // Update filtered ISB Services based on search and page selected
-  useEffect(() => {
-    let filtered: ISBServicesListing[] = Object.values(isbData ? isbData : {});
-    if (search) {
-      // Filter by search
-      filtered = filtered.filter((p: ISBServicesListing) =>
-        p.name.includes(search)
-      );
-    }
-    // Sorting
-    if (orderBy.value === ALPHABETICAL_SORT) {
-      filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
-        if (orderBy.sortOrder === ASC) {
-          return a.name > b.name ? 1 : -1;
-        } else {
-          return a.name < b.name ? 1 : -1;
-        }
-      });
-    } else if (orderBy.value === LAST_UPDATED_SORT) {
-      filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
-        if (orderBy.sortOrder === ASC) {
-          return new Date(
-            a?.isbService?.status?.conditions[
-              a?.isbService?.status?.conditions?.length - 1
-            ].lastTransitionTime
-          ) >
-            new Date(
-              b?.isbService?.status?.conditions[
-                b?.isbService?.status?.conditions?.length - 1
-              ].lastTransitionTime
-            )
-            ? 1
-            : -1;
-        } else {
-          return new Date(
-            a?.isbService?.status?.conditions[
-              a?.isbService?.status?.conditions?.length - 1
-            ].lastTransitionTime
-          ) <
-            new Date(
-              b?.isbService?.status?.conditions[
-                b?.isbService?.status?.conditions?.length - 1
-              ].lastTransitionTime
-            )
-            ? 1
-            : -1;
-        }
-      });
-    } else {
-      filtered.sort((a: ISBServicesListing, b: ISBServicesListing) => {
-        if (orderBy.sortOrder === ASC) {
-          return new Date(a?.isbService?.metadata?.creationTimestamp) >
-            new Date(b?.isbService?.metadata?.creationTimestamp)
-            ? 1
-            : -1;
-        } else {
-          return new Date(a?.isbService?.metadata?.creationTimestamp) <
-            new Date(b?.isbService?.metadata?.creationTimestamp)
-            ? 1
-            : -1;
-        }
-      });
-    }
-    //Filter by health
-    if (health !== "All") {
-      filtered = filtered.filter((p: ISBServicesListing) => {
-        const status = p?.status || UNKNOWN;
-        if (status.toLowerCase() === health.toLowerCase()) {
-          return true;
-        } else {
-          return false;
-        }
-      });
-    }
-
-    //Filter by status
-    if (status !== "All") {
-      filtered = filtered.filter((p: ISBServicesListing) => {
-        const currentStatus = p?.isbService?.status?.phase || UNKNOWN;
-        if (currentStatus.toLowerCase() === status.toLowerCase()) {
-          return true;
-        } else {
-          return false;
-        }
-      });
-    }
-    // Break list into pages
-    const pages = filtered.reduce((resultArray: any[], item, index) => {
-      const chunkIndex = Math.floor(index / MAX_PAGE_SIZE);
-      if (!resultArray[chunkIndex]) {
-        resultArray[chunkIndex] = [];
-      }
-      resultArray[chunkIndex].push(item);
-      return resultArray;
-    }, []);
-
-    if (page > pages.length) {
-      // Reset to page 1 if current page is greater than total pages after filterting
-      setPage(1);
-    }
-    // Set filtered namespaces with current page of pipelines
-    setFilteredISBServices(pages[page - 1] || []);
-    setTotalPages(pages.length);
-  }, [data, search, page, isbData, orderBy, health, status, tabValue]);
 
   const handlePageChange = useCallback(
     (event: React.ChangeEvent<unknown>, value: number) => {
@@ -391,8 +415,8 @@ export function NamespacePipelineListing({
           filteredPipelines.map((p: PipelineData) => {
             const isbName = pipelineData
               ? pipelineData[p.name]?.pipeline?.spec
-                  ?.interStepBufferServiceName || "default"
-              : "default";
+                  ?.interStepBufferServiceName || DEFAULT_ISB
+              : DEFAULT_ISB;
             return (
               <Grid key={`pipeline-${p.name}`} item xs={12}>
                 <PipelineCard
@@ -437,6 +461,7 @@ export function NamespacePipelineListing({
 
   const handleCreatePipelineComplete = useCallback(() => {
     refresh();
+    setTabValue(PIPELINE);
     if (!setSidebarProps) {
       return;
     }
@@ -464,6 +489,7 @@ export function NamespacePipelineListing({
 
   const handleCreateISBComplete = useCallback(() => {
     refresh();
+    setTabValue(ISB_SERVICES);
     if (!setSidebarProps) {
       return;
     }
@@ -496,31 +522,37 @@ export function NamespacePipelineListing({
         flexDirection: "column",
         padding: "0 2.625rem",
       }}
+      data-testid="namespace-pipeline-listing"
     >
       <Box
-        sx={{ display: "flex", flexDirection: "row", alignItems: "flex-start" }}
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
       >
-        <DebouncedSearchInput
-          placeHolder={
-            tabValue === PIPELINE
-              ? "Search for pipeline"
-              : "Search for ISB service"
-          }
-          onChange={setSearch}
-        />
         <Box
           sx={{
             display: "flex",
             flexDirection: "row",
-            flexGrow: 1,
-            marginLeft: "2rem",
+            alignItems: "flex-start",
+            width: "100%",
           }}
         >
+          <DebouncedSearchInput
+            placeHolder={
+              tabValue === PIPELINE
+                ? "Search for pipeline"
+                : "Search for ISB service"
+            }
+            onChange={setSearch}
+          />
+
           <Box
             sx={{
               display: "flex",
               flexDirection: "column",
-              flexGrow: 0.15,
+              marginLeft: "1rem",
             }}
           >
             <label style={{ color: "#6B6C72" }}>Health</label>
@@ -536,7 +568,6 @@ export function NamespacePipelineListing({
                 background: "#fff",
                 border: "1px solid #6B6C72",
                 height: "2.125rem",
-                marginRight: "0.5rem",
               }}
               onChange={handleHealthFilterChange}
             >
@@ -555,7 +586,7 @@ export function NamespacePipelineListing({
             sx={{
               display: "flex",
               flexDirection: "column",
-              flexGrow: 0.15,
+              marginLeft: "1rem",
               marginRight: "20rem",
             }}
           >

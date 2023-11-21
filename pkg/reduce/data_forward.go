@@ -354,6 +354,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 	if len(successfullyWrittenMessages) == 0 {
 		return
 	}
+
 	// ack successful messages
 	df.ackMessages(ctx, successfullyWrittenMessages)
 

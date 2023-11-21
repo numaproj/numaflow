@@ -108,7 +108,7 @@ const getLayoutedElements = (
   // setting nodes excepts generators and assigning generator height after remaining nodes are laid out
   let max_pos = 0;
   nodes.forEach((node) => {
-    if (node?.data?.type !== "sideInput") {
+    if (node?.data?.type !== "sideInput" && node?.data?.type !== "generator") {
       const nodeWithPosition = dagreGraph.node(node.id);
       max_pos = Math.max(max_pos, nodeWithPosition.y);
     }
@@ -116,7 +116,7 @@ const getLayoutedElements = (
   let cnt = 2;
   nodes.forEach((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
-    if (node?.data?.type === "sideInput") {
+    if (node?.data?.type === "sideInput" || node?.data?.type === "generator") {
       nodeWithPosition.x = nodeWidth;
       nodeWithPosition.y = max_pos + nodeHeight * 0.75 * cnt;
       cnt++;
@@ -190,6 +190,7 @@ const Flow = (props: FlowProps) => {
     }, 1000);
     setTimer(pauseTimer);
   }, [timer]);
+
   const handlePlayClick = useCallback(() => {
     handleTimer();
     setStatusPayload({
@@ -350,6 +351,7 @@ const Flow = (props: FlowProps) => {
                   color: "#516F91",
                   alignItems: "center",
                 }}
+                data-testid="pipeline-status"
               >
                 <CircularProgress
                   sx={{
@@ -389,7 +391,7 @@ const Flow = (props: FlowProps) => {
           placement={"top"}
           arrow
         >
-          <IconButton onClick={onIsLockedChange}>
+          <IconButton onClick={onIsLockedChange} data-testid={"lock"}>
             <img src={isLocked ? lock : unlock} alt={"lock-unlock"} />
           </IconButton>
         </Tooltip>
@@ -398,7 +400,10 @@ const Flow = (props: FlowProps) => {
           placement={"top"}
           arrow
         >
-          <IconButton onClick={onIsPanOnScrollLockedChange}>
+          <IconButton
+            onClick={onIsPanOnScrollLockedChange}
+            data-testid={"panOnScroll"}
+          >
             <img
               src={isPanOnScrollLocked ? closedHand : scrollToggle}
               alt={"panOnScrollLock"}
@@ -407,18 +412,18 @@ const Flow = (props: FlowProps) => {
         </Tooltip>
         <div className={"divider"} />
         <Tooltip title={"Fit Graph"} placement={"top"} arrow>
-          <IconButton onClick={onFullScreen}>
+          <IconButton onClick={onFullScreen} data-testid={"fitView"}>
             <img src={fullscreen} alt={"fullscreen"} />
           </IconButton>
         </Tooltip>
         <div className={"divider"} />
         <Tooltip title={"Zoom In"} placement={"top"} arrow>
-          <IconButton onClick={onZoomIn}>
+          <IconButton onClick={onZoomIn} data-testid={"zoomIn"}>
             <img src={zoomInIcon} alt="zoom-in" />
           </IconButton>
         </Tooltip>
         <Tooltip title={"Zoom Out"} placement="top" arrow>
-          <IconButton onClick={onZoomOut}>
+          <IconButton onClick={onZoomOut} data-testid={"zoomOut"}>
             <img src={zoomOutIcon} alt="zoom-out" />
           </IconButton>
         </Tooltip>
@@ -448,7 +453,10 @@ const Flow = (props: FlowProps) => {
       <Panel
         position="top-left"
         className={"legend"}
-        style={{ marginTop: isCollapsed ? "5.75rem" : "9.5rem" }}
+        style={{
+          marginTop: isCollapsed ? "5.75rem" : "9.5rem",
+          cursor: "default",
+        }}
       >
         <Accordion>
           <AccordionSummary

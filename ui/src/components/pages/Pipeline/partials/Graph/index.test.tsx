@@ -1,3 +1,16 @@
+import React from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import "@testing-library/jest-dom";
+import fetchMock from "jest-fetch-mock";
+
+import Graph from "./index";
+
+import { AppContext } from "../../../../../App";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { GraphData } from "../../../../../types/declarations/pipeline";
+import { Position } from "@reactflow/core";
+
 window.ResizeObserver = class ResizeObserver {
   observe() {
     // do nothing
@@ -9,17 +22,9 @@ window.ResizeObserver = class ResizeObserver {
     // do nothing
   }
 };
-import React from "react";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import "@testing-library/jest-dom";
-
-import Graph from "./index";
-
-import { AppContext } from "../../../../../App";
-import { AppContextProps } from "../../../../../types/declarations/app";
-import { GraphData } from "../../../../../types/declarations/pipeline";
 
 const mockSetSidebarProps = jest.fn();
+const mockSetUserInfo = jest.fn();
 
 const mockContext: AppContextProps = {
   setSidebarProps: mockSetSidebarProps,
@@ -35,6 +40,7 @@ const mockContext: AppContextProps = {
   clearErrors: function (): void {
     throw new Error("Function not implemented.");
   },
+  setUserInfo: mockSetUserInfo,
 };
 class DOMMatrixReadOnly {
   m22: number;
@@ -90,8 +96,8 @@ const mockData: GraphData = {
         fromNodeOutDegree: 1,
         edgeWatermark: {
           isWaterMarkEnabled: true,
-          watermarks: [-1],
-          WMFetchTime: 1697226683529,
+          watermarks: [1699517989897],
+          WMFetchTime: 1699517991711,
         },
       },
       animated: true,
@@ -116,14 +122,29 @@ const mockData: GraphData = {
         fromNodeOutDegree: 1,
         edgeWatermark: {
           isWaterMarkEnabled: true,
-          watermarks: [-1],
-          WMFetchTime: 1697226683529,
+          watermarks: [1699517988896],
+          WMFetchTime: 1699517991711,
         },
       },
       animated: true,
       type: "custom",
       sourceHandle: "0",
       targetHandle: "0",
+    },
+    {
+      id: "myticker-cat",
+      source: "myticker",
+      target: "cat",
+      data: {
+        source: "myticker",
+        target: "cat",
+        sideInputEdge: true,
+      },
+      animated: true,
+      type: "custom",
+      sourceHandle: "2",
+      targetHandle: "3-0",
+      hidden: true,
     },
   ],
   vertices: [
@@ -156,8 +177,8 @@ const mockData: GraphData = {
       },
       draggable: false,
       type: "custom",
-      targetPosition: "left",
-      sourcePosition: "right",
+      targetPosition: Position.Left,
+      sourcePosition: Position.Right,
     },
     {
       id: "cat",
@@ -200,8 +221,8 @@ const mockData: GraphData = {
       },
       draggable: false,
       type: "custom",
-      targetPosition: "left",
-      sourcePosition: "right",
+      targetPosition: Position.Left,
+      sourcePosition: Position.Right,
     },
     {
       id: "out",
@@ -241,13 +262,54 @@ const mockData: GraphData = {
       },
       draggable: false,
       type: "custom",
-      targetPosition: "left",
-      sourcePosition: "right",
+      targetPosition: Position.Left,
+      sourcePosition: Position.Right,
+    },
+    {
+      id: "generator",
+      data: {
+        sideInputCount: 1,
+        type: "generator",
+      },
+      position: {
+        x: 126,
+        y: 108,
+      },
+      draggable: false,
+      type: "custom",
+      targetPosition: Position.Left,
+      sourcePosition: Position.Right,
+    },
+    {
+      id: "myticker",
+      data: {
+        name: "myticker",
+        nodeInfo: {
+          name: "myticker",
+          container: {
+            image: "quay.io/numaio/numaflow-go/sideinput-example:v0.5.0",
+            resources: {},
+            imagePullPolicy: "Always",
+          },
+          trigger: {
+            schedule: "*/2 * * * *",
+            timezone: null,
+          },
+        },
+        type: "sideInput",
+        sideHandle: true,
+      },
+      position: {
+        x: 126,
+        y: 162,
+      },
+      draggable: false,
+      type: "custom",
+      targetPosition: Position.Left,
+      sourcePosition: Position.Right,
     },
   ],
   pipeline: {
-    kind: "Pipeline",
-    apiVersion: "numaflow.numaproj.io/v1alpha1",
     metadata: {
       name: "simple-pipeline",
       namespace: "numaflow-system",
@@ -340,6 +402,20 @@ const mockData: GraphData = {
       ],
     },
     spec: {
+      sideInputs: [
+        {
+          name: "myticker",
+          container: {
+            image: "quay.io/numaio/numaflow-go/sideinput-example:v0.5.0",
+            resources: {},
+            imagePullPolicy: "Always",
+          },
+          trigger: {
+            schedule: "*/2 * * * *",
+            timezone: null,
+          },
+        },
+      ],
       vertices: [
         {
           name: "in",
@@ -350,7 +426,6 @@ const mockData: GraphData = {
               msgSize: 8,
             },
           },
-          scale: {},
         },
         {
           name: "cat",
@@ -361,14 +436,12 @@ const mockData: GraphData = {
             },
             groupBy: null,
           },
-          scale: {},
         },
         {
           name: "out",
           sink: {
             log: {},
           },
-          scale: {},
         },
       ],
       edges: [
@@ -383,16 +456,6 @@ const mockData: GraphData = {
           conditions: null,
         },
       ],
-      lifecycle: {
-        deleteGracePeriodSeconds: 30,
-        desiredPhase: "Paused",
-      },
-      limits: {
-        readBatchSize: 500,
-        bufferMaxLength: 30000,
-        bufferUsageLimit: 80,
-        readTimeout: "1s",
-      },
       watermark: {
         maxDelay: "0s",
       },
@@ -424,20 +487,24 @@ const mockData: GraphData = {
   },
 };
 
+fetchMock.enableMocks();
+
 describe("Graph", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockReactFlow();
   });
 
-  it("should render graph", async () => {
+  it("Renders Graph", async () => {
     render(
       <AppContext.Provider value={mockContext}>
         <Graph
           namespaceId="test"
           data={mockData}
           pipelineId="simple-pipeline"
-          refresh={() => {}}
+          refresh={() => {
+            return;
+          }}
         />
       </AppContext.Provider>
     );
@@ -449,13 +516,17 @@ describe("Graph", () => {
       expect(screen.getByText("cat")).toBeInTheDocument();
     });
   });
+
   it("should not crash if data is null", () => {
     const mockData: GraphData = {
       edges: [],
       vertices: [],
       pipeline: {
-        kind: "Pipeline",
-        apiVersion: "numaflow.numaproj.io/v1alpha1",
+        spec: {
+          vertices: [],
+          edges: [],
+          watermark: {},
+        },
         metadata: {
           name: "simple-pipeline",
           namespace: "numaflow-system",
@@ -472,13 +543,16 @@ describe("Graph", () => {
           namespaceId="test"
           data={mockData}
           pipelineId="simple-pipeline"
-          refresh={() => {}}
+          refresh={() => {
+            return;
+          }}
         />
       </AppContext.Provider>
     );
 
     // Add assertions relevant to your component
   });
+
   it("should render a different number of nodes based on the data prop", () => {
     const dataWithTwoNodes = {
       ...mockData,
@@ -510,7 +584,9 @@ describe("Graph", () => {
           namespaceId="test"
           data={dataWithTwoNodes}
           pipelineId="simple-pipeline"
-          refresh={() => {}}
+          refresh={() => {
+            return;
+          }}
         />
       </AppContext.Provider>
     );
@@ -528,6 +604,8 @@ describe("Graph", () => {
 
   it("Tests refresh method", async () => {
     const refresh = jest.fn();
+    fetchMock.mockResponseOnce(JSON.stringify({ random: "value" }));
+    const user = userEvent.setup();
     render(
       <AppContext.Provider value={mockContext}>
         <Graph
@@ -548,17 +626,23 @@ describe("Graph", () => {
     await waitFor(() => {
       expect(screen.getByTestId("resume")).toBeInTheDocument();
     });
-
-    fireEvent.click(screen.getByTestId("resume"));
+    await user.click(screen.getByTestId("resume"));
+    await waitFor(() => {
+      expect(screen.getByTestId("pipeline-status")).toBeInTheDocument();
+    });
   });
 
   it("Tests pause method", async () => {
     const refresh = jest.fn();
+    fetchMock.mockResponseOnce(JSON.stringify({ key: "value" }));
+    const user = userEvent.setup();
+    const updatedMockData = { ...mockData };
+    updatedMockData.pipeline.status.phase = "Running";
     render(
       <AppContext.Provider value={mockContext}>
         <Graph
           namespaceId="test"
-          data={mockData}
+          data={updatedMockData}
           pipelineId="simple-pipeline"
           refresh={refresh}
         />
@@ -574,8 +658,10 @@ describe("Graph", () => {
     await waitFor(() => {
       expect(screen.getByTestId("pause")).toBeInTheDocument();
     });
-
-    fireEvent.click(screen.getByTestId("pause"));
+    await user.click(screen.getByTestId("pause"));
+    await waitFor(() => {
+      expect(screen.getByTestId("pipeline-status")).toBeInTheDocument();
+    });
   });
 
   it("Tests handlePaneClick method", async () => {
@@ -595,13 +681,91 @@ describe("Graph", () => {
       expect(screen.getByTestId("graph")).toBeInTheDocument();
     });
     await waitFor(() => {
-      expect(screen.getByText("cat")).toBeInTheDocument();
-    });
-    await waitFor(() => {
       expect(screen.getByTestId("rf__wrapper")).toBeInTheDocument();
     });
 
-    screen.getAllByTestId("rf__node-in")[0].click();
-    screen.getByTestId("rf__wrapper").childNodes[0].childNodes[0].click();
+    fireEvent.click(document.getElementsByClassName("react-flow__pane")[0]);
+  });
+
+  it("Tests handleNodeClick method", async () => {
+    const refresh = jest.fn();
+    render(
+      <AppContext.Provider value={mockContext}>
+        <Graph
+          namespaceId="test"
+          data={mockData}
+          pipelineId="simple-pipeline"
+          refresh={refresh}
+        />
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("graph")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByText("in")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("rf__node-in"));
+  });
+
+  it("Tests sideInput click", async () => {
+    const refresh = jest.fn();
+    render(
+      <AppContext.Provider
+        value={{
+          ...mockContext,
+          sidebarProps: { type: 8 },
+        }}
+      >
+        <Graph
+          namespaceId="test"
+          data={mockData}
+          pipelineId="simple-pipeline"
+          refresh={refresh}
+        />
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("graph")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(
+        document.getElementsByClassName("sideInput_node_ele")[0]
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("sideInput-myticker"));
+  });
+
+  it("Tests interaction toolbar", async () => {
+    const refresh = jest.fn();
+    render(
+      <AppContext.Provider
+        value={{
+          ...mockContext,
+          sidebarProps: { type: 8 },
+        }}
+      >
+        <Graph
+          namespaceId="test"
+          data={mockData}
+          pipelineId="simple-pipeline"
+          refresh={refresh}
+        />
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("graph")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("lock")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("lock"));
+    fireEvent.click(screen.getByTestId("panOnScroll"));
+    fireEvent.click(screen.getByTestId("fitView"));
+    fireEvent.click(screen.getByTestId("zoomIn"));
+    fireEvent.click(screen.getByTestId("zoomOut"));
   });
 });

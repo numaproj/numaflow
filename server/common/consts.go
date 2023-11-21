@@ -21,5 +21,5 @@ const (
 	StateCookieName          = "numaflow-oauthstate"
 	StateCookieMaxAge        = 60 * 5
 	UserIdentityCookieName   = "numaflow.token"
-	UserIdentityCookieMaxAge = 60 * 60
+	UserIdentityCookieMaxAge = 60 * 60 * 8 // 8 hours
 )
