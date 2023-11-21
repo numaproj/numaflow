@@ -1,8 +1,9 @@
 import { usePipelineViewFetch } from "./pipelineViewFetch";
 import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react-test-renderer";
-
 import "@testing-library/jest-dom";
+
+jest.mock("../fetchWrappers/fetch");
 
 describe("Custom Pipeline hook", () => {
   let originFetch: any;
@@ -71,30 +72,32 @@ describe("Custom Pipeline hook", () => {
       ok: true,
     };
     const mRes2 = {
-      json: jest.fn().mockResolvedValueOnce([
-        {
-          pipeline: "simple-pipeline",
-          bufferName: "default-simple-pipeline-cat-0",
-          pendingCount: 0,
-          ackPendingCount: 5,
-          totalMessages: 5,
-          bufferLength: 30000,
-          bufferUsageLimit: 0.8,
-          bufferUsage: 0.00016666666666666666,
-          isFull: false,
-        },
-        {
-          pipeline: "simple-pipeline",
-          bufferName: "default-simple-pipeline-out-0",
-          pendingCount: 0,
-          ackPendingCount: 0,
-          totalMessages: 0,
-          bufferLength: 30000,
-          bufferUsageLimit: 0.8,
-          bufferUsage: 0,
-          isFull: false,
-        },
-      ]),
+      json: jest.fn().mockResolvedValueOnce({
+        data: [
+          {
+            pipeline: "simple-pipeline",
+            bufferName: "default-simple-pipeline-cat-0",
+            pendingCount: 0,
+            ackPendingCount: 5,
+            totalMessages: 5,
+            bufferLength: 30000,
+            bufferUsageLimit: 0.8,
+            bufferUsage: 0.00016666666666666666,
+            isFull: false,
+          },
+          {
+            pipeline: "simple-pipeline",
+            bufferName: "default-simple-pipeline-out-0",
+            pendingCount: 0,
+            ackPendingCount: 0,
+            totalMessages: 0,
+            bufferLength: 30000,
+            bufferUsageLimit: 0.8,
+            bufferUsage: 0,
+            isFull: false,
+          },
+        ],
+      }),
       ok: true,
     };
     const mRes3 = {
@@ -208,7 +211,7 @@ describe("Custom Pipeline hook", () => {
         })
       );
     });
-    expect(mockedFetch).toBeCalledTimes(2);
+    expect(mockedFetch).toBeCalledTimes(4);
     expect(mRes1.json).toBeCalledTimes(1);
     expect(mRes2.json).toBeCalledTimes(1);
   });

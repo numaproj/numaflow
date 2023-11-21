@@ -66,8 +66,8 @@ export const usePipelineViewFetch = (
               `${json.data?.pipeline?.metadata?.namespace}-${json.data.pipeline?.metadata?.name}-`
             );
             // Update spec state if it is not equal to the spec from the response
-            if (!isEqual(spec, json.data?.pipeline?.spec))
-              setSpec(json.data?.pipeline?.spec);
+            console.log("----", spec, json.data?.pipeline?.spec);
+            if (!isEqual(spec, json.data)) setSpec(json.data?.pipeline?.spec);
             setPipelineErr(undefined);
           } else if (json?.errMsg) {
             // pipeline API call returns an error message
@@ -163,7 +163,6 @@ export const usePipelineViewFetch = (
   // This useEffect is used to obtain all the pods for a given vertex in a pipeline.
   useEffect(() => {
     const vertexToPodsMap = new Map();
-
     if (spec?.vertices) {
       // Fetch pods count for each vertex in parallel
       Promise.allSettled(
