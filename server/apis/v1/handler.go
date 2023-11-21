@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,7 +62,7 @@ type handler struct {
 	kubeClient         kubernetes.Interface
 	metricsClient      *metricsversiond.Clientset
 	numaflowClient     dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache *lru.Cache
+	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
 	dexObj             *DexObject
 }
 
@@ -82,8 +82,8 @@ func NewHandler(dexObj *DexObject) (*handler, error) {
 	}
 	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
-	daemonClientsCache, _ := lru.NewWithEvict(100, func(key, value interface{}) {
-		_ = value.(*daemonclient.DaemonClient).Close()
+	daemonClientsCache, _ := lru.NewWithEvict[string, *daemonclient.DaemonClient](100, func(key string, value *daemonclient.DaemonClient) {
+		_ = value.Close()
 	})
 	return &handler{
 		kubeClient:         kubeClient,
@@ -1037,11 +1037,5 @@ func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClie
 		}
 		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
 	}
-
-	client, ok := dClient.(*daemonclient.DaemonClient)
-	if !ok {
-		return nil, fmt.Errorf("failed to get client")
-	}
-
-	return client, nil
+	return dClient, nil
 }
