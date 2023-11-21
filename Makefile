@@ -116,7 +116,7 @@ test-api-e2e:
 test-udsource-e2e:
 test-transformer-e2e:
 test-diamond-e2e:
-test-sideinput-e2e:
+test-sideinputs-e2e:
 test-%:
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
