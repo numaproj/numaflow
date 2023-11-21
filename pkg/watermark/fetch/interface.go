@@ -27,6 +27,8 @@ type Fetcher interface {
 	ComputeWatermark(offset isb.Offset, fromPartitionIdx int32) wmb.Watermark
 	// ComputeHeadIdleWMB computes a valid head idle WMB for the given partition.
 	ComputeHeadIdleWMB(fromPartitionIdx int32) wmb.WMB
+	// ComputeHeadWatermark computes a valid head watermark for the given partition
+	ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark
 }
 
 // UXFetcher computes the watermark for Vn.

@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -66,7 +65,9 @@ type DataForward struct {
 	vertexReplica  int32
 	Watermark      dfv1.Watermark
 	// idleManager manages the idle watermark status.
-	idleManager wmb.IdleManager
+	idleManager      wmb.IdleManager
+	lastUpdateWM     time.Time
+	currentWatermark wmb.Watermark
 	Shutdown
 }
 
@@ -115,10 +116,13 @@ func NewDataForward(
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
-		opts: *options,
+		opts:         *options,
+		lastUpdateWM: time.Now(),
 	}
 	// add logger from parent ctx to child context.
 	isdf.ctx = logging.WithLogger(ctx, options.logger)
+	// set the current watermark
+	isdf.currentWatermark = isdf.wmFetcher.ComputeWatermark(nil, 0)
 	return &isdf, nil
 }
 
@@ -211,18 +215,29 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.ReadMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
 	}
 
-	// source fetcher doesn't care about the offsets
-	lastUpdatedWM := isdf.wmFetcher.ComputeWatermark(nil, 0)
+	// execute only if idle source configuration is defined, i.e.
+	// maxWait: How much longer it will wait before increasing the idle watermark
+	// minIncrement: Duration to increase in case of watermark idling
+	if isdf.Watermark.IdleSource != nil {
+		isWMIdle := isdf.isWatermarkIdle()
 
-	maxWait := isdf.Watermark.IdleSource.GetMaxWait()
-	minIncrement := isdf.Watermark.IdleSource.GetMinIncrement()
+		// If no any message is coming and watermark is idling then start increasing the watermark with "minIncrement"
+		// value after each "maxWait" duration
+		if len(readMessages) == 0 && isWMIdle {
+			minIncrement := isdf.Watermark.IdleSource.GetMinIncrement()
+			// Get the head watermark value then add the minIncrement to it and publish the idle watermark with updated value.
+			headWatermark := isdf.wmFetcher.ComputeHeadWatermark(0)
+			updatedWM := headWatermark.Add(minIncrement)
 
-	if len(readMessages) == 0 && time.Now().Sub(time.Time(lastUpdatedWM)) > maxWait {
-		log.Println("--------------------> publishing idle watermark")
+			isdf.srcWMPublisher.PublishIdleWatermarks(updatedWM)
+			// set the time for last updated watermark which will be used for calculating maximum wait time is passed
+			// or not in case of idle watermark.
+			isdf.lastUpdateWM = time.Now()
+			// currentWatermark is used to calculate when watermark is idling
+			isdf.currentWatermark = isdf.wmFetcher.ComputeWatermark(nil, 0)
 
-		updatedWM := lastUpdatedWM.Add(minIncrement)
-
-		isdf.srcWMPublisher.PublishIdleWatermarks(updatedWM)
+			return
+		}
 	}
 
 	// Process only if we have any read messages.
@@ -380,7 +395,6 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	for toVertexName := range isdf.toVertexWMPublishers {
 		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
 			if !activePartition {
-				// use the watermark of the current read batch for the idle watermark
 				// same as read len==0 because there's no event published to the buffer
 				if vertexPublishers, ok := isdf.toVertexWMPublishers[toVertexName]; ok {
 					for sp := range sourcePartitionsIndices {
@@ -409,6 +423,21 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 
 	// ProcessingTimes of the entire forwardAChunk
 	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
+}
+
+// isWatermarkIdle calculate that the current watermark is idling for the given maxWait duration based the provided
+// configuration by user for idle sourcing
+func (isdf *DataForward) isWatermarkIdle() bool {
+	diff := time.Since(isdf.lastUpdateWM)
+	maxWait := isdf.Watermark.IdleSource.GetMaxWait()
+	if diff > maxWait {
+		computedWM := isdf.wmFetcher.ComputeWatermark(nil, 0)
+		if computedWM == isdf.currentWatermark {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (isdf *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {
