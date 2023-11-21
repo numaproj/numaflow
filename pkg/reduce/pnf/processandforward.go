@@ -176,14 +176,14 @@ outerLoop:
 			// wait until all the writer go routines return
 			wg.Wait()
 
-			// publish watermark, we publish window end time as watermark
+			// publish watermark, we publish window end time minus one millisecond  as watermark
 			// but if there's a window that's about to be closed which has a end time before the current window end time,
 			// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
 			oldestClosedWindowEndTime := p.windower.OldestWindowEndTime()
 			if oldestClosedWindowEndTime != time.UnixMilli(-1) && oldestClosedWindowEndTime.Before(response.Window.Partition().End) {
 				p.publishWM(ctx, wmb.Watermark(oldestClosedWindowEndTime.Add(-1*time.Millisecond)), writeOffsets)
 			} else {
-				p.publishWM(ctx, wmb.Watermark(p.PartitionID.End.Add(-1*time.Millisecond)), writeOffsets)
+				p.publishWM(ctx, wmb.Watermark(response.Window.Partition().End.Add(-1*time.Millisecond)), writeOffsets)
 			}
 
 			// since we track window for every key, we need to delete the closed windows

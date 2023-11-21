@@ -272,7 +272,6 @@ func (w *Windower) handleWindowToBeMerged(canBeMerged bool, toBeMerged window.Ti
 }
 
 // NextWindowToBeClosed returns the next window yet to be closed.
-// since session window is not based on time, we return a common window
 func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 	return &sessionWindow{
 		startTime: Partition.Start,
@@ -286,12 +285,22 @@ func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
 }
 
 // OldestWindowEndTime returns the end time of the oldest window.
-// if there are no closed windows, it returns -1 as the end time
+// if there are no closed windows, it returns the end time of the oldest active window
 func (w *Windower) OldestWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()
 	} else {
-		return time.UnixMilli(-1)
+		var minEndTime = time.UnixMilli(math.MaxInt64)
+		for _, windows := range w.activeWindows {
+			if win = windows.Front(); win != nil && win.EndTime().Before(minEndTime) {
+				minEndTime = win.EndTime()
+			}
+		}
+		if minEndTime.UnixMilli() == math.MaxInt64 {
+			return time.UnixMilli(-1)
+		} else {
+			return minEndTime
+		}
 	}
 }
 
