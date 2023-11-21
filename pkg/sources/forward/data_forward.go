@@ -27,7 +27,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
@@ -51,7 +51,7 @@ type DataForward struct {
 	reader isb.BufferReader
 	// toBuffers store the toVertex name to its owned buffers mapping.
 	toBuffers          map[string][]isb.BufferWriter
-	toWhichStepDecider forward.ToWhichStepDecider
+	toWhichStepDecider forwarder.ToWhichStepDecider
 	transformer        applier.SourceTransformApplier
 	wmFetcher          fetch.Fetcher
 	toVertexWMStores   map[string]store.WatermarkStore
@@ -73,7 +73,7 @@ func NewDataForward(
 	vertexInstance *dfv1.VertexInstance,
 	fromStep isb.BufferReader,
 	toSteps map[string][]isb.BufferWriter,
-	toWhichStepDecider forward.ToWhichStepDecider,
+	toWhichStepDecider forwarder.ToWhichStepDecider,
 	transformer applier.SourceTransformApplier,
 	fetchWatermark fetch.Fetcher,
 	srcWMPublisher isb.SourceWatermarkPublisher,
