@@ -112,7 +112,7 @@ func TestSession_InsertWindow(t *testing.T) {
 
 	windower := &Windower{
 		gap:           10 * time.Second,
-		activeWindows: make(map[string]*window.SortedWindowListByEndTime[window.TimedWindow]),
+		activeWindows: make(map[string]*window.SortedWindowListByEndTime),
 	}
 
 	windower.InsertWindow(win1)
@@ -351,8 +351,8 @@ func TestSession_CloseWindowsComplex(t *testing.T) {
 
 	windower := &Windower{
 		gap:           10 * time.Second,
-		activeWindows: make(map[string]*window.SortedWindowListByEndTime[window.TimedWindow]),
-		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: make(map[string]*window.SortedWindowListByEndTime),
+		closedWindows: window.NewSortedWindowListByEndTime(),
 	}
 
 	windower.InsertWindow(win1)
@@ -403,8 +403,8 @@ func TestSession_DeleteWindows(t *testing.T) {
 
 	windower := &Windower{
 		gap:           10 * time.Second,
-		activeWindows: make(map[string]*window.SortedWindowListByEndTime[window.TimedWindow]),
-		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: make(map[string]*window.SortedWindowListByEndTime),
+		closedWindows: window.NewSortedWindowListByEndTime(),
 	}
 
 	// insert the windows
@@ -463,8 +463,8 @@ func TestWindower_OldestClosedWindowEndTime(t *testing.T) {
 
 	windower := &Windower{
 		gap:           10 * time.Second,
-		activeWindows: make(map[string]*window.SortedWindowListByEndTime[window.TimedWindow]),
-		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: make(map[string]*window.SortedWindowListByEndTime),
+		closedWindows: window.NewSortedWindowListByEndTime(),
 	}
 
 	// insert the windows

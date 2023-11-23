@@ -116,19 +116,19 @@ type Windower struct {
 	// activeWindows is a map of keys to list of active windows
 	// key is join of all the keys of the message, since session is per key
 	// we need to maintain a list of windows per key
-	activeWindows map[string]*window.SortedWindowListByEndTime[window.TimedWindow]
+	activeWindows map[string]*window.SortedWindowListByEndTime
 
 	// closedWindows is a list of closed windows which are yet to be GCed
 	// we need to track the close windows because while publishing the watermark
 	// for session window, we need to compare the watermark with the oldest closed window
-	closedWindows *window.SortedWindowListByEndTime[window.TimedWindow]
+	closedWindows *window.SortedWindowListByEndTime
 }
 
 func NewWindower(gap time.Duration) window.TimedWindower {
 	return &Windower{
 		gap:           gap,
-		activeWindows: make(map[string]*window.SortedWindowListByEndTime[window.TimedWindow]),
-		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: make(map[string]*window.SortedWindowListByEndTime),
+		closedWindows: window.NewSortedWindowListByEndTime(),
 	}
 }
 
@@ -149,7 +149,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	// if there is no existing windows for that key, create a new window and
 	// update the activeWindows map
 	if list, ok := w.activeWindows[combinedKey]; !ok {
-		list = window.NewSortedWindowListByEndTime[window.TimedWindow]()
+		list = window.NewSortedWindowListByEndTime()
 		// since it's the first window, we can insert it at the front
 		list.InsertFront(win)
 		windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &Partition))
@@ -191,7 +191,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 func (w *Windower) InsertWindow(tw window.TimedWindow) {
 	combinedKey := strings.Join(tw.Keys(), delimiter)
 	if list, ok := w.activeWindows[combinedKey]; !ok {
-		list = window.NewSortedWindowListByEndTime[window.TimedWindow]()
+		list = window.NewSortedWindowListByEndTime()
 		list.InsertFront(tw)
 		w.activeWindows[combinedKey] = list
 	} else {

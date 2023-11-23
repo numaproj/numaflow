@@ -105,17 +105,17 @@ type Windower struct {
 	length time.Duration
 	// we track all the active windows, we store the windows sorted by start time
 	// so its easy to find the window
-	activeWindows *window.SortedWindowListByEndTime[window.TimedWindow]
+	activeWindows *window.SortedWindowListByEndTime
 	// closedWindows is a list of closed windows which are yet to be GCed
 	// we need to track the close windows because while publishing the watermark
 	// for a fixed window, we need to compare the watermark with the oldest closed window
-	closedWindows *window.SortedWindowListByEndTime[window.TimedWindow]
+	closedWindows *window.SortedWindowListByEndTime
 }
 
 func NewWindower(length time.Duration) window.TimedWindower {
 	return &Windower{
-		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
-		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: window.NewSortedWindowListByEndTime(),
+		closedWindows: window.NewSortedWindowListByEndTime(),
 		length:        length,
 	}
 }
@@ -178,7 +178,7 @@ func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
 	w.closedWindows.Delete(response.Window)
 }
 
-// OldestClosedWindowEndTime returns the end time of the oldest closed window.
+// OldestWindowEndTime returns the end time of the oldest window.
 func (w *Windower) OldestWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()

@@ -55,7 +55,7 @@ func (u *GRPCBasedReduce) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
-// WaitUntilReady waits until the map udf is connected.
+// WaitUntilReady waits until the reduce udf is connected.
 func (u *GRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	for {
@@ -73,14 +73,14 @@ func (u *GRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-// ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
+// ApplyReduce accepts a channel of TimedWindowRequests and returns the aggregated result and any error
+func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
 	var (
-		result     *reducepb.ReduceResponse
-		err        error
-		errCh      = make(chan error, 1)
-		responseCh = make(chan *reducepb.ReduceResponse, 1)
-		datumCh    = make(chan *reducepb.ReduceRequest)
+		result         *reducepb.ReduceResponse
+		err            error
+		errCh          = make(chan error, 1)
+		responseCh     = make(chan *reducepb.ReduceResponse, 1)
+		reduceRequests = make(chan *reducepb.ReduceRequest)
 	)
 
 	// pass key and window information inside the context
@@ -95,12 +95,12 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 	grpcCtx := metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
 
 	// There can be two error scenarios:
-	// 1. The u.client.ReduceFn method returns an error before reading all the messages from the messageStream
-	// 2. The u.client.ReduceFn method returns an error after reading all the messages from the messageStream
+	// 1. The u.client.ReduceFn method returns an error before reading all the requests from the requestsStream
+	// 2. The u.client.ReduceFn method returns an error after reading all the requests from the requestsStream
 
-	// invoke the reduceFn method with datumCh channel
+	// invoke the reduceFn method with reduceRequests channel
 	go func() {
-		result, err = u.client.ReduceFn(grpcCtx, datumCh)
+		result, err = u.client.ReduceFn(grpcCtx, reduceRequests)
 		if err != nil {
 			errCh <- err
 		} else {
@@ -110,23 +110,23 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 		close(responseCh)
 	}()
 
-	// create datum from isbMessage and send it to datumCh channel for reduceFn
+	// create ReduceRequest from TimedWindowRequest and send it to reduceRequests channel for reduceFn
 	go func() {
-		// after reading all the messages from the messageStream or if ctx was canceled close the datumCh channel
-		defer close(datumCh)
+		// after reading all the messages from the requestsStream or if ctx was canceled close the reduceRequests channel
+		defer close(reduceRequests)
 		for {
 			select {
-			case msg, ok := <-messageStream:
-				// if the messageStream is closed or if the message is nil, return
-				if !ok || msg == nil {
+			case req, ok := <-requestsStream:
+				// if the requestsStream is closed or if the request is nil, return
+				if !ok || req == nil {
 					return
 				}
 
-				d := createReduceRequest(msg)
+				d := createReduceRequest(req)
 
-				// send the datum to datumCh channel, handle the case when the context is canceled
+				// send the request to reduceRequests channel, handle the case when the context is canceled
 				select {
-				case datumCh <- d:
+				case reduceRequests <- d:
 				case <-ctx.Done():
 					return
 				}
@@ -153,11 +153,11 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 }
 
 // AsyncApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
-func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
-		errCh      = make(chan error)
-		responseCh = make(chan *window.TimedWindowResponse)
-		datumCh    = make(chan *reducepb.ReduceRequest)
+		errCh          = make(chan error)
+		responseCh     = make(chan *window.TimedWindowResponse)
+		reduceRequests = make(chan *reducepb.ReduceRequest)
 	)
 
 	// pass key and window information inside the context
@@ -168,10 +168,10 @@ func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *par
 
 	grpcCtx := metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
 
-	// invoke the AsyncReduceFn method with datumCh channel and send the result to responseCh channel
+	// invoke the AsyncReduceFn method with reduceRequests channel and send the result to responseCh channel
 	// and any error to errCh channel
 	go func() {
-		resultCh, reduceErrCh := u.client.AsyncReduceFn(grpcCtx, datumCh)
+		resultCh, reduceErrCh := u.client.AsyncReduceFn(grpcCtx, reduceRequests)
 		for {
 			select {
 			case result, ok := <-resultCh:
@@ -195,29 +195,29 @@ func (u *GRPCBasedReduce) AsyncApplyReduce(ctx context.Context, partitionID *par
 		}
 	}()
 
-	// create datum from isbMessage and send it to datumCh channel for AsyncReduceFn
+	// create ReduceRequest from TimedWindowRequest and send it to reduceRequests channel for AsyncReduceFn
 	go func() {
-		// after reading all the messages from the messageStream or if ctx was canceled close the datumCh channel
+		// after reading all the messages from the requestsStream or if ctx was canceled close the reduceRequests channel
 		defer func() {
-			close(datumCh)
+			close(reduceRequests)
 		}()
 		for {
 			select {
-			case msg, ok := <-messageStream:
-				// if the messageStream is closed or if the message is nil, return
+			case msg, ok := <-requestsStream:
+				// if the requestsStream is closed or if the message is nil, return
 				if !ok || msg == nil {
 					return
 				}
 
 				d := createReduceRequest(msg)
-				// send the datum to datumCh channel, handle the case when the context is canceled
+				// send the datum to reduceRequests channel, handle the case when the context is canceled
 				select {
-				case datumCh <- d:
+				case reduceRequests <- d:
 				case <-ctx.Done():
 					return
 				}
 
-			case <-ctx.Done(): // if the context is done, don't send any more datum to datumCh channel
+			case <-ctx.Done(): // if the context is done, don't send any more datum to reduceRequests channel
 				return
 			}
 		}

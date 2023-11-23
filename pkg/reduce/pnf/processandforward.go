@@ -126,8 +126,8 @@ func (p *ProcessAndForward) Process(ctx context.Context) error {
 	return err
 }
 
-// AsyncProcessForward reads messages from the supplied PBQ, invokes UDF to reduce the windowResponse, and then forwards
-// the windowResponse to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
+// AsyncProcessForward reads requests from the supplied PBQ, invokes UDF to get the response, and then forwards
+// the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
 // manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
 func (p *ProcessAndForward) AsyncProcessForward(ctx context.Context) {
 	responseCh, errCh := p.UDF.AsyncApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
@@ -186,7 +186,7 @@ outerLoop:
 				p.publishWM(ctx, wmb.Watermark(response.Window.Partition().End.Add(-1*time.Millisecond)), writeOffsets)
 			}
 
-			// since we track window for every key, we need to delete the closed windows
+			// since we track session window for every key, we need to delete the closed windows
 			// every time we receive a response from the UDF.
 			if p.windower.Strategy() == window.Session {
 				// delete the closed windows which are tracked by the windower

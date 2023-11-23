@@ -70,7 +70,7 @@ func TestFixed_InsertWindow(t *testing.T) {
 
 	windower := &Windower{
 		length:        60 * time.Second,
-		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: window.NewSortedWindowListByEndTime(),
 	}
 
 	windower.InsertWindow(win)
@@ -152,8 +152,8 @@ func TestFixed_DeleteWindows(t *testing.T) {
 
 	windower := &Windower{
 		length:        60 * time.Second,
-		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
-		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: window.NewSortedWindowListByEndTime(),
+		closedWindows: window.NewSortedWindowListByEndTime(),
 	}
 
 	// insert the windows
@@ -196,8 +196,8 @@ func TestFixed_OldestClosedWindowEndTime(t *testing.T) {
 
 	windower := &Windower{
 		length:        60 * time.Second,
-		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
-		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: window.NewSortedWindowListByEndTime(),
+		closedWindows: window.NewSortedWindowListByEndTime(),
 	}
 
 	// insert the windows
@@ -231,8 +231,8 @@ func TestWindower_NextWindowToBeClosed(t *testing.T) {
 
 	windower := &Windower{
 		length:        60 * time.Second,
-		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
-		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: window.NewSortedWindowListByEndTime(),
+		closedWindows: window.NewSortedWindowListByEndTime(),
 	}
 
 	// insert the windows

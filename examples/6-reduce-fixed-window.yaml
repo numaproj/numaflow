@@ -9,16 +9,12 @@ spec:
         http: {}
     - name: atoi
       scale:
-        min: 1
+        min: 3
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:v0.5.0
     - name: compute-sum
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: "false" # DO NOT forget the double quotes!!
       udf:
         container:
           # compute the sum
@@ -32,7 +28,7 @@ spec:
             persistentVolumeClaim:
               volumeSize: 10Gi
               accessMode: ReadWriteOnce
-      partitions: 1
+      partitions: 2
     - name: sink
       scale:
         min: 1

@@ -216,7 +216,7 @@ func Test_buildReducesVertices(t *testing.T) {
 	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
 	pl.Spec.Vertices[1].Partitions = pointer.Int32(2)
 	r := buildVertices(pl)
-	assert.Equal(t, 5, len(r))
+	assert.Equal(t, 6, len(r))
 	_, existing := r[pl.Name+"-"+pl.Spec.Vertices[1].Name]
 	assert.True(t, existing)
 	assert.Equal(t, int32(2), *r[pl.Name+"-"+pl.Spec.Vertices[1].Name].Spec.Replicas)

@@ -54,7 +54,7 @@ func (u *GRPCBasedGlobalReduce) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
-// WaitUntilReady waits until the map udf is connected.
+// WaitUntilReady waits until the reduce udf is connected.
 func (u *GRPCBasedGlobalReduce) WaitUntilReady(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	for {
@@ -72,13 +72,13 @@ func (u *GRPCBasedGlobalReduce) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-// ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *GRPCBasedGlobalReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
+// ApplyReduce accepts a channel of TimedWindowRequests and returns the aggregated result
+func (u *GRPCBasedGlobalReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
 	return nil, fmt.Errorf("only async is supported for global reduce")
 }
 
 // AsyncApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
-func (u *GRPCBasedGlobalReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (u *GRPCBasedGlobalReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan *window.TimedWindowResponse)
@@ -119,23 +119,23 @@ func (u *GRPCBasedGlobalReduce) AsyncApplyReduce(ctx context.Context, partitionI
 		}
 	}()
 
-	// create datum from isbMessage and send it to requestCh channel for AsyncReduceFn
+	// create GlobalReduceRequest from TimedWindowRequest and send it to requestCh channel for AsyncReduceFn
 	go func() {
-		// after reading all the messages from the messageStream or if ctx was canceled close the requestCh channel
+		// after reading all the requests from the requestsStream or if ctx was canceled close the requestCh channel
 		defer func() {
 			close(requestCh)
 		}()
 		for {
 			select {
-			case msg, ok := <-messageStream:
-				// if the messageStream is closed or if the message is nil, return
-				if !ok || msg == nil {
+			case req, ok := <-requestsStream:
+				// if the requestsStream is closed or if the request is nil, return
+				if !ok || req == nil {
 					return
 				}
 
-				d := createGlobalReduceRequest(msg)
+				d := createGlobalReduceRequest(req)
 
-				// send the datum to requestCh channel, handle the case when the context is canceled
+				// send the request to requestCh channel, handle the case when the context is canceled
 				select {
 				case <-ctx.Done():
 					return
@@ -163,7 +163,7 @@ func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *global
 			Keys:  w.Keys(),
 		})
 	}
-	// for fixed and sliding window event can be either open, close or append
+
 	switch windowRequest.Operation {
 	case window.Open:
 		windowOp = globalreducepb.GlobalReduceRequest_WindowOperation_OPEN

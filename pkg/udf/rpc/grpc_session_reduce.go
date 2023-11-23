@@ -35,7 +35,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// GRPCBasedSessionReduce is a reduce applier that uses gRPC client to invoke the reduce UDF. It implements the applier.ReduceApplier interface.
+// GRPCBasedSessionReduce is a reduce applier that uses gRPC client to invoke the session reduce UDF. It implements the applier.ReduceApplier interface.
 type GRPCBasedSessionReduce struct {
 	client sessionreducer.Client
 }
@@ -54,7 +54,7 @@ func (u *GRPCBasedSessionReduce) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
-// WaitUntilReady waits until the map udf is connected.
+// WaitUntilReady waits until the reduce udf is connected.
 func (u *GRPCBasedSessionReduce) WaitUntilReady(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	for {
@@ -72,13 +72,13 @@ func (u *GRPCBasedSessionReduce) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-// ApplyReduce accepts a channel of isbMessages and returns the aggregated result
-func (u *GRPCBasedSessionReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
+// ApplyReduce accepts a channel of timedWindowRequests and returns the aggregated result
+func (u *GRPCBasedSessionReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
 // AsyncApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
-func (u *GRPCBasedSessionReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (u *GRPCBasedSessionReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan *window.TimedWindowResponse)
@@ -101,7 +101,7 @@ func (u *GRPCBasedSessionReduce) AsyncApplyReduce(ctx context.Context, partition
 			select {
 			case result, ok := <-resultCh:
 				if !ok || result == nil {
-					// if the resultCh channel is closed, close the responseCh and errCh channels and return
+					// if the resultCh channel is closed, close the responseCh
 					close(responseCh)
 					return
 				}
@@ -120,23 +120,23 @@ func (u *GRPCBasedSessionReduce) AsyncApplyReduce(ctx context.Context, partition
 		}
 	}()
 
-	// create datum from isbMessage and send it to requestCh channel for AsyncReduceFn
+	// creates SessionWindowRequest from TimedWindowRequest and send it to requestCh channel for AsyncReduceFn
 	go func() {
-		// after reading all the messages from the messageStream or if ctx was canceled close the requestCh channel
+		// after reading all the messages from the requestsStream or if ctx was canceled close the requestCh channel
 		defer func() {
 			close(requestCh)
 		}()
 		for {
 			select {
-			case msg, ok := <-messageStream:
-				// if the messageStream is closed or if the message is nil, return
-				if !ok || msg == nil {
+			case req, ok := <-requestsStream:
+				// if the requestsStream is closed or if the message is nil, return
+				if !ok || req == nil {
 					return
 				}
 
-				d := createSessionReduceRequest(msg)
+				d := createSessionReduceRequest(req)
 
-				// send the datum to requestCh channel, handle the case when the context is canceled
+				// send the request to requestCh channel, handle the case when the context is canceled
 				select {
 				case <-ctx.Done():
 					return
@@ -152,6 +152,7 @@ func (u *GRPCBasedSessionReduce) AsyncApplyReduce(ctx context.Context, partition
 	return responseCh, errCh
 }
 
+// createSessionReduceRequest creates a SessionReduceRequest from TimedWindowRequest
 func createSessionReduceRequest(windowRequest *window.TimedWindowRequest) *sessionreducepb.SessionReduceRequest {
 	var windowOp sessionreducepb.SessionReduceRequest_WindowOperation_Event
 	var partitions []*sessionreducepb.Partition
@@ -164,7 +165,6 @@ func createSessionReduceRequest(windowRequest *window.TimedWindowRequest) *sessi
 			Keys:  w.Keys(),
 		})
 	}
-	// for fixed and sliding window event can be either open, close or append
 	switch windowRequest.Operation {
 	case window.Open:
 		windowOp = sessionreducepb.SessionReduceRequest_WindowOperation_OPEN

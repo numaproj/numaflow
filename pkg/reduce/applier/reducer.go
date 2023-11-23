@@ -23,8 +23,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// ReduceApplier applies the HTTPBasedUDF on the read message and gives back a new message. Any UserError will be retried here, while
-// InternalErr can be returned and could be retried by the callee.
+// ReduceApplier applies the GRPCBasedReduceUDF on the stream of read messages and gives back a new message.
 type ReduceApplier interface {
 	// ApplyReduce applies the reduce UDF on the stream of window requests and returns the timed window response.
 	// waits for the response for all the keys in the window, before sending the response back.

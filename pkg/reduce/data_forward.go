@@ -146,7 +146,7 @@ func (df *DataForward) Start() {
 // ReplayPersistedMessages replays persisted messages, because during boot up, it has to replay the data from the persistent store of
 // PBQ before it can start reading from ISB. ReplayPersistedMessages will return only after the replay has been completed.
 func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
-	//TODO: fix replay for session windows
+	// TODO: fix replay for session windows
 	if df.windower.Strategy() == window.Session {
 		return nil
 	}
@@ -159,7 +159,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 	df.log.Infow("Partitions to be replayed ", zap.Int("count", len(partitions)), zap.Any("partitions", partitions))
 
 	for _, p := range partitions {
-		// Open keyed window for a given partition
+		// create a window for each partition and insert it to the windower
 		// so that the window can be closed when the watermark
 		// crosses the window.
 		var timedWindow window.TimedWindow
@@ -212,7 +212,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 		// -1 means there are no windows
 		if oldestClosedWindowEndTime := df.windower.OldestWindowEndTime(); oldestClosedWindowEndTime == time.UnixMilli(-1) {
-			// if all the windows are closed already, and the len(readBatch) == 0
+			// if there are no windows, and the len(readBatch) == 0
 			// then it means there's an idle situation
 			// in this case, send idle watermark to all the toBuffer partitions
 			for toVertexName, toVertexBuffer := range df.toBuffers {

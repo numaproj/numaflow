@@ -219,7 +219,7 @@ func TestSortedWindowListByEndTime_InsertIfNotPresent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowListByEndTime[*TestWindow]()
+			windows := NewSortedWindowListByEndTime()
 			setupWindows(windows, tt.given)
 			ret, isPresent := windows.InsertIfNotPresent(tt.input)
 			assert.Equal(t, tt.isPresent, isPresent)
@@ -332,7 +332,7 @@ func TestSortedWindowListByEndTime_RemoveWindows(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowListByEndTime[*TestWindow]()
+			windows := NewSortedWindowListByEndTime()
 			setupWindows(windows, tt.given)
 			removedWindows := windows.RemoveWindows(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), len(removedWindows))
@@ -451,7 +451,7 @@ func TestSortedWindowListByEndTime_DeleteWindow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowListByEndTime[*TestWindow]()
+			windows := NewSortedWindowListByEndTime()
 			setupWindows(windows, tt.given)
 			windows.Delete(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
@@ -533,7 +533,7 @@ func TestSortedWindowListByEndTime_InsertFront(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowListByEndTime[*TestWindow]()
+			windows := NewSortedWindowListByEndTime()
 			setupWindows(windows, tt.given)
 			windows.InsertFront(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
@@ -615,7 +615,7 @@ func TestSortedWindowListByEndTime_InsertBack(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowListByEndTime[*TestWindow]()
+			windows := NewSortedWindowListByEndTime()
 			setupWindows(windows, tt.given)
 			windows.InsertBack(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
@@ -787,7 +787,7 @@ func TestSortedWindowListByEndTime_Insert(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowListByEndTime[*TestWindow]()
+			windows := NewSortedWindowListByEndTime()
 			setupWindows(windows, tt.given)
 			windows.Insert(tt.input)
 			assert.Equal(t, len(tt.expectedWindows), windows.Len())
@@ -940,7 +940,7 @@ func TestSortedWindowListByEndTime_FindWindowForTime(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			windows := NewSortedWindowListByEndTime[*TestWindow]()
+			windows := NewSortedWindowListByEndTime()
 			setupWindows(windows, tt.given)
 			win, isPresent := windows.FindWindowForTime(tt.input)
 			assert.Equal(t, tt.isPresent, isPresent)
@@ -1024,7 +1024,7 @@ func TestSortedWindowListByEndTime_WindowToBeMerged(t *testing.T) {
 		slot:  "slot-0",
 	}
 
-	windowList := NewSortedWindowListByEndTime[*TestWindow]()
+	windowList := NewSortedWindowListByEndTime()
 	windowList.Insert(win1)
 	windowList.Insert(win2)
 	windowList.Insert(win3)
@@ -1053,7 +1053,7 @@ func TestSortedWindowListByEndTime_WindowToBeMerged2(t *testing.T) {
 		slot:  "slot-0",
 	}
 
-	windowList := NewSortedWindowListByEndTime[*TestWindow]()
+	windowList := NewSortedWindowListByEndTime()
 	windowList.Insert(win1)
 
 	outputWin, canBeMerged := windowList.WindowToBeMerged(testWin)
@@ -1061,7 +1061,7 @@ func TestSortedWindowListByEndTime_WindowToBeMerged2(t *testing.T) {
 	assert.Equal(t, win1.Partition().String(), outputWin.Partition().String())
 }
 
-func setupWindows(windows *SortedWindowListByEndTime[*TestWindow], wins []*TestWindow) {
+func setupWindows(windows *SortedWindowListByEndTime, wins []*TestWindow) {
 	for _, win := range wins {
 		windows.InsertBack(win)
 	}

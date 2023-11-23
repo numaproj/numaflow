@@ -166,7 +166,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Debug("Vertex being deleted.")
 		return nil
 	}
-	if !vertex.Scalable() { // A vertex which is not scalable, such as a ReduceStreamer, or autoscaling disabled.
+	if !vertex.Scalable() { // A vertex which is not scalable, such as a Reducer, or autoscaling disabled.
 		s.StopWatching(key) // Remove it in case it's watched.
 		return nil
 	}

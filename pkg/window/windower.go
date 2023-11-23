@@ -23,6 +23,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
+// TimedWindower is the interface for windowing strategy
 type TimedWindower interface {
 	// Strategy returns the window strategy
 	Strategy() Strategy
@@ -40,6 +41,7 @@ type TimedWindower interface {
 	OldestWindowEndTime() time.Time
 }
 
+// TimedWindow represents a time based window
 type TimedWindow interface {
 	// StartTime returns the start time of the window
 	StartTime() time.Time
@@ -49,8 +51,8 @@ type TimedWindow interface {
 	Slot() string
 	// Keys returns the keys of the window
 	Keys() []string
-	// Partition returns the unique partition id of the window
-	// could be combination of startTime, endTime and slot
+	// Partition returns the partition id of the window
+	// which will be used to map to the pbq instance
 	Partition() *partition.ID
 	// Merge merges the window with the new window
 	Merge(tw TimedWindow)

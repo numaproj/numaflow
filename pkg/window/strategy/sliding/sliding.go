@@ -104,19 +104,19 @@ type Windower struct {
 	length time.Duration
 	slide  time.Duration
 	//activeWindows is a list of active windows which are yet to be closed
-	activeWindows *window.SortedWindowListByEndTime[window.TimedWindow]
+	activeWindows *window.SortedWindowListByEndTime
 	// closedWindows is a list of closed windows which are yet to be GCed
 	// we need to track the close windows because while publishing the watermark
 	// for a fixed window, we need to compare the watermark with the oldest closed window
-	closedWindows *window.SortedWindowListByEndTime[window.TimedWindow]
+	closedWindows *window.SortedWindowListByEndTime
 }
 
 func NewWindower(length time.Duration, slide time.Duration) window.TimedWindower {
 	return &Windower{
 		length:        length,
 		slide:         slide,
-		activeWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
-		closedWindows: window.NewSortedWindowListByEndTime[window.TimedWindow](),
+		activeWindows: window.NewSortedWindowListByEndTime(),
+		closedWindows: window.NewSortedWindowListByEndTime(),
 	}
 }
 
