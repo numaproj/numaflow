@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
@@ -57,7 +57,7 @@ type ProcessAndForward struct {
 	pbqReader      pbq.Reader
 	log            *zap.SugaredLogger
 	toBuffers      map[string][]isb.BufferWriter
-	whereToDecider forward.ToWhichStepDecider
+	whereToDecider forwarder.ToWhichStepDecider
 	wmPublishers   map[string]publish.Publisher
 	idleManager    wmb.IdleManager
 	pbqManager     *pbq.Manager
@@ -73,7 +73,7 @@ func newProcessAndForward(ctx context.Context,
 	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
 	toBuffers map[string][]isb.BufferWriter,
-	whereToDecider forward.ToWhichStepDecider,
+	whereToDecider forwarder.ToWhichStepDecider,
 	pw map[string]publish.Publisher,
 	idleManager wmb.IdleManager,
 	manager *pbq.Manager,
@@ -206,7 +206,7 @@ func (p *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[s
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][][]isb.Message)
 
-	var to []forward.VertexBuffer
+	var to []forwarder.VertexBuffer
 	var err error
 	for _, msg := range writeMessages {
 		to, err = p.whereToDecider.WhereTo(msg.Keys, msg.Tags)

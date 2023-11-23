@@ -38,7 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
@@ -68,7 +68,7 @@ type DataForward struct {
 	// wmbChecker checks if the idle watermark is valid when the len(readMessage) is 0.
 	wmbChecker     wmb.WMBChecker
 	pbqManager     *pbq.Manager
-	whereToDecider forward.ToWhichStepDecider
+	whereToDecider forwarder.ToWhichStepDecider
 	of             *pnf.Manager
 	opts           *Options
 	log            *zap.SugaredLogger
@@ -80,7 +80,7 @@ func NewDataForward(ctx context.Context,
 	fromBuffer isb.BufferReader,
 	toBuffers map[string][]isb.BufferWriter,
 	pbqManager *pbq.Manager,
-	whereToDecider forward.ToWhichStepDecider,
+	whereToDecider forwarder.ToWhichStepDecider,
 	fw fetch.Fetcher,
 	watermarkPublishers map[string]publish.Publisher,
 	windowingStrategy window.TimedWindower,

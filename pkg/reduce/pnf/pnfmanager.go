@@ -23,10 +23,10 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
 
-	"github.com/numaproj/numaflow/pkg/forward"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
@@ -44,7 +44,7 @@ type Manager struct {
 	pbqManager          *pbq.Manager
 	reduceApplier       applier.ReduceApplier
 	toBuffers           map[string][]isb.BufferWriter
-	whereToDecider      forward.ToWhichStepDecider
+	whereToDecider      forwarder.ToWhichStepDecider
 	watermarkPublishers map[string]publish.Publisher
 	idleManager         wmb.IdleManager
 	windower            window.TimedWindower
@@ -57,7 +57,7 @@ func NewOrderedProcessor(ctx context.Context,
 	udf applier.ReduceApplier,
 	toBuffers map[string][]isb.BufferWriter,
 	pbqManager *pbq.Manager,
-	whereToDecider forward.ToWhichStepDecider,
+	whereToDecider forwarder.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,
 	idleManager wmb.IdleManager,
 	windower window.TimedWindower) *Manager {

@@ -29,7 +29,7 @@ import (
 	"go.uber.org/atomic"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
@@ -125,8 +125,8 @@ type myForwardTestRoundRobin struct {
 	count atomic.Int32
 }
 
-func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
-	var output = []forward.VertexBuffer{{
+func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+	var output = []forwarder.VertexBuffer{{
 		ToVertexName:         "reduce-to-vertex",
 		ToVertexPartitionIdx: f.count.Load() % 2,
 	}}
@@ -183,8 +183,8 @@ func (f CounterReduceTest) CloseConn(_ context.Context) error {
 	return nil
 }
 
-func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
-	return []forward.VertexBuffer{{
+func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+	return []forwarder.VertexBuffer{{
 		ToVertexName:         "reduce-to-vertex",
 		ToVertexPartitionIdx: 0,
 	}}, nil
