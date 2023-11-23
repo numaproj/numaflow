@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,7 +62,7 @@ type handler struct {
 	kubeClient         kubernetes.Interface
 	metricsClient      *metricsversiond.Clientset
 	numaflowClient     dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache *lru.Cache
+	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
 	dexObj             *DexObject
 }
 
@@ -82,8 +82,8 @@ func NewHandler(dexObj *DexObject) (*handler, error) {
 	}
 	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
-	daemonClientsCache, _ := lru.NewWithEvict(100, func(key, value interface{}) {
-		_ = value.(*daemonclient.DaemonClient).Close()
+	daemonClientsCache, _ := lru.NewWithEvict[string, *daemonclient.DaemonClient](500, func(key string, value *daemonclient.DaemonClient) {
+		_ = value.Close()
 	})
 	return &handler{
 		kubeClient:         kubeClient,
@@ -655,11 +655,6 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 	newPipelineSpec := oldPipelineSpec.DeepCopy()
 	for index, vertex := range newPipelineSpec.Spec.Vertices {
 		if vertex.Name == inputVertexName {
-			if vertex.GetVertexType() != requestBody.GetVertexType() {
-				h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: vertex type is immutable",
-					ns, pipeline, inputVertexName))
-				return
-			}
 			newPipelineSpec.Spec.Vertices[index] = requestBody
 			break
 		}
@@ -938,9 +933,8 @@ func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 // validatePipelineSpec is used to validate the pipeline spec during create and update
 func validatePipelineSpec(h *handler, oldPipeline *dfv1.Pipeline, newPipeline *dfv1.Pipeline, validType string) error {
 	ns := newPipeline.Namespace
-	pipeClient := h.numaflowClient.Pipelines(ns)
 	isbClient := h.numaflowClient.InterStepBufferServices(ns)
-	valid := validator.NewPipelineValidator(h.kubeClient, pipeClient, isbClient, oldPipeline, newPipeline)
+	valid := validator.NewPipelineValidator(isbClient, oldPipeline, newPipeline)
 	var resp *admissionv1.AdmissionResponse
 	switch validType {
 	case ValidTypeCreate:
@@ -1026,22 +1020,14 @@ func daemonSvcAddress(ns, pipeline string) string {
 }
 
 func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClient, error) {
-	dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline))
-	if !ok {
-		dClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline)); !ok {
+		c, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 		if err != nil {
 			return nil, err
 		}
-		if dClient == nil {
-			return nil, fmt.Errorf("nil client")
-		}
-		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
+		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), c)
+		return c, nil
+	} else {
+		return dClient, nil
 	}
-
-	client, ok := dClient.(*daemonclient.DaemonClient)
-	if !ok {
-		return nil, fmt.Errorf("failed to get client")
-	}
-
-	return client, nil
 }

@@ -46,3 +46,17 @@ Resource: "numaflow.numaproj.io/v1alpha1, Resource=pipelines", GroupVersionKind:
 Name: "simple-pipeline", Namespace: "numaflow-system"
 for: "examples/1-simple-pipeline.yaml": error when patching "examples/1-simple-pipeline.yaml": admission webhook "webhook.numaflow.numaproj.io" denied the request: Cannot update pipeline with different interStepBufferServiceName
 ```
+
+Other validations include:
+
+Pipeline:
+
+1. cannot change the type of an existing vertex 
+2. cannot change the partition count of a reduce vertex
+3. cannot change the storage class of a reduce vertex
+4. etc.
+
+InterStepBufferService:
+
+1. cannot change the persistence configuration of an ISB Service
+2. etc.
