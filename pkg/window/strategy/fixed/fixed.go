@@ -35,7 +35,6 @@ type fixedWindow struct {
 	startTime time.Time
 	endTime   time.Time
 	slot      string
-	keys      []string
 }
 
 // NewFixedWindow returns a new window for the given message.
@@ -50,7 +49,6 @@ func NewFixedWindow(length time.Duration, message *isb.ReadMessage) window.Timed
 		startTime: start,
 		endTime:   end,
 		slot:      slot,
-		keys:      message.Keys,
 	}
 }
 
@@ -67,7 +65,7 @@ func (w *fixedWindow) Slot() string {
 }
 
 func (w *fixedWindow) Keys() []string {
-	return w.keys
+	return nil
 }
 
 func (w *fixedWindow) Partition() *partition.ID {

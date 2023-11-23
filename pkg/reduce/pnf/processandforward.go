@@ -131,6 +131,7 @@ outerLoop:
 				break outerLoop
 			}
 
+			var messagesToStep map[string][][]isb.Message
 			if response.EOF {
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
@@ -139,9 +140,10 @@ outerLoop:
 					// delete the closed windows which are tracked by the windower
 					p.windower.DeleteClosedWindows(response)
 				}
-				continue
+			} else {
+				messagesToStep = p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
 			}
-			messagesToStep := p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
+
 			// store write offsets to publish watermark
 			writeOffsets := make(map[string][][]isb.Offset)
 			for toVertexName, toVertexBuffer := range p.toBuffers {

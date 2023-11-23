@@ -34,10 +34,9 @@ type slidingWindow struct {
 	startTime time.Time
 	endTime   time.Time
 	slot      string
-	keys      []string
 }
 
-func NewWindow(startTime time.Time, endTime time.Time, message *isb.ReadMessage) window.TimedWindow {
+func NewWindow(startTime time.Time, endTime time.Time) window.TimedWindow {
 	// TODO: slot should be extracted based on the key
 	// we can accept an interface SlotAssigner
 	// which will assign the slot based on the key
@@ -48,7 +47,6 @@ func NewWindow(startTime time.Time, endTime time.Time, message *isb.ReadMessage)
 		startTime: startTime,
 		endTime:   endTime,
 		slot:      slot,
-		keys:      message.Keys,
 	}
 }
 
@@ -65,7 +63,7 @@ func (w *slidingWindow) Slot() string {
 }
 
 func (w *slidingWindow) Keys() []string {
-	return w.keys
+	return nil
 }
 
 func (w *slidingWindow) Partition() *partition.ID {
@@ -145,7 +143,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	// so given windows 500-600 and 600-700 and the event time is 600
 	// we will add the element to 600-700 window and not to the 500-600 window.
 	for !startTime.After(message.EventTime) && endTime.After(message.EventTime) {
-		win, isPresent := w.activeWindows.InsertIfNotPresent(NewWindow(startTime, endTime, message))
+		win, isPresent := w.activeWindows.InsertIfNotPresent(NewWindow(startTime, endTime))
 		operation := &window.TimedWindowRequest{
 			ReadMessage: message,
 			Operation:   window.Append,
@@ -195,7 +193,7 @@ func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
 	w.closedWindows.Delete(response.Window)
 }
 
-// OldestClosedWindowEndTime returns the end time of the oldest closed window.
+// OldestWindowEndTime returns the end time of the oldest window.
 func (w *Windower) OldestWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()
