@@ -125,21 +125,16 @@ export function NamespacePipelineListing({
   refresh,
 }: NamespacePipelineListingProps) {
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
-  const [pipelineSearch, setPipelineSearch] = useState("");
-  const [isbSearch, setIsbSearch] = useState("");
+  const [search, setSearch] = useState("");
   const [health, setHealth] = useState(ALL);
   const [status, setStatus] = useState(ALL);
-  const [pipelinePage, setPipelinePage] = useState(1);
-  const [isbPage, setIsbPage] = useState(1);
+  const [page, setPage] = useState(1);
   const [orderBy, setOrderBy] = useState({
     value: ALPHABETICAL_SORT,
     sortOrder: ASC,
   });
-  const [totalPipelinePages, setTotalPipelinePages] = useState(
+  const [totalPages, setTotalPages] = useState(
     Math.ceil(data.pipelinesCount / MAX_PAGE_SIZE)
-  );
-  const [totalIsbPages, setTotalIsbPages] = useState(
-    Math.ceil(data?.isbsCount / MAX_PAGE_SIZE)
   );
   const [filteredPipelines, setFilteredPipelines] = useState<PipelineData[]>(
     []
@@ -156,10 +151,10 @@ export function NamespacePipelineListing({
       let filtered: PipelineData[] = Object.values(
         pipelineData ? pipelineData : {}
       );
-      if (pipelineSearch) {
+      if (search) {
         // Filter by search
         filtered = filtered.filter((p: PipelineData) =>
-          p.name.includes(pipelineSearch)
+          p.name.includes(search)
         );
       }
       // Sorting
@@ -233,21 +228,21 @@ export function NamespacePipelineListing({
         return resultArray;
       }, []);
 
-      if (pipelinePage > pages.length) {
+      if (page > pages.length) {
         // Reset to page 1 if current page is greater than total pages after filterting
-        setPipelinePage(1);
+        setPage(1);
       }
       // Set filtered namespaces with current page of pipelines
-      setFilteredPipelines(pages[pipelinePage - 1] || []);
-      setTotalPipelinePages(pages.length);
+      setFilteredPipelines(pages[page - 1] || []);
+      setTotalPages(pages.length);
     } else {
       let filtered: ISBServicesListing[] = Object.values(
         isbData ? isbData : {}
       );
-      if (isbSearch) {
+      if (search) {
         // Filter by search
         filtered = filtered.filter((p: ISBServicesListing) =>
-          p.name.includes(isbSearch)
+          p.name.includes(search)
         );
       }
       // Sorting
@@ -349,20 +344,18 @@ export function NamespacePipelineListing({
         return resultArray;
       }, []);
 
-      if (isbPage > pages.length) {
+      if (page > pages.length) {
         // Reset to page 1 if current page is greater than total pages after filterting
-        setIsbPage(1);
+        setPage(1);
       }
       // Set filtered namespaces with current page of pipelines
-      setFilteredISBServices(pages[isbPage - 1] || []);
-      setTotalIsbPages(pages.length);
+      setFilteredISBServices(pages[page - 1] || []);
+      setTotalPages(pages.length);
     }
   }, [
     data,
-    pipelineSearch,
-    isbSearch,
-    pipelinePage,
-    isbPage,
+    search,
+    page,
     pipelineData,
     isbData,
     orderBy,
@@ -372,18 +365,14 @@ export function NamespacePipelineListing({
   ]);
 
   const handlePageChange = useCallback(
-    (_: React.ChangeEvent<unknown>, value: number) => {
-      if (tabValue === PIPELINE) {
-        setPipelinePage(value);
-      } else {
-        setIsbPage(value);
-      }
+    (event: React.ChangeEvent<unknown>, value: number) => {
+      setPage(value);
     },
-    [tabValue]
+    []
   );
   const handleSortChange = useCallback(
     (
-      _: React.MouseEvent<HTMLAnchorElement | HTMLSpanElement>,
+      event: React.MouseEvent<HTMLAnchorElement | HTMLSpanElement>,
       value: string
     ) => {
       setOrderBy({
@@ -460,14 +449,14 @@ export function NamespacePipelineListing({
     (e) => {
       setHealth(e.target.value);
     },
-    [health, tabValue]
+    [health]
   );
 
   const handleStatusFilterChange = useCallback(
     (e) => {
       setStatus(e.target.value);
     },
-    [status, tabValue]
+    [status]
   );
 
   const handleCreatePipelineComplete = useCallback(() => {
@@ -522,19 +511,9 @@ export function NamespacePipelineListing({
     });
   }, [setSidebarProps, handleCreateISBComplete, namespace]);
 
-  const handleTabsChange = useCallback((_, newValue) => {
+  const handleTabsChange = useCallback((event, newValue) => {
     setTabValue(newValue);
   }, []);
-
-  useEffect(() => {
-    setPipelineSearch("");
-    setHealth(ALL);
-    setStatus(ALL);
-    setOrderBy({
-      value: ALPHABETICAL_SORT,
-      sortOrder: ASC,
-    });
-  }, [tabValue]);
 
   return (
     <Box
@@ -566,8 +545,7 @@ export function NamespacePipelineListing({
                 ? "Search for pipeline"
                 : "Search for ISB service"
             }
-            onChange={tabValue === PIPELINE ? setPipelineSearch : setIsbSearch}
-            key={tabValue === PIPELINE ? "pipeline" : "isb"}
+            onChange={setSearch}
           />
 
           <Box
@@ -580,8 +558,7 @@ export function NamespacePipelineListing({
             <label style={{ color: "#6B6C72" }}>Health</label>
             <Select
               label="Health"
-              defaultValue={ALL}
-              value={health}
+              defaultValue="All"
               inputProps={{
                 name: "Health",
                 id: "health",
@@ -616,8 +593,7 @@ export function NamespacePipelineListing({
             <label style={{ color: "#6B6C72" }}>Status</label>
             <Select
               label="Status"
-              defaultValue={ALL}
-              value={status}
+              defaultValue="All"
               inputProps={{
                 name: "Status",
                 id: "health",
@@ -749,8 +725,8 @@ export function NamespacePipelineListing({
         }}
       >
         <Pagination
-          count={tabValue === PIPELINE ? totalPipelinePages : totalIsbPages}
-          page={tabValue === PIPELINE ? pipelinePage : isbPage}
+          count={totalPages}
+          page={page}
           onChange={handlePageChange}
           shape="rounded"
         />
