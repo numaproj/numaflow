@@ -3,7 +3,6 @@ package rpc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"testing"
@@ -176,7 +175,7 @@ func TestGRPCBasedUDF_BasicGlobalReduceWithMockClient(t *testing.T) {
 				if err != nil {
 					assert.ErrorIs(t, err, ApplyUDFErr{
 						UserUDFErr: false,
-						Message:    fmt.Sprintf("%s", err.Error()),
+						Message:    err.Error(),
 						InternalErr: InternalErr{
 							Flag:        true,
 							MainCarDown: false,
