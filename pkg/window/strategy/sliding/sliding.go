@@ -76,23 +76,11 @@ func (w *slidingWindow) Partition() *partition.ID {
 
 // Merge merges the given window with the current window.
 func (w *slidingWindow) Merge(tw window.TimedWindow) {
-	if w.slot != tw.Slot() {
-		panic("cannot merge windows with different slots")
-	}
-	// expand the start and end to accommodate the new window
-	if tw.StartTime().Before(w.startTime) {
-		w.startTime = tw.StartTime()
-	}
-
-	if tw.EndTime().After(w.endTime) {
-		w.endTime = tw.EndTime()
-	}
+	// never be invokved for Aligned Window
 }
 
 func (w *slidingWindow) Expand(endTime time.Time) {
-	if endTime.After(w.endTime) {
-		w.endTime = endTime
-	}
+	// never be invokved for Aligned Window
 }
 
 // Windower is a implementation of TimedWindower of fixed window, windower is responsible for assigning
@@ -118,8 +106,15 @@ func NewWindower(length time.Duration, slide time.Duration) window.TimedWindower
 	}
 }
 
+var _ window.TimedWindower = (*Windower)(nil)
+
 func (w *Windower) Strategy() window.Strategy {
 	return window.Sliding
+}
+
+// Type implements window.TimedWindower.
+func (*Windower) Type() window.Type {
+	return window.Aligned
 }
 
 // AssignWindows assigns the event to the window based on give window configuration.

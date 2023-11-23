@@ -144,8 +144,8 @@ func (df *DataForward) Start() {
 // ReplayPersistedMessages replays persisted messages, because during boot up, it has to replay the data from the persistent store of
 // PBQ before it can start reading from ISB. ReplayPersistedMessages will return only after the replay has been completed.
 func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
-	// TODO: fix replay for session windows
-	if df.windower.Strategy() == window.Session {
+	// FIXME: fix replay for unaligned windows
+	if df.windower.Type() != window.Unaligned {
 		return nil
 	}
 	// start the PBQManager which discovers and builds the state from persistent store of the PBQ.
@@ -156,17 +156,16 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 
 	df.log.Infow("Partitions to be replayed ", zap.Int("count", len(partitions)), zap.Any("partitions", partitions))
 
+	// for aligned windows, we can create/assign a partition based on the timestamp in the payload, but this is not
+	// neccessarily true for unaligned windows.
+
 	for _, p := range partitions {
 		// create a window for each partition and insert it to the windower
 		// so that the window can be closed when the watermark
 		// crosses the window.
 		var timedWindow window.TimedWindow
 
-		if df.windower.Strategy() == window.Fixed || df.windower.Strategy() == window.Sliding {
-			timedWindow = window.NewWindowFromPartition(&p)
-		} else {
-			continue
-		}
+		timedWindow = window.NewWindowFromPartition(&p)
 
 		df.windower.InsertWindow(timedWindow)
 
@@ -175,6 +174,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 
 	// replays the data (replay internally writes the data from persistent store on to the PBQ)
 	df.pbqManager.Replay(ctx)
+
 	return nil
 }
 
@@ -209,7 +209,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// -1 means there are no windows
-		if oldestClosedWindowEndTime := df.windower.OldestWindowEndTime(); oldestClosedWindowEndTime == time.UnixMilli(-1) {
+		if oldestWindowEndTime := df.windower.OldestWindowEndTime(); oldestWindowEndTime == time.UnixMilli(-1) {
 			// if there are no windows, and the len(readBatch) == 0
 			// then it means there's an idle situation
 			// in this case, send idle watermark to all the toBuffer partitions
@@ -224,7 +224,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// if window exists, and the watermark we fetch has already passed the endTime of this window
 			// then it means the overall dataflow of the pipeline has already reached a later time point
 			// so we can close the window and process the data in this window
-			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); oldestClosedWindowEndTime.Before(watermark) {
+			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); oldestWindowEndTime.Before(watermark) {
 				windowOperations := df.windower.CloseWindows(watermark)
 				for _, op := range windowOperations {
 					err = df.writeToPBQ(ctx, op)

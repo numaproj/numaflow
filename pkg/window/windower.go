@@ -27,6 +27,8 @@ import (
 type TimedWindower interface {
 	// Strategy returns the window strategy
 	Strategy() Strategy
+	// Type returns the window type
+	Type() Type
 	// AssignWindows assigns the event to the window based on give window configuration.
 	AssignWindows(message *isb.ReadMessage) []*TimedWindowRequest
 	// CloseWindows closes the windows that are past the watermark
@@ -176,6 +178,25 @@ func (e Operation) String() string {
 		return "Append"
 	case Expand:
 		return "Expand"
+	default:
+		return "Unknown"
+	}
+}
+
+// Type represents window type
+type Type int
+
+const (
+	Aligned Type = iota
+	Unaligned
+)
+
+func (t Type) String() string {
+	switch t {
+	case Aligned:
+		return "Aligned"
+	case Unaligned:
+		return "Unaligned"
 	default:
 		return "Unknown"
 	}

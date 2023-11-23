@@ -132,9 +132,16 @@ func NewWindower(gap time.Duration) window.TimedWindower {
 	}
 }
 
+var _ window.TimedWindower = (*Windower)(nil)
+
 // Strategy returns the window strategy
 func (w *Windower) Strategy() window.Strategy {
 	return window.Session
+}
+
+// Type implements window.TimedWindower.
+func (*Windower) Type() window.Type {
+	return window.Unaligned
 }
 
 // AssignWindows assigns the event to the window based on give window configuration.
