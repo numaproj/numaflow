@@ -195,9 +195,7 @@ func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 }
 
 func (r *KafkaSource) PublishIdleWatermarks(wm time.Time) {
-	// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
-	//r.sourcePublishWMs.PublishIdleWatermark(wmb.Watermark(wm), nil, 0) // Source publisher does not care about the offset
-	panic("implement me")
+	// TODO: Implement me
 }
 
 // loadSourceWatermarkPublisher does a lazy load on the watermark publisher

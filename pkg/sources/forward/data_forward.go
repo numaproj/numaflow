@@ -157,10 +157,6 @@ func (isdf *DataForward) Start() <-chan struct{} {
 		}
 	}()
 
-	//   []     []    []
-
-	// source(12) -> v2 -> v3
-
 	go func() {
 		wg.Wait()
 		// clean up resources for source reader and all the writers if any.

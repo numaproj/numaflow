@@ -61,7 +61,7 @@ type testForwardFetcher struct {
 }
 
 func (t *testForwardFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
-	//TODO implement me
+	// won't be used
 	return wmb.Watermark{}
 }
 

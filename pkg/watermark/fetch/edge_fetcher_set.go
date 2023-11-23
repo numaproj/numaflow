@@ -60,7 +60,7 @@ func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance,
 }
 
 func (efs *edgeFetcherSet) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
-	// TODO: Implement Me
+	// won't be used
 	return wmb.Watermark{}
 }
 
