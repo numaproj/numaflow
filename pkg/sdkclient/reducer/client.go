@@ -23,9 +23,7 @@ import (
 	"time"
 
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
@@ -96,61 +94,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 
 // ReduceFn applies a reduce function to a datum stream.
 func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.ReduceRequest) (*reducepb.ReduceResponse, error) {
-	var g errgroup.Group
-	var finalResponse = &reducepb.ReduceResponse{}
-
-	stream, err := c.grpcClt.ReduceFn(ctx)
-	err = util.ToUDFErr("c.grpcClt.ReduceFn", err)
-	if err != nil {
-		return nil, err
-	}
-	// stream the messages to server
-	g.Go(func() error {
-		var sendErr error
-		for datum := range datumStreamCh {
-			select {
-			case <-ctx.Done():
-				return status.FromContextError(ctx.Err()).Err()
-			default:
-				if sendErr = stream.Send(datum); sendErr != nil {
-					// we don't need to invoke close on the stream
-					// if there is an error gRPC will close the stream.
-					return sendErr
-				}
-			}
-		}
-		return stream.CloseSend()
-	})
-
-	// read the response from the server stream
-outputLoop:
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, util.ToUDFErr("ReduceFn OutputLoop", status.FromContextError(ctx.Err()).Err())
-		default:
-			var resp *reducepb.ReduceResponse
-			resp, err = stream.Recv()
-			if err == io.EOF {
-				break outputLoop
-			}
-			if err != nil {
-				err = util.ToUDFErr("ReduceFn stream.Recv()", err)
-				return nil, err
-			}
-			finalResponse.Results = append(finalResponse.Results, resp.Results...)
-			finalResponse.Partition = resp.Partition
-			finalResponse.EventTime = resp.EventTime
-		}
-	}
-
-	err = g.Wait()
-	err = util.ToUDFErr("ReduceFn errorGroup", err)
-	if err != nil {
-		return nil, err
-	}
-
-	return finalResponse, nil
+	return nil, nil
 }
 
 // AsyncReduceFn applies a reduce function to a datum stream asynchronously.

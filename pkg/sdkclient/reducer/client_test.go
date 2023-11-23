@@ -56,74 +56,6 @@ func TestClient_IsReady(t *testing.T) {
 	assert.EqualError(t, err, "mock connection refused")
 }
 
-func TestClient_ReduceFn(t *testing.T) {
-	var ctx = context.Background()
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := reducemock.NewMockReduceClient(ctrl)
-	mockReduceClient := reducemock.NewMockReduce_ReduceFnClient(ctrl)
-
-	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-		Results: []*reducepb.ReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key1"},
-				Value: []byte(`forward_message`),
-			},
-		},
-		Partition: &reducepb.Partition{
-			Start: timestamppb.New(time.Unix(60, 0)),
-			End:   timestamppb.New(time.Unix(120, 0)),
-			Slot:  "slot-0",
-		},
-		EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
-	}, nil).Times(1)
-	mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-		Results: []*reducepb.ReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key2"},
-				Value: []byte(`forward_message`),
-			},
-		},
-		Partition: &reducepb.Partition{
-			Start: timestamppb.New(time.Unix(60, 0)),
-			End:   timestamppb.New(time.Unix(120, 0)),
-			Slot:  "slot-0",
-		},
-		EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
-	}, io.EOF).Times(1)
-	mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
-
-	testClient, err := NewFromClient(mockClient)
-	assert.NoError(t, err)
-	reflect.DeepEqual(testClient, &client{
-		grpcClt: mockClient,
-	})
-
-	messageCh := make(chan *reducepb.ReduceRequest)
-	close(messageCh)
-	response, err := testClient.ReduceFn(ctx, messageCh)
-	assert.Equal(t, &reducepb.ReduceResponse{
-		Results: []*reducepb.ReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key1"},
-				Value: []byte(`forward_message`),
-			},
-		},
-		Partition: &reducepb.Partition{
-			Start: timestamppb.New(time.Unix(60, 0)),
-			End:   timestamppb.New(time.Unix(120, 0)),
-			Slot:  "slot-0",
-		},
-		EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
-	}, response)
-	assert.NoError(t, err)
-
-}
-
 func TestClient_AsyncReduceFn(t *testing.T) {
 	var ctx = context.Background()
 
@@ -136,32 +68,28 @@ func TestClient_AsyncReduceFn(t *testing.T) {
 	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 	mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-		Results: []*reducepb.ReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key1"},
-				Value: []byte(`forward_message`),
-			},
+		Result: &reducepb.ReduceResponse_Result{
+			Keys:      []string{"reduced_result_key1"},
+			Value:     []byte(`forward_message`),
+			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 		},
 		Partition: &reducepb.Partition{
 			Start: timestamppb.New(time.Unix(60, 0)),
 			End:   timestamppb.New(time.Unix(120, 0)),
 			Slot:  "slot-0",
 		},
-		EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 	}, nil).Times(1)
 	mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-		Results: []*reducepb.ReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key2"},
-				Value: []byte(`forward_message`),
-			},
+		Result: &reducepb.ReduceResponse_Result{
+			Keys:      []string{"reduced_result_key2"},
+			Value:     []byte(`forward_message`),
+			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 		},
 		Partition: &reducepb.Partition{
 			Start: timestamppb.New(time.Unix(60, 0)),
 			End:   timestamppb.New(time.Unix(120, 0)),
 			Slot:  "slot-0",
 		},
-		EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 	}, io.EOF).Times(1)
 	mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
@@ -176,18 +104,16 @@ func TestClient_AsyncReduceFn(t *testing.T) {
 	responseCh, _ := testClient.AsyncReduceFn(ctx, messageCh)
 	for response := range responseCh {
 		assert.Equal(t, &reducepb.ReduceResponse{
-			Results: []*reducepb.ReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key1"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &reducepb.ReduceResponse_Result{
+				Keys:      []string{"reduced_result_key1"},
+				Value:     []byte(`forward_message`),
+				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 			},
 			Partition: &reducepb.Partition{
 				Start: timestamppb.New(time.Unix(60, 0)),
 				End:   timestamppb.New(time.Unix(120, 0)),
 				Slot:  "slot-0",
 			},
-			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 		}, response)
 	}
 }

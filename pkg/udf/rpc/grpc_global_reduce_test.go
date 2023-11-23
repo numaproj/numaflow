@@ -59,13 +59,11 @@ func TestGRPCBasedUDF_BasicGlobalReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().Recv().Return(&globalreducepb.GlobalReduceResponse{
-			Results: []*globalreducepb.GlobalReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key_1"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &globalreducepb.GlobalReduceResponse_Result{
+				Keys:      []string{"reduced_result_key_1"},
+				Value:     []byte(`forward_message`),
+				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 			},
-			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 			Partition: &globalreducepb.Partition{
 				Start: timestamppb.New(time.Unix(60, 0)),
 				End:   timestamppb.New(time.Unix(120, 0)),
@@ -107,8 +105,7 @@ func TestGRPCBasedUDF_BasicGlobalReduceWithMockClient(t *testing.T) {
 		responseCh, _ := u.AsyncApplyReduce(ctx, partitionID, requestsCh)
 
 		for response := range responseCh {
-			assert.Len(t, response.WriteMessages, 1)
-			assert.Equal(t, time.Unix(120, 0).Add(-1*time.Millisecond).UnixMilli(), response.WriteMessages[0].EventTime.UnixMilli())
+			assert.Equal(t, time.Unix(120, 0).Add(-1*time.Millisecond).UnixMilli(), response.WriteMessage.EventTime.UnixMilli())
 		}
 		wg.Wait()
 	})
@@ -122,11 +119,9 @@ func TestGRPCBasedUDF_BasicGlobalReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().Recv().Return(&globalreducepb.GlobalReduceResponse{
-			Results: []*globalreducepb.GlobalReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &globalreducepb.GlobalReduceResponse_Result{
+				Keys:  []string{"reduced_result_key"},
+				Value: []byte(`forward_message`),
 			},
 		}, errors.New("mock error for reduce")).Times(1)
 		mockReduceClient.EXPECT().Recv().Return(nil, io.EOF).Times(1)
@@ -207,20 +202,16 @@ func TestGRPCBasedUDF_BasicGlobalReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().Recv().Return(&globalreducepb.GlobalReduceResponse{
-			Results: []*globalreducepb.GlobalReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &globalreducepb.GlobalReduceResponse_Result{
+				Keys:  []string{"reduced_result_key"},
+				Value: []byte(`forward_message`),
 			},
 		}, nil).Times(1)
 
 		mockReduceClient.EXPECT().Recv().Return(&globalreducepb.GlobalReduceResponse{
-			Results: []*globalreducepb.GlobalReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &globalreducepb.GlobalReduceResponse_Result{
+				Keys:  []string{"reduced_result_key"},
+				Value: []byte(`forward_message`),
 			},
 		}, io.EOF).Times(1)
 

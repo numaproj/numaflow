@@ -18,16 +18,9 @@ package pnf
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/assert"
-
-	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
-	"github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1/reducemock"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forward"
@@ -37,17 +30,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
-	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/udf/rpc"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
 
 const (
@@ -88,260 +77,6 @@ func (f *forwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*i
 type PayloadForTest struct {
 	Key   string
 	Value int64
-}
-
-func TestProcessAndForward_Process(t *testing.T) {
-	// 1. create a pbq which has to be passed to the process method
-	// 2. pass the pbqReader interface and create a new ProcessAndForward instance
-	// 3. mock the grpc client methods
-	// 4. assert to check if the process method is returning the windowResponse
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-		}
-	}()
-
-	testPartition := partition.ID{
-		Start: time.UnixMilli(60000),
-		End:   time.UnixMilli(120000),
-		Slot:  "partition-1",
-	}
-
-	var err error
-	var pbqManager *pbq.Manager
-
-	pbqManager, err = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
-		window.Fixed, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
-	assert.NoError(t, err)
-
-	// create a pbq for a partition
-	var simplePbq pbq.ReadWriteCloser
-	simplePbq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
-	assert.NoError(t, err)
-
-	// write requests to pbq
-	go func() {
-		writeRequests := testutils.BuildTestWindowRequests(10, time.Now(), window.Append)
-		for index := range writeRequests {
-			err := simplePbq.Write(ctx, &writeRequests[index])
-			assert.NoError(t, err)
-		}
-		// done writing, cob
-		simplePbq.CloseOfBook()
-	}()
-
-	// mock grpc reducer
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := reducemock.NewMockReduceClient(ctrl)
-	mockReduceClient := reducemock.NewMockReduce_ReduceFnClient(ctrl)
-
-	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-	mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-		Results: []*reducepb.ReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key"},
-				Value: []byte(`forward_message`),
-			},
-		},
-	}, nil).Times(1)
-	mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-		Results: []*reducepb.ReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key"},
-				Value: []byte(`forward_message`),
-			},
-		},
-	}, io.EOF).Times(1)
-
-	mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
-
-	c, _ := reducer.NewFromClient(mockClient)
-	client := rpc.NewUDSgRPCBasedReduce(c)
-	windower := fixed.NewWindower(time.Second * 10)
-
-	assert.NoError(t, err)
-	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(make(map[string][]isb.BufferWriter))
-
-	// create pf using key and reducer
-	pf := newProcessAndForward(ctx, "reduce", "test-pipeline", 0, testPartition, client, simplePbq, make(map[string][]isb.BufferWriter, 1), &forwardTest{}, publishWatermark, wmb.NewIdleManager(1), pbqManager, windower)
-
-	err = pf.Process(ctx)
-	assert.NoError(t, err)
-	assert.Len(t, pf.windowResponse.WriteMessages, 1)
-}
-
-func TestProcessAndForward_Forward(t *testing.T) {
-	ctx := context.Background()
-
-	var pbqManager *pbq.Manager
-
-	pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(), window.Fixed)
-
-	test1Buffer11 := simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0)
-	test1Buffer12 := simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1)
-
-	test1Buffer21 := simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0)
-	test1Buffer22 := simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 1)
-
-	toBuffers1 := map[string][]isb.BufferWriter{
-		"buffer1": {test1Buffer11, test1Buffer12},
-		"buffer2": {test1Buffer21, test1Buffer22},
-	}
-
-	pf1, otStores1 := createProcessAndForwardAndOTStore(ctx, "test-forward-one", pbqManager, toBuffers1)
-
-	test2Buffer11 := simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0)
-	test2Buffer12 := simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1)
-
-	test2Buffer21 := simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0)
-	test2Buffer22 := simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 1)
-
-	toBuffers2 := map[string][]isb.BufferWriter{
-		"buffer1": {test2Buffer11, test2Buffer12},
-		"buffer2": {test2Buffer21, test2Buffer22},
-	}
-
-	pf2, otStores2 := createProcessAndForwardAndOTStore(ctx, "test-forward-all", pbqManager, toBuffers2)
-
-	test3Buffer11 := simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0)
-	test3buffer12 := simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1)
-
-	test3Buffer21 := simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0)
-	test3Buffer22 := simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 1)
-
-	toBuffers3 := map[string][]isb.BufferWriter{
-		"buffer1": {test3Buffer11, test3buffer12},
-		"buffer2": {test3Buffer21, test3Buffer22},
-	}
-
-	pf3, otStores3 := createProcessAndForwardAndOTStore(ctx, "test-drop-all", pbqManager, toBuffers3)
-
-	tests := []struct {
-		name       string
-		id         partition.ID
-		buffers    []*simplebuffer.InMemoryBuffer
-		pf         ProcessAndForward
-		otStores   map[string]kvs.KVStorer
-		expected   []bool
-		wmExpected map[string]wmb.WMB
-	}{
-		{
-			name: "test-forward-one",
-			id: partition.ID{
-				Start: time.UnixMilli(60000),
-				End:   time.UnixMilli(120000),
-				Slot:  "test-forward-one",
-			},
-			buffers:  []*simplebuffer.InMemoryBuffer{test1Buffer11, test1Buffer12, test1Buffer21, test1Buffer22},
-			pf:       pf1,
-			otStores: otStores1,
-			expected: []bool{false, true, true, true}, // should have one ctrl message for buffer2
-			wmExpected: map[string]wmb.WMB{
-				"buffer1": {
-					Offset:    0,
-					Partition: 1,
-					Watermark: int64(119999),
-					Idle:      true,
-				},
-				"buffer2": {
-					Offset:    0,
-					Partition: 1,
-					Watermark: int64(119999),
-					Idle:      true,
-				},
-			},
-		},
-		{
-			name: "test-forward-all",
-			id: partition.ID{
-				Start: time.UnixMilli(60000),
-				End:   time.UnixMilli(120000),
-				Slot:  "test-forward-all",
-			},
-			buffers:  []*simplebuffer.InMemoryBuffer{test2Buffer11, test2Buffer12, test2Buffer21, test2Buffer22},
-			pf:       pf2,
-			otStores: otStores2,
-			expected: []bool{false, true, false, true},
-			wmExpected: map[string]wmb.WMB{
-				"buffer1": {
-					Offset:    0,
-					Partition: 1,
-					Watermark: int64(119999),
-					Idle:      true,
-				},
-				"buffer2": {
-					Offset:    0,
-					Partition: 1,
-					Watermark: int64(119999),
-					Idle:      true,
-				},
-			},
-		},
-		{
-			name: "test-drop-all",
-			id: partition.ID{
-				Start: time.UnixMilli(60000),
-				End:   time.UnixMilli(120000),
-				Slot:  "test-drop-all",
-			},
-			buffers:  []*simplebuffer.InMemoryBuffer{test3Buffer11, test3buffer12, test3Buffer21, test3Buffer22},
-			pf:       pf3,
-			otStores: otStores3,
-			expected: []bool{true, true, true, true}, // should have one ctrl message for each buffer
-			wmExpected: map[string]wmb.WMB{
-				"buffer1": {
-					Partition: 1,
-					Offset:    0,
-					Watermark: int64(119999),
-					Idle:      true,
-				},
-				"buffer2": {
-					Partition: 1,
-					Offset:    0,
-					Watermark: int64(119999),
-					Idle:      true,
-				},
-			},
-		},
-	}
-
-	for _, value := range tests {
-		t.Run(value.name, func(t *testing.T) {
-			err := value.pf.Forward(ctx)
-			assert.NoError(t, err)
-			msgs0, err := value.buffers[0].Read(ctx, 1)
-			assert.NoError(t, err)
-			assert.Equal(t, value.expected[0], msgs0[0].Header.Kind == isb.WMB)
-			msgs1, err := value.buffers[1].Read(ctx, 1)
-			assert.NoError(t, err)
-			assert.Equal(t, value.expected[1], msgs1[0].Header.Kind == isb.WMB)
-			msgs2, err := value.buffers[2].Read(ctx, 1)
-			assert.NoError(t, err)
-			assert.Equal(t, value.expected[2], msgs2[0].Header.Kind == isb.WMB)
-			msgs3, err := value.buffers[3].Read(ctx, 1)
-			assert.NoError(t, err)
-			assert.Equal(t, value.expected[3], msgs3[0].Header.Kind == isb.WMB)
-			// pbq entry from the manager will be removed after forwarding
-			assert.Equal(t, nil, pbqManager.GetPBQ(value.id))
-			for bufferName := range value.pf.wmPublishers {
-				// NOTE: in this test we only have one processor to publish
-				// so len(otKeys) should always be 1
-				otKeys, _ := value.otStores[bufferName].GetAllKeys(ctx)
-				for _, otKey := range otKeys {
-					otValue, _ := value.otStores[bufferName].GetValue(ctx, otKey)
-					ot, _ := wmb.DecodeToWMB(otValue)
-					assert.Equal(t, value.wmExpected[bufferName], ot)
-				}
-			}
-		})
-	}
 }
 
 // TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
@@ -401,24 +136,22 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		Value: 100,
 	})
 
-	var writeMessages = []*isb.WriteMessage{
-		{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: time.UnixMilli(60000),
-					},
-					ID:   "1",
-					Keys: []string{key},
+	var writeMessages = &isb.WriteMessage{
+		Message: isb.Message{
+			Header: isb.Header{
+				MessageInfo: isb.MessageInfo{
+					EventTime: time.UnixMilli(60000),
 				},
-				Body: isb.Body{Payload: resultPayload},
+				ID:   "1",
+				Keys: []string{key},
 			},
-			Tags: []string{key},
+			Body: isb.Body{Payload: resultPayload},
 		},
+		Tags: []string{key},
 	}
 
 	result := &window.TimedWindowResponse{
-		WriteMessages: writeMessages,
+		WriteMessage: writeMessages,
 	}
 
 	buffers := make([]string, 0)

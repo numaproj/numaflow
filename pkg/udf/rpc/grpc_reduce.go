@@ -75,81 +75,7 @@ func (u *GRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 
 // ApplyReduce accepts a channel of TimedWindowRequests and returns the aggregated result and any error
 func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
-	var (
-		result         *reducepb.ReduceResponse
-		err            error
-		errCh          = make(chan error, 1)
-		responseCh     = make(chan *reducepb.ReduceResponse, 1)
-		reduceRequests = make(chan *reducepb.ReduceRequest)
-	)
-
-	// pass key and window information inside the context
-	mdMap := map[string]string{
-		sdkclient.WinStartTime: strconv.FormatInt(partitionID.Start.UnixMilli(), 10),
-		sdkclient.WinEndTime:   strconv.FormatInt(partitionID.End.UnixMilli(), 10),
-	}
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	grpcCtx := metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
-
-	// There can be two error scenarios:
-	// 1. The u.client.ReduceFn method returns an error before reading all the requests from the requestsStream
-	// 2. The u.client.ReduceFn method returns an error after reading all the requests from the requestsStream
-
-	// invoke the reduceFn method with reduceRequests channel
-	go func() {
-		result, err = u.client.ReduceFn(grpcCtx, reduceRequests)
-		if err != nil {
-			errCh <- err
-		} else {
-			responseCh <- result
-		}
-		close(errCh)
-		close(responseCh)
-	}()
-
-	// create ReduceRequest from TimedWindowRequest and send it to reduceRequests channel for reduceFn
-	go func() {
-		// after reading all the messages from the requestsStream or if ctx was canceled close the reduceRequests channel
-		defer close(reduceRequests)
-		for {
-			select {
-			case req, ok := <-requestsStream:
-				// if the requestsStream is closed or if the request is nil, return
-				if !ok || req == nil {
-					return
-				}
-
-				d := createReduceRequest(req)
-
-				// send the request to reduceRequests channel, handle the case when the context is canceled
-				select {
-				case reduceRequests <- d:
-				case <-ctx.Done():
-					return
-				}
-
-			case <-ctx.Done(): // if the context is done, return
-				return
-			}
-		}
-	}()
-
-	// wait for the reduceFn to finish
-	for {
-		select {
-		case err = <-errCh:
-			if err != nil {
-				return nil, convertToUdfError(err)
-			}
-		case result = <-responseCh:
-			return parseReduceResponse(result), nil
-		case <-ctx.Done():
-			return nil, convertToUdfError(ctx.Err())
-		}
-	}
+	return nil, nil
 }
 
 // AsyncApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
@@ -306,35 +232,31 @@ func convertToUdfError(err error) ApplyUDFErr {
 }
 
 func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowResponse {
-	taggedMessages := make([]*isb.WriteMessage, 0)
-	for _, result := range response.GetResults() {
-		keys := result.Keys
-		taggedMessage := &isb.WriteMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: response.GetEventTime().AsTime(),
-						IsLate:    false,
-					},
-					Keys: keys,
+	taggedMessage := &isb.WriteMessage{
+		Message: isb.Message{
+			Header: isb.Header{
+				MessageInfo: isb.MessageInfo{
+					EventTime: response.GetResult().GetEventTime().AsTime(),
+					IsLate:    false,
 				},
-				Body: isb.Body{
-					Payload: result.Value,
-				},
+				Keys: response.GetResult().GetKeys(),
 			},
-			Tags: result.Tags,
-		}
-		taggedMessages = append(taggedMessages, taggedMessage)
+			Body: isb.Body{
+				Payload: response.GetResult().GetValue(),
+			},
+		},
+		Tags: response.GetResult().GetTags(),
 	}
 
 	// we don't care about the combined key which was used for demultiplexing in sdk side
 	// because for fixed and sliding we don't track keys.
 	return &window.TimedWindowResponse{
-		WriteMessages: taggedMessages,
+		WriteMessage: taggedMessage,
 		Window: window.NewWindowFromPartition(&partition.ID{
 			Start: response.GetPartition().GetStart().AsTime(),
 			End:   response.GetPartition().GetEnd().AsTime(),
 			Slot:  response.GetPartition().GetSlot(),
 		}),
+		EOF: response.GetEOF(),
 	}
 }

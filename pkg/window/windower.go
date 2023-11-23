@@ -142,10 +142,12 @@ type TimedWindowRequest struct {
 }
 
 type TimedWindowResponse struct {
-	// ReadMessage represents the isb message
-	WriteMessages []*isb.WriteMessage
-	// ID represents the partition id to which the response belongs
+	// WriteMessage represents the isb message
+	WriteMessage *isb.WriteMessage
+	// Window represents the window to which the message belongs
 	Window TimedWindow
+	// EOF represents the end of the response for the given window
+	EOF bool
 }
 
 // Operation represents the event type of the operation on the window

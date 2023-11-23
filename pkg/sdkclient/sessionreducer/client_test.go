@@ -68,32 +68,28 @@ func TestClient_SessionReduceFn(t *testing.T) {
 	mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 	mockReduceClient.EXPECT().Recv().Return(&sessionreducepb.SessionReduceResponse{
-		Results: []*sessionreducepb.SessionReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key1"},
-				Value: []byte(`forward_message`),
-			},
+		Result: &sessionreducepb.SessionReduceResponse_Result{
+			Keys:      []string{"reduced_result_key1"},
+			Value:     []byte(`forward_message`),
+			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 		},
 		Partition: &sessionreducepb.Partition{
 			Start: timestamppb.New(time.Unix(60, 0)),
 			End:   timestamppb.New(time.Unix(120, 0)),
 			Slot:  "slot-0",
 		},
-		EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 	}, nil).Times(1)
 	mockReduceClient.EXPECT().Recv().Return(&sessionreducepb.SessionReduceResponse{
-		Results: []*sessionreducepb.SessionReduceResponse_Result{
-			{
-				Keys:  []string{"reduced_result_key2"},
-				Value: []byte(`forward_message`),
-			},
+		Result: &sessionreducepb.SessionReduceResponse_Result{
+			Keys:      []string{"reduced_result_key2"},
+			Value:     []byte(`forward_message`),
+			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 		},
 		Partition: &sessionreducepb.Partition{
 			Start: timestamppb.New(time.Unix(60, 0)),
 			End:   timestamppb.New(time.Unix(120, 0)),
 			Slot:  "slot-0",
 		},
-		EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 	}, io.EOF).Times(1)
 	mockClient.EXPECT().SessionReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
@@ -108,18 +104,16 @@ func TestClient_SessionReduceFn(t *testing.T) {
 	responseCh, _ := testClient.SessionReduceFn(ctx, messageCh)
 	for response := range responseCh {
 		assert.Equal(t, &sessionreducepb.SessionReduceResponse{
-			Results: []*sessionreducepb.SessionReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key1"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &sessionreducepb.SessionReduceResponse_Result{
+				Keys:      []string{"reduced_result_key1"},
+				Value:     []byte(`forward_message`),
+				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 			},
 			Partition: &sessionreducepb.Partition{
 				Start: timestamppb.New(time.Unix(60, 0)),
 				End:   timestamppb.New(time.Unix(120, 0)),
 				Slot:  "slot-0",
 			},
-			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 		}, response)
 	}
 }

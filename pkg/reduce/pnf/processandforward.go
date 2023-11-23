@@ -110,22 +110,6 @@ func newProcessAndForward(ctx context.Context,
 // now we got a message with et 86, and wm 86 we can materialize the window 60 - 85
 // and publish the watermark as 85
 
-// Process method reads messages from the supplied PBQ, invokes UDF to reduce the windowResponse.
-func (p *ProcessAndForward) Process(ctx context.Context) error {
-	var err error
-	defer func(t time.Time) {
-		metrics.ReduceProcessTime.With(map[string]string{
-			metrics.LabelVertex:             p.vertexName,
-			metrics.LabelPipeline:           p.pipelineName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		}).Observe(float64(time.Since(t).Milliseconds()))
-	}(time.Now())
-
-	// blocking call, only returns the windowResponse after it has read all the requests from pbq
-	p.windowResponse, err = p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
-	return err
-}
-
 // AsyncProcessForward reads requests from the supplied PBQ, invokes UDF to get the response, and then forwards
 // the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
 // manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
@@ -146,7 +130,18 @@ outerLoop:
 			if !ok || response == nil {
 				break outerLoop
 			}
-			messagesToStep := p.whereToStep(response.WriteMessages)
+
+			if response.EOF {
+				// since we track session window for every key, we need to delete the closed windows
+				// when we have received the EOF response from the UDF.
+				// TODO: we need to compact the pbq when we have received the EOF response from the UDF.
+				if p.windower.Strategy() == window.Session {
+					// delete the closed windows which are tracked by the windower
+					p.windower.DeleteClosedWindows(response)
+				}
+				continue
+			}
+			messagesToStep := p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
 			// store write offsets to publish watermark
 			writeOffsets := make(map[string][][]isb.Offset)
 			for toVertexName, toVertexBuffer := range p.toBuffers {
@@ -185,13 +180,6 @@ outerLoop:
 			} else {
 				p.publishWM(ctx, wmb.Watermark(response.Window.Partition().End.Add(-1*time.Millisecond)), writeOffsets)
 			}
-
-			// since we track session window for every key, we need to delete the closed windows
-			// every time we receive a response from the UDF.
-			if p.windower.Strategy() == window.Session {
-				// delete the closed windows which are tracked by the windower
-				p.windower.DeleteClosedWindows(response)
-			}
 		}
 	}
 
@@ -209,60 +197,6 @@ outerLoop:
 		p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.PartitionID))
 		return
 	}
-}
-
-// Forward writes messages to the ISBs, publishes watermark, and invokes GC on PBQ.
-func (p *ProcessAndForward) Forward(ctx context.Context) error {
-	// extract window end time from the partitionID, which will be used for watermark
-	defer func(t time.Time) {
-		metrics.ReduceForwardTime.With(map[string]string{
-			metrics.LabelVertex:             p.vertexName,
-			metrics.LabelPipeline:           p.pipelineName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
-		}).Observe(float64(time.Since(t).Microseconds()))
-	}(time.Now())
-
-	// millisecond is the lowest granularity currently supported.
-	processorWM := wmb.Watermark(p.PartitionID.End.Add(-1 * time.Millisecond))
-
-	messagesToStep := p.whereToStep(p.windowResponse.WriteMessages)
-
-	// store write offsets to publish watermark
-	writeOffsets := make(map[string][][]isb.Offset)
-	for toVertexName, toVertexBuffer := range p.toBuffers {
-		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
-	}
-
-	// parallel writes to each isb
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	for key, value := range messagesToStep {
-		for index, messages := range value {
-			if len(messages) == 0 {
-				continue
-			}
-			wg.Add(1)
-			go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
-				defer wg.Done()
-				offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
-				mu.Lock()
-				// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-				writeOffsets[toVertexName][toVertexPartitionIdx] = offsets
-				mu.Unlock()
-			}(key, int32(index), messages)
-		}
-	}
-
-	// wait until all the writer go routines return
-	wg.Wait()
-
-	p.publishWM(ctx, processorWM, writeOffsets)
-	// delete the persisted messages
-	err := p.pbqReader.GC()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.

@@ -78,7 +78,7 @@ type EventTypeWMProgressor struct {
 	m          sync.Mutex
 }
 
-func (e *EventTypeWMProgressor) PublishWatermark(watermark wmb.Watermark, offset isb.Offset, i int32) {
+func (e *EventTypeWMProgressor) PublishWatermark(watermark wmb.Watermark, offset isb.Offset, _ int32) {
 	e.m.Lock()
 	defer e.m.Unlock()
 	e.watermarks[offset.String()] = watermark
@@ -96,7 +96,7 @@ func (e *EventTypeWMProgressor) Close() error {
 	return nil
 }
 
-func (e *EventTypeWMProgressor) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (e *EventTypeWMProgressor) ComputeWatermark(offset isb.Offset, _ int32) wmb.Watermark {
 	e.lastOffset = offset
 	return e.getWatermark()
 }
@@ -137,7 +137,7 @@ func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forward.Ver
 type CounterReduceTest struct {
 }
 
-func (f CounterReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, requestStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (f CounterReduceTest) AsyncApplyReduce(_ context.Context, partitionID *partition.ID, requestStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan *window.TimedWindowResponse, 1)
@@ -160,11 +160,9 @@ func (f CounterReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *pa
 		Body: isb.Body{Payload: b},
 	}
 	response := &window.TimedWindowResponse{
-		WriteMessages: []*isb.WriteMessage{
-			{
-				Message: ret,
-				Tags:    nil,
-			},
+		WriteMessage: &isb.WriteMessage{
+			Message: ret,
+			Tags:    nil,
 		},
 		Window: window.NewWindowFromPartition(partitionID),
 	}
@@ -173,33 +171,16 @@ func (f CounterReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *pa
 }
 
 // Reduce returns a result with the count of messages
-func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
-	count := 0
-	for range messageStream {
-		count += 1
-	}
+func (f CounterReduceTest) ApplyReduce(_ context.Context, _ *partition.ID, _ <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
+	return nil, nil
+}
 
-	payload := PayloadForTest{Key: "count", Value: count}
-	b, _ := json.Marshal(payload)
-	ret := isb.Message{
-		Header: isb.Header{
-			MessageInfo: isb.MessageInfo{
-				EventTime: partitionID.End.Add(-1 * time.Millisecond),
-			},
-			ID:   "msgID",
-			Keys: []string{"result"},
-		},
-		Body: isb.Body{Payload: b},
-	}
-	return &window.TimedWindowResponse{
-		WriteMessages: []*isb.WriteMessage{
-			{
-				Message: ret,
-				Tags:    nil,
-			},
-		},
-		Window: window.NewWindowFromPartition(partitionID),
-	}, nil
+func (f CounterReduceTest) WaitUntilReady(_ context.Context) error {
+	return nil
+}
+
+func (f CounterReduceTest) CloseConn(_ context.Context) error {
+	return nil
 }
 
 func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
@@ -212,10 +193,10 @@ func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuff
 type SumReduceTest struct {
 }
 
-func (s SumReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, requestsCh <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (s SumReduceTest) AsyncApplyReduce(_ context.Context, partitionID *partition.ID, requestsCh <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
-		responseCh = make(chan *window.TimedWindowResponse, 1)
+		responseCh = make(chan *window.TimedWindowResponse, 2)
 	)
 
 	sums := make(map[string]int)
@@ -227,8 +208,6 @@ func (s SumReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *partit
 		sums[key[0]] += payload.Value
 	}
 
-	msgs := make([]*isb.WriteMessage, 0)
-
 	for k, s := range sums {
 		payload := PayloadForTest{Key: k, Value: s}
 		b, _ := json.Marshal(payload)
@@ -245,64 +224,36 @@ func (s SumReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *partit
 			},
 			Tags: nil,
 		}
-
-		msgs = append(msgs, msg)
+		response := &window.TimedWindowResponse{
+			WriteMessage: msg,
+			Window:       window.NewWindowFromPartition(partitionID),
+		}
+		responseCh <- response
 	}
 
-	response := &window.TimedWindowResponse{
-		WriteMessages: msgs,
-		Window:        window.NewWindowFromPartition(partitionID),
-	}
-	responseCh <- response
 	return responseCh, errCh
 }
 
-func (s SumReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestCh <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
-	sums := make(map[string]int)
+func (s SumReduceTest) ApplyReduce(context.Context, *partition.ID, <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
+	return nil, nil
+}
 
-	for req := range requestCh {
-		var payload PayloadForTest
-		_ = json.Unmarshal(req.ReadMessage.Payload, &payload)
-		key := req.ReadMessage.Keys
-		sums[key[0]] += payload.Value
-	}
+func (s SumReduceTest) WaitUntilReady(_ context.Context) error {
+	return nil
+}
 
-	msgs := make([]*isb.WriteMessage, 0)
-
-	for k, s := range sums {
-		payload := PayloadForTest{Key: k, Value: s}
-		b, _ := json.Marshal(payload)
-		msg := &isb.WriteMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: partitionID.End.Add(-1 * time.Millisecond),
-					},
-					ID:   "msgID",
-					Keys: []string{k},
-				},
-				Body: isb.Body{Payload: b},
-			},
-			Tags: nil,
-		}
-
-		msgs = append(msgs, msg)
-	}
-
-	return &window.TimedWindowResponse{
-		WriteMessages: msgs,
-		Window:        window.NewWindowFromPartition(partitionID),
-	}, nil
+func (s SumReduceTest) CloseConn(_ context.Context) error {
+	return nil
 }
 
 type MaxReduceTest struct {
 }
 
-func (m MaxReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, requestCh <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (m MaxReduceTest) AsyncApplyReduce(_ context.Context, partitionID *partition.ID, requestCh <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 
 	var (
 		errCh      = make(chan error)
-		responseCh = make(chan *window.TimedWindowResponse, 1)
+		responseCh = make(chan *window.TimedWindowResponse, 2)
 	)
 
 	mx := math.MinInt64
@@ -319,7 +270,6 @@ func (m MaxReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *partit
 		}
 	}
 
-	result := make([]*isb.WriteMessage, 0)
 	for k, max := range maxMap {
 		payload := PayloadForTest{Key: k, Value: max}
 		b, _ := json.Marshal(payload)
@@ -337,56 +287,26 @@ func (m MaxReduceTest) AsyncApplyReduce(ctx context.Context, partitionID *partit
 			Tags: nil,
 		}
 
-		result = append(result, ret)
+		response := &window.TimedWindowResponse{
+			WriteMessage: ret,
+			Window:       window.NewWindowFromPartition(partitionID),
+		}
+		responseCh <- response
 	}
-	response := &window.TimedWindowResponse{
-		WriteMessages: result,
-		Window:        window.NewWindowFromPartition(partitionID),
-	}
-	responseCh <- response
+
 	return responseCh, errCh
 }
 
-func (m MaxReduceTest) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestCh <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
-	mx := math.MinInt64
-	maxMap := make(map[string]int)
-	for req := range requestCh {
-		var payload PayloadForTest
-		_ = json.Unmarshal(req.ReadMessage.Payload, &payload)
-		if max, ok := maxMap[req.ReadMessage.Keys[0]]; ok {
-			mx = max
-		}
-		if payload.Value > mx {
-			mx = payload.Value
-			maxMap[req.ReadMessage.Keys[0]] = mx
-		}
-	}
+func (m MaxReduceTest) ApplyReduce(_ context.Context, _ *partition.ID, _ <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
+	return nil, nil
+}
 
-	result := make([]*isb.WriteMessage, 0)
-	for k, max := range maxMap {
-		payload := PayloadForTest{Key: k, Value: max}
-		b, _ := json.Marshal(payload)
-		ret := &isb.WriteMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: partitionID.End.Add(-1 * time.Millisecond),
-					},
-					ID:   "msgID",
-					Keys: []string{k},
-				},
-				Body: isb.Body{Payload: b},
-			},
-			Tags: nil,
-		}
+func (m MaxReduceTest) WaitUntilReady(_ context.Context) error {
+	return nil
+}
 
-		result = append(result, ret)
-	}
-
-	return &window.TimedWindowResponse{
-		WriteMessages: result,
-		Window:        window.NewWindowFromPartition(partitionID),
-	}, nil
+func (m MaxReduceTest) CloseConn(_ context.Context) error {
+	return nil
 }
 
 // read from simple buffer
@@ -436,15 +356,15 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		}
 	}()
 
-	// create new fixed window of (windowTime)
-	window := fixed.NewWindower(windowTime)
+	// create new fixed windower of (windowTime)
+	windower := fixed.NewWindower(windowTime)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, window)
+	op := pnf.NewOrderedProcessor(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower)
 
 	var reduceDataForwarder *DataForward
 	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher,
-		window, idleManager, op, WithReadBatchSize(10))
+		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
 	go reduceDataForwarder.Start()

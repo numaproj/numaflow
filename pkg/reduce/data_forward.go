@@ -66,13 +66,12 @@ type DataForward struct {
 	keyed               bool
 	idleManager         wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid when the len(readMessage) is 0.
-	wmbChecker            wmb.WMBChecker
-	pbqManager            *pbq.Manager
-	whereToDecider        forward.ToWhichStepDecider
-	udfInvocationTracking map[partition.ID]*pnf.ForwardTask
-	of                    *pnf.OrderedProcessor
-	opts                  *Options
-	log                   *zap.SugaredLogger
+	wmbChecker     wmb.WMBChecker
+	pbqManager     *pbq.Manager
+	whereToDecider forward.ToWhichStepDecider
+	of             *pnf.Manager
+	opts           *Options
+	log            *zap.SugaredLogger
 }
 
 // NewDataForward creates a new DataForward
@@ -86,7 +85,7 @@ func NewDataForward(ctx context.Context,
 	watermarkPublishers map[string]publish.Publisher,
 	windowingStrategy window.TimedWindower,
 	idleManager wmb.IdleManager,
-	of *pnf.OrderedProcessor,
+	of *pnf.Manager,
 	opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()
@@ -98,24 +97,23 @@ func NewDataForward(ctx context.Context,
 	}
 
 	rl := &DataForward{
-		ctx:                   ctx,
-		vertexName:            vertexInstance.Vertex.Spec.Name,
-		pipelineName:          vertexInstance.Vertex.Spec.PipelineName,
-		vertexReplica:         vertexInstance.Replica,
-		fromBufferPartition:   fromBuffer,
-		toBuffers:             toBuffers,
-		wmFetcher:             fw,
-		wmPublishers:          watermarkPublishers,
-		windower:              windowingStrategy,
-		keyed:                 vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed,
-		idleManager:           idleManager,
-		pbqManager:            pbqManager,
-		whereToDecider:        whereToDecider,
-		udfInvocationTracking: make(map[partition.ID]*pnf.ForwardTask),
-		of:                    of,
-		wmbChecker:            wmb.NewWMBChecker(2), // TODO: make configurable
-		log:                   logging.FromContext(ctx),
-		opts:                  options}
+		ctx:                 ctx,
+		vertexName:          vertexInstance.Vertex.Spec.Name,
+		pipelineName:        vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica:       vertexInstance.Replica,
+		fromBufferPartition: fromBuffer,
+		toBuffers:           toBuffers,
+		wmFetcher:           fw,
+		wmPublishers:        watermarkPublishers,
+		windower:            windowingStrategy,
+		keyed:               vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed,
+		idleManager:         idleManager,
+		pbqManager:          pbqManager,
+		whereToDecider:      whereToDecider,
+		of:                  of,
+		wmbChecker:          wmb.NewWMBChecker(2), // TODO: make configurable
+		log:                 logging.FromContext(ctx),
+		opts:                options}
 
 	return rl, nil
 }
@@ -303,9 +301,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
-		//TODO: flag to enable/disable ordered processing, do we even need ordered processing?
 		df.of.AsyncSchedulePnF(ctx, *partitionID, q)
-		//df.udfInvocationTracking[partitionID] = t
 		df.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
 

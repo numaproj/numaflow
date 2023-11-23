@@ -194,28 +194,25 @@ func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *global
 }
 
 func parseGlobalReduceResponse(response *globalreducepb.GlobalReduceResponse) *window.TimedWindowResponse {
-	taggedMessages := make([]*isb.WriteMessage, 0)
-	for _, result := range response.GetResults() {
-		taggedMessage := &isb.WriteMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: response.GetEventTime().AsTime(),
-						IsLate:    false,
-					},
-					Keys: result.GetKeys(),
+	result := response.GetResult()
+	taggedMessage := &isb.WriteMessage{
+		Message: isb.Message{
+			Header: isb.Header{
+				MessageInfo: isb.MessageInfo{
+					EventTime: result.GetEventTime().AsTime(),
+					IsLate:    false,
 				},
-				Body: isb.Body{
-					Payload: result.GetValue(),
-				},
+				Keys: result.GetKeys(),
 			},
-			Tags: result.GetTags(),
-		}
-		taggedMessages = append(taggedMessages, taggedMessage)
+			Body: isb.Body{
+				Payload: result.GetValue(),
+			},
+		},
+		Tags: result.GetTags(),
 	}
 
 	return &window.TimedWindowResponse{
-		WriteMessages: taggedMessages,
+		WriteMessage: taggedMessage,
 		Window: window.NewWindowFromPartitionAndKeys(
 			&partition.ID{
 				Start: response.GetPartition().GetStart().AsTime(),
