@@ -57,6 +57,11 @@ type testForwardFetcher struct {
 	// for data_forward_test.go only
 }
 
+func (t *testForwardFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
+	// won't be used
+	return wmb.Watermark{}
+}
+
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
@@ -843,6 +848,10 @@ func (f mySourceForwardTest) ApplyTransform(ctx context.Context, message *isb.Re
 
 // TestSourceWatermarkPublisher is a dummy implementation of isb.SourceWatermarkPublisher interface
 type TestSourceWatermarkPublisher struct {
+}
+
+func (p TestSourceWatermarkPublisher) PublishIdleWatermarks(t time.Time) {
+	// PublishIdleWatermarks is not tested in data_forwarder_test.go
 }
 
 func (p TestSourceWatermarkPublisher) PublishSourceWatermarks([]*isb.ReadMessage) {
