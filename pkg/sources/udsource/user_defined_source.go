@@ -86,7 +86,7 @@ func New(
 	fsd forwarder.ToWhichStepDecider,
 	transformer applier.SourceTransformApplier,
 	sourceApplier *GRPCBasedUDSource,
-	fetchWM fetch.Fetcher,
+	fetchWM fetch.SourceFetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
@@ -194,10 +194,6 @@ func (u *userDefinedSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 	}
 }
 
-func (u *userDefinedSource) PublishIdleWatermarks(wm time.Time) {
-	// won't be used
-}
-
 // loadSourceWatermarkPublisher does a lazy load on the watermark publisher
 func (u *userDefinedSource) loadSourceWatermarkPublisher(partitionID int32) publish.Publisher {
 	u.lock.Lock()
@@ -211,4 +207,11 @@ func (u *userDefinedSource) loadSourceWatermarkPublisher(partitionID int32) publ
 	sourcePublishWM := publish.NewPublish(u.lifecycleCtx, processorEntity, u.srcPublishWMStores, 1, publish.IsSource())
 	u.srcWMPublishers[partitionID] = sourcePublishWM
 	return sourcePublishWM
+}
+
+// PublishIdleWatermarks will publish the watermark when source is idling
+func (u *userDefinedSource) PublishIdleWatermarks(t time.Time) {
+	for partitionID, publisher := range u.srcWMPublishers {
+		publisher.PublishWatermark(wmb.Watermark(t), nil, partitionID)
+	}
 }

@@ -68,7 +68,7 @@ func (n NoOpWMProgressor) Close() error {
 	return nil
 }
 
-func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.Fetcher, map[string]publish.Publisher) {
+func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.SourceFetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
 	for _, buffer := range toBuffers {

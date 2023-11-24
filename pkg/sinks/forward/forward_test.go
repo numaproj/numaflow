@@ -86,11 +86,6 @@ func (t *testForwarderPublisher) GetLatestWatermark() wmb.Watermark {
 type testForwardFetcher struct {
 }
 
-func (t *testForwardFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
-	// won't be used
-	return wmb.Watermark{}
-}
-
 // ComputeWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
 func (t *testForwardFetcher) ComputeWatermark(_ isb.Offset, _ int32) wmb.Watermark {
@@ -108,11 +103,6 @@ func (t *testForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 
 // testForwardFetcher is for data_forward_test.go only
 type testIdleForwardFetcher struct {
-}
-
-func (t *testIdleForwardFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
-	// won't be used
-	return wmb.Watermark{}
 }
 
 // ComputeWatermark uses current time as the watermark because we want to make sure

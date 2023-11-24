@@ -53,7 +53,7 @@ type DataForward struct {
 	toBuffers          map[string][]isb.BufferWriter
 	toWhichStepDecider forwarder.ToWhichStepDecider
 	transformer        applier.SourceTransformApplier
-	wmFetcher          fetch.Fetcher
+	wmFetcher          fetch.SourceFetcher
 	toVertexWMStores   map[string]store.WatermarkStore
 	// toVertexWMPublishers stores the toVertex to publisher mapping.
 	toVertexWMPublishers map[string]map[int32]publish.Publisher
@@ -78,7 +78,7 @@ func NewDataForward(
 	toSteps map[string][]isb.BufferWriter,
 	toWhichStepDecider forwarder.ToWhichStepDecider,
 	transformer applier.SourceTransformApplier,
-	fetchWatermark fetch.Fetcher,
+	fetchWatermark fetch.SourceFetcher,
 	srcWMPublisher isb.SourceWatermarkPublisher,
 	toVertexWmStores map[string]store.WatermarkStore,
 	idleManager wmb.IdleManager,
@@ -211,34 +211,33 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.ReadMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.reader.GetName()}).Inc()
 	}
 
-	// execute only if idle source configuration is defined, i.e.
-	// maxWait: How much longer it will wait before increasing the idle watermark
-	// minIncrement: Duration to increase in case of watermark idling
-	if isdf.Watermark.IdleSource != nil {
-		isWMIdle := isdf.isWatermarkIdle()
-
-		// If no any message is coming and watermark is idling then start increasing the watermark with "minIncrement"
-		// value after each "maxWait" duration
-		if len(readMessages) == 0 && isWMIdle {
-			minIncrement := isdf.Watermark.IdleSource.GetMinIncrement()
-			// Get the head watermark value then add the minIncrement to it and publish the idle watermark with updated value.
-			headWatermark := isdf.wmFetcher.ComputeHeadWatermark(0)
-			updatedWM := headWatermark.Add(minIncrement)
-
-			isdf.srcWMPublisher.PublishIdleWatermarks(updatedWM)
-			// set the time for last updated watermark which will be used for calculating maximum wait time is passed
-			// or not in case of idle watermark.
-			isdf.lastUpdateWM = time.Now()
-			// currentWatermark is used to calculate when watermark is idling
-			isdf.currentWatermark = isdf.wmFetcher.ComputeWatermark(nil, 0)
-
-			return
-		}
-	}
-
 	// Process only if we have any read messages.
 	// There is a natural looping here if there is an internal error while reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
+		// execute only if idle source configuration is defined, i.e.
+		// maxWait: How much longer it will wait before increasing the idle watermark
+		// minIncrement: Duration to increase in case of watermark idling
+		if isdf.Watermark.IdleSource != nil {
+			// calculate that watermark is idling or not for the given maxWait duration
+			isWMIdle := isdf.isWatermarkIdle()
+
+			// If no any message is coming and watermark is idling then start increasing the watermark with "minIncrement"
+			// value after each "maxWait" duration
+			if isWMIdle {
+				minIncrement := isdf.Watermark.IdleSource.GetMinIncrement()
+				// Get the head watermark value then add the minIncrement to it and publish the idle watermark with updated value.
+				headWatermark := isdf.wmFetcher.ComputeHeadWatermark(0)
+				updatedWM := headWatermark.Add(minIncrement)
+
+				isdf.srcWMPublisher.PublishIdleWatermarks(updatedWM)
+				// set the time for last updated watermark which will be used for calculating maximum wait time is passed
+				// or not in case of idle watermark.
+				isdf.lastUpdateWM = time.Now()
+				// currentWatermark is used to calculate when watermark is idling
+				isdf.currentWatermark = isdf.wmFetcher.ComputeWatermark(nil, 0)
+			}
+		}
+
 		return
 	}
 	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.reader.GetName()}).Add(float64(len(readMessages)))

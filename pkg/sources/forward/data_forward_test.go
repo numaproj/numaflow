@@ -57,11 +57,6 @@ type testForwardFetcher struct {
 	// for data_forward_test.go only
 }
 
-func (t *testForwardFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
-	// won't be used
-	return wmb.Watermark{}
-}
-
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
@@ -74,6 +69,10 @@ func (t *testForwardFetcher) ComputeWatermark(_ isb.Offset, _ int32) wmb.Waterma
 
 func (t *testForwardFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
+}
+
+func (t *testForwardFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
+	return wmb.Watermark{}
 }
 
 func (t *testForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {

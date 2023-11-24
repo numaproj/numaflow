@@ -60,11 +60,6 @@ type testForwardFetcher struct {
 	// for forward_test.go only
 }
 
-func (t *testForwardFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
-	// won't be used
-	return wmb.Watermark{}
-}
-
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
