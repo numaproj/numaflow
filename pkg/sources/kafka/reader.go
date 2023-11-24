@@ -195,7 +195,9 @@ func (r *KafkaSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
 }
 
 func (r *KafkaSource) PublishIdleWatermarks(wm time.Time) {
-	// TODO: Implement me
+	for partitionId, publisher := range r.sourcePublishWMs {
+		publisher.PublishIdleWatermark(wmb.Watermark(wm), nil, partitionId) // Source publisher does not care about the offset
+	}
 }
 
 // loadSourceWatermarkPublisher does a lazy load on the watermark publisher
