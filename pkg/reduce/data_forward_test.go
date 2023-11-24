@@ -360,7 +360,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	windower := fixed.NewWindower(windowTime)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower)
+	op := pnf.NewPnFManager(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower)
 
 	var reduceDataForwarder *DataForward
 	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher,
@@ -453,7 +453,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	// create a fixed windower of 5s
 	windower := fixed.NewWindower(5 * time.Second)
 	idleManager := wmb.NewIdleManager(len(toBuffers))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
+	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffers, pbqManager, CounterReduceTest{}, f, publisherMap,
@@ -659,7 +659,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	// create a fixed window of 60s
 	windower := fixed.NewWindower(60 * time.Second)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
+	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
@@ -741,7 +741,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	windower := fixed.NewWindower(5 * time.Second)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
+	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	allowedLatency := 1000
@@ -825,7 +825,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	// create a fixed window of 2 minutes
 	windower := fixed.NewWindower(2 * time.Minute)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
@@ -907,7 +907,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	// create a fixed window of 5 minutes
 	windower := fixed.NewWindower(5 * time.Minute)
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewPnFManager(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
@@ -990,7 +990,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	windower := fixed.NewWindower(5 * time.Minute)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
@@ -1093,7 +1093,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	windower := fixed.NewWindower(5 * time.Minute)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
@@ -1183,7 +1183,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	windower := fixed.NewWindower(5 * time.Minute)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(cctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
@@ -1277,7 +1277,7 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 	windower := fixed.NewWindower(5 * time.Minute)
 
 	idleManager := wmb.NewIdleManager(len(toBuffer))
-	op := pnf.NewOrderedProcessor(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager, windower)
+	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, &myForwardTestRoundRobin{}, f, publishersMap,

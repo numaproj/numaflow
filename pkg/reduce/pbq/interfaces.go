@@ -39,7 +39,7 @@ type Reader interface {
 // WriteCloser provides methods to write data to the PQB and close the PBQ.
 // No data can be written to PBQ after cob.
 type WriteCloser interface {
-	// Write writes data to PBQ
+	// Write writes the operation to PBQ
 	Write(ctx context.Context, msg *window.TimedWindowRequest) error
 	// CloseOfBook (cob) closes PBQ, no writes will be accepted after cob
 	CloseOfBook()

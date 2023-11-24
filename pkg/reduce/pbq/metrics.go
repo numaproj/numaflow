@@ -33,5 +33,5 @@ var activePartitionCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 var pbqChannelSize = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "reduce_pbq",
 	Name:      "channel_size",
-	Help:      "PBQ inputCh size",
+	Help:      "PBQ Channel size",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})

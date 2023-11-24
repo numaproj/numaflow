@@ -163,9 +163,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 		// create a window for each partition and insert it to the windower
 		// so that the window can be closed when the watermark
 		// crosses the window.
-		var timedWindow window.TimedWindow
-
-		timedWindow = window.NewWindowFromPartition(&p)
+		var timedWindow window.TimedWindow = window.NewWindowFromPartition(&p)
 
 		df.windower.InsertWindow(timedWindow)
 
@@ -209,10 +207,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// -1 means there are no windows
+		// if there are no windows, and the len(readBatch) == 0
+		// then it means there's an idle situation
+		// in this case, send idle watermark to all the toBuffer partitions
 		if oldestWindowEndTime := df.windower.OldestWindowEndTime(); oldestWindowEndTime == time.UnixMilli(-1) {
-			// if there are no windows, and the len(readBatch) == 0
-			// then it means there's an idle situation
-			// in this case, send idle watermark to all the toBuffer partitions
 			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.wmPublishers[toVertexName]; ok {
 					for _, bufferPartition := range toVertexBuffer {
@@ -308,7 +306,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 	return q
 }
 
-// process is one iteration of the read loop which writes create windows and writes window requests to the PBQs followed by acking the messages, and
+// process is one iteration of the read loop which create/merges/closes windows and writes window requests to the PBQs followed by acking the messages, and
 // then closing the windows that can closed.
 func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage) {
 	var dataMessages = make([]*isb.ReadMessage, 0, len(messages))
@@ -379,10 +377,10 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 	}
 
 	// solve Reduce withholding of watermark where we do not send WM until the window is closed.
-	oldestClosedWindowEndTime := df.windower.OldestWindowEndTime()
-	if oldestClosedWindowEndTime != time.UnixMilli(-1) {
+	oldestWindowEndTime := df.windower.OldestWindowEndTime()
+	if oldestWindowEndTime != time.UnixMilli(-1) {
 		// minus 1 ms because if it's the same as the end time the window would have already been closed
-		if watermark := time.Time(wm).Add(-1 * time.Millisecond); oldestClosedWindowEndTime.After(watermark) {
+		if watermark := time.Time(wm).Add(-1 * time.Millisecond); oldestWindowEndTime.After(watermark) {
 			// publish idle watermark so that the next vertex doesn't need to wait for the window to close to
 			// start processing data whose watermark is smaller than the endTime of the toBeClosed window
 
@@ -398,7 +396,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 	}
 }
 
-// writeMessagesToWindows write the messages to each window that message belongs to. Each window partition is backed by a PBQ.
+// writeMessagesToWindows write the messages to each window that message belongs to. Each window is backed by a PBQ.
 func (df *DataForward) writeMessagesToWindows(ctx context.Context, messages []*isb.ReadMessage) ([]*isb.ReadMessage, []*isb.ReadMessage, error) {
 	var err error
 	var writtenMessages = make([]*isb.ReadMessage, 0, len(messages))

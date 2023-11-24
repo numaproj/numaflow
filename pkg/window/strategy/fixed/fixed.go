@@ -119,7 +119,7 @@ func (w *Windower) Type() window.Type {
 }
 
 // AssignWindows assigns the event to the window based on give window configuration.
-// AssignWindows returns a map of partition id to window message. Partition id is used to
+// AssignWindows returns a array of TimedWindoweRequest to window message. Partition id is used to
 // identify the pbq instance to which the message should be assigned. fixedWindow message contains
 // the isb message and the window operation. fixedWindow operation contains the event type and the
 // if the window is newly created the operation is set to Open, if the window is already present

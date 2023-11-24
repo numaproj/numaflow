@@ -130,9 +130,10 @@ func (w *timedWindow) Expand(endTime time.Time) {
 	}
 }
 
-// TimedWindowRequest represents the operation on the window
+// TimedWindowRequest represents the operation to be performed on the window. TimedWindowRequest is sent
+// to the UDF and it contains enough context to execute the operation.
 type TimedWindowRequest struct {
-	// Operation of the operation on the windows
+	// Operation is the `Operation` on the windows
 	Operation Operation
 	// ReadMessage represents the isb message
 	ReadMessage *isb.ReadMessage
@@ -143,6 +144,8 @@ type TimedWindowRequest struct {
 	Windows []TimedWindow
 }
 
+// TimedWindowResponse is the response from the UDF based on how the result is propogated back.
+// It could be one or more responses based on how many results the user is streaming out.
 type TimedWindowResponse struct {
 	// WriteMessage represents the isb message
 	WriteMessage *isb.WriteMessage
@@ -156,11 +159,21 @@ type TimedWindowResponse struct {
 type Operation int
 
 const (
+	// Open is create a new Window (Open the Book).
 	Open Operation = iota
+	// Delete closes the partition (this means all the keyed-windows have been closed).
+	// PBQ gets closed when Delete is called.
 	Delete
+	// Close operation for the keyed-window (Close of Book). Only the keyed-window on the SDK side will be closed,
+	// other keyed-windows for the same partition can be open. `Delete` has to be called once all the keyed-windows
+	// are closed.
 	Close
+	// Merge merges two or more windows, particularly used for SessionWindows.
+	// Perhaps in future we will use it for hot-key partitioning.
 	Merge
+	// Append inserts more data into the opened Window.
 	Append
+	// Expand expands the existing window, used in SessionWindow after adding a new element or after a window merge operation.
 	Expand
 )
 

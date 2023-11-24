@@ -51,8 +51,8 @@ type Manager struct {
 	log                 *zap.SugaredLogger
 }
 
-// NewOrderedProcessor returns an Manager.
-func NewOrderedProcessor(ctx context.Context,
+// NewPnFManager returns a new Manager.
+func NewPnFManager(ctx context.Context,
 	vertexInstance *dfv1.VertexInstance,
 	udf applier.ReduceApplier,
 	toBuffers map[string][]isb.BufferWriter,

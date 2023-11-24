@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// partition is nothing but a window with slots. Partition and window are sometimes used
+// interchangeably.
 package partition
 
 import (
@@ -21,7 +23,7 @@ import (
 	"time"
 )
 
-// ID uniquely identifies a partition
+// ID uniquely identifies a partition.
 type ID struct {
 	Start time.Time
 	End   time.Time

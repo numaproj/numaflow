@@ -48,24 +48,27 @@ type PBQ struct {
 
 var _ ReadWriteCloser = (*PBQ)(nil)
 
-// Write accepts a window request and writes it to the PBQ, only the isb message is written to the store
+// Write accepts a window request and writes it to the PBQ, only the isb message is written to the store.
+// The other metadata like operation etc are recomputed from WAL.
 func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) error {
 	// if cob we should return
 	if p.cob {
 		p.log.Errorw("Failed to write request to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("request", request))
 		return nil
 	}
-	// RETHINK: I am not sure if we should be doing this here. We should probably do this in the writer.
+
 	// if the window operation is delete, we should close the output channel and return
 	if request != nil && request.Operation == window.Delete {
 		p.CloseOfBook()
 		return nil
 	}
+
 	var writeErr error
 	// we need context to get out of blocking write
 	select {
 	case p.output <- request:
 		if request.ReadMessage != nil {
+			// this is a blocking call, ctx.Done() will be ignored.
 			writeErr = p.store.Write(request.ReadMessage)
 		}
 	case <-ctx.Done():
