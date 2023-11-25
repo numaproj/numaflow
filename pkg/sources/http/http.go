@@ -91,7 +91,7 @@ func New(
 	writers map[string][]isb.BufferWriter,
 	fsd forwarder.ToWhichStepDecider,
 	transformerApplier applier.SourceTransformApplier,
-	fetchWM fetch.Fetcher,
+	fetchWM fetch.SourceFetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,

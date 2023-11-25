@@ -38,7 +38,7 @@ type edgeFetcherSet struct {
 }
 
 // NewEdgeFetcherSet creates a new edgeFetcherSet object which implements the Fetcher interface.
-func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance, wmStores map[string]store.WatermarkStore, opts ...Option) Fetcher {
+func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance, wmStores map[string]store.WatermarkStore, opts ...Option) SourceFetcher {
 	var edgeFetchers = make(map[string]*edgeFetcher)
 	for key, wmStore := range wmStores {
 		var fetchWatermark *edgeFetcher
@@ -120,4 +120,11 @@ func (efs *edgeFetcherSet) ComputeHeadIdleWMB(fromPartitionIdx int32) wmb.WMB {
 	}
 	return overallHeadWMB
 
+}
+
+func (efs *edgeFetcherSet) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
+	// TODO: Update me
+	//headIdleWMB = fetcher.ComputeHeadWatermark(fromPartitionIdx)
+
+	return wmb.Watermark{}
 }
