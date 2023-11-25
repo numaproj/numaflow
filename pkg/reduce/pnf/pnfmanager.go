@@ -37,10 +37,9 @@ import (
 
 // Manager manages the pnf instances. It schedules the pnf routine for each partition.
 type Manager struct {
-	vertexName    string
-	pipelineName  string
-	vertexReplica int32
-	sync.RWMutex
+	vertexName          string
+	pipelineName        string
+	vertexReplica       int32
 	pbqManager          *pbq.Manager
 	reduceApplier       applier.ReduceApplier
 	toBuffers           map[string][]isb.BufferWriter
@@ -48,7 +47,9 @@ type Manager struct {
 	watermarkPublishers map[string]publish.Publisher
 	idleManager         wmb.IdleManager
 	windower            window.TimedWindower
+	pnfRoutines         []*processAndForward
 	log                 *zap.SugaredLogger
+	sync.RWMutex
 }
 
 // NewPnFManager returns a new Manager.
@@ -73,10 +74,9 @@ func NewPnFManager(ctx context.Context,
 		watermarkPublishers: watermarkPublishers,
 		idleManager:         idleManager,
 		windower:            windower,
+		pnfRoutines:         make([]*processAndForward, 0),
 		log:                 logging.FromContext(ctx),
 	}
-
-	//go of.forward(ctx)
 
 	return of
 }
@@ -88,11 +88,15 @@ func (op *Manager) AsyncSchedulePnF(ctx context.Context,
 	pbq pbq.ReadWriteCloser,
 ) {
 	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.reduceApplier, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager, op.windower)
-	go pf.AsyncProcessForward(ctx)
+	op.pnfRoutines = append(op.pnfRoutines, pf)
 }
 
 // Shutdown closes all the partitions of the buffer.
 func (op *Manager) Shutdown() {
+	// wait for all the pnf routines to finish
+	for _, pnf := range op.pnfRoutines {
+		<-pnf.done
+	}
 	for _, buffer := range op.toBuffers {
 		for _, p := range buffer {
 			if err := p.Close(); err != nil {

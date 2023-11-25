@@ -72,13 +72,8 @@ func (u *GRPCBasedGlobalReduce) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-// ApplyReduce accepts a channel of TimedWindowRequests and returns the aggregated result
-func (u *GRPCBasedGlobalReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
-	return nil, fmt.Errorf("only async is supported for global reduce")
-}
-
-// AsyncApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
-func (u *GRPCBasedGlobalReduce) AsyncApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+// ApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
+func (u *GRPCBasedGlobalReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan *window.TimedWindowResponse)

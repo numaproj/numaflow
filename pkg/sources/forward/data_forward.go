@@ -80,9 +80,9 @@ func NewDataForward(
 	toVertexWmStores map[string]store.WatermarkStore,
 	idleManager wmb.IdleManager,
 	opts ...Option) (*DataForward, error) {
-	options := DefaultOptions()
+	defaultOptions := DefaultOptions()
 	for _, o := range opts {
-		if err := o(options); err != nil {
+		if err := o(defaultOptions); err != nil {
 			return nil, err
 		}
 	}
@@ -112,10 +112,10 @@ func NewDataForward(
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
-		opts: *options,
+		opts: *defaultOptions,
 	}
 	// add logger from parent ctx to child context.
-	isdf.ctx = logging.WithLogger(ctx, options.logger)
+	isdf.ctx = logging.WithLogger(ctx, defaultOptions.logger)
 	return &isdf, nil
 }
 
@@ -278,7 +278,12 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 			// since we use message event time instead of the watermark to determine and publish source watermarks,
 			// time.UnixMilli(-1) is assigned to the message watermark. transformedReadMessages are immediately
 			// used below for publishing source watermarks.
-			transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
+
+			// if message.EventTime is -1, it means that the message was dropped by the transformer
+			// so we should exclude it from watermark computation
+			if message.EventTime != time.UnixMilli(-1) {
+				transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
+			}
 		}
 	}
 	// publish source watermark

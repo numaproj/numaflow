@@ -129,7 +129,7 @@ func TestGRPCBasedUDF_AsyncReduceWithMockClient(t *testing.T) {
 			End:   time.Unix(120, 0),
 			Slot:  "test",
 		}
-		responseCh, _ := u.AsyncApplyReduce(ctx, partitionID, requestsCh)
+		responseCh, _ := u.ApplyReduce(ctx, partitionID, requestsCh)
 
 		for response := range responseCh {
 			assert.Equal(t, time.Unix(120, 0).Add(-1*time.Millisecond).UnixMilli(), response.WriteMessage.EventTime.UnixMilli())
@@ -190,7 +190,7 @@ func TestGRPCBasedUDF_AsyncReduceWithMockClient(t *testing.T) {
 			Slot:  "test",
 		}
 
-		responseCh, errCh := u.AsyncApplyReduce(ctx, partitionID, requestsCh)
+		responseCh, errCh := u.ApplyReduce(ctx, partitionID, requestsCh)
 
 	readLoop:
 		for {
@@ -256,7 +256,7 @@ func TestGRPCBasedUDF_AsyncReduceWithMockClient(t *testing.T) {
 			End:   time.Unix(120, 0),
 			Slot:  "test",
 		}
-		respCh, errCh := u.AsyncApplyReduce(ctx, partitionID, requests)
+		respCh, errCh := u.ApplyReduce(ctx, partitionID, requests)
 
 	readLoop:
 		for {

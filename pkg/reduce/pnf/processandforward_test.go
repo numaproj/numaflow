@@ -118,7 +118,7 @@ func TestWriteToBuffer(t *testing.T) {
 	}
 }
 
-func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter) (ProcessAndForward, map[string]kvs.KVStorer) {
+func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter) (processAndForward, map[string]kvs.KVStorer) {
 
 	testPartition := partition.ID{
 		Start: time.UnixMilli(60000),
@@ -162,7 +162,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		buffers: buffers,
 	}
 
-	pf := ProcessAndForward{
+	pf := processAndForward{
 		PartitionID:    testPartition,
 		UDF:            nil,
 		windowResponse: result,

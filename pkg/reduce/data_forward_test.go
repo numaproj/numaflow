@@ -137,7 +137,7 @@ func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forwarder.V
 type CounterReduceTest struct {
 }
 
-func (f CounterReduceTest) AsyncApplyReduce(_ context.Context, partitionID *partition.ID, requestStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, requestStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan *window.TimedWindowResponse, 1)
@@ -170,11 +170,6 @@ func (f CounterReduceTest) AsyncApplyReduce(_ context.Context, partitionID *part
 	return responseCh, errCh
 }
 
-// Reduce returns a result with the count of messages
-func (f CounterReduceTest) ApplyReduce(_ context.Context, _ *partition.ID, _ <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
-	return nil, nil
-}
-
 func (f CounterReduceTest) WaitUntilReady(_ context.Context) error {
 	return nil
 }
@@ -193,7 +188,7 @@ func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBu
 type SumReduceTest struct {
 }
 
-func (s SumReduceTest) AsyncApplyReduce(_ context.Context, partitionID *partition.ID, requestsCh <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, requestsCh <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan *window.TimedWindowResponse, 2)
@@ -234,10 +229,6 @@ func (s SumReduceTest) AsyncApplyReduce(_ context.Context, partitionID *partitio
 	return responseCh, errCh
 }
 
-func (s SumReduceTest) ApplyReduce(context.Context, *partition.ID, <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
-	return nil, nil
-}
-
 func (s SumReduceTest) WaitUntilReady(_ context.Context) error {
 	return nil
 }
@@ -249,7 +240,7 @@ func (s SumReduceTest) CloseConn(_ context.Context) error {
 type MaxReduceTest struct {
 }
 
-func (m MaxReduceTest) AsyncApplyReduce(_ context.Context, partitionID *partition.ID, requestCh <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID, requestCh <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 
 	var (
 		errCh      = make(chan error)
@@ -295,10 +286,6 @@ func (m MaxReduceTest) AsyncApplyReduce(_ context.Context, partitionID *partitio
 	}
 
 	return responseCh, errCh
-}
-
-func (m MaxReduceTest) ApplyReduce(_ context.Context, _ *partition.ID, _ <-chan *window.TimedWindowRequest) (*window.TimedWindowResponse, error) {
-	return nil, nil
 }
 
 func (m MaxReduceTest) WaitUntilReady(_ context.Context) error {

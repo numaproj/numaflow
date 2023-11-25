@@ -45,9 +45,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// ProcessAndForward reads messages from pbq, invokes reduceApplier using grpc, forwards the results to ISB, and then publishes
+// processAndForward reads requests from pbq, invokes reduceApplier using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
-type ProcessAndForward struct {
+type processAndForward struct {
 	vertexName     string
 	pipelineName   string
 	vertexReplica  int32
@@ -62,9 +62,10 @@ type ProcessAndForward struct {
 	idleManager    wmb.IdleManager
 	pbqManager     *pbq.Manager
 	windower       window.TimedWindower
+	done           chan struct{}
 }
 
-// newProcessAndForward will return a new ProcessAndForward instance
+// newProcessAndForward will return a new processAndForward instance
 func newProcessAndForward(ctx context.Context,
 	vertexName string,
 	pipelineName string,
@@ -77,9 +78,9 @@ func newProcessAndForward(ctx context.Context,
 	pw map[string]publish.Publisher,
 	idleManager wmb.IdleManager,
 	manager *pbq.Manager,
-	windower window.TimedWindower) *ProcessAndForward {
+	windower window.TimedWindower) *processAndForward {
 
-	pf := &ProcessAndForward{
+	pf := &processAndForward{
 		vertexName:     vertexName,
 		pipelineName:   pipelineName,
 		vertexReplica:  vr,
@@ -93,28 +94,19 @@ func newProcessAndForward(ctx context.Context,
 		idleManager:    idleManager,
 		pbqManager:     manager,
 		windower:       windower,
+		done:           make(chan struct{}),
 	}
-
+	// start the processAndForward routine
+	go pf.start(ctx)
 	return pf
 }
 
-// Hmm.. Global Window is nothing but a session window with infinite gap duration?
-
-// et 60 75 69 86
-// wm 59 69 69 86
-
-// 60 - 70
-// 75 - 85
-// since we got 69 with watermark 69, we have to merge the two windows and the updated window
-// should be 60 - 85
-// now we got a message with et 86, and wm 86 we can materialize the window 60 - 85
-// and publish the watermark as 85
-
-// AsyncProcessForward reads requests from the supplied PBQ, invokes UDF to get the response, and then forwards
+// start reads requests from the supplied PBQ, invokes UDF to get the response, and then forwards
 // the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
 // manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
-func (p *ProcessAndForward) AsyncProcessForward(ctx context.Context) {
-	responseCh, errCh := p.UDF.AsyncApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
+func (p *processAndForward) start(ctx context.Context) {
+	defer close(p.done)
+	responseCh, errCh := p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
 
 outerLoop:
 	for {
@@ -124,7 +116,7 @@ outerLoop:
 				return
 			}
 			if err != nil {
-				p.log.Panic("Got an error while invoking AsyncApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
+				p.log.Panic("Got an error while invoking ApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
 			}
 		case response, ok := <-responseCh:
 			if !ok || response == nil {
@@ -202,7 +194,7 @@ outerLoop:
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.
-func (p *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[string][][]isb.Message {
+func (p *processAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[string][][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][][]isb.Message)
 
@@ -238,7 +230,7 @@ func (p *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[s
 
 // writeToBuffer writes to the ISBs.
 // TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
-func (p *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) []isb.Offset {
+func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) []isb.Offset {
 	var (
 		writeCount int
 		writeBytes float64
@@ -325,7 +317,7 @@ func (p *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 
 // publishWM publishes the watermark to each edge.
 // TODO: support multi partitioned edges.
-func (p *ProcessAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][][]isb.Offset) {
+func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][][]isb.Offset) {
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
