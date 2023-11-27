@@ -18159,11 +18159,11 @@
       "properties": {
         "maxWait": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "MaxWait is the wait duration before progressing the watermark in idle case."
+          "description": "MaxWait is the wait time before publishing the idle watermark with MinIncrement value. Ex: If watermark found to be idle until MaxWait duration then publish the watermark by adding the MinIncrement value in it."
         },
         "minIncrement": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "MinIncrement is the time duration for increment the"
+          "description": "MinIncrement is the value to be added in idle watermark while publishing."
         }
       },
       "type": "object"

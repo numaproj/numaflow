@@ -106,7 +106,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexSpec":                     schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexStatus":                   schema_pkg_apis_numaflow_v1alpha1_VertexStatus(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexTemplate":                 schema_pkg_apis_numaflow_v1alpha1_VertexTemplate(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.WatermarkConfig":                schema_pkg_apis_numaflow_v1alpha1_Watermark(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark":                      schema_pkg_apis_numaflow_v1alpha1_Watermark(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window":                         schema_pkg_apis_numaflow_v1alpha1_Window(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.containerBuilder":               schema_pkg_apis_numaflow_v1alpha1_containerBuilder(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.getContainerReq":                schema_pkg_apis_numaflow_v1alpha1_getContainerReq(ref),
@@ -1732,7 +1732,7 @@ func schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref common.ReferenceCallback) com
 					},
 					"allowedLateness": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later than (WatermarkConfig - AllowedLateness).",
+							Description: "AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later than (Watermark - AllowedLateness).",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
@@ -1786,13 +1786,13 @@ func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) 
 				Properties: map[string]spec.Schema{
 					"maxWait": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MaxWait is the wait duration before progressing the watermark in idle case.",
+							Description: "MaxWait is the wait time before publishing the idle watermark with MinIncrement value. Ex: If watermark found to be idle until MaxWait duration then publish the watermark by adding the MinIncrement value in it.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"minIncrement": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MinIncrement is the time duration for increment the",
+							Description: "MinIncrement is the value to be added in idle watermark while publishing.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
@@ -3097,9 +3097,9 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 					},
 					"watermark": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WatermarkConfig enables watermark progression across the entire pipeline.",
+							Description: "Watermark enables watermark progression across the entire pipeline.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.WatermarkConfig"),
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"),
 						},
 					},
 					"templates": {
@@ -3126,7 +3126,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.WatermarkConfig"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
 	}
 }
 
@@ -4557,9 +4557,9 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					},
 					"watermark": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WatermarkConfig indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.",
+							Description: "Watermark indicates watermark progression in the vertex, it's populated from the pipeline watermark settings.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.WatermarkConfig"),
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"),
 						},
 					},
 				},
@@ -4567,7 +4567,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.WatermarkConfig", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 

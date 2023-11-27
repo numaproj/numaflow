@@ -2002,8 +2002,10 @@ Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <p>
-MaxWait is the wait duration before progressing the watermark in idle
-case.
+MaxWait is the wait time before publishing the idle watermark with
+MinIncrement value. Ex: If watermark found to be idle until MaxWait
+duration then publish the watermark by adding the MinIncrement value in
+it.
 </p>
 </td>
 </tr>
@@ -2015,7 +2017,8 @@ Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <p>
-MinIncrement is the time duration for increment the
+MinIncrement is the value to be added in idle watermark while
+publishing.
 </p>
 </td>
 </tr>
