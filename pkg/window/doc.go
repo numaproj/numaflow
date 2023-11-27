@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package window implements windowing constructs. In the world of data processing on an unbounded stream, Windowing
 // is a concept of grouping data using temporal boundaries. We use event-time to discover temporal boundaries on an
-// unbounded, infinite stream and Watermark to ensure the datasets within the boundaries are complete. A reduce function
+// unbounded, infinite stream and WatermarkConfig to ensure the datasets within the boundaries are complete. A reduce function
 // can be applied on this group of data.
 //
 // Windows are of different types, quite popular ones are Fixed windows and Sliding windows. Sessions are managed via

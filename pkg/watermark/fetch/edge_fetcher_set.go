@@ -59,7 +59,7 @@ func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance,
 	}
 }
 
-// ComputeWatermark processes the offset on the partition indicated and returns the overall Watermark
+// ComputeWatermark processes the offset on the partition indicated and returns the overall WatermarkConfig
 // from all Partitions
 func (efs *edgeFetcherSet) ComputeWatermark(inputOffset isb.Offset, fromPartitionIdx int32) wmb.Watermark {
 	var (

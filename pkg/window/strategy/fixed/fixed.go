@@ -19,7 +19,7 @@ limitations under the License.
 // window applies across all the data for the corresponding period of time.
 // Package fixed also maintains the state of active keyed windows in a vertex.
 // Keyed AlignedWindower maintains the association between set of keys and an interval window.
-// keyed also provides the lifecycle management of an interval window. Watermark is used to trigger the expiration of windows.
+// keyed also provides the lifecycle management of an interval window. WatermarkConfig is used to trigger the expiration of windows.
 package fixed
 
 import (

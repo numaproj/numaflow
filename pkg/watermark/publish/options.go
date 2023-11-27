@@ -25,7 +25,7 @@ type publishOptions struct {
 	autoRefreshHeartbeat bool
 	// The interval of refresh heartbeat
 	podHeartbeatRate int64
-	// Watermark delay.
+	// WatermarkConfig delay.
 	// It should only be used in a source publisher.
 	delay time.Duration
 	// Whether it is source publisher or not

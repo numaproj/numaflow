@@ -38,7 +38,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-// Publisher interface defines how to publish Watermark for a ProcessorEntitier.
+// Publisher interface defines how to publish WatermarkConfig for a ProcessorEntitier.
 type Publisher interface {
 	io.Closer
 	// PublishWatermark publishes the watermark.

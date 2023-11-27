@@ -500,18 +500,16 @@ type Watermark struct {
 	// +optional
 	MaxDelay *metav1.Duration `json:"maxDelay,omitempty" protobuf:"bytes,2,opt,name=maxDelay"`
 	// IdleSource defines the idle watermark properties, it could be configured in case source is idling.
-	// +kubebuilder:default={"maxWait": "-1s", "minIncrement": "-1s"}
 	// +optional
 	IdleSource *IdleSource `json:"idleSource,omitempty" protobuf:"bytes,3,opt,name=idleSource"`
 }
 
 type IdleSource struct {
-	// MaxWait is the wait duration before progressing the watermark in idle case.
-	// +kubebuilder:default="-1s"
+	// MaxWait is the wait time before publishing the idle watermark with MinIncrement value.
+	// Ex: If watermark found to be idle until MaxWait duration then publish the watermark by adding the MinIncrement value in it.
 	MaxWait *metav1.Duration `json:"maxWait,omitempty" protobuf:"bytes,1,opt,name=maxWait"`
-	// MinIncrement is the time duration for increment the
-	// +kubebuilder:default="-1s"
-	MinIncrement *metav1.Duration `json:"minIncrement,omitempty" protobuf:"bytes,4,opt,name=minIncrement"`
+	// MinIncrement is the value to be added in idle watermark while publishing.
+	MinIncrement *metav1.Duration `json:"minIncrement,omitempty" protobuf:"bytes,2,opt,name=minIncrement"`
 }
 
 // GetMaxDelay returns the configured max delay with a default value.
@@ -530,20 +528,20 @@ func (wm Watermark) GetIdleSource() *IdleSource {
 	return nil
 }
 
-func (is IdleSource) GetMaxWait() time.Duration {
+func (is IdleSource) GetMaxWait() *time.Duration {
 	if is.MaxWait != nil {
-		return is.MaxWait.Duration
+		return &is.MaxWait.Duration
 	}
 
-	return time.Duration(-1)
+	return nil
 }
 
-func (is IdleSource) GetMinIncrement() time.Duration {
+func (is IdleSource) GetMinIncrement() *time.Duration {
 	if is.MinIncrement != nil {
-		return is.MinIncrement.Duration
+		return &is.MinIncrement.Duration
 	}
 
-	return time.Duration(-1)
+	return nil
 }
 
 type Templates struct {

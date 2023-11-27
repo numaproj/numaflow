@@ -110,7 +110,7 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 			Value:     m.Payload,
 			Keys:      m.Keys,
 			EventTime: timestamppb.New(m.EventTime),
-			// Watermark is only available in readmessage....
+			// WatermarkConfig is only available in readmessage....
 			Watermark: timestamppb.New(time.Time{}), // TODO: insert the correct watermark
 		}
 	}

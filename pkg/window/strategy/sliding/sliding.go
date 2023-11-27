@@ -18,7 +18,7 @@ limitations under the License.
 // e.g. minutely windows or hourly windows and a fixed "slide". This is the duration by which the boundaries
 // of the windows move once every <slide> duration.
 // Package sliding also maintains the state of active windows.
-// Watermark is used to trigger the expiration of windows.
+// WatermarkConfig is used to trigger the expiration of windows.
 package sliding
 
 import (

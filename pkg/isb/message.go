@@ -25,7 +25,7 @@ type MessageKind int16
 
 const (
 	Data MessageKind = iota // Data payload
-	WMB                     // Watermark Barrier
+	WMB                     // WatermarkConfig Barrier
 )
 
 func (mt MessageKind) String() string {
