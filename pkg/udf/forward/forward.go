@@ -667,10 +667,6 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 			for index, m := range writeMessages {
 				// add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
 				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
-				// if we do not get a time from map UDF, we set it to the time from (N-1)th vertex
-				if m.EventTime.IsZero() {
-					m.EventTime = readMessage.EventTime
-				}
 			}
 			return writeMessages, nil
 		}
