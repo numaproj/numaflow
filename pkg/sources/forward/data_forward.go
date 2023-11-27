@@ -223,7 +223,6 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 			// Get the head watermark value then add the minIncrement to it and publish the idle watermark with updated value.
 			headWatermark := isdf.wmFetcher.ComputeHeadWatermark(0)
 			updatedWM := headWatermark.Add(*minIncrement)
-
 			isdf.srcWMPublisher.PublishIdleWatermarks(updatedWM)
 			// set the time for last updated watermark which will be used for calculating maximum wait time is passed
 			// or not in case of idle watermark.
@@ -308,6 +307,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	}
 	// publish source watermark
 	isdf.srcWMPublisher.PublishSourceWatermarks(transformedReadMessages)
+	isdf.lastUpdateWM = time.Now()
 	// fetch the source watermark again, we might not get the latest watermark because of publishing delay,
 	// but ideally we should use the latest to determine the IsLate attribute.
 	processorWM = isdf.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, isdf.reader.GetPartitionIdx())
@@ -370,6 +370,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 
 						publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
 						activeWatermarkBuffers[toVertexName][index] = true
+						isdf.lastUpdateWM = time.Now()
 						// reset because the toBuffer partition is no longer idling
 						isdf.idleManager.Reset(isdf.toBuffers[toVertexName][index].GetName())
 					}
@@ -393,6 +394,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 							vertexPublishers[sp] = publisher
 						}
 						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[toVertexName][index], publisher, isdf.idleManager, isdf.opts.logger, dfv1.VertexTypeSource, processorWM)
+						isdf.lastUpdateWM = time.Now()
 					}
 				}
 			}
