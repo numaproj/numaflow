@@ -24,9 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
 	"go.uber.org/zap"
-	"k8s.io/utils/strings/slices"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forwarder"
@@ -522,12 +520,6 @@ func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.
 		} else {
 			for index, m := range writeMessages {
 				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
-				// if the message is dropped by the source transformer, we assign the original event time to the message.
-				// the original event time is the event time of the message before the source transformer.
-				// this way, even when the message is dropped, the event time is still preserved and be used for watermark calculation.
-				if slices.Contains(m.Tags, sourcetransformer.DROP) {
-					m.EventTime = readMessage.EventTime
-				}
 			}
 			return writeMessages, nil
 		}
