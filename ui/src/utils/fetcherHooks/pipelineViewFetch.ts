@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Edge, MarkerType, Node } from "reactflow";
 import { isEqual } from "lodash";
+import { getBaseHref } from "../index";
 import {
   BufferInfo,
   EdgeWatermark,
@@ -45,7 +46,7 @@ export const usePipelineViewFetch = (
   const [buffersErr, setBuffersErr] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
-  const BASE_API = `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
+  const BASE_API = `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
 
   const refresh = useCallback(() => {
     setRequestKey(`${Date.now()}`);
