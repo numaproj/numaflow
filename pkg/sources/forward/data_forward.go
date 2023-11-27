@@ -523,12 +523,8 @@ func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.
 			}
 			continue
 		} else {
-			// if we do not get a time from Transformer, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
 				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
-				if m.EventTime.IsZero() {
-					m.EventTime = readMessage.EventTime
-				}
 			}
 			return writeMessages, nil
 		}
