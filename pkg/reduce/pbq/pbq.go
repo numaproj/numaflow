@@ -32,18 +32,18 @@ import (
 // PBQ Buffer queue which is backed with a persisted store, each partition
 // will have a PBQ associated with it
 type PBQ struct {
-	vertexName     string
-	pipelineName   string
-	vertexReplica  int32
-	store          store.Store
-	output         chan *window.TimedWindowRequest
-	cob            bool // cob to avoid panic in case writes happen after close of book
-	PartitionID    partition.ID
-	options        *options
-	manager        *Manager
-	windowStrategy window.Strategy
-	log            *zap.SugaredLogger
-	mu             sync.Mutex
+	vertexName    string
+	pipelineName  string
+	vertexReplica int32
+	store         store.Store
+	output        chan *window.TimedWindowRequest
+	cob           bool // cob to avoid panic in case writes happen after close of book
+	PartitionID   partition.ID
+	options       *options
+	manager       *Manager
+	windowType    window.Type
+	log           *zap.SugaredLogger
+	mu            sync.Mutex
 }
 
 var _ ReadWriteCloser = (*PBQ)(nil)
@@ -134,10 +134,10 @@ readLoop:
 		for _, msg := range readMessages {
 			// FIXME: support for session window
 			var w window.TimedWindow
-			if p.windowStrategy == window.Fixed || p.windowStrategy == window.Sliding {
+			if p.windowType == window.Aligned {
 				w = window.NewWindowFromPartition(&p.PartitionID)
 			} else {
-				p.log.Errorw("session window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowStrategy))
+				p.log.Errorw("session window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowType))
 			}
 			// select to avoid infinite blocking while writing to output channel
 			select {

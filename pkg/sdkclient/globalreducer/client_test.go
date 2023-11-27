@@ -73,7 +73,7 @@ func TestClient_GlobalReduceFn(t *testing.T) {
 			Value:     []byte(`forward_message`),
 			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 		},
-		Partition: &globalreducepb.Partition{
+		KeyedWindow: &globalreducepb.KeyedWindow{
 			Start: timestamppb.New(time.Unix(60, 0)),
 			End:   timestamppb.New(time.Unix(120, 0)),
 			Slot:  "slot-0",
@@ -85,7 +85,7 @@ func TestClient_GlobalReduceFn(t *testing.T) {
 			Value:     []byte(`forward_message`),
 			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 		},
-		Partition: &globalreducepb.Partition{
+		KeyedWindow: &globalreducepb.KeyedWindow{
 			Start: timestamppb.New(time.Unix(60, 0)),
 			End:   timestamppb.New(time.Unix(120, 0)),
 			Slot:  "slot-0",
@@ -109,7 +109,7 @@ func TestClient_GlobalReduceFn(t *testing.T) {
 				Value:     []byte(`forward_message`),
 				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 			},
-			Partition: &globalreducepb.Partition{
+			KeyedWindow: &globalreducepb.KeyedWindow{
 				Start: timestamppb.New(time.Unix(60, 0)),
 				End:   timestamppb.New(time.Unix(120, 0)),
 				Slot:  "slot-0",

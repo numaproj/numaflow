@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,9 +55,9 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Operation-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Operation-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Operation-Time", eventTime))
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
 			}
 		}
 	}()
@@ -97,9 +95,9 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Operation-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Operation-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Operation-Time", eventTime))
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
 			}
 		}
 	}()
@@ -135,8 +133,8 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Operation-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Operation-Time", eventTime))
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))
 			}
 		}
 	}()
@@ -182,9 +180,9 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 					w.Expect().VertexPodsRunning()
 					w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 				}
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Operation-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Operation-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Operation-Time", eventTime))
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
 			}
 		}
 	}()
@@ -223,8 +221,8 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Operation-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Operation-Time", eventTime))
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))
 			}
 		}
 	}()

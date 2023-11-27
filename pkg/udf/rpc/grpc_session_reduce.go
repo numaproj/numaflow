@@ -150,10 +150,10 @@ func (u *GRPCBasedSessionReduce) ApplyReduce(ctx context.Context, partitionID *p
 // createSessionReduceRequest creates a SessionReduceRequest from TimedWindowRequest
 func createSessionReduceRequest(windowRequest *window.TimedWindowRequest) *sessionreducepb.SessionReduceRequest {
 	var windowOp sessionreducepb.SessionReduceRequest_WindowOperation_Event
-	var partitions []*sessionreducepb.Partition
+	var partitions []*sessionreducepb.KeyedWindow
 
 	for _, w := range windowRequest.Windows {
-		partitions = append(partitions, &sessionreducepb.Partition{
+		partitions = append(partitions, &sessionreducepb.KeyedWindow{
 			Start: timestamppb.New(w.StartTime()),
 			End:   timestamppb.New(w.EndTime()),
 			Slot:  w.Slot(),
@@ -186,8 +186,8 @@ func createSessionReduceRequest(windowRequest *window.TimedWindowRequest) *sessi
 	var d = &sessionreducepb.SessionReduceRequest{
 		Payload: payload,
 		Operation: &sessionreducepb.SessionReduceRequest_WindowOperation{
-			Event:      windowOp,
-			Partitions: partitions,
+			Event:        windowOp,
+			KeyedWindows: partitions,
 		},
 	}
 	return d
@@ -215,11 +215,11 @@ func parseSessionReduceResponse(response *sessionreducepb.SessionReduceResponse)
 		WriteMessage: taggedMessage,
 		Window: window.NewWindowFromPartitionAndKeys(
 			&partition.ID{
-				Start: time.UnixMilli(response.GetPartition().GetStart().AsTime().UnixMilli()),
-				End:   time.UnixMilli(response.GetPartition().GetEnd().AsTime().UnixMilli()),
-				Slot:  "slot-0",
+				Start: time.UnixMilli(response.GetKeyedWindow().GetStart().AsTime().UnixMilli()),
+				End:   time.UnixMilli(response.GetKeyedWindow().GetEnd().AsTime().UnixMilli()),
+				Slot:  response.GetKeyedWindow().GetSlot(),
 			},
-			response.GetPartition().GetKeys(),
+			response.GetKeyedWindow().GetKeys(),
 		),
 		EOF: response.GetEOF(),
 	}

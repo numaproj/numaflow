@@ -149,10 +149,10 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 
 func createReduceRequest(windowRequest *window.TimedWindowRequest) *reducepb.ReduceRequest {
 	var windowOp reducepb.ReduceRequest_WindowOperation_Event
-	var partitions []*reducepb.Partition
+	var windows []*reducepb.Window
 
 	for _, w := range windowRequest.Windows {
-		partitions = append(partitions, &reducepb.Partition{
+		windows = append(windows, &reducepb.Window{
 			Start: timestamppb.New(w.StartTime()),
 			End:   timestamppb.New(w.EndTime()),
 			Slot:  w.Slot(),
@@ -182,8 +182,8 @@ func createReduceRequest(windowRequest *window.TimedWindowRequest) *reducepb.Red
 	var d = &reducepb.ReduceRequest{
 		Payload: payload,
 		Operation: &reducepb.ReduceRequest_WindowOperation{
-			Event:      windowOp,
-			Partitions: partitions,
+			Event:   windowOp,
+			Windows: windows,
 		},
 	}
 	return d
@@ -248,9 +248,9 @@ func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowR
 	return &window.TimedWindowResponse{
 		WriteMessage: taggedMessage,
 		Window: window.NewWindowFromPartition(&partition.ID{
-			Start: response.GetPartition().GetStart().AsTime(),
-			End:   response.GetPartition().GetEnd().AsTime(),
-			Slot:  response.GetPartition().GetSlot(),
+			Start: response.GetWindow().GetStart().AsTime(),
+			End:   response.GetWindow().GetEnd().AsTime(),
+			Slot:  response.GetWindow().GetSlot(),
 		}),
 		EOF: response.GetEOF(),
 	}

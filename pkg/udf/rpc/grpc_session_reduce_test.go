@@ -63,7 +63,7 @@ func TestGRPCBasedUDF_BasicSessionReduceWithMockClient(t *testing.T) {
 				Value:     []byte(`forward_message`),
 				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 			},
-			Partition: &sessionreducepb.Partition{
+			KeyedWindow: &sessionreducepb.KeyedWindow{
 				Start: timestamppb.New(time.Unix(60, 0)),
 				End:   timestamppb.New(time.Unix(120, 0)),
 				Slot:  "test",

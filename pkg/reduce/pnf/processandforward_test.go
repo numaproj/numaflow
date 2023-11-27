@@ -107,7 +107,7 @@ func TestWriteToBuffer(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			var pbqManager *pbq.Manager
-			pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(), window.Fixed)
+			pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(), window.Aligned)
 			toBuffer := map[string][]isb.BufferWriter{
 				"buffer": value.buffers,
 			}

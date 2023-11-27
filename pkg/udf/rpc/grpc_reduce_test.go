@@ -79,7 +79,7 @@ func TestGRPCBasedUDF_AsyncReduceWithMockClient(t *testing.T) {
 				Value:     []byte(`forward_message_1`),
 				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 			},
-			Partition: &reducepb.Partition{
+			Window: &reducepb.Window{
 				Start: timestamppb.New(time.Unix(60, 0)),
 				End:   timestamppb.New(time.Unix(120, 0)),
 				Slot:  "test-1",
@@ -91,7 +91,7 @@ func TestGRPCBasedUDF_AsyncReduceWithMockClient(t *testing.T) {
 				Value:     []byte(`forward_message_2`),
 				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
 			},
-			Partition: &reducepb.Partition{
+			Window: &reducepb.Window{
 				Start: timestamppb.New(time.Unix(60, 0)),
 				End:   timestamppb.New(time.Unix(120, 0)),
 				Slot:  "test-2",

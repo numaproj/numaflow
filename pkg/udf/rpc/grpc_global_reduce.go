@@ -148,10 +148,10 @@ func (u *GRPCBasedGlobalReduce) ApplyReduce(ctx context.Context, partitionID *pa
 
 func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *globalreducepb.GlobalReduceRequest {
 	var windowOp globalreducepb.GlobalReduceRequest_WindowOperation_Event
-	var partitions []*globalreducepb.Partition
+	var partitions []*globalreducepb.KeyedWindow
 
 	for _, w := range windowRequest.Windows {
-		partitions = append(partitions, &globalreducepb.Partition{
+		partitions = append(partitions, &globalreducepb.KeyedWindow{
 			Start: timestamppb.New(w.StartTime()),
 			End:   timestamppb.New(w.EndTime()),
 			Slot:  w.Slot(),
@@ -181,8 +181,8 @@ func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *global
 	var d = &globalreducepb.GlobalReduceRequest{
 		Payload: payload,
 		Operation: &globalreducepb.GlobalReduceRequest_WindowOperation{
-			Event:      windowOp,
-			Partitions: partitions,
+			Event:        windowOp,
+			KeyedWindows: partitions,
 		},
 	}
 	return d
@@ -210,11 +210,11 @@ func parseGlobalReduceResponse(response *globalreducepb.GlobalReduceResponse) *w
 		WriteMessage: taggedMessage,
 		Window: window.NewWindowFromPartitionAndKeys(
 			&partition.ID{
-				Start: response.GetPartition().GetStart().AsTime(),
-				End:   response.GetPartition().GetEnd().AsTime(),
-				Slot:  response.GetPartition().GetSlot(),
+				Start: response.GetKeyedWindow().GetStart().AsTime(),
+				End:   response.GetKeyedWindow().GetEnd().AsTime(),
+				Slot:  response.GetKeyedWindow().GetSlot(),
 			},
-			response.GetPartition().GetKeys(),
+			response.GetKeyedWindow().GetKeys(),
 		),
 	}
 }

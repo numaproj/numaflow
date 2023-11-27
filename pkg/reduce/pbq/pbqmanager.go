@@ -37,14 +37,14 @@ import (
 
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
-	vertexName     string
-	pipelineName   string
-	vertexReplica  int32
-	storeProvider  store.StoreProvider
-	pbqOptions     *options
-	pbqMap         map[string]*PBQ
-	log            *zap.SugaredLogger
-	windowStrategy window.Strategy
+	vertexName    string
+	pipelineName  string
+	vertexReplica int32
+	storeProvider store.StoreProvider
+	pbqOptions    *options
+	pbqMap        map[string]*PBQ
+	log           *zap.SugaredLogger
+	windowType    window.Type
 	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
@@ -53,7 +53,7 @@ type Manager struct {
 
 // NewManager returns new instance of manager
 // We don't intend this to be called by multiple routines.
-func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider store.StoreProvider, windowStrategy window.Strategy, opts ...PBQOption) (*Manager, error) {
+func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider store.StoreProvider, windowType window.Type, opts ...PBQOption) (*Manager, error) {
 	pbqOpts := DefaultOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -64,14 +64,14 @@ func NewManager(ctx context.Context, vertexName string, pipelineName string, vr 
 	}
 
 	pbqManager := &Manager{
-		vertexName:     vertexName,
-		pipelineName:   pipelineName,
-		vertexReplica:  vr,
-		storeProvider:  storeProvider,
-		pbqMap:         make(map[string]*PBQ),
-		pbqOptions:     pbqOpts,
-		log:            logging.FromContext(ctx),
-		windowStrategy: windowStrategy,
+		vertexName:    vertexName,
+		pipelineName:  pipelineName,
+		vertexReplica: vr,
+		storeProvider: storeProvider,
+		pbqMap:        make(map[string]*PBQ),
+		pbqOptions:    pbqOpts,
+		log:           logging.FromContext(ctx),
+		windowType:    windowType,
 	}
 
 	return pbqManager, nil
@@ -86,17 +86,17 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 
 	// output channel is buffered to support bulk reads
 	p := &PBQ{
-		vertexName:     m.vertexName,
-		pipelineName:   m.pipelineName,
-		vertexReplica:  m.vertexReplica,
-		store:          persistentStore,
-		output:         make(chan *window.TimedWindowRequest, m.pbqOptions.channelBufferSize),
-		cob:            false,
-		PartitionID:    partitionID,
-		options:        m.pbqOptions,
-		manager:        m,
-		windowStrategy: m.windowStrategy,
-		log:            logging.FromContext(ctx).With("PBQ", partitionID),
+		vertexName:    m.vertexName,
+		pipelineName:  m.pipelineName,
+		vertexReplica: m.vertexReplica,
+		store:         persistentStore,
+		output:        make(chan *window.TimedWindowRequest, m.pbqOptions.channelBufferSize),
+		cob:           false,
+		PartitionID:   partitionID,
+		options:       m.pbqOptions,
+		manager:       m,
+		windowType:    m.windowType,
+		log:           logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 	m.register(partitionID, p)
 	return p, nil
