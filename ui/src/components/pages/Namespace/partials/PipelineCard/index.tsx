@@ -25,6 +25,7 @@ import {
   RUNNING,
   PAUSING,
   DELETING,
+  getBaseHref,
 } from "../../../../../utils";
 import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
@@ -186,7 +187,9 @@ export function PipelineCard({
     const patchStatus = async () => {
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespace}/pipelines/${data?.name}`,
+          `${getBaseHref()}/api/v1/namespaces/${namespace}/pipelines/${
+            data?.name
+          }`,
           {
             method: "PATCH",
             headers: {

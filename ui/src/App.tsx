@@ -26,6 +26,7 @@ import {
 import { ErrorDisplay } from "./components/common/ErrorDisplay";
 import { AppContextProps, AppError, UserInfo } from "./types/declarations/app";
 import AccountMenu from "./components/common/AccountMenu";
+import { getBaseHref } from "./utils";
 import logo from "./images/icon.png";
 import textLogo from "./images/text-icon.png";
 
@@ -81,7 +82,7 @@ function App() {
     // Attempt to load user info on app load
     const fetchData = async () => {
       try {
-        const response = await fetch(`/api/v1/authinfo`);
+        const response = await fetch(`${getBaseHref()}/api/v1/authinfo`);
         if (response.ok) {
           const data = await response.json();
           const claims = data?.data?.id_token_claims;

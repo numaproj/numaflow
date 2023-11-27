@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useFetch, Options } from "./fetch";
+import { getBaseHref } from "../index";
 import {
   K8sEvent,
   K8sEventSummary,
@@ -60,14 +61,16 @@ export const useNamespaceK8sEventsFetch = ({
     requestKey: "",
   });
 
+  const BASE_URL = `${getBaseHref()}/api/v1/namespaces/${namespace}/events`;
+
   const urlPath = useMemo(() => {
     if (vertex) {
-      return `/api/v1/namespaces/${namespace}/events?objectType=vertex&objectName=${pipeline}-${vertex}`;
+      return `${BASE_URL}?objectType=vertex&objectName=${pipeline}-${vertex}`;
     } else if (pipeline) {
-      return `/api/v1/namespaces/${namespace}/events?objectType=pipeline&objectName=${pipeline}`;
+      return `${BASE_URL}?objectType=pipeline&objectName=${pipeline}`;
     }
-    return `/api/v1/namespaces/${namespace}/events`;
-  }, [namespace, pipeline, vertex])
+    return `${BASE_URL}`;
+  }, [namespace, pipeline, vertex]);
 
   const {
     data: fetchData,
