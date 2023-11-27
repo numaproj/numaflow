@@ -24,7 +24,6 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
@@ -37,7 +36,7 @@ type Validator interface {
 }
 
 // GetValidator returns a Validator instance
-func GetValidator(ctx context.Context, client kubernetes.Interface, NumaClient v1alpha1.NumaflowV1alpha1Interface, kind metav1.GroupVersionKind, oldBytes []byte, newBytes []byte) (Validator, error) {
+func GetValidator(ctx context.Context, NumaClient v1alpha1.NumaflowV1alpha1Interface, kind metav1.GroupVersionKind, oldBytes []byte, newBytes []byte) (Validator, error) {
 	log := logging.FromContext(ctx)
 	switch kind.Kind {
 	case dfv1.ISBGroupVersionKind.Kind:
@@ -57,8 +56,7 @@ func GetValidator(ctx context.Context, client kubernetes.Interface, NumaClient v
 				return nil, err
 			}
 		}
-		isbSvcClient := NumaClient.InterStepBufferServices(newSpec.Namespace)
-		return NewISBServiceValidator(client, isbSvcClient, oldSpec, newSpec), nil
+		return NewISBServiceValidator(oldSpec, newSpec), nil
 	case dfv1.PipelineGroupVersionKind.Kind:
 		var newSpec *dfv1.Pipeline
 		if len(newBytes) > 0 {
@@ -77,14 +75,13 @@ func GetValidator(ctx context.Context, client kubernetes.Interface, NumaClient v
 			}
 		}
 		isbSvcClient := NumaClient.InterStepBufferServices(newSpec.Namespace)
-		pipelineClient := NumaClient.Pipelines(newSpec.Namespace)
-		return NewPipelineValidator(client, pipelineClient, isbSvcClient, oldSpec, newSpec), nil
+		return NewPipelineValidator(isbSvcClient, oldSpec, newSpec), nil
 	default:
 		return nil, fmt.Errorf("unrecognized kind: %v", kind)
 	}
 }
 
-// DeniedResponse constructs a denied AdmissionResonse
+// DeniedResponse constructs a denied AdmissionResponse
 func DeniedResponse(reason string, args ...interface{}) *admissionv1.AdmissionResponse {
 	result := apierrors.NewBadRequest(fmt.Sprintf(reason, args...)).Status()
 	return &admissionv1.AdmissionResponse{
@@ -93,7 +90,7 @@ func DeniedResponse(reason string, args ...interface{}) *admissionv1.AdmissionRe
 	}
 }
 
-// AllowedResponse constructs an allowed AdmissionResonse
+// AllowedResponse constructs an allowed AdmissionResponse
 func AllowedResponse() *admissionv1.AdmissionResponse {
 	return &admissionv1.AdmissionResponse{
 		Allowed: true,

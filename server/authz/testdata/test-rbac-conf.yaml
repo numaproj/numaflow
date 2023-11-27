@@ -1,0 +1,3 @@
+policy:
+  default: role:readonly
+  scopes: groups

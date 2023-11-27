@@ -19,20 +19,14 @@ package fixtures
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
-
-	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/transport/spdy"
 
 	"github.com/stretchr/testify/suite"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	runtimeutil "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -189,51 +183,6 @@ func (s *E2ESuite) Given() *Given {
 		vertexClient:   s.vertexClient,
 		restConfig:     s.restConfig,
 		kubeClient:     s.kubeClient,
-	}
-}
-
-func (s *E2ESuite) GetNumaflowServerPodName() string {
-	s.T().Log("Get numaflow server pod name")
-	podList, err := s.kubeClient.CoreV1().Pods(Namespace).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		panic(err)
-	}
-	for _, pod := range podList.Items {
-		if strings.Contains(pod.Name, "numaflow-server") {
-			return pod.Name
-		}
-	}
-	return ""
-}
-
-func (s *E2ESuite) StartPortForward(podName string, port int) (stopPortForward func()) {
-
-	s.T().Log("Starting port-forward to pod :", podName, port)
-	transport, upgrader, err := spdy.RoundTripperFor(s.restConfig)
-	if err != nil {
-		panic(err)
-	}
-	x, err := url.Parse(fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s/portforward", s.restConfig.Host, Namespace, podName))
-	if err != nil {
-		panic(err)
-	}
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", x)
-	stopChan, readyChan := make(chan struct{}, 1), make(chan struct{}, 1)
-	forwarder, err := portforward.New(dialer, []string{fmt.Sprintf("%d:%d", port, port)}, stopChan, readyChan, os.Stdout, os.Stderr)
-	if err != nil {
-		panic(err)
-	}
-	go func() {
-		defer runtimeutil.HandleCrash()
-		if err := forwarder.ForwardPorts(); err != nil {
-			panic(err)
-		}
-	}()
-	<-readyChan
-	s.T().Log("Started port-forward :", podName, port)
-	return func() {
-		stopChan <- struct{}{}
-		s.T().Log("Stopped port-forward :", podName, port)
 	}
 }
 

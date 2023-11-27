@@ -49,6 +49,7 @@ import {
   RUNNING,
   getAPIResponseError,
   timeAgo,
+  getBaseHref,
 } from "../../../../../utils";
 import { ErrorIndicator } from "../../../../common/ErrorIndicator";
 import { CollapseContext } from "../../../../common/SummaryPageLayout";
@@ -217,7 +218,9 @@ const Flow = (props: FlowProps) => {
     const patchStatus = async () => {
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${data?.pipeline?.metadata?.name}`,
+          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${
+            data?.pipeline?.metadata?.name
+          }`,
           {
             method: "PATCH",
             headers: {

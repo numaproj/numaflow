@@ -36,7 +36,7 @@ spec:
         - name: NUMAFLOW_SERVER_BASE_HREF
           valueFrom:
             configMapKeyRef:
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               key: server.base.href
               optional: true
         volumeMounts:
@@ -65,49 +65,49 @@ spec:
           - name: NUMAFLOW_SERVER_INSECURE
             valueFrom:
               configMapKeyRef:
-                name: numaflow-server-cmd-params-config
+                name: numaflow-cmd-params-config
                 key: server.insecure
                 optional: true
           - name: NUMAFLOW_SERVER_PORT_NUMBER
             valueFrom:
               configMapKeyRef:
-                name: numaflow-server-cmd-params-config
+                name: numaflow-cmd-params-config
                 key: server.port
                 optional: true
           - name: NUMAFLOW_SERVER_NAMESPACED
             valueFrom:
               configMapKeyRef:
-                name: numaflow-server-cmd-params-config
-                key: server.namespaced
+                name: numaflow-cmd-params-config
+                key: namespaced
                 optional: true
           - name: NUMAFLOW_SERVER_MANAGED_NAMESPACE
             valueFrom:
               configMapKeyRef:
-                name: numaflow-server-cmd-params-config
-                key: server.managed.namespace
+                name: numaflow-cmd-params-config
+                key: managed.namespace
                 optional: true
           - name: NUMAFLOW_SERVER_BASE_HREF
             valueFrom:
               configMapKeyRef:
-                name: numaflow-server-cmd-params-config
+                name: numaflow-cmd-params-config
                 key: server.base.href
                 optional: true
           - name: NUMAFLOW_SERVER_DISABLE_AUTH
             valueFrom:
               configMapKeyRef:
-                name: numaflow-server-cmd-params-config
+                name: numaflow-cmd-params-config
                 key: server.disable.auth
                 optional: true
           - name: NUMAFLOW_SERVER_DEX_SERVER_ADDR
             valueFrom:
               configMapKeyRef:
-                name: numaflow-server-cmd-params-config
+                name: numaflow-cmd-params-config
                 key: server.dex.server
                 optional: true
           - name: NUMAFLOW_SERVER_ADDRESS
             valueFrom:
               configMapKeyRef:
-                name: numaflow-server-cmd-params-config
+                name: numaflow-cmd-params-config
                 key: server.address
                 optional: true
           resources:

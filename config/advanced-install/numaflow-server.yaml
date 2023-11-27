@@ -90,7 +90,7 @@ data:
   server.disable.auth: "true"
 kind: ConfigMap
 metadata:
-  name: numaflow-server-cmd-params-config
+  name: numaflow-cmd-params-config
   namespace: numaflow-system
 ---
 apiVersion: v1
@@ -161,49 +161,49 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: server.insecure
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_PORT_NUMBER
           valueFrom:
             configMapKeyRef:
               key: server.port
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_NAMESPACED
           valueFrom:
             configMapKeyRef:
-              key: server.namespaced
-              name: numaflow-server-cmd-params-config
+              key: namespaced
+              name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_MANAGED_NAMESPACE
           valueFrom:
             configMapKeyRef:
-              key: server.managed.namespace
-              name: numaflow-server-cmd-params-config
+              key: managed.namespace
+              name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_BASE_HREF
           valueFrom:
             configMapKeyRef:
               key: server.base.href
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_DISABLE_AUTH
           valueFrom:
             configMapKeyRef:
               key: server.disable.auth
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_DEX_SERVER_ADDR
           valueFrom:
             configMapKeyRef:
               key: server.dex.server
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_ADDRESS
           valueFrom:
             configMapKeyRef:
               key: server.address
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
@@ -239,7 +239,7 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: server.base.href
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always

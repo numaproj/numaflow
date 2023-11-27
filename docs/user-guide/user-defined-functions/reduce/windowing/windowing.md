@@ -56,7 +56,7 @@ window-based partition into smaller partitions by adding keys along with the
 window will help us horizontally scale the distribution.
 
 Keyed partitions are heavily used to aggregate data and are frequently seen
-throughout the processing pipeline. We could also convert and non-keyed problem
+throughout the processing pipeline. We could also convert a non-keyed problem
 to a set of keyed problems and apply a non-keyed function at the end. This will
 help solve the original problem in a scalable manner without affecting the
 result's completeness and/or accuracy.
@@ -66,7 +66,7 @@ vertex for parallel processing.
 
 ### Usage
 
-Numaflow support both Keyed and Non-Keyed windows. We set `keyed` to either
+Numaflow supports both Keyed and Non-Keyed windows. We set `keyed` to either
 `true` (keyed) or `false` (non-keyed). Please note that the non-keyed windows
 are not horizontally scalable as mentioned above.
 

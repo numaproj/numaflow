@@ -17,12 +17,12 @@ limitations under the License.
 package sinks
 
 import (
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 // Sinker interface defines what a Sink should implement.
 type Sinker interface {
 	isb.BufferWriter
-	forward.StarterStopper
+	forwarder.StarterStopper
 }

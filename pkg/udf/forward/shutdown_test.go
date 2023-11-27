@@ -22,6 +22,7 @@ import (
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
@@ -34,8 +35,8 @@ import (
 type myShutdownTest struct {
 }
 
-func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]VertexBuffer, error) {
-	return []VertexBuffer{}, nil
+func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+	return []forwarder.VertexBuffer{}, nil
 }
 
 func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {

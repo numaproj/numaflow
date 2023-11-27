@@ -24,10 +24,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
+	"github.com/numaproj/numaflow/pkg/udf/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
@@ -35,8 +36,8 @@ import (
 type myForwardJetStreamTest struct {
 }
 
-func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]forward.VertexBuffer, error) {
-	return []forward.VertexBuffer{{
+func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
 	}}, nil

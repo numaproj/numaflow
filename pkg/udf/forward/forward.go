@@ -34,11 +34,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward/applier"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/udf/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -54,7 +55,7 @@ type InterStepDataForward struct {
 	fromBufferPartition isb.BufferReader
 	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
 	toBuffers    map[string][]isb.BufferWriter
-	FSD          ToWhichStepDecider
+	FSD          forwarder.ToWhichStepDecider
 	mapUDF       applier.MapApplier
 	mapStreamUDF applier.MapStreamApplier
 	wmFetcher    fetch.Fetcher
@@ -76,7 +77,7 @@ func NewInterStepDataForward(
 	vertexInstance *dfv1.VertexInstance,
 	fromStep isb.BufferReader,
 	toSteps map[string][]isb.BufferWriter,
-	fsd ToWhichStepDecider,
+	fsd forwarder.ToWhichStepDecider,
 	applyUDF applier.MapApplier,
 	applyUDFStream applier.MapStreamApplier,
 	fetchWatermark fetch.Fetcher,
@@ -663,13 +664,9 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 			}
 			continue
 		} else {
-			// if we do not get a time from map UDF, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
 				// add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
 				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
-				if m.EventTime.IsZero() {
-					m.EventTime = readMessage.EventTime
-				}
 			}
 			return writeMessages, nil
 		}

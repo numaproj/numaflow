@@ -32,7 +32,7 @@ type MockInterStepBufferServices struct {
 
 // Get takes name of the interStepBufferService, and returns the corresponding interStepBufferService object, and an error if there is any.
 func (c *MockInterStepBufferServices) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.InterStepBufferService, err error) {
-	isbsvc := fakeISBSvc()
+	isbsvc := fakeRedisISBSvc()
 	isbsvc.Status.MarkDeployed()
 	return isbsvc, err
 }

@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,7 +62,7 @@ type handler struct {
 	kubeClient         kubernetes.Interface
 	metricsClient      *metricsversiond.Clientset
 	numaflowClient     dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache *lru.Cache
+	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
 	dexObj             *DexObject
 }
 
@@ -82,8 +82,8 @@ func NewHandler(dexObj *DexObject) (*handler, error) {
 	}
 	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
-	daemonClientsCache, _ := lru.NewWithEvict(100, func(key, value interface{}) {
-		_ = value.(*daemonclient.DaemonClient).Close()
+	daemonClientsCache, _ := lru.NewWithEvict[string, *daemonclient.DaemonClient](500, func(key string, value *daemonclient.DaemonClient) {
+		_ = value.Close()
 	})
 	return &handler{
 		kubeClient:         kubeClient,
@@ -236,38 +236,34 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 // CreatePipeline is used to create a given pipeline
 func (h *handler) CreatePipeline(c *gin.Context) {
 	ns := c.Param("namespace")
-	// dryRun is used to check if the operation is just a validation or an actual create
+	// dryRun is used to check if the operation is just a validation or an actual creation
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
 	var pipelineSpec dfv1.Pipeline
-	err := c.ShouldBindJSON(&pipelineSpec)
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
+	if err := bindJson(c, &pipelineSpec); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to pipeline spec, %s", err.Error()))
 		return
 	}
 
-	err = validateNamespace(h, &pipelineSpec, ns)
-	if err != nil {
-		h.respondWithError(c, err.Error())
+	if requestedNs := pipelineSpec.Namespace; !isValidNamespaceSpec(requestedNs, ns) {
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s, got %s", ns, requestedNs))
 		return
 	}
 	pipelineSpec.Namespace = ns
-	err = validatePipelineSpec(h, nil, &pipelineSpec, ValidTypeCreate)
-	if err != nil {
+
+	if err := validatePipelineSpec(h, nil, &pipelineSpec, ValidTypeCreate); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", err.Error()))
 		return
 	}
-	// if Validation flag "dryRun" is set to true, return without creating the pipeline
+	// if the validation flag "dryRun" is set to true, return without creating the pipeline
 	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
-
 	if _, err := h.numaflowClient.Pipelines(ns).Create(context.Background(), &pipelineSpec, metav1.CreateOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to create pipeline %q, %s", pipelineSpec.Name, err.Error()))
 		return
 	}
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
 
@@ -378,32 +374,29 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 	}
 
 	var updatedSpec dfv1.Pipeline
-	err = c.ShouldBindJSON(&updatedSpec)
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
+	if err = bindJson(c, &updatedSpec); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to pipeline spec, %s", err.Error()))
 		return
 	}
 
-	// Validate the namespace of the request
-	err = validateNamespace(h, &updatedSpec, ns)
-	if err != nil {
-		h.respondWithError(c, err.Error())
+	if requestedNs := updatedSpec.Namespace; !isValidNamespaceSpec(requestedNs, ns) {
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s, got %s", ns, requestedNs))
 		return
 	}
+	updatedSpec.Namespace = ns
 
-	// pipeline name in the URL should be same as spec name
+	// pipeline name in the URL should be the same as spec name
 	if pipeline != updatedSpec.Name {
 		h.respondWithError(c, fmt.Sprintf("pipeline name %q is immutable", pipeline))
 		return
 	}
 
-	updatedSpec.Namespace = ns
 	isValid := validatePipelineSpec(h, oldSpec, &updatedSpec, ValidTypeUpdate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update pipeline %q, %s", pipeline, isValid.Error()))
 		return
 	}
-	// If Validation flag is set to true, return without updating the pipeline
+	// If the validation flag is set to true, return without updating the pipeline
 	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
@@ -457,25 +450,29 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
 
-// CreateInterStepBufferService is used to create a given interstep buffer service
 func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual update
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 
 	var isbsvcSpec dfv1.InterStepBufferService
-	err := c.ShouldBindJSON(&isbsvcSpec)
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
+	if err := bindJson(c, &isbsvcSpec); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to interstepbuffer service spec, %s", err.Error()))
 		return
 	}
 
-	isValid := validateISBSVCSpec(h, nil, &isbsvcSpec, ValidTypeCreate)
+	if isbsvcNs := isbsvcSpec.Namespace; !isValidNamespaceSpec(isbsvcNs, ns) {
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s, got %s", ns, isbsvcNs))
+		return
+	}
+	isbsvcSpec.Namespace = ns
+
+	isValid := validateISBSVCSpec(nil, &isbsvcSpec, ValidTypeCreate)
 	if isValid != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to create interstepbuffer service spec, %s", isValid.Error()))
 		return
 	}
-	// If Validation flag is set to true, return without creating the ISB
+	// If the validation flag is set to true, return without creating the ISB service
 	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
@@ -522,7 +519,6 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, resp))
 }
 
-// UpdateInterStepBufferService is used to delete the inter-step buffer service
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 	// dryRun is used to check if the operation is just a validation or an actual update
@@ -535,19 +531,17 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 	}
 
 	var updatedSpec dfv1.InterStepBufferService
-	err = c.ShouldBindJSON(&updatedSpec)
-	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get JSON request body, %s", err.Error()))
+	if err = bindJson(c, &updatedSpec); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to interstepbuffer service spec, %s", err.Error()))
 		return
 	}
 
-	err = validateISBSVCSpec(h, isbSVC, &updatedSpec, ValidTypeUpdate)
-	if err != nil {
+	if err = validateISBSVCSpec(isbSVC, &updatedSpec, ValidTypeUpdate); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate interstepbuffer service spec, %s", err.Error()))
 		return
 	}
 
-	// If Validation flag is set to true, return without updating the ISB service
+	// If the validation flag is set to true, return without updating the ISB service
 	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
@@ -558,16 +552,13 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the interstep buffer service: namespace %q isb-services %q: %s", ns, isbsvcName, err.Error()))
 		return
 	}
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, updatedISBSvc))
 }
 
-// DeleteInterStepBufferService is used to update the spec of the inter step buffer service
 func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 
 	pipelines, err := h.numaflowClient.Pipelines(ns).List(context.Background(), metav1.ListOptions{})
-	// Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get pipelines in namespace %q, %s", ns, err.Error()))
 		return
@@ -639,20 +630,19 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 		inputVertexName = c.Param("vertex")
 		pipeline        = c.Param("pipeline")
 		ns              = c.Param("namespace")
-		// dryRun is used to check if the operation is just a validation or an actual create
+		// dryRun is used to check if the operation is just a validation or an actual creation
 		dryRun = strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
 	)
 
-	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
+	oldPipelineSpec, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", ns,
 			pipeline, inputVertexName, err.Error()))
 		return
 	}
 
-	if err = c.ShouldBindJSON(&requestBody); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s", ns,
-			pipeline, inputVertexName, err.Error()))
+	if err = bindJson(c, &requestBody); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to vertex spec, %s", err.Error()))
 		return
 	}
 
@@ -662,41 +652,33 @@ func (h *handler) UpdateVertex(c *gin.Context) {
 		return
 	}
 
-	for index, vertex := range pl.Spec.Vertices {
+	newPipelineSpec := oldPipelineSpec.DeepCopy()
+	for index, vertex := range newPipelineSpec.Spec.Vertices {
 		if vertex.Name == inputVertexName {
-			if vertex.GetVertexType() != requestBody.GetVertexType() {
-				h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: vertex type is immutable",
-					ns, pipeline, inputVertexName))
-				return
-			}
-			pl.Spec.Vertices[index] = requestBody
+			newPipelineSpec.Spec.Vertices[index] = requestBody
 			break
 		}
 	}
-	err = validateNamespace(h, pl, ns)
-	if err != nil {
-		h.respondWithError(c, err.Error())
-		return
-	}
-	pl.Namespace = ns
-	err = validatePipelineSpec(h, nil, pl, ValidTypeCreate)
+
+	err = validatePipelineSpec(h, oldPipelineSpec, newPipelineSpec, ValidTypeUpdate)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to validate pipeline spec, %s", err.Error()))
 		return
 	}
-	// if Validation flag "dryRun" is set to true, return without creating the pipeline
+	// if the validation flag "dryRun" is set to true, return without updating the pipeline
 	if dryRun {
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 		return
 	}
 
-	if _, err := h.numaflowClient.Pipelines(ns).Update(context.Background(), pl, metav1.UpdateOptions{}); err != nil {
+	oldPipelineSpec.Spec = newPipelineSpec.Spec
+	if _, err := h.numaflowClient.Pipelines(ns).Update(context.Background(), oldPipelineSpec, metav1.UpdateOptions{}); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to update the vertex: namespace %q pipeline %q vertex %q: %s",
 			ns, pipeline, inputVertexName, err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pl.Spec))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, oldPipelineSpec.Spec))
 }
 
 // GetVerticesMetrics is used to provide information about all the vertices for the given pipeline including processing rates.
@@ -951,9 +933,8 @@ func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 // validatePipelineSpec is used to validate the pipeline spec during create and update
 func validatePipelineSpec(h *handler, oldPipeline *dfv1.Pipeline, newPipeline *dfv1.Pipeline, validType string) error {
 	ns := newPipeline.Namespace
-	pipeClient := h.numaflowClient.Pipelines(ns)
 	isbClient := h.numaflowClient.InterStepBufferServices(ns)
-	valid := validator.NewPipelineValidator(h.kubeClient, pipeClient, isbClient, oldPipeline, newPipeline)
+	valid := validator.NewPipelineValidator(isbClient, oldPipeline, newPipeline)
 	var resp *admissionv1.AdmissionResponse
 	switch validType {
 	case ValidTypeCreate:
@@ -969,11 +950,20 @@ func validatePipelineSpec(h *handler, oldPipeline *dfv1.Pipeline, newPipeline *d
 }
 
 // validateISBSVCSpec is used to validate the ISB service spec
-func validateISBSVCSpec(h *handler, prevSpec *dfv1.InterStepBufferService,
+func validateISBSVCSpec(prevSpec *dfv1.InterStepBufferService,
 	newSpec *dfv1.InterStepBufferService, validType string) error {
-	ns := newSpec.Namespace
-	isbClient := h.numaflowClient.InterStepBufferServices(ns)
-	valid := validator.NewISBServiceValidator(h.kubeClient, isbClient, prevSpec, newSpec)
+	// UI-specific validations: updating namespace and name from UI is not allowed
+	if validType == ValidTypeUpdate && prevSpec != nil {
+		if !isValidNamespaceSpec(newSpec.Namespace, prevSpec.Namespace) {
+			return fmt.Errorf("updating an inter-step buffer service's namespace is not allowed, expected %s, got %s", prevSpec.Namespace, newSpec.Namespace)
+		}
+		if prevSpec.Name != newSpec.Name {
+			return fmt.Errorf("updating an inter-step buffer service's name is not allowed, expected %s, got %s", prevSpec.Name, newSpec.Name)
+		}
+	}
+
+	// the rest of the code leverages the webhook validator to validate the ISB service spec.
+	valid := validator.NewISBServiceValidator(prevSpec, newSpec)
 	var resp *admissionv1.AdmissionResponse
 	switch validType {
 	case ValidTypeCreate:
@@ -988,12 +978,19 @@ func validateISBSVCSpec(h *handler, prevSpec *dfv1.InterStepBufferService,
 	return nil
 }
 
-// validateNamespace is used to validate the namespace for a pipeline spec
-// For a request, the namespace provided as parameter should be same as the namespace in the pipeline spec
-func validateNamespace(h *handler, pipeline *dfv1.Pipeline, ns string) error {
-	if pipeline.Namespace != "" && pipeline.Namespace != ns {
-		errMsg := fmt.Errorf("namespace mismatch, expected %s", ns)
-		return errMsg
+// isValidNamespaceSpec validates
+// that the requested namespace should be either empty or the same as the current namespace
+func isValidNamespaceSpec(requested, current string) bool {
+	return requested == "" || requested == current
+}
+
+// bindJson is used to bind the request body to a given object
+// It also validates the request body to ensure that it does not contain any unknown fields
+func bindJson(c *gin.Context, obj interface{}) error {
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(obj); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1023,22 +1020,14 @@ func daemonSvcAddress(ns, pipeline string) string {
 }
 
 func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClient, error) {
-	dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline))
-	if !ok {
-		dClient, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+	if dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline)); !ok {
+		c, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 		if err != nil {
 			return nil, err
 		}
-		if dClient == nil {
-			return nil, fmt.Errorf("nil client")
-		}
-		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), dClient)
+		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), c)
+		return c, nil
+	} else {
+		return dClient, nil
 	}
-
-	client, ok := dClient.(*daemonclient.DaemonClient)
-	if !ok {
-		return nil, fmt.Errorf("failed to get client")
-	}
-
-	return client, nil
 }

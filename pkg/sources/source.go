@@ -24,7 +24,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
@@ -278,7 +278,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 // getSourcer is used to send the sourcer information
 func (sp *SourceProcessor) getSourcer(
 	writers map[string][]isb.BufferWriter,
-	fsd forward.ToWhichStepDecider,
+	fsd forwarder.ToWhichStepDecider,
 	transformerApplier applier.SourceTransformApplier,
 	udsGRPCClient *udsource.GRPCBasedUDSource,
 	fetchWM fetch.Fetcher,
@@ -327,21 +327,21 @@ func (sp *SourceProcessor) getSourcer(
 	return nil, fmt.Errorf("invalid source spec")
 }
 
-func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forward.GoWhere {
+func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forwarder.GoWhere {
 	getToBufferPartition := GetPartitionedBufferIdx()
 
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
-		var result []forward.VertexBuffer
+	fsd := forwarder.GoWhere(func(keys []string, tags []string) ([]forwarder.VertexBuffer, error) {
+		var result []forwarder.VertexBuffer
 
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 				toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-				result = append(result, forward.VertexBuffer{
+				result = append(result, forwarder.VertexBuffer{
 					ToVertexName:         edge.To,
 					ToVertexPartitionIdx: toVertexPartition,
 				})
 			} else {
-				result = append(result, forward.VertexBuffer{
+				result = append(result, forwarder.VertexBuffer{
 					ToVertexName:         edge.To,
 					ToVertexPartitionIdx: getToBufferPartition(edge.To, edge.GetToVertexPartitionCount()),
 				})
@@ -352,10 +352,10 @@ func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*sh
 	return fsd
 }
 
-func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forward.GoWhere {
+func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forwarder.GoWhere {
 	getToBufferPartition := GetPartitionedBufferIdx()
-	fsd := forward.GoWhere(func(keys []string, tags []string) ([]forward.VertexBuffer, error) {
-		var result []forward.VertexBuffer
+	fsd := forwarder.GoWhere(func(keys []string, tags []string) ([]forwarder.VertexBuffer, error) {
+		var result []forwarder.VertexBuffer
 
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil
@@ -366,12 +366,12 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
 				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-					result = append(result, forward.VertexBuffer{
+					result = append(result, forwarder.VertexBuffer{
 						ToVertexName:         edge.To,
 						ToVertexPartitionIdx: toVertexPartition,
 					})
 				} else {
-					result = append(result, forward.VertexBuffer{
+					result = append(result, forwarder.VertexBuffer{
 						ToVertexName:         edge.To,
 						ToVertexPartitionIdx: getToBufferPartition(edge.To, edge.GetToVertexPartitionCount()),
 					})
@@ -380,12 +380,12 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
 					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
 						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-						result = append(result, forward.VertexBuffer{
+						result = append(result, forwarder.VertexBuffer{
 							ToVertexName:         edge.To,
 							ToVertexPartitionIdx: toVertexPartition,
 						})
 					} else {
-						result = append(result, forward.VertexBuffer{
+						result = append(result, forwarder.VertexBuffer{
 							ToVertexName:         edge.To,
 							ToVertexPartitionIdx: getToBufferPartition(edge.To, edge.GetToVertexPartitionCount()),
 						})
