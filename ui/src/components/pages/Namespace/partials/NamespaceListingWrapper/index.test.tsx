@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import { BrowserRouter } from "react-router-dom";
 import { act } from "react-dom/test-utils";
 
-import { NamespacePipelineListing } from "./index";
+import { NamespaceListingWrapper } from "./index";
 import { AppContext } from "../../../../../App";
 
 const mockRefresh = jest.fn();
@@ -222,12 +222,12 @@ const mockISBRawData = {
   },
 };
 
-describe("NamespacePipelineListing", () => {
+describe("NamespaceListingWrapper", () => {
   it("renders without crashing", async () => {
     await act(async () => {
       render(
         <BrowserRouter>
-          <NamespacePipelineListing
+          <NamespaceListingWrapper
             namespace="numaflow-system"
             data={mockData}
             refresh={mockRefresh}
@@ -247,7 +247,7 @@ describe("NamespacePipelineListing", () => {
       render(
         <AppContext.Provider value="">
           <BrowserRouter>
-            <NamespacePipelineListing
+            <NamespaceListingWrapper
               namespace="numaflow-system"
               data={mockData}
               refresh={mockRefresh}
@@ -273,5 +273,29 @@ describe("NamespacePipelineListing", () => {
       screen.getByTestId("namespace-pipeline-listing").querySelector("input")
         ?.value
     ).toBe("zzz");
+  });
+
+  it("Tests handleTabChange", async () => {
+    await act(async () => {
+      render(
+        <AppContext.Provider value="">
+          <BrowserRouter>
+            <NamespaceListingWrapper
+              namespace="numaflow-system"
+              data={mockData}
+              refresh={mockRefresh}
+              isbData={mockISBRawData}
+              pipelineData={mockPipelineRawData}
+            />
+          </BrowserRouter>
+        </AppContext.Provider>
+      );
+    });
+    const tabs = screen
+      .getByTestId("namespace-pipeline-listing")
+      .querySelectorAll("button");
+    tabs.forEach((tab) => {
+      fireEvent.click(tab);
+    });
   });
 });
