@@ -16592,7 +16592,7 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: server.base.href
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
