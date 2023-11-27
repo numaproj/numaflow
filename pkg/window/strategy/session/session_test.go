@@ -365,12 +365,52 @@ func TestSession_CloseWindowsComplex(t *testing.T) {
 
 	closeWindowOps := windower.CloseWindows(time.Unix(515, 0))
 
-	for _, windowOp := range closeWindowOps {
-		println(windowOp.Operation.String())
-		for _, win := range windowOp.Windows {
-			println(win.Partition().String(), " keys - ", win.Keys())
-		}
-	}
+	//Merge
+	//456000-515000-slot-0
+	//514000-573000-slot-0
+
+	//Close
+	//357000-416000-slot-0
+
+	//Merge
+	//262000-317000-slot-0
+	//258000-279000-slot-0
+
+	//Close
+	//258000-317000-slot-0
+
+	//Close
+	//159000-218000-slot-0
+
+	//Close
+	//60000-119000-slot-0
+
+	assert.Equal(t, 6, len(closeWindowOps))
+	assert.Equal(t, window.Merge, closeWindowOps[0].Operation)
+	assert.Equal(t, int64(456000), closeWindowOps[0].Windows[0].StartTime().UnixMilli())
+	assert.Equal(t, int64(515000), closeWindowOps[0].Windows[0].EndTime().UnixMilli())
+	assert.Equal(t, int64(514000), closeWindowOps[0].Windows[1].StartTime().UnixMilli())
+	assert.Equal(t, int64(573000), closeWindowOps[0].Windows[1].EndTime().UnixMilli())
+
+	assert.Equal(t, window.Close, closeWindowOps[1].Operation)
+	assert.Equal(t, int64(357000), closeWindowOps[1].Windows[0].StartTime().UnixMilli())
+	assert.Equal(t, int64(416000), closeWindowOps[1].Windows[0].EndTime().UnixMilli())
+
+	assert.Equal(t, window.Merge, closeWindowOps[2].Operation)
+	assert.Equal(t, int64(262000), closeWindowOps[2].Windows[0].StartTime().UnixMilli())
+	assert.Equal(t, int64(317000), closeWindowOps[2].Windows[0].EndTime().UnixMilli())
+	assert.Equal(t, int64(258000), closeWindowOps[2].Windows[1].StartTime().UnixMilli())
+	assert.Equal(t, int64(279000), closeWindowOps[2].Windows[1].EndTime().UnixMilli())
+
+	assert.Equal(t, window.Close, closeWindowOps[3].Operation)
+	assert.Equal(t, int64(258000), closeWindowOps[3].Windows[0].StartTime().UnixMilli())
+
+	assert.Equal(t, window.Close, closeWindowOps[4].Operation)
+	assert.Equal(t, int64(159000), closeWindowOps[4].Windows[0].StartTime().UnixMilli())
+
+	assert.Equal(t, window.Close, closeWindowOps[5].Operation)
+	assert.Equal(t, int64(60000), closeWindowOps[5].Windows[0].StartTime().UnixMilli())
+
 }
 
 func TestSession_DeleteWindows(t *testing.T) {

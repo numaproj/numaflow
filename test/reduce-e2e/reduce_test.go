@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -233,6 +235,8 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 		SinkContains("sink", "180")
 	done <- struct{}{}
 }
+
+// TODO add test for sliding window with keyed reduce
 
 func TestReduceSuite(t *testing.T) {
 	suite.Run(t, new(ReduceSuite))
