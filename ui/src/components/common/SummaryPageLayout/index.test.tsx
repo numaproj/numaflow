@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import { SummaryPageLayout } from "./index";
-import { NamespacePipelineListing } from "../../pages/Namespace/partials/NamespacePipelineListing";
+import { NamespaceListingWrapper } from "../../pages/Namespace/partials/NamespaceListingWrapper";
 
 window.ResizeObserver = class ResizeObserver {
   observe() {
@@ -163,7 +163,7 @@ describe("SummaryPageLayout", () => {
       <SummaryPageLayout
         summarySections={[]}
         contentComponent={
-          <NamespacePipelineListing
+          <NamespaceListingWrapper
             namespace={""}
             data={mockComponentData}
             refresh={() => {}}
