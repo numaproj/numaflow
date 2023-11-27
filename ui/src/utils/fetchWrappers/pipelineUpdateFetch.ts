@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Options, useFetch } from "./fetch";
+import { getBaseHref } from "../index";
 import { PipelineUpdateFetchResult } from "../../types/declarations/pipeline";
 
 const DATA_REFRESH_INTERVAL = 1000; // ms
@@ -23,7 +24,7 @@ export const usePipelineUpdateFetch = ({
   const [intervalId, setIntervalId] = useState<any>();
 
   const { data, loading, error } = useFetch(
-    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
+    `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
     undefined,
     options
   );
