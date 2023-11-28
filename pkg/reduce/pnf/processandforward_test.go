@@ -139,7 +139,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	}
 
 	pf := processAndForward{
-		PartitionID:    testPartition,
+		partitionId:    testPartition,
 		UDF:            nil,
 		pbqReader:      simplePbq,
 		log:            logging.FromContext(ctx),

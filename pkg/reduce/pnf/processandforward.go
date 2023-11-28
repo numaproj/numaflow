@@ -51,7 +51,7 @@ type processAndForward struct {
 	vertexName     string
 	pipelineName   string
 	vertexReplica  int32
-	PartitionID    partition.ID
+	partitionId    partition.ID
 	UDF            applier.ReduceApplier
 	pbqReader      pbq.Reader
 	log            *zap.SugaredLogger
@@ -83,7 +83,7 @@ func newProcessAndForward(ctx context.Context,
 		vertexName:     vertexName,
 		pipelineName:   pipelineName,
 		vertexReplica:  vr,
-		PartitionID:    partitionID,
+		partitionId:    partitionID,
 		UDF:            udf,
 		pbqReader:      pbqReader,
 		log:            logging.FromContext(ctx),
@@ -106,7 +106,13 @@ func newProcessAndForward(ctx context.Context,
 // manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
 func (p *processAndForward) start(ctx context.Context) {
 	defer close(p.done)
-	responseCh, errCh := p.UDF.ApplyReduce(ctx, &p.PartitionID, p.pbqReader.ReadCh())
+	responseCh, errCh := p.UDF.ApplyReduce(ctx, &p.partitionId, p.pbqReader.ReadCh())
+	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
+	// which will be used for publishing the watermark when the window is closed.
+	latestWriteOffsets := make(map[string][][]isb.Offset)
+	for toVertexName, toVertexBuffer := range p.toBuffers {
+		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
+	}
 
 outerLoop:
 	for {
@@ -116,7 +122,7 @@ outerLoop:
 				return
 			}
 			if err != nil {
-				p.log.Panic("Got an error while invoking ApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
+				p.log.Panic("Got an error while invoking ApplyReduce", zap.Error(err), zap.Any("partitionID", p.partitionId))
 			}
 		case response, ok := <-responseCh:
 			if !ok {
@@ -133,67 +139,53 @@ outerLoop:
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
 				// FIXME(session): we need to compact the pbq for unAligned when we have received the EOF response from the UDF.
-				if p.windower.Strategy() == window.Session {
+				if p.windower.Type() == window.Unaligned {
+					p.publishWM(ctx, p.partitionId, latestWriteOffsets)
 					// delete the closed windows which are tracked by the windower
 					p.windower.DeleteClosedWindows(response)
 				}
 			} else {
 				messagesToStep = p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
-			}
-
-			// store write offsets to publish watermark
-			writeOffsets := make(map[string][][]isb.Offset)
-			for toVertexName, toVertexBuffer := range p.toBuffers {
-				writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
-			}
-
-			// parallel writes to each isb
-			var wg sync.WaitGroup
-			var mu sync.Mutex
-			for key, value := range messagesToStep {
-				for index, messages := range value {
-					if len(messages) == 0 {
-						continue
+				// parallel writes to each isb
+				var wg sync.WaitGroup
+				var mu sync.Mutex
+				for key, value := range messagesToStep {
+					for index, messages := range value {
+						if len(messages) == 0 {
+							continue
+						}
+						wg.Add(1)
+						go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
+							defer wg.Done()
+							offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
+							mu.Lock()
+							// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
+							latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
+							mu.Unlock()
+						}(key, int32(index), messages)
 					}
-					wg.Add(1)
-					go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
-						defer wg.Done()
-						offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
-						mu.Lock()
-						// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-						writeOffsets[toVertexName][toVertexPartitionIdx] = offsets
-						mu.Unlock()
-					}(key, int32(index), messages)
 				}
-			}
 
-			// wait until all the writer go routines return
-			wg.Wait()
-
-			// publish watermark, we publish window end time minus one millisecond  as watermark
-			// but if there's a window that's about to be closed which has a end time before the current window end time,
-			// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
-			oldestClosedWindowEndTime := p.windower.OldestWindowEndTime()
-			if oldestClosedWindowEndTime != time.UnixMilli(-1) && oldestClosedWindowEndTime.Before(response.Window.Partition().End) {
-				p.publishWM(ctx, wmb.Watermark(oldestClosedWindowEndTime.Add(-1*time.Millisecond)), writeOffsets)
-			} else {
-				p.publishWM(ctx, wmb.Watermark(response.Window.Partition().End.Add(-1*time.Millisecond)), writeOffsets)
+				// wait until all the writer go routines return
+				wg.Wait()
 			}
 		}
 	}
 
-	// since we don't track the windows for every key, we need to delete the closed windows
+	// for aligned we don't track the windows for every key, we need to delete the window
 	// once we have received all the responses from the UDF.
-	if p.windower.Strategy() == window.Fixed || p.windower.Strategy() == window.Sliding {
+	if p.windower.Type() == window.Aligned {
+		p.publishWM(ctx, p.partitionId, latestWriteOffsets)
 		// delete the closed windows which are tracked by the windower
-		p.windower.DeleteClosedWindows(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(&p.PartitionID)})
+		p.windower.DeleteClosedWindows(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(&p.partitionId)})
+
 	}
 
 	// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
 	err := p.pbqReader.GC()
-	p.log.Infow("Finished GC", zap.Any("partitionID", p.PartitionID))
+	p.log.Infow("Finished GC", zap.Any("partitionID", p.partitionId))
 	if err != nil {
-		p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.PartitionID))
+		p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.partitionId))
 		return
 	}
 }
@@ -214,7 +206,7 @@ func (p *processAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[s
 				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 			}).Inc()
-			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.Strings("keys", msg.Keys), zap.Error(err), zap.Any("partitionID", p.PartitionID))
+			p.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.Strings("keys", msg.Keys), zap.Error(err), zap.Any("partitionID", p.partitionId))
 			continue
 		}
 
@@ -286,7 +278,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 	})
 
 	if ctxClosedErr != nil {
-		p.log.Errorw("Ctx closed while writing messages to ISB", zap.Error(ctxClosedErr), zap.Any("partitionID", p.PartitionID))
+		p.log.Errorw("Ctx closed while writing messages to ISB", zap.Error(ctxClosedErr), zap.Any("partitionID", p.partitionId))
 		return nil
 	}
 
@@ -322,13 +314,24 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 
 // publishWM publishes the watermark to each edge.
 // TODO: support multi partitioned edges.
-func (p *processAndForward) publishWM(ctx context.Context, wm wmb.Watermark, writeOffsets map[string][][]isb.Offset) {
+func (p *processAndForward) publishWM(ctx context.Context, id partition.ID, offsets map[string][][]isb.Offset) {
+	// publish watermark, we publish window end time minus one millisecond  as watermark
+	// but if there's a window that's about to be closed which has a end time before the current window end time,
+	// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
+	var wm wmb.Watermark
+	oldestClosedWindowEndTime := p.windower.OldestWindowEndTime()
+	if oldestClosedWindowEndTime != time.UnixMilli(-1) && oldestClosedWindowEndTime.Before(p.partitionId.End) {
+		wm = wmb.Watermark(oldestClosedWindowEndTime.Add(-1 * time.Millisecond))
+	} else {
+		wm = wmb.Watermark(id.End.Add(-1 * time.Millisecond))
+	}
+
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
 	// it's used to determine which buffers should receive an idle watermark.
 	// Created as a slice since it tracks per partition of the buffer.
 	var activeWatermarkBuffers = make(map[string][]bool)
-	for toVertexName, bufferOffsets := range writeOffsets {
+	for toVertexName, bufferOffsets := range offsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
 		if publisher, ok := p.wmPublishers[toVertexName]; ok {
 			for index, offsets := range bufferOffsets {
