@@ -146,7 +146,7 @@ wmLoop:
 				if err != nil {
 					assert.Fail(s.T(), err.Error())
 				}
-				// WatermarkConfig propagation can delay, we consider the test as passed as long as the retrieved watermark is greater than the event time of the first message
+				// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark is greater than the event time of the first message
 				// and less than the current time.
 				assert.True(s.T(), edgeWM >= time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() && edgeWM < currentTime)
 				break wmLoop

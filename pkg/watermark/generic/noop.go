@@ -87,7 +87,7 @@ func BuildNoOpSourceWatermarkProgressors(toBuffers []string) (fetch.SourceFetche
 	return fetchWatermark, publishWatermark
 }
 
-func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string][]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
+func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string][]isb.BufferWriter) (fetch.SourceFetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
 	for buffName := range bufferMap {

@@ -370,7 +370,7 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 	// cases to test:
 	// (should test 1 Edge Fetcher as well as 2)
 	// 1. one of them has all publishers Idle and 1 doesn't: should return WMB{}
-	// 2. all publishers Idle: should not return WMB{} and should return most conservative WatermarkConfig
+	// 2. all publishers Idle: should not return WMB{} and should return most conservative Watermark
 	// 3. all publishers Idle but somehow the GetWatermark() of one of the EdgeFetchers is higher than the returned value
 
 	var (

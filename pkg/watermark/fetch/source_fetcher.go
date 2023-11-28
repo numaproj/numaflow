@@ -53,7 +53,7 @@ func (e *sourceFetcher) ComputeWatermark(_ isb.Offset, _ int32) wmb.Watermark {
 	return e.getWatermark()
 }
 
-// getWatermark returns the lowest of the latest WatermarkConfig of all the processors,
+// getWatermark returns the lowest of the latest Watermark of all the processors,
 // it ignores the input Offset.
 func (e *sourceFetcher) getWatermark() wmb.Watermark {
 	var epoch int64 = math.MaxInt64

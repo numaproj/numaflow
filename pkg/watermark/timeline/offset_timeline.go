@@ -91,7 +91,7 @@ func (t *OffsetTimeline) Put(node wmb.WMB) {
 				// 2. G2 determines watermark x and publishes to offsets 102-103
 				// 3. G2 publishes watermark x for offset 103
 				// 4. G1 publishes watermark x for offset 101
-				t.log.Debugw("WatermarkConfig the same but Input offset smaller than the existing offset - skipping", zap.Int64("watermark", node.Watermark),
+				t.log.Debugw("Watermark the same but Input offset smaller than the existing offset - skipping", zap.Int64("watermark", node.Watermark),
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				return
 			}
@@ -166,7 +166,7 @@ func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 }
 
 // GetHeadOffset returns the head offset, that is the most recent offset which will have the highest
-// WatermarkConfig.
+// Watermark.
 func (t *OffsetTimeline) GetHeadOffset() int64 {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -194,7 +194,7 @@ func (t *OffsetTimeline) GetHeadWMB() wmb.WMB {
 }
 
 // GetOffset will return the offset for the given event-time.
-// TODO(jyu6): will make WatermarkConfig an interface make it easy to pass an Offset and return a WatermarkConfig?
+// TODO(jyu6): will make Watermark an interface make it easy to pass an Offset and return a Watermark?
 func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -210,7 +210,7 @@ func (t *OffsetTimeline) GetOffset(eventTime int64) int64 {
 }
 
 // GetEventTime will return the event-time for the given offset.
-// TODO(jyu6): will make WatermarkConfig an interface make it easy to get a WatermarkConfig and return an Offset?
+// TODO(jyu6): will make Watermark an interface make it easy to get a Watermark and return an Offset?
 func (t *OffsetTimeline) GetEventTime(inputOffset isb.Offset) int64 {
 	// TODO: handle err?
 	inputOffsetInt64, _ := inputOffset.Sequence()

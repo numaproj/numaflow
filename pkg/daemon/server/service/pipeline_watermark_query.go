@@ -104,7 +104,7 @@ func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		return resp, nil
 	}
 
-	// WatermarkConfig is enabled
+	// Watermark is enabled
 	watermarkArr := make([]*daemon.EdgeWatermark, len(ps.watermarkFetchers))
 	i := 0
 	for k, edgeFetchers := range ps.watermarkFetchers {
