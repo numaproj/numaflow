@@ -11,9 +11,9 @@ import {
 import { AppContext } from "../../../App";
 import { AppContextProps } from "../../../types/declarations/app";
 import { SidebarType } from "../../common/SlidingSidebar";
-import { NamespacePipelineListing } from "./partials/NamespacePipelineListing";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { NamespaceSummaryData } from "../../../types/declarations/namespace";
+import { NamespaceListingWrapper } from "./partials/NamespaceListingWrapper";
 import {
   ISB_SERVICES_STATUS_TOOLTIP,
   ISB_SERVICES_TOOLTIP,
@@ -273,7 +273,7 @@ export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
     }
 
     return (
-      <NamespacePipelineListing
+      <NamespaceListingWrapper
         namespace={namespaceId || ""}
         data={data ? data : defaultNamespaceSummaryData}
         pipelineData={pipelineRawData}
