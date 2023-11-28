@@ -67,6 +67,7 @@ type DataForward struct {
 	// idleManager manages the idle watermark status.
 	idleManager      wmb.IdleManager
 	lastUpdateWM     time.Time
+	idleWMFound      time.Time
 	currentWatermark *wmb.Watermark
 	Shutdown
 }
@@ -219,6 +220,12 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 		// If no any message is coming and watermark is idling then start increasing the watermark with "minIncrement" config
 		// value after waiting for each "maxWait" duration.
 		if isdf.isWatermarkIdle() {
+			// wait for maxWait duration before publishing the idle watermark with MinIncrement value.
+			if time.Since(isdf.idleWMFound) < isdf.WatermarkConfig.IdleSource.GetMaxDelay() {
+				return
+			}
+			// reset the idleWMFound time while publishing the idle watermark.
+			isdf.idleWMFound = time.Time{}
 			// MinIncrement is the value to be added in idle watermark while publishing.
 			minIncrement := isdf.WatermarkConfig.IdleSource.GetMinIncrement()
 			// Get the head watermark value then add the minIncrement to it and publish the idle watermark with updated value.
@@ -430,21 +437,24 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 // configuration by user for idle sourcing
 func (isdf *DataForward) isWatermarkIdle() bool {
 	if isdf.WatermarkConfig.IdleSource != nil {
-		diff := time.Since(isdf.lastUpdateWM)
 		// MaxWait is the wait time before publishing the idle watermark with MinIncrement value. If watermark found to be idle
 		// until MaxWait duration then publish the watermark by adding the MinIncrement value in it.
 		maxWait := isdf.WatermarkConfig.IdleSource.GetMaxWait()
-		if maxWait != nil && diff > *maxWait {
+		if maxWait != nil && time.Since(isdf.lastUpdateWM) > *maxWait {
 			computedWM := isdf.wmFetcher.ComputeWatermark(nil, 0)
 			if isdf.currentWatermark == nil {
 				isdf.currentWatermark = &computedWM
-				return true
 			}
 			if computedWM == *isdf.currentWatermark {
+				// set idleWMFound time if not already set and watermark is found to be idle
+				if isdf.idleWMFound.IsZero() {
+					isdf.idleWMFound = time.Now()
+				}
 				return true
 			}
 		}
 	}
+
 	return false
 }
 

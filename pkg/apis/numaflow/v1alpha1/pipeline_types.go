@@ -508,8 +508,12 @@ type IdleSource struct {
 	// MaxWait is the wait time before publishing the idle watermark with MinIncrement value.
 	// Ex: If watermark found to be idle until MaxWait duration then publish the watermark by adding the MinIncrement value in it.
 	MaxWait *metav1.Duration `json:"maxWait,omitempty" protobuf:"bytes,1,opt,name=maxWait"`
+	// MaxDelay is the delay after watermark found to be idle before publishing the watermark.
+	// +kubebuilder:default="0s"
+	// +optional
+	MaxDelay *metav1.Duration `json:"MaxDelay,omitempty" protobuf:"bytes,2,opt,name=MaxDelay"`
 	// MinIncrement is the value to be added in idle watermark while publishing.
-	MinIncrement *metav1.Duration `json:"minIncrement,omitempty" protobuf:"bytes,2,opt,name=minIncrement"`
+	MinIncrement *metav1.Duration `json:"minIncrement,omitempty" protobuf:"bytes,3,opt,name=minIncrement"`
 }
 
 // GetMaxDelay returns the configured max delay with a default value.
@@ -542,6 +546,13 @@ func (is IdleSource) GetMinIncrement() *time.Duration {
 	}
 
 	return nil
+}
+
+func (is IdleSource) GetMaxDelay() time.Duration {
+	if is.MaxDelay != nil {
+		return is.MaxDelay.Duration
+	}
+	return time.Duration(0)
 }
 
 type Templates struct {

@@ -526,8 +526,13 @@ message IdleSource {
   // Ex: If watermark found to be idle until MaxWait duration then publish the watermark by adding the MinIncrement value in it.
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxWait = 1;
 
+  // MaxDelay is the delay after watermark found to be idle before publishing the watermark.
+  // +kubebuilder:default="0s"
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration MaxDelay = 2;
+
   // MinIncrement is the value to be added in idle watermark while publishing.
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration minIncrement = 2;
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration minIncrement = 3;
 }
 
 // +genclient

@@ -828,6 +828,11 @@ func (in *IdleSource) DeepCopyInto(out *IdleSource) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
+	if in.MaxDelay != nil {
+		in, out := &in.MaxDelay, &out.MaxDelay
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	if in.MinIncrement != nil {
 		in, out := &in.MinIncrement, &out.MinIncrement
 		*out = new(metav1.Duration)

@@ -18157,6 +18157,10 @@
     },
     "io.numaproj.numaflow.v1alpha1.IdleSource": {
       "properties": {
+        "MaxDelay": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "MaxDelay is the delay after watermark found to be idle before publishing the watermark."
+        },
         "maxWait": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
           "description": "MaxWait is the wait time before publishing the idle watermark with MinIncrement value. Ex: If watermark found to be idle until MaxWait duration then publish the watermark by adding the MinIncrement value in it."

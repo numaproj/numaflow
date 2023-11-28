@@ -2011,6 +2011,20 @@ it.
 </tr>
 <tr>
 <td>
+<code>MaxDelay</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+MaxDelay is the delay after watermark found to be idle before publishing
+the watermark.
+</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>minIncrement</code></br> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>

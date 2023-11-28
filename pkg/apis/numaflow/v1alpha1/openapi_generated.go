@@ -1790,6 +1790,12 @@ func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) 
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"MaxDelay": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxDelay is the delay after watermark found to be idle before publishing the watermark.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 					"minIncrement": {
 						SchemaProps: spec.SchemaProps{
 							Description: "MinIncrement is the value to be added in idle watermark while publishing.",

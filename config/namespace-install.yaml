@@ -11187,6 +11187,9 @@ spec:
                     type: boolean
                   idleSource:
                     properties:
+                      MaxDelay:
+                        default: 0s
+                        type: string
                       maxWait:
                         type: string
                       minIncrement:
@@ -15847,6 +15850,9 @@ spec:
                     type: boolean
                   idleSource:
                     properties:
+                      MaxDelay:
+                        default: 0s
+                        type: string
                       maxWait:
                         type: string
                       minIncrement:
