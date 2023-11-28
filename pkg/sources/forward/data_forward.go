@@ -58,7 +58,7 @@ type DataForward struct {
 	// toVertexWMPublishers stores the toVertex to publisher mapping.
 	toVertexWMPublishers map[string]map[int32]publish.Publisher
 	// srcWMPublisher is used to publish source watermark.
-	srcWMPublisher  isb.SourceWatermarkPublisher
+	srcWMPublisher  publish.SourceWatermarkPublisher
 	opts            options
 	vertexName      string
 	pipelineName    string
@@ -79,7 +79,7 @@ func NewDataForward(
 	toWhichStepDecider forwarder.ToWhichStepDecider,
 	transformer applier.SourceTransformApplier,
 	fetchWatermark fetch.SourceFetcher,
-	srcWMPublisher isb.SourceWatermarkPublisher,
+	srcWMPublisher publish.SourceWatermarkPublisher,
 	toVertexWmStores map[string]store.WatermarkStore,
 	idleManager wmb.IdleManager,
 	opts ...Option) (*DataForward, error) {

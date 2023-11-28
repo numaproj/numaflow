@@ -28,7 +28,8 @@ import (
 type NoOpWMProgressor struct {
 }
 
-var _ fetch.Fetcher = (*NoOpWMProgressor)(nil)
+// if the struct implements SourceFetcher interface, it implicitly implements Fetcher.
+var _ fetch.SourceFetcher = (*NoOpWMProgressor)(nil)
 var _ publish.Publisher = (*NoOpWMProgressor)(nil)
 
 // NewNoOpWMProgressor returns NoOpWMProgressor.
@@ -68,7 +69,7 @@ func (n NoOpWMProgressor) Close() error {
 	return nil
 }
 
-func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.SourceFetcher, map[string]publish.Publisher) {
+func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.Fetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
 	for _, buffer := range toBuffers {
@@ -77,7 +78,16 @@ func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.Sour
 	return fetchWatermark, publishWatermark
 }
 
-func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string][]isb.BufferWriter) (fetch.SourceFetcher, map[string]publish.Publisher) {
+func BuildNoOpSourceWatermarkProgressors(toBuffers []string) (fetch.SourceFetcher, map[string]publish.Publisher) {
+	fetchWatermark := NewNoOpWMProgressor()
+	publishWatermark := make(map[string]publish.Publisher)
+	for _, buffer := range toBuffers {
+		publishWatermark[buffer] = NewNoOpWMProgressor()
+	}
+	return fetchWatermark, publishWatermark
+}
+
+func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string][]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
 	for buffName := range bufferMap {

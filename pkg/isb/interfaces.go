@@ -26,7 +26,6 @@ import (
 	"context"
 	"io"
 	"math"
-	"time"
 )
 
 const PendingNotAvailable = int64(math.MinInt64)
@@ -74,13 +73,6 @@ type BufferWriterInformation interface {
 	GetName() string
 	// GetPartitionIdx returns the partition ID.
 	GetPartitionIdx() int32
-}
-
-// SourceWatermarkPublisher publishes source watermarks based on a list of isb.ReadMessage
-type SourceWatermarkPublisher interface {
-	PublishSourceWatermarks([]*ReadMessage)
-
-	PublishIdleWatermarks(time.Time)
 }
 
 // Offset is an interface used in the ReadMessage referencing offset information.

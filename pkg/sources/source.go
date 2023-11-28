@@ -82,7 +82,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	// watermark variables no-op initialization
 	// create a no op fetcher
-	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToBuffers())
+	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressors(sp.VertexInstance.Vertex.GetToBuffers())
 	// create no op publisher stores
 	for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 		toVertexWatermarkStores[e.To], _ = store.BuildNoOpWatermarkStore()
