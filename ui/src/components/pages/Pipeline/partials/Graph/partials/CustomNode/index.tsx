@@ -72,7 +72,6 @@ const CustomNode: FC<NodeProps> = ({
     setHighlightValues,
     setHidden,
     sideInputNodes,
-    // handleNodeClick,
     sideInputEdges,
   } = useContext<HighlightContextProps>(HighlightContext);
 
