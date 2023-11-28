@@ -8,7 +8,7 @@ import {
   ValidationMessage,
 } from "../../../SpecEditor";
 import { SpecEditorSidebarProps } from "../..";
-import { getAPIResponseError } from "../../../../../utils";
+import { getAPIResponseError, getBaseHref } from "../../../../../utils";
 import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
 
 import "./style.css";
@@ -120,7 +120,7 @@ export function PipelineCreate({
       });
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines?dry-run=false`,
+          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines?dry-run=false`,
           {
             method: "POST",
             headers: {
@@ -167,7 +167,7 @@ export function PipelineCreate({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines?dry-run=true`,
+          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines?dry-run=true`,
           {
             method: "POST",
             headers: {

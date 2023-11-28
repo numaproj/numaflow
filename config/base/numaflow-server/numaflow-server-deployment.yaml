@@ -36,7 +36,7 @@ spec:
         - name: NUMAFLOW_SERVER_BASE_HREF
           valueFrom:
             configMapKeyRef:
-              name: numaflow-server-cmd-params-config
+              name: numaflow-cmd-params-config
               key: server.base.href
               optional: true
         volumeMounts:
