@@ -33,9 +33,8 @@ const mockContext: AppContextProps = {
     namespaced: false,
   },
   systemInfoError: null,
-  errors: [],
   addError: function (error: string): void {
-    throw new Error("Function not implemented.");
+    console.log(error);
   },
   clearErrors: function (): void {
     throw new Error("Function not implemented.");
