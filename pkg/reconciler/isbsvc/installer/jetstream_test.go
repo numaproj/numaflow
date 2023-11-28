@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -42,11 +43,12 @@ func TestJetStreamBadInstallation(t *testing.T) {
 		badIsbs := testJetStreamIsbSvc.DeepCopy()
 		badIsbs.Spec.JetStream = nil
 		installer := &jetStreamInstaller{
-			client: fake.NewClientBuilder().Build(),
-			isbSvc: badIsbs,
-			config: fakeConfig,
-			labels: testLabels,
-			logger: zaptest.NewLogger(t).Sugar(),
+			client:   fake.NewClientBuilder().Build(),
+			isbSvc:   badIsbs,
+			config:   fakeConfig,
+			labels:   testLabels,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
 		}
 		_, err := installer.Install(context.TODO())
 		assert.Error(t, err)
@@ -78,6 +80,7 @@ func TestJetStreamCreateObjects(t *testing.T) {
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
+		recorder:   record.NewFakeRecorder(64),
 	}
 
 	t.Run("test create sts", func(t *testing.T) {
@@ -156,6 +159,7 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
+		recorder:   record.NewFakeRecorder(64),
 	}
 	t.Run("test install", func(t *testing.T) {
 		c, err := i.Install(ctx)

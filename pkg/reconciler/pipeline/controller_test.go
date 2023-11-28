@@ -483,11 +483,12 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	ctx := context.TODO()
 	r := &pipelineReconciler{
-		client: cl,
-		scheme: scheme.Scheme,
-		config: fakeConfig,
-		image:  testFlowImage,
-		logger: zaptest.NewLogger(t).Sugar(),
+		client:   cl,
+		scheme:   scheme.Scheme,
+		config:   fakeConfig,
+		image:    testFlowImage,
+		logger:   zaptest.NewLogger(t).Sugar(),
+		recorder: record.NewFakeRecorder(64),
 	}
 
 	t.Run("test create or update service", func(t *testing.T) {

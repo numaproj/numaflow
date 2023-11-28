@@ -127,6 +127,7 @@ func TestReconcileNativeRedis(t *testing.T) {
 			scheme:     scheme.Scheme,
 			config:     fakeConfig,
 			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
 		}
 		err := r.reconcile(ctx, testIsb)
 		assert.NoError(t, err)
@@ -167,6 +168,7 @@ func TestReconcileJetStream(t *testing.T) {
 			scheme:     scheme.Scheme,
 			config:     fakeConfig,
 			logger:     zaptest.NewLogger(t).Sugar(),
+			recorder:   record.NewFakeRecorder(64),
 		}
 		err := r.reconcile(ctx, testIsb)
 		assert.NoError(t, err)
