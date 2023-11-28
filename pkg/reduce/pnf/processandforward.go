@@ -107,6 +107,17 @@ func newProcessAndForward(ctx context.Context,
 func (p *processAndForward) invokeUDF(ctx context.Context) {
 	defer close(p.done)
 	responseCh, errCh := p.UDF.ApplyReduce(ctx, &p.partitionId, p.pbqReader.ReadCh())
+
+	if p.windower.Type() == window.Aligned {
+		p.handleAlignedWindowResponses(ctx, responseCh, errCh)
+	} else {
+		p.handleUnalignedWindowResponses(ctx, responseCh, errCh)
+	}
+}
+
+// handleUnalignedWindowResponses handles the responses from the UDF for unaligned windows.
+func (p *processAndForward) handleUnalignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
+	defer close(p.done)
 	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
 	// which will be used for publishing the watermark when the window is closed.
 	latestWriteOffsets := make(map[string][][]isb.Offset)
@@ -114,8 +125,6 @@ func (p *processAndForward) invokeUDF(ctx context.Context) {
 		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 
-	// FIXME(session): refactor this code into two 2 fuctions each with a for loop. Key reason for that is
-	// one for-loop exits, while the other does not.
 outerLoop:
 	for {
 		select {
@@ -131,69 +140,98 @@ outerLoop:
 				break outerLoop
 			}
 
-			// FIXME(session): remove this nil check later
-			if response == nil {
-				p.log.Panic("we should have never received a nil response, please report a bug")
-			}
-
-			var messagesToStep map[string][][]isb.Message
-
 			if response.EOF {
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
 				// FIXME(session): we need to compact the pbq for unAligned when we have received the EOF response from the UDF.
-				if p.windower.Type() == window.Unaligned {
-					p.publishWM(ctx, p.partitionId, latestWriteOffsets)
-					// delete the closed windows which are tracked by the windower
-					p.windower.DeleteClosedWindows(response)
-				}
+				p.publishWM(ctx, p.partitionId, latestWriteOffsets)
+				// delete the closed windows which are tracked by the windower
+				p.windower.DeleteClosedWindows(response)
 
 				continue
 			}
 
-			messagesToStep = p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
-			// parallel writes to each isb
-			var wg sync.WaitGroup
-			var mu sync.Mutex
-			for key, value := range messagesToStep {
-				for index, messages := range value {
-					if len(messages) == 0 {
-						continue
-					}
-					wg.Add(1)
-					go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
-						defer wg.Done()
-						offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
-						mu.Lock()
-						// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-						latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
-						mu.Unlock()
-					}(key, int32(index), messages)
-				}
+			p.handleWritingToBuffers(ctx, response, latestWriteOffsets)
+		}
+	}
+}
+
+// handleAlignedWindowResponses handles the responses from the UDF for aligned window.
+func (p *processAndForward) handleAlignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
+	defer close(p.done)
+	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
+	// which will be used for publishing the watermark when the window is closed.
+	latestWriteOffsets := make(map[string][][]isb.Offset)
+	for toVertexName, toVertexBuffer := range p.toBuffers {
+		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
+	}
+
+outerLoop:
+	for {
+		select {
+		case err := <-errCh:
+			if err == ctx.Err() {
+				return
+			}
+			if err != nil {
+				p.log.Panic("Got an error while invoking ApplyReduce", zap.Error(err), zap.Any("partitionID", p.partitionId))
+			}
+		case response, ok := <-responseCh:
+			if !ok {
+				break outerLoop
+			}
+			if response.EOF {
+				continue
 			}
 
-			// wait until all the writer go routines return
-			wg.Wait()
+			p.handleWritingToBuffers(ctx, response, latestWriteOffsets)
 		}
 	}
 
 	// for aligned we don't track the windows for every key, we need to delete the window
 	// once we have received all the responses from the UDF.
-	if p.windower.Type() == window.Aligned {
-		p.publishWM(ctx, p.partitionId, latestWriteOffsets)
-		// delete the closed windows which are tracked by the windower
-		p.windower.DeleteClosedWindows(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(&p.partitionId)})
+	p.publishWM(ctx, p.partitionId, latestWriteOffsets)
+	// delete the closed windows which are tracked by the windower
+	p.windower.DeleteClosedWindows(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(&p.partitionId)})
 
-		// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
-		err := p.pbqReader.GC()
-		p.log.Infow("Finished GC", zap.Any("partitionID", p.partitionId))
-		if err != nil {
-			p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.partitionId))
-			return
-		}
-	} else {
-		// FIXME(session):
+	// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
+	err := p.pbqReader.GC()
+	p.log.Infow("Finished GC", zap.Any("partitionID", p.partitionId))
+	if err != nil {
+		p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.partitionId))
+		return
 	}
+
+}
+
+// handleWritingToBuffers writes the messages to the ISBs.
+func (p *processAndForward) handleWritingToBuffers(ctx context.Context, response *window.TimedWindowResponse, latestWriteOffsets map[string][][]isb.Offset) {
+	var messagesToStep map[string][][]isb.Message
+
+	messagesToStep = p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
+	// parallel writes to each ISB
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for key, values := range messagesToStep {
+		for index, messages := range values {
+			if len(messages) == 0 {
+				continue
+			}
+			wg.Add(1)
+			go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
+				defer wg.Done()
+				offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
+				mu.Lock()
+				// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
+				latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
+				mu.Unlock()
+			}(key, int32(index), messages)
+		}
+	}
+
+	// wait until all the writer go routines return
+	wg.Wait()
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.
