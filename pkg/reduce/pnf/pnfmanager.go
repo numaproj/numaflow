@@ -24,15 +24,14 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forwarder"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-	"github.com/numaproj/numaflow/pkg/window"
-
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // Manager manages the pnf instances. It schedules the pnf routine for each partition.
@@ -85,7 +84,7 @@ func NewPnFManager(ctx context.Context,
 // does not maintain the order of pnf execution.
 func (op *Manager) AsyncSchedulePnF(ctx context.Context,
 	partitionID partition.ID,
-	pbq pbq.ReadWriteCloser,
+	pbq pbq.Reader,
 ) {
 	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.reduceApplier, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager, op.windower)
 	op.pnfRoutines = append(op.pnfRoutines, pf)

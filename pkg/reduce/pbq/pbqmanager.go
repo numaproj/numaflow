@@ -95,7 +95,7 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 		PartitionID:   partitionID,
 		options:       m.pbqOptions,
 		manager:       m,
-		windowType:    m.windowType,
+		windowType:    m.windowType, // FIXME(session): this is can be removed when we have unaligned window replay
 		log:           logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 	m.register(partitionID, p)

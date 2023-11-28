@@ -171,7 +171,7 @@ const (
 	// Merge merges two or more windows, particularly used for SessionWindows.
 	// Perhaps in future we will use it for hot-key partitioning.
 	Merge
-	// Append inserts more data into the opened Window.
+	// Append inserts more data into the opened Window. Append implicitly does Open if window has not been opened yet.
 	Append
 	// Expand expands the existing window, used in SessionWindow after adding a new element or after a window merge operation.
 	Expand

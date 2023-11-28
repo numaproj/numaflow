@@ -18,6 +18,7 @@ package pbq
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -50,6 +51,7 @@ var _ ReadWriteCloser = (*PBQ)(nil)
 
 // Write accepts a window request and writes it to the PBQ, only the isb message is written to the store.
 // The other metadata like operation etc are recomputed from WAL.
+// request can never be nil.
 func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) error {
 	// if cob we should return
 	if p.cob {
@@ -58,7 +60,7 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) err
 	}
 
 	// if the window operation is delete, we should close the output channel and return
-	if request != nil && request.Operation == window.Delete {
+	if request.Operation == window.Delete {
 		p.CloseOfBook()
 		return nil
 	}
@@ -67,9 +69,14 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) err
 	// we need context to get out of blocking write
 	select {
 	case p.output <- request:
-		if request.ReadMessage != nil {
+		switch request.Operation {
+		case window.Open, window.Append, window.Expand:
 			// this is a blocking call, ctx.Done() will be ignored.
 			writeErr = p.store.Write(request.ReadMessage)
+		case window.Close, window.Merge:
+		// these do not have request.ReadMessage, only metadata fields are used
+		default:
+			return fmt.Errorf("unknown request.Operation, %v", request.Operation)
 		}
 	case <-ctx.Done():
 		// closing the output channel will not cause panic, since its inside select case
@@ -137,7 +144,7 @@ readLoop:
 			if p.windowType == window.Aligned {
 				w = window.NewWindowFromPartition(&p.PartitionID)
 			} else {
-				p.log.Errorw("session window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowType))
+				p.log.Errorw("unAligned window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowType))
 			}
 			// select to avoid infinite blocking while writing to output channel
 			select {

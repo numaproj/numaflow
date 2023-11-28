@@ -17,7 +17,6 @@ package pnf
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -131,29 +130,6 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	var simplePbq pbq.Reader
 	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition)
 
-	resultPayload, _ := json.Marshal(PayloadForTest{
-		Key:   "result_payload",
-		Value: 100,
-	})
-
-	var writeMessages = &isb.WriteMessage{
-		Message: isb.Message{
-			Header: isb.Header{
-				MessageInfo: isb.MessageInfo{
-					EventTime: time.UnixMilli(60000),
-				},
-				ID:   "1",
-				Keys: []string{key},
-			},
-			Body: isb.Body{Payload: resultPayload},
-		},
-		Tags: []string{key},
-	}
-
-	result := &window.TimedWindowResponse{
-		WriteMessage: writeMessages,
-	}
-
 	buffers := make([]string, 0)
 	for k := range toBuffers {
 		buffers = append(buffers, k)
@@ -165,7 +141,6 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	pf := processAndForward{
 		PartitionID:    testPartition,
 		UDF:            nil,
-		windowResponse: result,
 		pbqReader:      simplePbq,
 		log:            logging.FromContext(ctx),
 		toBuffers:      toBuffers,

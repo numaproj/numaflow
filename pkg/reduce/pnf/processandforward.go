@@ -53,7 +53,6 @@ type processAndForward struct {
 	vertexReplica  int32
 	PartitionID    partition.ID
 	UDF            applier.ReduceApplier
-	windowResponse *window.TimedWindowResponse
 	pbqReader      pbq.Reader
 	log            *zap.SugaredLogger
 	toBuffers      map[string][]isb.BufferWriter
@@ -96,7 +95,8 @@ func newProcessAndForward(ctx context.Context,
 		windower:       windower,
 		done:           make(chan struct{}),
 	}
-	// start the processAndForward routine
+	// start the processAndForward routine. This go-routine is collected by the Shutdown method which
+	// listens on the done channel.
 	go pf.start(ctx)
 	return pf
 }
@@ -119,15 +119,20 @@ outerLoop:
 				p.log.Panic("Got an error while invoking ApplyReduce", zap.Error(err), zap.Any("partitionID", p.PartitionID))
 			}
 		case response, ok := <-responseCh:
-			if !ok || response == nil {
+			if !ok {
 				break outerLoop
+			}
+
+			// FIXME(session): remove this nil check later
+			if response == nil {
+				p.log.Panic("we should have never received a nil response, please report a bug")
 			}
 
 			var messagesToStep map[string][][]isb.Message
 			if response.EOF {
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
-				// TODO: we need to compact the pbq when we have received the EOF response from the UDF.
+				// FIXME(session): we need to compact the pbq for unAligned when we have received the EOF response from the UDF.
 				if p.windower.Strategy() == window.Session {
 					// delete the closed windows which are tracked by the windower
 					p.windower.DeleteClosedWindows(response)
