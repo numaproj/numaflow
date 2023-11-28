@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import NodeInfo from "./index";
 
 describe("NodeInfo", () => {
@@ -61,7 +61,28 @@ describe("NodeInfo", () => {
       ],
     },
   };
-  it("loads", () => {
+  const node1 = {
+    id: "node",
+    position: undefined,
+    data: {
+      name: "myticker",
+      nodeInfo: {
+        name: "myticker",
+        container: {
+          image: "quay.io/numaio/numaflow-go/sideinput-example:v0.5.0",
+          resources: {},
+          imagePullPolicy: "Always",
+        },
+        trigger: {
+          schedule: "*/2 * * * *",
+          timezone: null,
+        },
+      },
+      type: "sideInput",
+      sideHandle: true,
+    },
+  };
+  it("loads", async () => {
     render(
       <NodeInfo
         node={node}
@@ -69,7 +90,23 @@ describe("NodeInfo", () => {
         pipelineId={"simple-pipeline"}
       />
     );
-    expect(screen.getByTestId("pods-view")).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByTestId("pods-view")).not.toBeNull();
+    });
+    fireEvent.click(screen.getByTestId("spec"));
+  });
+
+  it("loads info for sideInput vertex", async () => {
+    render(
+      <NodeInfo
+        node={node1}
+        namespaceId={"default"}
+        pipelineId={"simple-pipeline"}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("spec")).not.toBeNull();
+    });
     fireEvent.click(screen.getByTestId("spec"));
   });
 

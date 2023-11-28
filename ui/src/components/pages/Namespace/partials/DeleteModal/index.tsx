@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Modal from "@mui/material/Modal";
 import Button from "@mui/material/Button";
-import { getAPIResponseError } from "../../../../../utils";
+import { getAPIResponseError, getBaseHref } from "../../../../../utils";
 import { ValidationMessage } from "../../../../common/SpecEditor/partials/ValidationMessage";
 import CircularProgress from "@mui/material/CircularProgress";
 
@@ -36,10 +36,10 @@ export function DeleteModal({
       let url: string;
       switch (type) {
         case "pipeline":
-          url = `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
+          url = `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`;
           break;
         case "isb":
-          url = `/api/v1/namespaces/${namespaceId}/isb-services/${isbId}`;
+          url = `${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services/${isbId}`;
           break;
         default:
           return;

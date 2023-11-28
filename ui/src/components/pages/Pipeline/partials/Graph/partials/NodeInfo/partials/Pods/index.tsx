@@ -129,7 +129,7 @@ export function Pods(props: PodsProps) {
         }}
       >
         <Box sx={{ paddingBottom: "0.625rem" }}>
-          {pods && (
+          {pods && selectedPod && (
             <Autocomplete
               {...defaultProps}
               disablePortal
@@ -199,6 +199,7 @@ export function Pods(props: PodsProps) {
             padding: "1rem",
             justifyContent: "space-evenly",
           }}
+          data-testid={"pods-searchablePodsHeatMap"}
         >
           {podSearchDetails}
           <SearchablePodsHeatMap

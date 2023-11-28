@@ -1,6 +1,6 @@
-import "@testing-library/jest-dom";
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
+import "@testing-library/jest-dom";
 import { Position } from "@reactflow/core";
 import { ReactFlowProvider } from "reactflow";
 import CustomEdge from "./index";
@@ -15,6 +15,7 @@ describe("Custom Edge", () => {
           setHighlightValues: jest.fn(),
           sideInputNodes: new Map(),
           sideInputEdges: new Map(),
+          setHidden: jest.fn(),
         }}
       >
         <ReactFlowProvider>
@@ -52,6 +53,7 @@ describe("Custom Edge", () => {
           setHighlightValues: jest.fn(),
           sideInputNodes: new Map(),
           sideInputEdges: new Map(),
+          setHidden: jest.fn(),
         }}
       >
         <ReactFlowProvider>
@@ -90,6 +92,7 @@ describe("Custom Edge", () => {
           setHighlightValues: jest.fn(),
           sideInputNodes: new Map(),
           sideInputEdges: new Map(),
+          setHidden: jest.fn(),
         }}
       >
         <ReactFlowProvider>
@@ -129,6 +132,7 @@ describe("Custom Edge", () => {
           setHighlightValues: jest.fn(),
           sideInputNodes: new Map(),
           sideInputEdges: new Map(),
+          setHidden: jest.fn(),
         }}
       >
         <ReactFlowProvider>
@@ -259,6 +263,7 @@ describe("Custom Edge", () => {
           setHighlightValues: jest.fn(),
           sideInputNodes: new Map(),
           sideInputEdges: new Map(),
+          setHidden: jest.fn(),
         }}
       >
         <ReactFlowProvider>
@@ -320,6 +325,7 @@ describe("Custom Edge", () => {
           setHighlightValues: jest.fn(),
           sideInputNodes: new Map(),
           sideInputEdges: new Map(),
+          setHidden: jest.fn(),
         }}
       >
         <ReactFlowProvider>
@@ -358,6 +364,7 @@ describe("Custom Edge", () => {
           setHighlightValues: jest.fn(),
           sideInputNodes: new Map(),
           sideInputEdges: new Map(),
+          setHidden: jest.fn(),
         }}
       >
         <ReactFlowProvider>

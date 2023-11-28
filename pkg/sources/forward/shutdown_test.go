@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
@@ -39,8 +39,8 @@ func (s myShutdownTest) IsHealthy(context.Context) error {
 	return nil
 }
 
-func (s myShutdownTest) WhereTo([]string, []string) ([]forward.VertexBuffer, error) {
-	return []forward.VertexBuffer{}, nil
+func (s myShutdownTest) WhereTo([]string, []string) ([]forwarder.VertexBuffer, error) {
+	return []forwarder.VertexBuffer{}, nil
 }
 
 func (s myShutdownTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
