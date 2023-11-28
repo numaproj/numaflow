@@ -105,14 +105,11 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		if apierrors.IsNotFound(err) {
 			e := fmt.Errorf("isbsvc %s not found", isbSvcName)
 			vertex.Status.MarkPhaseFailed("ISBSvcNotFound", e.Error())
-			r.recorder.Event(vertex, corev1.EventTypeWarning, "ISBSvcNotFound", e.Error())
 			return ctrl.Result{}, e
 		}
-		r.markPhaseLogEvent(vertex, log, "FindISBSvcFailed", err.Error(), "Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		return ctrl.Result{}, err
 	}
 	if !isbSvc.Status.IsReady() {
-		r.markPhaseLogEvent(vertex, log, "ISBSvcNotReady", "isbsvc not ready", "isbsvc not ready", zap.String("isbsvc", isbSvcName))
 		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
 	}
 
@@ -127,7 +124,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			for i := 0; i < desiredReplicas; i++ {
 				newPvc, err := r.buildReduceVertexPVCSpec(vertex, i)
 				if err != nil {
-					r.markPhaseLogEvent(vertex, log, "BuildPVCSpecFailed", err.Error(), "Error building a PVC spec", zap.Error(err))
 					return ctrl.Result{}, err
 				}
 				hash := sharedutil.MustHash(newPvc.Spec)
@@ -135,13 +131,13 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 				existingPvc := &corev1.PersistentVolumeClaim{}
 				if err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: newPvc.Name}, existingPvc); err != nil {
 					if !apierrors.IsNotFound(err) {
-						r.markPhaseLogEvent(vertex, log, "FindExistingPVCFailed", err.Error(), "Error finding existing PVC", zap.Error(err))
 						return ctrl.Result{}, err
 					}
 					if err := r.client.Create(ctx, newPvc); err != nil && !apierrors.IsAlreadyExists(err) {
 						r.markPhaseLogEvent(vertex, log, "CreatePVCFailed", err.Error(), "Error creating a PVC", zap.Error(err))
 						return ctrl.Result{}, err
 					}
+					r.recorder.Event(vertex, corev1.EventTypeNormal, "CreatePVCSuccess", "Successfully created PVC")
 				} else {
 					if existingPvc.GetAnnotations()[dfv1.KeyHash] != hash {
 						// TODO: deal with spec difference
@@ -162,7 +158,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	// E.g., the vertex processing rate calculation relies on the headless service to determine the number of active pods.
 	existingSvcs, err := r.findExistingServices(ctx, vertex)
 	if err != nil {
-		r.markPhaseLogEvent(vertex, log, "FindExistingSvcsFailed", err.Error(), "Failed to find existing services", zap.Error(err))
 		return ctrl.Result{}, err
 	}
 	for _, s := range vertex.GetServiceObjs() {
@@ -178,6 +173,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 					}
 				} else {
 					log.Infow("Deleted a stale service to recreate", zap.String("service", existingSvc.Name))
+					r.recorder.Eventf(vertex, corev1.EventTypeNormal, "DelSvcSuccess", "Deleted stale service %s to recreate", existingSvc.Name)
 				}
 				needToCreate = true
 			}
@@ -194,6 +190,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 				return ctrl.Result{}, err
 			} else {
 				log.Infow("Succeeded to create a service", zap.String("service", s.Name))
+				r.recorder.Eventf(vertex, corev1.EventTypeNormal, "CreateSvcSuccess", "Succeeded to create service %s", s.Name)
 			}
 		}
 	}
@@ -205,24 +202,22 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			}
 		} else {
 			log.Infow("Deleted a stale service", zap.String("service", v.Name))
+			r.recorder.Event(vertex, corev1.EventTypeNormal, "DelSvcSuccess", "Deleted a stale service")
 		}
 	}
 
 	pipeline := &dfv1.Pipeline{}
 	if err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: vertex.Spec.PipelineName}, pipeline); err != nil {
-		r.markPhaseLogEvent(vertex, log, "GetPipelineFailed", err.Error(), "Failed to get pipeline object", zap.Error(err))
 		return ctrl.Result{}, err
 	}
 	// Create pods
 	existingPods, err := r.findExistingPods(ctx, vertex)
 	if err != nil {
-		r.markPhaseLogEvent(vertex, log, "FindExistingPodFailed", err.Error(), "Failed to find existing pods", zap.Error(err))
 		return ctrl.Result{}, err
 	}
 	for replica := 0; replica < desiredReplicas; replica++ {
 		podSpec, err := r.buildPodSpec(vertex, pipeline, isbSvc.Status.Config, replica)
 		if err != nil {
-			r.markPhaseLogEvent(vertex, log, "PodSpecGenFailed", err.Error(), "Failed to generate pod spec", zap.Error(err))
 			return ctrl.Result{}, err
 		}
 		hash := sharedutil.MustHash(podSpec)
@@ -295,6 +290,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 				return ctrl.Result{}, err
 			}
 			log.Infow("Succeeded to create a pod", zap.String("pod", pod.Name))
+			r.recorder.Event(vertex, corev1.EventTypeNormal, "CreatePodSuccess", "Succeeded to create a pod")
 		}
 	}
 	for _, v := range existingPods {
@@ -307,6 +303,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	currentReplicas := int(vertex.Status.Replicas)
 	if currentReplicas != desiredReplicas || vertex.Status.Selector == "" {
 		log.Infow("Replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
+		r.recorder.Eventf(vertex, corev1.EventTypeNormal, "ReplicasScaled", "Replicas changed from %d to %d", currentReplicas, desiredReplicas)
 		vertex.Status.Replicas = uint32(desiredReplicas)
 		vertex.Status.LastScaledAt = metav1.Time{Time: time.Now()}
 	}
@@ -432,6 +429,7 @@ func (r *vertexReconciler) findExistingServices(ctx context.Context, vertex *dfv
 	return result, nil
 }
 
+// helper function for warning event types
 func (r *vertexReconciler) markPhaseLogEvent(vertex *dfv1.Vertex, log *zap.SugaredLogger, reason, message, logMsg string, logWith ...interface{}) {
 	log.Errorw(logMsg, logWith)
 	vertex.Status.MarkPhaseFailed(reason, message)

@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -61,9 +62,10 @@ type jetStreamInstaller struct {
 	config     *reconciler.GlobalConfig
 	labels     map[string]string
 	logger     *zap.SugaredLogger
+	recorder   record.EventRecorder
 }
 
-func NewJetStreamInstaller(client client.Client, kubeClient kubernetes.Interface, isbSvc *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
+func NewJetStreamInstaller(client client.Client, kubeClient kubernetes.Interface, isbSvc *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger, recorder record.EventRecorder) Installer {
 	return &jetStreamInstaller{
 		client:     client,
 		kubeClient: kubeClient,
@@ -71,6 +73,7 @@ func NewJetStreamInstaller(client client.Client, kubeClient kubernetes.Interface
 		config:     config,
 		labels:     labels,
 		logger:     logger.With("isbsvc", isbSvc.Name),
+		recorder:   recorder,
 	}
 }
 
@@ -104,21 +107,25 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 	if err := r.createSecrets(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream auth secrets", zap.Error(err))
 		r.isbSvc.Status.MarkDeployFailed("JetStreamAuthSecretsFailed", err.Error())
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeNormal, "JetStreamAuthSecretsFailed", "Failed to create jetstream auth secrets: %v", err.Error())
 		return nil, err
 	}
 	if err := r.createConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream ConfigMap", zap.Error(err))
 		r.isbSvc.Status.MarkDeployFailed("JetStreamConfigMapFailed", err.Error())
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeNormal, "JetStreamConfigMapFailed", "Failed to create jetstream ConfigMap: %v", err.Error())
 		return nil, err
 	}
 	if err := r.createService(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream Service", zap.Error(err))
 		r.isbSvc.Status.MarkDeployFailed("JetStreamServiceFailed", err.Error())
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeNormal, "JetStreamServiceFailed", "Failed to create jetstream Service: %v", err.Error())
 		return nil, err
 	}
 	if err := r.createStatefulSet(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream StatefulSet", zap.Error(err))
 		r.isbSvc.Status.MarkDeployFailed("JetStreamStatefulSetFailed", err.Error())
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeNormal, "JetStreamStatefulSetFailed", "Failed to create jetstream StatefulSet: %v", err.Error())
 		return nil, err
 	}
 	r.isbSvc.Status.MarkDeployed()
@@ -177,6 +184,7 @@ func (r *jetStreamInstaller) createService(ctx context.Context) error {
 				return fmt.Errorf("failed to create jetstream service, err: %w", err)
 			}
 			r.logger.Info("Created jetstream service successfully")
+			r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "JetStreamServiceSuccess", "Created jetstream service successfully")
 			return nil
 		} else {
 			return fmt.Errorf("failed to check if jetstream service is existing, err: %w", err)
@@ -189,6 +197,7 @@ func (r *jetStreamInstaller) createService(ctx context.Context) error {
 			return fmt.Errorf("failed to update jetstream service, err: %w", err)
 		}
 		r.logger.Info("Updated jetstream service successfully")
+		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "JetStreamServiceSuccess", "Updated jetstream service successfully")
 	}
 	return nil
 }
@@ -236,6 +245,7 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 				return fmt.Errorf("failed to create jetstream statefulset, err: %w", err)
 			}
 			r.logger.Info("Created jetstream statefulset successfully")
+			r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "JetStreamStatefulSetSuccess", "Created jetstream stateful successfully")
 			return nil
 		} else {
 			return fmt.Errorf("failed to check if jetstream statefulset is existing, err: %w", err)
@@ -248,6 +258,7 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 			return fmt.Errorf("failed to update jetstream statefulset, err: %w", err)
 		}
 		r.logger.Info("Updated jetstream statefulset successfully")
+		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "JetStreamStatefulSet", "Updated jetstream statefulset successfully")
 	}
 	return nil
 }
@@ -482,6 +493,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 				return fmt.Errorf("failed to create jetstream configmap, err: %w", err)
 			}
 			r.logger.Info("Created jetstream configmap successfully")
+			r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "JetStreamConfigMap", "Created jetstream configmap successfully")
 			return nil
 		} else {
 			return fmt.Errorf("failed to check if jetstream configmap is existing, err: %w", err)
@@ -494,6 +506,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 			return fmt.Errorf("failed to update jetstream configmap, err: %w", err)
 		}
 		r.logger.Info("Updated jetstream configmap successfully")
+		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "JetStreamConfigMap", "Updated jetstream configmap successfully")
 	}
 	return nil
 }
