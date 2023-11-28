@@ -198,8 +198,8 @@ func Test_reconcileEvents(t *testing.T) {
 		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input", Source: &dfv1.Source{}})
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
-		events := getEvents(r, 1)
-		assert.Equal(t, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: duplicate vertex name \"input\"", events[0])
+		events := getEvents(r, 64)
+		assert.Contains(t, events, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: duplicate vertex name \"input\"")
 	})
 }
 
@@ -518,11 +518,12 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	ctx := context.TODO()
 	r := &pipelineReconciler{
-		client: cl,
-		scheme: scheme.Scheme,
-		config: fakeConfig,
-		image:  testFlowImage,
-		logger: zaptest.NewLogger(t).Sugar(),
+		client:   cl,
+		scheme:   scheme.Scheme,
+		config:   fakeConfig,
+		image:    testFlowImage,
+		logger:   zaptest.NewLogger(t).Sugar(),
+		recorder: record.NewFakeRecorder(64),
 	}
 
 	t.Run("no side inputs", func(t *testing.T) {
