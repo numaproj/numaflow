@@ -173,6 +173,8 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 		assert.NotNil(t, c.JetStream.Auth.Basic.Password)
 		assert.True(t, testJetStreamIsbSvc.Status.IsReady())
 		assert.False(t, c.JetStream.TLSEnabled)
+		events := getEvents(i.recorder)
+		assert.Contains(t, events, "Normal JetStreamConfigMap Created jetstream configmap successfully", "Normal JetStreamServiceSuccess Created jetstream service successfully", "Normal JetStreamStatefulSetSuccess Created jetstream stateful successfully")
 		svc := &corev1.Service{}
 		err = cl.Get(ctx, types.NamespacedName{Namespace: testJetStreamIsbSvc.Namespace, Name: generateJetStreamServiceName(testJetStreamIsbSvc)}, svc)
 		assert.NoError(t, err)
@@ -187,4 +189,14 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 		err := i.Uninstall(ctx)
 		assert.NoError(t, err)
 	})
+}
+
+func getEvents(recorder record.EventRecorder) []string {
+	c := recorder.(*record.FakeRecorder).Events
+	close(c)
+	events := make([]string, len(c))
+	for msg := range c {
+		events = append(events, msg)
+	}
+	return events
 }

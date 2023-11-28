@@ -290,7 +290,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 				return ctrl.Result{}, err
 			}
 			log.Infow("Succeeded to create a pod", zap.String("pod", pod.Name))
-			r.recorder.Event(vertex, corev1.EventTypeNormal, "CreatePodSuccess", "Succeeded to create a pod")
+			r.recorder.Eventf(vertex, corev1.EventTypeNormal, "CreatePodSuccess", "Succeeded to create pod %s", pod.Name)
 		}
 	}
 	for _, v := range existingPods {

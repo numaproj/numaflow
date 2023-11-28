@@ -199,6 +199,8 @@ func Test_NativeRedisInstall_Uninstall(t *testing.T) {
 		assert.NotNil(t, c.Redis.Password)
 		assert.NotNil(t, c.Redis.SentinelPassword)
 		assert.True(t, testNativeRedisIsbSvc.Status.IsReady())
+		events := getEvents(i.recorder)
+		assert.Contains(t, events, "Normal RedisScriptsConfigMapSuccess Created redis scripts configmap successfully", "Normal RedisHealthConfigMapSuccess Created redis health configmap successfully", "Normal RedisConfConfigMapSuccess Created redis config configmap successfully", "Normal RedisServiceSuccess Created redis service successfully", "Normal RedisHeadlessServiceSuccess Created redis headless service successfully", "Normal RedisStatefulSetSuccess Created redis statefulset successfully")
 		svc := &corev1.Service{}
 		err = cl.Get(ctx, types.NamespacedName{Namespace: testNativeRedisIsbSvc.Namespace, Name: generateRedisHeadlessServiceName(testNativeRedisIsbSvc)}, svc)
 		assert.NoError(t, err)
