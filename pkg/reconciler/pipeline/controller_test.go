@@ -618,8 +618,8 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 func getEvents(reconciler *pipelineReconciler, num int) []string {
 	c := reconciler.recorder.(*record.FakeRecorder).Events
 	events := make([]string, num)
-	for i := 0; i < num; i++ {
-		events[i] = <-c
+	for msg := range c {
+		events = append(events, msg)
 	}
 	return events
 }
