@@ -97,14 +97,14 @@ func newProcessAndForward(ctx context.Context,
 	}
 	// start the processAndForward routine. This go-routine is collected by the Shutdown method which
 	// listens on the done channel.
-	go pf.start(ctx)
+	go pf.invokeUDF(ctx)
 	return pf
 }
 
-// start reads requests from the supplied PBQ, invokes UDF to get the response, and then forwards
+// invokeUDF reads requests from the supplied PBQ, invokes the UDF to get the response, and then forwards
 // the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
 // manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
-func (p *processAndForward) start(ctx context.Context) {
+func (p *processAndForward) invokeUDF(ctx context.Context) {
 	defer close(p.done)
 	responseCh, errCh := p.UDF.ApplyReduce(ctx, &p.partitionId, p.pbqReader.ReadCh())
 	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
@@ -114,6 +114,8 @@ func (p *processAndForward) start(ctx context.Context) {
 		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 
+	// FIXME(session): refactor this code into two 2 fuctions each with a for loop. Key reason for that is
+	// one for-loop exits, while the other does not.
 outerLoop:
 	for {
 		select {
@@ -135,6 +137,7 @@ outerLoop:
 			}
 
 			var messagesToStep map[string][][]isb.Message
+
 			if response.EOF {
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
@@ -144,31 +147,33 @@ outerLoop:
 					// delete the closed windows which are tracked by the windower
 					p.windower.DeleteClosedWindows(response)
 				}
-			} else {
-				messagesToStep = p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
-				// parallel writes to each isb
-				var wg sync.WaitGroup
-				var mu sync.Mutex
-				for key, value := range messagesToStep {
-					for index, messages := range value {
-						if len(messages) == 0 {
-							continue
-						}
-						wg.Add(1)
-						go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
-							defer wg.Done()
-							offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
-							mu.Lock()
-							// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-							latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
-							mu.Unlock()
-						}(key, int32(index), messages)
-					}
-				}
 
-				// wait until all the writer go routines return
-				wg.Wait()
+				continue
 			}
+
+			messagesToStep = p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
+			// parallel writes to each isb
+			var wg sync.WaitGroup
+			var mu sync.Mutex
+			for key, value := range messagesToStep {
+				for index, messages := range value {
+					if len(messages) == 0 {
+						continue
+					}
+					wg.Add(1)
+					go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
+						defer wg.Done()
+						offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
+						mu.Lock()
+						// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
+						latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
+						mu.Unlock()
+					}(key, int32(index), messages)
+				}
+			}
+
+			// wait until all the writer go routines return
+			wg.Wait()
 		}
 	}
 
@@ -179,14 +184,15 @@ outerLoop:
 		// delete the closed windows which are tracked by the windower
 		p.windower.DeleteClosedWindows(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(&p.partitionId)})
 
-	}
-
-	// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
-	err := p.pbqReader.GC()
-	p.log.Infow("Finished GC", zap.Any("partitionID", p.partitionId))
-	if err != nil {
-		p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.partitionId))
-		return
+		// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
+		err := p.pbqReader.GC()
+		p.log.Infow("Finished GC", zap.Any("partitionID", p.partitionId))
+		if err != nil {
+			p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.partitionId))
+			return
+		}
+	} else {
+		// FIXME(session):
 	}
 }
 

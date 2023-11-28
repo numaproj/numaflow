@@ -151,7 +151,8 @@ type TimedWindowResponse struct {
 	WriteMessage *isb.WriteMessage
 	// Window represents the window to which the message belongs
 	Window TimedWindow
-	// EOF represents the end of the response for the given window
+	// EOF represents the end of the response for the given window.
+	// When EOF is true, it will be just a metadata payload, there won't be any WriteMessage.
 	EOF bool
 }
 

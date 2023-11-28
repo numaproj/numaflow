@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// FIXME(globalreduce): revisit this. perhaps move to a new branch. I don't think this should go to main.
+
 package globalreducer
 
 import (
