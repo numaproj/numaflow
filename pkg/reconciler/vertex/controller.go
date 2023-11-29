@@ -126,6 +126,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			for i := 0; i < desiredReplicas; i++ {
 				newPvc, err := r.buildReduceVertexPVCSpec(vertex, i)
 				if err != nil {
+					log.Errorw("Error building a PVC spec", zap.Error(err))
+					vertex.Status.MarkPhaseFailed("BuildPVCSpecFailed", err.Error())
 					return ctrl.Result{}, err
 				}
 				hash := sharedutil.MustHash(newPvc.Spec)
@@ -133,6 +135,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 				existingPvc := &corev1.PersistentVolumeClaim{}
 				if err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: newPvc.Name}, existingPvc); err != nil {
 					if !apierrors.IsNotFound(err) {
+						log.Errorw("Error finding existing PVC", zap.Error(err))
+						vertex.Status.MarkPhaseFailed("FindExistingPVCFailed", err.Error())
 						return ctrl.Result{}, err
 					}
 					if err := r.client.Create(ctx, newPvc); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -210,16 +214,22 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 	pipeline := &dfv1.Pipeline{}
 	if err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: vertex.Spec.PipelineName}, pipeline); err != nil {
+		log.Errorw("Failed to get pipeline object", zap.Error(err))
+		vertex.Status.MarkPhaseFailed("GetPipelineFailed", err.Error())
 		return ctrl.Result{}, err
 	}
 	// Create pods
 	existingPods, err := r.findExistingPods(ctx, vertex)
 	if err != nil {
+		log.Errorw("Failed to find existing pods", zap.Error(err))
+		vertex.Status.MarkPhaseFailed("FindExistingPodFailed", err.Error())
 		return ctrl.Result{}, err
 	}
 	for replica := 0; replica < desiredReplicas; replica++ {
 		podSpec, err := r.buildPodSpec(vertex, pipeline, isbSvc.Status.Config, replica)
 		if err != nil {
+			log.Errorw("Failed to generate pod spec", zap.Error(err))
+			vertex.Status.MarkPhaseFailed("PodSpecGenFailed", err.Error())
 			return ctrl.Result{}, err
 		}
 		hash := sharedutil.MustHash(podSpec)
