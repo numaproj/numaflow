@@ -94,7 +94,7 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	isbSvcController, err := controller.New(dfv1.ControllerISBSvc, mgr, controller.Options{
-		Reconciler: isbsvcctrl.NewReconciler(mgr.GetClient(), kubeClient, mgr.GetScheme(), config, logger),
+		Reconciler: isbsvcctrl.NewReconciler(mgr.GetClient(), kubeClient, mgr.GetScheme(), config, logger, mgr.GetEventRecorderFor(dfv1.ControllerISBSvc)),
 	})
 	if err != nil {
 		logger.Fatalw("Unable to set up ISB controller", zap.Error(err))

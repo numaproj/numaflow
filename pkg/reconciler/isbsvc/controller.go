@@ -24,6 +24,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -44,12 +45,13 @@ type interStepBufferServiceReconciler struct {
 	kubeClient kubernetes.Interface
 	scheme     *runtime.Scheme
 
-	config *reconciler.GlobalConfig
-	logger *zap.SugaredLogger
+	config   *reconciler.GlobalConfig
+	logger   *zap.SugaredLogger
+	recorder record.EventRecorder
 }
 
-func NewReconciler(client client.Client, kubeClient kubernetes.Interface, scheme *runtime.Scheme, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) reconcile.Reconciler {
-	return &interStepBufferServiceReconciler{client: client, kubeClient: kubeClient, scheme: scheme, config: config, logger: logger}
+func NewReconciler(client client.Client, kubeClient kubernetes.Interface, scheme *runtime.Scheme, config *reconciler.GlobalConfig, logger *zap.SugaredLogger, recorder record.EventRecorder) reconcile.Reconciler {
+	return &interStepBufferServiceReconciler{client: client, kubeClient: kubeClient, scheme: scheme, config: config, logger: logger, recorder: recorder}
 }
 
 func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -86,7 +88,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 		log.Info("Deleting isbsvc")
 		if controllerutil.ContainsFinalizer(isbSvc, finalizerName) {
 			// Finalizer logic should be added here.
-			if err := installer.Uninstall(ctx, isbSvc, r.client, r.kubeClient, r.config, log); err != nil {
+			if err := installer.Uninstall(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder); err != nil {
 				log.Errorw("Failed to uninstall", zap.Error(err))
 				return err
 			}
@@ -106,7 +108,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 	} else {
 		isbSvc.Status.MarkConfigured()
 	}
-	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log)
+	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder)
 }
 
 func (r *interStepBufferServiceReconciler) needsUpdate(old, new *dfv1.InterStepBufferService) bool {

@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -42,11 +43,12 @@ func TestJetStreamBadInstallation(t *testing.T) {
 		badIsbs := testJetStreamIsbSvc.DeepCopy()
 		badIsbs.Spec.JetStream = nil
 		installer := &jetStreamInstaller{
-			client: fake.NewClientBuilder().Build(),
-			isbSvc: badIsbs,
-			config: fakeConfig,
-			labels: testLabels,
-			logger: zaptest.NewLogger(t).Sugar(),
+			client:   fake.NewClientBuilder().Build(),
+			isbSvc:   badIsbs,
+			config:   fakeConfig,
+			labels:   testLabels,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
 		}
 		_, err := installer.Install(context.TODO())
 		assert.Error(t, err)
@@ -78,6 +80,7 @@ func TestJetStreamCreateObjects(t *testing.T) {
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
+		recorder:   record.NewFakeRecorder(64),
 	}
 
 	t.Run("test create sts", func(t *testing.T) {
@@ -156,6 +159,7 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
+		recorder:   record.NewFakeRecorder(64),
 	}
 	t.Run("test install", func(t *testing.T) {
 		c, err := i.Install(ctx)
@@ -169,6 +173,8 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 		assert.NotNil(t, c.JetStream.Auth.Basic.Password)
 		assert.True(t, testJetStreamIsbSvc.Status.IsReady())
 		assert.False(t, c.JetStream.TLSEnabled)
+		events := getEvents(i.recorder)
+		assert.Contains(t, events, "Normal JetStreamConfigMap Created jetstream configmap successfully", "Normal JetStreamServiceSuccess Created jetstream service successfully", "Normal JetStreamStatefulSetSuccess Created jetstream stateful successfully")
 		svc := &corev1.Service{}
 		err = cl.Get(ctx, types.NamespacedName{Namespace: testJetStreamIsbSvc.Namespace, Name: generateJetStreamServiceName(testJetStreamIsbSvc)}, svc)
 		assert.NoError(t, err)
@@ -183,4 +189,14 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 		err := i.Uninstall(ctx)
 		assert.NoError(t, err)
 	})
+}
+
+func getEvents(recorder record.EventRecorder) []string {
+	c := recorder.(*record.FakeRecorder).Events
+	close(c)
+	events := make([]string, len(c))
+	for msg := range c {
+		events = append(events, msg)
+	}
+	return events
 }

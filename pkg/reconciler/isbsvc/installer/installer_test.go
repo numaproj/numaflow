@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -122,7 +123,7 @@ func init() {
 
 func TestGetInstaller(t *testing.T) {
 	t.Run("get native redis installer", func(t *testing.T) {
-		installer, err := getInstaller(testNativeRedisIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar())
+		installer, err := getInstaller(testNativeRedisIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar(), nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, installer)
 		_, ok := installer.(*redisInstaller)
@@ -130,7 +131,7 @@ func TestGetInstaller(t *testing.T) {
 	})
 
 	t.Run("get jetstream installer", func(t *testing.T) {
-		installer, err := getInstaller(testJetStreamIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar())
+		installer, err := getInstaller(testJetStreamIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar(), nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, installer)
 		_, ok := installer.(*jetStreamInstaller)
@@ -138,7 +139,7 @@ func TestGetInstaller(t *testing.T) {
 	})
 
 	t.Run("get external redis installer", func(t *testing.T) {
-		installer, err := getInstaller(testExternalRedisIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar())
+		installer, err := getInstaller(testExternalRedisIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar(), nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, installer)
 		_, ok := installer.(*externalRedisInstaller)
@@ -148,7 +149,7 @@ func TestGetInstaller(t *testing.T) {
 	t.Run("test error", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
 		testObj.Spec.Redis = nil
-		_, err := getInstaller(testObj, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar())
+		_, err := getInstaller(testObj, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar(), nil)
 		assert.Error(t, err)
 	})
 }
@@ -160,14 +161,14 @@ func TestInstall(t *testing.T) {
 	t.Run("test redis error", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
 		testObj.Spec.Redis = nil
-		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar())
+		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.Error(t, err)
 		assert.Equal(t, "invalid isb service spec", err.Error())
 	})
 
 	t.Run("test redis install ok", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
-		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar())
+		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
 		assert.True(t, testObj.Status.IsReady())
 		assert.NotNil(t, testObj.Status.Config.Redis)
@@ -180,14 +181,14 @@ func TestInstall(t *testing.T) {
 	t.Run("test jetstream error", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
 		testObj.Spec.JetStream = nil
-		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar())
+		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.Error(t, err)
 		assert.Equal(t, "invalid isb service spec", err.Error())
 	})
 
 	t.Run("test jetstream install ok", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
-		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar())
+		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
 		assert.True(t, testObj.Status.IsReady())
 		assert.NotNil(t, testObj.Status.Config.JetStream)
@@ -207,28 +208,28 @@ func TestUnInstall(t *testing.T) {
 	t.Run("test redis error", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
 		testObj.Spec.Redis = nil
-		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar())
+		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.Error(t, err)
 		assert.Equal(t, "invalid isb service spec", err.Error())
 	})
 
 	t.Run("test redis uninstall ok", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
-		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar())
+		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
 	})
 
 	t.Run("test jetstream error", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
 		testObj.Spec.JetStream = nil
-		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar())
+		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.Error(t, err)
 		assert.Equal(t, "invalid isb service spec", err.Error())
 	})
 
 	t.Run("test jetstream uninstall ok", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
-		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar())
+		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
 	})
 }
