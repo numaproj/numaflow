@@ -505,15 +505,15 @@ type Watermark struct {
 }
 
 type IdleSource struct {
-	// MaxWait is the wait time before publishing the idle watermark with MinIncrement value.
-	// Ex: If watermark found to be idle until MaxWait duration then publish the watermark by adding the MinIncrement value in it.
-	MaxWait *metav1.Duration `json:"maxWait,omitempty" protobuf:"bytes,1,opt,name=maxWait"`
-	// MaxDelay is the delay after watermark found to be idle before publishing the watermark.
+	// Threshold is the duration in seconds after which a source is marked a Idle due to lack of data.
+	// Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.
+	Threshold *metav1.Duration `json:"threshold,omitempty" protobuf:"bytes,1,opt,name=threshold"`
+	// StepInterval is the duration in seconds between the subsequent increment of the watermark as long the source remains Idle.
 	// +kubebuilder:default="0s"
 	// +optional
-	MaxDelay *metav1.Duration `json:"MaxDelay,omitempty" protobuf:"bytes,2,opt,name=MaxDelay"`
-	// MinIncrement is the value to be added in idle watermark while publishing.
-	MinIncrement *metav1.Duration `json:"minIncrement,omitempty" protobuf:"bytes,3,opt,name=minIncrement"`
+	StepInterval *metav1.Duration `json:"stepInterval,omitempty" protobuf:"bytes,2,opt,name=stepInterval"`
+	// IncrementBy is the duration in seconds to be added to the current watermark to progress the watermark when source is idling.
+	IncrementBy *metav1.Duration `json:"incrementBy,omitempty" protobuf:"bytes,3,opt,name=incrementBy"`
 }
 
 // GetMaxDelay returns the configured max delay with a default value.
@@ -533,24 +533,24 @@ func (wm Watermark) GetIdleSource() *IdleSource {
 }
 
 func (is IdleSource) GetMaxWait() *time.Duration {
-	if is.MaxWait != nil {
-		return &is.MaxWait.Duration
+	if is.Threshold != nil {
+		return &is.Threshold.Duration
 	}
 
 	return nil
 }
 
 func (is IdleSource) GetMinIncrement() *time.Duration {
-	if is.MinIncrement != nil {
-		return &is.MinIncrement.Duration
+	if is.IncrementBy != nil {
+		return &is.IncrementBy.Duration
 	}
 
 	return nil
 }
 
 func (is IdleSource) GetMaxDelay() time.Duration {
-	if is.MaxDelay != nil {
-		return is.MaxDelay.Duration
+	if is.StepInterval != nil {
+		return is.StepInterval.Duration
 	}
 	return time.Duration(0)
 }

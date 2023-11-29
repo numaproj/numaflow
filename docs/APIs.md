@@ -1996,43 +1996,43 @@ Description
 <tbody>
 <tr>
 <td>
-<code>maxWait</code></br> <em>
+<code>threshold</code></br> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <p>
-MaxWait is the wait time before publishing the idle watermark with
-MinIncrement value. Ex: If watermark found to be idle until MaxWait
-duration then publish the watermark by adding the MinIncrement value in
-it.
+Threshold is the duration in seconds after which a source is marked a
+Idle due to lack of data. Ex: If watermark found to be idle after the
+Threshold duration then the watermark is progressed by
+<code>IncrementBy</code>.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>MaxDelay</code></br> <em>
+<code>stepInterval</code></br> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-MaxDelay is the delay after watermark found to be idle before publishing
-the watermark.
+StepInterval is the duration in seconds between the subsequent increment
+of the watermark as long the source remains Idle.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>minIncrement</code></br> <em>
+<code>incrementBy</code></br> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <p>
-MinIncrement is the value to be added in idle watermark while
-publishing.
+IncrementBy is the duration in seconds to be added to the current
+watermark to progress the watermark when source is idling.
 </p>
 </td>
 </tr>

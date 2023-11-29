@@ -11187,12 +11187,12 @@ spec:
                     type: boolean
                   idleSource:
                     properties:
-                      MaxDelay:
+                      incrementBy:
+                        type: string
+                      stepInterval:
                         default: 0s
                         type: string
-                      maxWait:
-                        type: string
-                      minIncrement:
+                      threshold:
                         type: string
                     type: object
                   maxDelay:
@@ -15850,12 +15850,12 @@ spec:
                     type: boolean
                   idleSource:
                     properties:
-                      MaxDelay:
+                      incrementBy:
+                        type: string
+                      stepInterval:
                         default: 0s
                         type: string
-                      maxWait:
-                        type: string
-                      minIncrement:
+                      threshold:
                         type: string
                     type: object
                   maxDelay:

@@ -1784,21 +1784,21 @@ func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) 
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"maxWait": {
+					"threshold": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MaxWait is the wait time before publishing the idle watermark with MinIncrement value. Ex: If watermark found to be idle until MaxWait duration then publish the watermark by adding the MinIncrement value in it.",
+							Description: "Threshold is the duration in seconds after which a source is marked a Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
-					"MaxDelay": {
+					"stepInterval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MaxDelay is the delay after watermark found to be idle before publishing the watermark.",
+							Description: "StepInterval is the duration in seconds between the subsequent increment of the watermark as long the source remains Idle.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
-					"minIncrement": {
+					"incrementBy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MinIncrement is the value to be added in idle watermark while publishing.",
+							Description: "IncrementBy is the duration in seconds to be added to the current watermark to progress the watermark when source is idling.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
