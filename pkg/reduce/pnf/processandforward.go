@@ -86,7 +86,6 @@ func newProcessAndForward(ctx context.Context,
 		partitionId:    partitionID,
 		UDF:            udf,
 		pbqReader:      pbqReader,
-		log:            logging.FromContext(ctx),
 		toBuffers:      toBuffers,
 		whereToDecider: whereToDecider,
 		wmPublishers:   pw,
@@ -94,6 +93,7 @@ func newProcessAndForward(ctx context.Context,
 		pbqManager:     manager,
 		windower:       windower,
 		done:           make(chan struct{}),
+		log:            logging.FromContext(ctx),
 	}
 	// start the processAndForward routine. This go-routine is collected by the Shutdown method which
 	// listens on the done channel.
@@ -145,9 +145,9 @@ outerLoop:
 				// when we have received the EOF response from the UDF.
 				// FIXME(session): we need to compact the pbq for unAligned when we have received the EOF response from the UDF.
 				p.publishWM(ctx, p.partitionId, latestWriteOffsets)
+
 				// delete the closed windows which are tracked by the windower
 				p.windower.DeleteClosedWindows(response)
-
 				continue
 			}
 
@@ -201,7 +201,6 @@ outerLoop:
 		p.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.Any("partitionID", p.partitionId))
 		return
 	}
-
 }
 
 // handleWritingToBuffers writes the messages to the ISBs.
@@ -358,7 +357,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 
 // publishWM publishes the watermark to each edge.
 // TODO: support multi partitioned edges.
-func (p *processAndForward) publishWM(ctx context.Context, id partition.ID, offsets map[string][][]isb.Offset) {
+func (p *processAndForward) publishWM(ctx context.Context, id partition.ID, writeOffsets map[string][][]isb.Offset) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,
 	// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
@@ -375,7 +374,7 @@ func (p *processAndForward) publishWM(ctx context.Context, id partition.ID, offs
 	// it's used to determine which buffers should receive an idle watermark.
 	// Created as a slice since it tracks per partition of the buffer.
 	var activeWatermarkBuffers = make(map[string][]bool)
-	for toVertexName, bufferOffsets := range offsets {
+	for toVertexName, bufferOffsets := range writeOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
 		if publisher, ok := p.wmPublishers[toVertexName]; ok {
 			for index, offsets := range bufferOffsets {

@@ -236,6 +236,46 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	done <- struct{}{}
 }
 
+func (r *ReduceSuite) TestSimpleSessionPipeline() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	w := r.Given().Pipeline("@testdata/simple-session-reduce-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "simple-session-sum"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	count := 0
+	done := make(chan struct{})
+	go func() {
+		// publish messages to source vertex, with event time starting from 60000
+		startTime := 60000
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				if count == 50 {
+					startTime = startTime + (50 * 1000)
+					count = 0
+				} else {
+					startTime = startTime + 1000
+				}
+				eventTime := strconv.Itoa(startTime)
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime))
+			}
+		}
+	}()
+
+	w.Expect().SinkContains("sink", "50")
+	done <- struct{}{}
+}
+
 // TODO add test for sliding window with keyed reduce
 
 func TestReduceSuite(t *testing.T) {

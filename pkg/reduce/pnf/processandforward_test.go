@@ -17,9 +17,12 @@ package pnf
 
 import (
 	"context"
-	"strings"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forwarder"
@@ -36,6 +39,7 @@ import (
 	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 )
 
 const (
@@ -44,38 +48,32 @@ const (
 	publisherKeyspace   = testPipelineName + "_" + testProcessorEntity + "_%s"
 )
 
+type pbqReader struct {
+}
+
+func (p *pbqReader) ReadCh() <-chan *window.TimedWindowRequest {
+	return nil
+}
+
+func (p *pbqReader) GC() error {
+	return nil
+}
+
 type forwardTest struct {
 	count   int
 	buffers []string
 }
 
-func (f *forwardTest) WhereTo(keys []string, _ []string) ([]forwarder.VertexBuffer, error) {
-	if strings.Compare(keys[len(keys)-1], "test-forward-one") == 0 {
-		return []forwarder.VertexBuffer{{
-			ToVertexName:         "buffer1",
+func (f *forwardTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+	var steps []forwarder.VertexBuffer
+	for _, buffer := range f.buffers {
+		steps = append(steps, forwarder.VertexBuffer{
+			ToVertexName:         buffer,
 			ToVertexPartitionIdx: int32(f.count % 2),
-		}}, nil
-	} else if strings.Compare(keys[len(keys)-1], "test-forward-all") == 0 {
-		var steps []forwarder.VertexBuffer
-		for _, buffer := range f.buffers {
-			steps = append(steps, forwarder.VertexBuffer{
-				ToVertexName:         buffer,
-				ToVertexPartitionIdx: int32(f.count % 2),
-			})
-		}
-		return steps, nil
+		})
 	}
 	f.count++
-	return []forwarder.VertexBuffer{}, nil
-}
-
-func (f *forwardTest) Apply(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, message)
-}
-
-type PayloadForTest struct {
-	Key   string
-	Value int64
+	return steps, nil
 }
 
 // TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
@@ -115,6 +113,108 @@ func TestWriteToBuffer(t *testing.T) {
 			pf.writeToBuffer(ctx, "buffer", 0, windowResponse)
 		})
 	}
+}
+
+func TestPnFHandleAlignedWindowResponses(t *testing.T) {
+	var (
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		responseCh  = make(chan *window.TimedWindowResponse)
+		errCh       = make(chan error)
+		wg          = &sync.WaitGroup{}
+	)
+	defer cancel()
+	id := &partition.ID{
+		Start: time.UnixMilli(60000),
+		End:   time.UnixMilli(120000),
+		Slot:  "slot-0",
+	}
+
+	test1Buffer11 := simplebuffer.NewInMemoryBuffer("buffer1-1", 5, 0)
+	test1Buffer12 := simplebuffer.NewInMemoryBuffer("buffer1-2", 5, 1)
+
+	test1Buffer21 := simplebuffer.NewInMemoryBuffer("buffer2-1", 5, 0)
+	test1Buffer22 := simplebuffer.NewInMemoryBuffer("buffer2-2", 5, 1)
+
+	toBuffersMap := map[string][]isb.BufferWriter{
+		"buffer1": {test1Buffer11, test1Buffer12},
+		"buffer2": {test1Buffer21, test1Buffer22},
+	}
+
+	buffers := make([]string, 0)
+	for k := range toBuffersMap {
+		buffers = append(buffers, k)
+	}
+
+	whereto := &forwardTest{
+		buffers: buffers,
+	}
+
+	responses := generateAlignedWindowResponses(10, id)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for _, response := range responses {
+			responseCh <- response
+		}
+		close(responseCh)
+	}()
+
+	windower := fixed.NewWindower(60 * time.Second)
+	windower.InsertWindow(window.NewWindowFromPartition(id))
+
+	wmPublishers, _ := buildPublisherMapAndOTStore(toBuffersMap)
+
+	pf := &processAndForward{
+		partitionId:    *id,
+		whereToDecider: whereto,
+		windower:       windower,
+		toBuffers:      toBuffersMap,
+		wmPublishers:   wmPublishers,
+		idleManager:    wmb.NewIdleManager(len(toBuffersMap)),
+		pbqReader:      &pbqReader{},
+		done:           make(chan struct{}),
+		log:            logging.FromContext(ctx),
+	}
+
+	pf.handleAlignedWindowResponses(ctx, responseCh, errCh)
+
+	wg.Wait()
+	assert.Equal(t, true, test1Buffer11.IsFull())
+	assert.Equal(t, true, test1Buffer12.IsFull())
+	assert.Equal(t, true, test1Buffer21.IsFull())
+	assert.Equal(t, true, test1Buffer22.IsFull())
+}
+
+func generateAlignedWindowResponses(count int, id *partition.ID) []*window.TimedWindowResponse {
+	var windowResponses []*window.TimedWindowResponse
+
+	for i := 0; i <= count; i++ {
+		if i == count {
+			windowResponses = append(windowResponses, &window.TimedWindowResponse{
+				Window: window.NewWindowFromPartition(id),
+				EOF:    true,
+			})
+			continue
+		}
+		windowResponses = append(windowResponses, &window.TimedWindowResponse{
+			WriteMessage: &isb.WriteMessage{
+				Message: isb.Message{
+					Header: isb.Header{
+						MessageInfo: isb.MessageInfo{
+							EventTime: id.End.Add(-1 * time.Millisecond),
+						},
+						ID:   fmt.Sprintf("%d-testVertex-0-0", i), // TODO: hard coded ID suffix ATM, make configurable if needed
+						Keys: []string{},
+					},
+					Body: isb.Body{Payload: []byte("test")},
+				},
+			},
+			Window: window.NewWindowFromPartition(id),
+			EOF:    false,
+		})
+	}
+	return windowResponses
 }
 
 func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter) (processAndForward, map[string]kvs.KVStorer) {
