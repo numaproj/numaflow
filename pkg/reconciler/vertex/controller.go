@@ -145,7 +145,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 						r.markPhaseLogEvent(vertex, log, "CreatePVCFailed", err.Error(), "Error creating a PVC", zap.Error(err))
 						return ctrl.Result{}, err
 					}
-					r.recorder.Event(vertex, corev1.EventTypeNormal, "CreatePVCSuccess", "Successfully created PVC")
+					r.recorder.Eventf(vertex, corev1.EventTypeNormal, "CreatePVCSuccess", "Successfully created PVC %s", newPvc.Name)
 				} else {
 					if existingPvc.GetAnnotations()[dfv1.KeyHash] != hash {
 						// TODO: deal with spec difference
@@ -212,7 +212,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			}
 		} else {
 			log.Infow("Deleted a stale service", zap.String("service", v.Name))
-			r.recorder.Event(vertex, corev1.EventTypeNormal, "DelSvcSuccess", "Deleted a stale service")
+			r.recorder.Eventf(vertex, corev1.EventTypeNormal, "DelSvcSuccess", "Deleted stale service %s", v.Name)
 		}
 	}
 
