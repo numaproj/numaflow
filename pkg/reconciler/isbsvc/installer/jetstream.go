@@ -107,25 +107,25 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 	if err := r.createSecrets(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream auth secrets", zap.Error(err))
 		r.isbSvc.Status.MarkDeployFailed("JetStreamAuthSecretsFailed", err.Error())
-		r.recorder.Eventf(r.isbSvc, corev1.EventTypeNormal, "JetStreamAuthSecretsFailed", "Failed to create jetstream auth secrets: %v", err.Error())
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "JetStreamAuthSecretsFailed", "Failed to create jetstream auth secrets: %v", err.Error())
 		return nil, err
 	}
 	if err := r.createConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream ConfigMap", zap.Error(err))
 		r.isbSvc.Status.MarkDeployFailed("JetStreamConfigMapFailed", err.Error())
-		r.recorder.Eventf(r.isbSvc, corev1.EventTypeNormal, "JetStreamConfigMapFailed", "Failed to create jetstream ConfigMap: %v", err.Error())
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "JetStreamConfigMapFailed", "Failed to create jetstream ConfigMap: %v", err.Error())
 		return nil, err
 	}
 	if err := r.createService(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream Service", zap.Error(err))
 		r.isbSvc.Status.MarkDeployFailed("JetStreamServiceFailed", err.Error())
-		r.recorder.Eventf(r.isbSvc, corev1.EventTypeNormal, "JetStreamServiceFailed", "Failed to create jetstream Service: %v", err.Error())
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "JetStreamServiceFailed", "Failed to create jetstream Service: %v", err.Error())
 		return nil, err
 	}
 	if err := r.createStatefulSet(ctx); err != nil {
 		r.logger.Errorw("Failed to create jetstream StatefulSet", zap.Error(err))
 		r.isbSvc.Status.MarkDeployFailed("JetStreamStatefulSetFailed", err.Error())
-		r.recorder.Eventf(r.isbSvc, corev1.EventTypeNormal, "JetStreamStatefulSetFailed", "Failed to create jetstream StatefulSet: %v", err.Error())
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "JetStreamStatefulSetFailed", "Failed to create jetstream StatefulSet: %v", err.Error())
 		return nil, err
 	}
 	r.isbSvc.Status.MarkDeployed()
