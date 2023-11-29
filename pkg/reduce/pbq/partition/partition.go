@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// partition is nothing but a window with slots. Partition and window are sometimes used
-// interchangeably.
+// partition is a tuple containing (start, end) time and an optional slot.
+// Window contains a partition because Window containts the keys too.
 package partition
 
 import (

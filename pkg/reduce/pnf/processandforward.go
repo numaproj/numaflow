@@ -104,19 +104,20 @@ func newProcessAndForward(ctx context.Context,
 // invokeUDF reads requests from the supplied PBQ, invokes the UDF to get the response, and then forwards
 // the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ. This method invokes UDF in a async
 // manner, which means it doesn't wait for the output of all the keys to be available before forwarding.
+// The watermark is only published at COB at key level for Unaligned and at Partition level for Aligned.
 func (p *processAndForward) invokeUDF(ctx context.Context) {
 	defer close(p.done)
 	responseCh, errCh := p.UDF.ApplyReduce(ctx, &p.partitionId, p.pbqReader.ReadCh())
 
 	if p.windower.Type() == window.Aligned {
-		p.handleAlignedWindowResponses(ctx, responseCh, errCh)
+		p.forwardAlignedWindowResponses(ctx, responseCh, errCh)
 	} else {
-		p.handleUnalignedWindowResponses(ctx, responseCh, errCh)
+		p.forwardUnalignedWindowResponses(ctx, responseCh, errCh)
 	}
 }
 
-// handleUnalignedWindowResponses handles the responses from the UDF for unaligned windows.
-func (p *processAndForward) handleUnalignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
+// forwardUnalignedWindowResponses writes to the next ISB along with the WM for the responses from the UDF for the unaligned windows.
+func (p *processAndForward) forwardUnalignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
 	defer close(p.done)
 	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
 	// which will be used for publishing the watermark when the window is closed.
@@ -125,6 +126,8 @@ func (p *processAndForward) handleUnalignedWindowResponses(ctx context.Context, 
 		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 
+	// this for loop never exits because we do not track at the partition level but will be tracked at window level.
+	// since the key is involved, we cannot ever do a cob at partition level.
 outerLoop:
 	for {
 		select {
@@ -140,6 +143,7 @@ outerLoop:
 				break outerLoop
 			}
 
+			// publish WMs now that we have a COB for the key.
 			if response.EOF {
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
@@ -151,13 +155,13 @@ outerLoop:
 				continue
 			}
 
-			p.handleWritingToBuffers(ctx, response, latestWriteOffsets)
+			p.forwardToBuffers(ctx, response, latestWriteOffsets)
 		}
 	}
 }
 
-// handleAlignedWindowResponses handles the responses from the UDF for aligned window.
-func (p *processAndForward) handleAlignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
+// forwardAlignedWindowResponses writes to the next ISB along with the WM for the responses from the UDF for the aligned window.
+func (p *processAndForward) forwardAlignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
 	defer close(p.done)
 	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
 	// which will be used for publishing the watermark when the window is closed.
@@ -166,6 +170,7 @@ func (p *processAndForward) handleAlignedWindowResponses(ctx context.Context, re
 		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 
+	// for loop for aligned windows does exit since we create a partition for every unique (start, end) window tuple.
 outerLoop:
 	for {
 		select {
@@ -184,7 +189,7 @@ outerLoop:
 				continue
 			}
 
-			p.handleWritingToBuffers(ctx, response, latestWriteOffsets)
+			p.forwardToBuffers(ctx, response, latestWriteOffsets)
 		}
 	}
 
@@ -204,8 +209,8 @@ outerLoop:
 
 }
 
-// handleWritingToBuffers writes the messages to the ISBs.
-func (p *processAndForward) handleWritingToBuffers(ctx context.Context, response *window.TimedWindowResponse, latestWriteOffsets map[string][][]isb.Offset) {
+// forwardToBuffers writes the messages to the ISBs concurrently for each partition.
+func (p *processAndForward) forwardToBuffers(ctx context.Context, response *window.TimedWindowResponse, latestWriteOffsets map[string][][]isb.Offset) {
 	var messagesToStep map[string][][]isb.Message
 
 	messagesToStep = p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
@@ -270,7 +275,6 @@ func (p *processAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[s
 }
 
 // writeToBuffer writes to the ISBs.
-// TODO: is there any point in returning an error here? this is an infinite loop and the only error is ctx.Done!
 func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) []isb.Offset {
 	var (
 		writeCount int
@@ -357,7 +361,6 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 }
 
 // publishWM publishes the watermark to each edge.
-// TODO: support multi partitioned edges.
 func (p *processAndForward) publishWM(ctx context.Context, id partition.ID, offsets map[string][][]isb.Offset) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,

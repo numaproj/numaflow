@@ -101,7 +101,7 @@ func TestClient_AsyncReduceFn(t *testing.T) {
 
 	messageCh := make(chan *reducepb.ReduceRequest)
 	close(messageCh)
-	responseCh, _ := testClient.AsyncReduceFn(ctx, messageCh)
+	responseCh, _ := testClient.ReduceFn(ctx, messageCh)
 	for response := range responseCh {
 		assert.Equal(t, &reducepb.ReduceResponse{
 			Result: &reducepb.ReduceResponse_Result{
