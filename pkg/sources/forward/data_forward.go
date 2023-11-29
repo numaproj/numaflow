@@ -218,7 +218,7 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	// There is a natural looping here if there is an internal error while reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
 		// If watermark is idling then check the lastTimestampIdleWMFound time, if it is less than the maxWait duration then do nothing.
-		if isdf.isWatermarkIdle() {
+		if isdf.isSourceIdling() {
 			currentTime := time.Now()
 			if !isdf.stepIntervalPassed(currentTime) {
 				return
@@ -422,11 +422,11 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
 }
 
-// isWatermarkIdle calculate that the current watermark is idling for the given maxWait duration based the provided
-// configuration by user for idle sourcing
-func (isdf *DataForward) isWatermarkIdle() bool {
+// isSourceIdling detects whether the source is idling.
+// If computed watermark is not progressing for X duration, we mark the source as idling because there is no data movement to progress the watermark.
+func (isdf *DataForward) isSourceIdling() bool {
 	if isdf.watermarkConfig.IdleSource != nil {
-		// If watermark is idling then check the lastTimestampIdleWMFound time, if it is less than the maxWait duration then do nothing.
+		// If watermark is not progressing and it is less than the Threshold duration then do nothing.
 		if time.Since(isdf.lastTimestampSrcWMUpdated) > isdf.watermarkConfig.IdleSource.GetThreshold() {
 			computedWM := isdf.wmFetcher.ComputeWatermark(nil, 0)
 			// set the lastFetchedSrcWatermark to the computed watermark if it is nil.
