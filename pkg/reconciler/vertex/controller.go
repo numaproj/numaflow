@@ -166,6 +166,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	// E.g., the vertex processing rate calculation relies on the headless service to determine the number of active pods.
 	existingSvcs, err := r.findExistingServices(ctx, vertex)
 	if err != nil {
+		log.Errorw("Failed to find existing services", zap.Error(err))
+		vertex.Status.MarkPhaseFailed("FindExistingSvcsFailed", err.Error())
 		return ctrl.Result{}, err
 	}
 	for _, s := range vertex.GetServiceObjs() {
