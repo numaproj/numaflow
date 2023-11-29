@@ -112,6 +112,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		return ctrl.Result{}, err
 	}
 	if !isbSvc.Status.IsReady() {
+		log.Errorw("ISB Service is not in ready status", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		vertex.Status.MarkPhaseFailed("ISBSvcNotReady", "isbsvc not ready")
 		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
 	}
 
