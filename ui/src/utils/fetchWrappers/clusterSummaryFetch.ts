@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFetch, Options } from "./fetch";
+import { getBaseHref } from "../index";
 import {
   ClusterNamespaceSummary,
   ClusterSummaryData,
@@ -116,7 +117,7 @@ export const useClusterSummaryFetch = ({
     data: fetchData,
     loading: fetchLoading,
     error: fetchError,
-  } = useFetch("/api/v1/cluster-summary", undefined, options);
+  } = useFetch(`${getBaseHref()}/api/v1/cluster-summary`, undefined, options);
 
   useEffect(() => {
     setInterval(() => {
@@ -176,7 +177,7 @@ export const useClusterSummaryFetch = ({
       });
       return;
     }
-  }, [fetchData, fetchLoading, fetchError, loadOnRefresh, options, addError]);
+  }, [fetchData, fetchLoading, fetchError, loadOnRefresh, options]);
 
   return results;
 };

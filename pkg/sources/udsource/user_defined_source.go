@@ -25,7 +25,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
@@ -83,7 +83,7 @@ type userDefinedSource struct {
 func New(
 	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
-	fsd forward.ToWhichStepDecider,
+	fsd forwarder.ToWhichStepDecider,
 	transformer applier.SourceTransformApplier,
 	sourceApplier *GRPCBasedUDSource,
 	fetchWM fetch.Fetcher,

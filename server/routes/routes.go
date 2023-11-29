@@ -56,7 +56,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
-	r1Group := r.Group("/api/v1")
+	r1Group := r.Group(baseHref + "api/v1")
 	if !authInfo.DisableAuth {
 		authorizer, err := authz.NewCasbinObject()
 		if err != nil {

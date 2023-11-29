@@ -27,7 +27,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
@@ -51,7 +51,7 @@ type DataForward struct {
 	reader isb.BufferReader
 	// toBuffers store the toVertex name to its owned buffers mapping.
 	toBuffers          map[string][]isb.BufferWriter
-	toWhichStepDecider forward.ToWhichStepDecider
+	toWhichStepDecider forwarder.ToWhichStepDecider
 	transformer        applier.SourceTransformApplier
 	wmFetcher          fetch.Fetcher
 	toVertexWMStores   map[string]store.WatermarkStore
@@ -73,7 +73,7 @@ func NewDataForward(
 	vertexInstance *dfv1.VertexInstance,
 	fromStep isb.BufferReader,
 	toSteps map[string][]isb.BufferWriter,
-	toWhichStepDecider forward.ToWhichStepDecider,
+	toWhichStepDecider forwarder.ToWhichStepDecider,
 	transformer applier.SourceTransformApplier,
 	fetchWatermark fetch.Fetcher,
 	srcWMPublisher isb.SourceWatermarkPublisher,
@@ -278,7 +278,12 @@ func (isdf *DataForward) forwardAChunk(ctx context.Context) {
 			// since we use message event time instead of the watermark to determine and publish source watermarks,
 			// time.UnixMilli(-1) is assigned to the message watermark. transformedReadMessages are immediately
 			// used below for publishing source watermarks.
-			transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
+
+			// if message.EventTime is -1, it means that the message was dropped by the transformer
+			// so we should exclude it from watermark computation
+			if message.EventTime != time.UnixMilli(-1) {
+				transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
+			}
 		}
 	}
 	// publish source watermark
@@ -518,12 +523,8 @@ func (isdf *DataForward) applyTransformer(ctx context.Context, readMessage *isb.
 			}
 			continue
 		} else {
-			// if we do not get a time from Transformer, we set it to the time from (N-1)th vertex
 			for index, m := range writeMessages {
 				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
-				if m.EventTime.IsZero() {
-					m.EventTime = readMessage.EventTime
-				}
 			}
 			return writeMessages, nil
 		}

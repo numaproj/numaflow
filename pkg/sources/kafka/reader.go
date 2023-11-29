@@ -26,7 +26,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forward"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -328,7 +328,7 @@ func (r *KafkaSource) Pending(_ context.Context) (int64, error) {
 func NewKafkaSource(
 	vertexInstance *dfv1.VertexInstance,
 	writers map[string][]isb.BufferWriter,
-	fsd forward.ToWhichStepDecider,
+	fsd forwarder.ToWhichStepDecider,
 	transformerApplier applier.SourceTransformApplier,
 	fetchWM fetch.Fetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,

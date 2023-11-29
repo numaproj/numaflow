@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/zap"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -47,8 +47,8 @@ type Scaler struct {
 	lock       *sync.RWMutex
 	options    *options
 	// Cache to store the vertex metrics such as pending message number
-	vertexMetricsCache *lru.Cache
-	daemonClientsCache *lru.Cache
+	vertexMetricsCache *lru.Cache[string, int64]
+	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
 }
 
 // NewScaler returns a Scaler instance.
@@ -66,11 +66,11 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 		vertexList: list.New(),
 		lock:       new(sync.RWMutex),
 	}
-	// cache top 100 daemon clients
-	s.daemonClientsCache, _ = lru.NewWithEvict(s.options.clientsCacheSize, func(key, value interface{}) {
-		_ = value.(*daemonclient.DaemonClient).Close()
+	// cache daemon clients
+	s.daemonClientsCache, _ = lru.NewWithEvict[string, *daemonclient.DaemonClient](s.options.clientsCacheSize, func(key string, value *daemonclient.DaemonClient) {
+		_ = value.Close()
 	})
-	vertexMetricsCache, _ := lru.New(10000)
+	vertexMetricsCache, _ := lru.New[string, int64](10000)
 	s.vertexMetricsCache = vertexMetricsCache
 	return s
 }
@@ -214,16 +214,15 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		}
 	}
 	var err error
-	dClient, _ := s.daemonClientsCache.Get(pl.GetDaemonServiceURL())
-	if dClient == nil {
-		dClient, err = daemonclient.NewDaemonServiceClient(pl.GetDaemonServiceURL())
+	daemonClient, _ := s.daemonClientsCache.Get(pl.GetDaemonServiceURL())
+	if daemonClient == nil {
+		daemonClient, err = daemonclient.NewDaemonServiceClient(pl.GetDaemonServiceURL())
 		if err != nil {
 			return fmt.Errorf("failed to get daemon service client for pipeline %s, %w", pl.Name, err)
 		}
-		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), dClient)
+		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), daemonClient)
 	}
 
-	daemonClient := dClient.(*daemonclient.DaemonClient)
 	vMetrics, err := daemonClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
@@ -461,17 +460,15 @@ loop:
 			continue
 		}
 		vertexKey := pl.Namespace + "/" + pl.Name + "-" + e.To
-		pendingVal, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
+		pending, ok := s.vertexMetricsCache.Get(vertexKey + "/pending")
 		if !ok { // Vertex key has not been cached, skip it.
 			continue
 		}
-		pending := pendingVal.(int64)
-		bufferLengthVal, ok := s.vertexMetricsCache.Get(vertexKey + "/length")
+		bufferLength, ok := s.vertexMetricsCache.Get(vertexKey + "/length")
 		if !ok { // Buffer length has not been cached, skip it.
 			continue
 		}
-		length := bufferLengthVal.(int64)
-		if float64(pending)/float64(length) >= s.options.backPressureThreshold {
+		if float64(pending)/float64(bufferLength) >= s.options.backPressureThreshold {
 			downstreamPressure = true
 			if e.From == vertex.Spec.Name {
 				directPressure = true

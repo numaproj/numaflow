@@ -33,9 +33,8 @@ const mockContext: AppContextProps = {
     namespaced: false,
   },
   systemInfoError: null,
-  errors: [],
   addError: function (error: string): void {
-    throw new Error("Function not implemented.");
+    console.log(error);
   },
   clearErrors: function (): void {
     throw new Error("Function not implemented.");
@@ -194,6 +193,7 @@ const mockData: GraphData = {
             },
             groupBy: null,
           },
+          sideInputs: ["myticker"],
           scale: {},
         },
         type: "udf",
@@ -514,6 +514,14 @@ describe("Graph", () => {
     });
     await waitFor(() => {
       expect(screen.getByText("cat")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      fireEvent.mouseOver(
+        document.getElementsByClassName("sideInput_handle")[0]
+      );
+      fireEvent.mouseOut(
+        document.getElementsByClassName("sideInput_handle")[0]
+      );
     });
   });
 

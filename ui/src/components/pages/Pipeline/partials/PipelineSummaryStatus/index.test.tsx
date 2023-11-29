@@ -5,6 +5,12 @@ import { AppContext } from "../../../../../App";
 import { BrowserRouter } from "react-router-dom";
 import { PipelineSummaryStatus } from "./index";
 import { act } from "react-dom/test-utils";
+import { useParams } from "react-router-dom";
+
+jest.mock("react-router-dom", () => ({
+  ...jest.requireActual("react-router-dom"),
+  useParams: jest.fn(),
+}));
 
 const mockRefresh = jest.fn();
 const mockPipeline = {
@@ -189,6 +195,10 @@ const mockPipeline = {
 
 describe("PipelineSummaryStatus", () => {
   it("should render the component", () => {
+    (useParams as jest.Mock).mockReturnValue({
+      namespaceId: "numaflow-system",
+      pipelineId: "simple-pipeline",
+    });
     render(
       <AppContext.Provider value="healthy">
         <BrowserRouter>
@@ -206,8 +216,37 @@ describe("PipelineSummaryStatus", () => {
   });
 
   it("Should click on the spec button", async () => {
+    (useParams as jest.Mock).mockReturnValue({
+      namespaceId: "numaflow-system",
+      pipelineId: "simple-pipeline",
+    });
     render(
-      <AppContext.Provider value="healthy">
+      <AppContext.Provider value={{ setSidebarProps: jest.fn() }}>
+        <BrowserRouter>
+          <PipelineSummaryStatus
+            pipelineId="simple-pipeline"
+            pipeline={mockPipeline}
+            lag={0}
+            refresh={mockRefresh}
+          />
+        </BrowserRouter>
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("pipeline-spec-click")).toBeInTheDocument();
+    });
+    await act(async () => {
+      screen.getByTestId("pipeline-spec-click").click();
+    });
+  });
+
+  it("Should click on the spec button but not open", async () => {
+    (useParams as jest.Mock).mockReturnValue({
+      namespaceId: undefined,
+    });
+    render(
+      <AppContext.Provider value={{ setSidebarProps: jest.fn() }}>
         <BrowserRouter>
           <PipelineSummaryStatus
             pipelineId="simple-pipeline"

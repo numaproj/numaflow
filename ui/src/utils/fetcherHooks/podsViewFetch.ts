@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
-import { quantityToScalar } from "../index";
+import { getBaseHref, quantityToScalar } from "../index";
 import {
   Pod,
   PodContainerSpec,
@@ -30,7 +30,7 @@ export const usePodsViewFetch = (
     const fetchPods = async () => {
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods?refreshKey=${requestKey}`
+          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods?refreshKey=${requestKey}`
         );
         if (response.ok) {
           const json = await response.json();
@@ -108,7 +108,9 @@ export const usePodsViewFetch = (
 
   useEffect(() => {
     if (pods?.length) {
-      if (!(selectedPod && pods?.find((pod) => pod?.name === selectedPod?.name))) {
+      if (
+        !(selectedPod && pods?.find((pod) => pod?.name === selectedPod?.name))
+      ) {
         setSelectedPod(pods[0]);
         setSelectedContainer(pods[0]?.containers[0]);
       }
@@ -122,7 +124,7 @@ export const usePodsViewFetch = (
     const fetchPods = async () => {
       try {
         const response = await fetch(
-          `/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
+          `${getBaseHref()}/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
         );
         if (response.ok) {
           const json = await response.json();
