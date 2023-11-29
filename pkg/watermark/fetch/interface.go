@@ -32,12 +32,11 @@ type Fetcher interface {
 // SourceFetcher fetches watermark data for source vertex.
 type SourceFetcher interface {
 	Fetcher
-	// ComputeHeadWatermark computes a valid head watermark for the given partition
-	ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark
+	HeadFetcher
 }
 
-// UXFetcher computes the watermark for Vn.
-type UXFetcher interface {
+// HeadFetcher computes the watermark for Vn.
+type HeadFetcher interface {
 	// ComputeHeadWatermark computes a valid head watermark for the given partition
 	ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark
 }

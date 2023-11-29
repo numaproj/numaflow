@@ -524,15 +524,7 @@ func (wm Watermark) GetMaxDelay() time.Duration {
 	return time.Duration(0)
 }
 
-func (wm Watermark) GetIdleSource() *IdleSource {
-	if wm.IdleSource != nil {
-		return wm.IdleSource
-	}
-
-	return nil
-}
-
-func (is IdleSource) GetMaxWait() *time.Duration {
+func (is IdleSource) GetThreshold() *time.Duration {
 	if is.Threshold != nil {
 		return &is.Threshold.Duration
 	}
@@ -540,7 +532,7 @@ func (is IdleSource) GetMaxWait() *time.Duration {
 	return nil
 }
 
-func (is IdleSource) GetMinIncrement() *time.Duration {
+func (is IdleSource) GetIncrementBy() *time.Duration {
 	if is.IncrementBy != nil {
 		return &is.IncrementBy.Duration
 	}
@@ -548,7 +540,7 @@ func (is IdleSource) GetMinIncrement() *time.Duration {
 	return nil
 }
 
-func (is IdleSource) GetMaxDelay() time.Duration {
+func (is IdleSource) GetStepInterval() time.Duration {
 	if is.StepInterval != nil {
 		return is.StepInterval.Duration
 	}

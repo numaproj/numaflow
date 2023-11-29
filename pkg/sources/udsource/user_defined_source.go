@@ -212,6 +212,6 @@ func (u *userDefinedSource) loadSourceWatermarkPublisher(partitionID int32) publ
 // PublishIdleWatermarks will publish the watermark when source is idling
 func (u *userDefinedSource) PublishIdleWatermarks(t time.Time) {
 	for partitionID, publisher := range u.srcWMPublishers {
-		publisher.PublishWatermark(wmb.Watermark(t), nil, partitionID)
+		publisher.PublishIdleWatermark(wmb.Watermark(t), nil, partitionID)
 	}
 }

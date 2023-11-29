@@ -5,9 +5,9 @@ metadata:
 spec:
   watermark:
     idleSource:
-      maxWait: 5s
-      minIncrement: 5s
-      maxDelay: 5s
+      threshold: 5s
+      incrementBy: 5s
+      stepInterval: 5s
   limits:
     readBatchSize: 50
   vertices:
