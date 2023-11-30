@@ -178,7 +178,7 @@ describe("index", () => {
 
   // test getBaseHref
   it("getBaseHref", () => {
-    expect(getBaseHref()).toEqual("/");
+    expect(getBaseHref()).toEqual("");
   });
 
   // test getAPIResponseError
@@ -198,7 +198,7 @@ describe("index", () => {
   const clipboard = {
     writeText: jest.fn(),
   };
-  Object.defineProperty(global.navigator, 'clipboard', {
+  Object.defineProperty(global.navigator, "clipboard", {
     value: clipboard,
   });
   // test handleCopy
