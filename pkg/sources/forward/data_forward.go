@@ -596,7 +596,7 @@ func (df *DataForward) applyTransformer(ctx context.Context, readMessage *isb.Re
 			continue
 		} else {
 			for index, m := range writeMessages {
-				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
+				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), df.vertexName, index)
 			}
 			return writeMessages, nil
 		}
