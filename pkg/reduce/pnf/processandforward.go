@@ -207,9 +207,7 @@ outerLoop:
 
 // forwardToBuffers writes the messages to the ISBs concurrently for each partition.
 func (p *processAndForward) forwardToBuffers(ctx context.Context, response *window.TimedWindowResponse) {
-	var messagesToStep map[string][][]isb.Message
-
-	messagesToStep = p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
+	messagesToStep := p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
 	// parallel writes to each ISB
 	var wg sync.WaitGroup
 	var mu sync.Mutex
