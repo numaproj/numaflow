@@ -67,9 +67,9 @@ type DataForward struct {
 	watermarkConfig dfv1.Watermark
 	// idleManager manages the idle watermark status.
 	idleManager               wmb.IdleManager
-	lastTimestampSrcWMUpdated time.Time
-	lastTimestampIdleWMFound  time.Time
-	lastFetchedSrcWatermark   *wmb.Watermark
+	lastTimestampSrcWMUpdated time.Time      // last time the source watermark was updated
+	lastTimestampIdleWMFound  time.Time      // last time the idle watermark was found
+	lastFetchedSrcWatermark   *wmb.Watermark // last fetched source watermark
 	Shutdown
 }
 
@@ -221,8 +221,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		// if source is idling then check the stepIntervalHasPassed, if it is less than the stepInterval then do nothing.
 		if df.isSourceIdling() {
 			currentTime := time.Now()
-			// if the stepIntervalHasPassed then publish the idle watermark.
-			if df.stepIntervalHasPassed(currentTime) {
+			// if the stepInterval has not passed then do nothing.
+			if !df.stepIntervalHasPassed(currentTime) {
 				return
 			}
 			// Get the head watermark value then add the minIncrement to it and publish the idle watermark with updated value.
@@ -468,7 +468,7 @@ func (df *DataForward) stepIntervalHasPassed(t time.Time) bool {
 	}
 
 	// if the time since lastTimestampIdleWMFound is greater than the stepInterval then return true
-	return time.Since(df.lastTimestampIdleWMFound) > df.watermarkConfig.IdleSource.GetStepInterval()
+	return time.Since(df.lastTimestampIdleWMFound) < df.watermarkConfig.IdleSource.GetStepInterval()
 
 }
 
