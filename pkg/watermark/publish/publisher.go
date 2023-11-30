@@ -49,15 +49,6 @@ type Publisher interface {
 	GetLatestWatermark() wmb.Watermark
 }
 
-// SourceWatermarkPublisher publishes source watermarks based on a list of isb.ReadMessage
-// and also publishes idle watermarks.
-type SourceWatermarkPublisher interface {
-	// PublishSourceWatermarks publishes source watermarks.
-	PublishSourceWatermarks([]*isb.ReadMessage)
-	// PublishIdleWatermarks publishes idle watermarks.
-	PublishIdleWatermarks(time.Time)
-}
-
 // publish publishes the watermark and heartbeat for a processor entity.
 type publish struct {
 	ctx    context.Context

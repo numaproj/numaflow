@@ -86,7 +86,7 @@ func TestInterStepDataForward(t *testing.T) {
 				Replica: 0,
 			}
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexWmStores := buildNoOpToVertexStores(toSteps)
 			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
@@ -124,7 +124,7 @@ func TestInterStepDataForward(t *testing.T) {
 				Replica: 0,
 			}
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexWmStores := buildNoOpToVertexStores(toSteps)
 			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 			assert.NoError(t, err)

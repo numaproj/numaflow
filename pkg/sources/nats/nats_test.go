@@ -30,6 +30,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
+	"github.com/numaproj/numaflow/pkg/sources/common"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -70,7 +71,7 @@ func testVertex(t *testing.T, url, subject, queue string, hostname string, repli
 	return vi
 }
 
-func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
+func newInstance(t *testing.T, vi *dfv1.VertexInstance) (common.Sourcer, error) {
 	t.Helper()
 	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
 	toBuffers := map[string][]isb.BufferWriter{
@@ -78,7 +79,7 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (*natsSource, error) {
 	}
 
 	publishWMStores, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
+	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"testVertex": publishWMStores,
 	}

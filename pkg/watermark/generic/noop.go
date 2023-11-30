@@ -29,7 +29,7 @@ type NoOpWMProgressor struct {
 }
 
 // if the struct implements SourceFetcher interface, it implicitly implements Fetcher.
-var _ fetch.SourceFetcher = (*NoOpWMProgressor)(nil)
+var _ fetch.Fetcher = (*NoOpWMProgressor)(nil)
 var _ publish.Publisher = (*NoOpWMProgressor)(nil)
 
 // NewNoOpWMProgressor returns NoOpWMProgressor.
@@ -69,6 +69,42 @@ func (n NoOpWMProgressor) Close() error {
 	return nil
 }
 
+type NoOpSourceWMProgressor struct {
+}
+
+var _ fetch.SourceFetcher = (*NoOpSourceWMProgressor)(nil)
+var _ publish.Publisher = (*NoOpSourceWMProgressor)(nil)
+
+func NewNoOpSourceWMProgressor() *NoOpSourceWMProgressor {
+	return &NoOpSourceWMProgressor{}
+}
+
+// Close stops the no-op progressor.
+func (n NoOpSourceWMProgressor) Close() error {
+	return nil
+}
+
+// PublishWatermark does a no-op watermark publish.
+func (n NoOpSourceWMProgressor) PublishWatermark(_ wmb.Watermark, _ isb.Offset, _ int32) {}
+
+// PublishIdleWatermark does a no-op idle watermark publish.
+func (n NoOpSourceWMProgressor) PublishIdleWatermark(_ wmb.Watermark, _ isb.Offset, _ int32) {}
+
+// GetLatestWatermark returns the default watermark as the latest watermark.
+func (n NoOpSourceWMProgressor) GetLatestWatermark() wmb.Watermark {
+	return wmb.Watermark{}
+}
+
+// ComputeWatermark returns the default watermark.
+func (n NoOpSourceWMProgressor) ComputeWatermark() wmb.Watermark {
+	return wmb.Watermark{}
+}
+
+// ComputeHeadWatermark returns the default head watermark.
+func (n NoOpSourceWMProgressor) ComputeHeadWatermark(int32) wmb.Watermark {
+	return wmb.Watermark{}
+}
+
 func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.Fetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
@@ -79,19 +115,28 @@ func BuildNoOpWatermarkProgressorsFromBufferList(toBuffers []string) (fetch.Fetc
 }
 
 func BuildNoOpSourceWatermarkProgressors(toBuffers []string) (fetch.SourceFetcher, map[string]publish.Publisher) {
-	fetchWatermark := NewNoOpWMProgressor()
+	fetchWatermark := NewNoOpSourceWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
 	for _, buffer := range toBuffers {
-		publishWatermark[buffer] = NewNoOpWMProgressor()
+		publishWatermark[buffer] = NewNoOpSourceWMProgressor()
 	}
 	return fetchWatermark, publishWatermark
 }
 
-func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string][]isb.BufferWriter) (fetch.SourceFetcher, map[string]publish.Publisher) {
+func BuildNoOpWatermarkProgressorsFromBufferMap(bufferMap map[string][]isb.BufferWriter) (fetch.Fetcher, map[string]publish.Publisher) {
 	fetchWatermark := NewNoOpWMProgressor()
 	publishWatermark := make(map[string]publish.Publisher)
 	for buffName := range bufferMap {
 		publishWatermark[buffName] = NewNoOpWMProgressor()
+	}
+	return fetchWatermark, publishWatermark
+}
+
+func BuildNoOpSourceWatermarkProgressorsFromBufferMap(bufferMap map[string][]isb.BufferWriter) (fetch.SourceFetcher, map[string]publish.Publisher) {
+	fetchWatermark := NewNoOpSourceWMProgressor()
+	publishWatermark := make(map[string]publish.Publisher)
+	for buffName := range bufferMap {
+		publishWatermark[buffName] = NewNoOpSourceWMProgressor()
 	}
 	return fetchWatermark, publishWatermark
 }

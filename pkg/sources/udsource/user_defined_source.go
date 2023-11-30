@@ -18,8 +18,6 @@ package udsource
 
 import (
 	"context"
-	"fmt"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -28,9 +26,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sources/common"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
-	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -56,28 +54,15 @@ func WithReadTimeout(t time.Duration) Option {
 }
 
 type userDefinedSource struct {
-	// name of the user-defined source vertex
-	vertexName string
-	// name of the pipeline
-	pipelineName string
-	// sourceApplier applies the user-defined source functions
-	sourceApplier *GRPCBasedUDSource
-	// forwarder writes the source data to destination
-	forwarder *sourceforward.DataForward
-	// context cancel function
-	cancelFn context.CancelFunc
-	// source watermark publishers for different partitions
-	srcWMPublishers map[int32]publish.Publisher
-	// source watermark publisher stores
-	srcPublishWMStores store.WatermarkStore
-	// lifecycleCtx context is used to control the lifecycle of this source.
-	lifecycleCtx context.Context
-	// read timeout for the source
-	readTimeout time.Duration
-	// logger
-	logger *zap.SugaredLogger
-	// a lock to protect srcWMPublishers
-	lock *sync.RWMutex
+	vertexName         string                     // name of the user-defined source vertex
+	pipelineName       string                     // name of the pipeline
+	sourceApplier      *GRPCBasedUDSource         // sourceApplier applies the user-defined source functions
+	forwarder          *sourceforward.DataForward // forwarder writes the source data to destination
+	cancelFn           context.CancelFunc         // context cancel function
+	srcPublishWMStores store.WatermarkStore       // source watermark publisher stores
+	lifecycleCtx       context.Context            // lifecycleCtx context is used to control the lifecycle of this source.
+	readTimeout        time.Duration              // read timeout for the source
+	logger             *zap.SugaredLogger
 }
 
 func New(
@@ -90,15 +75,15 @@ func New(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (*userDefinedSource, error) {
+	opts ...Option) (common.Sourcer, error) {
+
+	var err error
 
 	u := &userDefinedSource{
 		vertexName:         vertexInstance.Vertex.Spec.Name,
 		pipelineName:       vertexInstance.Vertex.Spec.PipelineName,
 		sourceApplier:      sourceApplier,
 		srcPublishWMStores: publishWMStores,
-		srcWMPublishers:    make(map[int32]publish.Publisher),
-		lock:               new(sync.RWMutex),
 		logger:             logging.NewLogger(), // default logger
 	}
 	for _, opt := range opts {
@@ -113,15 +98,19 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	var err error
-	u.forwarder, err = sourceforward.NewDataForward(vertexInstance, u, writers, fsd, transformer, fetchWM, u, toVertexPublisherStores, idleManager, forwardOpts...)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	u.cancelFn = cancel
+	u.lifecycleCtx = ctx
+
+	// create a source watermark publisher
+	sourceWmPublisher := publish.NewSourcePublisher(ctx, u.pipelineName, u.vertexName, publishWMStores)
+
+	u.forwarder, err = sourceforward.NewDataForward(vertexInstance, u, writers, fsd, transformer, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		u.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	u.cancelFn = cancel
-	u.lifecycleCtx = ctx
 	return u, nil
 }
 
@@ -176,42 +165,4 @@ func (u *userDefinedSource) ForceStop() {
 func (u *userDefinedSource) Start() <-chan struct{} {
 	u.logger.Info("Starting user-defined source...")
 	return u.forwarder.Start()
-}
-
-func (u *userDefinedSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
-	// oldestTimestamps stores the latest timestamps for different partitions
-	oldestTimestamps := make(map[int32]time.Time)
-	for _, m := range msgs {
-		// Get latest timestamps for different partitions
-		if t, ok := oldestTimestamps[m.ReadOffset.PartitionIdx()]; !ok || m.EventTime.Before(t) {
-			oldestTimestamps[m.ReadOffset.PartitionIdx()] = m.EventTime
-		}
-	}
-	for p, t := range oldestTimestamps {
-		publisher := u.loadSourceWatermarkPublisher(p)
-		// toVertexPartitionIdx is 0 because we publish watermarks within the source itself.
-		publisher.PublishWatermark(wmb.Watermark(t), nil, 0) // Source publisher does not care about the offset
-	}
-}
-
-// loadSourceWatermarkPublisher does a lazy load on the watermark publisher
-func (u *userDefinedSource) loadSourceWatermarkPublisher(partitionID int32) publish.Publisher {
-	u.lock.Lock()
-	defer u.lock.Unlock()
-	if p, ok := u.srcWMPublishers[partitionID]; ok {
-		return p
-	}
-	entityName := fmt.Sprintf("%s-%s-%d", u.pipelineName, u.vertexName, partitionID)
-	processorEntity := entity.NewProcessorEntity(entityName)
-	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
-	sourcePublishWM := publish.NewPublish(u.lifecycleCtx, processorEntity, u.srcPublishWMStores, 1, publish.IsSource())
-	u.srcWMPublishers[partitionID] = sourcePublishWM
-	return sourcePublishWM
-}
-
-// PublishIdleWatermarks will publish the watermark when source is idling
-func (u *userDefinedSource) PublishIdleWatermarks(t time.Time) {
-	for partitionID, publisher := range u.srcWMPublishers {
-		publisher.PublishIdleWatermark(wmb.Watermark(t), nil, partitionID)
-	}
 }

@@ -31,9 +31,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/sources/common"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
-	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -41,21 +41,16 @@ import (
 )
 
 type natsSource struct {
-	name         string
+	vertexName   string
 	pipelineName string
 	logger       *zap.SugaredLogger
-
-	natsConn *natslib.Conn
-	sub      *natslib.Subscription
-
-	bufferSize  int
-	messages    chan *isb.ReadMessage
-	readTimeout time.Duration
-
-	cancelFn  context.CancelFunc
-	forwarder *sourceforward.DataForward
-	// source watermark publisher
-	sourcePublishWM publish.Publisher
+	natsConn     *natslib.Conn
+	sub          *natslib.Subscription
+	bufferSize   int
+	messages     chan *isb.ReadMessage
+	readTimeout  time.Duration
+	cancelFn     context.CancelFunc
+	forwarder    *sourceforward.DataForward
 }
 
 func New(
@@ -67,10 +62,10 @@ func New(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (*natsSource, error) {
+	opts ...Option) (common.Sourcer, error) {
 
 	n := &natsSource{
-		name:         vertexInstance.Vertex.Spec.Name,
+		vertexName:   vertexInstance.Vertex.Spec.Name,
 		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
 		bufferSize:   1000,            // default size
 		readTimeout:  1 * time.Second, // default timeout
@@ -91,25 +86,26 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	forwarder, err := sourceforward.NewDataForward(vertexInstance, n, writers, fsd, transformerApplier, fetchWM, n, toVertexPublisherStores, idleManager, forwardOpts...)
-	if err != nil {
-		n.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
-		return nil, err
-	}
-	n.forwarder = forwarder
+
 	ctx, cancel := context.WithCancel(context.Background())
 	n.cancelFn = cancel
-	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
-	processorEntity := entity.NewProcessorEntity(entityName)
-	// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
-	n.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+
+	// create a source watermark publisher
+	sourceWmPublisher := publish.NewSourcePublisher(ctx, n.pipelineName, n.vertexName, publishWMStores)
+
+	sourceForwarder, err := sourceforward.NewDataForward(vertexInstance, n, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
+	if err != nil {
+		n.logger.Errorw("Error instantiating the sourceForwarder", zap.Error(err))
+		return nil, err
+	}
+	n.forwarder = sourceForwarder
 
 	source := vertexInstance.Vertex.Spec.Source.Nats
 	opt := []natslib.Option{
 		natslib.MaxReconnects(-1),
 		natslib.ReconnectWait(3 * time.Second),
-		natslib.DisconnectHandler(func(c *natslib.Conn) {
-			n.logger.Info("Nats disconnected")
+		natslib.DisconnectErrHandler(func(c *natslib.Conn, err error) {
+			n.logger.Errorw("Nats disconnected", zap.Error(err))
 		}),
 		natslib.ReconnectHandler(func(c *natslib.Conn) {
 			n.logger.Info("Nats reconnected")
@@ -213,7 +209,7 @@ func WithReadTimeout(t time.Duration) Option {
 }
 
 func (ns *natsSource) GetName() string {
-	return ns.name
+	return ns.vertexName
 }
 
 // GetPartitionIdx returns the partition number for the source vertex buffer
@@ -229,7 +225,7 @@ loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-ns.messages:
-			natsSourceReadCount.With(map[string]string{metrics.LabelVertex: ns.name, metrics.LabelPipeline: ns.pipelineName}).Inc()
+			natsSourceReadCount.With(map[string]string{metrics.LabelVertex: ns.vertexName, metrics.LabelPipeline: ns.pipelineName}).Inc()
 			msgs = append(msgs, m)
 		case <-timeout:
 			ns.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", ns.readTimeout), zap.Int("read", len(msgs)))
@@ -242,24 +238,6 @@ loop:
 
 func (ns *natsSource) Pending(_ context.Context) (int64, error) {
 	return isb.PendingNotAvailable, nil
-}
-
-func (ns *natsSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
-	var oldest time.Time
-	for _, m := range msgs {
-		if oldest.IsZero() || m.EventTime.Before(oldest) {
-			oldest = m.EventTime
-		}
-	}
-	if len(msgs) > 0 && !oldest.IsZero() {
-		// toVertexPartitionIdx is 0 because we publish watermarks within the source itself.
-		ns.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
-	}
-}
-
-func (ns *natsSource) PublishIdleWatermarks(wm time.Time) {
-	// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
-	ns.sourcePublishWM.PublishIdleWatermark(wmb.Watermark(wm), nil, 0) // Source publisher does not care about the offset
 }
 
 func (ns *natsSource) Ack(_ context.Context, offsets []isb.Offset) []error {

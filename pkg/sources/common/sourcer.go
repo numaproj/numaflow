@@ -14,12 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sources
+package common
 
 import (
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
 // Sourcer interface provides an isb.BufferReader abstraction over the underlying data source.
@@ -28,5 +27,4 @@ type Sourcer interface {
 	isb.BufferReader
 	forwarder.StarterStopper
 	isb.LagReader
-	publish.SourceWatermarkPublisher
 }

@@ -31,7 +31,8 @@ type Fetcher interface {
 
 // SourceFetcher fetches watermark data for source vertex.
 type SourceFetcher interface {
-	Fetcher
+	// ComputeWatermark computes the watermark, it will return the minimum of all the watermarks of the processors.
+	ComputeWatermark() wmb.Watermark
 	HeadFetcher
 }
 

@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 
 // ComputeWatermark uses current time as the watermark because we want to make sure
 // the test publisher is publishing watermark
-func (t *testForwardFetcher) ComputeWatermark(_ isb.Offset, _ int32) wmb.Watermark {
+func (t *testForwardFetcher) ComputeWatermark() wmb.Watermark {
 	return t.getWatermark()
 }
 
@@ -71,13 +71,8 @@ func (t *testForwardFetcher) getWatermark() wmb.Watermark {
 	return wmb.Watermark(testSourceWatermark)
 }
 
-func (t *testForwardFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark {
+func (t *testForwardFetcher) ComputeHeadWatermark(int32) wmb.Watermark {
 	return wmb.Watermark{}
-}
-
-func (t *testForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
-	// won't be used
-	return wmb.WMB{}
 }
 
 type myForwardTest struct {
@@ -132,7 +127,7 @@ func TestNewDataForward(t *testing.T) {
 
 			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			noOpStores := buildNoOpToVertexStores(toSteps)
 			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, noOpStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
@@ -682,7 +677,7 @@ func TestNewDataForward(t *testing.T) {
 
 			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexStores := buildNoOpToVertexStores(toSteps)
 			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardApplyTransformerErrTest{}, myForwardApplyTransformerErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
@@ -726,7 +721,7 @@ func TestNewDataForward(t *testing.T) {
 				Replica: 0,
 			}
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexStores := buildNoOpToVertexStores(toSteps)
 			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
@@ -768,7 +763,7 @@ func TestNewDataForward(t *testing.T) {
 				Replica: 0,
 			}
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexStores := buildNoOpToVertexStores(toSteps)
 			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
 
@@ -849,7 +844,7 @@ func (f mySourceForwardTest) ApplyTransform(ctx context.Context, message *isb.Re
 type TestSourceWatermarkPublisher struct {
 }
 
-func (p TestSourceWatermarkPublisher) PublishIdleWatermarks(t time.Time) {
+func (p TestSourceWatermarkPublisher) PublishIdleWatermarks(time.Time) {
 	// PublishIdleWatermarks is not tested in data_forwarder_test.go
 }
 
@@ -1039,7 +1034,7 @@ func TestWriteToBuffer(t *testing.T) {
 				Replica: 0,
 			}
 
-			fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexStores := buildNoOpToVertexStores(toSteps)
 			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(value.batchSize))
 			assert.NoError(t, err)

@@ -25,7 +25,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -49,7 +48,7 @@ func NewSourceFetcher(ctx context.Context, store store.WatermarkStore, opts ...O
 	}
 }
 
-func (e *sourceFetcher) ComputeWatermark(_ isb.Offset, _ int32) wmb.Watermark {
+func (e *sourceFetcher) ComputeWatermark() wmb.Watermark {
 	return e.getWatermark()
 }
 
@@ -97,10 +96,4 @@ func (e *sourceFetcher) ComputeHeadWatermark(fromPartitionIdx int32) wmb.Waterma
 		return wmb.InitialWatermark
 	}
 	return wmb.Watermark(time.UnixMilli(epoch))
-}
-
-// ComputeHeadIdleWMB returns the latest idle WMB among all processors
-func (e *sourceFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
-	// TODO: what would this be...
-	return wmb.WMB{}
 }

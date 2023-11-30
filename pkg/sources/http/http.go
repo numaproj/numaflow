@@ -36,9 +36,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/sources/common"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
-	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -54,11 +54,8 @@ type httpSource struct {
 	messages     chan *isb.ReadMessage
 	logger       *zap.SugaredLogger
 	forwarder    *sourceforward.DataForward
-	// source watermark publisher
-	sourcePublishWM publish.Publisher
-	// context cancel function
-	cancelFunc context.CancelFunc
-	shutdown   func(context.Context) error
+	cancelFunc   context.CancelFunc // context cancel function
+	shutdown     func(context.Context) error
 }
 
 type Option func(*httpSource) error
@@ -95,7 +92,7 @@ func New(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (*httpSource, error) {
+	opts ...Option) (common.Sourcer, error) {
 
 	h := &httpSource{
 		vertexName:   vertexInstance.Vertex.Spec.Name,
@@ -199,19 +196,18 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	h.cancelFunc = cancel
 
-	h.forwarder, err = sourceforward.NewDataForward(vertexInstance, h, writers, fsd, transformerApplier, fetchWM, h, toVertexPublisherStores, idleManager, forwardOpts...)
+	// create a source watermark publisher
+	sourceWmPublisher := publish.NewSourcePublisher(ctx, vertexInstance.Vertex.Spec.PipelineName, vertexInstance.Vertex.Spec.Name,
+		publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	h.forwarder, err = sourceforward.NewDataForward(vertexInstance, h, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	h.cancelFunc = cancel
-	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
-	processorEntity := entity.NewProcessorEntity(entityName)
-	// source publisher toVertexPartitionCount will be 1, because we publish watermarks within the source itself.
-	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 	return h, nil
 }
 
@@ -245,25 +241,6 @@ loop:
 
 func (h *httpSource) Pending(_ context.Context) (int64, error) {
 	return isb.PendingNotAvailable, nil
-}
-
-func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
-	var oldest time.Time
-	for _, m := range msgs {
-		if oldest.IsZero() || m.EventTime.Before(oldest) {
-			oldest = m.EventTime
-		}
-	}
-	if len(msgs) > 0 && !oldest.IsZero() {
-		h.logger.Debugf("Publishing watermark %v to source", oldest)
-		// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
-		h.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
-	}
-}
-
-func (h *httpSource) PublishIdleWatermarks(wm time.Time) {
-	// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
-	h.sourcePublishWM.PublishIdleWatermark(wmb.Watermark(wm), nil, 0) // Source publisher does not care about the offset
 }
 
 func (h *httpSource) Ack(_ context.Context, offsets []isb.Offset) []error {

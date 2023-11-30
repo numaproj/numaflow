@@ -38,6 +38,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
+	"github.com/numaproj/numaflow/pkg/sources/common"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
@@ -65,7 +66,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		log                      = logging.FromContext(ctx)
 		writersMap               = make(map[string][]isb.BufferWriter)
 		sdkClient                sourcetransformer.Client
-		sourcer                  Sourcer
+		sourcer                  common.Sourcer
 		readyCheckers            []metrics.HealthChecker
 		idleManager              wmb.IdleManager
 	)
@@ -285,7 +286,7 @@ func (sp *SourceProcessor) getSourcer(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	logger *zap.SugaredLogger) (Sourcer, error) {
+	logger *zap.SugaredLogger) (common.Sourcer, error) {
 
 	src := sp.VertexInstance.Vertex.Spec.Source
 	if x := src.UDSource; x != nil && udsGRPCClient != nil {
