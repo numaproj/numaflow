@@ -18163,15 +18163,15 @@
       "type": "object",
       "properties": {
         "incrementBy": {
-          "description": "IncrementBy is the duration in seconds to be added to the current watermark to progress the watermark when source is idling.",
+          "description": "IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "stepInterval": {
-          "description": "StepInterval is the duration in seconds between the subsequent increment of the watermark as long the source remains Idle.",
+          "description": "StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "threshold": {
-          "description": "Threshold is the duration in seconds after which a source is marked a Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
+          "description": "Threshold is the duration after which a source is marked a Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }

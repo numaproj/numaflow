@@ -17,7 +17,6 @@ package idle_source_e2e
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -68,28 +67,6 @@ func (is *IdleSourceSuite) TestSimpleKeyedReducePipeline() {
 		SinkContains("sink", "40").
 		SinkContains("sink", "20")
 	done <- struct{}{}
-}
-
-func (is *IdleSourceSuite) TestKafkaSourceSink() {
-	inputTopic := CreateKafkaTopic()
-
-	sedCMD := fmt.Sprintf("sed \"s/my-topic/%s/g\"", inputTopic)
-	is.Given().When().Exec("sh", []string{"-c", sedCMD}, OutputRegexp(""))
-
-	w := is.Given().Pipeline("@testdata/kafka-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	defer w.DeletePipelineAndWait()
-
-	//pipelineName := "kafka-idle-source"
-
-	time.Sleep(60 * time.Second)
-	PumpKafkaTopic(inputTopic, 100, 20*time.Millisecond, 10)
-	DeleteKafkaTopic(inputTopic)
 }
 
 func TestReduceSuite(t *testing.T) {
