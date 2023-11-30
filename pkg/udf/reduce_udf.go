@@ -89,7 +89,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if windowType.Fixed != nil {
 		windower = fixed.NewWindower(windowType.Fixed.Length.Duration)
-		client, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
+		client, err := reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create a new fixed reducer gRPC client: %w", err)
 		}
@@ -98,7 +98,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		heathChecker = reduceHandler
 	} else if windowType.Sliding != nil {
 		windower = sliding.NewWindower(windowType.Sliding.Length.Duration, windowType.Sliding.Slide.Duration)
-		client, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
+		client, err := reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create a new sliding reducer gRPC client: %w", err)
 		}
@@ -107,9 +107,9 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		heathChecker = reduceHandler
 	} else if windowType.Session != nil {
 		windower = session.NewWindower(windowType.Session.Timeout.Duration)
-		client, err := sessionreducer.New(sessionreducer.WithMaxMessageSize(maxMessageSize))
+		client, err := sessionreducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
-			return fmt.Errorf("failed to create a new sliding reducer gRPC client: %w", err)
+			return fmt.Errorf("failed to create a new session reducer gRPC client: %w", err)
 		}
 		reduceHandler := rpc.NewGRPCBasedSessionReduce(client)
 		udfApplier = reduceHandler

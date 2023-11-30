@@ -145,7 +145,7 @@ func (df *DataForward) Start() {
 // PBQ before it can start reading from ISB. ReplayPersistedMessages will return only after the replay has been completed.
 func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 	// FIXME: fix replay for unaligned windows
-	if df.windower.Type() != window.Unaligned {
+	if df.windower.Type() == window.Unaligned {
 		return nil
 	}
 	// start the PBQManager which discovers and builds the state from persistent store of the PBQ.

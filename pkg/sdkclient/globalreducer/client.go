@@ -22,7 +22,6 @@ import (
 	"context"
 	"io"
 	"log"
-	"time"
 
 	globalreducerpb "github.com/numaproj/numaflow-go/pkg/apis/proto/globalreduce/v1"
 	"google.golang.org/grpc"
@@ -39,21 +38,15 @@ type client struct {
 }
 
 // New creates a new client object.
-func New(inputOptions ...Option) (Client, error) {
-	var opts = &options{
-		maxMessageSize:             sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
-		serverInfoFilePath:         sdkclient.ServerInfoFilePath,
-		tcpSockAddr:                sdkclient.TcpAddr,
-		udsSockAddr:                sdkclient.ReduceAddr,
-		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
-	}
+func New(inputOptions ...sdkclient.Option) (Client, error) {
+	var opts = sdkclient.DefaultOptions(sdkclient.GlobalReduceAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}
 
 	// Wait for server info to be ready
-	serverInfo, err := util.WaitForServerInfo(opts.serverInfoReadinessTimeout, opts.serverInfoFilePath)
+	serverInfo, err := util.WaitForServerInfo(opts.ServerInfoReadinessTimeout(), opts.ServerInfoFilePath())
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +56,7 @@ func New(inputOptions ...Option) (Client, error) {
 	}
 
 	// Connect to the server
-	conn, err := util.ConnectToServer(opts.udsSockAddr, opts.tcpSockAddr, serverInfo, opts.maxMessageSize)
+	conn, err := util.ConnectToServer(opts.UdsSockAddr(), opts.TcpSockAddr(), serverInfo, opts.MaxMessageSize())
 	if err != nil {
 		return nil, err
 	}

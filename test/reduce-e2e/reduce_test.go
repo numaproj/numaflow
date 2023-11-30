@@ -268,6 +268,7 @@ func (r *ReduceSuite) TestSimpleSessionPipeline() {
 				}
 				eventTime := strconv.Itoa(startTime)
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				count += 1
 			}
 		}
 	}()

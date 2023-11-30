@@ -48,20 +48,21 @@ import (
 // processAndForward reads requests from pbq, invokes reduceApplier using grpc, forwards the results to ISB, and then publishes
 // the watermark for that partition.
 type processAndForward struct {
-	vertexName     string
-	pipelineName   string
-	vertexReplica  int32
-	partitionId    partition.ID
-	UDF            applier.ReduceApplier
-	pbqReader      pbq.Reader
-	log            *zap.SugaredLogger
-	toBuffers      map[string][]isb.BufferWriter
-	whereToDecider forwarder.ToWhichStepDecider
-	wmPublishers   map[string]publish.Publisher
-	idleManager    wmb.IdleManager
-	pbqManager     *pbq.Manager
-	windower       window.TimedWindower
-	done           chan struct{}
+	vertexName         string
+	pipelineName       string
+	vertexReplica      int32
+	partitionId        partition.ID
+	UDF                applier.ReduceApplier
+	pbqReader          pbq.Reader
+	log                *zap.SugaredLogger
+	toBuffers          map[string][]isb.BufferWriter
+	whereToDecider     forwarder.ToWhichStepDecider
+	wmPublishers       map[string]publish.Publisher
+	idleManager        wmb.IdleManager
+	pbqManager         *pbq.Manager
+	windower           window.TimedWindower
+	latestWriteOffsets map[string][][]isb.Offset
+	done               chan struct{}
 }
 
 // newProcessAndForward will return a new processAndForward instance
@@ -79,21 +80,29 @@ func newProcessAndForward(ctx context.Context,
 	manager *pbq.Manager,
 	windower window.TimedWindower) *processAndForward {
 
+	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
+	// which will be used for publishing the watermark when the window is closed.
+	latestWriteOffsets := make(map[string][][]isb.Offset)
+	for toVertexName, toVertexBuffer := range toBuffers {
+		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
+	}
+
 	pf := &processAndForward{
-		vertexName:     vertexName,
-		pipelineName:   pipelineName,
-		vertexReplica:  vr,
-		partitionId:    partitionID,
-		UDF:            udf,
-		pbqReader:      pbqReader,
-		toBuffers:      toBuffers,
-		whereToDecider: whereToDecider,
-		wmPublishers:   pw,
-		idleManager:    idleManager,
-		pbqManager:     manager,
-		windower:       windower,
-		done:           make(chan struct{}),
-		log:            logging.FromContext(ctx),
+		vertexName:         vertexName,
+		pipelineName:       pipelineName,
+		vertexReplica:      vr,
+		partitionId:        partitionID,
+		UDF:                udf,
+		pbqReader:          pbqReader,
+		toBuffers:          toBuffers,
+		whereToDecider:     whereToDecider,
+		wmPublishers:       pw,
+		idleManager:        idleManager,
+		pbqManager:         manager,
+		windower:           windower,
+		done:               make(chan struct{}),
+		latestWriteOffsets: latestWriteOffsets,
+		log:                logging.FromContext(ctx),
 	}
 	// start the processAndForward routine. This go-routine is collected by the Shutdown method which
 	// listens on the done channel.
@@ -119,12 +128,6 @@ func (p *processAndForward) invokeUDF(ctx context.Context) {
 // forwardUnalignedWindowResponses writes to the next ISB along with the WM for the responses from the UDF for the unaligned windows.
 func (p *processAndForward) forwardUnalignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
 	defer close(p.done)
-	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
-	// which will be used for publishing the watermark when the window is closed.
-	latestWriteOffsets := make(map[string][][]isb.Offset)
-	for toVertexName, toVertexBuffer := range p.toBuffers {
-		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
-	}
 
 	// this for loop never exits because we do not track at the partition level but will be tracked at window level.
 	// since the key is involved, we cannot ever do a cob at partition level.
@@ -148,14 +151,14 @@ outerLoop:
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
 				// FIXME(session): we need to compact the pbq for unAligned when we have received the EOF response from the UDF.
-				p.publishWM(ctx, p.partitionId, latestWriteOffsets)
+				p.publishWM(ctx, p.partitionId)
 
 				// delete the closed windows which are tracked by the windower
 				p.windower.DeleteClosedWindows(response)
 				continue
 			}
 
-			p.forwardToBuffers(ctx, response, latestWriteOffsets)
+			p.forwardToBuffers(ctx, response)
 		}
 	}
 }
@@ -163,12 +166,6 @@ outerLoop:
 // forwardAlignedWindowResponses writes to the next ISB along with the WM for the responses from the UDF for the aligned window.
 func (p *processAndForward) forwardAlignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
 	defer close(p.done)
-	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
-	// which will be used for publishing the watermark when the window is closed.
-	latestWriteOffsets := make(map[string][][]isb.Offset)
-	for toVertexName, toVertexBuffer := range p.toBuffers {
-		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
-	}
 
 	// for loop for aligned windows does exit since we create a partition for every unique (start, end) window tuple.
 outerLoop:
@@ -189,13 +186,13 @@ outerLoop:
 				continue
 			}
 
-			p.forwardToBuffers(ctx, response, latestWriteOffsets)
+			p.forwardToBuffers(ctx, response)
 		}
 	}
 
 	// for aligned we don't track the windows for every key, we need to delete the window
 	// once we have received all the responses from the UDF.
-	p.publishWM(ctx, p.partitionId, latestWriteOffsets)
+	p.publishWM(ctx, p.partitionId)
 	// delete the closed windows which are tracked by the windower
 	p.windower.DeleteClosedWindows(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(&p.partitionId)})
 
@@ -209,7 +206,7 @@ outerLoop:
 }
 
 // forwardToBuffers writes the messages to the ISBs concurrently for each partition.
-func (p *processAndForward) forwardToBuffers(ctx context.Context, response *window.TimedWindowResponse, latestWriteOffsets map[string][][]isb.Offset) {
+func (p *processAndForward) forwardToBuffers(ctx context.Context, response *window.TimedWindowResponse) {
 	var messagesToStep map[string][][]isb.Message
 
 	messagesToStep = p.whereToStep([]*isb.WriteMessage{response.WriteMessage})
@@ -228,7 +225,7 @@ func (p *processAndForward) forwardToBuffers(ctx context.Context, response *wind
 				offsets := p.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
 				mu.Lock()
 				// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-				latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
+				p.latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
 				mu.Unlock()
 			}(key, int32(index), messages)
 		}
@@ -361,7 +358,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 
 // publishWM publishes the watermark to each edge.
 // TODO: support multi partitioned edges.
-func (p *processAndForward) publishWM(ctx context.Context, id partition.ID, writeOffsets map[string][][]isb.Offset) {
+func (p *processAndForward) publishWM(ctx context.Context, id partition.ID) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,
 	// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
@@ -378,7 +375,7 @@ func (p *processAndForward) publishWM(ctx context.Context, id partition.ID, writ
 	// it's used to determine which buffers should receive an idle watermark.
 	// Created as a slice since it tracks per partition of the buffer.
 	var activeWatermarkBuffers = make(map[string][]bool)
-	for toVertexName, bufferOffsets := range writeOffsets {
+	for toVertexName, bufferOffsets := range p.latestWriteOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
 		if publisher, ok := p.wmPublishers[toVertexName]; ok {
 			for index, offsets := range bufferOffsets {
@@ -403,5 +400,11 @@ func (p *processAndForward) publishWM(ctx context.Context, id partition.ID, writ
 				}
 			}
 		}
+	}
+
+	// reset the latestWriteOffsets after publishing watermark
+	p.latestWriteOffsets = make(map[string][][]isb.Offset)
+	for toVertexName, toVertexBuffer := range p.toBuffers {
+		p.latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 }

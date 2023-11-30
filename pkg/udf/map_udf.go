@@ -131,7 +131,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if enableMapUdfStream {
-		mapStreamClient, err := mapstreamer.New(mapstreamer.WithMaxMessageSize(maxMessageSize))
+		mapStreamClient, err := mapstreamer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create map stream client, %w", err)
 		}
@@ -149,7 +149,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}()
 
 	} else {
-		mapClient, err := mapper.New(mapper.WithMaxMessageSize(maxMessageSize))
+		mapClient, err := mapper.New(sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create map client, %w", err)
 		}

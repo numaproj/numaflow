@@ -164,22 +164,33 @@ func TestPnFHandleAlignedWindowResponses(t *testing.T) {
 	windower.InsertWindow(window.NewWindowFromPartition(id))
 
 	wmPublishers, _ := buildPublisherMapAndOTStore(toBuffersMap)
-
-	pf := &processAndForward{
-		partitionId:    *id,
-		whereToDecider: whereto,
-		windower:       windower,
-		toBuffers:      toBuffersMap,
-		wmPublishers:   wmPublishers,
-		idleManager:    wmb.NewIdleManager(len(toBuffersMap)),
-		pbqReader:      &pbqReader{},
-		done:           make(chan struct{}),
-		log:            logging.FromContext(ctx),
+	latestWriteOffsets := make(map[string][][]isb.Offset)
+	for toVertexName, toVertexBuffer := range toBuffersMap {
+		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 
-	pf.handleAlignedWindowResponses(ctx, responseCh, errCh)
+	pf := &processAndForward{
+		partitionId:        *id,
+		whereToDecider:     whereto,
+		windower:           windower,
+		toBuffers:          toBuffersMap,
+		wmPublishers:       wmPublishers,
+		idleManager:        wmb.NewIdleManager(len(toBuffersMap)),
+		pbqReader:          &pbqReader{},
+		done:               make(chan struct{}),
+		latestWriteOffsets: latestWriteOffsets,
+		log:                logging.FromContext(ctx),
+	}
+
+	pf.forwardAlignedWindowResponses(ctx, responseCh, errCh)
 
 	wg.Wait()
+
+	for _, writeOffsets := range latestWriteOffsets {
+		for _, offsets := range writeOffsets {
+			println(offsets[0].Sequence())
+		}
+	}
 	assert.Equal(t, true, test1Buffer11.IsFull())
 	assert.Equal(t, true, test1Buffer12.IsFull())
 	assert.Equal(t, true, test1Buffer21.IsFull())
