@@ -218,10 +218,11 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// Process only if we have any read messages.
 	// There is a natural looping here if there is an internal error while reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
-		// If watermark is idling then check the lastTimestampIdleWMFound time, if it is less than the maxWait duration then do nothing.
+		// if source is idling then check the stepIntervalHasPassed, if it is less than the stepInterval then do nothing.
 		if df.isSourceIdling() {
 			currentTime := time.Now()
-			if !df.stepIntervalPassed(currentTime) {
+			// if the stepIntervalHasPassed then publish the idle watermark.
+			if df.stepIntervalHasPassed(currentTime) {
 				return
 			}
 			// Get the head watermark value then add the minIncrement to it and publish the idle watermark with updated value.
@@ -458,13 +459,15 @@ func (df *DataForward) updateIdleWatermarkConfig() {
 	df.lastTimestampIdleWMFound = time.Time{}
 }
 
-func (df *DataForward) stepIntervalPassed(t time.Time) bool {
+func (df *DataForward) stepIntervalHasPassed(t time.Time) bool {
 	// set lastTimestampIdleWMFound time if not already set and watermark is found to be idle
 	if df.lastTimestampIdleWMFound.IsZero() {
 		df.lastTimestampIdleWMFound = t
 	}
-	// If watermark is idling then check the lastTimestampIdleWMFound time, if it is less than the maxWait duration then do nothing.
-	return time.Since(df.lastTimestampIdleWMFound) < df.watermarkConfig.IdleSource.GetStepInterval()
+
+	// if the time since lastTimestampIdleWMFound is greater than the stepInterval then return true
+	return time.Since(df.lastTimestampIdleWMFound) > df.watermarkConfig.IdleSource.GetStepInterval()
+
 }
 
 func (df *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {
