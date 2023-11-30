@@ -43,26 +43,29 @@ type TimedWindower interface {
 	OldestWindowEndTime() time.Time
 }
 
-// TimedWindow represents a time based window
+// TimedWindow represents a time based window.
 type TimedWindow interface {
-	// StartTime returns the start time of the window
+	// StartTime returns the start time of the window.
 	StartTime() time.Time
-	// EndTime returns the end time of the window
+	// EndTime returns the end time of the window.
 	EndTime() time.Time
-	// Slot returns the slot to which the window belongs
+	// Slot returns the slot to which the window belongs.
 	Slot() string
-	// Keys returns the keys of the window
-	Keys() []string
 	// Partition returns the partition id of the window
-	// which will be used to map to the pbq instance
+	// which will be used to map to the pbq instance.
 	Partition() *partition.ID
-	// Merge merges the window with the new window
+	// Keys returns the keys of the window tracked for Unaligned windows.
+	// This will return empty for Aligned windows.
+	Keys() []string
+	// Merge merges the window with the new window. It is used only for
+	// Unaligned window.
 	Merge(tw TimedWindow)
-	// Expand expands the window end time to the new endTime
+	// Expand expands the window end time to the new endTime. It is used only for
+	// Unaligned window.
 	Expand(endTime time.Time)
 }
 
-// timedWindow implements TimedWindow
+// timedWindow implements TimedWindow.
 type timedWindow struct {
 	startTime time.Time
 	endTime   time.Time

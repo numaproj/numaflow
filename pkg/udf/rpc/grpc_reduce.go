@@ -92,11 +92,12 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 	// invoke the AsyncReduceFn method with reduceRequests channel and send the result to responseCh channel
 	// and any error to errCh channel
 	go func() {
-		resultCh, reduceErrCh := u.client.AsyncReduceFn(grpcCtx, reduceRequests)
+		resultCh, reduceErrCh := u.client.ReduceFn(grpcCtx, reduceRequests)
 		for {
 			select {
 			case result, ok := <-resultCh:
 				if !ok || result == nil {
+					errCh = nil
 					// if the resultCh channel is closed, close the responseCh and return
 					close(responseCh)
 					return

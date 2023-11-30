@@ -104,7 +104,7 @@ func (c *client) SessionReduceFn(ctx context.Context, datumStreamCh <-chan *sess
 
 	if err != nil {
 		go func() {
-			errCh <- util.ToUDFErr("c.grpcClt.ReduceFn", err)
+			errCh <- util.ToUDFErr("c.grpcClt.SessionReduceFn", err)
 		}()
 	}
 
@@ -121,14 +121,14 @@ func (c *client) SessionReduceFn(ctx context.Context, datumStreamCh <-chan *sess
 					break outerLoop
 				}
 				if sendErr = stream.Send(datum); sendErr != nil {
-					errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
+					errCh <- util.ToUDFErr("SessionReduceFn stream.Send()", sendErr)
 				}
 			}
 		}
 		// close the stream after sending all the messages
 		sendErr = stream.CloseSend()
 		if sendErr != nil {
-			errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
+			errCh <- util.ToUDFErr("SessionReduceFn stream.Send()", sendErr)
 		}
 	}()
 
@@ -146,11 +146,13 @@ func (c *client) SessionReduceFn(ctx context.Context, datumStreamCh <-chan *sess
 				resp, recvErr = stream.Recv()
 				// if the stream is closed, close the responseCh and errCh channels and return
 				if recvErr == io.EOF {
+					// skip selection on nil channel
+					errCh = nil
 					close(responseCh)
 					return
 				}
 				if recvErr != nil {
-					errCh <- util.ToUDFErr("ReduceFn stream.Recv()", recvErr)
+					errCh <- util.ToUDFErr("SessionReduceFn stream.Recv()", recvErr)
 				}
 				responseCh <- resp
 			}

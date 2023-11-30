@@ -83,14 +83,12 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 	defer natsClientPool.CloseAll()
 
-	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
-	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
-	ss := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Session
+	windowType := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window
 
 	// based on the window type create the windower, udfApplier and health checker
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
-	if f != nil {
-		windower = fixed.NewWindower(f.Length.Duration)
+	if windowType.Fixed != nil {
+		windower = fixed.NewWindower(windowType.Fixed.Length.Duration)
 		client, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create a new fixed reducer gRPC client: %w", err)
@@ -98,8 +96,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		reduceHandler := rpc.NewUDSgRPCBasedReduce(client)
 		udfApplier = reduceHandler
 		heathChecker = reduceHandler
-	} else if s != nil {
-		windower = sliding.NewWindower(s.Length.Duration, s.Slide.Duration)
+	} else if windowType.Sliding != nil {
+		windower = sliding.NewWindower(windowType.Sliding.Length.Duration, windowType.Sliding.Slide.Duration)
 		client, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create a new sliding reducer gRPC client: %w", err)
@@ -107,8 +105,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		reduceHandler := rpc.NewUDSgRPCBasedReduce(client)
 		udfApplier = reduceHandler
 		heathChecker = reduceHandler
-	} else if ss != nil {
-		windower = session.NewWindower(ss.Timeout.Duration)
+	} else if windowType.Session != nil {
+		windower = session.NewWindower(windowType.Session.Timeout.Duration)
 		client, err := sessionreducer.New(sessionreducer.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create a new sliding reducer gRPC client: %w", err)

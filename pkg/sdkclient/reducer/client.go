@@ -92,8 +92,8 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 	return resp.GetReady(), nil
 }
 
-// AsyncReduceFn applies a reduce function to a datum stream asynchronously.
-func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.ReduceRequest) (<-chan *reducepb.ReduceResponse, <-chan error) {
+// ReduceFn applies a reduce function to a datum stream asynchronously.
+func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.ReduceRequest) (<-chan *reducepb.ReduceResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan *reducepb.ReduceResponse)
@@ -146,6 +146,8 @@ func (c *client) AsyncReduceFn(ctx context.Context, datumStreamCh <-chan *reduce
 				resp, recvErr = stream.Recv()
 				// if the stream is closed, close the responseCh return
 				if recvErr == io.EOF {
+					// nil channel will never be selected
+					errCh = nil
 					close(responseCh)
 					return
 				}
