@@ -441,6 +441,7 @@ func (df *DataForward) isSourceIdling() bool {
 			if df.lastFetchedSrcWatermark == nil {
 				df.lastFetchedSrcWatermark = &computedWM
 			}
+
 			if computedWM == *df.lastFetchedSrcWatermark {
 				return true
 			}
@@ -459,6 +460,7 @@ func (df *DataForward) updateIdleWatermarkConfig() {
 	df.lastTimestampIdleWMFound = time.Time{}
 }
 
+// stepIntervalHasPassed returns true if Interval duration has passed since the last
 func (df *DataForward) stepIntervalHasPassed(t time.Time) bool {
 	// set lastTimestampIdleWMFound time if not already set and watermark is found to be idle
 	if df.lastTimestampIdleWMFound.IsZero() {

@@ -28,7 +28,10 @@ import (
 )
 
 // SourcePublisher publishes source watermarks based on a list of isb.ReadMessage
-// and also publishes idle watermarks.
+// and also publishes idle watermarks. It internally calls the main WM Publisher to publish
+// the watermark. The only difference is that in source we do not care about offsets in the first
+// Publish within the source itself (huh? :-D). Also, when the source boots up, it has to load
+// the watermark information so it can know about the global source WM state.
 type SourcePublisher interface {
 	// PublishSourceWatermarks publishes source watermarks.
 	PublishSourceWatermarks([]*isb.ReadMessage)
@@ -36,7 +39,7 @@ type SourcePublisher interface {
 	PublishIdleWatermarks(time.Time)
 }
 
-type sourcePublisher struct {
+type sourcePublish struct {
 	ctx                context.Context
 	pipelineName       string
 	vertexName         string
@@ -51,7 +54,7 @@ func NewSourcePublisher(ctx context.Context, pipelineName, vertexName string, sr
 	for _, opt := range opts {
 		opt(options)
 	}
-	return &sourcePublisher{
+	return &sourcePublish{
 		ctx:                ctx,
 		pipelineName:       pipelineName,
 		vertexName:         vertexName,
@@ -65,7 +68,7 @@ func NewSourcePublisher(ctx context.Context, pipelineName, vertexName string, sr
 // it publishes for the partitions to which the messages belong, it publishes the oldest timestamp
 // seen for that partition in the list of messages.
 // if a publisher for a partition doesn't exist, it creates one.
-func (df *sourcePublisher) PublishSourceWatermarks(readMessages []*isb.ReadMessage) {
+func (df *sourcePublish) PublishSourceWatermarks(readMessages []*isb.ReadMessage) {
 	// oldestTimestamps stores the latest timestamps for different partitions
 	oldestTimestamps := make(map[int32]time.Time)
 	for _, m := range readMessages {
@@ -82,14 +85,14 @@ func (df *sourcePublisher) PublishSourceWatermarks(readMessages []*isb.ReadMessa
 }
 
 // PublishIdleWatermarks publishes idle watermarks for all partitions.
-func (df *sourcePublisher) PublishIdleWatermarks(wm time.Time) {
+func (df *sourcePublish) PublishIdleWatermarks(wm time.Time) {
 	for partitionId, publisher := range df.sourcePublishWMs {
 		publisher.PublishIdleWatermark(wmb.Watermark(wm), nil, partitionId) // while publishing idle watermark at source, we don't care about the offset
 	}
 }
 
 // loadSourceWatermarkPublisher does a lazy load on the watermark publisher
-func (df *sourcePublisher) loadSourceWatermarkPublisher(partitionID int32) Publisher {
+func (df *sourcePublish) loadSourceWatermarkPublisher(partitionID int32) Publisher {
 	if p, ok := df.sourcePublishWMs[partitionID]; ok {
 		return p
 	}
