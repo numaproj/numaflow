@@ -146,6 +146,8 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 				resp, recvErr = stream.Recv()
 				// if the stream is closed, close the responseCh return
 				if recvErr == io.EOF {
+					// nil channel will never be selected
+					errCh = nil
 					close(responseCh)
 					return
 				}

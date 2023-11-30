@@ -31,7 +31,9 @@ type Shuffle struct {
 	// partitionCount is the number of partitions of the buffer owned by the vertex
 	partitionCount int
 	hash           hash.Hash64
-	mu             sync.Mutex
+	// we need to hold a lock because concurrent PnFs writes to buffer which internally invokes shuffle.
+	// we need the lock to protect the hash.
+	mu sync.Mutex
 }
 
 // NewShuffle accepts list of buffer identifiers(unique identifier of isb)

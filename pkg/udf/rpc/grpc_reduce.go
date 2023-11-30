@@ -97,6 +97,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 			select {
 			case result, ok := <-resultCh:
 				if !ok || result == nil {
+					errCh = nil
 					// if the resultCh channel is closed, close the responseCh and return
 					close(responseCh)
 					return
