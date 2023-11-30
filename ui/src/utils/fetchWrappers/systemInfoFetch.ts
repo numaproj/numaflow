@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { SystemInfo } from "../models/systemInfo";
 import { useFetch } from "./fetch";
+import { getBaseHref } from "../index";
 import { useLocation } from "react-router-dom";
 
 export const useSystemInfoFetch = () => {
@@ -20,7 +21,7 @@ export const useSystemInfoFetch = () => {
     data,
     loading: fetchLoading,
     error,
-  } = useFetch(`/api/v1/sysinfo`, undefined, options);
+  } = useFetch(`${getBaseHref()}/api/v1/sysinfo`, undefined, options);
 
   useEffect(() => {
     setLoading(fetchLoading);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFetch } from "./fetch";
+import { getBaseHref } from "../index";
 
 export const useNamespaceFetch = (namespaceId: string | undefined) => {
   const [pipelines, setPipelines] = useState<string[]>([]);
@@ -9,7 +10,7 @@ export const useNamespaceFetch = (namespaceId: string | undefined) => {
     data,
     loading: fetchLoading,
     error,
-  } = useFetch(`/api/v1/namespaces/${namespaceId}/pipelines`);
+  } = useFetch(`${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines`);
 
   useEffect(() => {
     if (fetchLoading) {

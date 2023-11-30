@@ -1,7 +1,7 @@
 // Tests the ISBServiceCard component
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import userEvent from "@testing-library/user-event";
 import { ISBServiceCard } from "./ISBServiceCard";
@@ -167,6 +167,20 @@ const mockData = {
   },
 };
 
+//Mock the DeleteModal component
+jest.mock("../../DeleteModal", () => {
+  return {
+    DeleteModal: ({ _, onDeleteCompleted, onCancel }) => {
+      return (
+        <div data-testid="mock-delete-confirmation">
+          <button onClick={onDeleteCompleted}>Mock Delete Confirmation</button>
+          <button onClick={onCancel}>Mock Cancel</button>
+        </div>
+      );
+    },
+  };
+});
+
 const mockRefresh = jest.fn();
 
 describe("ISBServiceCard", () => {
@@ -214,12 +228,9 @@ describe("ISBServiceCard", () => {
     const deleteButton = screen.getByTestId("delete-isb");
     expect(deleteButton).toBeInTheDocument();
     await userEvent.click(deleteButton);
-    expect(
-      screen.getByTestId("delete-confirmation-button")
-    ).toBeInTheDocument();
-    await act(async () => {
-      userEvent.click(screen.getByTestId("delete-confirmation-button"));
-    });
+    expect(screen.getByTestId("mock-delete-confirmation")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("Mock Delete Confirmation"));
+    expect(mockRefresh).toHaveBeenCalled();
   });
   it("Tests if Edit exists and is clickable", async () => {
     render(
@@ -241,5 +252,35 @@ describe("ISBServiceCard", () => {
     const editButton = screen.getByTestId("edit-isb");
     expect(editButton).toBeInTheDocument();
     userEvent.click(editButton);
+  });
+
+  it("Tests clicking cancel on the delete confirmation", async () => {
+    render(
+      <BrowserRouter>
+        <AppContext.Provider
+          value={{
+            setSidebarProps: mockSetSidebarProps,
+          }}
+        >
+          <ISBServiceCard
+            namespace={mockNamespace}
+            data={mockData}
+            refresh={mockRefresh}
+          />
+        </AppContext.Provider>
+      </BrowserRouter>
+    );
+
+    const deleteButton = screen.getByTestId("delete-isb");
+    expect(deleteButton).toBeInTheDocument();
+    await act(() => {
+      userEvent.click(deleteButton);
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Mock Cancel")).toBeInTheDocument();
+    });
+    await act(() => {
+      userEvent.click(screen.getByText("Mock Cancel"));
+    });
   });
 });

@@ -171,9 +171,9 @@ func Test_reconcileEvents(t *testing.T) {
 		testObj.Name = "very-very-very-loooooooooooooooooooooooooooooooooooong"
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
-		events := getEvents(r, 2)
-		assert.Equal(t, "Normal UpdatePipelinePhase Updated pipeline phase from Paused to Running", events[0])
-		assert.Equal(t, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]", events[1])
+		events := getEvents(r)
+		assert.Contains(t, events, "Normal UpdatePipelinePhase Updated pipeline phase from Paused to Running")
+		assert.Contains(t, events, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]")
 	})
 
 	t.Run("test reconcile - duplicate vertex", func(t *testing.T) {
@@ -198,8 +198,8 @@ func Test_reconcileEvents(t *testing.T) {
 		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input", Source: &dfv1.Source{}})
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
-		events := getEvents(r, 1)
-		assert.Equal(t, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: duplicate vertex name \"input\"", events[0])
+		events := getEvents(r)
+		assert.Contains(t, events, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: duplicate vertex name \"input\"")
 	})
 }
 
@@ -483,11 +483,12 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	ctx := context.TODO()
 	r := &pipelineReconciler{
-		client: cl,
-		scheme: scheme.Scheme,
-		config: fakeConfig,
-		image:  testFlowImage,
-		logger: zaptest.NewLogger(t).Sugar(),
+		client:   cl,
+		scheme:   scheme.Scheme,
+		config:   fakeConfig,
+		image:    testFlowImage,
+		logger:   zaptest.NewLogger(t).Sugar(),
+		recorder: record.NewFakeRecorder(64),
 	}
 
 	t.Run("test create or update service", func(t *testing.T) {
@@ -517,11 +518,12 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	ctx := context.TODO()
 	r := &pipelineReconciler{
-		client: cl,
-		scheme: scheme.Scheme,
-		config: fakeConfig,
-		image:  testFlowImage,
-		logger: zaptest.NewLogger(t).Sugar(),
+		client:   cl,
+		scheme:   scheme.Scheme,
+		config:   fakeConfig,
+		image:    testFlowImage,
+		logger:   zaptest.NewLogger(t).Sugar(),
+		recorder: record.NewFakeRecorder(64),
 	}
 
 	t.Run("no side inputs", func(t *testing.T) {
@@ -613,11 +615,12 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 	})
 }
 
-func getEvents(reconciler *pipelineReconciler, num int) []string {
+func getEvents(reconciler *pipelineReconciler) []string {
 	c := reconciler.recorder.(*record.FakeRecorder).Events
-	events := make([]string, num)
-	for i := 0; i < num; i++ {
-		events[i] = <-c
+	close(c)
+	events := make([]string, len(c))
+	for msg := range c {
+		events = append(events, msg)
 	}
 	return events
 }

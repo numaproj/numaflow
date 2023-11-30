@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -59,9 +60,10 @@ type redisInstaller struct {
 	config     *reconciler.GlobalConfig
 	labels     map[string]string
 	logger     *zap.SugaredLogger
+	recorder   record.EventRecorder
 }
 
-func NewNativeRedisInstaller(client client.Client, kubeClient kubernetes.Interface, isbSvc *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger) Installer {
+func NewNativeRedisInstaller(client client.Client, kubeClient kubernetes.Interface, isbSvc *dfv1.InterStepBufferService, config *reconciler.GlobalConfig, labels map[string]string, logger *zap.SugaredLogger, recorder record.EventRecorder) Installer {
 	return &redisInstaller{
 		client:     client,
 		kubeClient: kubeClient,
@@ -69,6 +71,7 @@ func NewNativeRedisInstaller(client client.Client, kubeClient kubernetes.Interfa
 		config:     config,
 		labels:     labels,
 		logger:     logger.With("isbsvc", isbSvc.Name),
+		recorder:   recorder,
 	}
 }
 
@@ -79,16 +82,19 @@ func (r *redisInstaller) Install(ctx context.Context) (*dfv1.BufferServiceConfig
 	r.isbSvc.Status.SetType(dfv1.ISBSvcTypeRedis)
 	if err := r.createScriptsConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis scripts ConfigMap", zap.Error(err))
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisScriptsConfigMapFailed", "Failed to create Redis scripts ConfigMap: %v", err.Error())
 		r.isbSvc.Status.MarkDeployFailed("RedisScriptsConfigMapFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createHealthConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis health ConfigMap", zap.Error(err))
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisHealthConfigMapFailed", "Failed to create Redis health ConfigMap: %v", err.Error())
 		r.isbSvc.Status.MarkDeployFailed("RedisHealthConfigMapFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createConfConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis config ConfigMap", zap.Error(err))
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisConfConfigMapFailed", "Failed to create Redis config ConfigMap: %v", err.Error())
 		r.isbSvc.Status.MarkDeployFailed("RedisConfConfigMapFailed", err.Error())
 		return nil, err
 	}
@@ -99,16 +105,19 @@ func (r *redisInstaller) Install(ctx context.Context) (*dfv1.BufferServiceConfig
 	}
 	if err := r.createRedisService(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis Service", zap.Error(err))
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisServiceFailed", "Failed to create Redis Serivce: %v", err.Error())
 		r.isbSvc.Status.MarkDeployFailed("RedisServiceFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createRedisHeadlessService(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis Headless Service", zap.Error(err))
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisHeadlessServiceFailed", "Failed to create Redis Headless Service: %v", err.Error())
 		r.isbSvc.Status.MarkDeployFailed("RedisHeadlessServiceFailed", err.Error())
 		return nil, err
 	}
 	if err := r.createStatefulSet(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis StatefulSet", zap.Error(err))
+		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisStatefulSetFailed", "Failed to create Redis StatefulSet: %v", err.Error())
 		r.isbSvc.Status.MarkDeployFailed("RedisStatefulSetFailed", err.Error())
 		return nil, err
 	}
@@ -219,6 +228,7 @@ func (r *redisInstaller) createScriptsConfigMap(ctx context.Context) error {
 				return fmt.Errorf("failed to create redis scripts configmap, err: %w", err)
 			}
 			r.logger.Info("Created redis scripts configmap successfully")
+			r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisScriptsConfigMapSuccess", "Created redis scripts configmap successfully")
 			return nil
 		} else {
 			return fmt.Errorf("failed to check if redis scripts configmap is existing, err: %w", err)
@@ -231,6 +241,7 @@ func (r *redisInstaller) createScriptsConfigMap(ctx context.Context) error {
 			return fmt.Errorf("failed to update redis scripts configmap, err: %w", err)
 		}
 		r.logger.Info("Updated redis scripts configmap successfully")
+		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisScriptsConfigMapSuccess", "Updated redis scripts configmap successfully")
 	}
 	return nil
 }
@@ -268,6 +279,7 @@ func (r *redisInstaller) createHealthConfigMap(ctx context.Context) error {
 				return fmt.Errorf("failed to create redis health configmap, err: %w", err)
 			}
 			r.logger.Info("Created redis health configmap successfully")
+			r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisHealthConfigMapSuccess", "Created redis health configmap successfully")
 			return nil
 		} else {
 			return fmt.Errorf("failed to check if redis health configmap is existing, err: %w", err)
@@ -280,6 +292,7 @@ func (r *redisInstaller) createHealthConfigMap(ctx context.Context) error {
 			return fmt.Errorf("failed to update redis health configmap, err: %w", err)
 		}
 		r.logger.Info("Updated redis health configmap successfully")
+		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisHealthConfigMapSuccess", "Updated redis health configmap successfully")
 	}
 	return nil
 }
@@ -394,6 +407,7 @@ func (r *redisInstaller) createConfConfigMap(ctx context.Context) error {
 				return fmt.Errorf("failed to create redis config configmap, err: %w", err)
 			}
 			r.logger.Info("Created redis config configmap successfully")
+			r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisConfConfigMapSuccess", "Created redis config configmap successfully")
 			return nil
 		} else {
 			return fmt.Errorf("failed to check if redis config configmap is existing, err: %w", err)
@@ -406,6 +420,7 @@ func (r *redisInstaller) createConfConfigMap(ctx context.Context) error {
 			return fmt.Errorf("failed to update redis config configmap, err: %w", err)
 		}
 		r.logger.Info("Updated redis config configmap successfully")
+		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisConfConfigMapSuccess", "Updated redis config configmap successfully")
 	}
 	return nil
 }
@@ -438,6 +453,7 @@ func (r *redisInstaller) createRedisService(ctx context.Context) error {
 				return fmt.Errorf("failed to create redis service, err: %w", err)
 			}
 			r.logger.Info("Created redis service successfully")
+			r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisServiceSuccess", "Created redis service successfully")
 			return nil
 		} else {
 			return fmt.Errorf("failed to check if redis service is existing, err: %w", err)
@@ -450,6 +466,7 @@ func (r *redisInstaller) createRedisService(ctx context.Context) error {
 			return fmt.Errorf("failed to update redis service, err: %w", err)
 		}
 		r.logger.Info("Updated redis service successfully")
+		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisServiceSuccess", "Updated redis service successfully")
 	}
 	return nil
 }
@@ -482,6 +499,7 @@ func (r *redisInstaller) createRedisHeadlessService(ctx context.Context) error {
 				return fmt.Errorf("failed to create redis headless service, err: %w", err)
 			}
 			r.logger.Info("Created redis headless service successfully")
+			r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisHeadlessServiceSuccess", "Created redis headless service successfully")
 			return nil
 		} else {
 			return fmt.Errorf("failed to check if redis headless service is existing, err: %w", err)
@@ -494,6 +512,7 @@ func (r *redisInstaller) createRedisHeadlessService(ctx context.Context) error {
 			return fmt.Errorf("failed to update redis headless service, err: %w", err)
 		}
 		r.logger.Info("Updated redis headless service successfully")
+		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisHeadlessServiceSuccess", "Updated redis headless service successfully")
 	}
 	return nil
 }
@@ -542,6 +561,7 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 				return fmt.Errorf("failed to create redis statefulset, err: %w", err)
 			}
 			r.logger.Info("Created redis statefulset successfully")
+			r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisStatefulSetSuccess", "Created redis statefulset successfully")
 			return nil
 		} else {
 			return fmt.Errorf("failed to check if redis statefulset is existing, err: %w", err)
@@ -554,6 +574,7 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 			return fmt.Errorf("failed to update redis statefulset, err: %w", err)
 		}
 		r.logger.Info("Updated redis statefulset successfully")
+		r.recorder.Event(r.isbSvc, corev1.EventTypeNormal, "RedisStatefulSetSuccess", "Updated redis statefulset successfully")
 	}
 	return nil
 }

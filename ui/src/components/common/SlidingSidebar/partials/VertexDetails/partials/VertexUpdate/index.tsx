@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
 import YAML from "yaml";
-import { getAPIResponseError } from "../../../../../../../utils";
+import { getAPIResponseError, getBaseHref } from "../../../../../../../utils";
 import {
   SpecEditor,
   ViewType,
@@ -52,7 +52,7 @@ export function VertexUpdate({
       });
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=false`,
+          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=false`,
           {
             method: "PUT",
             headers: {
@@ -109,7 +109,7 @@ export function VertexUpdate({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=true`,
+          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=true`,
           {
             method: "PUT",
             headers: {

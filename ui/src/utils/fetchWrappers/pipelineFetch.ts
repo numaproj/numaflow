@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Options, useFetch } from "./fetch";
 import { PipelineSummaryFetchResult } from "../../types/declarations/pipeline";
-import {DEFAULT_ISB} from "../index";
+import { DEFAULT_ISB, getBaseHref } from "../index";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
@@ -36,7 +36,7 @@ export const usePipelineSummaryFetch = ({
     loading: pipelineLoading,
     error: pipelineError,
   } = useFetch(
-    `/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
+    `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
     undefined,
     options
   );
@@ -46,7 +46,7 @@ export const usePipelineSummaryFetch = ({
     loading: isbLoading,
     error: isbError,
   } = useFetch(
-    `/api/v1/namespaces/${namespaceId}/isb-services/${isb}`,
+    `${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services/${isb}`,
     undefined,
     isb ? options : { ...options, skip: true }
   );
@@ -104,9 +104,7 @@ export const usePipelineSummaryFetch = ({
     }
     if (pipelineData) {
       if (pipelineData.data?.pipeline?.spec?.interStepBufferServiceName) {
-        setIsb(
-          pipelineData.data?.pipeline?.spec?.interStepBufferServiceName
-        );
+        setIsb(pipelineData.data?.pipeline?.spec?.interStepBufferServiceName);
       } else {
         setIsb(DEFAULT_ISB);
       }

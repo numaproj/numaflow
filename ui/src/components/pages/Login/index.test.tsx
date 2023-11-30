@@ -38,10 +38,12 @@ jest.mock("react-router-dom", () => ({
   useSearchParams: jest.fn(),
 }));
 
+const mockFnParam = jest.fn();
+
 describe("Login", () => {
   (useSearchParams as jest.Mock).mockReturnValue([
     new URLSearchParams(""),
-    () => {},
+    mockFnParam,
   ]);
   it("renders the login page", async () => {
     render(
@@ -59,7 +61,7 @@ describe("Login", () => {
   it("Tests clicking the login button", async () => {
     (useSearchParams as jest.Mock).mockReturnValue([
       new URLSearchParams(""),
-      () => {},
+      mockFnParam,
     ]);
     render(
       <AppContext.Provider value={{ isAuthenticated: false }}>
@@ -86,7 +88,7 @@ describe("Login", () => {
     // Mock the search params to simulate the conditions for handleCallback
     (useSearchParams as jest.Mock).mockReturnValue([
       new URLSearchParams("code=123&state=abc"),
-      () => {},
+      mockFnParam,
     ]);
 
     render(

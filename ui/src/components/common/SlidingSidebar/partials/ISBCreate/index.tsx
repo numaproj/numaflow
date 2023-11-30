@@ -8,7 +8,7 @@ import {
   ValidationMessage,
 } from "../../../SpecEditor";
 import { SpecEditorSidebarProps } from "../..";
-import { getAPIResponseError } from "../../../../../utils";
+import { getAPIResponseError, getBaseHref } from "../../../../../utils";
 
 import "./style.css";
 
@@ -55,7 +55,7 @@ export function ISBCreate({
       });
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/isb-services?dry-run=false`,
+          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services?dry-run=false`,
           {
             method: "POST",
             headers: {
@@ -108,7 +108,7 @@ export function ISBCreate({
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/v1/namespaces/${namespaceId}/isb-services?dry-run=true`,
+          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services?dry-run=true`,
           {
             method: "POST",
             headers: {

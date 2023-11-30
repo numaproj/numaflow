@@ -1,4 +1,4 @@
-import { PipelineData } from "../../components/pages/Namespace/partials/NamespacePipelineListing/PipelinesTypes";
+import { PipelineData } from "../../components/pages/Namespace/partials/NamespaceListingWrapper/PipelinesTypes";
 
 export interface NamespacePipelineSummary {
   name: string;
