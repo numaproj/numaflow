@@ -2045,50 +2045,17 @@
 
 
 <h1 id="ui-access-path">UI Access Path<a class="headerlink" href="#ui-access-path" title="Permanent link">&para;</a></h1>
-<p>Currently, the base configuration will host the UI at the root <code>/</code> ie. <code>localhost:8443</code>. If a user needs to access the UI under a different path for a certain cluster, this can be achieved
-with this configuration.</p>
-<p>This can be configured in the <code>numaflow-server</code> deployment spec by adding the <code>--base-href</code> argument to the main and init containers. This will route requests from the root to the new
-preferred destination. </p>
-<p>For example, we could port-forward the service and host at <code>localhost:8443/numaflow</code>. Note that this new access path will work with or without a trailing slash.</p>
-<p>The following example shows how to configure the access path for the UI to <code>/numaflow</code>:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">serviceAccountName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-server-sa</span>
-<span class="w">      </span><span class="nt">securityContext</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">runAsNonRoot</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<span class="w">        </span><span class="nt">runAsUser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">9737</span>
-<span class="w">      </span><span class="nt">volumes</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env-volume</span>
-<span class="w">        </span><span class="nt">emptyDir</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
-<span class="w">      </span><span class="nt">initContainers</span><span class="p">:</span>
-<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">server-init</span>
-<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaproj/numaflow:latest</span>
-<span class="w">        </span><span class="nt">args</span><span class="p">:</span>
-<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;server-init&quot;</span>
-<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--base-href=/numaflow</span><span class="w"> </span><span class="c1"># include new path here</span>
-<span class="w">        </span><span class="nt">imagePullPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Always</span>
-<span class="w">        </span><span class="nt">volumeMounts</span><span class="p">:</span>
-<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/opt/numaflow</span>
-<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env-volume</span>
-<span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
-<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main</span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaproj/numaflow:latest</span>
-<span class="w">          </span><span class="nt">args</span><span class="p">:</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;server&quot;</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--base-href=/numaflow</span><span class="w"> </span><span class="c1"># include new path here</span>
-<span class="w">          </span><span class="nt">imagePullPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Always</span>
-<span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/ui/build/runtime-env.js</span>
-<span class="w">            </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env-volume</span>
-<span class="w">            </span><span class="nt">subPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runtime-env.js</span>
-<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/ui/build/index.html</span>
-<span class="w">            </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env-volume</span>
-<span class="w">            </span><span class="nt">subPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">index.html</span>
-<span class="w">          </span><span class="nt">env</span><span class="p">:</span>
-<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NAMESPACE</span>
-<span class="w">              </span><span class="nt">valueFrom</span><span class="p">:</span>
-<span class="w">                </span><span class="nt">fieldRef</span><span class="p">:</span>
-<span class="w">                  </span><span class="nt">fieldPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metadata.namespace</span>
+<p>By default, Numaflow UI server will host the service at the root <code>/</code> ie. <code>localhost:8443</code>. If a user needs to access the UI server under a different path, this can be achieved with following configuration. This is useful when the UI is hosted behind a reverse proxy or ingress controller that requires a specific path.</p>
+<p>Configure <code>server.base.href</code> in the ConfigMap <code>numaflow-cmd-params-config</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="c1">### Base href for Numaflow UI server, defaults to &#39;/&#39;.</span>
+<span class="w">  </span><span class="nt">server.base.href</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/app&quot;</span>
 </code></pre></div>
+<p>The configuration above will host the service at <code>localhost:8443/app</code>. Note that this new access path will work with or without a trailing slash.</p>
 
               
             </article>
