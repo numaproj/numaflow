@@ -23,7 +23,8 @@ import (
 )
 
 // SortedWindowListByEndTime is a thread safe list implementation, which is sorted by window end time
-// from lowest to highest
+// from lowest to highest.
+// All search operations are done using binary-search because it is an already sorted list.
 type SortedWindowListByEndTime struct {
 	windows []TimedWindow
 	lock    *sync.RWMutex

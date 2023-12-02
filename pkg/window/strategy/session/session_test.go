@@ -32,7 +32,7 @@ func TestNewWindow(t *testing.T) {
 	gap := time.Minute
 	message := &isb.ReadMessage{}
 
-	win := NewWindow(startTime, gap, message)
+	win := NewSessionWindow(startTime, gap, message)
 
 	assert.Equal(t, startTime, win.StartTime())
 	assert.Equal(t, startTime.Add(gap), win.EndTime())

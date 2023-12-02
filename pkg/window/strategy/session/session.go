@@ -44,10 +44,10 @@ type sessionWindow struct {
 	keys      []string
 }
 
-func NewWindow(startTime time.Time, gap time.Duration, message *isb.ReadMessage) window.TimedWindow {
+func NewSessionWindow(startTime time.Time, gap time.Duration, message *isb.ReadMessage) window.TimedWindow {
 	start := startTime
 	end := start.Add(gap)
-	//TODO: slot should be extracted based on the key
+	// TODO: slot should be extracted based on the key
 	// we can accept an interface SlotAssigner
 	// which will assign the slot based on the keys
 	slot := "slot-0"
@@ -83,6 +83,7 @@ func (w *sessionWindow) Partition() *partition.ID {
 	}
 }
 
+// Merge window merges two windows. This operation of merge happens in Unaligned windows.
 func (w *sessionWindow) Merge(tw window.TimedWindow) {
 	// expand the start and end to accommodate the new window
 	if tw.StartTime().Before(w.startTime) {
@@ -94,6 +95,7 @@ func (w *sessionWindow) Merge(tw window.TimedWindow) {
 	}
 }
 
+// cloneWindow makes a deep copy of the window.
 func cloneWindow(win window.TimedWindow) *sessionWindow {
 	return &sessionWindow{
 		startTime: win.StartTime(),
@@ -103,6 +105,7 @@ func cloneWindow(win window.TimedWindow) *sessionWindow {
 	}
 }
 
+// Expand expands the window. An interesting property of Unaligned windows :).
 func (w *sessionWindow) Expand(endTime time.Time) {
 	if endTime.After(w.endTime) {
 		w.endTime = endTime
@@ -112,7 +115,9 @@ func (w *sessionWindow) Expand(endTime time.Time) {
 // Windower is a implementation of TimedWindower of session window, windower is responsible for assigning
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
+	// gap is the duration after with the session is marked as closed.
 	gap time.Duration
+
 	// activeWindows is a map of keys to list of active windows
 	// key is join of all the keys of the message, since session is per key
 	// we need to maintain a list of windows per key
@@ -144,52 +149,67 @@ func (*Windower) Type() window.Type {
 	return window.Unaligned
 }
 
-// AssignWindows assigns the event to the window based on give window configuration.
+// AssignWindows assigns the event to the window based on give window configuration. This assignment could trigger the following
+// - New window Creation
+// - Expand an existing window
+// - Append to an existing window (event time has the event-time such that gap + event-time is < window end time).
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
 
 	var (
 		combinedKey      = strings.Join(message.Keys, delimiter)
 		windowOperations = make([]*window.TimedWindowRequest, 0)
-		win              = NewWindow(message.EventTime, w.gap, message)
+		win              = NewSessionWindow(message.EventTime, w.gap, message)
 	)
 
-	// if there is no existing windows for that key, create a new window and
-	// update the activeWindows map
-	if list, ok := w.activeWindows[combinedKey]; !ok {
+	// check whether we have any active windows created for for this key
+	// NOTE: we track per key windows for Unaligned.
+	list, ok := w.activeWindows[combinedKey]
+
+	// if there is no existing windows for that key, we create a new window and
+	// update the activeWindows map, and then return early
+	if !ok {
 		list = window.NewSortedWindowListByEndTime()
 		// since it's the first window, we can insert it at the front
 		list.InsertFront(win)
 		windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &Partition))
 		w.activeWindows[combinedKey] = list
-	} else {
-		// if there are any existing windows for the key, check we can append the message
-		// to any existing window or a window can be expanded to accommodate the message
-		// if we can't append or expand, we need to create a new window
 
-		if windowToBeMerged, canBeMerged := list.WindowToBeMerged(win); canBeMerged {
-			// we check if the new window created by the message can be merged
-			// with any existing window, WindowToBeMerged returns the window that can be merged
-			// if the returned window is not same as the window created by the message, that means
-			// we need to expand the window to accommodate the new message and send an expand operation
-			// to the server
-			if win.StartTime().Before(windowToBeMerged.StartTime()) || win.EndTime().After(windowToBeMerged.EndTime()) {
-				// we need to clone the window because for expand operation we need to send the old window
-				// and the expanded window
-				oldWindow := cloneWindow(windowToBeMerged)
-				// update the reference of the window in the list with the expanded window
-				windowToBeMerged.Merge(win)
-				windowOperations = append(windowOperations, createWindowOperation(message, window.Expand, []window.TimedWindow{oldWindow, windowToBeMerged}, &Partition))
-			} else {
-				// if the returned window is same as the window created by the message, that means
-				// the message belongs to an existing window and it's an append operation
-				windowOperations = append(windowOperations, createWindowOperation(message, window.Append, []window.TimedWindow{windowToBeMerged}, &Partition))
-			}
-		} else {
-			// if the window cannot be merged, that means we need to create a new window
-			list.Insert(win)
-			windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &Partition))
-		}
+		return windowOperations
 	}
+
+	// now that we know that there are active windows for this key, we need to check
+	// if there are any compatible windows for the key, if yes we can append the message
+	// to any compatible window or that window can be expanded to accommodate the message
+	// if we can't append or expand, we need to create a new window
+	// NOTE to reader: what is compatible? :)
+
+	// we check if the new window created by the message can be merged
+	// with any existing window, WindowToBeMerged returns the window that can be merged
+	// if the returned window is not same as the window created by the message, that means
+	// we need to expand the window to accommodate the new message and send an expand operation
+	// to the server
+	if windowToBeMerged, canBeMerged := list.WindowToBeMerged(win); canBeMerged {
+		// check whether we have to do expand window.
+		if win.StartTime().Before(windowToBeMerged.StartTime()) || win.EndTime().After(windowToBeMerged.EndTime()) {
+			// we need to clone the window because for expand operation we need to send the old window (e.g., 60-70)
+			// and the expanded window (e.g., 60-72).
+			oldWindow := cloneWindow(windowToBeMerged)
+
+			// update the reference of the window in the list with the expanded window
+			windowToBeMerged.Merge(win)
+			windowOperations = append(windowOperations, createWindowOperation(message, window.Expand, []window.TimedWindow{oldWindow, windowToBeMerged}, &Partition))
+		} else { // no need to expand, message doesn't change the window end-time.
+			// if the returned window is same as the window created by the message, that means
+			// the message belongs to an existing window and it's an append operation
+			windowOperations = append(windowOperations, createWindowOperation(message, window.Append, []window.TimedWindow{windowToBeMerged}, &Partition))
+		}
+
+		return windowOperations
+	}
+
+	// if the window cannot be merged, that means we need to create a new window to the active windows list
+	list.Insert(win)
+	windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &Partition))
 
 	return windowOperations
 }
@@ -207,7 +227,8 @@ func (w *Windower) InsertWindow(tw window.TimedWindow) {
 }
 
 func createWindowOperation(message *isb.ReadMessage, event window.Operation, windows []window.TimedWindow, id *partition.ID) *window.TimedWindowRequest {
-	// clone the windows because the windows might be updated after the operation is sent to the server
+	// clone the windows because the windows might be updated after the operation is sent to the server.
+	// we do inplace updates, but those will be merged later on, hence correctness won't be affected.
 	var clonedWindows = make([]window.TimedWindow, 0)
 	for _, win := range windows {
 		clonedWindows = append(clonedWindows, cloneWindow(win))
@@ -220,17 +241,21 @@ func createWindowOperation(message *isb.ReadMessage, event window.Operation, win
 	}
 }
 
-// CloseWindows closes the windows that are past the watermark.
-// also merges the windows that should be merged
+// CloseWindows closes the windows that are past the watermark
+// and also merges the windows that should be merged.
 func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 
 	windowOperations := make([]*window.TimedWindowRequest, 0)
+
 	for _, list := range w.activeWindows {
 		closedWindows := list.RemoveWindows(time)
+
+		// nothing to close
 		if len(closedWindows) == 0 {
 			continue
 		}
-		// check if any of the windows can be merged
+
+		// check if any of the windows that is being close can be merged with another window (active or otherwise)
 		// for example if we have two session windows for a key  (60, 78) and (75, 85)
 		// we should merge them to (60, 85)
 		mergedWindows := windowsThatCanBeMerged(closedWindows)
@@ -240,16 +265,22 @@ func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 			// so we need to send a merge operation to the server
 			if len(windows) > 1 {
 
+				// make UDF aware that windows have to be merged
 				windowOperations = append(windowOperations, createWindowOperation(nil, window.Merge, windows, &Partition))
+
+				// merge the first window with subsequent windows and it grows as it merges
 				var mergedWindow = cloneWindow(windows[0])
-				for _, win := range windows {
+				for _, win := range windows[1:] {
 					mergedWindow.Merge(win)
 				}
+
 				// before closing the mergedWindow we need to check if it can be merged with any of the
 				// existing activeWindows, for example if we have two closed session windows (60, 70) and
 				// (65, 75) and one active window (73, 83).
-				// We should merge the closed windows to (60, 75) and then merge it with the active window
-				// (73, 83) to (60, 83)
+				// We should merge the closed windows (60,70) and (65,75) to the new bigger closed window (60, 75).
+				// Now we have to merge this bigger closed window with the active window
+				// (73, 83) to create an even bigger active window (60, 83).
+				// whew :-P
 				toBeMerged, canBeMerged := list.WindowToBeMerged(mergedWindow)
 				windowOperations = append(windowOperations, w.handleWindowToBeMerged(canBeMerged, toBeMerged, mergedWindow))
 			} else {
@@ -303,6 +334,7 @@ func (w *Windower) OldestWindowEndTime() time.Time {
 				minEndTime = win.EndTime()
 			}
 		}
+
 		if minEndTime.UnixMilli() == math.MaxInt64 {
 			return time.UnixMilli(-1)
 		} else {
@@ -328,25 +360,30 @@ func windowsThatCanBeMerged(windows []window.TimedWindow) [][]window.TimedWindow
 	mWindows := make([][]window.TimedWindow, 0)
 
 	i := len(windows) - 1
-	// Iterate over the windows
+	// Reverse iterate over the windows because it is sorted by end-time.
 	for i >= 0 {
 		// Initialize a slice to hold the current window and any subsequent mergeable windows
 		merged := []window.TimedWindow{windows[i]}
+
 		// Set the last window to be the current window
 		last := cloneWindow(windows[i])
+
+		// now that i have stored the last, let's skip it
+		i--
+
 		// Check if the end time of the last window is after the start time of the previous window
 		// If it is that means they should be merged, add the previous window to the merged slice
 		// and update the end time of the last window
-		i--
 		for i >= 0 && windows[i].EndTime().After(last.StartTime()) {
 			merged = append(merged, windows[i])
 			last.Merge(windows[i])
 			i--
 		}
+
 		// Add the merged slice to the slice of all mergeable windows
 		mWindows = append(mWindows, merged)
-
 	}
+
 	// Return the slice of all mergeable windows
 	return mWindows
 }

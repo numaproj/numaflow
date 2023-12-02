@@ -277,7 +277,7 @@ func (r *ReduceSuite) TestSimpleSessionPipeline() {
 	done <- struct{}{}
 }
 
-// TODO add test for sliding window with keyed reduce
+// FIXME(session): add test for keyed session window
 
 func TestReduceSuite(t *testing.T) {
 	suite.Run(t, new(ReduceSuite))

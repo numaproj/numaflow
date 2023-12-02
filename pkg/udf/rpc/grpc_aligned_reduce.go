@@ -36,6 +36,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
+// FIXME(session): rename file, type, NewXXX to Aligned
+
 // GRPCBasedReduce is a reduce applier that uses gRPC client to invoke the reduce UDF. It implements the applier.ReduceApplier interface.
 type GRPCBasedReduce struct {
 	client reducer.Client
@@ -131,7 +133,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 					return
 				}
 
-				d := createReduceRequest(msg)
+				d := createAlignedReduceRequest(msg)
 				// send the datum to reduceRequests channel, handle the case when the context is canceled
 				select {
 				case reduceRequests <- d:
@@ -148,7 +150,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 	return responseCh, errCh
 }
 
-func createReduceRequest(windowRequest *window.TimedWindowRequest) *reducepb.ReduceRequest {
+func createAlignedReduceRequest(windowRequest *window.TimedWindowRequest) *reducepb.ReduceRequest {
 	var windowOp reducepb.ReduceRequest_WindowOperation_Event
 	var windows []*reducepb.Window
 
@@ -227,6 +229,7 @@ func convertToUdfError(err error) ApplyUDFErr {
 	}
 }
 
+// parseReduceResponse parse the SDK response to TimedWindowResponse
 func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowResponse {
 	taggedMessage := &isb.WriteMessage{
 		Message: isb.Message{
@@ -253,6 +256,7 @@ func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowR
 			End:   response.GetWindow().GetEnd().AsTime(),
 			Slot:  response.GetWindow().GetSlot(),
 		}),
+		// this will be set once the SDK has sent the last message
 		EOF: response.GetEOF(),
 	}
 }

@@ -35,6 +35,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
+// FIXME(session): rename file, type, NewXXX to Unaligned
+
 // GRPCBasedSessionReduce is a reduce applier that uses gRPC client to invoke the session reduce UDF. It implements the applier.ReduceApplier interface.
 type GRPCBasedSessionReduce struct {
 	client sessionreducer.Client
@@ -72,7 +74,8 @@ func (u *GRPCBasedSessionReduce) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-// ApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
+// ApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse.
+// ApplyReduce will never return for unAligned (for-loops ever break) because we only have one single partition. Windows are handled outside.
 func (u *GRPCBasedSessionReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
@@ -129,7 +132,7 @@ func (u *GRPCBasedSessionReduce) ApplyReduce(ctx context.Context, partitionID *p
 					return
 				}
 
-				d := createSessionReduceRequest(req)
+				d := createUnalignedReduceRequest(req)
 
 				// send the request to requestCh channel, handle the case when the context is canceled
 				select {
@@ -147,8 +150,8 @@ func (u *GRPCBasedSessionReduce) ApplyReduce(ctx context.Context, partitionID *p
 	return responseCh, errCh
 }
 
-// createSessionReduceRequest creates a SessionReduceRequest from TimedWindowRequest
-func createSessionReduceRequest(windowRequest *window.TimedWindowRequest) *sessionreducepb.SessionReduceRequest {
+// createUnalignedReduceRequest creates a unAlignedReduceRequest from TimedWindowRequest
+func createUnalignedReduceRequest(windowRequest *window.TimedWindowRequest) *sessionreducepb.SessionReduceRequest {
 	var windowOp sessionreducepb.SessionReduceRequest_WindowOperation_Event
 	var partitions []*sessionreducepb.KeyedWindow
 
@@ -160,10 +163,13 @@ func createSessionReduceRequest(windowRequest *window.TimedWindowRequest) *sessi
 			Keys:  w.Keys(),
 		})
 	}
+
+	// we have to handle different scenarios unlike the Aligned window because
+	// unAligned window width can dynamimcally change.
 	switch windowRequest.Operation {
 	case window.Open:
 		windowOp = sessionreducepb.SessionReduceRequest_WindowOperation_OPEN
-	case window.Close:
+	case window.Close: // CLOSE is explicitly handled because we close at Key level, unlike Aligned where we close the whole window.
 		windowOp = sessionreducepb.SessionReduceRequest_WindowOperation_CLOSE
 	case window.Merge:
 		windowOp = sessionreducepb.SessionReduceRequest_WindowOperation_MERGE

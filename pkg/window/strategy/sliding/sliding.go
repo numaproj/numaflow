@@ -36,7 +36,7 @@ type slidingWindow struct {
 	slot      string
 }
 
-func NewWindow(startTime time.Time, endTime time.Time) window.TimedWindow {
+func NewSessionWindow(startTime time.Time, endTime time.Time) window.TimedWindow {
 	// TODO: slot should be extracted based on the key
 	// we can accept an interface SlotAssigner
 	// which will assign the slot based on the key
@@ -138,21 +138,25 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	// so given windows 500-600 and 600-700 and the event time is 600
 	// we will add the element to 600-700 window and not to the 500-600 window.
 	for !startTime.After(message.EventTime) && endTime.After(message.EventTime) {
-		win, isPresent := w.activeWindows.InsertIfNotPresent(NewWindow(startTime, endTime))
+		win, isPresent := w.activeWindows.InsertIfNotPresent(NewSessionWindow(startTime, endTime))
+
+		op := window.Open
+		if isPresent {
+			op = window.Append
+		}
+
 		operation := &window.TimedWindowRequest{
 			ReadMessage: message,
-			Operation:   window.Append,
+			Operation:   op,
 			Windows:     []window.TimedWindow{win},
 			ID:          win.Partition(),
 		}
-		if !isPresent {
-			operation.Operation = window.Open
-		}
+
 		windowOperations = append(windowOperations, operation)
 		startTime = startTime.Add(-w.slide)
 		endTime = endTime.Add(-w.slide)
-
 	}
+
 	return windowOperations
 }
 
