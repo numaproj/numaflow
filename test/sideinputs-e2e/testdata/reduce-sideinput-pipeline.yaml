@@ -27,7 +27,7 @@ spec:
       udf:
         container:
           # A reduce side input udf, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input/udf
-          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:v0.0.2"
+          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:dev"
           imagePullPolicy: Always
         groupBy:
           window:
@@ -36,7 +36,7 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 10Gi
+              volumeSize: 2Gi
               accessMode: ReadWriteOnce
       sideInputs:
         - myticker

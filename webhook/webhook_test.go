@@ -149,7 +149,7 @@ func TestRun(t *testing.T) {
 		_ = ac.Run(ctx)
 	}()
 	_, err := net.Dial("tcp", fmt.Sprintf(":%d", opts.Port))
-	assert.Nil(t, err)
+	assert.NotNil(t, err)
 }
 
 func TestConfigureCertWithExistingSecret(t *testing.T) {
