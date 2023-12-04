@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -42,11 +43,12 @@ func TestNativeRedisBadInstallation(t *testing.T) {
 		badIsbs := testNativeRedisIsbSvc.DeepCopy()
 		badIsbs.Spec.Redis = nil
 		installer := &redisInstaller{
-			client: fake.NewClientBuilder().Build(),
-			isbSvc: badIsbs,
-			config: fakeConfig,
-			labels: testLabels,
-			logger: zaptest.NewLogger(t).Sugar(),
+			client:   fake.NewClientBuilder().Build(),
+			isbSvc:   badIsbs,
+			config:   fakeConfig,
+			labels:   testLabels,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
 		}
 		_, err := installer.Install(context.TODO())
 		assert.Error(t, err)
@@ -82,6 +84,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
+		recorder:   record.NewFakeRecorder(64),
 	}
 
 	t.Run("test create sts", func(t *testing.T) {
@@ -183,6 +186,7 @@ func Test_NativeRedisInstall_Uninstall(t *testing.T) {
 		config:     fakeConfig,
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
+		recorder:   record.NewFakeRecorder(64),
 	}
 	t.Run("test install", func(t *testing.T) {
 		c, err := i.Install(ctx)
@@ -195,6 +199,8 @@ func Test_NativeRedisInstall_Uninstall(t *testing.T) {
 		assert.NotNil(t, c.Redis.Password)
 		assert.NotNil(t, c.Redis.SentinelPassword)
 		assert.True(t, testNativeRedisIsbSvc.Status.IsReady())
+		events := getEvents(i.recorder)
+		assert.Contains(t, events, "Normal RedisScriptsConfigMapSuccess Created redis scripts configmap successfully", "Normal RedisHealthConfigMapSuccess Created redis health configmap successfully", "Normal RedisConfConfigMapSuccess Created redis config configmap successfully", "Normal RedisServiceSuccess Created redis service successfully", "Normal RedisHeadlessServiceSuccess Created redis headless service successfully", "Normal RedisStatefulSetSuccess Created redis statefulset successfully")
 		svc := &corev1.Service{}
 		err = cl.Get(ctx, types.NamespacedName{Namespace: testNativeRedisIsbSvc.Namespace, Name: generateRedisHeadlessServiceName(testNativeRedisIsbSvc)}, svc)
 		assert.NoError(t, err)

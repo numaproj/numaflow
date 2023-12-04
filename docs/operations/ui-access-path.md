@@ -1,51 +1,17 @@
 # UI Access Path
 
-Currently, the base configuration will host the UI at the root `/` ie. `localhost:8443`. If a user needs to access the UI under a different path for a certain cluster, this can be achieved
-with this configuration.
+By default, Numaflow UI server will host the service at the root `/` ie. `localhost:8443`. If a user needs to access the UI server under a different path, this can be achieved with following configuration. This is useful when the UI is hosted behind a reverse proxy or ingress controller that requires a specific path.
 
-This can be configured in the `numaflow-server` deployment spec by adding the `--base-href` argument to the main and init containers. This will route requests from the root to the new
-preferred destination. 
-
-For example, we could port-forward the service and host at `localhost:8443/numaflow`. Note that this new access path will work with or without a trailing slash.
-
-The following example shows how to configure the access path for the UI to `/numaflow`:
+Configure `server.base.href` in the ConfigMap `numaflow-cmd-params-config`.
 
 ```yaml
-spec:
-      serviceAccountName: numaflow-server-sa
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 9737
-      volumes:
-      - name: env-volume
-        emptyDir: {}
-      initContainers:
-      - name: server-init
-        image: quay.io/numaproj/numaflow:latest
-        args:
-        - "server-init"
-        - --base-href=/numaflow # include new path here
-        imagePullPolicy: Always
-        volumeMounts:
-        - mountPath: /opt/numaflow
-          name: env-volume
-      containers:
-        - name: main
-          image: quay.io/numaproj/numaflow:latest
-          args:
-          - "server"
-          - --base-href=/numaflow # include new path here
-          imagePullPolicy: Always
-          volumeMounts:
-          - mountPath: /ui/build/runtime-env.js
-            name: env-volume
-            subPath: runtime-env.js
-          - mountPath: /ui/build/index.html
-            name: env-volume
-            subPath: index.html
-          env:
-            - name: NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-cmd-params-config
+data:
+  ### Base href for Numaflow UI server, defaults to '/'.
+  server.base.href: "/app"
 ```
+
+The configuration above will host the service at `localhost:8443/app`. Note that this new access path will work with or without a trailing slash.

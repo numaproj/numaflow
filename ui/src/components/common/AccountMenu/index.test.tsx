@@ -19,9 +19,6 @@ describe("AccountMenu", () => {
       email: "john.doe@example.com",
     },
   };
-
-  const mockNavigate = jest.fn();
-
   it("renders", async () => {
     render(
       <BrowserRouter>

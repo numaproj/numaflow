@@ -104,9 +104,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetDeleteGracePeriodSeconds()) * time.Second)) {
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
-					logMsg := fmt.Sprintf("Failed to check if it's safe to delete the pipeline: %v", err.Error())
+					logMsg := fmt.Sprintf("Failed to check if it's safe to delete pipeline %s: %v", pl.Name, err.Error())
 					log.Error(logMsg)
-					r.recorder.Event(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", logMsg)
 					return ctrl.Result{}, err
 				}
 
@@ -205,6 +204,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	if err := r.createOrUpdateSIMDeployments(ctx, pl, isbSvc.Status.Config); err != nil {
 		log.Errorw("Failed to create or update Side Inputs Manager deployments", zap.Error(err))
 		pl.Status.MarkDeployFailed("CreateOrUpdateSIMDeploymentsFailed", err.Error())
+		r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateOrUpdateSIMDeploymentsFailed", "Failed to create or update Side Inputs Manager deployments: %w", err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -251,19 +251,23 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 					continue
 				} else {
 					pl.Status.MarkDeployFailed("CreateVertexFailed", err.Error())
+					r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateVertexFailed", "Failed to create vertex: %w", err.Error())
 					return ctrl.Result{}, fmt.Errorf("failed to create vertex, err: %w", err)
 				}
 			}
 			log.Infow("Created vertex successfully", zap.String("vertex", vertexName))
+			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
 		} else {
 			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
 				oldObj.Spec = newObj.Spec
 				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
 				if err := r.client.Update(ctx, &oldObj); err != nil {
 					pl.Status.MarkDeployFailed("UpdateVertexFailed", err.Error())
+					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
 					return ctrl.Result{}, fmt.Errorf("failed to update vertex, err: %w", err)
 				}
 				log.Infow("Updated vertex successfully", zap.String("vertex", vertexName))
+				r.recorder.Eventf(pl, corev1.EventTypeNormal, "UpdateVertexSuccess", "Updated vertex %s successfully", vertexName)
 			}
 			delete(existingObjs, vertexName)
 		}
@@ -271,9 +275,11 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	for _, v := range existingObjs {
 		if err := r.client.Delete(ctx, &v); err != nil {
 			pl.Status.MarkDeployFailed("DeleteStaleVertexFailed", err.Error())
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteStaleVertexFailed", "Failed to delete vertex: %w", err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to delete vertex, err: %w", err)
 		}
 		log.Infow("Deleted stale vertex successfully", zap.String("vertex", v.Name))
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "DeleteStaleVertexSuccess", "Deleted stale vertex %s successfully", v.Name)
 	}
 
 	// create batch job
@@ -347,6 +353,7 @@ func (r *pipelineReconciler) createOrUpdateDaemonService(ctx context.Context, pl
 		if err := r.client.Delete(ctx, existingSvc); err != nil && !apierrors.IsNotFound(err) {
 			log.Errorw("Failed to delete existing daemon service", zap.String("service", existingSvc.Name), zap.Error(err))
 			pl.Status.MarkDeployFailed("DelDaemonSvcFailed", err.Error())
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DelDaemonSvcFailed", "Failed to delete existing daemon service: %w", err.Error())
 			return fmt.Errorf("failed to delete existing daemon service, %w", err)
 		}
 		needToCreatDaemonSvc = true
@@ -355,9 +362,11 @@ func (r *pipelineReconciler) createOrUpdateDaemonService(ctx context.Context, pl
 		if err := r.client.Create(ctx, svc); err != nil {
 			log.Errorw("Failed to create daemon service", zap.String("service", svc.Name), zap.Error(err))
 			pl.Status.MarkDeployFailed("CreateDaemonSvcFailed", err.Error())
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateDaemonSvcFailed", "Failed to create daemon service: %w", err.Error())
 			return fmt.Errorf("failed to create daemon service, %w", err)
 		}
 		log.Infow("Succeeded to create a daemon service", zap.String("service", svc.Name))
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateDaemonSvcSuccess", "Succeeded to create daemon service %s", svc.Name)
 	}
 	return nil
 }
@@ -395,6 +404,7 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 			if err := r.client.Delete(ctx, existingDeploy); err != nil {
 				log.Errorw("Failed to delete the outdated daemon deployment", zap.String("deployment", existingDeploy.Name), zap.Error(err))
 				pl.Status.MarkDeployFailed("DeleteOldDaemonDeployFailed", err.Error())
+				r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteOldDaemonDeployFailed", "Failed to delete the outdated daemon deployment: %w", err.Error())
 				return fmt.Errorf("failed to delete an outdated daemon deployment, %w", err)
 			}
 			needToCreate = true
@@ -404,9 +414,11 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 		if err := r.client.Create(ctx, deploy); err != nil && !apierrors.IsAlreadyExists(err) {
 			log.Errorw("Failed to create a daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
 			pl.Status.MarkDeployFailed("CreateDaemonDeployFailed", err.Error())
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateDaemonDeployFailed", "Failed to create a daemon deployment: %w", err.Error())
 			return fmt.Errorf("failed to create a daemon deployment, %w", err)
 		}
-		log.Infow("Succeeded to created/recreatd a daemon deployment", zap.String("deployment", deploy.Name))
+		log.Infow("Succeeded to create/recreate a daemon deployment", zap.String("deployment", deploy.Name))
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateDaemonDeploySuccess", "Succeeded to create/recreate daemon deployment %s", deploy.Name)
 	}
 	return nil
 }
@@ -476,6 +488,7 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 				}
 			}
 			log.Infow("Succeeded to create/recreate Side Inputs Manager Deployment", zap.String("deployment", newObj.Name))
+			r.recorder.Event(pl, corev1.EventTypeNormal, "CreateSIMDeployment", "Succeeded to create/recreate Side Inputs Manager Deployment")
 		}
 	}
 	for _, v := range existingObjs {

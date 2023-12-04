@@ -24,6 +24,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -36,8 +37,8 @@ type Installer interface {
 }
 
 // Install function installs the ISBS
-func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) error {
-	installer, err := getInstaller(isbSvc, client, kubeClient, config, logger)
+func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger, recorder record.EventRecorder) error {
+	installer, err := getInstaller(isbSvc, client, kubeClient, config, logger, recorder)
 	if err != nil {
 		logger.Errorw("failed to get an installer", zap.Error(err))
 		return err
@@ -52,7 +53,7 @@ func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client cl
 }
 
 // GetInstaller returns Installer implementation
-func getInstaller(isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) (Installer, error) {
+func getInstaller(isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger, recorder record.EventRecorder) (Installer, error) {
 	labels := map[string]string{
 		dfv1.KeyPartOf:     dfv1.Project,
 		dfv1.KeyManagedBy:  dfv1.ControllerISBSvc,
@@ -64,11 +65,11 @@ func getInstaller(isbSvc *dfv1.InterStepBufferService, client client.Client, kub
 		if redis.External != nil {
 			return NewExternalRedisInstaller(isbSvc, logger), nil
 		} else if redis.Native != nil {
-			return NewNativeRedisInstaller(client, kubeClient, isbSvc, config, labels, logger), nil
+			return NewNativeRedisInstaller(client, kubeClient, isbSvc, config, labels, logger, recorder), nil
 		}
 	} else if js := isbSvc.Spec.JetStream; js != nil {
 		labels[dfv1.KeyISBSvcType] = string(dfv1.ISBSvcTypeJetStream)
-		return NewJetStreamInstaller(client, kubeClient, isbSvc, config, labels, logger), nil
+		return NewJetStreamInstaller(client, kubeClient, isbSvc, config, labels, logger, recorder), nil
 	}
 	return nil, fmt.Errorf("invalid isb service spec")
 }
@@ -81,8 +82,8 @@ func getInstaller(isbSvc *dfv1.InterStepBufferService, client client.Client, kub
 // separately.
 //
 // It could also be used to check if the ISB Service object can be safely deleted.
-func Uninstall(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger) error {
-	installer, err := getInstaller(isbSvc, client, kubeClient, config, logger)
+func Uninstall(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger, recorder record.EventRecorder) error {
+	installer, err := getInstaller(isbSvc, client, kubeClient, config, logger, recorder)
 	if err != nil {
 		logger.Errorw("Failed to get an installer", zap.Error(err))
 		return err
