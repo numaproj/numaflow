@@ -199,6 +199,28 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return err
 	}
 
+	if err := validateIdleSource(*pl); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateIdleSource validates the idle source watermark config.
+// The threshold should be greater than or equal to incrementBy.
+// if threshold is specified, incrementBy should be specified
+func validateIdleSource(pl dfv1.Pipeline) error {
+	if pl.Spec.Watermark.IdleSource != nil {
+		if pl.Spec.Watermark.IdleSource.Threshold != nil {
+			if pl.Spec.Watermark.IdleSource.IncrementBy == nil {
+				return fmt.Errorf("invalid idle source watermark config, if threshold is specified, incrementBy should be specified")
+			}
+		}
+
+		if pl.Spec.Watermark.IdleSource.Threshold.Duration < pl.Spec.Watermark.IdleSource.IncrementBy.Duration {
+			return fmt.Errorf("invalid idle source watermark config, threshold should be greater than or equal to incrementBy")
+		}
+	}
 	return nil
 }
 
