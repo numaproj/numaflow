@@ -38,27 +38,27 @@ import (
 
 // FIXME(session): rename file, type, NewXXX to Aligned
 
-// GRPCBasedReduce is a reduce applier that uses gRPC client to invoke the reduce UDF. It implements the applier.ReduceApplier interface.
-type GRPCBasedReduce struct {
+// GRPCBasedAlignedReduce is a reduce applier that uses gRPC client to invoke the aligned reduce UDF. It implements the applier.ReduceApplier interface.
+type GRPCBasedAlignedReduce struct {
 	client reducer.Client
 }
 
-func NewUDSgRPCBasedReduce(client reducer.Client) *GRPCBasedReduce {
-	return &GRPCBasedReduce{client: client}
+func NewUDSgRPCAlignedReduce(client reducer.Client) *GRPCBasedAlignedReduce {
+	return &GRPCBasedAlignedReduce{client: client}
 }
 
 // IsHealthy checks if the map udf is healthy.
-func (u *GRPCBasedReduce) IsHealthy(ctx context.Context) error {
+func (u *GRPCBasedAlignedReduce) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *GRPCBasedReduce) CloseConn(ctx context.Context) error {
+func (u *GRPCBasedAlignedReduce) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // WaitUntilReady waits until the reduce udf is connected.
-func (u *GRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
+func (u *GRPCBasedAlignedReduce) WaitUntilReady(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	for {
 		select {
@@ -76,7 +76,7 @@ func (u *GRPCBasedReduce) WaitUntilReady(ctx context.Context) error {
 }
 
 // ApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
-func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (u *GRPCBasedAlignedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh          = make(chan error)
 		responseCh     = make(chan *window.TimedWindowResponse)
@@ -161,7 +161,7 @@ func createAlignedReduceRequest(windowRequest *window.TimedWindowRequest) *reduc
 			Slot:  w.Slot(),
 		})
 	}
-	// for fixed and sliding window event can be either open or append
+	// for aligned window event can be either open or append
 	// since closing the pbq channel is like a close event for the window
 	// when pbq channel is closed, grpc client stream will be closed and
 	// server will consider the grpc client stream as closed event for the window

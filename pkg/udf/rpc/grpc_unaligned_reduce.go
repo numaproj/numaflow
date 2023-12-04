@@ -35,29 +35,27 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// FIXME(session): rename file, type, NewXXX to Unaligned
-
-// GRPCBasedSessionReduce is a reduce applier that uses gRPC client to invoke the session reduce UDF. It implements the applier.ReduceApplier interface.
-type GRPCBasedSessionReduce struct {
+// GRPCBasedUnalignedReduce is a reduce applier that uses gRPC client to invoke the session reduce UDF. It implements the applier.ReduceApplier interface.
+type GRPCBasedUnalignedReduce struct {
 	client sessionreducer.Client
 }
 
-func NewGRPCBasedSessionReduce(client sessionreducer.Client) *GRPCBasedSessionReduce {
-	return &GRPCBasedSessionReduce{client: client}
+func NewGRPCBasedUnalignedReduce(client sessionreducer.Client) *GRPCBasedUnalignedReduce {
+	return &GRPCBasedUnalignedReduce{client: client}
 }
 
 // IsHealthy checks if the map udf is healthy.
-func (u *GRPCBasedSessionReduce) IsHealthy(ctx context.Context) error {
+func (u *GRPCBasedUnalignedReduce) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *GRPCBasedSessionReduce) CloseConn(ctx context.Context) error {
+func (u *GRPCBasedUnalignedReduce) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // WaitUntilReady waits until the reduce udf is connected.
-func (u *GRPCBasedSessionReduce) WaitUntilReady(ctx context.Context) error {
+func (u *GRPCBasedUnalignedReduce) WaitUntilReady(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	for {
 		select {
@@ -76,7 +74,7 @@ func (u *GRPCBasedSessionReduce) WaitUntilReady(ctx context.Context) error {
 
 // ApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse.
 // ApplyReduce will never return for unAligned (for-loops ever break) because we only have one single partition. Windows are handled outside.
-func (u *GRPCBasedSessionReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (u *GRPCBasedUnalignedReduce) ApplyReduce(ctx context.Context, partitionID *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan *window.TimedWindowResponse)
