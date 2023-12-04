@@ -49,10 +49,15 @@ export const LAST_UPDATED_SORT = "lastUpdated";
 export const LAST_CREATED_SORT = "lastCreated";
 
 export function getBaseHref(): string {
-  if (window.__RUNTIME_CONFIG__?.BASE_HREF) {
-    return window.__RUNTIME_CONFIG__.BASE_HREF;
+  const runtimeConfig = window.__RUNTIME_CONFIG__;
+  if (runtimeConfig?.BASE_HREF) {
+    let baseHref = runtimeConfig.BASE_HREF;
+    if (baseHref.endsWith("/")) {
+      baseHref = baseHref.slice(0, -1);
+    }
+    return baseHref;
   }
-  return "/";
+  return "";
 }
 
 export async function getAPIResponseError(
