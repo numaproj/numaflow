@@ -18,8 +18,9 @@ package authz
 
 import (
 	"fmt"
-
 	"github.com/gin-gonic/gin"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	"strings"
 )
 
 // RouteInfo is a struct which contains the route information with the object
@@ -38,34 +39,45 @@ func newRouteInfo(object string, requiresAuthZ bool) *RouteInfo {
 	}
 }
 
+// GetBaseHref returns the base href of the server with a trailing slash.
+func GetBaseHref() string {
+	baseHref := sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/")
+	if !strings.HasSuffix(baseHref, "/") {
+		baseHref = baseHref + "/"
+	}
+	return baseHref
+}
+
+var baseHref = GetBaseHref()
+
 // RouteMap is a map of routes to their corresponding RouteInfo objects.
 // It saves the object corresponding to the route and a boolean to indicate
 // whether the route requires authorization.
 var RouteMap = map[string]*RouteInfo{
-	"GET:/api/v1/sysinfo":                                                         newRouteInfo(ObjectPipeline, false),
-	"GET:/api/v1/authinfo":                                                        newRouteInfo(ObjectEvents, false),
-	"GET:/api/v1/namespaces":                                                      newRouteInfo(ObjectEvents, false),
-	"GET:/api/v1/cluster-summary":                                                 newRouteInfo(ObjectPipeline, false),
-	"GET:/api/v1/namespaces/:namespace/pipelines":                                 newRouteInfo(ObjectPipeline, true),
-	"POST:/api/v1/namespaces/:namespace/pipelines":                                newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/health":                newRouteInfo(ObjectPipeline, true),
-	"PUT:/api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
-	"DELETE:/api/v1/namespaces/:namespace/pipelines/:pipeline":                    newRouteInfo(ObjectPipeline, true),
-	"PATCH:/api/v1/namespaces/:namespace/pipelines/:pipeline":                     newRouteInfo(ObjectPipeline, true),
-	"POST:/api/v1/namespaces/:namespace/isb-services":                             newRouteInfo(ObjectISBSvc, true),
-	"GET:/api/v1/namespaces/:namespace/isb-services":                              newRouteInfo(ObjectISBSvc, true),
-	"GET:/api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
-	"PUT:/api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
-	"DELETE:/api/v1/namespaces/:namespace/isb-services/:isb-service":              newRouteInfo(ObjectISBSvc, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/isbs":                  newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/watermarks":            newRouteInfo(ObjectPipeline, true),
-	"PUT:/api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex":      newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/metrics":      newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods": newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/metrics/namespaces/:namespace/pods":                              newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pods/:pod/logs":                            newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/events":                                    newRouteInfo(ObjectEvents, true),
+	"GET:" + baseHref + "api/v1/sysinfo":                                                         newRouteInfo(ObjectPipeline, false),
+	"GET:" + baseHref + "api/v1/authinfo":                                                        newRouteInfo(ObjectEvents, false),
+	"GET:" + baseHref + "api/v1/namespaces":                                                      newRouteInfo(ObjectEvents, false),
+	"GET:" + baseHref + "api/v1/cluster-summary":                                                 newRouteInfo(ObjectPipeline, false),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                 newRouteInfo(ObjectPipeline, true),
+	"POST:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                newRouteInfo(ObjectPipeline, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/health":                newRouteInfo(ObjectPipeline, true),
+	"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
+	"DELETE:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                    newRouteInfo(ObjectPipeline, true),
+	"PATCH:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                     newRouteInfo(ObjectPipeline, true),
+	"POST:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                             newRouteInfo(ObjectISBSvc, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                              newRouteInfo(ObjectISBSvc, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
+	"PUT:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
+	"DELETE:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":              newRouteInfo(ObjectISBSvc, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/isbs":                  newRouteInfo(ObjectPipeline, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/watermarks":            newRouteInfo(ObjectPipeline, true),
+	"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex":      newRouteInfo(ObjectPipeline, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/metrics":      newRouteInfo(ObjectPipeline, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods": newRouteInfo(ObjectPipeline, true),
+	"GET:" + baseHref + "api/v1/metrics/namespaces/:namespace/pods":                              newRouteInfo(ObjectPipeline, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/pods/:pod/logs":                            newRouteInfo(ObjectPipeline, true),
+	"GET:" + baseHref + "api/v1/namespaces/:namespace/events":                                    newRouteInfo(ObjectEvents, true),
 }
 
 // GetRouteMapKey returns the key for the RouteMap.

@@ -9,7 +9,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
-import { getAPIResponseError } from "../../../utils";
+import { getAPIResponseError, getBaseHref } from "../../../utils";
 import { AppContext } from "../../../App";
 import { AppContextProps } from "../../../types/declarations/app";
 import gitIcon from "../../../images/github.png";
@@ -40,7 +40,9 @@ export function Login() {
     setLoadingMessage("Logging in...");
     setCallbackError(undefined);
     try {
-      const response = await fetch(`/auth/v1/login?returnUrl=${returnURL}`);
+      const response = await fetch(
+        `${getBaseHref()}/auth/v1/login?returnUrl=${returnURL}`
+      );
       if (response.ok) {
         const data = await response.json();
         if (data?.data?.AuthCodeURL) {
@@ -67,7 +69,7 @@ export function Login() {
     setLoadingMessage("Logging in...");
     try {
       const response = await fetch(
-        `/auth/v1/callback?code=${code}&state=${state}`
+        `${getBaseHref()}/auth/v1/callback?code=${code}&state=${state}`
       );
       if (response.ok) {
         const data = await response.json();

@@ -51,7 +51,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		panic(err)
 	}
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
-	noAuthGroup := r.Group("/auth/v1")
+	noAuthGroup := r.Group(baseHref + "auth/v1")
 	v1RoutesNoAuth(noAuthGroup, dexObj)
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
