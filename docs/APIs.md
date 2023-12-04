@@ -2002,10 +2002,9 @@ Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <p>
-Threshold is the duration in seconds after which a source is marked a
-Idle due to lack of data. Ex: If watermark found to be idle after the
-Threshold duration then the watermark is progressed by
-<code>IncrementBy</code>.
+Threshold is the duration after which a source is marked a Idle due to
+lack of data. Ex: If watermark found to be idle after the Threshold
+duration then the watermark is progressed by <code>IncrementBy</code>.
 </p>
 </td>
 </tr>
@@ -2018,8 +2017,8 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-StepInterval is the duration in seconds between the subsequent increment
-of the watermark as long the source remains Idle.
+StepInterval is the duration between the subsequent increment of the
+watermark as long the source remains Idle.
 </p>
 </td>
 </tr>
@@ -2031,8 +2030,8 @@ Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <p>
-IncrementBy is the duration in seconds to be added to the current
-watermark to progress the watermark when source is idling.
+IncrementBy is the duration to be added to the current watermark to
+progress the watermark when source is idling.
 </p>
 </td>
 </tr>

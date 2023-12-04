@@ -26,9 +26,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/common"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -75,7 +75,7 @@ func New(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (common.Sourcer, error) {
+	opts ...Option) (sourcer.Sourcer, error) {
 
 	var err error
 
@@ -104,7 +104,7 @@ func New(
 	u.lifecycleCtx = ctx
 
 	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublisher(ctx, u.pipelineName, u.vertexName, publishWMStores)
+	sourceWmPublisher := publish.NewSourcePublisher(ctx, u.pipelineName, u.vertexName, publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	u.forwarder, err = sourceforward.NewDataForward(vertexInstance, u, writers, fsd, transformer, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {

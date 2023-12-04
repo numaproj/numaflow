@@ -38,12 +38,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
-	"github.com/numaproj/numaflow/pkg/sources/common"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
 	"github.com/numaproj/numaflow/pkg/sources/nats"
+	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/sources/udsource"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
@@ -66,7 +66,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		log                      = logging.FromContext(ctx)
 		writersMap               = make(map[string][]isb.BufferWriter)
 		sdkClient                sourcetransformer.Client
-		sourcer                  common.Sourcer
+		sourcer                  sourcer.Sourcer
 		readyCheckers            []metrics.HealthChecker
 		idleManager              wmb.IdleManager
 	)
@@ -286,7 +286,7 @@ func (sp *SourceProcessor) getSourcer(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	logger *zap.SugaredLogger) (common.Sourcer, error) {
+	logger *zap.SugaredLogger) (sourcer.Sourcer, error) {
 
 	src := sp.VertexInstance.Vertex.Spec.Source
 	if x := src.UDSource; x != nil && udsGRPCClient != nil {

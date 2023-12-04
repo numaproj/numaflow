@@ -505,14 +505,14 @@ type Watermark struct {
 }
 
 type IdleSource struct {
-	// Threshold is the duration in seconds after which a source is marked a Idle due to lack of data.
+	// Threshold is the duration after which a source is marked a Idle due to lack of data.
 	// Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.
 	Threshold *metav1.Duration `json:"threshold,omitempty" protobuf:"bytes,1,opt,name=threshold"`
-	// StepInterval is the duration in seconds between the subsequent increment of the watermark as long the source remains Idle.
+	// StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.
 	// +kubebuilder:default="0s"
 	// +optional
 	StepInterval *metav1.Duration `json:"stepInterval,omitempty" protobuf:"bytes,2,opt,name=stepInterval"`
-	// IncrementBy is the duration in seconds to be added to the current watermark to progress the watermark when source is idling.
+	// IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.
 	IncrementBy *metav1.Duration `json:"incrementBy,omitempty" protobuf:"bytes,3,opt,name=incrementBy"`
 }
 

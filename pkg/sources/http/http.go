@@ -36,9 +36,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/pkg/sources/common"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -92,7 +92,7 @@ func New(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (common.Sourcer, error) {
+	opts ...Option) (sourcer.Sourcer, error) {
 
 	h := &httpSource{
 		vertexName:   vertexInstance.Vertex.Spec.Name,

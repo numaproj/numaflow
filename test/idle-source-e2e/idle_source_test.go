@@ -26,14 +26,14 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
-type ReduceSuite struct {
+type IdleSourceSuite struct {
 	E2ESuite
 }
 
-func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
+func (is *IdleSourceSuite) TestSimpleKeyedReducePipeline() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	w := r.Given().Pipeline("@testdata/idle-source-reduce-pipeline.yaml").
+	w := is.Given().Pipeline("@testdata/idle-source-reduce-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
@@ -70,5 +70,5 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 }
 
 func TestReduceSuite(t *testing.T) {
-	suite.Run(t, new(ReduceSuite))
+	suite.Run(t, new(IdleSourceSuite))
 }
