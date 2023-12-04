@@ -105,7 +105,7 @@ func (df *sourcePublish) PublishSourceWatermarks(readMessages []*isb.ReadMessage
 func (df *sourcePublish) PublishIdleWatermarks(wm time.Time, partitions []int32) {
 	for _, partitionId := range partitions {
 		publisher := df.loadSourceWatermarkPublisher(partitionId)
-		publisher.PublishIdleWatermark(wmb.Watermark(wm), nil, partitionId) // while publishing idle watermark at source, we don't care about the offset
+		publisher.PublishIdleWatermark(wmb.Watermark(wm), nil, 0) // while publishing idle watermark at source, we don't care about the offset
 	}
 }
 
