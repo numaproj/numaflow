@@ -19,16 +19,16 @@ type SrcIdleHandler struct {
 	lastIdleWmPublishedTime time.Time
 	updatedTS               time.Time
 	wmFetcher               fetch.SourceFetcher
-	wmPublisher             publish.SourcePublisher
+	srcPublisher            publish.SourcePublisher
 }
 
 // NewSrcIdleHandler creates a new instance of SrcIdleHandler.
 func NewSrcIdleHandler(config *dfv1.Watermark, fetcher fetch.SourceFetcher, publisher publish.SourcePublisher) *SrcIdleHandler {
 	return &SrcIdleHandler{
-		config:      config,
-		wmFetcher:   fetcher,
-		wmPublisher: publisher,
-		updatedTS:   time.Now(),
+		config:       config,
+		wmFetcher:    fetcher,
+		srcPublisher: publisher,
+		updatedTS:    time.Now(),
 	}
 }
 
@@ -48,14 +48,11 @@ func (iw *SrcIdleHandler) isSourceIdling() bool {
 
 // hasStepIntervalPassed verifies if the step interval has passed.
 func (iw *SrcIdleHandler) hasStepIntervalPassed() bool {
-	if time.Since(iw.lastIdleWmPublishedTime) < iw.config.IdleSource.GetStepInterval() {
-		return false
-	}
-	return true
+	return time.Since(iw.lastIdleWmPublishedTime) >= iw.config.IdleSource.GetStepInterval()
 }
 
-// PublishIdleWatermark publishes an idle watermark if the conditions are met.
-func (iw *SrcIdleHandler) PublishIdleWatermark() {
+// PublishSrcIdleWatermark publishes an idle watermark if the conditions are met for source.
+func (iw *SrcIdleHandler) PublishSrcIdleWatermark(partitions []int32) {
 	// if source is not idling, return
 	if !iw.isSourceIdling() {
 		return
@@ -75,7 +72,7 @@ func (iw *SrcIdleHandler) PublishIdleWatermark() {
 		nextIdleWM = currentTime
 	}
 
-	iw.wmPublisher.PublishIdleWatermarks(nextIdleWM)
+	iw.srcPublisher.PublishIdleWatermarks(nextIdleWM, partitions)
 	iw.lastIdleWmPublishedTime = time.Now()
 }
 

@@ -33,6 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
+	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
@@ -46,35 +47,29 @@ type DataForward struct {
 	ctx context.Context
 	// cancelFn cancels our new context, our cancellation is a little more complex and needs to be well orchestrated, hence
 	// we need something more than a cancel().
-	cancelFn context.CancelFunc
-	// reader reads data from source.
-	reader isb.BufferReader
-	// toBuffers store the toVertex name to its owned buffers mapping.
-	toBuffers          map[string][]isb.BufferWriter
-	toWhichStepDecider forwarder.ToWhichStepDecider
-	transformer        applier.SourceTransformApplier
-	wmFetcher          fetch.SourceFetcher
-	toVertexWMStores   map[string]store.WatermarkStore
-	// toVertexWMPublishers stores the toVertex to publisher mapping.
-	toVertexWMPublishers map[string]map[int32]publish.Publisher
-	// srcWMPublisher is used to publish source watermark.
-	// source watermark publishers for different partitions
-	srcWMPublisher  publish.SourcePublisher
-	opts            options
-	vertexName      string
-	pipelineName    string
-	vertexReplica   int32
-	watermarkConfig dfv1.Watermark
-	// idleManager manages the idle watermark status.
-	idleManager    wmb.IdleManager
-	srcIdleHandler *idlehandler.SrcIdleHandler
+	cancelFn             context.CancelFunc
+	reader               sourcer.SourceReader          // reader reads data from source.
+	toBuffers            map[string][]isb.BufferWriter // toBuffers store the toVertex name to its owned buffers mapping.
+	toWhichStepDecider   forwarder.ToWhichStepDecider
+	transformer          applier.SourceTransformApplier
+	wmFetcher            fetch.SourceFetcher
+	toVertexWMStores     map[string]store.WatermarkStore
+	toVertexWMPublishers map[string]map[int32]publish.Publisher // toVertexWMPublishers stores the toVertex to publisher mapping.
+	srcWMPublisher       publish.SourcePublisher                // srcWMPublisher is used to publish source watermark.
+	opts                 options
+	vertexName           string
+	pipelineName         string
+	vertexReplica        int32
+	watermarkConfig      dfv1.Watermark
+	idleManager          wmb.IdleManager // idleManager manages the idle watermark status.
+	srcIdleHandler       *idlehandler.SrcIdleHandler
 	Shutdown
 }
 
 // NewDataForward creates a source data forwarder
 func NewDataForward(
 	vertexInstance *dfv1.VertexInstance,
-	fromStep isb.BufferReader,
+	reader sourcer.SourceReader,
 	toSteps map[string][]isb.BufferWriter,
 	toWhichStepDecider forwarder.ToWhichStepDecider,
 	transformer applier.SourceTransformApplier,
@@ -103,7 +98,7 @@ func NewDataForward(
 	var isdf = DataForward{
 		ctx:                  ctx,
 		cancelFn:             cancel,
-		reader:               fromStep,
+		reader:               reader,
 		toBuffers:            toSteps,
 		toWhichStepDecider:   toWhichStepDecider,
 		transformer:          transformer,
@@ -216,12 +211,31 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// Process only if we have any read messages.
 	// There is a natural looping here if there is an internal error while reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
-		// publish idle watermark
-		df.srcIdleHandler.PublishIdleWatermark()
-	} else {
-		// reset the idle handler because we have read messages
-		df.srcIdleHandler.Reset()
+		// publish idle watermark for the source
+		df.srcIdleHandler.PublishSrcIdleWatermark(df.reader.Partitions())
+
+		// publish idle watermark for all the toBuffers
+		fetchedWm := df.wmFetcher.ComputeWatermark()
+		for toVertexName, toVertexBuffers := range df.toBuffers {
+			for index := range toVertexBuffers {
+				// publish idle watermark to all the source partitions
+				for _, sp := range df.reader.Partitions() {
+					if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
+						var publisher, ok = vertexPublishers[sp]
+						if !ok {
+							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
+							vertexPublishers[sp] = publisher
+						}
+						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, fetchedWm)
+					}
+				}
+			}
+		}
+		return
 	}
+	// reset the idle handler because we have read messages
+	df.srcIdleHandler.Reset()
+	
 	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(readMessages)))
 	metrics.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(readMessages)))
 

@@ -62,6 +62,7 @@ type userDefinedSource struct {
 	srcPublishWMStores store.WatermarkStore       // source watermark publisher stores
 	lifecycleCtx       context.Context            // lifecycleCtx context is used to control the lifecycle of this source.
 	readTimeout        time.Duration              // read timeout for the source
+	partitions         map[int32]bool             // partitions of the source
 	logger             *zap.SugaredLogger
 }
 
@@ -119,15 +120,28 @@ func (u *userDefinedSource) GetName() string {
 	return u.vertexName
 }
 
-// GetPartitionIdx returns the partition number for the user-defined source.
-// Source is like a buffer with only one partition. So, we always return 0
-func (u *userDefinedSource) GetPartitionIdx() int32 {
-	return 0
+// Partitions returns the partitions of the user-defined source
+func (u *userDefinedSource) Partitions() []int32 {
+	partitions := make([]int32, 0, len(u.partitions))
+	for partition := range u.partitions {
+		partitions = append(partitions, partition)
+	}
+	return partitions
 }
 
-// Read reads the messages from the user-defined source
+// Read reads the messages from the user-defined source, tracks the partitions from which the messages are read
+// tracked partitions are used to determine the partitions to which the watermarks should be published
 func (u *userDefinedSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
-	return u.sourceApplier.ApplyReadFn(ctx, count, u.readTimeout)
+	readMessages, err := u.sourceApplier.ApplyReadFn(ctx, count, u.readTimeout)
+	if err != nil {
+		return nil, err
+	}
+	for _, msg := range readMessages {
+		if _, ok := u.partitions[msg.ReadOffset.PartitionIdx()]; !ok {
+			u.partitions[msg.ReadOffset.PartitionIdx()] = true
+		}
+	}
+	return readMessages, nil
 }
 
 // Ack acknowledges the messages from the user-defined source

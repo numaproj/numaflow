@@ -35,8 +35,8 @@ import (
 type SourcePublisher interface {
 	// PublishSourceWatermarks publishes source watermarks.
 	PublishSourceWatermarks([]*isb.ReadMessage)
-	// PublishIdleWatermarks publishes idle watermarks.
-	PublishIdleWatermarks(time.Time)
+	// PublishIdleWatermarks publishes idle watermarks for the given partitions.
+	PublishIdleWatermarks(wm time.Time, partitions []int32)
 }
 
 type sourcePublish struct {
@@ -102,8 +102,9 @@ func (df *sourcePublish) PublishSourceWatermarks(readMessages []*isb.ReadMessage
 }
 
 // PublishIdleWatermarks publishes idle watermarks for all partitions.
-func (df *sourcePublish) PublishIdleWatermarks(wm time.Time) {
-	for partitionId, publisher := range df.sourcePublishWMs {
+func (df *sourcePublish) PublishIdleWatermarks(wm time.Time, partitions []int32) {
+	for _, partitionId := range partitions {
+		publisher := df.loadSourceWatermarkPublisher(partitionId)
 		publisher.PublishIdleWatermark(wmb.Watermark(wm), nil, partitionId) // while publishing idle watermark at source, we don't care about the offset
 	}
 }

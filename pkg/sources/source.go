@@ -66,7 +66,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		log                      = logging.FromContext(ctx)
 		writersMap               = make(map[string][]isb.BufferWriter)
 		sdkClient                sourcetransformer.Client
-		sourcer                  sourcer.Sourcer
+		source                   sourcer.Sourcer
 		readyCheckers            []metrics.HealthChecker
 		idleManager              wmb.IdleManager
 	)
@@ -227,15 +227,15 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 
 		readyCheckers = append(readyCheckers, transformerGRPCClient)
-		sourcer, err = sp.getSourcer(writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), transformerGRPCClient, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
+		source, err = sp.getSourcer(writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), transformerGRPCClient, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
 	} else {
-		sourcer, err = sp.getSourcer(writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
+		source, err = sp.getSourcer(writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to find a sourcer, error: %w", err)
+		return fmt.Errorf("failed to find a source, error: %w", err)
 	}
 	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToBuffers()))
-	stopped := sourcer.Start()
+	stopped := source.Start()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -247,7 +247,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyCheckers, []isb.BufferReader{sourcer})
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyCheckers, []isb.LagReader{source})
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -256,7 +256,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	}
 	<-ctx.Done()
 	log.Info("SIGTERM, exiting...")
-	sourcer.Stop()
+	source.Stop()
 	wg.Wait()
 
 	// close all the source wm stores

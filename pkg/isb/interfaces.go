@@ -32,6 +32,7 @@ const PendingNotAvailable = int64(math.MinInt64)
 
 // LagReader is the interface that wraps the Pending method.
 type LagReader interface {
+	GetName() string
 	// Pending returns the pending messages number.
 	Pending(context.Context) (int64, error)
 }
@@ -57,6 +58,8 @@ type BufferReader interface {
 	Ack(context.Context, []Offset) []error
 	// NoAck cancels acknowledgement of an array of offset.
 	NoAck(context.Context, []Offset)
+	// Pending returns the count of pending messages.
+	Pending(context.Context) (int64, error)
 }
 
 // BufferReaderInformation has information regarding the buffer we are reading from.

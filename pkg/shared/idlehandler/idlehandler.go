@@ -27,7 +27,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-// PublishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
+// PublishSrcIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
 
 func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
 

@@ -17,14 +17,35 @@ limitations under the License.
 package sourcer
 
 import (
+	"context"
+	"io"
+
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
+type SourceReader interface {
+	io.Closer
+	// GetName returns the name of the source.
+	GetName() string
+	// Read reads a chunk of messages and returns at the first occurrence of an error. Error does not indicate that the
+	// array of result is empty, the callee should process all the elements in the array even if the error is set. Read
+	// will not mark the message in the buffer as "READ" if the read for that index is erring.
+	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
+	// at-least-once semantics for reading, during the restart we will have to reprocess all unacknowledged messages.
+	Read(context.Context, int64) ([]*isb.ReadMessage, error)
+	// Ack acknowledges an array of offset.
+	Ack(context.Context, []isb.Offset) []error
+	// NoAck cancels acknowledgement of an array of offset.
+	NoAck(context.Context, []isb.Offset)
+	// Partitions returns the partitions of the source.
+	Partitions() []int32
+}
+
 // Sourcer interface provides an isb.BufferReader abstraction over the underlying data source.
 // This is intended to be consumed by a connector like isb.forward
 type Sourcer interface {
-	isb.BufferReader
+	SourceReader
 	forwarder.StarterStopper
 	isb.LagReader
 }

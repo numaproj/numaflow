@@ -211,14 +211,14 @@ func NewMemGen(
 	return genSrc, nil
 }
 
+// GetName returns the name of the source
 func (mg *memGen) GetName() string {
 	return mg.vertexName
 }
 
-// GetPartitionIdx returns the partition number for the source vertex buffer
-// Source is like a buffer with only one partition. So, we always return 0
-func (mg *memGen) GetPartitionIdx() int32 {
-	return 0
+// Partitions returns the partitions for the source.
+func (mg *memGen) Partitions() []int32 {
+	return []int32{mg.vertexInstance.Replica}
 }
 
 func (mg *memGen) IsEmpty() bool {

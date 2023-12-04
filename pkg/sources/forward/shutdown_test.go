@@ -64,7 +64,7 @@ func TestInterStepDataForward(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name+"_stop", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			fromStep := NewSimpleSource(simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0))
 			to1 := simplebuffer.NewInMemoryBuffer("to1", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},
@@ -102,7 +102,7 @@ func TestInterStepDataForward(t *testing.T) {
 		})
 		t.Run(tt.name+"_forceStop", func(t *testing.T) {
 			batchSize := tt.batchSize
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			fromStep := NewSimpleSource(simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0))
 			to1 := simplebuffer.NewInMemoryBuffer("to", 2*batchSize, 0)
 			toSteps := map[string][]isb.BufferWriter{
 				"to1": {to1},

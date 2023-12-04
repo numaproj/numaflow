@@ -131,10 +131,14 @@ func (r *kafkaSource) GetName() string {
 	return r.vertexName
 }
 
-// GetPartitionIdx returns the partition number for the source vertex buffer
-// Source is like a buffer with only one partition. So, we always return 0
-func (r *kafkaSource) GetPartitionIdx() int32 {
-	return 0
+// Partitions returns the partitions from which the source is reading.
+func (r *kafkaSource) Partitions() []int32 {
+	for topic, partitions := range r.handler.sess.Claims() {
+		if topic == r.topic {
+			return partitions
+		}
+	}
+	return []int32{}
 }
 
 func (r *kafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {

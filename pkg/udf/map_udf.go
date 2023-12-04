@@ -259,12 +259,17 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
 		}(bufferPartition, forwarder)
 	}
+	// create lag readers from buffer readers
+	var lagReaders []isb.LagReader
+	for _, reader := range readers {
+		lagReaders = append(lagReaders, reader)
+	}
 
 	var metricsOpts []metrics.Option
 	if enableMapUdfStream {
-		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapStreamHandler}, readers)
+		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapStreamHandler}, lagReaders)
 	} else {
-		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapHandler}, readers)
+		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapHandler}, lagReaders)
 
 	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)

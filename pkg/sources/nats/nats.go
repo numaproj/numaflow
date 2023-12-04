@@ -41,16 +41,17 @@ import (
 )
 
 type natsSource struct {
-	vertexName   string
-	pipelineName string
-	logger       *zap.SugaredLogger
-	natsConn     *natslib.Conn
-	sub          *natslib.Subscription
-	bufferSize   int
-	messages     chan *isb.ReadMessage
-	readTimeout  time.Duration
-	cancelFn     context.CancelFunc
-	forwarder    *sourceforward.DataForward
+	vertexName    string
+	pipelineName  string
+	vertexReplica int32
+	logger        *zap.SugaredLogger
+	natsConn      *natslib.Conn
+	sub           *natslib.Subscription
+	bufferSize    int
+	messages      chan *isb.ReadMessage
+	readTimeout   time.Duration
+	cancelFn      context.CancelFunc
+	forwarder     *sourceforward.DataForward
 }
 
 func New(
@@ -65,10 +66,11 @@ func New(
 	opts ...Option) (sourcer.Sourcer, error) {
 
 	n := &natsSource{
-		vertexName:   vertexInstance.Vertex.Spec.Name,
-		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
-		bufferSize:   1000,            // default size
-		readTimeout:  1 * time.Second, // default timeout
+		vertexName:    vertexInstance.Vertex.Spec.Name,
+		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica: vertexInstance.Replica,
+		bufferSize:    1000,            // default size
+		readTimeout:   1 * time.Second, // default timeout
 	}
 	for _, o := range opts {
 		if err := o(n); err != nil {
@@ -213,10 +215,9 @@ func (ns *natsSource) GetName() string {
 	return ns.vertexName
 }
 
-// GetPartitionIdx returns the partition number for the source vertex buffer
-// Source is like a buffer with only one partition. So, we always return 0
-func (ns *natsSource) GetPartitionIdx() int32 {
-	return 0
+// Partitions returns the partitions associated with this source.
+func (ns *natsSource) Partitions() []int32 {
+	return []int32{ns.vertexReplica}
 }
 
 func (ns *natsSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {

@@ -191,8 +191,14 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			log.Infow("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
 		}(sinker, readers[index].GetName())
 	}
+
+	// create lag readers from buffer readers
+	var lagReaders []isb.LagReader
+	for _, reader := range readers {
+		lagReaders = append(lagReaders, reader)
+	}
 	// start metrics server and pass the sinkHandler to it, so that it can be used to check the readiness of the sink
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{sinkHandler}, readers)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{sinkHandler}, lagReaders)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)

@@ -107,7 +107,7 @@ func WithHealthCheckExecutor(f func() error) Option {
 }
 
 // NewMetricsOptions returns a metrics option list.
-func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, healthCheckers []HealthChecker, readers []isb.BufferReader) []Option {
+func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, healthCheckers []HealthChecker, readers []isb.LagReader) []Option {
 	metricsOpts := []Option{
 		WithLookbackSeconds(int64(vertex.Spec.Scale.GetLookbackSeconds())),
 	}
@@ -124,9 +124,7 @@ func NewMetricsOptions(ctx context.Context, vertex *dfv1.Vertex, healthCheckers 
 
 	lagReaders := make(map[string]isb.LagReader)
 	for _, reader := range readers {
-		if x, ok := reader.(isb.LagReader); ok {
-			lagReaders[reader.GetName()] = x
-		}
+		lagReaders[reader.GetName()] = reader
 	}
 	if len(lagReaders) > 0 {
 		metricsOpts = append(metricsOpts, WithLagReaders(lagReaders))
