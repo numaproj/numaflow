@@ -2002,7 +2002,7 @@ Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <p>
-Threshold is the duration after which a source is marked a Idle due to
+Threshold is the duration after which a source is marked as Idle due to
 lack of data. Ex: If watermark found to be idle after the Threshold
 duration then the watermark is progressed by <code>IncrementBy</code>.
 </p>

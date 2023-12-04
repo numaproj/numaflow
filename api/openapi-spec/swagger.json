@@ -18171,7 +18171,7 @@
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "threshold": {
-          "description": "Threshold is the duration after which a source is marked a Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
+          "description": "Threshold is the duration after which a source is marked as Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }

@@ -1786,7 +1786,7 @@ func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) 
 				Properties: map[string]spec.Schema{
 					"threshold": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Threshold is the duration after which a source is marked a Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
+							Description: "Threshold is the duration after which a source is marked as Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},

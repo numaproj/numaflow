@@ -505,7 +505,7 @@ type Watermark struct {
 }
 
 type IdleSource struct {
-	// Threshold is the duration after which a source is marked a Idle due to lack of data.
+	// Threshold is the duration after which a source is marked as Idle due to lack of data.
 	// Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.
 	Threshold *metav1.Duration `json:"threshold,omitempty" protobuf:"bytes,1,opt,name=threshold"`
 	// StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.
