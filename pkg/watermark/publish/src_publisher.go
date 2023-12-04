@@ -31,11 +31,15 @@ type sourcePublisher struct {
 
 // NewSourcePublisher returns a new source publisher.
 func NewSourcePublisher(ctx context.Context, pipelineName, vertexName string, srcPublishWMStores store.WatermarkStore, opts ...PublishOption) SourcePublisher {
-	options := &publishOptions{}
+	options := &publishOptions{
+		defaultPartitionIdx: -1,
+		delay:               0,
+	}
 	for _, opt := range opts {
 		opt(options)
 	}
-	return &sourcePublisher{
+
+	sp := &sourcePublisher{
 		ctx:                ctx,
 		pipelineName:       pipelineName,
 		vertexName:         vertexName,
@@ -43,6 +47,19 @@ func NewSourcePublisher(ctx context.Context, pipelineName, vertexName string, sr
 		sourcePublishWMs:   make(map[int32]Publisher),
 		opts:               options,
 	}
+
+	// if defaultPartitionIdx is set, create a publisher for it
+	// will be used by http, nats and tickgen source whose partitionIdx is same
+	// as the vertex replica index
+	if sp.opts.defaultPartitionIdx != -1 {
+		entityName := fmt.Sprintf("%s-%s-%d", sp.pipelineName, sp.vertexName, sp.opts.defaultPartitionIdx)
+		processorEntity := entity.NewProcessorEntity(entityName)
+		// toVertexPartitionCount is 1 because we publish watermarks within the source itself.
+		sourcePublishWM := NewPublish(sp.ctx, processorEntity, sp.srcPublishWMStores, 1, IsSource(), WithDelay(sp.opts.delay))
+		sp.sourcePublishWMs[sp.opts.defaultPartitionIdx] = sourcePublishWM
+	}
+
+	return sp
 }
 
 // PublishSourceWatermarks publishes source watermarks for a list of isb.ReadMessage.

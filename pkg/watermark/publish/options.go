@@ -34,6 +34,9 @@ type publishOptions struct {
 	// Whether it is sink publisher or not
 	// isSource and isSink should not be both true
 	isSink bool
+	// partitionIdx is the default partition index
+	// It will be only used by source publisher
+	defaultPartitionIdx int32
 }
 
 type PublishOption func(*publishOptions)
@@ -68,5 +71,12 @@ func IsSource() PublishOption {
 func IsSink() PublishOption {
 	return func(opts *publishOptions) {
 		opts.isSink = true
+	}
+}
+
+// WithDefaultPartitionIdx sets the default partition index
+func WithDefaultPartitionIdx(partitionIdx int32) PublishOption {
+	return func(opts *publishOptions) {
+		opts.defaultPartitionIdx = partitionIdx
 	}
 }

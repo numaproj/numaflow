@@ -201,7 +201,7 @@ func New(
 
 	// create a source watermark publisher
 	sourceWmPublisher := publish.NewSourcePublisher(ctx, vertexInstance.Vertex.Spec.PipelineName, vertexInstance.Vertex.Spec.Name,
-		publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+		publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()), publish.WithDefaultPartitionIdx(vertexInstance.Replica))
 	h.forwarder, err = sourceforward.NewDataForward(vertexInstance, h, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))

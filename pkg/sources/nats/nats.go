@@ -91,7 +91,8 @@ func New(
 	n.cancelFn = cancel
 
 	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublisher(ctx, n.pipelineName, n.vertexName, publishWMStores)
+	sourceWmPublisher := publish.NewSourcePublisher(ctx, n.pipelineName, n.vertexName,
+		publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()), publish.WithDefaultPartitionIdx(vertexInstance.Replica))
 
 	sourceForwarder, err := sourceforward.NewDataForward(vertexInstance, n, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
