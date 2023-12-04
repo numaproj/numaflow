@@ -104,7 +104,7 @@ func New(
 	u.lifecycleCtx = ctx
 
 	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublisher(ctx, u.pipelineName, u.vertexName, publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	sourceWmPublisher := publish.NewSourcePublish(ctx, u.pipelineName, u.vertexName, publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	u.forwarder, err = sourceforward.NewDataForward(vertexInstance, u, writers, fsd, transformer, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {

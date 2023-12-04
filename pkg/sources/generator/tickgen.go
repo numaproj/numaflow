@@ -198,7 +198,7 @@ func NewMemGen(
 	}
 
 	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublisher(ctx, genSrc.pipelineName, genSrc.vertexName, publishWMStores,
+	sourceWmPublisher := publish.NewSourcePublish(ctx, genSrc.pipelineName, genSrc.vertexName, publishWMStores,
 		publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()), publish.WithDefaultPartitionIdx(vertexInstance.Replica))
 
 	// we pass in the context to sourceForwarder as well so that it can shut down when we cancelFn the context

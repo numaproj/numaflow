@@ -48,8 +48,8 @@ type sourcePublish struct {
 	opts               *publishOptions
 }
 
-// NewSourcePublisher returns a new source publisher.
-func NewSourcePublisher(ctx context.Context, pipelineName, vertexName string, srcPublishWMStores store.WatermarkStore, opts ...PublishOption) SourcePublisher {
+// NewSourcePublish returns a new source publisher.
+func NewSourcePublish(ctx context.Context, pipelineName, vertexName string, srcPublishWMStores store.WatermarkStore, opts ...PublishOption) SourcePublisher {
 	options := &publishOptions{
 		defaultPartitionIdx: -1,
 		delay:               0,
@@ -58,7 +58,7 @@ func NewSourcePublisher(ctx context.Context, pipelineName, vertexName string, sr
 		opt(options)
 	}
 
-	sp := &sourcePublisher{
+	sp := &sourcePublish{
 		ctx:                ctx,
 		pipelineName:       pipelineName,
 		vertexName:         vertexName,

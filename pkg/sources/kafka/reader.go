@@ -344,7 +344,7 @@ func NewKafkaSource(
 		}
 	}
 	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublisher(ctx, ks.pipelineName, ks.vertexName, publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	sourceWmPublisher := publish.NewSourcePublish(ctx, ks.pipelineName, ks.vertexName, publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 	sourceForwarder, err := sourceforward.NewDataForward(vertexInstance, ks, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		ks.logger.Errorw("Error instantiating the sourceForwarder", zap.Error(err))
