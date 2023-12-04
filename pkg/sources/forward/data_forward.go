@@ -218,7 +218,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	if len(readMessages) == 0 {
 		// publish idle watermark
 		df.srcIdleHandler.PublishIdleWatermark()
-		return
 	} else {
 		// reset the idle handler because we have read messages
 		df.srcIdleHandler.Reset()
@@ -346,11 +345,15 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// a watermark in this batch processing cycle.
 	// It's used to determine which buffers should receive an idle watermark.
 	// It is created as a slice because it tracks per partition activity info.
+	// when there are no messages read from the source, we will publish idle watermark to all the toBuffers.
 	var activeWatermarkBuffers = make(map[string][]bool)
+	for toVertexName, toVertexBuffers := range df.toBuffers {
+		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBuffers))
+	}
+
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
 	for toVertexName, toVertexBufferOffsets := range writeOffsets {
-		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
 		if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
 				if len(offsets) > 0 {
