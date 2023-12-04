@@ -85,6 +85,7 @@ func New(
 		pipelineName:       vertexInstance.Vertex.Spec.PipelineName,
 		sourceApplier:      sourceApplier,
 		srcPublishWMStores: publishWMStores,
+		partitions:         make(map[int32]bool),
 		logger:             logging.NewLogger(), // default logger
 	}
 	for _, opt := range opts {

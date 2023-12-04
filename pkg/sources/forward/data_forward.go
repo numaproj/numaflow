@@ -212,21 +212,26 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// There is a natural looping here if there is an internal error while reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
 		// publish idle watermark for the source
-		df.srcIdleHandler.PublishSrcIdleWatermark(df.reader.Partitions())
+		published := df.srcIdleHandler.PublishSrcIdleWatermark(df.reader.Partitions())
 
-		// publish idle watermark for all the toBuffers
-		fetchedWm := df.wmFetcher.ComputeWatermark()
-		for toVertexName, toVertexBuffers := range df.toBuffers {
-			for index := range toVertexBuffers {
-				// publish idle watermark to all the source partitions
-				for _, sp := range df.reader.Partitions() {
-					if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
-						var publisher, ok = vertexPublishers[sp]
-						if !ok {
-							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
-							vertexPublishers[sp] = publisher
+		// if we have published idle watermark to source, we need to publish idle watermark to all the toBuffers
+		// it might not get the latest watermark because of publishing delay, but we will get in the subsequent
+		// iterations.
+		if published {
+			// publish idle watermark for all the toBuffers
+			fetchedWm := df.wmFetcher.ComputeWatermark()
+			for toVertexName, toVertexBuffers := range df.toBuffers {
+				for index := range toVertexBuffers {
+					// publish idle watermark to all the source partitions
+					for _, sp := range df.reader.Partitions() {
+						if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
+							var publisher, ok = vertexPublishers[sp]
+							if !ok {
+								publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
+								vertexPublishers[sp] = publisher
+							}
+							idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, fetchedWm)
 						}
-						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, fetchedWm)
 					}
 				}
 			}
@@ -361,13 +366,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// It is created as a slice because it tracks per partition activity info.
 	// when there are no messages read from the source, we will publish idle watermark to all the toBuffers.
 	var activeWatermarkBuffers = make(map[string][]bool)
-	for toVertexName, toVertexBuffers := range df.toBuffers {
-		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBuffers))
-	}
-
 	// forward the highest watermark to all the edges to avoid idle edge problem
 	// TODO: sort and get the highest value
 	for toVertexName, toVertexBufferOffsets := range writeOffsets {
+		activeWatermarkBuffers[toVertexName] = make([]bool, len(toVertexBufferOffsets))
 		if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
 			for index, offsets := range toVertexBufferOffsets {
 				if len(offsets) > 0 {
