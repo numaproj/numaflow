@@ -235,7 +235,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}
 	// reset the idle handler because we have read messages
 	df.srcIdleHandler.Reset()
-	
+
 	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(readMessages)))
 	metrics.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(readMessages)))
 
