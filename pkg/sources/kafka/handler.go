@@ -46,13 +46,6 @@ func newConsumerHandler(readChanSize int) *consumerHandler {
 
 // Setup is run at the beginning of a new session, before ConsumeClaim
 func (consumer *consumerHandler) Setup(sess sarama.ConsumerGroupSession) error {
-	consumer.logger.Info("setup was invoked for a new session")
-	for topic, partitions := range sess.Claims() {
-		println("topic: ", topic)
-		for _, partition := range partitions {
-			println("partition: ", partition)
-		}
-	}
 	consumer.sess = sess
 	consumer.readyCloser.Do(func() {
 		close(consumer.ready)
@@ -72,13 +65,6 @@ func (consumer *consumerHandler) Cleanup(sess sarama.ConsumerGroupSession) error
 func (consumer *consumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	// The `ConsumeClaim` itself is called within a goroutine, see:
 	// https://github.com/IBM/sarama/blob/main/consumer_group.go#L27-L29
-	consumer.logger.Info("consume claim was invoked")
-	for topic, partitions := range session.Claims() {
-		println("topic: ", topic)
-		for _, partition := range partitions {
-			println("partition: ", partition)
-		}
-	}
 	for {
 		select {
 		case msg, ok := <-claim.Messages():
