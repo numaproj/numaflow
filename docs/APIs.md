@@ -2018,7 +2018,10 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 StepInterval is the duration between the subsequent increment of the
-watermark as long the source remains Idle.
+watermark as long the source remains Idle. The default value is 0s which
+means that once we detect idle source, we will be incrementing the
+watermark by <code>IncrementBy</code> for time we detect that we source
+is empty (in other words, this will be a very frequent update).
 </p>
 </td>
 </tr>

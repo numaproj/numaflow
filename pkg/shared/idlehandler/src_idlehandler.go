@@ -8,10 +8,15 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
-// Questions to ask when publishing idle watermark:
-// 1. How to decide if the source is idling? -> Answer: if I am not reading any messages for WatermarkConfig.Threshold(provided by user) time.
-// 2. When to publish the idle watermark? -> Answer: if the source is idling and the step interval has passed.
-// 3. What to publish as the idle watermark? -> Answer: the current watermark + WatermarkConfig.IncrementBy(provided by user).
+// Source Idle Handler to resolve the following conundrums
+// How to decide if the source is idling?
+//   If data forwarder is not reading any messages for WatermarkConfig.Threshold(provided by user)
+//   time, then it is idling
+// When to publish the idle watermark?
+//   If the source is idling and the step interval has passed (also provided by the user)
+// What to publish as the idle watermark?
+//   The current watermark + WatermarkConfig.IncrementBy (provided by user). We will ensure that the
+//   increment will never cross (time.Now() - maxDelay).
 
 // SrcIdleHandler handles operations related to idle watermarks for source.
 type SrcIdleHandler struct {
