@@ -71,7 +71,7 @@ func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) 
 func (e expressions) apply(et time.Time, payload []byte) (sourcetransformer.Message, error) {
 	result, err := expr.EvalBool(e.filterExpr, payload)
 	if err != nil {
-		return sourcetransformer.MessageToDrop(), err
+		return sourcetransformer.MessageToDrop(et), err
 	}
 	if result {
 		timeStr, err := expr.EvalStr(e.eventTimeExpr, payload)
@@ -91,5 +91,5 @@ func (e expressions) apply(et time.Time, payload []byte) (sourcetransformer.Mess
 			return sourcetransformer.NewMessage(payload, newEventTime), nil
 		}
 	}
-	return sourcetransformer.MessageToDrop(), nil
+	return sourcetransformer.MessageToDrop(et), nil
 }

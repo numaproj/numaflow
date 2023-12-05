@@ -310,12 +310,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// since we use message event time instead of the watermark to determine and publish source watermarks,
 			// time.UnixMilli(-1) is assigned to the message watermark. transformedReadMessages are immediately
 			// used below for publishing source watermarks.
-
-			// if message.EventTime is -1, it means that the message was dropped by the transformer
-			// so we should exclude it from watermark computation
-			if message.EventTime != time.UnixMilli(-1) {
-				transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
-			}
+			transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
 		}
 	}
 	// publish source watermark

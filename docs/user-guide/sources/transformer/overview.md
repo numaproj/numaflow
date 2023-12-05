@@ -25,17 +25,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"time"
 
-	functionsdk "github.com/numaproj/numaflow-go/pkg/function"
-	"github.com/numaproj/numaflow-go/pkg/function/server"
+	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
 )
 
-func Handle(_ context.Context, keys []string, data functionsdk.Datum) functionsdk.MessageTs {
+func transform(_ context.Context, keys []string, data sourcetransformer.Datum) sourcetransformer.Messages {
 	/*
 		Input messages are in JSON format. Sample: {"timestamp": "1673239888", "filterOut": "true"}.
-		Field "timestamp" shows the real event time of the message, in format of epoch.
-		Field "filterOut" indicates whether the message should be filtered out, in format of boolean.
+		Field "timestamp" shows the real event time of the message, in the format of epoch.
+		Field "filterOut" indicates whether the message should be filtered out, in the format of boolean.
 	*/
 	var jsonObject map[string]interface{}
 	json.Unmarshal(data.Value(), &jsonObject)
@@ -53,14 +53,17 @@ func Handle(_ context.Context, keys []string, data functionsdk.Datum) functionsd
 		filterOut = f.(bool)
 	}
 	if filterOut {
-		return functionsdk.MessageTsBuilder().Append(functionsdk.MessageTToDrop())
+		return sourcetransformer.MessagesBuilder().Append(sourcetransformer.MessageToDrop(eventTime))
 	} else {
-		return functionsdk.MessageTsBuilder().Append(functionsdk.NewMessageT(data.Value(), eventTime).WithKeys(keys))
+		return sourcetransformer.MessagesBuilder().Append(sourcetransformer.NewMessage(data.Value(), eventTime).WithKeys(keys))
 	}
 }
 
 func main() {
-	server.New().RegisterMapperT(functionsdk.MapTFunc(Handle)).Start(context.Background())
+	err := sourcetransformer.NewServer(sourcetransformer.SourceTransformFunc(transform)).Start(context.Background())
+	if err != nil {
+		log.Panic("Failed to start source transform server: ", err)
+	}
 }
 ```
 
