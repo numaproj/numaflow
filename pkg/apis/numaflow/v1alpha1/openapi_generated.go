@@ -1792,7 +1792,7 @@ func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) 
 					},
 					"stepInterval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.",
+							Description: "StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle. The default value is 0s which means that once we detect idle source, we will be incrementing the watermark by `IncrementBy` for time we detect that we source is empty (in other words, this will be a very frequent update).",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},

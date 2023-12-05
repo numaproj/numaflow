@@ -504,24 +504,26 @@ type Watermark struct {
 	IdleSource *IdleSource `json:"idleSource,omitempty" protobuf:"bytes,3,opt,name=idleSource"`
 }
 
-type IdleSource struct {
-	// Threshold is the duration after which a source is marked as Idle due to lack of data.
-	// Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.
-	Threshold *metav1.Duration `json:"threshold,omitempty" protobuf:"bytes,1,opt,name=threshold"`
-	// StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.
-	// +kubebuilder:default="0s"
-	// +optional
-	StepInterval *metav1.Duration `json:"stepInterval,omitempty" protobuf:"bytes,2,opt,name=stepInterval"`
-	// IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.
-	IncrementBy *metav1.Duration `json:"incrementBy,omitempty" protobuf:"bytes,3,opt,name=incrementBy"`
-}
-
 // GetMaxDelay returns the configured max delay with a default value.
 func (wm Watermark) GetMaxDelay() time.Duration {
 	if wm.MaxDelay != nil {
 		return wm.MaxDelay.Duration
 	}
 	return time.Duration(0)
+}
+
+type IdleSource struct {
+	// Threshold is the duration after which a source is marked as Idle due to lack of data.
+	// Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.
+	Threshold *metav1.Duration `json:"threshold,omitempty" protobuf:"bytes,1,opt,name=threshold"`
+	// StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.
+	// The default value is 0s which means that once we detect idle source, we will be incrementing the watermark by
+	// `IncrementBy` for time we detect that we source is empty (in other words, this will be a very frequent update).
+	// +kubebuilder:default="0s"
+	// +optional
+	StepInterval *metav1.Duration `json:"stepInterval,omitempty" protobuf:"bytes,2,opt,name=stepInterval"`
+	// IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.
+	IncrementBy *metav1.Duration `json:"incrementBy,omitempty" protobuf:"bytes,3,opt,name=incrementBy"`
 }
 
 func (is IdleSource) GetThreshold() time.Duration {
