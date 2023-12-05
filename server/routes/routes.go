@@ -154,10 +154,8 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			c.Abort()
 			return
 		}
-		// Get the route map from the context. Key is in the format "method:path".
-		routeMapKey := authz.GetRouteMapKey(c)
 		// Check if the route requires authorization.
-		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuthZ {
+		if authz.GlobalRouteMap.GetRouteFromContext(c) != nil && authz.GlobalRouteMap.GetRouteFromContext(c).RequiresAuthZ {
 			// Check if the user is authorized to execute the requested action.
 			isAuthorized := authorizer.Authorize(c, userInfo)
 			if isAuthorized {
@@ -169,12 +167,12 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
 			}
-		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuthZ {
+		} else if authz.GlobalRouteMap.GetRouteFromContext(c) != nil && !authz.GlobalRouteMap.GetRouteFromContext(c).RequiresAuthZ {
 			// If the route does not require AuthZ, skip the AuthZ check.
 			c.Next()
 		} else {
 			// If the route is not present in the route map, return an error.
-			logger.Errorw("route not present in routeMap", "route", routeMapKey)
+			logger.Errorw("route not present in routeMap", "route", authz.GetRouteMapKey(c))
 			errMsg := "Invalid route"
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()

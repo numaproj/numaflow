@@ -236,12 +236,9 @@ func extractResource(c *gin.Context) string {
 
 // extractObject extracts the object from the request.
 func extractObject(c *gin.Context) string {
-	action := c.Request.Method
-	// Get the route map from the context. Key is in the format "method:path".
-	routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
-	// Return the object from the route map.
-	if RouteMap[routeMapKey] != nil {
-		return RouteMap[routeMapKey].Object
+	// Return the object from the route map from context.
+	if GlobalRouteMap.GetRouteFromContext(c) != nil {
+		return GlobalRouteMap.GetRouteFromContext(c).Object
 	}
 	return emptyString
 }

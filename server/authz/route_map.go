@@ -18,9 +18,8 @@ package authz
 
 import (
 	"fmt"
+
 	"github.com/gin-gonic/gin"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"strings"
 )
 
 // RouteInfo is a struct which contains the route information with the object
@@ -39,52 +38,66 @@ func newRouteInfo(object string, requiresAuthZ bool) *RouteInfo {
 	}
 }
 
-// GetBaseHref returns the base href of the server with a trailing slash.
-func GetBaseHref() string {
-	baseHref := sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/")
-	if !strings.HasSuffix(baseHref, "/") {
-		baseHref = baseHref + "/"
-	}
-	return baseHref
-}
+type routeMap map[string]*RouteInfo
 
-var baseHref = GetBaseHref()
-
-// RouteMap is a map of routes to their corresponding RouteInfo objects.
+// GlobalRouteMap is a map of routes to their corresponding RouteInfo objects.
 // It saves the object corresponding to the route and a boolean to indicate
 // whether the route requires authorization.
-var RouteMap = map[string]*RouteInfo{
-	"GET:" + baseHref + "api/v1/sysinfo":                                                         newRouteInfo(ObjectPipeline, false),
-	"GET:" + baseHref + "api/v1/authinfo":                                                        newRouteInfo(ObjectEvents, false),
-	"GET:" + baseHref + "api/v1/namespaces":                                                      newRouteInfo(ObjectEvents, false),
-	"GET:" + baseHref + "api/v1/cluster-summary":                                                 newRouteInfo(ObjectPipeline, false),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                 newRouteInfo(ObjectPipeline, true),
-	"POST:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                newRouteInfo(ObjectPipeline, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/health":                newRouteInfo(ObjectPipeline, true),
-	"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
-	"DELETE:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                    newRouteInfo(ObjectPipeline, true),
-	"PATCH:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                     newRouteInfo(ObjectPipeline, true),
-	"POST:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                             newRouteInfo(ObjectISBSvc, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                              newRouteInfo(ObjectISBSvc, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
-	"PUT:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
-	"DELETE:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":              newRouteInfo(ObjectISBSvc, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/isbs":                  newRouteInfo(ObjectPipeline, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/watermarks":            newRouteInfo(ObjectPipeline, true),
-	"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex":      newRouteInfo(ObjectPipeline, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/metrics":      newRouteInfo(ObjectPipeline, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods": newRouteInfo(ObjectPipeline, true),
-	"GET:" + baseHref + "api/v1/metrics/namespaces/:namespace/pods":                              newRouteInfo(ObjectPipeline, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/pods/:pod/logs":                            newRouteInfo(ObjectPipeline, true),
-	"GET:" + baseHref + "api/v1/namespaces/:namespace/events":                                    newRouteInfo(ObjectEvents, true),
+var GlobalRouteMap *routeMap
+
+// InitializeRouteMapInfo initializes the GlobalRouteMap.
+// It is called only once when the server starts.
+// It adds baseHref to the routeMap keys.
+// For example, "GET:/api/v1/namespaces" becomes "GET:/baseHref/api/v1/namespaces".
+func InitializeRouteMapInfo(baseHref string) {
+	if GlobalRouteMap == nil {
+		GlobalRouteMap = &routeMap{
+			"GET:" + baseHref + "api/v1/sysinfo":                                                         newRouteInfo(ObjectPipeline, false),
+			"GET:" + baseHref + "api/v1/authinfo":                                                        newRouteInfo(ObjectEvents, false),
+			"GET:" + baseHref + "api/v1/namespaces":                                                      newRouteInfo(ObjectEvents, false),
+			"GET:" + baseHref + "api/v1/cluster-summary":                                                 newRouteInfo(ObjectPipeline, false),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                 newRouteInfo(ObjectPipeline, true),
+			"POST:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                newRouteInfo(ObjectPipeline, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/health":                newRouteInfo(ObjectPipeline, true),
+			"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
+			"DELETE:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                    newRouteInfo(ObjectPipeline, true),
+			"PATCH:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                     newRouteInfo(ObjectPipeline, true),
+			"POST:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                             newRouteInfo(ObjectISBSvc, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                              newRouteInfo(ObjectISBSvc, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
+			"PUT:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
+			"DELETE:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":              newRouteInfo(ObjectISBSvc, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/isbs":                  newRouteInfo(ObjectPipeline, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/watermarks":            newRouteInfo(ObjectPipeline, true),
+			"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex":      newRouteInfo(ObjectPipeline, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/metrics":      newRouteInfo(ObjectPipeline, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods": newRouteInfo(ObjectPipeline, true),
+			"GET:" + baseHref + "api/v1/metrics/namespaces/:namespace/pods":                              newRouteInfo(ObjectPipeline, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/pods/:pod/logs":                            newRouteInfo(ObjectPipeline, true),
+			"GET:" + baseHref + "api/v1/namespaces/:namespace/events":                                    newRouteInfo(ObjectEvents, true),
+		}
+	}
 }
 
-// GetRouteMapKey returns the key for the RouteMap.
+// GetRouteMapKey returns the key for the routeMap.
 // The key is a combination of the HTTP method and the path.
 // The format is "method:path".
 // For example, "GET:/api/v1/namespaces", "POST:/api/v1/namespaces".
-// This key is used to get the RouteInfo object from the RouteMap.
+// This key is used to get the RouteInfo object from the routeMap.
 func GetRouteMapKey(c *gin.Context) string {
 	return fmt.Sprintf("%s:%s", c.Request.Method, c.FullPath())
+}
+
+// GetRouteFromKey returns the RouteInfo object from the routeMap based on the key.
+func (r *routeMap) GetRouteFromKey(key string) *RouteInfo {
+	if routeEntry, ok := (*r)[key]; ok {
+		return routeEntry
+	}
+	return nil
+}
+
+// GetRouteFromContext returns the RouteInfo object from the routeMap based on the context.
+func (r *routeMap) GetRouteFromContext(c *gin.Context) *RouteInfo {
+	return r.GetRouteFromKey(GetRouteMapKey(c))
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
+	"github.com/numaproj/numaflow/server/authz"
 	"github.com/numaproj/numaflow/server/routes"
 )
 
@@ -66,6 +67,8 @@ func (s *server) Start() {
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.RedirectTrailingSlash = true
+	// sets the route map for authorization with the base href
+	authz.InitializeRouteMapInfo(s.options.BaseHref)
 	router.Use(static.Serve(s.options.BaseHref, static.LocalFile("./ui/build", true)))
 	if s.options.BaseHref != "/" {
 		router.NoRoute(func(c *gin.Context) {
