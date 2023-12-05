@@ -62,7 +62,7 @@ type userDefinedSource struct {
 	srcPublishWMStores store.WatermarkStore       // source watermark publisher stores
 	lifecycleCtx       context.Context            // lifecycleCtx context is used to control the lifecycle of this source.
 	readTimeout        time.Duration              // read timeout for the source
-	partitions         map[int32]bool             // partitions of the source
+	partitions         map[int32]struct{}         // partitions of the source
 	logger             *zap.SugaredLogger
 }
 
@@ -85,7 +85,7 @@ func New(
 		pipelineName:       vertexInstance.Vertex.Spec.PipelineName,
 		sourceApplier:      sourceApplier,
 		srcPublishWMStores: publishWMStores,
-		partitions:         make(map[int32]bool),
+		partitions:         make(map[int32]struct{}),
 		logger:             logging.NewLogger(), // default logger
 	}
 	for _, opt := range opts {
@@ -139,7 +139,7 @@ func (u *userDefinedSource) Read(ctx context.Context, count int64) ([]*isb.ReadM
 	}
 	for _, msg := range readMessages {
 		if _, ok := u.partitions[msg.ReadOffset.PartitionIdx()]; !ok {
-			u.partitions[msg.ReadOffset.PartitionIdx()] = true
+			u.partitions[msg.ReadOffset.PartitionIdx()] = struct{}{}
 		}
 	}
 	return readMessages, nil

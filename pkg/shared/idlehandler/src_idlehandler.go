@@ -69,7 +69,7 @@ func (iw *SrcIdleHandler) PublishSrcIdleWatermark(partitions []int32) bool {
 
 	// publish the idle watermark, the idle watermark is the current watermark + the increment by value.
 	nextIdleWM := iw.wmFetcher.ComputeWatermark().Add(iw.config.IdleSource.GetIncrementBy())
-	currentTime := time.Now()
+	currentTime := time.Now().Add(-1 * iw.config.GetMaxDelay())
 
 	// if the next idle watermark is after the current time, then set the next idle watermark to the current time.
 	if nextIdleWM.After(currentTime) {
