@@ -36,7 +36,9 @@ type SourceReader interface {
 	Read(context.Context, int64) ([]*isb.ReadMessage, error)
 	// Ack acknowledges an array of offset.
 	Ack(context.Context, []isb.Offset) []error
-	// Partitions returns the partitions of the source.
+	// Partitions returns the partitions of the source. This is used by the forwarder to determine to which partition
+	// idle watermarks should be published. Partition assignment to a pod is dynamic, so this method may return different
+	// partitions at different times. (Example - Kafka, every time topic rebalancing happens, the partitions gets updated)
 	Partitions() []int32
 }
 

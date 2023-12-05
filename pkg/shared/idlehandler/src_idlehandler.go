@@ -25,10 +25,11 @@ type SrcIdleHandler struct {
 // NewSrcIdleHandler creates a new instance of SrcIdleHandler.
 func NewSrcIdleHandler(config *dfv1.Watermark, fetcher fetch.SourceFetcher, publisher publish.SourcePublisher) *SrcIdleHandler {
 	return &SrcIdleHandler{
-		config:       config,
-		wmFetcher:    fetcher,
-		srcPublisher: publisher,
-		updatedTS:    time.Now(),
+		config:                  config,
+		wmFetcher:               fetcher,
+		srcPublisher:            publisher,
+		updatedTS:               time.Now(),
+		lastIdleWmPublishedTime: time.UnixMilli(-1),
 	}
 }
 
@@ -58,11 +59,10 @@ func (iw *SrcIdleHandler) PublishSrcIdleWatermark(partitions []int32) bool {
 		return false
 	}
 
-	// if the step interval has not passed, return
 	// if the last idle watermark published time is -1, it means that the idle watermark has not been published yet.
 	// -1 is used as the default value for lastIdleWmPublishedTime, so that we immediately publish the idle watermark
-	// when the source is idling for the first time after the threshold has passed and next subsequent idling happens
-	// after the step interval has passed.
+	// when the source is idling for the first time after the threshold has passed and next subsequent idle watermark
+	// is published after the step interval has passed.
 	if iw.lastIdleWmPublishedTime != time.UnixMilli(-1) && !iw.hasStepIntervalPassed() {
 		return false
 	}
