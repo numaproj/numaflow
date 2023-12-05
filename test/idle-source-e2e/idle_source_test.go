@@ -47,7 +47,7 @@ func (is *IdleSourceSuite) TestSimpleKeyedReducePipeline() {
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
-		startTime := 1000
+		startTime := 100
 		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():

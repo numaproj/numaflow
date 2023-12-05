@@ -5,7 +5,7 @@ metadata:
 spec:
   watermark:
     idleSource:
-      threshold: 5s
+      threshold: 10s
       incrementBy: 5s
       stepInterval: 5s
   limits:
