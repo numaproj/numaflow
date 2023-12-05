@@ -59,7 +59,11 @@ func (iw *SrcIdleHandler) PublishSrcIdleWatermark(partitions []int32) bool {
 	}
 
 	// if the step interval has not passed, return
-	if !iw.hasStepIntervalPassed() {
+	// if the last idle watermark published time is -1, it means that the idle watermark has not been published yet.
+	// -1 is used as the default value for lastIdleWmPublishedTime, so that we immediately publish the idle watermark
+	// when the source is idling for the first time after the threshold has passed and next subsequent idling happens
+	// after the step interval has passed.
+	if iw.lastIdleWmPublishedTime != time.UnixMilli(-1) && !iw.hasStepIntervalPassed() {
 		return false
 	}
 
@@ -80,4 +84,5 @@ func (iw *SrcIdleHandler) PublishSrcIdleWatermark(partitions []int32) bool {
 // Reset resets the updatedTS to the current time.
 func (iw *SrcIdleHandler) Reset() {
 	iw.updatedTS = time.Now()
+	iw.lastIdleWmPublishedTime = time.UnixMilli(-1)
 }

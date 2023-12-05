@@ -126,6 +126,11 @@ func (p *publish) initialSetup() {
 // PublishWatermark publishes watermark and will retry until it can succeed. It will not publish if the new-watermark
 // is less than the current head watermark.
 func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset, toVertexPartitionIdx int32) {
+	// if its a source, we need to add the delay to the watermark
+	if p.opts.isSource && p.opts.delay.Nanoseconds() > 0 && !time.Time(wm).IsZero() {
+		wm = wmb.Watermark(time.Time(wm).Add(-p.opts.delay))
+	}
+
 	validWM, skipWM := p.validateWatermark(wm, toVertexPartitionIdx)
 	if skipWM {
 		return
@@ -168,9 +173,6 @@ func (p *publish) PublishWatermark(wm wmb.Watermark, offset isb.Offset, toVertex
 // validateWatermark checks if the new watermark is greater than the head watermark, return true if yes,
 // otherwise, return false
 func (p *publish) validateWatermark(wm wmb.Watermark, toVertexPartitionIdx int32) (wmb.Watermark, bool) {
-	if p.opts.isSource && p.opts.delay.Nanoseconds() > 0 && !time.Time(wm).IsZero() {
-		wm = wmb.Watermark(time.Time(wm).Add(-p.opts.delay))
-	}
 	// update p.headWatermarks only if wm > p.headWatermarks
 	headWM := p.GetHeadWM(toVertexPartitionIdx)
 	if wm.AfterWatermark(headWM) {
@@ -187,6 +189,8 @@ func (p *publish) validateWatermark(wm wmb.Watermark, toVertexPartitionIdx int32
 }
 
 // PublishIdleWatermark publishes the idle watermark and will retry until it can succeed.
+// while publishing idle watermark for source we don't add the delay because the idle watermark
+// is the current watermark + the increment by value.
 // TODO: merge with PublishWatermark
 func (p *publish) PublishIdleWatermark(wm wmb.Watermark, offset isb.Offset, toVertexPartitionIdx int32) {
 	var key = p.entity.GetName()
