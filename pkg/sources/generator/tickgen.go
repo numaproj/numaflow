@@ -254,8 +254,6 @@ func (mg *memGen) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
 
-func (mg *memGen) NoAck(_ context.Context, _ []isb.Offset) {}
-
 func (mg *memGen) Close() error {
 	return nil
 }

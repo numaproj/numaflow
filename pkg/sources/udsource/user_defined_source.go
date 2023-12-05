@@ -156,10 +156,6 @@ func (u *userDefinedSource) Pending(ctx context.Context) (int64, error) {
 	return u.sourceApplier.ApplyPendingFn(ctx)
 }
 
-func (u *userDefinedSource) NoAck(_ context.Context, _ []isb.Offset) {
-	panic("User defined source does not support NoAck")
-}
-
 func (u *userDefinedSource) Close() error {
 	u.logger.Info("Shutting down user-defined source...")
 	u.cancelFn()

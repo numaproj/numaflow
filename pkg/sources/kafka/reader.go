@@ -183,8 +183,6 @@ func (r *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
 
-func (r *kafkaSource) NoAck(_ context.Context, _ []isb.Offset) {}
-
 func (r *kafkaSource) Start() <-chan struct{} {
 	client, err := sarama.NewClient(r.brokers, r.config)
 	if err != nil {

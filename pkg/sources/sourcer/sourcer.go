@@ -36,8 +36,6 @@ type SourceReader interface {
 	Read(context.Context, int64) ([]*isb.ReadMessage, error)
 	// Ack acknowledges an array of offset.
 	Ack(context.Context, []isb.Offset) []error
-	// NoAck cancels acknowledgement of an array of offset.
-	NoAck(context.Context, []isb.Offset)
 	// Partitions returns the partitions of the source.
 	Partitions() []int32
 }
