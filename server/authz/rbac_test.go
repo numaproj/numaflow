@@ -56,6 +56,8 @@ func TestCreateAuthorizer(t *testing.T) {
 // TestAuthorize is a test implementation of the Authorize functionality.
 // It tests that the user is authorized correctly for the given request.
 func TestAuthorize(t *testing.T) {
+	// Initialize the route map with the base href for the root path
+	InitializeRouteMapInfo("/")
 	authorizer, err := NewCasbinObject(WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
 	assert.NoError(t, err)
 
