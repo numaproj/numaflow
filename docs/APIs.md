@@ -1074,6 +1074,14 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>streaming</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.ForwardConditions">
@@ -1886,8 +1894,8 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-AllowedLateness allows late data to be included for the Reduce operation
-as long as the late data is not later than (Watermark -
+AllowedLateness allows late data to be included for the ReduceStream
+operation as long as the late data is not later than (Watermark -
 AllowedLateness).
 </p>
 </td>
@@ -4375,6 +4383,14 @@ Kubernetes meta/v1.Duration </a> </em>
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
+</td>
+</tr>
+<tr>
+<td>
+<code>streaming</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>

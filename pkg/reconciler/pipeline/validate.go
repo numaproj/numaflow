@@ -178,8 +178,8 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("invalid pipeline, cannot be disjointed")
 	}
 
-	// Prevent pipelines with Cycles in the case that there is a Reduce Vertex at the point of the cycle or to the right of it.
-	// Whenever there's a cycle, there will inherently be "late data", and we don't want late data for a Reduce Vertex, which may
+	// Prevent pipelines with Cycles in the case that there is a ReduceStream Vertex at the point of the cycle or to the right of it.
+	// Whenever there's a cycle, there will inherently be "late data", and we don't want late data for a ReduceStream Vertex, which may
 	// have already "closed the book" on the data's time window.
 	if err := validateCycles(&pl.Spec); err != nil {
 		return err
@@ -343,8 +343,8 @@ func isReservedContainerName(name string) bool {
 }
 
 // validateCycles verifies that there are no invalid cycles in the pipeline.
-// An invalid cycle has a Reduce Vertex at or to the right of the cycle. Whenever there's a cycle,
-// there will inherently be "late data", and we don't want late data for a Reduce Vertex, which may
+// An invalid cycle has a ReduceStream Vertex at or to the right of the cycle. Whenever there's a cycle,
+// there will inherently be "late data", and we don't want late data for a ReduceStream Vertex, which may
 // have already "closed the book" on the data's time window.
 func validateCycles(pipelineSpec *dfv1.PipelineSpec) error {
 	verticesByName := pipelineSpec.GetVerticesByName()
@@ -358,7 +358,7 @@ func validateCycles(pipelineSpec *dfv1.PipelineSpec) error {
 	if err != nil {
 		return err
 	}
-	// need to make sure none of the cycles have a Reduce Vertex at or to the right of the cycle
+	// need to make sure none of the cycles have a ReduceStream Vertex at or to the right of the cycle
 	for cycleVertexName := range cycles {
 		cycleVertex, found := verticesByName[cycleVertexName]
 		if !found {
@@ -368,7 +368,7 @@ func validateCycles(pipelineSpec *dfv1.PipelineSpec) error {
 			return v.IsReduceUDF()
 		})
 		if invalidReduce {
-			return fmt.Errorf("there's a Reduce Vertex at or to the right of a Cycle occurring at Vertex %q", cycleVertexName)
+			return fmt.Errorf("there's a ReduceStream Vertex at or to the right of a Cycle occurring at Vertex %q", cycleVertexName)
 		}
 	}
 

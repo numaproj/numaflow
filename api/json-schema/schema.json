@@ -17732,6 +17732,9 @@
       "properties": {
         "length": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "streaming": {
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -18124,7 +18127,7 @@
       "properties": {
         "allowedLateness": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later than (Watermark - AllowedLateness)."
+          "description": "AllowedLateness allows late data to be included for the ReduceStream operation as long as the late data is not later than (Watermark - AllowedLateness)."
         },
         "keyed": {
           "type": "boolean"
@@ -19231,6 +19234,9 @@
         },
         "slide": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "streaming": {
+          "type": "boolean"
         }
       },
       "type": "object"

@@ -317,6 +317,9 @@ message Edge {
 // FixedWindow describes a fixed window
 message FixedWindow {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
+
+  // +optional
+  optional bool streaming = 3;
 }
 
 message ForwardConditions {
@@ -503,7 +506,7 @@ message GroupBy {
   // +optional
   optional bool keyed = 2;
 
-  // AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later
+  // AllowedLateness allows late data to be included for the ReduceStream operation as long as the late data is not later
   // than (Watermark - AllowedLateness).
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration allowedLateness = 3;
@@ -1120,6 +1123,9 @@ message SlidingWindow {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
 
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration slide = 2;
+
+  // +optional
+  optional bool streaming = 3;
 }
 
 message Source {

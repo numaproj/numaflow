@@ -118,7 +118,7 @@ type GroupBy struct {
 	Window Window `json:"window" protobuf:"bytes,1,opt,name=window"`
 	// +optional
 	Keyed bool `json:"keyed" protobuf:"bytes,2,opt,name=keyed"`
-	// AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later
+	// AllowedLateness allows late data to be included for the ReduceStream operation as long as the late data is not later
 	// than (Watermark - AllowedLateness).
 	// +optional
 	AllowedLateness *metav1.Duration `json:"allowedLateness,omitempty" protobuf:"bytes,3,opt,name=allowedLateness"`
@@ -139,12 +139,16 @@ type Window struct {
 // FixedWindow describes a fixed window
 type FixedWindow struct {
 	Length *metav1.Duration `json:"length,omitempty" protobuf:"bytes,1,opt,name=length"`
+	// +optional
+	Streaming bool `json:"streaming,omitempty" protobuf:"bytes,3,opt,name=streaming"`
 }
 
 // SlidingWindow describes a sliding window
 type SlidingWindow struct {
 	Length *metav1.Duration `json:"length,omitempty" protobuf:"bytes,1,opt,name=length"`
 	Slide  *metav1.Duration `json:"slide,omitempty" protobuf:"bytes,2,opt,name=slide"`
+	// +optional
+	Streaming bool `json:"streaming,omitempty" protobuf:"bytes,3,opt,name=streaming"`
 }
 
 // SessionWindow describes a session window

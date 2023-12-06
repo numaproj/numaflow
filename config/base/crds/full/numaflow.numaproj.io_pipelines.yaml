@@ -7938,6 +7938,8 @@ spec:
                                   properties:
                                     length:
                                       type: string
+                                    streaming:
+                                      type: boolean
                                   type: object
                                 session:
                                   properties:
@@ -7950,6 +7952,8 @@ spec:
                                       type: string
                                     slide:
                                       type: string
+                                    streaming:
+                                      type: boolean
                                   type: object
                               type: object
                           required:

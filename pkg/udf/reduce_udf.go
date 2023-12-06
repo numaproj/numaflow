@@ -89,7 +89,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	// create udf handler and wait until it is ready
 	if windowType.Fixed != nil || windowType.Sliding != nil {
-		client, err := reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
+		var client reducer.Client
+		// if streaming is enabled, use the reduceStreaming address
+		if windowType.Fixed.Streaming == true || windowType.Sliding.Streaming == true {
+			client, err = reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
+		} else {
+			client, err = reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
+		}
 		if err != nil {
 			return fmt.Errorf("failed to create a new reducer gRPC client: %w", err)
 		}
