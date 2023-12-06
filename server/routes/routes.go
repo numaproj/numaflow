@@ -155,7 +155,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			return
 		}
 		// Check if the route requires authorization.
-		if authz.GlobalRouteMap.GetRouteFromContext(c) != nil && authz.GlobalRouteMap.GetRouteFromContext(c).RequiresAuthZ {
+		if authz.AuthRouteMap.GetRouteFromContext(c) != nil && authz.AuthRouteMap.GetRouteFromContext(c).RequiresAuthZ {
 			// Check if the user is authorized to execute the requested action.
 			isAuthorized := authorizer.Authorize(c, userInfo)
 			if isAuthorized {
@@ -167,7 +167,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
 			}
-		} else if authz.GlobalRouteMap.GetRouteFromContext(c) != nil && !authz.GlobalRouteMap.GetRouteFromContext(c).RequiresAuthZ {
+		} else if authz.AuthRouteMap.GetRouteFromContext(c) != nil && !authz.AuthRouteMap.GetRouteFromContext(c).RequiresAuthZ {
 			// If the route does not require AuthZ, skip the AuthZ check.
 			c.Next()
 		} else {

@@ -40,18 +40,18 @@ func newRouteInfo(object string, requiresAuthZ bool) *RouteInfo {
 
 type routeMap map[string]*RouteInfo
 
-// GlobalRouteMap is a map of routes to their corresponding RouteInfo objects.
+// AuthRouteMap is a map of routes to their corresponding RouteInfo objects.
 // It saves the object corresponding to the route and a boolean to indicate
 // whether the route requires authorization.
-var GlobalRouteMap *routeMap
+var AuthRouteMap routeMap
 
-// InitializeRouteMapInfo initializes the GlobalRouteMap.
+// InitializeRouteMapInfo initializes the AuthRouteMap.
 // It is called only once when the server starts.
 // It adds baseHref to the routeMap keys.
 // For example, "GET:/api/v1/namespaces" becomes "GET:/baseHref/api/v1/namespaces".
 func InitializeRouteMapInfo(baseHref string) {
-	if GlobalRouteMap == nil {
-		GlobalRouteMap = &routeMap{
+	if AuthRouteMap == nil {
+		AuthRouteMap = routeMap{
 			"GET:" + baseHref + "api/v1/sysinfo":                                                         newRouteInfo(ObjectPipeline, false),
 			"GET:" + baseHref + "api/v1/authinfo":                                                        newRouteInfo(ObjectEvents, false),
 			"GET:" + baseHref + "api/v1/namespaces":                                                      newRouteInfo(ObjectEvents, false),
@@ -80,16 +80,16 @@ func InitializeRouteMapInfo(baseHref string) {
 	}
 }
 
-// GetRouteMapKey returns the key for the routeMap.
+// GetRouteMapKey returns the key for the AuthRouteMap.
 // The key is a combination of the HTTP method and the path.
 // The format is "method:path".
 // For example, "GET:/api/v1/namespaces", "POST:/api/v1/namespaces".
-// This key is used to get the RouteInfo object from the routeMap.
+// This key is used to get the RouteInfo object from the AuthRouteMap.
 func GetRouteMapKey(c *gin.Context) string {
 	return fmt.Sprintf("%s:%s", c.Request.Method, c.FullPath())
 }
 
-// GetRouteFromKey returns the RouteInfo object from the routeMap based on the key.
+// GetRouteFromKey returns the RouteInfo object from the AuthRouteMap based on the key.
 func (r *routeMap) GetRouteFromKey(key string) *RouteInfo {
 	if routeEntry, ok := (*r)[key]; ok {
 		return routeEntry
@@ -97,7 +97,7 @@ func (r *routeMap) GetRouteFromKey(key string) *RouteInfo {
 	return nil
 }
 
-// GetRouteFromContext returns the RouteInfo object from the routeMap based on the context.
+// GetRouteFromContext returns the RouteInfo object from the AuthRouteMap based on the context.
 func (r *routeMap) GetRouteFromContext(c *gin.Context) *RouteInfo {
 	return r.GetRouteFromKey(GetRouteMapKey(c))
 }

@@ -237,8 +237,8 @@ func extractResource(c *gin.Context) string {
 // extractObject extracts the object from the request.
 func extractObject(c *gin.Context) string {
 	// Return the object from the route map from context.
-	if GlobalRouteMap.GetRouteFromContext(c) != nil {
-		return GlobalRouteMap.GetRouteFromContext(c).Object
+	if AuthRouteMap.GetRouteFromContext(c) != nil {
+		return AuthRouteMap.GetRouteFromContext(c).Object
 	}
 	return emptyString
 }
