@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/IBM/sarama v1.40.1
 	github.com/Masterminds/sprig/v3 v3.2.2
+	github.com/VividCortex/ewma v1.2.0
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/antonmedv/expr v1.9.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de

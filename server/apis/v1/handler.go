@@ -885,8 +885,38 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 // It represents the pending messages, lags, etc.
 // Criticality can be "ok (0) | warning (1) | critical (2)".
 // Health and Criticality are different because ...?
+// GetPipelineStatus is used to return the status of a given pipeline
+// It is divided into two parts:
+// 1. Pipeline Vertex Health: It is based on the health of each vertex in the pipeline
+// 2. Data Criticality: It is based on the data movement of the pipeline
 func (h *handler) GetPipelineStatus(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, "working on it")
+	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
+
+	// Get the vertex level health of the pipeline
+	vertexHealth, err := getPipelineVertexHealth(h, ns, pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the status for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+
+	// Get a new daemon client for the given pipeline
+	client, err := h.getDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
+		return
+	}
+	// Get the data criticality for the given pipeline
+	status, err := client.GetPipelineStatus(context.Background(), pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the status for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+
+	// Create a response string based on the vertex health and data criticality
+	// We combine both the states to get the final status of the pipeline
+	var response string
+	response = fmt.Sprintf("%s-%s", vertexHealth, status)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
