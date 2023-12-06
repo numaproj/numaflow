@@ -8,18 +8,18 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
-// Source Idle Handler to resolve the following conundrums
+// Source Idle Handler has to resolve the following conundrums:
 // How to decide if the source is idling?
-//   If data forwarder is not reading any messages for WatermarkConfig.Threshold(provided by user)
-//   time, then it is idling
+//   If data forwarder is not reading any messages for WatermarkConfig.Threshold (provided by user)
+//   time, then it is idling.
 // When to publish the idle watermark?
-//   If the source is idling and the step interval has passed (also provided by the user)
+//   If the source is idling and the step interval has passed (also provided by the user).
 // What to publish as the idle watermark?
 //   The current watermark + WatermarkConfig.IncrementBy (provided by user). We will ensure that the
 //   increment will never cross (time.Now() - maxDelay).
 
-// SrcIdleHandler handles operations related to idle watermarks for source.
-type SrcIdleHandler struct {
+// SourceIdleHandler handles operations related to idle watermarks for source.
+type SourceIdleHandler struct {
 	config                  *dfv1.Watermark
 	lastIdleWmPublishedTime time.Time
 	updatedTS               time.Time
@@ -27,9 +27,9 @@ type SrcIdleHandler struct {
 	srcPublisher            publish.SourcePublisher
 }
 
-// NewSrcIdleHandler creates a new instance of SrcIdleHandler.
-func NewSrcIdleHandler(config *dfv1.Watermark, fetcher fetch.SourceFetcher, publisher publish.SourcePublisher) *SrcIdleHandler {
-	return &SrcIdleHandler{
+// NewSourceIdleHandler creates a new instance of SrcIdleHandler.
+func NewSourceIdleHandler(config *dfv1.Watermark, fetcher fetch.SourceFetcher, publisher publish.SourcePublisher) *SourceIdleHandler {
+	return &SourceIdleHandler{
 		config:                  config,
 		wmFetcher:               fetcher,
 		srcPublisher:            publisher,
@@ -38,8 +38,13 @@ func NewSrcIdleHandler(config *dfv1.Watermark, fetcher fetch.SourceFetcher, publ
 	}
 }
 
+// IsSourceIdling will return true if source has been idling and the step interval has passed.
+func (iw *SourceIdleHandler) IsSourceIdling() bool {
+	return iw.isSourceIdling() && iw.hasStepIntervalPassed()
+}
+
 // isSourceIdling checks if the source is idling by comparing the last updated timestamp with the threshold.
-func (iw *SrcIdleHandler) isSourceIdling() bool {
+func (iw *SourceIdleHandler) isSourceIdling() bool {
 	// if the source is not configured for idling, return false
 	if iw.config == nil || iw.config.IdleSource == nil {
 		return false
@@ -49,29 +54,27 @@ func (iw *SrcIdleHandler) isSourceIdling() bool {
 	if time.Since(iw.updatedTS) < iw.config.IdleSource.GetThreshold() {
 		return false
 	}
+
 	return true
 }
 
 // hasStepIntervalPassed verifies if the step interval has passed.
-func (iw *SrcIdleHandler) hasStepIntervalPassed() bool {
-	return time.Since(iw.lastIdleWmPublishedTime) >= iw.config.IdleSource.GetStepInterval()
-}
-
-// PublishSrcIdleWatermark publishes an idle watermark if the conditions are met for source.
-func (iw *SrcIdleHandler) PublishSrcIdleWatermark(partitions []int32) bool {
-	// if source is not idling, return
-	if !iw.isSourceIdling() {
-		return false
-	}
+func (iw *SourceIdleHandler) hasStepIntervalPassed() bool {
 
 	// if the last idle watermark published time is -1, it means that the idle watermark has not been published yet.
 	// -1 is used as the default value for lastIdleWmPublishedTime, so that we immediately publish the idle watermark
 	// when the source is idling for the first time after the threshold has passed and next subsequent idle watermark
 	// is published after the step interval has passed.
-	if iw.lastIdleWmPublishedTime != time.UnixMilli(-1) && !iw.hasStepIntervalPassed() {
-		return false
+	if iw.lastIdleWmPublishedTime == time.UnixMilli(-1) {
+		return true
 	}
 
+	// else make sure duration has passed
+	return time.Since(iw.lastIdleWmPublishedTime) >= iw.config.IdleSource.GetStepInterval()
+}
+
+// PublishSourceIdleWatermark publishes an idle watermark.
+func (iw *SourceIdleHandler) PublishSourceIdleWatermark(partitions []int32) {
 	// publish the idle watermark, the idle watermark is the current watermark + the increment by value.
 	nextIdleWM := iw.wmFetcher.ComputeWatermark().Add(iw.config.IdleSource.GetIncrementBy())
 	currentTime := time.Now().Add(-1 * iw.config.GetMaxDelay())
@@ -83,11 +86,10 @@ func (iw *SrcIdleHandler) PublishSrcIdleWatermark(partitions []int32) bool {
 
 	iw.srcPublisher.PublishIdleWatermarks(nextIdleWM, partitions)
 	iw.lastIdleWmPublishedTime = time.Now()
-	return true
 }
 
 // Reset resets the updatedTS to the current time.
-func (iw *SrcIdleHandler) Reset() {
+func (iw *SourceIdleHandler) Reset() {
 	iw.updatedTS = time.Now()
 	iw.lastIdleWmPublishedTime = time.UnixMilli(-1)
 }
