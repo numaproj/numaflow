@@ -89,15 +89,10 @@ func GetRouteMapKey(c *gin.Context) string {
 	return fmt.Sprintf("%s:%s", c.Request.Method, c.FullPath())
 }
 
-// GetRouteFromKey returns the RouteInfo object from the AuthRouteMap based on the key.
-func (r *routeMap) GetRouteFromKey(key string) *RouteInfo {
-	if routeEntry, ok := (*r)[key]; ok {
+// GetRouteFromContext returns the RouteInfo object from the AuthRouteMap based on the context.
+func (r routeMap) GetRouteFromContext(c *gin.Context) *RouteInfo {
+	if routeEntry, ok := r[GetRouteMapKey(c)]; ok {
 		return routeEntry
 	}
 	return nil
-}
-
-// GetRouteFromContext returns the RouteInfo object from the AuthRouteMap based on the context.
-func (r *routeMap) GetRouteFromContext(c *gin.Context) *RouteInfo {
-	return r.GetRouteFromKey(GetRouteMapKey(c))
 }
