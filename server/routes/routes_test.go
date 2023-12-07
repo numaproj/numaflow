@@ -17,6 +17,7 @@ limitations under the License.
 package routes
 
 import (
+	"github.com/numaproj/numaflow/server/authz"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -41,7 +42,8 @@ func TestRoutes(t *testing.T) {
 		DisableAuth:   false,
 		DexServerAddr: "test-dex-server-addr",
 	}
-	Routes(router, sysInfo, authInfo, "/")
+	authRouteMap := authz.RouteMap{}
+	Routes(router, sysInfo, authInfo, "/", authRouteMap)
 	t.Run("/404", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, "/404", nil)

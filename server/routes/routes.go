@@ -42,7 +42,7 @@ type AuthInfo struct {
 
 var logger = logging.NewLogger().Named("server")
 
-func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref string) {
+func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref string, authRouteMap authz.RouteMap) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -58,12 +58,12 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group(baseHref + "api/v1")
 	if !authInfo.DisableAuth {
-		authorizer, err := authz.NewCasbinObject()
+		authorizer, err := authz.NewCasbinObject(authRouteMap)
 		if err != nil {
 			panic(err)
 		}
 		// Add the AuthN/AuthZ middleware to the group.
-		r1Group.Use(authMiddleware(authorizer, dexObj))
+		r1Group.Use(authMiddleware(authorizer, dexObj, authRouteMap))
 		v1Routes(r1Group, dexObj)
 	} else {
 		v1Routes(r1Group, nil)
@@ -144,7 +144,7 @@ func v1Routes(r gin.IRouter, dexObj *v1.DexObject) {
 // authMiddleware is the middleware for AuthN/AuthZ.
 // it ensures the user is authenticated and authorized
 // to execute the requested action before sending the request to the api handler.
-func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticator) gin.HandlerFunc {
+func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticator, authRouteMap authz.RouteMap) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Authenticate the user.
 		userInfo, err := authenticator.Authenticate(c)
@@ -155,7 +155,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 			return
 		}
 		// Check if the route requires authorization.
-		if authz.AuthRouteMap.GetRouteFromContext(c) != nil && authz.AuthRouteMap.GetRouteFromContext(c).RequiresAuthZ {
+		if authRouteMap.GetRouteFromContext(c) != nil && authRouteMap.GetRouteFromContext(c).RequiresAuthZ {
 			// Check if the user is authorized to execute the requested action.
 			isAuthorized := authorizer.Authorize(c, userInfo)
 			if isAuthorized {
@@ -167,7 +167,7 @@ func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticat
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
 			}
-		} else if authz.AuthRouteMap.GetRouteFromContext(c) != nil && !authz.AuthRouteMap.GetRouteFromContext(c).RequiresAuthZ {
+		} else if authRouteMap.GetRouteFromContext(c) != nil && !authRouteMap.GetRouteFromContext(c).RequiresAuthZ {
 			// If the route does not require AuthZ, skip the AuthZ check.
 			c.Next()
 		} else {
