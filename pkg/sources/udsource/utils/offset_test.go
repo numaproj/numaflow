@@ -30,7 +30,7 @@ func TestOffsetConversion(t *testing.T) {
 	assert.Equal(t, testIsbOffset.PartitionIdx(), convertedBackIsbOffset.PartitionIdx())
 	assert.Equal(t, testIsbOffset.String(), convertedBackIsbOffset.String())
 	testSrcOffset := &sourcepb.Offset{
-		PartitionId: "0",
+		PartitionId: 0,
 		Offset:      []byte("test"),
 	}
 	convertedIsbOffset := ConvertToIsbOffset(testSrcOffset)

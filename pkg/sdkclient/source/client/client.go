@@ -130,3 +130,8 @@ func (c *client) AckFn(ctx context.Context, req *sourcepb.AckRequest) (*sourcepb
 func (c *client) PendingFn(ctx context.Context, req *emptypb.Empty) (*sourcepb.PendingResponse, error) {
 	return c.grpcClt.PendingFn(ctx, req)
 }
+
+// PartitionsFn returns the number of partitions from the source.
+func (c *client) PartitionsFn(ctx context.Context, req *emptypb.Empty) (*sourcepb.PartitionsResponse, error) {
+	return c.grpcClt.PartitionsFn(ctx, req)
+}

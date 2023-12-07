@@ -31,6 +31,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 )
 
+var defaultPartitionIdx = int32(0)
+
 // GRPCBasedUDSource applies a user-defined source over gRPC
 // connection where server is the UDSource.
 type GRPCBasedUDSource struct {
@@ -161,7 +163,18 @@ func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset
 	return err
 }
 
+func (u *GRPCBasedUDSource) ApplyPartitionFn(ctx context.Context) ([]int32, error) {
+	if resp, err := u.client.PartitionsFn(ctx, &emptypb.Empty{}); err == nil {
+		if len(resp.GetResult().GetPartitions()) == 0 {
+			return []int32{defaultPartitionIdx}, nil
+		}
+		return resp.GetResult().GetPartitions(), nil
+	} else {
+		return nil, err
+	}
+}
+
 func constructMessageID(r *sourcepb.ReadResponse_Result) string {
 	// For a user-defined source, the partition ID plus the offset should be able to uniquely identify a message
-	return r.Offset.GetPartitionId() + "-" + string(r.Offset.GetOffset())
+	return fmt.Sprintf("%d-%s", r.GetOffset().GetPartitionId(), string(r.GetOffset().GetOffset()))
 }

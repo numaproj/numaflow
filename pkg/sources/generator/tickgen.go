@@ -217,7 +217,7 @@ func (mg *memGen) GetName() string {
 }
 
 // Partitions returns the partitions for the source.
-func (mg *memGen) Partitions() []int32 {
+func (mg *memGen) Partitions(context.Context) []int32 {
 	return []int32{mg.vertexInstance.Replica}
 }
 
