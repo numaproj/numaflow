@@ -216,7 +216,7 @@ func (hc *HealthChecker) getPipelineDataCriticality() ([]string, error) {
 		log.Info("DEBUGSID ewmavalue", bufferName, ewmaBufferUsage)
 		// assign the state to the vertex based on the average buffer usage
 		// Look back is disabled for the critical state
-		currentState := assignStateToTimeline(ewmaBufferUsage, DisableCriticalLookBack)
+		currentState := assignStateToTimeline(ewmaBufferUsage, EnableCriticalLookBack)
 		vertexState = append(vertexState, currentState)
 	}
 	return vertexState, nil

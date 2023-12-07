@@ -65,6 +65,7 @@ type handler struct {
 	daemonClientsCache   *lru.Cache[string, *daemonclient.DaemonClient]
 	dexObj               *DexObject
 	localUsersAuthObject *LocalUsersAuthObject
+	healthChecker        *HealthChecker
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -93,6 +94,7 @@ func NewHandler(dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (
 		daemonClientsCache:   daemonClientsCache,
 		dexObj:               dexObj,
 		localUsersAuthObject: localUsersAuthObject,
+		healthChecker:        NewHealthChecker(),
 	}, nil
 }
 
@@ -893,7 +895,7 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	// Get the vertex level health of the pipeline
-	vertexHealth, err := getPipelineVertexHealth(h, ns, pipeline)
+	vertexHealth, err := h.healthChecker.getPipelineVertexHealth(h, ns, pipeline)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the status for pipeline %q: %s", pipeline, err.Error()))
 		return
