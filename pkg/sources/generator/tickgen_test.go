@@ -49,7 +49,7 @@ func TestRead(t *testing.T) {
 	ctx := context.Background()
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
-			Name: "memgen",
+			Name: "memGen",
 		},
 		Spec: dfv1.VertexSpec{
 			PipelineName: "testPipeline",
@@ -72,7 +72,7 @@ func TestRead(t *testing.T) {
 		"writer": {dest},
 	}
 
-	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
+	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toBuffers)
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"writer": publishWMStore,
 	}
@@ -89,7 +89,7 @@ func TestRead(t *testing.T) {
 
 	// wait for the context to be completely stopped.
 	for {
-		_, ok := <-mgen.srcChan
+		_, ok := <-mgen.(*memGen).srcChan
 		if !ok {
 			break
 		}
@@ -109,7 +109,7 @@ func TestStop(t *testing.T) {
 	dest := simplebuffer.NewInMemoryBuffer("writer", 10, 0)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
-			Name: "memgen",
+			Name: "memGen",
 		},
 		Spec: dfv1.VertexSpec{
 			PipelineName: "testPipeline",
@@ -131,7 +131,7 @@ func TestStop(t *testing.T) {
 		"writer": {dest},
 	}
 
-	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toBuffers)
+	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toBuffers)
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"writer": publishWMStore,
 	}
@@ -209,7 +209,7 @@ func TestWatermark(t *testing.T) {
 	dest := simplebuffer.NewInMemoryBuffer("writer", 1000, 0)
 	vertex := &dfv1.Vertex{
 		ObjectMeta: v1.ObjectMeta{
-			Name: "memgen",
+			Name: "memGen",
 		},
 		Spec: dfv1.VertexSpec{
 			PipelineName: "testPipeline",

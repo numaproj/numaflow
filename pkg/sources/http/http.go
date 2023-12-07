@@ -38,7 +38,7 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
-	"github.com/numaproj/numaflow/pkg/watermark/entity"
+	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -46,19 +46,17 @@ import (
 )
 
 type httpSource struct {
-	vertexName   string
-	pipelineName string
-	ready        bool
-	readTimeout  time.Duration
-	bufferSize   int
-	messages     chan *isb.ReadMessage
-	logger       *zap.SugaredLogger
-	forwarder    *sourceforward.DataForward
-	// source watermark publisher
-	sourcePublishWM publish.Publisher
-	// context cancel function
-	cancelFunc context.CancelFunc
-	shutdown   func(context.Context) error
+	vertexName    string
+	pipelineName  string
+	vertexReplica int32
+	ready         bool
+	readTimeout   time.Duration
+	bufferSize    int
+	messages      chan *isb.ReadMessage
+	logger        *zap.SugaredLogger
+	forwarder     *sourceforward.DataForward
+	cancelFunc    context.CancelFunc // context cancel function
+	shutdown      func(context.Context) error
 }
 
 type Option func(*httpSource) error
@@ -91,18 +89,19 @@ func New(
 	writers map[string][]isb.BufferWriter,
 	fsd forwarder.ToWhichStepDecider,
 	transformerApplier applier.SourceTransformApplier,
-	fetchWM fetch.Fetcher,
+	fetchWM fetch.SourceFetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (*httpSource, error) {
+	opts ...Option) (sourcer.Sourcer, error) {
 
 	h := &httpSource{
-		vertexName:   vertexInstance.Vertex.Spec.Name,
-		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
-		ready:        false,
-		bufferSize:   1000,            // default size
-		readTimeout:  1 * time.Second, // default timeout
+		vertexName:    vertexInstance.Vertex.Spec.Name,
+		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica: vertexInstance.Replica,
+		ready:         false,
+		bufferSize:    1000,            // default size
+		readTimeout:   1 * time.Second, // default timeout
 	}
 
 	for _, o := range opts {
@@ -199,30 +198,29 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	h.cancelFunc = cancel
 
-	h.forwarder, err = sourceforward.NewDataForward(vertexInstance, h, writers, fsd, transformerApplier, fetchWM, h, toVertexPublisherStores, idleManager, forwardOpts...)
+	// create a source watermark publisher
+	sourceWmPublisher := publish.NewSourcePublish(ctx, vertexInstance.Vertex.Spec.PipelineName, vertexInstance.Vertex.Spec.Name,
+		publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()), publish.WithDefaultPartitionIdx(vertexInstance.Replica))
+	h.forwarder, err = sourceforward.NewDataForward(vertexInstance, h, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	h.cancelFunc = cancel
-	entityName := fmt.Sprintf("%s-%d", vertexInstance.Vertex.Name, vertexInstance.Replica)
-	processorEntity := entity.NewProcessorEntity(entityName)
-	// source publisher toVertexPartitionCount will be 1, because we publish watermarks within the source itself.
-	h.sourcePublishWM = publish.NewPublish(ctx, processorEntity, publishWMStores, 1, publish.IsSource(), publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 	return h, nil
 }
 
+// GetName returns the name of the source.
 func (h *httpSource) GetName() string {
 	return h.vertexName
 }
 
-// GetPartitionIdx returns the partition number for the source vertex buffer
-// Source is like a buffer with only one partition. So, we always return 0
-func (h *httpSource) GetPartitionIdx() int32 {
-	return 0
+// Partitions returns the partitions for the source.
+func (h *httpSource) Partitions() []int32 {
+	return []int32{h.vertexReplica}
 }
 
 func (h *httpSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
@@ -247,25 +245,9 @@ func (h *httpSource) Pending(_ context.Context) (int64, error) {
 	return isb.PendingNotAvailable, nil
 }
 
-func (h *httpSource) PublishSourceWatermarks(msgs []*isb.ReadMessage) {
-	var oldest time.Time
-	for _, m := range msgs {
-		if oldest.IsZero() || m.EventTime.Before(oldest) {
-			oldest = m.EventTime
-		}
-	}
-	if len(msgs) > 0 && !oldest.IsZero() {
-		h.logger.Debugf("Publishing watermark %v to source", oldest)
-		// toVertexPartitionIdx is 0, because we publish watermarks within the source itself.
-		h.sourcePublishWM.PublishWatermark(wmb.Watermark(oldest), nil, 0) // Source publisher does not care about the offset
-	}
-}
-
 func (h *httpSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	return make([]error, len(offsets))
 }
-
-func (h *httpSource) NoAck(_ context.Context, _ []isb.Offset) {}
 
 func (h *httpSource) Close() error {
 	h.logger.Info("Shutting down http source server...")

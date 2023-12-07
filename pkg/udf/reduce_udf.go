@@ -257,8 +257,14 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer))
 
+	// create lag readers from buffer readers
+	var lagReaders []isb.LagReader
+	for _, reader := range readers {
+		lagReaders = append(lagReaders, reader)
+	}
+
 	// start metrics server
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{heathChecker}, readers)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{heathChecker}, lagReaders)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)

@@ -1,0 +1,55 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: idle-source
+spec:
+  watermark:
+    idleSource:
+      threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
+      incrementBy: 3s # If source is found to be idle then increment the watermark by given incrementBy value.
+      stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
+  limits:
+    readBatchSize: 50
+  vertices:
+    - name: in
+      scale:
+        min: 2
+      source:
+        http: {}
+    - name: atoi
+      scale:
+        min: 1
+      udf:
+        container:
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.5.0
+    - name: compute-sum
+      partitions: 2
+      udf:
+        container:
+          # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
+        groupBy:
+          window:
+            fixed:
+              length: 10s
+          keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 2Gi
+              accessMode: ReadWriteOnce
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+  edges:
+    - from: in
+      to: atoi
+    - from: atoi
+      to: compute-sum
+    - from: compute-sum
+      to: sink

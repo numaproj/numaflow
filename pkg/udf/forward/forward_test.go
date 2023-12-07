@@ -1312,7 +1312,7 @@ func (f mySourceForwardTest) ApplyMapStream(ctx context.Context, message *isb.Re
 	}(ctx, message, writeMessageCh)
 }
 
-// TestSourceWatermarkPublisher is a dummy implementation of isb.SourceWatermarkPublisher interface
+// TestSourceWatermarkPublisher is a dummy implementation of isb.SourcePublisher interface
 type TestSourceWatermarkPublisher struct {
 }
 

@@ -53,10 +53,10 @@ func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) 
 func (f filter) apply(et time.Time, msg []byte) (sourcetransformer.Message, error) {
 	result, err := expr.EvalBool(f.expression, msg)
 	if err != nil {
-		return sourcetransformer.MessageToDrop(), err
+		return sourcetransformer.MessageToDrop(et), err
 	}
 	if result {
 		return sourcetransformer.NewMessage(msg, et), nil
 	}
-	return sourcetransformer.MessageToDrop(), nil
+	return sourcetransformer.MessageToDrop(et), nil
 }
