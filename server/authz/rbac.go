@@ -46,26 +46,28 @@ const (
 )
 
 // CasbinObject is the struct that implements the Authorizer interface.
-// It contains the Casbin Enforcer, the current scopes, the default policy and the config reader.
+// It contains the Casbin Enforcer, the current scopes, the default policy, the config reader and the route map.
 // The config reader is used to watch for changes in the config file.
 // The Casbin Enforcer is used to enforce the authorization policy.
 // The current scopes are used to determine the user identity token to be used for authorization.
 // policyDefault is the default policy to be used when the requested resource is not present in the policy.
 // userPermCount is a cache to store the count of permissions for a user. If the user has permissions in the
 // policy, we store the count in the cache and return based on the value.
+// authRouteMap is a map of routes to their corresponding RouteInfo objects.
 type CasbinObject struct {
 	enforcer      *casbin.Enforcer
 	userPermCount *sync.Map
 	currentScopes []string
 	policyDefault string
 	configReader  *viper.Viper
+	authRouteMap  RouteMap
 	opts          *options
 	rwMutex       *sync.RWMutex
 }
 
 // NewCasbinObject returns a new CasbinObject. It initializes the Casbin Enforcer with the model and policy.
 // It also initializes the config reader to watch for changes in the config file.
-func NewCasbinObject(inputOptions ...Option) (*CasbinObject, error) {
+func NewCasbinObject(authRouteMap RouteMap, inputOptions ...Option) (*CasbinObject, error) {
 	// Set the default options.
 	var opts = DefaultOptions()
 	// Apply the input options.
@@ -93,6 +95,7 @@ func NewCasbinObject(inputOptions ...Option) (*CasbinObject, error) {
 		currentScopes: currentScopes,
 		policyDefault: policyDefault,
 		configReader:  configReader,
+		authRouteMap:  authRouteMap,
 		opts:          opts,
 		rwMutex:       &sync.RWMutex{},
 	}
@@ -116,7 +119,7 @@ func (cas *CasbinObject) Authorize(c *gin.Context, userInfo *authn.UserInfo) boo
 	scopedList := getSubjectFromScope(currentScopes, userInfo)
 	// Get the resource, object and action from the request.
 	resource := extractResource(c)
-	object := extractObject(c)
+	object := extractObject(c, cas.authRouteMap)
 	action := c.Request.Method
 	userHasPolicies := false
 	// Check for the given scoped list if the user is authorized using any of the subjects in the list.
@@ -235,13 +238,10 @@ func extractResource(c *gin.Context) string {
 }
 
 // extractObject extracts the object from the request.
-func extractObject(c *gin.Context) string {
-	action := c.Request.Method
-	// Get the route map from the context. Key is in the format "method:path".
-	routeMapKey := fmt.Sprintf("%s:%s", action, c.FullPath())
-	// Return the object from the route map.
-	if RouteMap[routeMapKey] != nil {
-		return RouteMap[routeMapKey].Object
+func extractObject(c *gin.Context, authRouteMap RouteMap) string {
+	// Return the object from the route map from context.
+	if authRouteMap.GetRouteFromContext(c) != nil {
+		return authRouteMap.GetRouteFromContext(c).Object
 	}
 	return emptyString
 }
