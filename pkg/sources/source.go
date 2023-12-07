@@ -43,6 +43,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
 	"github.com/numaproj/numaflow/pkg/sources/nats"
+	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/sources/transformer"
 	"github.com/numaproj/numaflow/pkg/sources/udsource"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
@@ -65,7 +66,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		log                      = logging.FromContext(ctx)
 		writersMap               = make(map[string][]isb.BufferWriter)
 		sdkClient                sourcetransformer.Client
-		sourcer                  Sourcer
+		source                   sourcer.Sourcer
 		readyCheckers            []metrics.HealthChecker
 		idleManager              wmb.IdleManager
 	)
@@ -82,7 +83,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	// watermark variables no-op initialization
 	// create a no op fetcher
-	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferList(sp.VertexInstance.Vertex.GetToBuffers())
+	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressors(sp.VertexInstance.Vertex.GetToBuffers())
 	// create no op publisher stores
 	for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 		toVertexWatermarkStores[e.To], _ = store.BuildNoOpWatermarkStore()
@@ -226,15 +227,15 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 
 		readyCheckers = append(readyCheckers, transformerGRPCClient)
-		sourcer, err = sp.getSourcer(writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), transformerGRPCClient, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
+		source, err = sp.getSourcer(writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), transformerGRPCClient, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
 	} else {
-		sourcer, err = sp.getSourcer(writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
+		source, err = sp.getSourcer(writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to find a sourcer, error: %w", err)
+		return fmt.Errorf("failed to find a source, error: %w", err)
 	}
 	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToBuffers()))
-	stopped := sourcer.Start()
+	stopped := source.Start()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -246,7 +247,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 	}()
 
-	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyCheckers, []isb.BufferReader{sourcer})
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyCheckers, []isb.LagReader{source})
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -255,7 +256,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	}
 	<-ctx.Done()
 	log.Info("SIGTERM, exiting...")
-	sourcer.Stop()
+	source.Stop()
 	wg.Wait()
 
 	// close all the source wm stores
@@ -281,11 +282,11 @@ func (sp *SourceProcessor) getSourcer(
 	fsd forwarder.ToWhichStepDecider,
 	transformerApplier applier.SourceTransformApplier,
 	udsGRPCClient *udsource.GRPCBasedUDSource,
-	fetchWM fetch.Fetcher,
+	fetchWM fetch.SourceFetcher,
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	logger *zap.SugaredLogger) (Sourcer, error) {
+	logger *zap.SugaredLogger) (sourcer.Sourcer, error) {
 
 	src := sp.VertexInstance.Vertex.Spec.Source
 	if x := src.UDSource; x != nil && udsGRPCClient != nil {

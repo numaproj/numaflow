@@ -29,8 +29,15 @@ type Fetcher interface {
 	ComputeHeadIdleWMB(fromPartitionIdx int32) wmb.WMB
 }
 
-// UXFetcher computes the watermark for Vn.
-type UXFetcher interface {
+// SourceFetcher fetches watermark data for source vertex.
+type SourceFetcher interface {
+	// ComputeWatermark computes the watermark, it will return the minimum of all the watermarks of the processors.
+	ComputeWatermark() wmb.Watermark
+	HeadFetcher
+}
+
+// HeadFetcher computes the watermark for Vn.
+type HeadFetcher interface {
 	// ComputeHeadWatermark computes a valid head watermark for the given partition
 	ComputeHeadWatermark(fromPartitionIdx int32) wmb.Watermark
 }

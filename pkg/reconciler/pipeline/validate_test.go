@@ -955,3 +955,51 @@ func Test_validateCycles(t *testing.T) {
 		})
 	}
 }
+
+func Test_validateIdleSource(t *testing.T) {
+	testObj := testPipeline.DeepCopy()
+	testObj.Spec.Watermark.IdleSource = &dfv1.IdleSource{
+		Threshold:   &metav1.Duration{Duration: 5 * time.Second},
+		IncrementBy: &metav1.Duration{Duration: 5 * time.Second},
+	}
+	err := validateIdleSource(*testObj)
+	assert.NoError(t, err)
+
+	testObj.Spec.Watermark.IdleSource = &dfv1.IdleSource{
+		Threshold: nil,
+	}
+	err = validateIdleSource(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `invalid idle source watermark config, threshold is missing`)
+
+	testObj.Spec.Watermark.IdleSource = &dfv1.IdleSource{
+		Threshold: &metav1.Duration{Duration: 0 * time.Second},
+	}
+	err = validateIdleSource(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `invalid idle source watermark config, threshold should be greater than 0`)
+
+	testObj.Spec.Watermark.IdleSource = &dfv1.IdleSource{
+		Threshold:   &metav1.Duration{Duration: 5 * time.Second},
+		IncrementBy: nil,
+	}
+	err = validateIdleSource(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `invalid idle source watermark config, incrementBy is missing`)
+
+	testObj.Spec.Watermark.IdleSource = &dfv1.IdleSource{
+		Threshold:   &metav1.Duration{Duration: 5 * time.Second},
+		IncrementBy: &metav1.Duration{Duration: 0 * time.Second},
+	}
+	err = validateIdleSource(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `invalid idle source watermark config, incrementBy should be greater than 0`)
+
+	testObj.Spec.Watermark.IdleSource = &dfv1.IdleSource{
+		Threshold:   &metav1.Duration{Duration: 2 * time.Second},
+		IncrementBy: &metav1.Duration{Duration: 5 * time.Second},
+	}
+	err = validateIdleSource(*testObj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `invalid idle source watermark config, threshold should be greater than or equal to incrementBy`)
+}

@@ -81,18 +81,18 @@ func Test_NewHTTP(t *testing.T) {
 		"test": {dest},
 	}
 	publishWMStores, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
+	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"test": publishWMStores,
 	}
 	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, wmb.NewIdleManager(len(toBuffers)))
 	assert.NoError(t, err)
-	assert.False(t, h.ready)
+	assert.False(t, h.(*httpSource).ready)
 	assert.Equal(t, v.Spec.Name, h.GetName())
-	assert.NotNil(t, h.forwarder)
-	assert.NotNil(t, h.shutdown)
+	assert.NotNil(t, h.(*httpSource).forwarder)
+	assert.NotNil(t, h.(*httpSource).shutdown)
 	_ = h.Start()
-	assert.True(t, h.ready)
+	assert.True(t, h.(*httpSource).ready)
 	h.Stop()
-	assert.False(t, h.ready)
+	assert.False(t, h.(*httpSource).ready)
 }

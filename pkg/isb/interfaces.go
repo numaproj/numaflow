@@ -30,12 +30,6 @@ import (
 
 const PendingNotAvailable = int64(math.MinInt64)
 
-// LagReader is the interface that wraps the Pending method.
-type LagReader interface {
-	// Pending returns the pending messages number.
-	Pending(context.Context) (int64, error)
-}
-
 // BufferWriter is the buffer to which we are writing.
 type BufferWriter interface {
 	BufferWriterInformation
@@ -57,7 +51,20 @@ type BufferReader interface {
 	Ack(context.Context, []Offset) []error
 	// NoAck cancels acknowledgement of an array of offset.
 	NoAck(context.Context, []Offset)
+	// Pending returns the count of pending messages.
+	Pending(context.Context) (int64, error)
 }
+
+// LagReader is the interface that wraps the Pending method and GetName method.
+// will be used by the metrics server to get the pending messages count.
+type LagReader interface {
+	GetName() string
+	// Pending returns the pending messages number.
+	Pending(context.Context) (int64, error)
+}
+
+// BufferReader can be used as LagReader.
+var _ LagReader = (BufferReader)(nil)
 
 // BufferReaderInformation has information regarding the buffer we are reading from.
 type BufferReaderInformation interface {
@@ -73,11 +80,6 @@ type BufferWriterInformation interface {
 	GetName() string
 	// GetPartitionIdx returns the partition ID.
 	GetPartitionIdx() int32
-}
-
-// SourceWatermarkPublisher publishes source watermarks based on a list of isb.ReadMessage
-type SourceWatermarkPublisher interface {
-	PublishSourceWatermarks([]*ReadMessage)
 }
 
 // Offset is an interface used in the ReadMessage referencing offset information.

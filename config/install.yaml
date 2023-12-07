@@ -11185,6 +11185,16 @@ spec:
                   disabled:
                     default: false
                     type: boolean
+                  idleSource:
+                    properties:
+                      incrementBy:
+                        type: string
+                      stepInterval:
+                        default: 0s
+                        type: string
+                      threshold:
+                        type: string
+                    type: object
                   maxDelay:
                     default: 0s
                     type: string
@@ -15838,6 +15848,16 @@ spec:
                   disabled:
                     default: false
                     type: boolean
+                  idleSource:
+                    properties:
+                      incrementBy:
+                        type: string
+                      stepInterval:
+                        default: 0s
+                        type: string
+                      threshold:
+                        type: string
+                    type: object
                   maxDelay:
                     default: 0s
                     type: string

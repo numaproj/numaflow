@@ -55,6 +55,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetVertexPodSpecReq":            schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy":                        schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource":                     schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource":                     schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferService":         schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceList":     schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceList(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceSpec":     schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceSpec(ref),
@@ -1777,6 +1778,38 @@ func schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref common.ReferenceCallback) 
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"threshold": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Threshold is the duration after which a source is marked as Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"stepInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle. The default value is 0s which means that once we detect idle source, we will be incrementing the watermark by `IncrementBy` for time we detect that we source is empty (in other words, this will be a very frequent update).",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"incrementBy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3077,7 +3110,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 					},
 					"templates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Templates is used to customize additional kubernetes resources required for the Pipeline",
+							Description: "Templates are used to customize additional kubernetes resources required for the Pipeline",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates"),
 						},
 					},
@@ -4758,11 +4791,17 @@ func schema_pkg_apis_numaflow_v1alpha1_Watermark(ref common.ReferenceCallback) c
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"idleSource": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IdleSource defines the idle watermark properties, it could be configured in case source is idling.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 

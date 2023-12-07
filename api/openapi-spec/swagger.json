@@ -18159,6 +18159,23 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.IdleSource": {
+      "type": "object",
+      "properties": {
+        "incrementBy": {
+          "description": "IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "stepInterval": {
+          "description": "StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle. The default value is 0s which means that once we detect idle source, we will be incrementing the watermark by `IncrementBy` for time we detect that we source is empty (in other words, this will be a very frequent update).",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "threshold": {
+          "description": "Threshold is the duration after which a source is marked as Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.InterStepBufferService": {
       "type": "object",
       "required": [
@@ -18844,7 +18861,7 @@
           }
         },
         "templates": {
-          "description": "Templates is used to customize additional kubernetes resources required for the Pipeline",
+          "description": "Templates are used to customize additional kubernetes resources required for the Pipeline",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Templates"
         },
         "vertices": {
@@ -19746,6 +19763,10 @@
         "disabled": {
           "description": "Disabled toggles the watermark propagation, defaults to false.",
           "type": "boolean"
+        },
+        "idleSource": {
+          "description": "IdleSource defines the idle watermark properties, it could be configured in case source is idling.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.IdleSource"
         },
         "maxDelay": {
           "description": "Maximum delay allowed for watermark calculation, defaults to \"0s\", which means no delay.",

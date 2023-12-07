@@ -31,14 +31,14 @@ import (
 
 // BuildUXEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
 // value is a list of fetchers to the buffers.
-func BuildUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, wmStores map[v1alpha1.Edge][]store.WatermarkStore) (map[v1alpha1.Edge][]fetch.UXFetcher, error) {
-	var wmFetchers = make(map[v1alpha1.Edge][]fetch.UXFetcher)
+func BuildUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeline, wmStores map[v1alpha1.Edge][]store.WatermarkStore) (map[v1alpha1.Edge][]fetch.HeadFetcher, error) {
+	var wmFetchers = make(map[v1alpha1.Edge][]fetch.HeadFetcher)
 	if pipeline.Spec.Watermark.Disabled {
 		return wmFetchers, nil
 	}
 
 	for edge, stores := range wmStores {
-		var fetchers []fetch.UXFetcher
+		var fetchers []fetch.HeadFetcher
 		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
 		partitionCount := pipeline.GetVertex(edge.To).GetPartitionCount()
 		for i, s := range stores {

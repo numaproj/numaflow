@@ -27,9 +27,9 @@ import (
 
 // consumerHandler struct
 type consumerHandler struct {
-	inflightacks chan bool
+	inflightAcks chan bool
 	ready        chan bool
-	readycloser  sync.Once
+	readyCloser  sync.Once
 	messages     chan *sarama.ConsumerMessage
 	sess         sarama.ConsumerGroupSession
 	logger       *zap.SugaredLogger
@@ -47,7 +47,7 @@ func newConsumerHandler(readChanSize int) *consumerHandler {
 // Setup is run at the beginning of a new session, before ConsumeClaim
 func (consumer *consumerHandler) Setup(sess sarama.ConsumerGroupSession) error {
 	consumer.sess = sess
-	consumer.readycloser.Do(func() {
+	consumer.readyCloser.Do(func() {
 		close(consumer.ready)
 	})
 	return nil
@@ -56,7 +56,7 @@ func (consumer *consumerHandler) Setup(sess sarama.ConsumerGroupSession) error {
 // Cleanup is run at the end of a session, once all ConsumeClaim goroutines have exited
 func (consumer *consumerHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 	// wait for inflight acks to be completed.
-	<-consumer.inflightacks
+	<-consumer.inflightAcks
 	sess.Commit()
 	return nil
 }

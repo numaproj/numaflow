@@ -77,7 +77,7 @@ func TestMessageHandling(t *testing.T) {
 		Replica:  0,
 	}
 	publishWMStore, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
+	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"test": publishWMStore,
 	}
@@ -94,7 +94,7 @@ func TestMessageHandling(t *testing.T) {
 
 	expectedoffset := fmt.Sprintf("%s:%v:%v", topic, partition, offset)
 	// push one message
-	ks.handler.messages <- msg
+	ks.(*kafkaSource).handler.messages <- msg
 
 	readmsgs, err := ks.Read(context.Background(), 10)
 	assert.Nil(t, err)

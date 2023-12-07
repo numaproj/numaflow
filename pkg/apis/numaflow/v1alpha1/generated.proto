@@ -521,6 +521,22 @@ message HTTPSource {
   optional bool service = 2;
 }
 
+message IdleSource {
+  // Threshold is the duration after which a source is marked as Idle due to lack of data.
+  // Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration threshold = 1;
+
+  // StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.
+  // The default value is 0s which means that once we detect idle source, we will be incrementing the watermark by
+  // `IncrementBy` for time we detect that we source is empty (in other words, this will be a very frequent update).
+  // +kubebuilder:default="0s"
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration stepInterval = 2;
+
+  // IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration incrementBy = 3;
+}
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=isbsvc
@@ -904,7 +920,7 @@ message PipelineSpec {
   // +optional
   optional Watermark watermark = 6;
 
-  // Templates is used to customize additional kubernetes resources required for the Pipeline
+  // Templates are used to customize additional kubernetes resources required for the Pipeline
   // +optional
   optional Templates templates = 7;
 
@@ -1351,6 +1367,10 @@ message Watermark {
   // +kubebuilder:default="0s"
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxDelay = 2;
+
+  // IdleSource defines the idle watermark properties, it could be configured in case source is idling.
+  // +optional
+  optional IdleSource idleSource = 3;
 }
 
 // Window describes windowing strategy

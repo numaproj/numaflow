@@ -1973,6 +1973,73 @@ ISBSvcType (<code>string</code> alias)
 </p>
 <p>
 </p>
+<h3 id="numaflow.numaproj.io/v1alpha1.IdleSource">
+IdleSource
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Watermark">Watermark</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>threshold</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<p>
+Threshold is the duration after which a source is marked as Idle due to
+lack of data. Ex: If watermark found to be idle after the Threshold
+duration then the watermark is progressed by <code>IncrementBy</code>.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>stepInterval</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+StepInterval is the duration between the subsequent increment of the
+watermark as long the source remains Idle. The default value is 0s which
+means that once we detect idle source, we will be incrementing the
+watermark by <code>IncrementBy</code> for time we detect that we source
+is empty (in other words, this will be a very frequent update).
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>incrementBy</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<p>
+IncrementBy is the duration to be added to the current watermark to
+progress the watermark when source is idling.
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.InterStepBufferService">
 InterStepBufferService
 </h3>
@@ -3253,7 +3320,7 @@ Watermark enables watermark progression across the entire pipeline.
 <td>
 <em>(Optional)</em>
 <p>
-Templates is used to customize additional kubernetes resources required
+Templates are used to customize additional kubernetes resources required
 for the Pipeline
 </p>
 </td>
@@ -3469,7 +3536,7 @@ Watermark enables watermark progression across the entire pipeline.
 <td>
 <em>(Optional)</em>
 <p>
-Templates is used to customize additional kubernetes resources required
+Templates are used to customize additional kubernetes resources required
 for the Pipeline
 </p>
 </td>
@@ -5393,6 +5460,20 @@ Kubernetes meta/v1.Duration </a> </em>
 <p>
 Maximum delay allowed for watermark calculation, defaults to “0s”, which
 means no delay.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>idleSource</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.IdleSource"> IdleSource </a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+IdleSource defines the idle watermark properties, it could be configured
+in case source is idling.
 </p>
 </td>
 </tr>
