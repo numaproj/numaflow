@@ -210,37 +210,43 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	// if there are no read messages, we return early.
 	if len(readMessages) == 0 {
+		// not idling, so nothing much to do
+		if !df.srcIdleHandler.IsSourceIdling() {
+			return
+		}
+
 		// if the source is idling, we will publish idle watermark to the source and all the toBuffers
 		// we will not publish idle watermark if the source is not idling.
-		if df.srcIdleHandler.IsSourceIdling() {
-			// publish idle watermark for the source
-			df.srcIdleHandler.PublishSourceIdleWatermark(df.reader.Partitions())
+		// publish idle watermark for the source
+		df.srcIdleHandler.PublishSourceIdleWatermark(df.reader.Partitions())
 
-			// if we have published idle watermark to source, we need to publish idle watermark to all the toBuffers
-			// it might not get the latest watermark because of publishing delay, but we will get in the subsequent
-			// iterations.
+		// if we have published idle watermark to source, we need to publish idle watermark to all the toBuffers
+		// it might not get the latest watermark because of publishing delay, but we will get in the subsequent
+		// iterations.
 
-			// publish idle watermark for all the toBuffers
-			fetchedWm := df.wmFetcher.ComputeWatermark()
-			for toVertexName, toVertexBuffers := range df.toBuffers {
-				for index := range toVertexBuffers {
-					// publish idle watermark to all the source partitions owned by this reader.
-					// it is 1:1 for many (HTTP, tickgen, etc.) but for e.g., for Kafka it is 1:N and the list of partitions in the N could keep changing.
-					for _, sp := range df.reader.Partitions() {
-						if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
-							var publisher, ok = vertexPublishers[sp]
-							if !ok {
-								publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
-								vertexPublishers[sp] = publisher
-							}
-							idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, fetchedWm)
+		// publish idle watermark for all the toBuffers
+		fetchedWm := df.wmFetcher.ComputeWatermark()
+		for toVertexName, toVertexBuffers := range df.toBuffers {
+			for index := range toVertexBuffers {
+				// publish idle watermark to all the source partitions owned by this reader.
+				// it is 1:1 for many (HTTP, tickgen, etc.) but for e.g., for Kafka it is 1:N and the list of partitions in the N could keep changing.
+				for _, sp := range df.reader.Partitions() {
+					if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
+						var publisher, ok = vertexPublishers[sp]
+						if !ok {
+							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
+							vertexPublishers[sp] = publisher
 						}
+						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, fetchedWm)
 					}
 				}
 			}
 		}
+
+		// len(readMessages) == 0, so we do not have anything more to do
 		return
 	}
+
 	// reset the idle handler because we have read messages
 	df.srcIdleHandler.Reset()
 
@@ -428,10 +434,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 }
 
 func (df *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {
-	// if there are no offsets, we return early.
-	if len(offsets) == 0 {
-		return nil
-	}
 	// for all the sources, we either ack all offsets or none.
 	// when a batch ack fails, the source Ack() function populate the error array with the same error;
 	// hence we can just return the first error.
