@@ -165,14 +165,12 @@ func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset
 
 // ApplyPartitionFn returns the partitions associated with the source.
 func (u *GRPCBasedUDSource) ApplyPartitionFn(ctx context.Context) ([]int32, error) {
-	if resp, err := u.client.PartitionsFn(ctx, &emptypb.Empty{}); err == nil {
-		if len(resp.GetResult().GetPartitions()) == 0 {
-			return []int32{defaultPartitionIdx}, nil
-		}
-		return resp.GetResult().GetPartitions(), nil
-	} else {
+	resp, err := u.client.PartitionsFn(ctx, &emptypb.Empty{})
+	if err != nil {
 		return nil, err
-	}
+	} 
+
+	return resp.GetResult().GetPartitions(), nil
 }
 
 func constructMessageID(r *sourcepb.ReadResponse_Result) string {
