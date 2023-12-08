@@ -35,6 +35,6 @@ type Client interface {
 	AckFn(ctx context.Context, req *sourcepb.AckRequest) (*sourcepb.AckResponse, error)
 	// PendingFn returns the number of pending messages from the udsource.
 	PendingFn(ctx context.Context, req *emptypb.Empty) (*sourcepb.PendingResponse, error)
-	// PartitionsFn returns the number of partitions from the udsource.
+	// PartitionsFn returns the list of partitions from the udsource.
 	PartitionsFn(ctx context.Context, req *emptypb.Empty) (*sourcepb.PartitionsResponse, error)
 }

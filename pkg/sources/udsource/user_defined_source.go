@@ -129,8 +129,7 @@ func (u *userDefinedSource) Partitions(ctx context.Context) []int32 {
 	return partitions
 }
 
-// Read reads the messages from the user-defined source, tracks the partitions from which the messages are read
-// tracked partitions are used to determine the partitions to which the watermarks should be published
+// Read reads the messages from the user-defined source.
 func (u *userDefinedSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
 	return u.sourceApplier.ApplyReadFn(ctx, count, u.readTimeout)
 }

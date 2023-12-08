@@ -31,8 +31,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 )
 
-var defaultPartitionIdx = int32(0)
-
 // GRPCBasedUDSource applies a user-defined source over gRPC
 // connection where server is the UDSource.
 type GRPCBasedUDSource struct {
@@ -168,7 +166,7 @@ func (u *GRPCBasedUDSource) ApplyPartitionFn(ctx context.Context) ([]int32, erro
 	resp, err := u.client.PartitionsFn(ctx, &emptypb.Empty{})
 	if err != nil {
 		return nil, err
-	} 
+	}
 
 	return resp.GetResult().GetPartitions(), nil
 }
