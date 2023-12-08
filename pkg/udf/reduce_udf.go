@@ -91,7 +91,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if windowType.Fixed != nil || windowType.Sliding != nil {
 		var client reducer.Client
 		// if streaming is enabled, use the reduceStreaming address
-		if windowType.Fixed.Streaming == true || windowType.Sliding.Streaming == true {
+		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
 			client, err = reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
 		} else {
 			client, err = reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))

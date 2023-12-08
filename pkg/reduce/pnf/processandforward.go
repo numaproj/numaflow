@@ -127,8 +127,6 @@ func (p *processAndForward) invokeUDF(ctx context.Context) {
 
 // forwardUnalignedWindowResponses writes to the next ISB along with the WM for the responses from the UDF for the unaligned windows.
 func (p *processAndForward) forwardUnalignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
-	defer close(p.done)
-
 	// this for loop never exits because we do not track at the partition level but will be tracked at window level.
 	// since the key is involved, we cannot ever do a cob at partition level.
 outerLoop:
@@ -165,8 +163,6 @@ outerLoop:
 
 // forwardAlignedWindowResponses writes to the next ISB along with the WM for the responses from the UDF for the aligned window.
 func (p *processAndForward) forwardAlignedWindowResponses(ctx context.Context, responseCh <-chan *window.TimedWindowResponse, errCh <-chan error) {
-	defer close(p.done)
-
 	// for loop for aligned windows does exit since we create a partition for every unique (start, end) window tuple.
 outerLoop:
 	for {
