@@ -163,6 +163,7 @@ func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset
 	return err
 }
 
+// ApplyPartitionFn returns the partitions associated with the source.
 func (u *GRPCBasedUDSource) ApplyPartitionFn(ctx context.Context) ([]int32, error) {
 	if resp, err := u.client.PartitionsFn(ctx, &emptypb.Empty{}); err == nil {
 		if len(resp.GetResult().GetPartitions()) == 0 {
