@@ -309,8 +309,9 @@ func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 	status := GetCurrentPipelineHealth()
 	resp := new(daemon.GetPipelineStatusResponse)
 	resp.Status = &daemon.PipelineStatus{
-		Status:  pointer.String(status),
-		Message: pointer.String(fmt.Sprintf("Pipeline status is %s.", status)),
+		Status:  pointer.String(status.Status),
+		Message: pointer.String(status.Message),
+		Code:    pointer.String(status.Code),
 	}
 	return resp, nil
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -70,16 +71,39 @@ type TimelineEntry struct {
 	AverageBufferUsage float64 `json:"averageBufferUsage"`
 }
 
-var (
-	currentPipelineStatus = PipelineStatusOK
-	pipeStatusLock        = &sync.RWMutex{}
+// DataHealthResponse is the response returned by the data health check API
+type DataHealthResponse struct {
+	// Status is the overall data status of the pipeline
+	Status string `json:"status"`
+	// Message is the error message if any
+	Message string `json:"message"`
+	// Code is the status code for the data health
+	Code string `json:"code"`
+}
 
-	log = logging.FromContext(context.Background())
+// NewDataHealthResponse is used to create a new DataHealthResponse object
+func NewDataHealthResponse(status string, message string, code string) *DataHealthResponse {
+	return &DataHealthResponse{
+		Status:  status,
+		Message: message,
+		Code:    code,
+	}
+}
+
+// DefaultDataHealthResponse is the default response returned by the data health check API
+var DefaultDataHealthResponse = NewDataHealthResponse(PipelineStatusOK,
+	fmt.Sprintf("Pipeline dataflow is healthy"),
+	"D1")
+
+var (
+	currentPipelineStatus = DefaultDataHealthResponse
+	pipeStatusLock        = &sync.RWMutex{}
+	log                   = logging.FromContext(context.Background())
 )
 
 // GetCurrentPipelineHealth returns the current health status of the pipeline.
 // It is thread safe to ensure concurrent access.
-func GetCurrentPipelineHealth() string {
+func GetCurrentPipelineHealth() *DataHealthResponse {
 	// Lock the statusLock to ensure thread safety.
 	pipeStatusLock.RLock()
 	defer pipeStatusLock.RUnlock()
@@ -89,7 +113,7 @@ func GetCurrentPipelineHealth() string {
 
 // SetCurrentPipelineHealth sets the current health status of the pipeline.
 // It is thread safe to ensure concurrent access.
-func SetCurrentPipelineHealth(status string) {
+func SetCurrentPipelineHealth(status *DataHealthResponse) {
 	// Lock the statusLock to ensure thread safety.
 	pipeStatusLock.Lock()
 	defer pipeStatusLock.Unlock()
@@ -100,7 +124,7 @@ func SetCurrentPipelineHealth(status string) {
 // HealthChecker is the struct type for health checker.
 type HealthChecker struct {
 	// Add a field for the health status.
-	currentDataStatus     string
+	currentDataStatus     *DataHealthResponse
 	pipelineMetadataQuery *pipelineMetadataQuery
 	pipeline              *v1alpha1.Pipeline
 	timelineData          map[string][]*TimelineEntry
@@ -111,7 +135,7 @@ type HealthChecker struct {
 func NewHealthChecker(pipeline *v1alpha1.Pipeline, pipelineMetadataQuery *pipelineMetadataQuery) *HealthChecker {
 	// Return a new HealthChecker struct instance.
 	return &HealthChecker{
-		currentDataStatus:     PipelineStatusOK,
+		currentDataStatus:     DefaultDataHealthResponse,
 		pipelineMetadataQuery: pipelineMetadataQuery,
 		pipeline:              pipeline,
 		timelineData:          make(map[string][]*TimelineEntry),
@@ -119,9 +143,25 @@ func NewHealthChecker(pipeline *v1alpha1.Pipeline, pipelineMetadataQuery *pipeli
 	}
 }
 
+// VertexState is a struct which contains the name and  state of a vertex
+type VertexState struct {
+	// Name is the name of the vertex
+	Name string `json:"name"`
+	// State is the state of the vertex
+	State string `json:"state"`
+}
+
+// NewVertexState is used to create a new VertexState object
+func NewVertexState(name string, state string) *VertexState {
+	return &VertexState{
+		Name:  name,
+		State: state,
+	}
+}
+
 // GetCurrentHealth returns the current health status of the pipeline.
 // It is thread safe to ensure concurrent access.
-func (hc *HealthChecker) GetCurrentHealth() string {
+func (hc *HealthChecker) GetCurrentHealth() *DataHealthResponse {
 	// Lock the statusLock to ensure thread safety.
 	hc.statusLock.RLock()
 	defer hc.statusLock.RUnlock()
@@ -131,7 +171,7 @@ func (hc *HealthChecker) GetCurrentHealth() string {
 
 // SetCurrentHealth sets the current health status of the pipeline.
 // It is thread safe to ensure concurrent access.
-func (hc *HealthChecker) SetCurrentHealth(status string) {
+func (hc *HealthChecker) SetCurrentHealth(status *DataHealthResponse) {
 	// Lock the statusLock to ensure thread safety.
 	hc.statusLock.Lock()
 	defer hc.statusLock.Unlock()
@@ -143,8 +183,6 @@ func (hc *HealthChecker) SetCurrentHealth(status string) {
 // StartHealthCheck starts the health check.
 func (hc *HealthChecker) StartHealthCheck() {
 	ctx := context.Background()
-
-	log.Info("DEBUGSID StartHealthCheck")
 	// Goroutine to listen for ticks
 	// At every tick, check and update the health status of the pipeline.
 	go func() {
@@ -155,16 +193,13 @@ func (hc *HealthChecker) StartHealthCheck() {
 			select {
 			// If the ticker ticks, check and update the health status of the pipeline.
 			case <-ticker.C:
-				log.Info("DEBUGSID got tick")
 				// Get the current health status of the pipeline.
 				criticality, err := hc.getPipelineDataCriticality()
 				if err != nil {
 					return
 				}
-				log.Info("DEBUGSID criticality", criticality)
 				// convert the vertex state to pipeline state
 				pipelineState := convertVertexStateToPipelineState(criticality)
-				log.Info("DEBUGSID pipelineState", pipelineState)
 				// update the current health status of the pipeline
 				hc.SetCurrentHealth(pipelineState)
 
@@ -191,7 +226,7 @@ func (hc *HealthChecker) StartHealthCheck() {
 // If this average is greater than the critical threshold, we return the critical status
 // If this average is greater than the warning threshold, we return the warning status
 // If this average is less than the warning threshold, we return the ok status
-func (hc *HealthChecker) getPipelineDataCriticality() ([]string, error) {
+func (hc *HealthChecker) getPipelineDataCriticality() ([]*VertexState, error) {
 	ctx := context.Background()
 	pipelineName := hc.pipeline.GetName()
 
@@ -206,7 +241,7 @@ func (hc *HealthChecker) getPipelineDataCriticality() ([]string, error) {
 	// update the usage timeline for all the ISBs used in the pipeline
 	hc.updateUsageTimeline(buffers.Buffers)
 
-	var vertexState []string
+	var vertexState []*VertexState
 
 	// iterate over the timeline data for each buffer and calculate the exponential weighted mean average
 	// for the last HEALTH_WINDOW_SIZE buffer usage entries
@@ -223,7 +258,10 @@ func (hc *HealthChecker) getPipelineDataCriticality() ([]string, error) {
 		// assign the state to the vertex based on the average buffer usage
 		// Look back is disabled for the critical state
 		currentState := assignStateToTimeline(ewmaBufferUsage, EnableCriticalLookBack)
-		vertexState = append(vertexState, currentState)
+		// create a new vertex state object
+		currentVertexState := NewVertexState(bufferName, currentState)
+		// add the vertex state to the list of vertex states
+		vertexState = append(vertexState, currentVertexState)
 	}
 	return vertexState, nil
 }
@@ -344,7 +382,6 @@ func assignStateToBufferUsage(ewmaValue float64) string {
 // If the state is CRITICAL at least LOOK_BACK_COUNT times in the last CRITICAL_WINDOW_SIZE entries
 // Set the state to CRITICAL
 func assignStateToTimeline(ewmaValues []float64, lookBack bool) string {
-
 	// Extract the last entry of the timeline
 	ewmaUsage := ewmaValues[len(ewmaValues)-1]
 
@@ -387,7 +424,7 @@ func assignStateToTimeline(ewmaValues []float64, lookBack bool) string {
 // else the pipeline is ok
 // Here we follow a precedence order of unknown > critical > warning  > ok
 // Hence, whichever is the highest precedence state found in the vertex state, we return that
-func convertVertexStateToPipelineState(vertexState []string) string {
+func convertVertexStateToPipelineState(vertexState []*VertexState) *DataHealthResponse {
 	// create a map to store the precedence order of the states
 	// assign a number to each state based on the precedence order
 
@@ -401,19 +438,59 @@ func convertVertexStateToPipelineState(vertexState []string) string {
 
 	// initialize the max state to 0 (ie Healthy state)
 	maxState := 0
+	// initialize the max state vertex to empty string
+	maxStateVtx := ""
 
 	// iterate over the vertex state and assign a number to each state and update the current max state
 	for _, state := range vertexState {
-		if stateMap[state] > maxState {
-			maxState = stateMap[state]
+		if stateMap[state.State] > maxState {
+			maxState = stateMap[state.State]
+			maxStateVtx = state.Name
 		}
 	}
 
-	// get the state corresponding to the max state
+	// get the state and vertex corresponding to the max state
 	for state, value := range stateMap {
 		if value == maxState {
-			return state
+			return generateDataHealthResponse(state, maxStateVtx)
 		}
 	}
-	return PipelineStatusUnknown
+
+	// if we reach here, return unknown state
+	return NewDataHealthResponse(PipelineStatusUnknown,
+		fmt.Sprintf("Pipeline dataflow is in an unknown state"),
+		"D4")
+}
+
+// generateDataHealthResponse is used to generate the data health response
+// if the state is Healthy we return a message saying the pipeline is healthy, and the code corresponding to Healthy
+// if the state is Warning we return a message saying the pipeline is warning due to the vertex,
+// and the code corresponding to Warning, similar for Critical
+// if the state is Unknown we return a message saying the pipeline is in an unknown state due to the vertex,
+// and the code corresponding to Unknown
+func generateDataHealthResponse(state string, vertex string) *DataHealthResponse {
+	switch state {
+	case PipelineStatusOK:
+		return NewDataHealthResponse(
+			PipelineStatusOK,
+			fmt.Sprintf("Pipeline dataflow is healthy"),
+			"D1")
+	case PipelineStatusWarning:
+		return NewDataHealthResponse(
+			PipelineStatusWarning,
+			fmt.Sprintf("Dataflow is in warning state for  %s", vertex),
+			"D2")
+	case PipelineStatusCritical:
+		return NewDataHealthResponse(
+			PipelineStatusCritical,
+			fmt.Sprintf("Dataflow is in critical state for %s", vertex),
+			"D3")
+	case PipelineStatusUnknown:
+		return NewDataHealthResponse(
+			PipelineStatusUnknown,
+			fmt.Sprintf("Pipeline dataflow is in an unknown state due to %s", vertex),
+			"D4")
+	default:
+		return DefaultDataHealthResponse
+	}
 }

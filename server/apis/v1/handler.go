@@ -916,9 +916,10 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 
 	// Create a response string based on the vertex health and data criticality
 	// We combine both the states to get the final dataStatus of the pipeline
-	response, message := h.healthChecker.getCombinedHealthStatus(vertexHealth.Status, dataStatus.GetStatus(),
-		vertexHealth.Message, dataStatus.GetMessage())
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&message, response))
+	response := NewHealthResponse(vertexHealth.Status, dataStatus.GetStatus(),
+		vertexHealth.Message, dataStatus.GetMessage(), vertexHealth.Code, dataStatus.GetCode())
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
