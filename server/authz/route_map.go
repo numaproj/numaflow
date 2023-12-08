@@ -30,49 +30,32 @@ type RouteInfo struct {
 	RequiresAuthZ bool
 }
 
-// newRouteInfo creates a new RouteInfo object.
-func newRouteInfo(object string, requiresAuthZ bool) *RouteInfo {
+// NewRouteInfo creates a new RouteInfo object.
+func NewRouteInfo(object string, requiresAuthZ bool) *RouteInfo {
 	return &RouteInfo{
 		Object:        object,
 		RequiresAuthZ: requiresAuthZ,
 	}
 }
 
-// RouteMap is a map of routes to their corresponding RouteInfo objects.
+// RouteMap type is a map of routes to their corresponding RouteInfo objects.
 // It saves the object corresponding to the route and a boolean to indicate
 // whether the route requires authorization.
-var RouteMap = map[string]*RouteInfo{
-	"GET:/api/v1/sysinfo":                                                         newRouteInfo(ObjectPipeline, false),
-	"GET:/api/v1/authinfo":                                                        newRouteInfo(ObjectEvents, false),
-	"GET:/api/v1/namespaces":                                                      newRouteInfo(ObjectEvents, false),
-	"GET:/api/v1/cluster-summary":                                                 newRouteInfo(ObjectPipeline, false),
-	"GET:/api/v1/namespaces/:namespace/pipelines":                                 newRouteInfo(ObjectPipeline, true),
-	"POST:/api/v1/namespaces/:namespace/pipelines":                                newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/health":                newRouteInfo(ObjectPipeline, true),
-	"PUT:/api/v1/namespaces/:namespace/pipelines/:pipeline":                       newRouteInfo(ObjectPipeline, true),
-	"DELETE:/api/v1/namespaces/:namespace/pipelines/:pipeline":                    newRouteInfo(ObjectPipeline, true),
-	"PATCH:/api/v1/namespaces/:namespace/pipelines/:pipeline":                     newRouteInfo(ObjectPipeline, true),
-	"POST:/api/v1/namespaces/:namespace/isb-services":                             newRouteInfo(ObjectISBSvc, true),
-	"GET:/api/v1/namespaces/:namespace/isb-services":                              newRouteInfo(ObjectISBSvc, true),
-	"GET:/api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
-	"PUT:/api/v1/namespaces/:namespace/isb-services/:isb-service":                 newRouteInfo(ObjectISBSvc, true),
-	"DELETE:/api/v1/namespaces/:namespace/isb-services/:isb-service":              newRouteInfo(ObjectISBSvc, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/isbs":                  newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/watermarks":            newRouteInfo(ObjectPipeline, true),
-	"PUT:/api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex":      newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/metrics":      newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods": newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/metrics/namespaces/:namespace/pods":                              newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/pods/:pod/logs":                            newRouteInfo(ObjectPipeline, true),
-	"GET:/api/v1/namespaces/:namespace/events":                                    newRouteInfo(ObjectEvents, true),
-}
+type RouteMap map[string]*RouteInfo
 
-// GetRouteMapKey returns the key for the RouteMap.
+// GetRouteMapKey returns the key for the AuthRouteMap.
 // The key is a combination of the HTTP method and the path.
 // The format is "method:path".
 // For example, "GET:/api/v1/namespaces", "POST:/api/v1/namespaces".
-// This key is used to get the RouteInfo object from the RouteMap.
+// This key is used to get the RouteInfo object from the AuthRouteMap.
 func GetRouteMapKey(c *gin.Context) string {
 	return fmt.Sprintf("%s:%s", c.Request.Method, c.FullPath())
+}
+
+// GetRouteFromContext returns the RouteInfo object from the AuthRouteMap based on the context.
+func (r RouteMap) GetRouteFromContext(c *gin.Context) *RouteInfo {
+	if routeEntry, ok := r[GetRouteMapKey(c)]; ok {
+		return routeEntry
+	}
+	return nil
 }
