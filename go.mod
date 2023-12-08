@@ -29,7 +29,7 @@ require (
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe
 	github.com/nats-io/nats-server/v2 v2.10.4
 	github.com/nats-io/nats.go v1.31.0
-	github.com/numaproj/numaflow-go v0.5.3-0.20231207034843-0efe53f69ea4
+	github.com/numaproj/numaflow-go v0.5.3-0.20231208052731-3d4d17004cc9
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.37.0
 	github.com/redis/go-redis/v9 v9.0.3
