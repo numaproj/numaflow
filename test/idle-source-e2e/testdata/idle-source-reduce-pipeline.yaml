@@ -8,8 +8,6 @@ spec:
       threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
       incrementBy: 3s # If source is found to be idle then increment the watermark by given incrementBy value.
       stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
-  limits:
-    readBatchSize: 50
   vertices:
     - name: in
       scale:

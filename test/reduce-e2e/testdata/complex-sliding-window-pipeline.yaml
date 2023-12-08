@@ -57,7 +57,6 @@ spec:
           storage:
             emptyDir: {}
     - name: sink
-      partitions: 2
       scale:
         min: 1
       sink:

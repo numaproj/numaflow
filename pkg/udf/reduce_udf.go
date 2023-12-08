@@ -49,6 +49,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 	"github.com/numaproj/numaflow/pkg/window/strategy/session"
+	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 )
 
 type ReduceUDFProcessor struct {
@@ -142,7 +143,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if windowType.Fixed != nil {
 		windower = fixed.NewWindower(windowType.Fixed.Length.Duration)
 	} else if windowType.Sliding != nil {
-		windower = fixed.NewWindower(windowType.Sliding.Length.Duration)
+		windower = sliding.NewWindower(windowType.Sliding.Length.Duration, windowType.Sliding.Slide.Duration)
 	} else if windowType.Session != nil {
 		windower = session.NewWindower(windowType.Session.Timeout.Duration)
 	} else {
