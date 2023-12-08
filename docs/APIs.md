@@ -1894,8 +1894,8 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 <em>(Optional)</em>
 <p>
-AllowedLateness allows late data to be included for the ReduceStream
-operation as long as the late data is not later than (Watermark -
+AllowedLateness allows late data to be included for the Reduce operation
+as long as the late data is not later than (Watermark -
 AllowedLateness).
 </p>
 </td>

@@ -18134,7 +18134,7 @@
       ],
       "properties": {
         "allowedLateness": {
-          "description": "AllowedLateness allows late data to be included for the ReduceStream operation as long as the late data is not later than (Watermark - AllowedLateness).",
+          "description": "AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later than (Watermark - AllowedLateness).",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "keyed": {

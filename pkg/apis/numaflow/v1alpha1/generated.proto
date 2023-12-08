@@ -506,7 +506,7 @@ message GroupBy {
   // +optional
   optional bool keyed = 2;
 
-  // AllowedLateness allows late data to be included for the ReduceStream operation as long as the late data is not later
+  // AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later
   // than (Watermark - AllowedLateness).
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration allowedLateness = 3;

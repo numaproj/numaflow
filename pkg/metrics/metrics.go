@@ -203,7 +203,7 @@ var (
 	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
 )
 
-// ReduceStream forwarder specific metrics
+// Reduce forwarder specific metrics
 var (
 	// ReduceDroppedMessagesCount is used to indicate the number of messages dropped
 	ReduceDroppedMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -238,7 +238,7 @@ var (
 	ReduceProcessTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Subsystem: "reduce_pnf",
 		Name:      "process_time",
-		Help:      "ReduceStream process time (1 to 1200000 milliseconds)",
+		Help:      "Reduce process time (1 to 1200000 milliseconds)",
 		Buckets:   prometheus.ExponentialBucketsRange(1, 1200000, 5),
 	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
 
@@ -246,7 +246,7 @@ var (
 	ReduceForwardTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Subsystem: "reduce_pnf",
 		Name:      "forward_time",
-		Help:      "ReduceStream forward time (1 to 100000 microseconds)",
+		Help:      "Reduce forward time (1 to 100000 microseconds)",
 		Buckets:   prometheus.ExponentialBucketsRange(1, 100000, 5),
 	}, []string{LabelPipeline, LabelVertex, LabelVertexReplicaIndex})
 

@@ -39,7 +39,7 @@ type Shuffle struct {
 // NewShuffle accepts list of buffer identifiers(unique identifier of isb)
 // and returns new shuffle instance. It uses vertex-name as seed, without a seed, we will end with the problem where
 // Shuffling before the Vnth vertex creates a key to edge-buffer-index affinity,
-// which will not change from Vn to Vn+1 ReduceStream vertices if there is no re-keying between these vertices causing
+// which will not change from Vn to Vn+1 Reduce vertices if there is no re-keying between these vertices causing
 // idle partitions.
 func NewShuffle(vertexName string, partitionCount int) *Shuffle {
 	// We use vertex name as seed.

@@ -75,9 +75,8 @@ func TestGRPCBasedUDF_AsyncReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
 			Result: &reducepb.ReduceResponse_Result{
-				Keys:      []string{"reduced_result_key_1"},
-				Value:     []byte(`forward_message_1`),
-				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
+				Keys:  []string{"reduced_result_key_1"},
+				Value: []byte(`forward_message_1`),
 			},
 			Window: &reducepb.Window{
 				Start: timestamppb.New(time.Unix(60, 0)),
@@ -87,9 +86,8 @@ func TestGRPCBasedUDF_AsyncReduceWithMockClient(t *testing.T) {
 		}, nil).Times(1)
 		mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
 			Result: &reducepb.ReduceResponse_Result{
-				Keys:      []string{"reduced_result_key_2"},
-				Value:     []byte(`forward_message_2`),
-				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
+				Keys:  []string{"reduced_result_key_2"},
+				Value: []byte(`forward_message_2`),
 			},
 			Window: &reducepb.Window{
 				Start: timestamppb.New(time.Unix(60, 0)),

@@ -203,7 +203,7 @@ func parseSessionReduceResponse(response *sessionreducepb.SessionReduceResponse)
 		Message: isb.Message{
 			Header: isb.Header{
 				MessageInfo: isb.MessageInfo{
-					EventTime: result.GetEventTime().AsTime(),
+					EventTime: response.GetKeyedWindow().GetEnd().AsTime().Add(-1 * time.Millisecond),
 					IsLate:    false,
 				},
 				Keys: result.GetKeys(),

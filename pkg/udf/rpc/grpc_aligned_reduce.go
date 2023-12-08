@@ -235,7 +235,7 @@ func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowR
 		Message: isb.Message{
 			Header: isb.Header{
 				MessageInfo: isb.MessageInfo{
-					EventTime: response.GetResult().GetEventTime().AsTime(),
+					EventTime: response.GetWindow().GetEnd().AsTime().Add(-1 * time.Millisecond),
 					IsLate:    false,
 				},
 				Keys: response.GetResult().GetKeys(),

@@ -376,7 +376,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 		}
 	}
 
-	// solve ReduceStream withholding of watermark where we do not send WM until the window is closed.
+	// solve Reduce withholding of watermark where we do not send WM until the window is closed.
 	oldestWindowEndTime := df.windower.OldestWindowEndTime()
 	if oldestWindowEndTime != time.UnixMilli(-1) {
 		// minus 1 ms because if it's the same as the end time the window would have already been closed

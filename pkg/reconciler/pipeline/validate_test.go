@@ -885,7 +885,7 @@ func Test_validateCycles(t *testing.T) {
 			pipelineSpec: &dfv1.PipelineSpec{
 				Vertices: []dfv1.AbstractVertex{
 					{Name: "A", Source: &dfv1.Source{}},
-					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //ReduceStream vertex
+					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
 					{Name: "C", UDF: &dfv1.UDF{}},
 					{Name: "D", UDF: &dfv1.UDF{}},
 					{Name: "E", UDF: &dfv1.UDF{}},
@@ -910,7 +910,7 @@ func Test_validateCycles(t *testing.T) {
 			pipelineSpec: &dfv1.PipelineSpec{
 				Vertices: []dfv1.AbstractVertex{
 					{Name: "A", Source: &dfv1.Source{}},
-					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //ReduceStream vertex
+					{Name: "B", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
 					{Name: "C", UDF: &dfv1.UDF{}},
 					{Name: "D", UDF: &dfv1.UDF{}},
 					{Name: "E", UDF: &dfv1.UDF{}},
@@ -935,7 +935,7 @@ func Test_validateCycles(t *testing.T) {
 				Vertices: []dfv1.AbstractVertex{
 					{Name: "A", Source: &dfv1.Source{}},
 					{Name: "B", UDF: &dfv1.UDF{}},
-					{Name: "C", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //ReduceStream vertex
+					{Name: "C", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
 					{Name: "D", UDF: &dfv1.UDF{}},
 					{Name: "E", UDF: &dfv1.UDF{}},
 					{Name: "F", Source: &dfv1.Source{}},
@@ -958,10 +958,10 @@ func Test_validateCycles(t *testing.T) {
 			pipelineSpec: &dfv1.PipelineSpec{
 				Vertices: []dfv1.AbstractVertex{
 					{Name: "A", Source: &dfv1.Source{}},
-					{Name: "B", UDF: &dfv1.UDF{}}, //ReduceStream vertex
+					{Name: "B", UDF: &dfv1.UDF{}}, //Reduce vertex
 					{Name: "C", UDF: &dfv1.UDF{}},
 					{Name: "D", UDF: &dfv1.UDF{}},
-					{Name: "E", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //ReduceStream vertex
+					{Name: "E", UDF: &dfv1.UDF{GroupBy: &dfv1.GroupBy{}}}, //Reduce vertex
 					{Name: "F", Source: &dfv1.Source{}},
 					{Name: "G", UDF: &dfv1.UDF{}},
 					{Name: "H", UDF: &dfv1.UDF{}},

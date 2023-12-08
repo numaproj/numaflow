@@ -59,9 +59,8 @@ func TestGRPCBasedUDF_BasicSessionReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().Recv().Return(&sessionreducepb.SessionReduceResponse{
 			Result: &sessionreducepb.SessionReduceResponse_Result{
-				Keys:      []string{"reduced_result_key_1"},
-				Value:     []byte(`forward_message`),
-				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
+				Keys:  []string{"reduced_result_key_1"},
+				Value: []byte(`forward_message`),
 			},
 			KeyedWindow: &sessionreducepb.KeyedWindow{
 				Start: timestamppb.New(time.Unix(60, 0)),

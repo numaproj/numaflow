@@ -21,7 +21,7 @@ type options struct {
 	podHeartbeatRate int64
 	// refreshingProcessorsRate uses second as time unit
 	refreshingProcessorsRate int64
-	// isReduce is true if the processor manager is for reduce. we have this because ReduceStream has a 1:1 mapping between
+	// isReduce is true if the processor manager is for reduce. we have this because Reduce has a 1:1 mapping between
 	// partitions and processors.
 	isReduce bool
 	// vertexReplica is the replica of the vertex

@@ -1739,7 +1739,7 @@ func schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref common.ReferenceCallback) com
 					},
 					"allowedLateness": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AllowedLateness allows late data to be included for the ReduceStream operation as long as the late data is not later than (Watermark - AllowedLateness).",
+							Description: "AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later than (Watermark - AllowedLateness).",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},

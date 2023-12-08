@@ -69,9 +69,8 @@ func TestClient_AsyncReduceFn(t *testing.T) {
 	mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 	mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
 		Result: &reducepb.ReduceResponse_Result{
-			Keys:      []string{"reduced_result_key1"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
+			Keys:  []string{"reduced_result_key1"},
+			Value: []byte(`forward_message`),
 		},
 		Window: &reducepb.Window{
 			Start: timestamppb.New(time.Unix(60, 0)),
@@ -81,9 +80,8 @@ func TestClient_AsyncReduceFn(t *testing.T) {
 	}, nil).Times(1)
 	mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
 		Result: &reducepb.ReduceResponse_Result{
-			Keys:      []string{"reduced_result_key2"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
+			Keys:  []string{"reduced_result_key2"},
+			Value: []byte(`forward_message`),
 		},
 		Window: &reducepb.Window{
 			Start: timestamppb.New(time.Unix(60, 0)),
@@ -105,9 +103,8 @@ func TestClient_AsyncReduceFn(t *testing.T) {
 	for response := range responseCh {
 		assert.Equal(t, &reducepb.ReduceResponse{
 			Result: &reducepb.ReduceResponse_Result{
-				Keys:      []string{"reduced_result_key1"},
-				Value:     []byte(`forward_message`),
-				EventTime: timestamppb.New(time.Unix(120, 0).Add(-1 * time.Millisecond)),
+				Keys:  []string{"reduced_result_key1"},
+				Value: []byte(`forward_message`),
 			},
 			Window: &reducepb.Window{
 				Start: timestamppb.New(time.Unix(60, 0)),
