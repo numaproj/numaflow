@@ -897,7 +897,7 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 	// Get the vertex level health of the pipeline
 	vertexHealth, err := h.healthChecker.getPipelineVertexHealth(h, ns, pipeline)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the status for pipeline %q: %s", pipeline, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the dataStatus for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
 
@@ -908,17 +908,17 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 		return
 	}
 	// Get the data criticality for the given pipeline
-	status, err := client.GetPipelineStatus(context.Background(), pipeline)
+	dataStatus, err := client.GetPipelineStatus(context.Background(), pipeline)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the status for pipeline %q: %s", pipeline, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the dataStatus for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
 
 	// Create a response string based on the vertex health and data criticality
-	// We combine both the states to get the final status of the pipeline
-	var response string
-	response = fmt.Sprintf("%s-%s", vertexHealth, status)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+	// We combine both the states to get the final dataStatus of the pipeline
+	response, message := h.healthChecker.getCombinedHealthStatus(vertexHealth.Status, dataStatus.GetStatus(),
+		vertexHealth.Message, dataStatus.GetMessage())
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&message, response))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster

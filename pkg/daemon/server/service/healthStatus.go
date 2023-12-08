@@ -13,16 +13,16 @@ import (
 )
 
 const (
-	// TotalHealthTime is the total time window to compute the health of a vertex
-	TotalHealthTime = 5 * time.Minute
+	// HealthSlidingWindow is the total time window to compute the health of a vertex
+	HealthSlidingWindow = 5 * time.Minute
 
-	// HealthTimeStep is the time step to compute the health of a vertex
+	// HealthTimeStep is the frequency at which the health of a vertex is computed
 	HealthTimeStep = 10 * time.Second
 
 	// HealthWindowSize is the number of timeline entries to keep for a given vertex
 	// This is used to compute the health of a vertex
-	// Ensure that TotalHealthTime / HealthTimeStep is an integer
-	HealthWindowSize = TotalHealthTime / HealthTimeStep
+	// Ensure that HealthSlidingWindow / HealthTimeStep is an integer
+	HealthWindowSize = HealthSlidingWindow / HealthTimeStep
 
 	// CriticalWindowTime is the number of entries to look back to assign a critical state to a vertex
 	CriticalWindowTime = 1 * time.Minute
@@ -142,6 +142,7 @@ func (hc *HealthChecker) SetCurrentHealth(status string) {
 
 // StartHealthCheck starts the health check.
 func (hc *HealthChecker) StartHealthCheck() {
+	ctx := context.Background()
 
 	log.Info("DEBUGSID StartHealthCheck")
 	// Goroutine to listen for ticks
@@ -152,6 +153,7 @@ func (hc *HealthChecker) StartHealthCheck() {
 		defer ticker.Stop()
 		for {
 			select {
+			// If the ticker ticks, check and update the health status of the pipeline.
 			case <-ticker.C:
 				log.Info("DEBUGSID got tick")
 				// Get the current health status of the pipeline.
@@ -165,6 +167,10 @@ func (hc *HealthChecker) StartHealthCheck() {
 				log.Info("DEBUGSID pipelineState", pipelineState)
 				// update the current health status of the pipeline
 				hc.SetCurrentHealth(pipelineState)
+
+			// If the context is done, return.
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
