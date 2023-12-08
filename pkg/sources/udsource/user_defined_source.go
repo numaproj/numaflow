@@ -62,7 +62,6 @@ type userDefinedSource struct {
 	srcPublishWMStores store.WatermarkStore       // source watermark publisher stores
 	lifecycleCtx       context.Context            // lifecycleCtx context is used to control the lifecycle of this source.
 	readTimeout        time.Duration              // read timeout for the source
-	partitions         map[int32]struct{}         // partitions of the source
 	logger             *zap.SugaredLogger
 }
 
@@ -85,7 +84,6 @@ func New(
 		pipelineName:       vertexInstance.Vertex.Spec.PipelineName,
 		sourceApplier:      sourceApplier,
 		srcPublishWMStores: publishWMStores,
-		partitions:         make(map[int32]struct{}),
 		logger:             logging.NewLogger(), // default logger
 	}
 	for _, opt := range opts {
@@ -122,27 +120,18 @@ func (u *userDefinedSource) GetName() string {
 }
 
 // Partitions returns the partitions of the user-defined source
-func (u *userDefinedSource) Partitions() []int32 {
-	partitions := make([]int32, 0, len(u.partitions))
-	for partition := range u.partitions {
-		partitions = append(partitions, partition)
+func (u *userDefinedSource) Partitions(ctx context.Context) []int32 {
+	partitions, err := u.sourceApplier.ApplyPartitionFn(ctx)
+	if err != nil {
+		u.logger.Errorw("Error getting partitions", zap.Error(err))
+		return nil
 	}
 	return partitions
 }
 
-// Read reads the messages from the user-defined source, tracks the partitions from which the messages are read
-// tracked partitions are used to determine the partitions to which the watermarks should be published
+// Read reads the messages from the user-defined source.
 func (u *userDefinedSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
-	readMessages, err := u.sourceApplier.ApplyReadFn(ctx, count, u.readTimeout)
-	if err != nil {
-		return nil, err
-	}
-	for _, msg := range readMessages {
-		if _, ok := u.partitions[msg.ReadOffset.PartitionIdx()]; !ok {
-			u.partitions[msg.ReadOffset.PartitionIdx()] = struct{}{}
-		}
-	}
-	return readMessages, nil
+	return u.sourceApplier.ApplyReadFn(ctx, count, u.readTimeout)
 }
 
 // Ack acknowledges the messages from the user-defined source

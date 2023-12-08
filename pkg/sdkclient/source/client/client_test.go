@@ -90,7 +90,7 @@ func TestReadFn(t *testing.T) {
 	expectedResp := &sourcepb.ReadResponse{
 		Result: &sourcepb.ReadResponse_Result{
 			Payload:   []byte(`test_payload`),
-			Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
+			Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: 0},
 			EventTime: timestamppb.New(TestEventTime),
 			Keys:      []string{"test_key"},
 		},

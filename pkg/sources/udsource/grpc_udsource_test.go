@@ -191,7 +191,7 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 		expectedResponse := &sourcepb.ReadResponse{
 			Result: &sourcepb.ReadResponse_Result{
 				Payload:   []byte(`test_payload`),
-				Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
+				Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: 0},
 				EventTime: timestamppb.New(TestEventTime),
 				Keys:      []string{"test_key"},
 			},
@@ -238,7 +238,7 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 		expectedResponse := &sourcepb.ReadResponse{
 			Result: &sourcepb.ReadResponse_Result{
 				Payload:   []byte(`test_payload`),
-				Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: "0"},
+				Offset:    &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: 0},
 				EventTime: timestamppb.New(TestEventTime),
 				Keys:      []string{"test_key"},
 			},
@@ -272,7 +272,7 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 		req := &sourcepb.AckRequest{
 			Request: &sourcepb.AckRequest_Request{
 				Offsets: []*sourcepb.Offset{
-					{Offset: []byte("test-offset-1"), PartitionId: "0"}, {Offset: []byte("test-offset-2"), PartitionId: "0"},
+					{Offset: []byte("test-offset-1"), PartitionId: 0}, {Offset: []byte("test-offset-2"), PartitionId: 0},
 				},
 			},
 		}
@@ -304,7 +304,7 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 		req := &sourcepb.AckRequest{
 			Request: &sourcepb.AckRequest_Request{
 				Offsets: []*sourcepb.Offset{
-					{Offset: []byte("test-offset-1"), PartitionId: "0"}, {Offset: []byte("test-offset-2"), PartitionId: "0"},
+					{Offset: []byte("test-offset-1"), PartitionId: 0}, {Offset: []byte("test-offset-2"), PartitionId: 0},
 				},
 			},
 		}

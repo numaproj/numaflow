@@ -161,7 +161,17 @@ func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset
 	return err
 }
 
+// ApplyPartitionFn returns the partitions associated with the source.
+func (u *GRPCBasedUDSource) ApplyPartitionFn(ctx context.Context) ([]int32, error) {
+	resp, err := u.client.PartitionsFn(ctx, &emptypb.Empty{})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.GetResult().GetPartitions(), nil
+}
+
 func constructMessageID(r *sourcepb.ReadResponse_Result) string {
 	// For a user-defined source, the partition ID plus the offset should be able to uniquely identify a message
-	return r.Offset.GetPartitionId() + "-" + string(r.Offset.GetOffset())
+	return fmt.Sprintf("%d-%s", r.GetOffset().GetPartitionId(), string(r.GetOffset().GetOffset()))
 }

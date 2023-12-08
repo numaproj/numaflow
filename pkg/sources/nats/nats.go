@@ -216,7 +216,7 @@ func (ns *natsSource) GetName() string {
 }
 
 // Partitions returns the partitions associated with this source.
-func (ns *natsSource) Partitions() []int32 {
+func (ns *natsSource) Partitions(context.Context) []int32 {
 	return []int32{ns.vertexReplica}
 }
 
