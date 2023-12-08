@@ -4,6 +4,7 @@ import IconButton from "@mui/material/IconButton";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
 import { useNavigate } from "react-router-dom";
+import { getBaseHref } from "../../../utils";
 import Chip from "@mui/material/Chip";
 
 export default function AccountMenu() {
@@ -12,7 +13,7 @@ export default function AccountMenu() {
 
   const handleLogout = useCallback(async () => {
     try {
-      const response = await fetch(`/auth/v1/logout`);
+      const response = await fetch(`${getBaseHref()}/auth/v1/logout`);
       if (response.ok) {
         navigate("/login");
       }
