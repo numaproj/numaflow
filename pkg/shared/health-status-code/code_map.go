@@ -67,7 +67,7 @@ var vertexHealthMap = map[string]*HealthCodeInfo{
 }
 
 // DataflowHealthCodeMap is used to maintain status codes for dataflow level health
-// Each map entry is a map of status code as the key to the status message and the criticality of the status
+// Each map entry is a map of status code as the key to the status message and the criticality of the status.
 // Status codes are in incremental like
 // 1. D1
 // 2. D2
@@ -98,7 +98,7 @@ var dataflowHealthMap = map[string]*HealthCodeInfo{
 }
 
 // getHealthCodeInfo is used to get the status code information for a given status code
-func (HealthCodeInfo) getHealthCodeInfo(code string) *HealthCodeInfo {
+func getHealthCodeInfo(code string) *HealthCodeInfo {
 	if status, ok := vertexHealthMap[code]; ok {
 		return status
 	}

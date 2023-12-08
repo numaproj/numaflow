@@ -20,23 +20,24 @@ package v1
 // It contains the health status of the vertex and data.
 // We include the Status, Message and Code for both vertex and data.
 type HealthResponse struct {
-	VertexHealthStatus  string `json:"vertexHealthStatus"`
-	DataHealthStatus    string `json:"dataHealthStatus"`
-	VertexHealthMessage string `json:"vertexHealthMessage"`
-	DataHealthMessage   string `json:"dataHealthMessage"`
-	VertexHealthCode    string `json:"vertexHealthCode"`
-	DataHealthCode      string `json:"dataHealthCode"`
+	ResourceHealthStatus  string `json:"resourceHealthStatus"`
+	DataHealthStatus      string `json:"dataHealthStatus"`
+	ResourceHealthMessage string `json:"resourceHealthMessage"`
+	DataHealthMessage     string `json:"dataHealthMessage"`
+	ResourceHealthCode    string `json:"resourceHealthCode"`
+	DataHealthCode        string `json:"dataHealthCode"`
 }
 
 // NewHealthResponse returns a HealthResponse object for the given status, message and code.
-func NewHealthResponse(vertexHealthStatus string, dataHealthStatus string,
-	vertexHealthMessage string, dataHealthMessage string, vertexHealthCode string, dataHealthCode string) HealthResponse {
+func NewHealthResponse(resourceHealthStatus string, dataHealthStatus string,
+	resourceHealthMessage string, dataHealthMessage string, resourceHealthCode string,
+	dataHealthCode string) HealthResponse {
 	return HealthResponse{
-		VertexHealthStatus:  vertexHealthStatus,
-		DataHealthStatus:    dataHealthStatus,
-		VertexHealthMessage: vertexHealthMessage,
-		DataHealthMessage:   dataHealthMessage,
-		VertexHealthCode:    vertexHealthCode,
-		DataHealthCode:      dataHealthCode,
+		ResourceHealthStatus:  resourceHealthStatus,
+		DataHealthStatus:      dataHealthStatus,
+		ResourceHealthMessage: resourceHealthMessage,
+		DataHealthMessage:     dataHealthMessage,
+		ResourceHealthCode:    resourceHealthCode,
+		DataHealthCode:        dataHealthCode,
 	}
 }

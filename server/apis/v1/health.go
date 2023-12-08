@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	// vertexCacheRefreshDuration is the duration after which the vertex status cache is refreshed
-	vertexCacheRefreshDuration = 30 * time.Second
+	// resourceCacheRefreshDuration is the duration after which the vertex status cache is refreshed
+	resourceCacheRefreshDuration = 30 * time.Second
 )
 
-// vertexHealthResponse is the response returned by the vertex health check API
-type vertexHealthResponse struct {
+// resourceHealthResponse is the response returned by the vertex health check API
+type resourceHealthResponse struct {
 	// Status is the overall vertex status of the pipeline
 	Status string `json:"status"`
 	// Message is the error message if any
@@ -28,20 +28,21 @@ type vertexHealthResponse struct {
 }
 
 type HealthChecker struct {
-	vertexStatusCache *evictCache.LRU[string, *vertexHealthResponse]
+	resourceStatusCache *evictCache.LRU[string, *resourceHealthResponse]
 }
 
 func NewHealthChecker() *HealthChecker {
-	c := evictCache.NewLRU[string, *vertexHealthResponse](500, nil, vertexCacheRefreshDuration)
+	c := evictCache.NewLRU[string, *resourceHealthResponse](500, nil, resourceCacheRefreshDuration)
 	return &HealthChecker{
-		vertexStatusCache: c,
+		resourceStatusCache: c,
 	}
 }
 
-// getPipelineVertexHealth is used to provide the overall vertex health and status of the pipeline
+// getPipelineResourceHealth is used to provide the overall vertex health and status of the pipeline
 // This first check if the pipeline status is cached, if not, it checks for the current pipeline status
 // and caches it.
-func (hc *HealthChecker) getPipelineVertexHealth(h *handler, ns string, pipeline string) (*vertexHealthResponse, error) {
+func (hc *HealthChecker) getPipelineResourceHealth(h *handler, ns string,
+	pipeline string) (*resourceHealthResponse, error) {
 	ctx := context.Background()
 	log := logging.FromContext(ctx)
 
@@ -51,7 +52,7 @@ func (hc *HealthChecker) getPipelineVertexHealth(h *handler, ns string, pipeline
 	cacheKey := fmt.Sprintf("%s-%s", ns, pipeline)
 
 	// check if the pipeline status is cached
-	if status, ok := hc.vertexStatusCache.Get(cacheKey); ok {
+	if status, ok := hc.resourceStatusCache.Get(cacheKey); ok {
 		log.Info("pipeline status from cache: ", status)
 		return status, nil
 	}
@@ -61,7 +62,7 @@ func (hc *HealthChecker) getPipelineVertexHealth(h *handler, ns string, pipeline
 		return status, err
 	}
 	// update cache with the new pipeline status
-	hc.vertexStatusCache.Add(cacheKey, status)
+	hc.resourceStatusCache.Add(cacheKey, status)
 
 	return status, nil
 }
@@ -78,13 +79,14 @@ func (hc *HealthChecker) getPipelineVertexHealth(h *handler, ns string, pipeline
 // are equal to the number of desired replicas and the pods are in running state
 // 2) If all the containers in the pod are in running state
 // if any of the above conditions are not met, the vertex is unhealthy
-func checkVertexLevelHealth(ctx context.Context, h *handler, ns string, pipeline string) (*vertexHealthResponse, error) {
+func checkVertexLevelHealth(ctx context.Context, h *handler, ns string,
+	pipeline string) (*resourceHealthResponse, error) {
 	log := logging.FromContext(ctx)
 	// check if the pipeline is paused, if so, return paused status
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	// if error return unknown status
 	if err != nil {
-		return &vertexHealthResponse{
+		return &resourceHealthResponse{
 			Status:  PipelineStatusUnknown,
 			Message: fmt.Sprintf("error in getting pipeline %q status: %v", pipeline, err),
 			Code:    "V6",
@@ -94,7 +96,7 @@ func checkVertexLevelHealth(ctx context.Context, h *handler, ns string, pipeline
 	// if the pipeline is paused, return inactive status
 	// this cannot be checked at individual vertex level, hence needs to be checked here
 	if pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
-		return &vertexHealthResponse{
+		return &resourceHealthResponse{
 			Status:  PipelineStatusInactive,
 			Message: fmt.Sprintf("pipeline %q is paused", pipeline),
 			Code:    "V7",
@@ -105,7 +107,7 @@ func checkVertexLevelHealth(ctx context.Context, h *handler, ns string, pipeline
 	// this cannot be checked at individual vertex level, hence needs to be checked here
 	// TODO(Health): Check if this is correct?
 	if pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseDeleting {
-		return &vertexHealthResponse{
+		return &resourceHealthResponse{
 			Status:  PipelineStatusDeleting,
 			Message: fmt.Sprintf("pipeline %q is killed", pipeline),
 			Code:    "V8",
@@ -121,7 +123,7 @@ func checkVertexLevelHealth(ctx context.Context, h *handler, ns string, pipeline
 		// fetch the current spec of the vertex
 		v, err := h.numaflowClient.Vertices(ns).Get(context.Background(), vertexName, metav1.GetOptions{})
 		if err != nil {
-			return &vertexHealthResponse{
+			return &resourceHealthResponse{
 				Status:  PipelineStatusUnknown,
 				Message: fmt.Sprintf("error in getting vertex %q status: %v", vertexName, err),
 				Code:    "V6",
@@ -139,7 +141,7 @@ func checkVertexLevelHealth(ctx context.Context, h *handler, ns string, pipeline
 		}
 	}
 	// if all the vertices are healthy, return healthy status
-	return &vertexHealthResponse{
+	return &resourceHealthResponse{
 		Status:  PipelineStatusHealthy,
 		Message: fmt.Sprintf("pipeline %q is healthy", pipeline),
 		Code:    "V4",
@@ -149,7 +151,8 @@ func checkVertexLevelHealth(ctx context.Context, h *handler, ns string, pipeline
 // isVertexHealthy is used to check if the number of replicas running in the vertex
 // are equal to the number of desired replicas and the pods are in running state.
 // We first check if the vertex is in running state, if not, return the error message from the status
-func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex, vertexName string) (bool, *vertexHealthResponse, error) {
+func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex,
+	vertexName string) (bool, *resourceHealthResponse, error) {
 	log := logging.FromContext(context.Background())
 	// check if the vertex is in running state
 	log.Info("vertex status: ", vertex.Name, vertex.Status.Phase)
@@ -157,14 +160,14 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 		// check if the number of replicas running in the vertex
 		// are equal to the number of desired replicas
 		if int(vertex.Status.Replicas) != vertex.GetReplicas() {
-			return false, &vertexHealthResponse{
+			return false, &resourceHealthResponse{
 				Message: fmt.Sprintf("vertex %q has %d replicas running, "+
 					"expected %d", vertex.Name, vertex.Status.Replicas, vertex.GetReplicas()),
 				Code: "V9",
 			}, nil
 		}
 		// Else return the error message from the status
-		return false, &vertexHealthResponse{
+		return false, &resourceHealthResponse{
 			Message: fmt.Sprintf("error in vertex %s", vertex.Status.Message),
 			Code:    "V2",
 		}, nil
@@ -172,10 +175,11 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 
 	// Get all the pods for the given vertex
 	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipeline, dfv1.KeyVertexName, vertexName),
+		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName,
+			pipeline, dfv1.KeyVertexName, vertexName),
 	})
 	if err != nil {
-		return false, &vertexHealthResponse{
+		return false, &resourceHealthResponse{
 			Message: fmt.Sprintf("error in getting pods for vertex %q: %v", vertexName, err),
 			Code:    "V6",
 		}, err
@@ -187,7 +191,7 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			// if the container is not in running state, return false
 			if containerStatus.State.Running == nil {
-				return false, &vertexHealthResponse{
+				return false, &resourceHealthResponse{
 					Message: fmt.Sprintf("container %q in pod %q is not running",
 						containerStatus.Name, pod.Name),
 					Code: "V3",
@@ -195,7 +199,7 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 			}
 		}
 	}
-	return true, &vertexHealthResponse{
+	return true, &resourceHealthResponse{
 		Message: fmt.Sprintf("vertex %q is healthy", vertexName),
 		Code:    "V1",
 	}, nil

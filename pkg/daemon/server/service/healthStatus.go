@@ -92,7 +92,7 @@ func NewDataHealthResponse(status string, message string, code string) *DataHeal
 
 // DefaultDataHealthResponse is the default response returned by the data health check API
 var DefaultDataHealthResponse = NewDataHealthResponse(PipelineStatusOK,
-	fmt.Sprintf("Pipeline dataflow is healthy"),
+	"Pipeline dataflow is healthy",
 	"D1")
 
 var (
@@ -458,7 +458,7 @@ func convertVertexStateToPipelineState(vertexState []*VertexState) *DataHealthRe
 
 	// if we reach here, return unknown state
 	return NewDataHealthResponse(PipelineStatusUnknown,
-		fmt.Sprintf("Pipeline dataflow is in an unknown state"),
+		"Pipeline dataflow is in an unknown state",
 		"D4")
 }
 
@@ -473,7 +473,7 @@ func generateDataHealthResponse(state string, vertex string) *DataHealthResponse
 	case PipelineStatusOK:
 		return NewDataHealthResponse(
 			PipelineStatusOK,
-			fmt.Sprintf("Pipeline dataflow is healthy"),
+			"Pipeline dataflow is healthy",
 			"D1")
 	case PipelineStatusWarning:
 		return NewDataHealthResponse(

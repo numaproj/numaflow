@@ -216,29 +216,29 @@ func TestListBuffers(t *testing.T) {
 }
 
 // mock rater
-type mockRater_TestGetPipelineStatus struct {
-	isActivelyProcessing bool
-}
-
-func (mr *mockRater_TestGetPipelineStatus) Start(ctx context.Context) error {
-	return nil
-}
-
-func (mr *mockRater_TestGetPipelineStatus) GetRates(vertexName string, partitionName string) map[string]float64 {
-	res := make(map[string]float64)
-	if mr.isActivelyProcessing {
-		res["default"] = 4.894736842105263
-		res["1m"] = 5.084745762711864
-		res["5m"] = 4.894736842105263
-		res["15m"] = 4.894736842105263
-	} else {
-		res["default"] = 0
-		res["1m"] = 0
-		res["5m"] = 0
-		res["15m"] = 0
-	}
-	return res
-}
+//type mockRater_TestGetPipelineStatus struct {
+//	isActivelyProcessing bool
+//}
+//
+//func (mr *mockRater_TestGetPipelineStatus) Start(ctx context.Context) error {
+//	return nil
+//}
+//
+//func (mr *mockRater_TestGetPipelineStatus) GetRates(vertexName string, partitionName string) map[string]float64 {
+//	res := make(map[string]float64)
+//	if mr.isActivelyProcessing {
+//		res["default"] = 4.894736842105263
+//		res["1m"] = 5.084745762711864
+//		res["5m"] = 4.894736842105263
+//		res["15m"] = 4.894736842105263
+//	} else {
+//		res["default"] = 0
+//		res["1m"] = 0
+//		res["5m"] = 0
+//		res["15m"] = 0
+//	}
+//	return res
+//}
 
 //
 //func TestGetPipelineStatus(t *testing.T) {
