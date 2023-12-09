@@ -153,9 +153,7 @@ func checkVertexLevelHealth(ctx context.Context, h *handler, ns string,
 // We first check if the vertex is in running state, if not, return the error message from the status
 func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex,
 	vertexName string) (bool, *resourceHealthResponse, error) {
-	log := logging.FromContext(context.Background())
 	// check if the vertex is in running state
-	log.Info("vertex status: ", vertex.Name, vertex.Status.Phase)
 	if vertex.Status.Phase != dfv1.VertexPhaseRunning {
 		// check if the number of replicas running in the vertex
 		// are equal to the number of desired replicas
@@ -184,7 +182,6 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 			Code:    "V6",
 		}, err
 	}
-	log.Info("number of pods: ", len(pods.Items))
 	// Iterate over all the pods, and verify if all the containers in the pod are in running state
 	for _, pod := range pods.Items {
 		// Iterate over all the containers in the pod

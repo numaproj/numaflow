@@ -26,7 +26,6 @@ func newHealthCodeInfo(status string, criticality string) *HealthCodeInfo {
 // 2. Warning: The pipeline is in a warning state
 // 3. Healthy: The pipeline is healthy
 // 4. Unknown: The pipeline is in an unknown state
-
 var vertexHealthMap = map[string]*HealthCodeInfo{
 	"V1": newHealthCodeInfo(
 		"All pods are running",
