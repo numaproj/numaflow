@@ -5,9 +5,9 @@ metadata:
 spec:
   watermark:
     idleSource:
-      threshold: 5s
-      incrementBy: 3s
-      stepInterval: 2s
+      threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
+      incrementBy: 3s # If source is found to be idle then increment the watermark by given incrementBy value.
+      stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
   vertices:
     - name: kafka-in
       source:
@@ -16,16 +16,19 @@ spec:
             - kafka-broker:9092
           topic: my-topic
           consumerGroup: test-group
+        transformer:
+          builtin:
+            name: eventTimeExtractor
+            kwargs:
+              expression: json(payload).time
+              format: 2006-01-02T15:04:05Z07:00
       scale:
-        min: 1
-    - name: atoi
-      scale:
-        min: 1
-      udf:
-        container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.5.0
-    - name: compute-sum
+        min: 2
+    - name: count-event
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
@@ -34,7 +37,7 @@ spec:
           window:
             fixed:
               length: 10s
-          keyed: true
+          keyed: false
           storage:
             persistentVolumeClaim:
               volumeSize: 10Gi
@@ -47,18 +50,8 @@ spec:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
             image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
-    - name: sink-log
-      scale:
-        min: 1
-      sink:
-        # A simple log printing sink
-        log: {}
   edges:
     - from: kafka-in
-      to: atoi
-    - from: atoi
-      to: compute-sum
-    - from: compute-sum
+      to: count-event
+    - from: count-event
       to: sink
-    - from: compute-sum
-      to: sink-log

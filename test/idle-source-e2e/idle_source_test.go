@@ -17,6 +17,8 @@ package idle_source_e2e
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -72,6 +74,11 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipeline() {
 	done <- struct{}{}
 }
 
+//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
+//go:generate kubectl apply -k ../kafka -n numaflow-system
+// Wait for zookeeper to come up
+//go:generate sleep 60
+
 func (is *IdleSourceSuite) TestKafkaSourceSink() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -90,7 +97,7 @@ func (is *IdleSourceSuite) TestKafkaSourceSink() {
 
 	done := make(chan struct{})
 	go func() {
-		//startTime := 1000
+		startTime := time.Now().Add(-time.Second * 10)
 		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():
@@ -98,17 +105,31 @@ func (is *IdleSourceSuite) TestKafkaSourceSink() {
 			case <-done:
 				return
 			default:
-				SendMessage(inputTopic, "odd", "1")
-				SendMessage(inputTopic, "even", "2")
+				SendMessage(inputTopic, "data", generateMsg("1", startTime))
+				time.Sleep(10 * time.Millisecond)
+				startTime = startTime.Add(1 * time.Second)
 			}
 		}
 	}()
 
-	// since the key can be even or odd and the window duration is 10s
-	// the sum should be 20(for even) and 40(for odd)
 	ExpectKafkaTopicCount(inputTopic, 15, 3*time.Second)
-	w.Expect().SinkContains("sink", "20", WithTimeout(2*time.Minute))
+	// since the window duration is 10 second, so the count of event will be 10
+	w.Expect().SinkContains("sink", "10", WithTimeout(120*time.Second))
 	done <- struct{}{}
+}
+
+type data struct {
+	Value string    `json:"value"`
+	Time  time.Time `json:"time"`
+}
+
+func generateMsg(msg string, t time.Time) string {
+	testMsg := data{Value: msg, Time: t}
+	jsonBytes, err := json.Marshal(testMsg)
+	if err != nil {
+		log.Fatalf("failed to marshal test message: %v", err)
+	}
+	return string(jsonBytes)
 }
 
 func TestReduceSuite(t *testing.T) {
