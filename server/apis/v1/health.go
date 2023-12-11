@@ -27,10 +27,12 @@ type resourceHealthResponse struct {
 	Code string `json:"code"`
 }
 
+// HealthChecker is the struct to hold the resource status cache for the pipeline
 type HealthChecker struct {
 	resourceStatusCache *evictCache.LRU[string, *resourceHealthResponse]
 }
 
+// NewHealthChecker is used to create a new health checker
 func NewHealthChecker() *HealthChecker {
 	c := evictCache.NewLRU[string, *resourceHealthResponse](500, nil, resourceCacheRefreshDuration)
 	return &HealthChecker{
@@ -148,9 +150,14 @@ func checkVertexLevelHealth(ctx context.Context, h *handler, ns string,
 	}, nil
 }
 
-// isVertexHealthy is used to check if the number of replicas running in the vertex
-// are equal to the number of desired replicas and the pods are in running state.
-// We first check if the vertex is in running state, if not, return the error message from the status
+// isVertexHealthy is used to check if the vertex is healthy or not
+// It checks for the following:
+// 1) If the vertex is in running state
+// 2) the number of replicas running in the vertex
+// are equal to the number of desired replicas and the pods are in running state
+// 3) If all the containers in the pod are in running state
+// if any of the above conditions are not met, the vertex is unhealthy
+// Based on the above conditions, it returns the status code and message
 func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex,
 	vertexName string) (bool, *resourceHealthResponse, error) {
 	// check if the vertex is in running state

@@ -18,7 +18,7 @@ package v1
 
 // HealthResponse is the response payload for health API.
 // It contains the health status of the vertex and data.
-// We include the Status, Message and Code for both vertex and data.
+// We include the Status, Message and Code for both resources and data.
 type HealthResponse struct {
 	ResourceHealthStatus  string `json:"resourceHealthStatus"`
 	DataHealthStatus      string `json:"dataHealthStatus"`
