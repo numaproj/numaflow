@@ -6,9 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/pointer"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -22,6 +24,12 @@ const (
 // Client is the struct to hold the Kubernetes Clientset
 type Client struct {
 	Clientset kubernetes.Interface
+}
+
+func init() {
+	_ = dfv1.AddToScheme(scheme.Scheme)
+	_ = appv1.AddToScheme(scheme.Scheme)
+	//_ = corev1.AddToScheme(scheme.Scheme)
 }
 
 func (c Client) CreatePod(pod *v1.Pod) (*v1.Pod, error) {

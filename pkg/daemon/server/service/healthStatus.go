@@ -10,7 +10,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 const (
@@ -98,7 +97,6 @@ var DefaultDataHealthResponse = NewDataHealthResponse(PipelineStatusOK,
 var (
 	currentPipelineStatus = DefaultDataHealthResponse
 	pipeStatusLock        = &sync.RWMutex{}
-	log                   = logging.FromContext(context.Background())
 )
 
 // GetCurrentPipelineHealth returns the current health status of the pipeline.
