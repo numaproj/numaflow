@@ -251,60 +251,6 @@ func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.Get
 	return totalPendingMap
 }
 
-//func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {
-//
-//	resp := new(daemon.GetPipelineStatusResponse)
-//
-//	// get all vertices of pipeline
-//	vertices := ps.pipeline.Spec.Vertices
-//
-//	// loop over vertices and get metrics to check pending messages vs processing rate
-//	for _, vertex := range vertices {
-//		vertexReq := new(daemon.GetVertexMetricsRequest)
-//		vertexReq.Vertex = &vertex.Name
-//		vertexResp, err := ps.GetVertexMetrics(ctx, vertexReq)
-//		// if err is not nil, more than likely autoscaling is down to 0 and metrics are not available
-//		if err != nil {
-//			resp.Status = &daemon.PipelineStatus{
-//				Status:  pointer.String(PipelineStatusUnknown),
-//				Message: pointer.String("Pipeline status is unknown."),
-//			}
-//			return resp, nil
-//		}
-//
-//		totalProcessingRate := float64(0)
-//		totalPending := int64(0)
-//		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
-//		for _, vertexMetrics := range vertexResp.VertexMetrics {
-//			if vertexMetrics.GetProcessingRates() != nil {
-//				if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
-//					totalProcessingRate += p
-//				}
-//			}
-//			if vertexMetrics.GetPendings() != nil {
-//				if p, ok := vertexMetrics.GetPendings()["default"]; ok {
-//					totalPending += p
-//				}
-//			}
-//		}
-//
-//		if totalPending > 0 && totalProcessingRate == 0 {
-//			resp.Status = &daemon.PipelineStatus{
-//				Status:  pointer.String(PipelineStatusError),
-//				Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
-//			}
-//			return resp, nil
-//		}
-//	}
-//
-//	resp.Status = &daemon.PipelineStatus{
-//		Status:  pointer.String(PipelineStatusOK),
-//		Message: pointer.String("Pipeline has no issue."),
-//	}
-//
-//	return resp, nil
-//}
-
 func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {
 	status := GetCurrentPipelineHealth()
 	resp := new(daemon.GetPipelineStatusResponse)

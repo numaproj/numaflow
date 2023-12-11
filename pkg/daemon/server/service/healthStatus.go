@@ -180,7 +180,8 @@ func (hc *HealthChecker) SetCurrentHealth(status *DataHealthResponse) {
 	SetCurrentPipelineHealth(status)
 }
 
-// StartHealthCheck starts the health check.
+// StartHealthCheck starts the health check for the pipeline.
+// The ticks are generated at the interval of HealthTimeStep.
 func (hc *HealthChecker) StartHealthCheck() {
 	ctx := context.Background()
 	// Goroutine to listen for ticks
@@ -252,11 +253,9 @@ func (hc *HealthChecker) getPipelineDataCriticality() ([]*VertexState, error) {
 			bufferUsage = append(bufferUsage, entry.BufferUsage)
 		}
 		// calculate the average buffer usage over the last HEALTH_WINDOW_SIZE seconds
-		log.Info("DEBUGSID bufferusage", bufferName, bufferUsage)
 		ewmaBufferUsage := calculateEWMAUsage(bufferUsage)
-		log.Info("DEBUGSID ewmavalue", bufferName, ewmaBufferUsage)
 		// assign the state to the vertex based on the average buffer usage
-		// Look back is disabled for the critical state
+		// Look back is enabled for the critical state
 		currentState := assignStateToTimeline(ewmaBufferUsage, EnableCriticalLookBack)
 		// create a new vertex state object
 		currentVertexState := NewVertexState(bufferName, currentState)
@@ -299,7 +298,6 @@ func (hc *HealthChecker) updateUsageTimeline(bufferList []*daemon.BufferInfo) {
 			BufferUsage:        bufferUsage,
 			AverageBufferUsage: newAverage,
 		})
-		log.Info("DEBUGSID", bufferName, bufferUsage, newAverage)
 
 		// remove first entry if the size of the timeline is greater than HEALTH_WINDOW_SIZE
 		if len(hc.timelineData[bufferName]) > int(HealthWindowSize) {

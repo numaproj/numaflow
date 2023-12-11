@@ -138,19 +138,14 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = httpServer.Serve(httpL) }()
 	go func() { _ = tcpm.Serve() }()
 
-	// Start the Data flow status updater
-	// This function should be continuously running, and invoked every HEALTH_CHECK_INTERVAL seconds
-
 	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rater)
 	if err != nil {
 		log.Errorw("Failed to create pipeline metadata query", zap.Error(err))
 	}
 	healthChecker := service.NewHealthChecker(ds.pipeline, pipelineMetadataQuery)
 
-	log.Infof("DEBUGSID starting StartHealthCheck %s", healthChecker.GetCurrentHealth())
 	// Start the Data flow status updater
 	go func() {
-		log.Infof("DEBUGSID starting StartHealthCheck")
 		healthChecker.StartHealthCheck()
 	}()
 
