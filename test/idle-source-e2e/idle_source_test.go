@@ -17,7 +17,9 @@ package idle_source_e2e
 
 import (
 	"context"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,6 +69,45 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipeline() {
 	w.Expect().
 		SinkContains("sink", "40", WithTimeout(120*time.Second)).
 		SinkContains("sink", "20", WithTimeout(120*time.Second))
+	done <- struct{}{}
+}
+
+func (is *IdleSourceSuite) TestKafkaSourceSink() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	inputTopic := "input-topic"
+	fileData, err := os.ReadFile("testdata/kafka-pipeline.yaml")
+	is.NoError(err)
+	updatedFileData := strings.ReplaceAll(string(fileData), "my-topic", inputTopic)
+
+	w := is.Given().Pipeline(updatedFileData).When().CreatePipelineAndWait()
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	defer w.DeletePipelineAndWait()
+	defer DeleteKafkaTopic(inputTopic)
+
+	done := make(chan struct{})
+	go func() {
+		//startTime := 1000
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				SendMessage(inputTopic, "odd", "1")
+				SendMessage(inputTopic, "even", "2")
+			}
+		}
+	}()
+
+	// since the key can be even or odd and the window duration is 10s
+	// the sum should be 20(for even) and 40(for odd)
+	ExpectKafkaTopicCount(inputTopic, 15, 3*time.Second)
+	w.Expect().SinkContains("sink", "20", WithTimeout(2*time.Minute))
 	done <- struct{}{}
 }
 
