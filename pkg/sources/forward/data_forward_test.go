@@ -77,7 +77,7 @@ func (s *SimpleSource) Ack(ctx context.Context, offsets []isb.Offset) []error {
 	return s.buffer.Ack(ctx, offsets)
 }
 
-func (s *SimpleSource) Partitions() []int32 {
+func (s *SimpleSource) Partitions(context.Context) []int32 {
 	return []int32{0}
 }
 

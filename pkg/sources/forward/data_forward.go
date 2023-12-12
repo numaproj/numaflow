@@ -217,7 +217,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		// if the source is idling, we will publish idle watermark to the source and all the toBuffers
 		// we will not publish idle watermark if the source is not idling.
 		// publish idle watermark for the source
-		df.srcIdleHandler.PublishSourceIdleWatermark(df.reader.Partitions())
+		df.srcIdleHandler.PublishSourceIdleWatermark(df.reader.Partitions(df.ctx))
 
 		// if we have published idle watermark to source, we need to publish idle watermark to all the toBuffers
 		// it might not get the latest watermark because of publishing delay, but we will get in the subsequent
@@ -229,7 +229,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			for index := range toVertexBuffers {
 				// publish idle watermark to all the source partitions owned by this reader.
 				// it is 1:1 for many (HTTP, tickgen, etc.) but for e.g., for Kafka it is 1:N and the list of partitions in the N could keep changing.
-				for _, sp := range df.reader.Partitions() {
+				for _, sp := range df.reader.Partitions(df.ctx) {
 					if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
 						var publisher, ok = vertexPublishers[sp]
 						if !ok {

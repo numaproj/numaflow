@@ -219,7 +219,7 @@ func (h *httpSource) GetName() string {
 }
 
 // Partitions returns the partitions for the source.
-func (h *httpSource) Partitions() []int32 {
+func (h *httpSource) Partitions(context.Context) []int32 {
 	return []int32{h.vertexReplica}
 }
 
