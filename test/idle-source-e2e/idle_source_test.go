@@ -13,6 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
+//go:generate kubectl apply -k ./kafka -n numaflow-system
+// Wait for zookeeper to come up
+//go:generate sleep 60
+
 package idle_source_e2e
 
 import (
@@ -73,11 +78,6 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipeline() {
 		SinkContains("sink", "20", WithTimeout(120*time.Second))
 	done <- struct{}{}
 }
-
-//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
-//go:generate kubectl apply -k ../kafka -n numaflow-system
-// Wait for zookeeper to come up
-//go:generate sleep 60
 
 func (is *IdleSourceSuite) TestKafkaSourceSink() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
