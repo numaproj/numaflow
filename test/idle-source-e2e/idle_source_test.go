@@ -13,6 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/* These tests will test the functionality of progressing watermark in case of idle, while publishing the data to only one
+replica instead of two. Once "threshold" reached to 5s(configurable) and if source is found
+to be idle then it will increment the watermark by 3s(configurable) after waiting for stepInterval of 2s(configurable).
+*/
+
 //go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
 //go:generate kubectl apply -k ./kafka -n numaflow-system
 // Wait for zookeeper to come up
