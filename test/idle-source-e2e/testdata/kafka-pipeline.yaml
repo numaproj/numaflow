@@ -37,7 +37,7 @@ spec:
           window:
             fixed:
               length: 10s
-          keyed: false
+          keyed: true
           storage:
             persistentVolumeClaim:
               volumeSize: 10Gi

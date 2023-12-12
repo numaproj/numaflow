@@ -39,7 +39,7 @@ type IdleSourceSuite struct {
 	E2ESuite
 }
 
-func (is *IdleSourceSuite) TestIdleKeyedReducePipeline() {
+func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := is.Given().Pipeline("@testdata/idle-source-reduce-pipeline.yaml").
@@ -79,7 +79,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipeline() {
 	done <- struct{}{}
 }
 
-func (is *IdleSourceSuite) TestKafkaSourceSink() {
+func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
