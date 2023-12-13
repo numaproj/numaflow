@@ -5,11 +5,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/VividCortex/ewma"
 	"golang.org/x/net/context"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
+	"github.com/numaproj/numaflow/pkg/isbsvc"
+	"github.com/numaproj/numaflow/pkg/shared/ewma"
+	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
 const (
@@ -94,50 +96,25 @@ var DefaultDataHealthResponse = NewDataHealthResponse(PipelineStatusOK,
 	"Pipeline dataflow is healthy",
 	"D1")
 
-var (
-	currentPipelineStatus = DefaultDataHealthResponse
-	pipeStatusLock        = &sync.RWMutex{}
-)
-
-// GetCurrentPipelineHealth returns the current health status of the pipeline.
-// It is thread safe to ensure concurrent access.
-func GetCurrentPipelineHealth() *DataHealthResponse {
-	// Lock the statusLock to ensure thread safety.
-	pipeStatusLock.RLock()
-	defer pipeStatusLock.RUnlock()
-	// Return the health status.
-	return currentPipelineStatus
-}
-
-// SetCurrentPipelineHealth sets the current health status of the pipeline.
-// It is thread safe to ensure concurrent access.
-func SetCurrentPipelineHealth(status *DataHealthResponse) {
-	// Lock the statusLock to ensure thread safety.
-	pipeStatusLock.Lock()
-	defer pipeStatusLock.Unlock()
-	// Set the health status.
-	currentPipelineStatus = status
-}
-
 // HealthChecker is the struct type for health checker.
 type HealthChecker struct {
 	// Add a field for the health status.
-	currentDataStatus     *DataHealthResponse
-	pipelineMetadataQuery *pipelineMetadataQuery
-	pipeline              *v1alpha1.Pipeline
-	timelineData          map[string][]*TimelineEntry
-	statusLock            *sync.RWMutex
+	currentDataStatus *DataHealthResponse
+	isbSvcClient      isbsvc.ISBService
+	pipeline          *v1alpha1.Pipeline
+	timelineData      map[string]*sharedqueue.OverflowQueue[*TimelineEntry]
+	statusLock        *sync.RWMutex
 }
 
 // NewHealthChecker creates a new object HealthChecker struct type.
-func NewHealthChecker(pipeline *v1alpha1.Pipeline, pipelineMetadataQuery *pipelineMetadataQuery) *HealthChecker {
+func NewHealthChecker(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) *HealthChecker {
 	// Return a new HealthChecker struct instance.
 	return &HealthChecker{
-		currentDataStatus:     DefaultDataHealthResponse,
-		pipelineMetadataQuery: pipelineMetadataQuery,
-		pipeline:              pipeline,
-		timelineData:          make(map[string][]*TimelineEntry),
-		statusLock:            &sync.RWMutex{},
+		currentDataStatus: DefaultDataHealthResponse,
+		isbSvcClient:      isbSvcClient,
+		pipeline:          pipeline,
+		timelineData:      make(map[string]*sharedqueue.OverflowQueue[*TimelineEntry]),
+		statusLock:        &sync.RWMutex{},
 	}
 }
 
@@ -175,16 +152,14 @@ func (hc *HealthChecker) SetCurrentHealth(status *DataHealthResponse) {
 	defer hc.statusLock.Unlock()
 	// Set the health status.
 	hc.currentDataStatus = status
-	SetCurrentPipelineHealth(status)
 }
 
 // StartHealthCheck starts the health check for the pipeline.
 // The ticks are generated at the interval of HealthTimeStep.
-func (hc *HealthChecker) StartHealthCheck() {
-	ctx := context.Background()
+func (hc *HealthChecker) StartHealthCheck(ctx context.Context) {
 	// Goroutine to listen for ticks
 	// At every tick, check and update the health status of the pipeline.
-	go func() {
+	go func(ctx context.Context) {
 		// Create a ticker with the interval of HealthCheckInterval.
 		ticker := time.NewTicker(HealthTimeStep)
 		defer ticker.Stop()
@@ -207,7 +182,7 @@ func (hc *HealthChecker) StartHealthCheck() {
 				return
 			}
 		}
-	}()
+	}(ctx)
 }
 
 // getPipelineDataCriticality is used to provide the data criticality of the pipeline
@@ -227,13 +202,8 @@ func (hc *HealthChecker) StartHealthCheck() {
 // If this average is less than the warning threshold, we return the ok status
 func (hc *HealthChecker) getPipelineDataCriticality() ([]*VertexState, error) {
 	ctx := context.Background()
-	pipelineName := hc.pipeline.GetName()
-
-	// Create a new buffer request object
-	req := &daemon.ListBuffersRequest{Pipeline: &pipelineName}
-
 	// Fetch the buffer information for the pipeline
-	buffers, err := hc.pipelineMetadataQuery.ListBuffers(ctx, req)
+	buffers, err := listBuffers(ctx, hc.pipeline, hc.isbSvcClient)
 	if err != nil {
 		return nil, err
 	}
@@ -244,10 +214,10 @@ func (hc *HealthChecker) getPipelineDataCriticality() ([]*VertexState, error) {
 
 	// iterate over the timeline data for each buffer and calculate the exponential weighted mean average
 	// for the last HEALTH_WINDOW_SIZE buffer usage entries
-	for bufferName, timeline := range hc.timelineData {
+	for bufferName := range hc.timelineData {
 		// Extract the buffer usage of the timeline
 		var bufferUsage []float64
-		for _, entry := range timeline {
+		for _, entry := range hc.timelineData[bufferName].Items() {
 			bufferUsage = append(bufferUsage, entry.BufferUsage)
 		}
 		// calculate the average buffer usage over the last HEALTH_WINDOW_SIZE seconds
@@ -284,24 +254,17 @@ func (hc *HealthChecker) updateUsageTimeline(bufferList []*daemon.BufferInfo) {
 
 		// if the buffer name is not present in the timeline data, add it
 		if _, ok := hc.timelineData[bufferName]; !ok {
-			hc.timelineData[bufferName] = make([]*TimelineEntry, 0)
+			hc.timelineData[bufferName] = sharedqueue.New[*TimelineEntry](int(HealthWindowSize))
 		}
 		// extract the current buffer usage and update the average buffer usage
 		bufferUsage := buffer.GetBufferUsage() * 100
-		newAverage := updateAverageBufferUsage(hc.timelineData[bufferName], bufferUsage)
-
+		newAverage := updateAverageBufferUsage(hc.timelineData[bufferName].Items(), bufferUsage)
 		// add the new entry to the timeline
-		hc.timelineData[bufferName] = append(hc.timelineData[bufferName], &TimelineEntry{
+		hc.timelineData[bufferName].Append(&TimelineEntry{
 			Time:               timestamp,
 			BufferUsage:        bufferUsage,
 			AverageBufferUsage: newAverage,
 		})
-
-		// remove first entry if the size of the timeline is greater than HEALTH_WINDOW_SIZE
-		if len(hc.timelineData[bufferName]) > int(HealthWindowSize) {
-			hc.timelineData[bufferName] = hc.timelineData[bufferName][1:]
-		}
-
 	}
 }
 
@@ -345,11 +308,12 @@ func updateAverageBufferUsage(timeline []*TimelineEntry, newEntry float64) float
 // where lastEWMA is the EWMA buffer usage of the last entry in the timeline
 func calculateEWMAUsage(bufferUsage []float64) []float64 {
 	// Compute the current EWMA buffer usage of the timeline
-	a := ewma.NewMovingAverage()
+	a := ewma.NewSimpleEWMA(float64(HealthWindowSize))
 	var emwaValues []float64
+	// TODO: Check if we can keep storing the EWMA values instead of recomputing them
 	for _, f := range bufferUsage {
 		a.Add(f)
-		emwaValues = append(emwaValues, a.Value())
+		emwaValues = append(emwaValues, a.Get())
 	}
 	return emwaValues
 }

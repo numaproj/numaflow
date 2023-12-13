@@ -48,14 +48,16 @@ import (
 )
 
 type daemonServer struct {
-	pipeline   *v1alpha1.Pipeline
-	isbSvcType v1alpha1.ISBSvcType
+	pipeline      *v1alpha1.Pipeline
+	isbSvcType    v1alpha1.ISBSvcType
+	metaDataQuery *service.PipelineMetadataQuery
 }
 
 func NewDaemonServer(pl *v1alpha1.Pipeline, isbSvcType v1alpha1.ISBSvcType) *daemonServer {
 	return &daemonServer{
-		pipeline:   pl,
-		isbSvcType: isbSvcType,
+		pipeline:      pl,
+		isbSvcType:    isbSvcType,
+		metaDataQuery: nil,
 	}
 }
 
@@ -138,15 +140,9 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = httpServer.Serve(httpL) }()
 	go func() { _ = tcpm.Serve() }()
 
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rater)
-	if err != nil {
-		log.Errorw("Failed to create pipeline metadata query", zap.Error(err))
-	}
-	healthChecker := service.NewHealthChecker(ds.pipeline, pipelineMetadataQuery)
-
-	// Start the Data flow status updater
+	// Start the Data flow health status updater
 	go func() {
-		healthChecker.StartHealthCheck()
+		ds.metaDataQuery.StartHealthCheck(ctx)
 	}()
 
 	log.Infof("Daemon server started successfully on %s", address)
@@ -181,6 +177,7 @@ func (ds *daemonServer) newGRPCServer(
 		return nil, err
 	}
 	daemon.RegisterDaemonServiceServer(grpcServer, pipelineMetadataQuery)
+	ds.metaDataQuery = pipelineMetadataQuery
 	return grpcServer, nil
 }
 
