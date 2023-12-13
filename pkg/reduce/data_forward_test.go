@@ -1187,9 +1187,8 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// assert the output of reduce
 	var readMessagePayload0 PayloadForTest
 	_ = json.Unmarshal(msgs0[0].Payload, &readMessagePayload0)
-	// since the window duration is 5 minutes, the output should be
-	// 100 * 300(for key even) and 99 * 300(for key odd)
-	// we cant guarantee the order of the output
+	// since the session window timeout is 1 minute, the output should be
+	// 60 * 100(for key even) and 60 * 99(for key odd)
 	assert.Contains(t, []int{6000, 5940}, readMessagePayload0.Value)
 	assert.Contains(t, []string{"even", "odd"}, readMessagePayload0.Key)
 

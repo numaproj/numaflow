@@ -70,7 +70,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		idleManager        wmb.IdleManager
 		opts               []reduce.Option
 		udfApplier         applier.ReduceApplier
-		heathChecker       metrics.HealthChecker
+		healthChecker      metrics.HealthChecker
 	)
 
 	log := logging.FromContext(ctx)
@@ -114,7 +114,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}()
 
 		udfApplier = reduceHandler
-		heathChecker = reduceHandler
+		healthChecker = reduceHandler
 	} else if windowType.Session != nil {
 		client, err := sessionreducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
@@ -134,7 +134,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}()
 
 		udfApplier = reduceHandler
-		heathChecker = reduceHandler
+		healthChecker = reduceHandler
 	} else {
 		return fmt.Errorf("invalid window spec")
 	}
@@ -265,7 +265,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 
 	// start metrics server
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{heathChecker}, lagReaders)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{healthChecker}, lagReaders)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)

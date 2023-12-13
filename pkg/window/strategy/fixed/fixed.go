@@ -168,8 +168,8 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 	return w.activeWindows.Front()
 }
 
-// DeleteClosedWindows deletes the windows from the closed windows list.
-func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
+// DeleteClosedWindow deletes the window from the closed windows list.
+func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
 	w.closedWindows.Delete(response.Window)
 }
 

@@ -40,33 +40,31 @@ func NewSortedWindowListByEndTime() *SortedWindowListByEndTime {
 }
 
 // InsertBack inserts a window to the back of the list.
-func (s *SortedWindowListByEndTime) InsertBack(window TimedWindow) bool {
+func (s *SortedWindowListByEndTime) InsertBack(window TimedWindow) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	// Check if the window can be inserted at the back
-	if len(s.windows) != 0 && (s.windows[len(s.windows)-1].EndTime().After(window.EndTime())) {
-		return false
+	if l := len(s.windows); l != 0 && (s.windows[l-1].EndTime().After(window.EndTime())) {
+		return
 	}
 
 	// Insert the window at the back
 	s.windows = append(s.windows, window)
-	return true
 }
 
 // InsertFront inserts a window to the front of the list.
-func (s *SortedWindowListByEndTime) InsertFront(window TimedWindow) bool {
+func (s *SortedWindowListByEndTime) InsertFront(window TimedWindow) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	// Check if the window can be inserted at the front
 	if len(s.windows) != 0 && (s.windows[0].EndTime().Before(window.EndTime())) {
-		return false
+		return
 	}
 
 	// Insert the window at the front
 	s.windows = append([]TimedWindow{window}, s.windows...)
-	return true
 }
 
 // Insert inserts a window to the list.
@@ -209,7 +207,8 @@ func (s *SortedWindowListByEndTime) Items() []TimedWindow {
 	return items
 }
 
-// FindWindowForTime finds a window for a given time.
+// FindWindowForTime finds a window for a given time. If there are multiple windows for the given time,
+// it returns the first window.
 func (s *SortedWindowListByEndTime) FindWindowForTime(t time.Time) (TimedWindow, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()

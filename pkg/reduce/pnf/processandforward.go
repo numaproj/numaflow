@@ -51,7 +51,7 @@ type processAndForward struct {
 	vertexName         string
 	pipelineName       string
 	vertexReplica      int32
-	partitionId        partition.ID
+	partitionId        *partition.ID
 	UDF                applier.ReduceApplier
 	pbqReader          pbq.Reader
 	log                *zap.SugaredLogger
@@ -70,7 +70,7 @@ func newProcessAndForward(ctx context.Context,
 	vertexName string,
 	pipelineName string,
 	vr int32,
-	partitionID partition.ID,
+	partitionID *partition.ID,
 	udf applier.ReduceApplier,
 	pbqReader pbq.Reader,
 	toBuffers map[string][]isb.BufferWriter,
@@ -116,7 +116,7 @@ func newProcessAndForward(ctx context.Context,
 // The watermark is only published at COB at key level for Unaligned and at Partition level for Aligned.
 func (p *processAndForward) invokeUDF(ctx context.Context) {
 	defer close(p.done)
-	responseCh, errCh := p.UDF.ApplyReduce(ctx, &p.partitionId, p.pbqReader.ReadCh())
+	responseCh, errCh := p.UDF.ApplyReduce(ctx, p.partitionId, p.pbqReader.ReadCh())
 
 	if p.windower.Type() == window.Aligned {
 		p.forwardAlignedWindowResponses(ctx, responseCh, errCh)
@@ -149,10 +149,12 @@ outerLoop:
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
 				// FIXME(session): we need to compact the pbq for unAligned when we have received the EOF response from the UDF.
-				p.publishWM(ctx, p.partitionId)
+				// we should not use p.partitionId here, we should use the partition id from the response.
+				// because for unaligned p.partitionId indicates the shared partition id for the key.
+				p.publishWM(ctx, response.Window.Partition())
 
 				// delete the closed windows which are tracked by the windower
-				p.windower.DeleteClosedWindows(response)
+				p.windower.DeleteClosedWindow(response)
 				continue
 			}
 
@@ -190,7 +192,7 @@ outerLoop:
 	// once we have received all the responses from the UDF.
 	p.publishWM(ctx, p.partitionId)
 	// delete the closed windows which are tracked by the windower
-	p.windower.DeleteClosedWindows(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(&p.partitionId)})
+	p.windower.DeleteClosedWindow(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(p.partitionId)})
 
 	// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
 	err := p.pbqReader.GC()
@@ -352,7 +354,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 
 // publishWM publishes the watermark to each edge.
 // TODO: support multi partitioned edges.
-func (p *processAndForward) publishWM(ctx context.Context, id partition.ID) {
+func (p *processAndForward) publishWM(ctx context.Context, id *partition.ID) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,
 	// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.

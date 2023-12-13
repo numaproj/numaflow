@@ -36,7 +36,7 @@ type slidingWindow struct {
 	slot      string
 }
 
-func NewSessionWindow(startTime time.Time, endTime time.Time) window.TimedWindow {
+func NewSlidingWindow(startTime time.Time, endTime time.Time) window.TimedWindow {
 	// TODO: slot should be extracted based on the key
 	// we can accept an interface SlotAssigner
 	// which will assign the slot based on the key
@@ -83,7 +83,7 @@ func (w *slidingWindow) Expand(endTime time.Time) {
 	// never be invokved for Aligned Window
 }
 
-// Windower is a implementation of TimedWindower of fixed window, windower is responsible for assigning
+// Windower is a implementation of TimedWindower of sliding window, windower is responsible for assigning
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
 	// Length is the temporal length of the window.
@@ -93,7 +93,7 @@ type Windower struct {
 	activeWindows *window.SortedWindowListByEndTime
 	// closedWindows is a list of closed windows which are yet to be GCed
 	// we need to track the close windows because while publishing the watermark
-	// for a fixed window, we need to compare the watermark with the oldest closed window
+	// for a sliding window, we need to compare the watermark with the oldest closed window
 	closedWindows *window.SortedWindowListByEndTime
 }
 
@@ -138,7 +138,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	// so given windows 500-600 and 600-700 and the event time is 600
 	// we will add the element to 600-700 window and not to the 500-600 window.
 	for !startTime.After(message.EventTime) && endTime.After(message.EventTime) {
-		win, isPresent := w.activeWindows.InsertIfNotPresent(NewSessionWindow(startTime, endTime))
+		win, isPresent := w.activeWindows.InsertIfNotPresent(NewSlidingWindow(startTime, endTime))
 
 		op := window.Open
 		if isPresent {
@@ -187,8 +187,8 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 	return w.activeWindows.Front()
 }
 
-// DeleteClosedWindows deletes the windows from the closed windows list
-func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
+// DeleteClosedWindow deletes the window from the closed windows list
+func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
 	w.closedWindows.Delete(response.Window)
 }
 

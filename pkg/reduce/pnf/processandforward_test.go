@@ -170,7 +170,7 @@ func TestPnFHandleAlignedWindowResponses(t *testing.T) {
 	}
 
 	pf := &processAndForward{
-		partitionId:        *id,
+		partitionId:        id,
 		whereToDecider:     whereto,
 		windower:           windower,
 		toBuffers:          toBuffersMap,
@@ -230,7 +230,7 @@ func generateAlignedWindowResponses(count int, id *partition.ID) []*window.Timed
 
 func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManager *pbq.Manager, toBuffers map[string][]isb.BufferWriter) (processAndForward, map[string]kvs.KVStorer) {
 
-	testPartition := partition.ID{
+	testPartition := &partition.ID{
 		Start: time.UnixMilli(60000),
 		End:   time.UnixMilli(120000),
 		Slot:  key,
@@ -239,7 +239,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 	// create a pbq for a partition
 	pw, otStore := buildPublisherMapAndOTStore(toBuffers)
 	var simplePbq pbq.Reader
-	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, testPartition)
+	simplePbq, _ = pbqManager.CreateNewPBQ(ctx, *testPartition)
 
 	buffers := make([]string, 0)
 	for k := range toBuffers {

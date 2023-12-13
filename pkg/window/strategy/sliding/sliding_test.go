@@ -217,7 +217,7 @@ func TestSliding_DeleteWindows(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(120 * time.Second))
 
 	// delete one of the windows
-	windower.DeleteClosedWindows(&window.TimedWindowResponse{
+	windower.DeleteClosedWindow(&window.TimedWindowResponse{
 		Window: window.NewWindowFromPartition(&partition.ID{
 			Start: baseTime,
 			End:   baseTime.Add(60 * time.Second),

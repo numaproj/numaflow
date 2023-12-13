@@ -163,7 +163,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 		// create a window for each partition and insert it to the windower
 		// so that the window can be closed when the watermark
 		// crosses the window.
-		var timedWindow window.TimedWindow = window.NewWindowFromPartition(&p)
+		var timedWindow = window.NewWindowFromPartition(&p)
 
 		df.windower.InsertWindow(timedWindow)
 
@@ -299,7 +299,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
-		df.of.AsyncSchedulePnF(ctx, *partitionID, q)
+		df.of.AsyncSchedulePnF(ctx, partitionID, q)
 		df.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
 

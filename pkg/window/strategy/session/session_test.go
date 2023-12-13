@@ -54,7 +54,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	assert.Equal(t, 1, len(windowOperations[0].Windows))
 	assert.Equal(t, baseTime, windowOperations[0].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(gap), windowOperations[0].Windows[0].EndTime())
-	assert.Equal(t, &Partition, windowOperations[0].ID)
+	assert.Equal(t, &SharedSessionPartition, windowOperations[0].ID)
 
 	// 2nd message should be assigned to the same window, since key is same
 	message = buildReadMessage(baseTime.Add(5*time.Second), []string{"key1"})
@@ -68,7 +68,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	// 0th index we should have the old window, and 1st index we should have the new window
 	assert.Equal(t, baseTime.Add(gap), windowOperations[0].Windows[0].EndTime())
 	assert.Equal(t, message.EventTime.Add(gap), windowOperations[0].Windows[1].EndTime())
-	assert.Equal(t, &Partition, windowOperations[0].ID)
+	assert.Equal(t, &SharedSessionPartition, windowOperations[0].ID)
 
 	// 3rd message should be assigned to a new window, since key is different
 	message = buildReadMessage(baseTime, []string{"key2"})
@@ -80,7 +80,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	assert.Equal(t, 1, len(windowOperations[0].Windows))
 	assert.Equal(t, baseTime, windowOperations[0].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(gap), windowOperations[0].Windows[0].EndTime())
-	assert.Equal(t, &Partition, windowOperations[0].ID)
+	assert.Equal(t, &SharedSessionPartition, windowOperations[0].ID)
 
 	// 4th message should be assigned to a new window, because of the gap duration
 	message = buildReadMessage(baseTime.Add(20*time.Second), []string{"key2"})
@@ -92,7 +92,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	assert.Equal(t, 1, len(windowOperations[0].Windows))
 	assert.Equal(t, baseTime.Add(20*time.Second), windowOperations[0].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(30*time.Second), windowOperations[0].Windows[0].EndTime())
-	assert.Equal(t, &Partition, windowOperations[0].ID)
+	assert.Equal(t, &SharedSessionPartition, windowOperations[0].ID)
 }
 
 func TestSession_InsertWindow(t *testing.T) {
@@ -457,7 +457,7 @@ func TestSession_DeleteWindows(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(180 * time.Second))
 
 	// delete one of the windows
-	windower.DeleteClosedWindows(&window.TimedWindowResponse{
+	windower.DeleteClosedWindow(&window.TimedWindowResponse{
 		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
 			Start: baseTime,
 			End:   baseTime.Add(60 * time.Second),
@@ -468,7 +468,7 @@ func TestSession_DeleteWindows(t *testing.T) {
 	// since we deleted one of the windows, the closed windows should be 3
 	assert.Equal(t, 3, windower.closedWindows.Len())
 
-	windower.DeleteClosedWindows(&window.TimedWindowResponse{
+	windower.DeleteClosedWindow(&window.TimedWindowResponse{
 		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
 			Start: baseTime.Add(60 * time.Second),
 			End:   baseTime.Add(120 * time.Second),
@@ -520,7 +520,7 @@ func TestWindower_OldestClosedWindowEndTime(t *testing.T) {
 	assert.Equal(t, baseTime.Add(70*time.Second), windower.OldestWindowEndTime())
 
 	// delete one of the windows
-	windower.DeleteClosedWindows(&window.TimedWindowResponse{
+	windower.DeleteClosedWindow(&window.TimedWindowResponse{
 		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
 			Start: baseTime,
 			End:   baseTime.Add(70 * time.Second),

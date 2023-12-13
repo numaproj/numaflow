@@ -23,23 +23,23 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
-// TimedWindower is the interface for windowing strategy
+// TimedWindower is the interface for windowing strategy.
 type TimedWindower interface {
-	// Strategy returns the window strategy
+	// Strategy returns the window strategy.
 	Strategy() Strategy
-	// Type returns the window type
+	// Type returns the window type.
 	Type() Type
 	// AssignWindows assigns the event to the window based on give window configuration.
 	AssignWindows(message *isb.ReadMessage) []*TimedWindowRequest
-	// CloseWindows closes the windows that are past the watermark
+	// CloseWindows closes the windows that are past the watermark.
 	CloseWindows(time time.Time) []*TimedWindowRequest
 	// InsertWindow inserts window to the list of active windows
 	InsertWindow(tw TimedWindow)
 	// NextWindowToBeClosed returns the next window yet to be closed.
 	NextWindowToBeClosed() TimedWindow
-	// DeleteClosedWindows deletes the windows from the closed windows list
-	DeleteClosedWindows(response *TimedWindowResponse)
-	// OldestWindowEndTime returns the end time of the oldest closed window
+	// DeleteClosedWindow deletes the window from the closed windows list.
+	DeleteClosedWindow(response *TimedWindowResponse)
+	// OldestWindowEndTime returns the end time of the oldest window.
 	OldestWindowEndTime() time.Time
 }
 
@@ -51,8 +51,10 @@ type TimedWindow interface {
 	EndTime() time.Time
 	// Slot returns the slot to which the window belongs.
 	Slot() string
-	// Partition returns the partition id of the window
-	// which will be used to map to the pbq instance.
+	// Partition returns the partition id of the window, partition is
+	// combination of start time, end time and slot.
+	// for aligned windows, this will be used to map to the pbq instance
+	// for unaligned windows, we use a single pbq instance for all the windows
 	Partition() *partition.ID
 	// Keys returns the keys of the window tracked for Unaligned windows.
 	// This will return empty for Aligned windows.

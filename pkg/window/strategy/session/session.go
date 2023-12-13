@@ -26,11 +26,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-var delimiter = ":"
+const delimiter = ":"
 
-// Partition is a common partition for session window.
+// SharedSessionPartition is a common partition for session window.
 // session windows share a common pbq, this partition is used to identify the pbq instance.
-var Partition = partition.ID{
+var SharedSessionPartition = partition.ID{
 	Start: time.UnixMilli(0),
 	End:   time.UnixMilli(math.MaxInt64),
 	Slot:  "slot-0",
@@ -115,7 +115,7 @@ func (w *sessionWindow) Expand(endTime time.Time) {
 // Windower is a implementation of TimedWindower of session window, windower is responsible for assigning
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
-	// gap is the duration after with the session is marked as closed.
+	// gap is the duration after which the session is marked as closed.
 	gap time.Duration
 
 	// activeWindows is a map of keys to list of active windows
@@ -161,7 +161,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 		win              = NewSessionWindow(message.EventTime, w.gap, message)
 	)
 
-	// check whether we have any active windows created for for this key
+	// check whether we have any active windows created for this key
 	// NOTE: we track per key windows for Unaligned.
 	list, ok := w.activeWindows[combinedKey]
 
@@ -171,7 +171,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 		list = window.NewSortedWindowListByEndTime()
 		// since it's the first window, we can insert it at the front
 		list.InsertFront(win)
-		windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &Partition))
+		windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &SharedSessionPartition))
 		w.activeWindows[combinedKey] = list
 
 		return windowOperations
@@ -197,11 +197,11 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 
 			// update the reference of the window in the list with the expanded window
 			windowToBeMerged.Merge(win)
-			windowOperations = append(windowOperations, createWindowOperation(message, window.Expand, []window.TimedWindow{oldWindow, windowToBeMerged}, &Partition))
+			windowOperations = append(windowOperations, createWindowOperation(message, window.Expand, []window.TimedWindow{oldWindow, windowToBeMerged}, &SharedSessionPartition))
 		} else { // no need to expand, message doesn't change the window end-time.
 			// if the returned window is same as the window created by the message, that means
 			// the message belongs to an existing window and it's an append operation
-			windowOperations = append(windowOperations, createWindowOperation(message, window.Append, []window.TimedWindow{windowToBeMerged}, &Partition))
+			windowOperations = append(windowOperations, createWindowOperation(message, window.Append, []window.TimedWindow{windowToBeMerged}, &SharedSessionPartition))
 		}
 
 		return windowOperations
@@ -209,7 +209,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 
 	// if the window cannot be merged, that means we need to create a new window to the active windows list
 	list.Insert(win)
-	windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &Partition))
+	windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &SharedSessionPartition))
 
 	return windowOperations
 }
@@ -266,7 +266,7 @@ func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 			if len(windows) > 1 {
 
 				// make UDF aware that windows have to be merged
-				windowOperations = append(windowOperations, createWindowOperation(nil, window.Merge, windows, &Partition))
+				windowOperations = append(windowOperations, createWindowOperation(nil, window.Merge, windows, &SharedSessionPartition))
 
 				// merge the first window with subsequent windows and it grows as it merges
 				var mergedWindow = cloneWindow(windows[0])
@@ -302,45 +302,48 @@ func (w *Windower) handleWindowToBeMerged(canBeMerged bool, toBeMerged window.Ti
 	if canBeMerged {
 		oldWindow := cloneWindow(toBeMerged)
 		toBeMerged.Merge(latestWin)
-		return createWindowOperation(nil, window.Merge, []window.TimedWindow{latestWin, oldWindow}, &Partition)
+		return createWindowOperation(nil, window.Merge, []window.TimedWindow{latestWin, oldWindow}, &SharedSessionPartition)
 	}
 
 	w.closedWindows.Insert(latestWin)
-	return createWindowOperation(nil, window.Close, []window.TimedWindow{latestWin}, &Partition)
+	return createWindowOperation(nil, window.Close, []window.TimedWindow{latestWin}, &SharedSessionPartition)
 }
 
 // NextWindowToBeClosed returns the next window yet to be closed.
 func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 	return &sessionWindow{
-		startTime: Partition.Start,
-		endTime:   Partition.End,
-		slot:      Partition.Slot,
+		startTime: SharedSessionPartition.Start,
+		endTime:   SharedSessionPartition.End,
+		slot:      SharedSessionPartition.Slot,
 	}
 }
 
-func (w *Windower) DeleteClosedWindows(response *window.TimedWindowResponse) {
+// DeleteClosedWindow deletes the window from the closed windows list.
+func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
 	w.closedWindows.Delete(response.Window)
 }
 
 // OldestWindowEndTime returns the end time of the oldest window.
 // if there are no closed windows, it returns the end time of the oldest active window
+// if there are no windows, it returns -1
 func (w *Windower) OldestWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()
-	} else {
-		var minEndTime = time.UnixMilli(math.MaxInt64)
-		for _, windows := range w.activeWindows {
-			if win = windows.Front(); win != nil && win.EndTime().Before(minEndTime) {
-				minEndTime = win.EndTime()
-			}
-		}
+	}
 
-		if minEndTime.UnixMilli() == math.MaxInt64 {
-			return time.UnixMilli(-1)
-		} else {
-			return minEndTime
+	var minEndTime time.Time
+	for _, windows := range w.activeWindows {
+		if win := windows.Front(); win != nil && (minEndTime.IsZero() || win.EndTime().Before(minEndTime)) {
+			minEndTime = win.EndTime()
 		}
 	}
+
+	// if minEndTime is zero, that means there are no windows we can return -1.
+	if minEndTime.IsZero() {
+		return time.UnixMilli(-1)
+	}
+
+	return minEndTime
 }
 
 // windowsThatCanBeMerged is a function that takes a slice of windows (each window defined by a start and end time)

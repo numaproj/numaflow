@@ -83,7 +83,7 @@ func NewPnFManager(ctx context.Context,
 // AsyncSchedulePnF creates and schedules the PnF routine asynchronously.
 // does not maintain the order of pnf execution.
 func (op *Manager) AsyncSchedulePnF(ctx context.Context,
-	partitionID partition.ID,
+	partitionID *partition.ID,
 	pbq pbq.Reader,
 ) {
 	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.reduceApplier, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager, op.windower)
