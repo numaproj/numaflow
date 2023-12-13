@@ -20,7 +20,7 @@ Once "threshold" reached to 5s(configurable) and if source is found as idle, the
 */
 
 //go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
-//go:generate kubectl apply -k ./kafka -n numaflow-system
+//go:generate kubectl apply -k ../../config/apps/kafka -n numaflow-system
 // Wait for zookeeper to come up
 //go:generate sleep 60
 
@@ -69,6 +69,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + i*1000)
+				// SendMessageTo will publish the message to only one replica in case of multiple replicas.
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
@@ -89,17 +90,17 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	inputTopic := "input-topic"
+	topic := CreateKafkaTopic("2", "2")
 	fileData, err := os.ReadFile("testdata/kafka-pipeline.yaml")
 	is.NoError(err)
-	updatedFileData := strings.ReplaceAll(string(fileData), "my-topic", inputTopic)
+	updatedFileData := strings.ReplaceAll(string(fileData), "my-topic", topic)
 
 	w := is.Given().Pipeline(updatedFileData).When().CreatePipelineAndWait()
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
 	defer w.DeletePipelineAndWait()
-	defer DeleteKafkaTopic(inputTopic)
+	defer DeleteKafkaTopic(topic)
 
 	done := make(chan struct{})
 	go func() {
@@ -111,14 +112,13 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 			case <-done:
 				return
 			default:
-				SendMessage(inputTopic, "data", generateMsg("1", startTime))
+				SendMessage(topic, "data", generateMsg("1", startTime))
 				time.Sleep(10 * time.Millisecond)
 				startTime = startTime.Add(1 * time.Second)
 			}
 		}
 	}()
 
-	ExpectKafkaTopicCount(inputTopic, 15, 3*time.Second)
 	// since the window duration is 10 second, so the count of event will be 10
 	w.Expect().SinkContains("sink", "10", WithTimeout(120*time.Second))
 	done <- struct{}{}

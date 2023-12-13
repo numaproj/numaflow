@@ -38,7 +38,7 @@ type KafkaSuite struct {
 }
 
 func (ks *KafkaSuite) TestKafkaSink() {
-	outputTopic := fixtures.CreateKafkaTopic()
+	outputTopic := fixtures.CreateKafkaTopic("1", "1")
 	defer fixtures.DeleteKafkaTopic(outputTopic)
 	pipeline := &dfv1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
@@ -93,8 +93,8 @@ func (ks *KafkaSuite) TestKafkaSink() {
 }
 
 func (ks *KafkaSuite) TestKafkaSourceSink() {
-	inputTopic := fixtures.CreateKafkaTopic()
-	outputTopic := fixtures.CreateKafkaTopic()
+	inputTopic := fixtures.CreateKafkaTopic("1", "1")
+	outputTopic := fixtures.CreateKafkaTopic("1", "1")
 	pipeline := &dfv1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "kafka-sink-e2e",

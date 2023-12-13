@@ -32,6 +32,13 @@ func init() {
 	var brokers = []string{bootstrapServers}
 	http.HandleFunc("/kafka/create-topic", func(w http.ResponseWriter, r *http.Request) {
 		topic := r.URL.Query().Get("topic")
+		partitions, replicas, err := getKafkaPartitionAndReplicas(r.URL.Query().Get("partitions"), r.URL.Query().Get("replicas"))
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
 		if err != nil {
 			log.Println(err)
@@ -39,7 +46,7 @@ func init() {
 			return
 		}
 		defer admin.Close()
-		if err = admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: 1, ReplicationFactor: 1}, true); err != nil {
+		if err = admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: int32(partitions), ReplicationFactor: int16(replicas)}, true); err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -201,4 +208,26 @@ func init() {
 		}
 		_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", n, mf.size, float64(n)/time.Since(start).Seconds(), topic)
 	})
+}
+
+func getKafkaPartitionAndReplicas(p, r string) (partition int, replicas int, err error) {
+	if p == "" {
+		partition = 1
+	} else {
+		partition, err = strconv.Atoi(p)
+		if err != nil {
+			return 0, 0, err
+		}
+	}
+
+	if r == "" {
+		replicas = 1
+	} else {
+		replicas, err = strconv.Atoi(r)
+		if err != nil {
+			return 0, 0, err
+		}
+	}
+
+	return partition, replicas, nil
 }
