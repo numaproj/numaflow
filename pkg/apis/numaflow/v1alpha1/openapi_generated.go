@@ -1025,13 +1025,15 @@ func schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref common.ReferenceCallback)
 				Properties: map[string]spec.Schema{
 					"length": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Description: "Length is the duration of the fixed window.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"streaming": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Description: "Streaming should be set to true if the reduce udf is streaming.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},
@@ -3506,7 +3508,8 @@ func schema_pkg_apis_numaflow_v1alpha1_SessionWindow(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"timeout": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Description: "Timeout is the duration of inactivity after which a session window closes.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 				},
@@ -3781,18 +3784,21 @@ func schema_pkg_apis_numaflow_v1alpha1_SlidingWindow(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"length": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Description: "Length is the duration of the sliding window.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"slide": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Description: "Slide is the slide parameter that controls the frequency at which the sliding window is created.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"streaming": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Description: "Streaming should be set to true if the reduce udf is streaming.",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},

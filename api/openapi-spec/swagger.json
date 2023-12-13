@@ -17736,9 +17736,11 @@
       "type": "object",
       "properties": {
         "length": {
+          "description": "Length is the duration of the fixed window.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "streaming": {
+          "description": "Streaming should be set to true if the reduce udf is streaming.",
           "type": "boolean"
         }
       }
@@ -19088,6 +19090,7 @@
       "type": "object",
       "properties": {
         "timeout": {
+          "description": "Timeout is the duration of inactivity after which a session window closes.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }
@@ -19234,12 +19237,15 @@
       "type": "object",
       "properties": {
         "length": {
+          "description": "Length is the duration of the sliding window.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "slide": {
+          "description": "Slide is the slide parameter that controls the frequency at which the sliding window is created.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "streaming": {
+          "description": "Streaming should be set to true if the reduce udf is streaming.",
           "type": "boolean"
         }
       }

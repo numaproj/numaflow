@@ -1072,6 +1072,9 @@ Description
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
+<p>
+Length is the duration of the fixed window.
+</p>
 </td>
 </tr>
 <tr>
@@ -1080,6 +1083,9 @@ Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
+<p>
+Streaming should be set to true if the reduce udf is streaming.
+</p>
 </td>
 </tr>
 </tbody>
@@ -4185,6 +4191,10 @@ Description
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
+<p>
+Timeout is the duration of inactivity after which a session window
+closes.
+</p>
 </td>
 </tr>
 </tbody>
@@ -4441,6 +4451,9 @@ Description
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
+<p>
+Length is the duration of the sliding window.
+</p>
 </td>
 </tr>
 <tr>
@@ -4450,6 +4463,10 @@ Kubernetes meta/v1.Duration </a> </em>
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
+<p>
+Slide is the slide parameter that controls the frequency at which the
+sliding window is created.
+</p>
 </td>
 </tr>
 <tr>
@@ -4458,6 +4475,9 @@ Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
+<p>
+Streaming should be set to true if the reduce udf is streaming.
+</p>
 </td>
 </tr>
 </tbody>
