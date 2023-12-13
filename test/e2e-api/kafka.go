@@ -212,6 +212,7 @@ func init() {
 
 func getKafkaPartitionAndReplicas(p, r string) (partition int, replicas int, err error) {
 	if p == "" {
+		// if partition is not specified, default to 1
 		partition = 1
 	} else {
 		partition, err = strconv.Atoi(p)
@@ -221,6 +222,7 @@ func getKafkaPartitionAndReplicas(p, r string) (partition int, replicas int, err
 	}
 
 	if r == "" {
+		// if replicas is not specified, default to 1
 		replicas = 1
 	} else {
 		replicas, err = strconv.Atoi(r)
