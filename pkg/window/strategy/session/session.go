@@ -331,16 +331,11 @@ func (w *Windower) OldestWindowEndTime() time.Time {
 		return win.EndTime()
 	}
 
-	var minEndTime time.Time
+	var minEndTime = time.UnixMilli(-1)
 	for _, windows := range w.activeWindows {
-		if win := windows.Front(); win != nil && (minEndTime.IsZero() || win.EndTime().Before(minEndTime)) {
+		if win := windows.Front(); win != nil && (minEndTime.UnixMilli() == -1 || win.EndTime().Before(minEndTime)) {
 			minEndTime = win.EndTime()
 		}
-	}
-
-	// if minEndTime is zero, that means there are no windows we can return -1.
-	if minEndTime.IsZero() {
-		return time.UnixMilli(-1)
 	}
 
 	return minEndTime
