@@ -37,6 +37,7 @@ rules:
       - pods/log
       - pods/exec
       - configmaps
+      - secrets
       - services
       - persistentvolumeclaims
       - namespaces
@@ -44,6 +45,7 @@ rules:
       - get
       - list
       - watch
+      - update
   - apiGroups:
       - apps
     resources:
