@@ -30,7 +30,7 @@ import (
 
 const (
 	namespace = "numaflow-system"
-	secret    = "numaflow-server-pass-secret"
+	secret    = "numaflow-server-secret"
 )
 
 func Start() error {
@@ -62,6 +62,7 @@ func Start() error {
 		return fmt.Errorf("failed to get initial admin password, %w", err)
 	}
 
+	//add check if secret already exists skip it
 	k8sSecret.Data = map[string][]byte{
 		"admin.initial-password": []byte(password),  // base64 encoded password,
 		"server.secretkey":       []byte(secretKey), // base64 encoded secretKey,
