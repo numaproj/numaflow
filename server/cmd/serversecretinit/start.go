@@ -29,14 +29,19 @@ import (
 )
 
 const (
-	namespace = "numaflow-system"
-	secret    = "numaflow-server-secret"
+	namespace       = "numaflow-system"
+	secret          = "numaflow-server-secret"
+	serverSecretKey = "server.secretkey"
+	passwordKey     = "admin.initial-password"
 )
 
 func Start() error {
 	var (
-		k8sRestConfig *rest.Config
-		err           error
+		k8sRestConfig     *rest.Config
+		err               error
+		secretKeyExists   bool
+		passwordKeyExists bool
+		secretMap         = map[string][]byte{}
 	)
 	k8sRestConfig, err = util.K8sRestConfig()
 	if err != nil {
@@ -52,25 +57,30 @@ func Start() error {
 		return err
 	}
 
-	secretKey, err := generateRandomBytes(32)
-	if err != nil {
-		return fmt.Errorf("failed to generate session secret secretKey, %w", err)
+	_, secretKeyExists = k8sSecret.Data[serverSecretKey]
+	if !secretKeyExists {
+		secretKey, err := generateRandomBytes(32)
+		if err != nil {
+			return fmt.Errorf("failed to generate session secret secretKey, %w", err)
+		}
+		secretMap[serverSecretKey] = []byte(secretKey) // base64 encoded secretKey
 	}
 
-	password, err := generateRandomBytes(8)
-	if err != nil {
-		return fmt.Errorf("failed to get initial admin password, %w", err)
+	_, passwordKeyExists = k8sSecret.Data[passwordKey]
+	if !passwordKeyExists {
+		password, err := generateRandomBytes(8)
+		if err != nil {
+			return fmt.Errorf("failed to get initial admin password, %w", err)
+		}
+		secretMap[passwordKey] = []byte(password) // base64 encoded password
 	}
 
-	//add check if secret already exists skip it
-	k8sSecret.Data = map[string][]byte{
-		"admin.initial-password": []byte(password),  // base64 encoded password,
-		"server.secretkey":       []byte(secretKey), // base64 encoded secretKey,
-	}
-
-	k8sSecret, err = kubeClient.CoreV1().Secrets(namespace).Update(context.Background(), k8sSecret, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to update k8s secret with admin password and secretKey, %w", err)
+	if !secretKeyExists || !passwordKeyExists {
+		k8sSecret.Data = secretMap
+		_, err = kubeClient.CoreV1().Secrets(namespace).Update(context.Background(), k8sSecret, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to update k8s secret with admin password and secretKey, %w", err)
+		}
 	}
 
 	return nil

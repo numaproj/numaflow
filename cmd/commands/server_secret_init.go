@@ -17,8 +17,10 @@ limitations under the License.
 package commands
 
 import (
-	"github.com/spf13/cobra"
+	"fmt"
 
+	"github.com/spf13/cobra"
+	
 	secretinitcmd "github.com/numaproj/numaflow/server/cmd/serversecretinit"
 )
 
@@ -26,9 +28,14 @@ func NewServerSecretInitCommand() *cobra.Command {
 
 	command := &cobra.Command{
 		Use:   "secret-init",
-		Short: "Initialize secret with admin password and jwt secret key",
-		Run: func(cmd *cobra.Command, args []string) {
-			secretinitcmd.Start()
+		Short: "Initialize numaflow-server-secret with admin password and jwt secret key",
+		RunE: func(cmd *cobra.Command, args []string) error {
+
+			if err := secretinitcmd.Start(); err != nil {
+				return fmt.Errorf("failed to start server secret init service: %w", err)
+			}
+
+			return nil
 		},
 	}
 
