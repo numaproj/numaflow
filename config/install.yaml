@@ -16175,6 +16175,7 @@ rules:
   - pods/log
   - pods/exec
   - configmaps
+  - secrets
   - services
   - persistentvolumeclaims
   - namespaces
@@ -16182,6 +16183,7 @@ rules:
   - get
   - list
   - watch
+  - update
 - apiGroups:
   - apps
   resources:
@@ -16415,6 +16417,12 @@ metadata:
   namespace: numaflow-system
 ---
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-server-cm
+  namespace: numaflow-system
+---
+apiVersion: v1
 data:
   rbac-conf.yaml: |
     policy.default: role:readonly
@@ -16422,8 +16430,8 @@ data:
     # We can have multiple scopes, and the first scope that matches with the policy will be used.
     # The default value is "groups", which means that the groups field of the user's token will be examined
     # The other possible value is "email", which means that the email field of the user's token will be examined
-    # It can be provided as a comma-separated list, e.g "groups,email"
-    # policy.scopes: groups,email
+    # It can be provided as a comma-separated list, e.g "groups,email,username"
+    policy.scopes: groups,email,username
   rbac-policy.csv: |
     # Policies go here
     p, role:admin, *, *, *
@@ -16444,6 +16452,13 @@ metadata:
 stringData:
   dex-github-client-id: <GITHUB_CLIENT_ID>
   dex-github-client-secret: <GITHUB_CLIENT_SECRET>
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: numaflow-server-secret
+  namespace: numaflow-system
+type: Opaque
 ---
 apiVersion: v1
 kind: Service
@@ -16723,6 +16738,11 @@ spec:
         volumeMounts:
         - mountPath: /opt/numaflow
           name: env-volume
+      - args:
+        - secret-init
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        name: secret-init
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737
