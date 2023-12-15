@@ -60,7 +60,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		panic(err)
 	}
 	// noAuthLocalGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
-	noAuthLocalGroup := r.Group("/auth/local/v1")
+	noAuthLocalGroup := r.Group(baseHref + "/auth/local/v1")
 	v1RoutesNoAuthLocal(noAuthLocalGroup, localAuthObj)
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.

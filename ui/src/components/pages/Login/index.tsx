@@ -144,7 +144,7 @@ export function Login() {
     };
 
     try {
-      const response = await fetch(`/auth/local/v1/login`, {
+      const response = await fetch(`${getBaseHref()}/auth/local/v1/login`, {
         method: "POST",
         body: JSON.stringify(data),
       });
