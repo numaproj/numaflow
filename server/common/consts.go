@@ -17,9 +17,23 @@ limitations under the License.
 package common
 
 const (
-	AppClientID              = "numaflow-server-app"
-	StateCookieName          = "numaflow-oauthstate"
-	StateCookieMaxAge        = 60 * 5
-	UserIdentityCookieName   = "numaflow.token"
-	UserIdentityCookieMaxAge = 60 * 60 * 8 // 8 hours
+	AppClientID                 = "numaflow-server-app"
+	StateCookieName             = "numaflow-oauthstate"
+	StateCookieMaxAge           = 60 * 5
+	UserIdentityCookieName      = "numaflow.token"
+	UserIdentityCookieMaxAge    = 60 * 60 * 8 // 8 hours
+	LoginCookieName             = "numaflow-login"
+	NumaflowAdminUsername       = "admin"
+	NumaflowAccountsSecret      = "numaflow-server-secret"
+	NumaflowAccountsConfigMap   = "numaflow-server-cm"
+	NumaflowAccountsNamespace   = "numaflow-system"
+	NumaflowServerSecretKey     = "server.secretkey"
+	TokenIssuer                 = "numaflow-server"
+	AdminInitialPasswordHashKey = "admin.initial-password"
+	AdminPasswordHashKey        = "admin.password"
+	AdminEnabledKey             = "admin.enabled"
+	AccountsKeyPrefix           = "accounts"
+	AccountPasswordSuffix       = "password"
+	JWTCookieName               = "jwt"
+	JWTCookieMaxAge             = 60 * 60 * 8 // 8 hours
 )

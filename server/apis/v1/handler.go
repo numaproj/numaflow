@@ -64,10 +64,11 @@ type handler struct {
 	numaflowClient     dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
 	dexObj             *DexObject
+	localAuthObject    *LocalAuthObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(dexObj *DexObject) (*handler, error) {
+func NewHandler(dexObj *DexObject, localAuthObject *LocalAuthObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -91,10 +92,12 @@ func NewHandler(dexObj *DexObject) (*handler, error) {
 		numaflowClient:     numaflowClient,
 		daemonClientsCache: daemonClientsCache,
 		dexObj:             dexObj,
+		localAuthObject:    localAuthObject,
 	}, nil
 }
 
 // AuthInfo loads and returns auth info from cookie
+// TODO logic for JWT based auth
 func (h *handler) AuthInfo(c *gin.Context) {
 	if h.dexObj == nil {
 		errMsg := "User is not authenticated: missing Dex"
