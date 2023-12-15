@@ -183,7 +183,7 @@ func authMiddleware(authorizer authz.Authorizer, dexAuthenticator authn.Authenti
 		} else if loginType == "local" {
 			userInfo, err = localAuthenticator.Authenticate(c)
 		} else {
-			errMsg := fmt.Sprintf("unidentified login type received: %v", err)
+			errMsg := fmt.Sprintf("unidentified login type received: %v", loginType)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 			return

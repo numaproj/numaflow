@@ -72,9 +72,9 @@ func (l *LocalAuthObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) 
 
 	itc := authn.IDTokenClaims{
 		Iss:  claims["iss"].(string),
-		Name: claims["username"].(string),
 		Exp:  int(claims["exp"].(float64)),
 		Iat:  int(claims["iat"].(float64)),
+		Name: claims["username"].(string),
 	}
 	userInfo := authn.NewUserInfo(&itc, tokenString, "")
 	return &userInfo, nil

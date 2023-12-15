@@ -154,6 +154,10 @@ func getSubjectFromScope(scopes []string, userInfo *authn.UserInfo) []string {
 	if slices.Contains(scopes, ScopeEmail) {
 		scopedList = append(scopedList, userInfo.IDTokenClaims.Email)
 	}
+	// If the scope is username, fetch the name from the user identity token.
+	if slices.Contains(scopes, ScopeUsername) {
+		scopedList = append(scopedList, userInfo.IDTokenClaims.Name)
+	}
 	return scopedList
 }
 
