@@ -105,7 +105,7 @@ func (l *LocalAuthObject) VerifyUser(c *gin.Context, username string, password s
 		return err
 	}
 
-	if account.Enabled == false {
+	if !account.Enabled {
 		return fmt.Errorf("account: %s is disabled", username)
 	}
 

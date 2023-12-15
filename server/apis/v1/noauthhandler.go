@@ -82,6 +82,6 @@ func (h *noAuthHandler) Logout(c *gin.Context) {
 		return
 	}
 	c.SetCookie(common.LoginCookieName, "", -1, "/", "", true, true)
-	
+
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }

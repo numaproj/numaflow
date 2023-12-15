@@ -18,11 +18,11 @@ package v1
 
 import (
 	"fmt"
-	"github.com/numaproj/numaflow/server/authn"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
 )
 
@@ -46,7 +46,7 @@ type LoginInput struct {
 // The jwt token and login type are also set as a cookie.
 func (h *noAuthLocalHandler) Login(c *gin.Context) {
 	if h.localAuthObject.authDisabled {
-		errMsg := fmt.Sprintf("Auth is disabled")
+		errMsg := "Auth is disabled"
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
@@ -57,7 +57,7 @@ func (h *noAuthLocalHandler) Login(c *gin.Context) {
 	)
 
 	if err = c.ShouldBindJSON(&input); err != nil {
-		errMsg := fmt.Sprintf("Missing input fields")
+		errMsg := "Missing input fields"
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}

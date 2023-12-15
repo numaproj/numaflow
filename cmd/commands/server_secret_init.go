@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	
+
 	secretinitcmd "github.com/numaproj/numaflow/server/cmd/serversecretinit"
 )
 
