@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/numaproj/numaflow/server/authn"
 	"io"
 	"math"
 	"net/http"
@@ -47,7 +48,6 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
 	"github.com/numaproj/numaflow/webhook/validator"
 )
@@ -97,46 +97,88 @@ func NewHandler(dexObj *DexObject, localAuthObject *LocalAuthObject) (*handler, 
 }
 
 // AuthInfo loads and returns auth info from cookie
-// TODO logic for JWT based auth
 func (h *handler) AuthInfo(c *gin.Context) {
-	if h.dexObj == nil {
-		errMsg := "User is not authenticated: missing Dex"
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-	}
-	cookies := c.Request.Cookies()
-	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
-	if err != nil {
-		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	if userIdentityTokenStr == "" {
-		errMsg := "User is not authenticated, err: empty Token"
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	var userInfo authn.UserInfo
-	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
-		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+	if h.dexObj == nil && h.localAuthObject == nil {
+		errMsg := "User is not authenticated: missing Dex and LocalAuth"
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
-	idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+	loginType, err := c.Cookie(common.LoginCookieName)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	var claims authn.IDTokenClaims
-	if err = idToken.Claims(&claims); err != nil {
-		errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
+		errMsg := fmt.Sprintf("Failed to get login type: %v", err)
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
-	res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+	if loginType == "dex" {
+		cookies := c.Request.Cookies()
+		userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
+		if err != nil {
+			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		if userIdentityTokenStr == "" {
+			errMsg := "User is not authenticated, err: empty Token"
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		var userInfo authn.UserInfo
+		if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
+			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+
+		idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		var claims authn.IDTokenClaims
+		if err = idToken.Claims(&claims); err != nil {
+			errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+
+		res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+		return
+	} else if loginType == "local" {
+		userIdentityTokenStr, err := c.Cookie(common.JWTCookieName)
+		if err != nil {
+			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		if userIdentityTokenStr == "" {
+			errMsg := "User is not authenticated, err: empty Token"
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		claims, err := h.localAuthObject.ParseToken(c, userIdentityTokenStr)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to verify and parse token: %s", err)
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+
+		itc := authn.IDTokenClaims{
+			Iss:  claims["iss"].(string),
+			Exp:  int(claims["exp"].(float64)),
+			Iat:  int(claims["iat"].(float64)),
+			Name: claims["username"].(string),
+		}
+		res := authn.NewUserInfo(&itc, userIdentityTokenStr, "")
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+		return
+	}
+
+	errMsg := fmt.Sprintf("unidentified login type received: %v", loginType)
+	c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
