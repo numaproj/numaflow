@@ -104,7 +104,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 
 	done := make(chan struct{})
 	go func() {
-		startTime := time.Now().Add(-time.Second * 10)
+		startTime := time.Now().Add(-10000 * time.Hour)
 		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():
