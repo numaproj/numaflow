@@ -55,7 +55,7 @@ func (hc *HealthChecker) getPipelineResourceHealth(h *handler, ns string,
 
 	// check if the pipeline status is cached
 	if status, ok := hc.resourceStatusCache.Get(cacheKey); ok {
-		log.Info("pipeline status from cache: ", status)
+		log.Info("Pipeline status from cache: ", status)
 		return status, nil
 	}
 	// if not present in cache, check for the current pipeline status
