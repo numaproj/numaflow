@@ -111,10 +111,12 @@ func (l *LocalAuthObject) VerifyUser(c *gin.Context, username string, password s
 		if err = authn.VerifyPassword(password, account.PasswordHash); err != nil {
 			return fmt.Errorf("incorrect password enter for the user")
 		}
-	} else {
+	} else if username == common.NumaflowAdminUsername && account.InitialPasswordHash != "" {
 		if err = authn.VerifyInitialPassword(password, account.InitialPasswordHash); err != nil {
 			return err
 		}
+	} else {
+		return fmt.Errorf("password not configured for the user")
 	}
 
 	return nil
