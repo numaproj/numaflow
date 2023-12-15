@@ -90,7 +90,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	topic := CreateKafkaTopic("2", "1")
+	topic := CreateKafkaTopic(2, 1)
 	fileData, err := os.ReadFile("testdata/kafka-pipeline.yaml")
 	is.NoError(err)
 	updatedFileData := strings.ReplaceAll(string(fileData), "my-topic", topic)

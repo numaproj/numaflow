@@ -25,10 +25,10 @@ import (
 	"time"
 )
 
-func CreateKafkaTopic(partitions, replicas string) string {
+func CreateKafkaTopic(partitions, replicas int32) string {
 	topic := fmt.Sprintf("e2e-topic-%s", rand.String(5))
 	log.Printf("create Kafka topic %q\n", topic)
-	InvokeE2EAPI("/kafka/create-topic?topic=%s&partitions=%s&replicas=%s", topic, partitions, replicas)
+	InvokeE2EAPI("/kafka/create-topic?topic=%s&partitions=%d&replicas=%d", topic, partitions, replicas)
 	return topic
 }
 
