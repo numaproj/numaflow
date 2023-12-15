@@ -225,7 +225,7 @@ func (ps *PipelineMetadataQuery) getPending(ctx context.Context, req *daemon.Get
 }
 
 func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {
-	status := ps.healthChecker.GetCurrentHealth()
+	status := ps.healthChecker.getCurrentHealth()
 	resp := new(daemon.GetPipelineStatusResponse)
 	resp.Status = &daemon.PipelineStatus{
 		Status:  pointer.String(status.Status),
@@ -291,5 +291,5 @@ func listBuffers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient 
 
 // StartHealthCheck starts the health check for the pipeline using the health checker
 func (ps *PipelineMetadataQuery) StartHealthCheck(ctx context.Context) {
-	ps.healthChecker.StartHealthCheck(ctx)
+	ps.healthChecker.startHealthCheck(ctx)
 }

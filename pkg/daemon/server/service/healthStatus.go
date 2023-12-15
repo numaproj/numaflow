@@ -5,65 +5,68 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"golang.org/x/net/context"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/shared/ewma"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
 const (
-	// HealthSlidingWindow is the total time window to compute the health of a vertex
-	HealthSlidingWindow = 5 * time.Minute
+	// healthSlidingWindow is the total time window to compute the health of a vertex
+	healthSlidingWindow = 5 * time.Minute
 
-	// HealthTimeStep is the frequency at which the health of a vertex is computed
-	HealthTimeStep = 10 * time.Second
+	// healthTimeStep is the frequency at which the health of a vertex is computed
+	healthTimeStep = 10 * time.Second
 
-	// HealthWindowSize is the number of timeline entries to keep for a given vertex
+	// healthWindowSize is the number of timeline entries to keep for a given vertex
 	// This is used to compute the health of a vertex
-	// Ensure that HealthSlidingWindow / HealthTimeStep is an integer
-	HealthWindowSize = HealthSlidingWindow / HealthTimeStep
+	// Ensure that healthSlidingWindow / healthTimeStep is an integer
+	healthWindowSize = healthSlidingWindow / healthTimeStep
 
-	// CriticalWindowTime is the number of entries to look back to assign a critical state to a vertex
-	CriticalWindowTime = 1 * time.Minute
+	// criticalWindowTime is the number of entries to look back to assign a critical state to a vertex
+	// Critical state is assigned to a vertex if the weighted mean average buffer usage of
+	// the vertex for a given time period is above a defined criticalBufferThreshold
+	criticalWindowTime = 1 * time.Minute
 
-	// CriticalWindowSize is the number of entries to look back to assign a critical state to a vertex
+	// criticalWindowSize is the number of entries to look back to assign a critical state to a vertex
 	// This is used to avoid false positives
-	CriticalWindowSize = int(CriticalWindowTime / HealthTimeStep)
+	criticalWindowSize = int(criticalWindowTime / healthTimeStep)
 
-	// CriticalLookBackCount is the number of times the state must be critical in the last CriticalWindowSize entries
+	// criticalLookBackCount is the number of times the state must be critical in the last criticalWindowSize entries
 	// This is used to avoid false positives
-	CriticalLookBackCount = 3
+	criticalLookBackCount = 3
 )
 
 // HealthThresholds are the thresholds used to compute the health of a vertex
 const (
-	// CriticalThreshold is the threshold above which the health of a vertex is critical
-	CriticalThreshold = 95
-	// WarningThreshold is the threshold above which the health of a vertex is warning
-	WarningThreshold = 80
+	// criticalBufferThreshold is the threshold above which the health of a vertex is critical
+	criticalBufferThreshold = 95
+	// warningBufferThreshold is the threshold above which the health of a vertex is warning
+	warningBufferThreshold = 80
 )
 
 // Dataflow states
 const (
-	// CriticalState is the state of a vertex when its health is critical
-	CriticalState = "critical"
-	// WarningState is the state of a vertex when its health is warning
-	WarningState = "warning"
-	// HealthyState is the state of a vertex when its health is healthy
-	HealthyState = "healthy"
+	// criticalState is the state of a vertex when its health is critical
+	criticalState = "critical"
+	// warningState is the state of a vertex when its health is warning
+	warningState = "warning"
+	// healthyState is the state of a vertex when its health is healthy
+	healthyState = "healthy"
 )
 
 const (
-	// EnableCriticalLookBack is used to enable the look back for critical state
-	EnableCriticalLookBack  = true
-	DisableCriticalLookBack = false
+	// enableCriticalLookBack is used to enable the look back for critical state
+	enableCriticalLookBack = true
 )
 
-// TimelineEntry is used to store the buffer usage timeline for a given vertex
-type TimelineEntry struct {
+// timelineEntry is used to store the buffer usage timeline for a given vertex
+type timelineEntry struct {
 	// The time at which the entry is recorded
 	Time int64 `json:"time"`
 	// The buffer usage of the pipeline at the time
@@ -72,8 +75,8 @@ type TimelineEntry struct {
 	AverageBufferUsage float64 `json:"averageBufferUsage"`
 }
 
-// DataHealthResponse is the response returned by the data health check API
-type DataHealthResponse struct {
+// dataHealthResponse is the response returned by the data health check API
+type dataHealthResponse struct {
 	// Status is the overall data status of the pipeline
 	Status string `json:"status"`
 	// Message is the error message if any
@@ -82,27 +85,27 @@ type DataHealthResponse struct {
 	Code string `json:"code"`
 }
 
-// NewDataHealthResponse is used to create a new DataHealthResponse object
-func NewDataHealthResponse(status string, message string, code string) *DataHealthResponse {
-	return &DataHealthResponse{
+// newDataHealthResponse is used to create a new dataHealthResponse object
+func newDataHealthResponse(status string, message string, code string) *dataHealthResponse {
+	return &dataHealthResponse{
 		Status:  status,
 		Message: message,
 		Code:    code,
 	}
 }
 
-// DefaultDataHealthResponse is the default response returned by the data health check API
-var DefaultDataHealthResponse = NewDataHealthResponse(PipelineStatusOK,
-	"Pipeline dataflow is healthy",
-	"D1")
+// defaultDataHealthResponse is the default response returned by the data health check API
+var defaultDataHealthResponse = newDataHealthResponse(PipelineStatusUnknown,
+	"Pipeline dataflow is in an unknown state",
+	"D4")
 
 // HealthChecker is the struct type for health checker.
 type HealthChecker struct {
 	// Add a field for the health status.
-	currentDataStatus *DataHealthResponse
+	currentDataStatus *dataHealthResponse
 	isbSvcClient      isbsvc.ISBService
 	pipeline          *v1alpha1.Pipeline
-	timelineData      map[string]*sharedqueue.OverflowQueue[*TimelineEntry]
+	timelineData      map[string]*sharedqueue.OverflowQueue[*timelineEntry]
 	statusLock        *sync.RWMutex
 }
 
@@ -110,33 +113,33 @@ type HealthChecker struct {
 func NewHealthChecker(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) *HealthChecker {
 	// Return a new HealthChecker struct instance.
 	return &HealthChecker{
-		currentDataStatus: DefaultDataHealthResponse,
+		currentDataStatus: defaultDataHealthResponse,
 		isbSvcClient:      isbSvcClient,
 		pipeline:          pipeline,
-		timelineData:      make(map[string]*sharedqueue.OverflowQueue[*TimelineEntry]),
+		timelineData:      make(map[string]*sharedqueue.OverflowQueue[*timelineEntry]),
 		statusLock:        &sync.RWMutex{},
 	}
 }
 
-// VertexState is a struct which contains the name and  state of a vertex
-type VertexState struct {
+// vertexState is a struct which contains the name and  state of a vertex
+type vertexState struct {
 	// Name is the name of the vertex
 	Name string `json:"name"`
 	// State is the state of the vertex
 	State string `json:"state"`
 }
 
-// NewVertexState is used to create a new VertexState object
-func NewVertexState(name string, state string) *VertexState {
-	return &VertexState{
+// newVertexState is used to create a new vertexState object
+func newVertexState(name string, state string) *vertexState {
+	return &vertexState{
 		Name:  name,
 		State: state,
 	}
 }
 
-// GetCurrentHealth returns the current health status of the pipeline.
+// getCurrentHealth returns the current health status of the pipeline.
 // It is thread safe to ensure concurrent access.
-func (hc *HealthChecker) GetCurrentHealth() *DataHealthResponse {
+func (hc *HealthChecker) getCurrentHealth() *dataHealthResponse {
 	// Lock the statusLock to ensure thread safety.
 	hc.statusLock.RLock()
 	defer hc.statusLock.RUnlock()
@@ -144,9 +147,9 @@ func (hc *HealthChecker) GetCurrentHealth() *DataHealthResponse {
 	return hc.currentDataStatus
 }
 
-// SetCurrentHealth sets the current health status of the pipeline.
+// setCurrentHealth sets the current health status of the pipeline.
 // It is thread safe to ensure concurrent access.
-func (hc *HealthChecker) SetCurrentHealth(status *DataHealthResponse) {
+func (hc *HealthChecker) setCurrentHealth(status *dataHealthResponse) {
 	// Lock the statusLock to ensure thread safety.
 	hc.statusLock.Lock()
 	defer hc.statusLock.Unlock()
@@ -154,38 +157,42 @@ func (hc *HealthChecker) SetCurrentHealth(status *DataHealthResponse) {
 	hc.currentDataStatus = status
 }
 
-// StartHealthCheck starts the health check for the pipeline.
-// The ticks are generated at the interval of HealthTimeStep.
-func (hc *HealthChecker) StartHealthCheck(ctx context.Context) {
+// startHealthCheck starts the health check for the pipeline.
+// The ticks are generated at the interval of healthTimeStep.
+func (hc *HealthChecker) startHealthCheck(ctx context.Context) {
+	logger := logging.FromContext(ctx)
 	// Goroutine to listen for ticks
 	// At every tick, check and update the health status of the pipeline.
-	go func(ctx context.Context) {
-		// Create a ticker with the interval of HealthCheckInterval.
-		ticker := time.NewTicker(HealthTimeStep)
-		defer ticker.Stop()
-		for {
-			select {
-			// If the ticker ticks, check and update the health status of the pipeline.
-			case <-ticker.C:
-				// Get the current health status of the pipeline.
-				criticality, err := hc.getPipelineDataCriticality()
-				if err != nil {
-					return
-				}
+	// If the context is done, return.
+	// Create a ticker to generate ticks at the interval of healthTimeStep.
+	ticker := time.NewTicker(healthTimeStep)
+	defer ticker.Stop()
+	for {
+		select {
+		// If the ticker ticks, check and update the health status of the pipeline.
+		case <-ticker.C:
+			// Get the current health status of the pipeline.
+			criticality, err := hc.getPipelineVertexDataCriticality(ctx)
+			logger.Debugw("Health check", zap.Any("criticality", criticality))
+			if err != nil {
+				// If there is an error, set the current health status to unknown.
+				// as we are not able to determine the health of the pipeline.
+				logger.Errorw("Failed to vertex data criticality", zap.Error(err))
+				hc.setCurrentHealth(defaultDataHealthResponse)
+			} else {
 				// convert the vertex state to pipeline state
 				pipelineState := convertVertexStateToPipelineState(criticality)
 				// update the current health status of the pipeline
-				hc.SetCurrentHealth(pipelineState)
-
-			// If the context is done, return.
-			case <-ctx.Done():
-				return
+				hc.setCurrentHealth(pipelineState)
 			}
+		// If the context is done, return.
+		case <-ctx.Done():
+			return
 		}
-	}(ctx)
+	}
 }
 
-// getPipelineDataCriticality is used to provide the data criticality of the pipeline
+// getPipelineVertexDataCriticality is used to provide the data criticality of the pipeline
 // They can be of the following types:
 // 1. Ok: The pipeline is working as expected
 // 2. Warning: The pipeline is working but there is a lag in the data movement
@@ -195,13 +202,12 @@ func (hc *HealthChecker) StartHealthCheck(ctx context.Context) {
 //
 // Based on this information, we first get the current buffer usage of each buffer in the pipeline at that instant
 // and populate the timeline data for each buffer.
-// Then for a given buffer, we calculate the average buffer usage over
-// the last HEALTH_WINDOW_SIZE seconds.
+// Then for a given buffer, we calculate the weighted mean average buffer usage with decay over
+// the last HEALTH_WINDOW_SIZE seconds. This is done to smoothen the curve and remove point spikes
 // If this average is greater than the critical threshold, we return the critical status
 // If this average is greater than the warning threshold, we return the warning status
 // If this average is less than the warning threshold, we return the ok status
-func (hc *HealthChecker) getPipelineDataCriticality() ([]*VertexState, error) {
-	ctx := context.Background()
+func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) ([]*vertexState, error) {
 	// Fetch the buffer information for the pipeline
 	buffers, err := listBuffers(ctx, hc.pipeline, hc.isbSvcClient)
 	if err != nil {
@@ -210,7 +216,7 @@ func (hc *HealthChecker) getPipelineDataCriticality() ([]*VertexState, error) {
 	// update the usage timeline for all the ISBs used in the pipeline
 	hc.updateUsageTimeline(buffers.Buffers)
 
-	var vertexState []*VertexState
+	var vertexState []*vertexState
 
 	// iterate over the timeline data for each buffer and calculate the exponential weighted mean average
 	// for the last HEALTH_WINDOW_SIZE buffer usage entries
@@ -224,9 +230,9 @@ func (hc *HealthChecker) getPipelineDataCriticality() ([]*VertexState, error) {
 		ewmaBufferUsage := calculateEWMAUsage(bufferUsage)
 		// assign the state to the vertex based on the average buffer usage
 		// Look back is enabled for the critical state
-		currentState := assignStateToTimeline(ewmaBufferUsage, EnableCriticalLookBack)
+		currentState := assignStateToTimeline(ewmaBufferUsage, enableCriticalLookBack)
 		// create a new vertex state object
-		currentVertexState := NewVertexState(bufferName, currentState)
+		currentVertexState := newVertexState(bufferName, currentState)
 		// add the vertex state to the list of vertex states
 		vertexState = append(vertexState, currentVertexState)
 	}
@@ -235,7 +241,7 @@ func (hc *HealthChecker) getPipelineDataCriticality() ([]*VertexState, error) {
 
 // updateUsageTimeline is used to update the usage timeline for a given buffer list
 // This iterates over all the buffers in the buffer list and updates the usage timeline for each buffer
-// The timeline data is represented as a map of buffer name to a list of TimelineEntry
+// The timeline data is represented as a map of buffer name to a list of timelineEntry
 // Example:
 //
 //	{
@@ -254,13 +260,13 @@ func (hc *HealthChecker) updateUsageTimeline(bufferList []*daemon.BufferInfo) {
 
 		// if the buffer name is not present in the timeline data, add it
 		if _, ok := hc.timelineData[bufferName]; !ok {
-			hc.timelineData[bufferName] = sharedqueue.New[*TimelineEntry](int(HealthWindowSize))
+			hc.timelineData[bufferName] = sharedqueue.New[*timelineEntry](int(healthWindowSize))
 		}
 		// extract the current buffer usage and update the average buffer usage
 		bufferUsage := buffer.GetBufferUsage() * 100
 		newAverage := updateAverageBufferUsage(hc.timelineData[bufferName].Items(), bufferUsage)
 		// add the new entry to the timeline
-		hc.timelineData[bufferName].Append(&TimelineEntry{
+		hc.timelineData[bufferName].Append(&timelineEntry{
 			Time:               timestamp,
 			BufferUsage:        bufferUsage,
 			AverageBufferUsage: newAverage,
@@ -283,7 +289,7 @@ func (hc *HealthChecker) updateUsageTimeline(bufferList []*daemon.BufferInfo) {
 //	averageBufferUsage = lastAverage * timelineSize + (newUsageEntry) / timelineSize + 1
 //	where lastAverage is the average buffer usage of the last entry in the timeline
 //	and timelineSize is the size of the timeline
-func updateAverageBufferUsage(timeline []*TimelineEntry, newEntry float64) float64 {
+func updateAverageBufferUsage(timeline []*timelineEntry, newEntry float64) float64 {
 	// If the timeline is empty, return the buffer usage of the new entry
 	if len(timeline) == 0 {
 		return newEntry
@@ -292,9 +298,9 @@ func updateAverageBufferUsage(timeline []*TimelineEntry, newEntry float64) float
 	lastAverage := timeline[len(timeline)-1].AverageBufferUsage
 	var newAverage float64
 	// If the timeline is full
-	if len(timeline) == int(HealthWindowSize) {
-		newAverage = (lastAverage*float64(HealthWindowSize) + newEntry - timeline[0].BufferUsage) / float64(HealthWindowSize)
-	} else if len(timeline) < int(HealthWindowSize) {
+	if len(timeline) == int(healthWindowSize) {
+		newAverage = (lastAverage*float64(healthWindowSize) + newEntry - timeline[0].BufferUsage) / float64(healthWindowSize)
+	} else if len(timeline) < int(healthWindowSize) {
 		// If the timeline is not full
 		newAverage = (lastAverage*float64(len(timeline)) + newEntry) / float64(len(timeline)+1)
 	}
@@ -308,7 +314,7 @@ func updateAverageBufferUsage(timeline []*TimelineEntry, newEntry float64) float
 // where lastEWMA is the EWMA buffer usage of the last entry in the timeline
 func calculateEWMAUsage(bufferUsage []float64) []float64 {
 	// Compute the current EWMA buffer usage of the timeline
-	a := ewma.NewSimpleEWMA(float64(HealthWindowSize))
+	a := ewma.NewSimpleEWMA(float64(healthWindowSize))
 	var emwaValues []float64
 	// TODO: Check if we can keep storing the EWMA values instead of recomputing them
 	for _, f := range bufferUsage {
@@ -326,12 +332,12 @@ func calculateEWMAUsage(bufferUsage []float64) []float64 {
 func assignStateToBufferUsage(ewmaValue float64) string {
 	// Assign the state to the buffer usage
 	var state string
-	if ewmaValue > CriticalThreshold {
-		state = CriticalState
-	} else if ewmaValue > WarningThreshold {
-		state = WarningState
+	if ewmaValue > criticalBufferThreshold {
+		state = criticalState
+	} else if ewmaValue > warningBufferThreshold {
+		state = warningState
 	} else {
-		state = HealthyState
+		state = healthyState
 	}
 	return state
 }
@@ -350,7 +356,7 @@ func assignStateToTimeline(ewmaValues []float64, lookBack bool) string {
 
 	// If the state is CRITICAL, and we have a look back, we need to check we have
 	// LOOK_BACK_COUNT entries as CRITICAL
-	if state == CriticalState && lookBack {
+	if state == criticalState && lookBack {
 		// Extract the states of the timeline
 		var states []string
 		for _, entry := range ewmaValues {
@@ -359,19 +365,19 @@ func assignStateToTimeline(ewmaValues []float64, lookBack bool) string {
 		// Count the number of times the state is CRITICAL in the last CRITICAL_WINDOW_SIZE entries
 		var criticalCount int
 		for i := len(states) - 1; i >= 0; i-- {
-			if states[i] == CriticalState {
+			if states[i] == criticalState {
 				criticalCount++
 			}
-			if (len(states) - i) == CriticalWindowSize {
+			if (len(states) - i) == criticalWindowSize {
 				break
 			}
 		}
 		// If the state is CRITICAL at least LOOK_BACK_COUNT times in the last CRITICAL_WINDOW_SIZE entries
 		// Set the state to CRITICAL, otherwise set the state to WARNING
-		if criticalCount >= CriticalLookBackCount {
-			state = CriticalState
+		if criticalCount >= criticalLookBackCount {
+			state = criticalState
 		} else {
-			state = WarningState
+			state = warningState
 		}
 	}
 	return state
@@ -384,7 +390,7 @@ func assignStateToTimeline(ewmaValues []float64, lookBack bool) string {
 // else the pipeline is ok
 // Here we follow a precedence order of unknown > critical > warning  > ok
 // Hence, whichever is the highest precedence state found in the vertex state, we return that
-func convertVertexStateToPipelineState(vertexState []*VertexState) *DataHealthResponse {
+func convertVertexStateToPipelineState(vertexState []*vertexState) *dataHealthResponse {
 	// create a map to store the precedence order of the states
 	// assign a number to each state based on the precedence order
 
@@ -417,7 +423,7 @@ func convertVertexStateToPipelineState(vertexState []*VertexState) *DataHealthRe
 	}
 
 	// if we reach here, return unknown state
-	return NewDataHealthResponse(PipelineStatusUnknown,
+	return newDataHealthResponse(PipelineStatusUnknown,
 		"Pipeline dataflow is in an unknown state",
 		"D4")
 }
@@ -428,29 +434,29 @@ func convertVertexStateToPipelineState(vertexState []*VertexState) *DataHealthRe
 // and the code corresponding to Warning, similar for Critical
 // if the state is Unknown we return a message saying the pipeline is in an unknown state due to the vertex,
 // and the code corresponding to Unknown
-func generateDataHealthResponse(state string, vertex string) *DataHealthResponse {
+func generateDataHealthResponse(state string, vertex string) *dataHealthResponse {
 	switch state {
 	case PipelineStatusOK:
-		return NewDataHealthResponse(
+		return newDataHealthResponse(
 			PipelineStatusOK,
 			"Pipeline dataflow is healthy",
 			"D1")
 	case PipelineStatusWarning:
-		return NewDataHealthResponse(
+		return newDataHealthResponse(
 			PipelineStatusWarning,
 			fmt.Sprintf("Dataflow is in warning state for  %s", vertex),
 			"D2")
 	case PipelineStatusCritical:
-		return NewDataHealthResponse(
+		return newDataHealthResponse(
 			PipelineStatusCritical,
 			fmt.Sprintf("Dataflow is in critical state for %s", vertex),
 			"D3")
 	case PipelineStatusUnknown:
-		return NewDataHealthResponse(
+		return newDataHealthResponse(
 			PipelineStatusUnknown,
 			fmt.Sprintf("Pipeline dataflow is in an unknown state due to %s", vertex),
 			"D4")
 	default:
-		return DefaultDataHealthResponse
+		return defaultDataHealthResponse
 	}
 }

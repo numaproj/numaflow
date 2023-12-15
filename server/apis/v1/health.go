@@ -84,7 +84,7 @@ func (hc *HealthChecker) getPipelineResourceHealth(h *handler, ns string,
 func checkVertexLevelHealth(ctx context.Context, h *handler, ns string,
 	pipeline string) (*resourceHealthResponse, error) {
 	log := logging.FromContext(ctx)
-	// check if the pipeline is paused, if so, return paused status
+	// get the pipeline object
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	// if error return unknown status
 	if err != nil {
@@ -107,7 +107,6 @@ func checkVertexLevelHealth(ctx context.Context, h *handler, ns string,
 
 	// if the pipeline is killed, return killed status
 	// this cannot be checked at individual vertex level, hence needs to be checked here
-	// TODO(Health): Check if this is correct?
 	if pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseDeleting {
 		return &resourceHealthResponse{
 			Status:  PipelineStatusDeleting,

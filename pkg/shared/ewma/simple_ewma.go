@@ -1,9 +1,9 @@
 package ewma
 
 const (
-	averageAge = 30.0
+	defaultAlpha = 30.0
 	// constDecayFactor is the default decay factor
-	constDecayFactor = 2.0 / (averageAge + 1.0)
+	constDecayFactor = 2.0 / (defaultAlpha + 1.0)
 )
 
 // SimpleEWMA is a simple implementation of EWMA
