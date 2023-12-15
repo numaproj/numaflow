@@ -3,17 +3,27 @@ kind: Pipeline
 metadata:
   name: simple-source-go
 spec:
+  watermark:
+    idleSource:
+      threshold: 5s
+      incrementBy: 3s
+      stepInterval: 3s
   vertices:
     - name: in
+      scale:
+        min: 2
       source:
         udsource:
           container:
             # A simple user-defined source for e2e testing
             # See https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcer/examples/simple_source
-            image: quay.io/numaio/numaflow-go/source-simple-source:v0.5.1
+            image: quay.io/numaio/numaflow-go/source-simple-source:v0.6.1
+            imagePullPolicy: Always
       limits:
         readBatchSize: 2
     - name: out
+      scale:
+        min: 1
       sink:
         log: {}
   edges:

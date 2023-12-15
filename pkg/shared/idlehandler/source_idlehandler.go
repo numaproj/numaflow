@@ -21,6 +21,7 @@ import (
 // SourceIdleHandler handles operations related to idle watermarks for source.
 type SourceIdleHandler struct {
 	config                  *dfv1.Watermark
+	lastPublishedIdleWm     time.Time
 	lastIdleWmPublishedTime time.Time
 	updatedTS               time.Time
 	wmFetcher               fetch.SourceFetcher
@@ -35,6 +36,7 @@ func NewSourceIdleHandler(config *dfv1.Watermark, fetcher fetch.SourceFetcher, p
 		srcPublisher:            publisher,
 		updatedTS:               time.Now(),
 		lastIdleWmPublishedTime: time.UnixMilli(-1),
+		lastPublishedIdleWm:     time.UnixMilli(-1),
 	}
 }
 
@@ -75,16 +77,34 @@ func (iw *SourceIdleHandler) hasStepIntervalPassed() bool {
 
 // PublishSourceIdleWatermark publishes an idle watermark.
 func (iw *SourceIdleHandler) PublishSourceIdleWatermark(partitions []int32) {
-	// publish the idle watermark, the idle watermark is the current watermark + the increment by value.
-	nextIdleWM := iw.wmFetcher.ComputeWatermark().Add(iw.config.IdleSource.GetIncrementBy())
-	currentTime := time.Now().Add(-1 * iw.config.GetMaxDelay())
+	var nextIdleWM time.Time
+
+	// compute the next idle watermark
+	computedWm := iw.wmFetcher.ComputeWatermark()
+
+	// check if the computed watermark is -1
+	// last computed watermark can be -1, when the pod is restarted or when the processor entity is not created yet.
+	if computedWm.UnixMilli() == -1 {
+		// if the computed watermark is -1, it means that the source is not able to compute the watermark.
+		// in this case, we can publish the idle watermark as the last published idle watermark + the increment by value.
+		nextIdleWM = iw.lastPublishedIdleWm.Add(iw.config.IdleSource.GetIncrementBy())
+	} else {
+		// if its not -1, then we can publish the idle watermark as the computed watermark + the increment by value.
+		nextIdleWM = computedWm.Add(iw.config.IdleSource.GetIncrementBy())
+	}
 
 	// if the next idle watermark is after the current time, then set the next idle watermark to the current time.
+	currentTime := time.Now().Add(-1 * iw.config.GetMaxDelay())
 	if nextIdleWM.After(currentTime) {
 		nextIdleWM = currentTime
 	}
 
 	iw.srcPublisher.PublishIdleWatermarks(nextIdleWM, partitions)
+
+	// update the last published idle watermark
+	iw.lastPublishedIdleWm = nextIdleWM
+
+	// set the last idle watermark published time to the current time
 	iw.lastIdleWmPublishedTime = time.Now()
 }
 
