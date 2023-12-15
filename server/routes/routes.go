@@ -43,7 +43,7 @@ type AuthInfo struct {
 
 var logger = logging.NewLogger().Named("server")
 
-func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref string) {
+func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref string, authRouteMap authz.RouteMap) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -52,7 +52,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 		panic(err)
 	}
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
-	noAuthGroup := r.Group("/auth/v1")
+	noAuthGroup := r.Group(baseHref + "auth/v1")
 	v1RoutesNoAuth(noAuthGroup, dexObj)
 
 	localAuthObj, err := v1.NewLocalAuthObject(authInfo.DisableAuth)
@@ -67,12 +67,12 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group(baseHref + "api/v1")
 	if !authInfo.DisableAuth {
-		authorizer, err := authz.NewCasbinObject()
+		authorizer, err := authz.NewCasbinObject(authRouteMap)
 		if err != nil {
 			panic(err)
 		}
 		// Add the AuthN/AuthZ middleware to the group.
-		r1Group.Use(authMiddleware(authorizer, dexObj, localAuthObj))
+		r1Group.Use(authMiddleware(authorizer, dexObj, localAuthObj, authRouteMap))
 		v1Routes(r1Group, dexObj, localAuthObj)
 	} else {
 		v1Routes(r1Group, nil, nil)
@@ -164,7 +164,8 @@ func v1Routes(r gin.IRouter, dexObj *v1.DexObject, localAuthObject *v1.LocalAuth
 // authMiddleware is the middleware for AuthN/AuthZ.
 // it ensures the user is authenticated and authorized
 // to execute the requested action before sending the request to the api handler.
-func authMiddleware(authorizer authz.Authorizer, dexAuthenticator authn.Authenticator, localAuthenticator authn.Authenticator) gin.HandlerFunc {
+func authMiddleware(authorizer authz.Authorizer, dexAuthenticator authn.Authenticator, localAuthenticator authn.Authenticator, authRouteMap authz.RouteMap) gin.HandlerFunc {
+
 	return func(c *gin.Context) {
 
 		var userInfo *authn.UserInfo
@@ -195,10 +196,8 @@ func authMiddleware(authorizer authz.Authorizer, dexAuthenticator authn.Authenti
 			c.Abort()
 			return
 		}
-		// Get the route map from the context. Key is in the format "method:path".
-		routeMapKey := authz.GetRouteMapKey(c)
 		// Check if the route requires authorization.
-		if authz.RouteMap[routeMapKey] != nil && authz.RouteMap[routeMapKey].RequiresAuthZ {
+		if authRouteMap.GetRouteFromContext(c) != nil && authRouteMap.GetRouteFromContext(c).RequiresAuthZ {
 			// Check if the user is authorized to execute the requested action.
 			isAuthorized := authorizer.Authorize(c, userInfo)
 			if isAuthorized {
@@ -210,12 +209,12 @@ func authMiddleware(authorizer authz.Authorizer, dexAuthenticator authn.Authenti
 				c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 				c.Abort()
 			}
-		} else if authz.RouteMap[routeMapKey] != nil && !authz.RouteMap[routeMapKey].RequiresAuthZ {
+		} else if authRouteMap.GetRouteFromContext(c) != nil && !authRouteMap.GetRouteFromContext(c).RequiresAuthZ {
 			// If the route does not require AuthZ, skip the AuthZ check.
 			c.Next()
 		} else {
 			// If the route is not present in the route map, return an error.
-			logger.Errorw("route not present in routeMap", "route", routeMapKey)
+			logger.Errorw("route not present in routeMap", "route", authz.GetRouteMapKey(c))
 			errMsg := "Invalid route"
 			c.JSON(http.StatusForbidden, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()

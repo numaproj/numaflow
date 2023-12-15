@@ -132,7 +132,7 @@ func (r *kafkaSource) GetName() string {
 }
 
 // Partitions returns the partitions from which the source is reading.
-func (r *kafkaSource) Partitions() []int32 {
+func (r *kafkaSource) Partitions(context.Context) []int32 {
 	for topic, partitions := range r.handler.sess.Claims() {
 		if topic == r.topic {
 			return partitions

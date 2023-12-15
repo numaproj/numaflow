@@ -43,7 +43,9 @@ export function Login() {
     setLoadingMessage("Logging in...");
     setCallbackError(undefined);
     try {
-      const response = await fetch(`/auth/v1/login?returnUrl=${returnURL}`);
+      const response = await fetch(
+        `${getBaseHref()}/auth/v1/login?returnUrl=${returnURL}`
+      );
       if (response.ok) {
         const data = await response.json();
         if (data?.data?.AuthCodeURL) {
@@ -70,7 +72,7 @@ export function Login() {
     setLoadingMessage("Logging in...");
     try {
       const response = await fetch(
-        `/auth/v1/callback?code=${code}&state=${state}`
+        `${getBaseHref()}/auth/v1/callback?code=${code}&state=${state}`
       );
       if (response.ok) {
         const data = await response.json();

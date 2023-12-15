@@ -4,6 +4,7 @@ import IconButton from "@mui/material/IconButton";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
 import { useNavigate } from "react-router-dom";
+import { getBaseHref } from "../../../utils";
 import Chip from "@mui/material/Chip";
 
 export default function AccountMenu() {
@@ -11,7 +12,9 @@ export default function AccountMenu() {
   const { userInfo } = useContext<AppContextProps>(AppContext);
 
   const url =
-    userInfo?.email === "" ? `/auth/local/v1/logout` : `/auth/v1/logout`;
+    userInfo?.email === ""
+      ? `${getBaseHref()}/auth/local/v1/logout`
+      : `${getBaseHref()}/auth/v1/logout`;
 
   const handleLogout = useCallback(async () => {
     try {
