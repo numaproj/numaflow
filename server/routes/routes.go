@@ -55,7 +55,7 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	noAuthGroup := r.Group("/auth/v1")
 	v1RoutesNoAuth(noAuthGroup, dexObj)
 
-	localAuthObj, err := v1.NewLocalAuthObject()
+	localAuthObj, err := v1.NewLocalAuthObject(authInfo.DisableAuth)
 	if err != nil {
 		panic(err)
 	}

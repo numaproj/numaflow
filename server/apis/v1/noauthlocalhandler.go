@@ -45,13 +45,19 @@ type LoginInput struct {
 // Login is used to generate the jwt token and return it as part of the return payload.
 // The jwt token and login type are also set as a cookie.
 func (h *noAuthLocalHandler) Login(c *gin.Context) {
+	if h.localAuthObject.authDisabled {
+		errMsg := fmt.Sprintf("Auth is disabled")
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	var (
 		input LoginInput
 		err   error
 	)
 
 	if err = c.ShouldBindJSON(&input); err != nil {
-		errMsg := fmt.Sprintf("%v", err)
+		errMsg := fmt.Sprintf("Missing input fields")
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}

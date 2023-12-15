@@ -33,11 +33,12 @@ import (
 )
 
 type LocalAuthObject struct {
-	kubeClient kubernetes.Interface
+	kubeClient   kubernetes.Interface
+	authDisabled bool
 }
 
 // NewLocalAuthObject is used to provide a new localAuthObject
-func NewLocalAuthObject() (*LocalAuthObject, error) {
+func NewLocalAuthObject(authDisabled bool) (*LocalAuthObject, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -52,7 +53,8 @@ func NewLocalAuthObject() (*LocalAuthObject, error) {
 	}
 
 	return &LocalAuthObject{
-		kubeClient: kubeClient,
+		kubeClient:   kubeClient,
+		authDisabled: authDisabled,
 	}, nil
 }
 
