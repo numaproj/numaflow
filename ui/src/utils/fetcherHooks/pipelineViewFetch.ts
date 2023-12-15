@@ -67,7 +67,6 @@ export const usePipelineViewFetch = (
               `${json.data?.pipeline?.metadata?.namespace}-${json.data.pipeline?.metadata?.name}-`
             );
             // Update spec state if it is not equal to the spec from the response
-            console.log("----", spec, json.data?.pipeline?.spec);
             if (!isEqual(spec, json.data)) setSpec(json.data?.pipeline?.spec);
             setPipelineErr(undefined);
           } else if (json?.errMsg) {
