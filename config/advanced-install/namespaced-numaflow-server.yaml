@@ -120,15 +120,17 @@ subjects:
 apiVersion: v1
 data:
   namespaced: "true"
-  server.disable.auth: "true"
+  server.disable.auth: "false"
 kind: ConfigMap
 metadata:
   name: numaflow-cmd-params-config
 ---
 apiVersion: v1
+data:
+  admin.enabled: "true"
 kind: ConfigMap
 metadata:
-  name: numaflow-server-config
+  name: numaflow-server-local-user-config
 ---
 apiVersion: v1
 data:
