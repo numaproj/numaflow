@@ -22,7 +22,7 @@ data:
   # server.base.href: "/"
   #
   ### Whether to disable authentication and authorization for the UX server, defaults to false.
-  server.disable.auth: "false"
+  server.disable.auth: "true"
   #
   ### The address of the Dex server for authentication.
   # server.dex.server: http://numaflow-dex-server:5556/dex
