@@ -26,14 +26,14 @@ import (
 	"github.com/numaproj/numaflow/server/common"
 )
 
-type noAuthLocalHandler struct {
-	localAuthObject *LocalAuthObject
+type localUsersHandler struct {
+	localUsersAuthObject *LocalUsersAuthObject
 }
 
-// NewNoAuthLocalHandler is used to provide a new instance of the handler type
-func NewNoAuthLocalHandler(localAuthObject *LocalAuthObject) (*noAuthLocalHandler, error) {
-	return &noAuthLocalHandler{
-		localAuthObject: localAuthObject,
+// NewLocalUsersHandler is used to provide a new instance of the handler type
+func NewLocalUsersHandler(localUsersAuthObject *LocalUsersAuthObject) (*localUsersHandler, error) {
+	return &localUsersHandler{
+		localUsersAuthObject: localUsersAuthObject,
 	}, nil
 }
 
@@ -44,8 +44,8 @@ type LoginInput struct {
 
 // Login is used to generate the jwt token and return it as part of the return payload.
 // The jwt token and login type are also set as a cookie.
-func (h *noAuthLocalHandler) Login(c *gin.Context) {
-	if h.localAuthObject.authDisabled {
+func (h *localUsersHandler) Login(c *gin.Context) {
+	if h.localUsersAuthObject.authDisabled {
 		errMsg := "Auth is disabled"
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -62,19 +62,19 @@ func (h *noAuthLocalHandler) Login(c *gin.Context) {
 		return
 	}
 
-	user := authn.User{}
+	user := authn.LoginCredentials{}
 	user.Username = input.Username
 	user.Password = input.Password
 
 	// Verify user for the given username and password
-	if err = h.localAuthObject.VerifyUser(c, user.Username, user.Password); err != nil {
+	if err = h.localUsersAuthObject.VerifyUser(c, user.Username, user.Password); err != nil {
 		errMsg := fmt.Sprintf("%v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
 	//GenerateToken
-	token, err := h.localAuthObject.GenerateToken(c, user.Username)
+	token, err := h.localUsersAuthObject.GenerateToken(c, user.Username)
 	if err != nil {
 		errMsg := fmt.Sprintf("Error while generating user identity token: %v", err)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(&errMsg, nil))
@@ -94,7 +94,7 @@ func (h *noAuthLocalHandler) Login(c *gin.Context) {
 }
 
 // Logout is used to remove auth cookies ending a user's session.
-func (h *noAuthLocalHandler) Logout(c *gin.Context) {
+func (h *localUsersHandler) Logout(c *gin.Context) {
 	tokenString, err := c.Cookie(common.JWTCookieName)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to retrieve user identity token: %v", err)

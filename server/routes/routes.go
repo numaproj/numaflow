@@ -55,13 +55,13 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	noAuthGroup := r.Group(baseHref + "auth/v1")
 	v1RoutesNoAuth(noAuthGroup, dexObj)
 
-	localAuthObj, err := v1.NewLocalAuthObject(authInfo.DisableAuth)
+	localUsersAuthObj, err := v1.NewLocalUsersAuthObject(authInfo.DisableAuth)
 	if err != nil {
 		panic(err)
 	}
-	// noAuthLocalGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
-	noAuthLocalGroup := r.Group(baseHref + "/auth/local/v1")
-	v1RoutesNoAuthLocal(noAuthLocalGroup, localAuthObj)
+	// localUsersGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
+	localUsersGroup := r.Group(baseHref + "/auth/local/v1")
+	v1RoutesLocalUser(localUsersGroup, localUsersAuthObj)
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
@@ -72,8 +72,8 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 			panic(err)
 		}
 		// Add the AuthN/AuthZ middleware to the group.
-		r1Group.Use(authMiddleware(authorizer, dexObj, localAuthObj, authRouteMap))
-		v1Routes(r1Group, dexObj, localAuthObj)
+		r1Group.Use(authMiddleware(authorizer, dexObj, localUsersAuthObj, authRouteMap))
+		v1Routes(r1Group, dexObj, localUsersAuthObj)
 	} else {
 		v1Routes(r1Group, nil, nil)
 	}
@@ -95,8 +95,8 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject) {
 	r.GET("/callback", handler.Callback)
 }
 
-func v1RoutesNoAuthLocal(r gin.IRouter, localAuthObject *v1.LocalAuthObject) {
-	handler, err := v1.NewNoAuthLocalHandler(localAuthObject)
+func v1RoutesLocalUser(r gin.IRouter, localUsersAuthObject *v1.LocalUsersAuthObject) {
+	handler, err := v1.NewLocalUsersHandler(localUsersAuthObject)
 	if err != nil {
 		panic(err)
 	}
@@ -108,8 +108,8 @@ func v1RoutesNoAuthLocal(r gin.IRouter, localAuthObject *v1.LocalAuthObject) {
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
 // for the route along with an entry in the RouteMap in auth/route_map.go.
-func v1Routes(r gin.IRouter, dexObj *v1.DexObject, localAuthObject *v1.LocalAuthObject) {
-	handler, err := v1.NewHandler(dexObj, localAuthObject)
+func v1Routes(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject) {
+	handler, err := v1.NewHandler(dexObj, localUsersAuthObject)
 	if err != nil {
 		panic(err)
 	}
@@ -164,7 +164,7 @@ func v1Routes(r gin.IRouter, dexObj *v1.DexObject, localAuthObject *v1.LocalAuth
 // authMiddleware is the middleware for AuthN/AuthZ.
 // it ensures the user is authenticated and authorized
 // to execute the requested action before sending the request to the api handler.
-func authMiddleware(authorizer authz.Authorizer, dexAuthenticator authn.Authenticator, localAuthenticator authn.Authenticator, authRouteMap authz.RouteMap) gin.HandlerFunc {
+func authMiddleware(authorizer authz.Authorizer, dexAuthenticator authn.Authenticator, localUsersAuthenticator authn.Authenticator, authRouteMap authz.RouteMap) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 
@@ -182,7 +182,7 @@ func authMiddleware(authorizer authz.Authorizer, dexAuthenticator authn.Authenti
 		if loginType == "dex" {
 			userInfo, err = dexAuthenticator.Authenticate(c)
 		} else if loginType == "local" {
-			userInfo, err = localAuthenticator.Authenticate(c)
+			userInfo, err = localUsersAuthenticator.Authenticate(c)
 		} else {
 			errMsg := fmt.Sprintf("unidentified login type received: %v", loginType)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))

@@ -59,16 +59,16 @@ const (
 )
 
 type handler struct {
-	kubeClient         kubernetes.Interface
-	metricsClient      *metricsversiond.Clientset
-	numaflowClient     dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
-	dexObj             *DexObject
-	localAuthObject    *LocalAuthObject
+	kubeClient           kubernetes.Interface
+	metricsClient        *metricsversiond.Clientset
+	numaflowClient       dfv1clients.NumaflowV1alpha1Interface
+	daemonClientsCache   *lru.Cache[string, *daemonclient.DaemonClient]
+	dexObj               *DexObject
+	localUsersAuthObject *LocalUsersAuthObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(dexObj *DexObject, localAuthObject *LocalAuthObject) (*handler, error) {
+func NewHandler(dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -87,18 +87,18 @@ func NewHandler(dexObj *DexObject, localAuthObject *LocalAuthObject) (*handler, 
 		_ = value.Close()
 	})
 	return &handler{
-		kubeClient:         kubeClient,
-		metricsClient:      metricsClient,
-		numaflowClient:     numaflowClient,
-		daemonClientsCache: daemonClientsCache,
-		dexObj:             dexObj,
-		localAuthObject:    localAuthObject,
+		kubeClient:           kubeClient,
+		metricsClient:        metricsClient,
+		numaflowClient:       numaflowClient,
+		daemonClientsCache:   daemonClientsCache,
+		dexObj:               dexObj,
+		localUsersAuthObject: localUsersAuthObject,
 	}, nil
 }
 
 // AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
-	if h.dexObj == nil && h.localAuthObject == nil {
+	if h.dexObj == nil && h.localUsersAuthObject == nil {
 		errMsg := "User is not authenticated: missing Dex and LocalAuth"
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -159,7 +159,7 @@ func (h *handler) AuthInfo(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 			return
 		}
-		claims, err := h.localAuthObject.ParseToken(c, userIdentityTokenStr)
+		claims, err := h.localUsersAuthObject.ParseToken(c, userIdentityTokenStr)
 		if err != nil {
 			errMsg := fmt.Sprintf("Failed to verify and parse token: %s", err)
 			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
@@ -177,7 +177,7 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		return
 	}
 
-	errMsg := fmt.Sprintf("unidentified login type received: %v", loginType)
+	errMsg := fmt.Sprintf("Unidentified login type received: %v", loginType)
 	c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 }
 

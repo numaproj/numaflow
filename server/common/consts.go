@@ -31,7 +31,7 @@ const (
 	AdminInitialPasswordHashKey = "admin.initial-password"
 	AdminPasswordHashKey        = "admin.password"
 	AdminEnabledKey             = "admin.enabled"
-	AccountsKeyPrefix           = "accounts"
+	AccountUsernameSuffix       = "enabled"
 	AccountPasswordSuffix       = "password"
 	JWTCookieName               = "jwt"
 	JWTCookieMaxAge             = 60 * 60 * 8 // 8 hours

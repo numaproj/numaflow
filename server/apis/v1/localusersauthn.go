@@ -32,13 +32,13 @@ import (
 	"github.com/numaproj/numaflow/server/common"
 )
 
-type LocalAuthObject struct {
+type LocalUsersAuthObject struct {
 	kubeClient   kubernetes.Interface
 	authDisabled bool
 }
 
-// NewLocalAuthObject is used to provide a new localAuthObject
-func NewLocalAuthObject(authDisabled bool) (*LocalAuthObject, error) {
+// NewLocalUsersAuthObject is used to provide a new LocalUsersAuthObject
+func NewLocalUsersAuthObject(authDisabled bool) (*LocalUsersAuthObject, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -52,13 +52,13 @@ func NewLocalAuthObject(authDisabled bool) (*LocalAuthObject, error) {
 		return nil, fmt.Errorf("failed to get kubeclient, %w", err)
 	}
 
-	return &LocalAuthObject{
+	return &LocalUsersAuthObject{
 		kubeClient:   kubeClient,
 		authDisabled: authDisabled,
 	}, nil
 }
 
-func (l *LocalAuthObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
+func (l *LocalUsersAuthObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) {
 	tokenString, err := c.Cookie("jwt")
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve user identity token: %v", err)
@@ -82,7 +82,7 @@ func (l *LocalAuthObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) 
 	return &userInfo, nil
 }
 
-func (l *LocalAuthObject) getSecretKey(ctx context.Context) ([]byte, error) {
+func (l *LocalUsersAuthObject) getSecretKey(ctx context.Context) ([]byte, error) {
 	var namespace = util.LookupEnvStringOr("NAMESPACE", "numaflow-system")
 
 	secret, err := l.kubeClient.CoreV1().Secrets(namespace).Get(ctx, common.NumaflowAccountsSecret, metav1.GetOptions{})
@@ -97,7 +97,7 @@ func (l *LocalAuthObject) getSecretKey(ctx context.Context) ([]byte, error) {
 	return secretKey, nil
 }
 
-func (l *LocalAuthObject) VerifyUser(c *gin.Context, username string, password string) error {
+func (l *LocalUsersAuthObject) VerifyUser(c *gin.Context, username string, password string) error {
 	if username == "" || password == "" {
 		return fmt.Errorf("username or password cannot be empty")
 	}
@@ -127,7 +127,7 @@ func (l *LocalAuthObject) VerifyUser(c *gin.Context, username string, password s
 }
 
 // GenerateToken generates a jwt token for the given username
-func (l *LocalAuthObject) GenerateToken(c *gin.Context, username string) (string, error) {
+func (l *LocalUsersAuthObject) GenerateToken(c *gin.Context, username string) (string, error) {
 	claims := jwt.MapClaims{
 		"username": username,
 		"exp":      time.Now().Add(time.Hour * 9).Unix(), // Token expiration time - 9hours
@@ -148,7 +148,7 @@ func (l *LocalAuthObject) GenerateToken(c *gin.Context, username string) (string
 }
 
 // ParseToken parses a jwt token and returns the claims
-func (l *LocalAuthObject) ParseToken(c *gin.Context, tokenString string) (jwt.MapClaims, error) {
+func (l *LocalUsersAuthObject) ParseToken(c *gin.Context, tokenString string) (jwt.MapClaims, error) {
 	secretKey, err := l.getSecretKey(c.Request.Context())
 	if err != nil {
 		return nil, err

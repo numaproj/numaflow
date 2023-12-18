@@ -47,11 +47,3 @@ func NewUserInfo(itc *IDTokenClaims, idToken string, refreshToken string) UserIn
 		RefreshToken:  refreshToken,
 	}
 }
-
-// User includes the user information
-// It holds the username and password for the user
-// used for local user authentication
-type User struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}

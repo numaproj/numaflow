@@ -19,6 +19,7 @@ package authn
 import (
 	"context"
 	"fmt"
+	"golang.org/x/crypto/bcrypt"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -30,6 +31,14 @@ import (
 	"github.com/numaproj/numaflow/server/common"
 )
 
+// LoginCredentials includes the user information
+// It holds the username and password for the user
+// used for local user authentication
+type LoginCredentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 // Account holds local account information
 type Account struct {
 	InitialPasswordHash string
@@ -37,6 +46,7 @@ type Account struct {
 	Enabled             bool
 }
 
+// TODO: refactor to use a logger from server
 var logger = logging.NewLogger().Named("accounts")
 
 // GetAccount return an account info by the specified name.
@@ -66,6 +76,7 @@ func GetAccounts(ctx context.Context, kubeClient kubernetes.Interface) (map[stri
 	return parseAccounts(secret, cm)
 }
 
+// parseAdminAccount parses the admin account from the secret and configMap
 func parseAdminAccount(secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (*Account, error) {
 	adminAccount := &Account{Enabled: true}
 
@@ -88,6 +99,7 @@ func parseAdminAccount(secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (*Account, err
 	return adminAccount, nil
 }
 
+// parseAccounts parses all the accounts from the secret and configMap
 func parseAccounts(secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (map[string]Account, error) {
 	adminAccount, err := parseAdminAccount(secret, cm)
 	if err != nil {
@@ -99,17 +111,16 @@ func parseAccounts(secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (map[string]Accoun
 	}
 
 	for key, v := range cm.Data {
-		if !strings.HasPrefix(key, fmt.Sprintf("%s.", common.AccountsKeyPrefix)) {
+		if !strings.HasSuffix(key, fmt.Sprintf(".%s", common.AccountUsernameSuffix)) {
 			continue
 		}
 
 		val := v
-		var accountName, suffix string
+		var accountName string
 
 		parts := strings.Split(key, ".")
-		if len(parts) == 3 {
-			accountName = parts[1]
-			suffix = parts[2]
+		if len(parts) == 2 {
+			accountName = parts[0]
 		} else {
 			logger.Warnf("Unexpected key %s in ConfigMap '%s'", key, cm.Name)
 			continue
@@ -120,12 +131,12 @@ func parseAccounts(secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (map[string]Accoun
 			account = Account{Enabled: true}
 			accounts[accountName] = account
 		}
-		if suffix == "enabled" {
-			account.Enabled, err = strconv.ParseBool(val)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse configMap value for key %s: %w", key, err)
-			}
+
+		account.Enabled, err = strconv.ParseBool(val)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse configMap value for key %s: %w", key, err)
 		}
+
 		accounts[accountName] = account
 	}
 
@@ -134,11 +145,25 @@ func parseAccounts(secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (map[string]Accoun
 			continue
 		}
 
-		if passwordHash, ok := secret.Data[fmt.Sprintf("%s.%s.%s", common.AccountsKeyPrefix, name, common.AccountPasswordSuffix)]; ok {
+		if passwordHash, ok := secret.Data[fmt.Sprintf("%s.%s", name, common.AccountPasswordSuffix)]; ok {
 			account.PasswordHash = string(passwordHash)
 		}
 		accounts[name] = account
 	}
 
 	return accounts, nil
+}
+
+// VerifyInitialPassword verifies the initial password for the admin user from the Accounts object
+func VerifyInitialPassword(password, hashedPassword string) error {
+	if password == hashedPassword {
+		return nil
+	}
+
+	return fmt.Errorf("incorrect password enter for the user")
+}
+
+// VerifyPassword verifies the password(hashed) for the users from its respective Accounts object
+func VerifyPassword(password, hashedPassword string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 }
