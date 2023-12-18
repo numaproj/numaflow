@@ -28,7 +28,6 @@ import (
 )
 
 const (
-	namespace       = "numaflow-system"
 	secret          = "numaflow-server-secrets"
 	serverSecretKey = "server.secretkey"
 	passwordKey     = "admin.initial-password"
@@ -41,6 +40,7 @@ func Start() error {
 		secretKeyExists   bool
 		passwordKeyExists bool
 		secretMap         = map[string][]byte{}
+		namespace         = util.LookupEnvStringOr("NAMESPACE", "numaflow-system")
 	)
 	k8sRestConfig, err = util.K8sRestConfig()
 	if err != nil {

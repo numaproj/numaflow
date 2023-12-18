@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/server/common"
 )
 
@@ -53,11 +54,12 @@ func GetAccount(ctx context.Context, name string, kubeClient kubernetes.Interfac
 
 // GetAccounts returns list of configured accounts
 func GetAccounts(ctx context.Context, kubeClient kubernetes.Interface) (map[string]Account, error) {
-	secret, err := kubeClient.CoreV1().Secrets(common.NumaflowAccountsNamespace).Get(ctx, common.NumaflowAccountsSecret, metav1.GetOptions{})
+	var namespace = util.LookupEnvStringOr("NAMESPACE", "numaflow-system")
+	secret, err := kubeClient.CoreV1().Secrets(namespace).Get(ctx, common.NumaflowAccountsSecret, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
-	cm, err := kubeClient.CoreV1().ConfigMaps(common.NumaflowAccountsNamespace).Get(ctx, common.NumaflowAccountsConfigMap, metav1.GetOptions{})
+	cm, err := kubeClient.CoreV1().ConfigMaps(namespace).Get(ctx, common.NumaflowAccountsConfigMap, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

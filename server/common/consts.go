@@ -26,7 +26,6 @@ const (
 	NumaflowAdminUsername       = "admin"
 	NumaflowAccountsSecret      = "numaflow-server-secrets"
 	NumaflowAccountsConfigMap   = "numaflow-server-config"
-	NumaflowAccountsNamespace   = "numaflow-system"
 	NumaflowServerSecretKey     = "server.secretkey"
 	TokenIssuer                 = "numaflow-server"
 	AdminInitialPasswordHashKey = "admin.initial-password"

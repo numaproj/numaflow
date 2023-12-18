@@ -83,14 +83,16 @@ func (l *LocalAuthObject) Authenticate(c *gin.Context) (*authn.UserInfo, error) 
 }
 
 func (l *LocalAuthObject) getSecretKey(ctx context.Context) ([]byte, error) {
-	secret, err := l.kubeClient.CoreV1().Secrets(common.NumaflowAccountsNamespace).Get(ctx, common.NumaflowAccountsSecret, metav1.GetOptions{})
+	var namespace = util.LookupEnvStringOr("NAMESPACE", "numaflow-system")
+
+	secret, err := l.kubeClient.CoreV1().Secrets(namespace).Get(ctx, common.NumaflowAccountsSecret, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	secretKey, ok := secret.Data[common.NumaflowServerSecretKey]
 	if !ok {
-		return nil, fmt.Errorf("server.secretkey not found in secret")
+		return nil, fmt.Errorf("%s not found in secret", common.NumaflowServerSecretKey)
 	}
 	return secretKey, nil
 }
