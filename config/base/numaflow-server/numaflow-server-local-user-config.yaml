@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-server-local-user-config
+data:
+  # Configuration for local user authentication.
+  # Format: {username}.enabled: "true"
+  # Set the value to "false" to disable the user.
+  admin.enabled: "true"

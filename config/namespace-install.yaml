@@ -16354,9 +16354,11 @@ metadata:
   name: numaflow-dex-server-config
 ---
 apiVersion: v1
+data:
+  admin.enabled: "true"
 kind: ConfigMap
 metadata:
-  name: numaflow-server-config
+  name: numaflow-server-local-user-config
 ---
 apiVersion: v1
 data:

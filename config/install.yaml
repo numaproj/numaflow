@@ -16453,9 +16453,11 @@ metadata:
   namespace: numaflow-system
 ---
 apiVersion: v1
+data:
+  admin.enabled: "true"
 kind: ConfigMap
 metadata:
-  name: numaflow-server-config
+  name: numaflow-server-local-user-config
   namespace: numaflow-system
 ---
 apiVersion: v1
