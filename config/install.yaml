@@ -15949,6 +15949,26 @@ rules:
   - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-server-secrets-role
+  namespace: numaflow-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
@@ -16175,7 +16195,6 @@ rules:
   - pods/log
   - pods/exec
   - configmaps
-  - secrets
   - services
   - persistentvolumeclaims
   - namespaces
@@ -16183,7 +16202,6 @@ rules:
   - get
   - list
   - watch
-  - update
 - apiGroups:
   - apps
   resources:
@@ -16218,6 +16236,24 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: numaflow-dex-server
+  namespace: numaflow-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-server-secrets-binding
+  namespace: numaflow-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: numaflow-server-secrets-role
+subjects:
+- kind: ServiceAccount
+  name: numaflow-server-sa
   namespace: numaflow-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -37,7 +37,6 @@ rules:
       - pods/log
       - pods/exec
       - configmaps
-      - secrets
       - services
       - persistentvolumeclaims
     verbs:
@@ -53,7 +52,6 @@ rules:
       - get
       - list
       - watch
-      - update
   - apiGroups:
       - metrics.k8s.io
     resources:
