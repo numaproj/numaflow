@@ -24,8 +24,8 @@ const (
 	UserIdentityCookieMaxAge    = 60 * 60 * 8 // 8 hours
 	LoginCookieName             = "numaflow-login"
 	NumaflowAdminUsername       = "admin"
-	NumaflowAccountsSecret      = "numaflow-server-secret"
-	NumaflowAccountsConfigMap   = "numaflow-server-cm"
+	NumaflowAccountsSecret      = "numaflow-server-secrets"
+	NumaflowAccountsConfigMap   = "numaflow-server-config"
 	NumaflowAccountsNamespace   = "numaflow-system"
 	NumaflowServerSecretKey     = "server.secretkey"
 	TokenIssuer                 = "numaflow-server"

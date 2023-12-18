@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +29,7 @@ import (
 
 const (
 	namespace       = "numaflow-system"
-	secret          = "numaflow-server-secret"
+	secret          = "numaflow-server-secrets"
 	serverSecretKey = "server.secretkey"
 	passwordKey     = "admin.initial-password"
 )
@@ -59,19 +58,13 @@ func Start() error {
 
 	_, secretKeyExists = k8sSecret.Data[serverSecretKey]
 	if !secretKeyExists {
-		secretKey, err := generateRandomBytes(32)
-		if err != nil {
-			return fmt.Errorf("failed to generate session secret secretKey, %w", err)
-		}
+		secretKey := base64.URLEncoding.EncodeToString([]byte(util.RandomString(32)))
 		secretMap[serverSecretKey] = []byte(secretKey) // base64 encoded secretKey
 	}
 
 	_, passwordKeyExists = k8sSecret.Data[passwordKey]
 	if !passwordKeyExists {
-		password, err := generateRandomBytes(8)
-		if err != nil {
-			return fmt.Errorf("failed to get initial admin password, %w", err)
-		}
+		password := base64.URLEncoding.EncodeToString([]byte(util.RandomString(8)))
 		secretMap[passwordKey] = []byte(password) // base64 encoded password
 	}
 
@@ -84,19 +77,4 @@ func Start() error {
 	}
 
 	return nil
-}
-
-// generateRandomBytes generates a random byte slice of the specified length
-// and base64 encodes it
-func generateRandomBytes(length int) (string, error) {
-	// Create a byte slice with the specified length
-	bytes := make([]byte, length)
-
-	// Read random bytes into the slice
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-
-	return base64.URLEncoding.EncodeToString(bytes), nil
 }

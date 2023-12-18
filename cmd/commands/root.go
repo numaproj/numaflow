@@ -45,7 +45,7 @@ func init() {
 	rootCmd.AddCommand(NewDaemonServerCommand())
 	rootCmd.AddCommand(NewServerCommand())
 	rootCmd.AddCommand(NewServerInitCommand())
-	rootCmd.AddCommand(NewServerSecretInitCommand())
+	rootCmd.AddCommand(NewServerSecretsInitCommand())
 	rootCmd.AddCommand(NewWebhookCommand())
 	rootCmd.AddCommand(NewSideInputsInitCommand())
 	rootCmd.AddCommand(NewSideInputsManagerCommand())

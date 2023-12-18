@@ -24,15 +24,15 @@ import (
 	secretinitcmd "github.com/numaproj/numaflow/server/cmd/serversecretinit"
 )
 
-func NewServerSecretInitCommand() *cobra.Command {
+func NewServerSecretsInitCommand() *cobra.Command {
 
 	command := &cobra.Command{
-		Use:   "secret-init",
-		Short: "Initialize numaflow-server-secret with admin password and jwt secret key",
+		Use:   "server-secrets-init",
+		Short: "Initialize numaflow-server-secrets with admin password and jwt secret key",
 		RunE: func(cmd *cobra.Command, args []string) error {
 
 			if err := secretinitcmd.Start(); err != nil {
-				return fmt.Errorf("failed to start server secret init service: %w", err)
+				return fmt.Errorf("failed to start server secrets init service: %w", err)
 			}
 
 			return nil

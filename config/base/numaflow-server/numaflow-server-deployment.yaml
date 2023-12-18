@@ -42,10 +42,10 @@ spec:
         volumeMounts:
         - mountPath: /opt/numaflow
           name: env-volume
-      - name: secret-init
+      - name: server-secrets-init
         image: quay.io/numaproj/numaflow:latest
         args:
-        - "secret-init"
+        - "server-secrets-init"
         imagePullPolicy: Always
       containers:
         - name: main

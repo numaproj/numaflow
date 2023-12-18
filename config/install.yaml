@@ -16419,7 +16419,7 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: numaflow-server-cm
+  name: numaflow-server-config
   namespace: numaflow-system
 ---
 apiVersion: v1
@@ -16456,7 +16456,7 @@ stringData:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: numaflow-server-secret
+  name: numaflow-server-secrets
   namespace: numaflow-system
 type: Opaque
 ---
@@ -16739,10 +16739,10 @@ spec:
         - mountPath: /opt/numaflow
           name: env-volume
       - args:
-        - secret-init
+        - server-secrets-init
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
-        name: secret-init
+        name: server-secrets-init
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737
