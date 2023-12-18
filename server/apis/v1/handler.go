@@ -59,15 +59,16 @@ const (
 )
 
 type handler struct {
-	kubeClient         kubernetes.Interface
-	metricsClient      *metricsversiond.Clientset
-	numaflowClient     dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
-	dexObj             *DexObject
+	kubeClient           kubernetes.Interface
+	metricsClient        *metricsversiond.Clientset
+	numaflowClient       dfv1clients.NumaflowV1alpha1Interface
+	daemonClientsCache   *lru.Cache[string, *daemonclient.DaemonClient]
+	dexObj               *DexObject
+	localUsersAuthObject *LocalUsersAuthObject
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(dexObj *DexObject) (*handler, error) {
+func NewHandler(dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -86,54 +87,98 @@ func NewHandler(dexObj *DexObject) (*handler, error) {
 		_ = value.Close()
 	})
 	return &handler{
-		kubeClient:         kubeClient,
-		metricsClient:      metricsClient,
-		numaflowClient:     numaflowClient,
-		daemonClientsCache: daemonClientsCache,
-		dexObj:             dexObj,
+		kubeClient:           kubeClient,
+		metricsClient:        metricsClient,
+		numaflowClient:       numaflowClient,
+		daemonClientsCache:   daemonClientsCache,
+		dexObj:               dexObj,
+		localUsersAuthObject: localUsersAuthObject,
 	}, nil
 }
 
 // AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
-	if h.dexObj == nil {
-		errMsg := "User is not authenticated: missing Dex"
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-	}
-	cookies := c.Request.Cookies()
-	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
-	if err != nil {
-		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	if userIdentityTokenStr == "" {
-		errMsg := "User is not authenticated, err: empty Token"
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	var userInfo authn.UserInfo
-	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
-		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+	if h.dexObj == nil && h.localUsersAuthObject == nil {
+		errMsg := "User is not authenticated: missing Dex and LocalAuth"
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
-	idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+	loginType, err := c.Cookie(common.LoginCookieName)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	var claims authn.IDTokenClaims
-	if err = idToken.Claims(&claims); err != nil {
-		errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
+		errMsg := fmt.Sprintf("Failed to get login type: %v", err)
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
-	res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+	if loginType == "dex" {
+		cookies := c.Request.Cookies()
+		userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
+		if err != nil {
+			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		if userIdentityTokenStr == "" {
+			errMsg := "User is not authenticated, err: empty Token"
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		var userInfo authn.UserInfo
+		if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
+			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+
+		idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		var claims authn.IDTokenClaims
+		if err = idToken.Claims(&claims); err != nil {
+			errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+
+		res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+		return
+	} else if loginType == "local" {
+		userIdentityTokenStr, err := c.Cookie(common.JWTCookieName)
+		if err != nil {
+			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		if userIdentityTokenStr == "" {
+			errMsg := "User is not authenticated, err: empty Token"
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		claims, err := h.localUsersAuthObject.ParseToken(c, userIdentityTokenStr)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to verify and parse token: %s", err)
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+
+		itc := authn.IDTokenClaims{
+			Iss:  claims["iss"].(string),
+			Exp:  int(claims["exp"].(float64)),
+			Iat:  int(claims["iat"].(float64)),
+			Name: claims["username"].(string),
+		}
+		res := authn.NewUserInfo(&itc, userIdentityTokenStr, "")
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+		return
+	}
+
+	errMsg := fmt.Sprintf("Unidentified login type received: %v", loginType)
+	c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
