@@ -25,7 +25,7 @@ const (
 	LoginCookieName             = "numaflow-login"
 	NumaflowAdminUsername       = "admin"
 	NumaflowAccountsSecret      = "numaflow-server-secrets"
-	NumaflowAccountsConfigMap   = "numaflow-server-config"
+	NumaflowAccountsConfigMap   = "numaflow-server-local-user-config"
 	NumaflowServerSecretKey     = "server.secretkey"
 	TokenIssuer                 = "numaflow-server"
 	AdminInitialPasswordHashKey = "admin.initial-password"
