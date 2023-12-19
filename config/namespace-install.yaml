@@ -16111,6 +16111,25 @@ rules:
   - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-server-secrets-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
@@ -16154,6 +16173,22 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: numaflow-server-role
+subjects:
+- kind: ServiceAccount
+  name: numaflow-server-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: numaflow-ux
+    app.kubernetes.io/name: numaflow-ux
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-server-secrets-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: numaflow-server-secrets-role
 subjects:
 - kind: ServiceAccount
   name: numaflow-server-sa
@@ -16320,14 +16355,21 @@ metadata:
 ---
 apiVersion: v1
 data:
+  admin.enabled: "true"
+kind: ConfigMap
+metadata:
+  name: numaflow-server-local-user-config
+---
+apiVersion: v1
+data:
   rbac-conf.yaml: |
     policy.default: role:readonly
     # The scopes field controls which authentication scopes to examine during rbac enforcement.
     # We can have multiple scopes, and the first scope that matches with the policy will be used.
     # The default value is "groups", which means that the groups field of the user's token will be examined
     # The other possible value is "email", which means that the email field of the user's token will be examined
-    # It can be provided as a comma-separated list, e.g "groups,email"
-    # policy.scopes: groups,email
+    # It can be provided as a comma-separated list, e.g "groups,email,username"
+    policy.scopes: groups,email,username
   rbac-policy.csv: |
     # Policies go here
     p, role:admin, *, *, *
@@ -16346,6 +16388,12 @@ metadata:
 stringData:
   dex-github-client-id: <GITHUB_CLIENT_ID>
   dex-github-client-secret: <GITHUB_CLIENT_SECRET>
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: numaflow-server-secrets
+type: Opaque
 ---
 apiVersion: v1
 kind: Service
@@ -16620,6 +16668,11 @@ spec:
         volumeMounts:
         - mountPath: /opt/numaflow
           name: env-volume
+      - args:
+        - server-secrets-init
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        name: server-secrets-init
       securityContext:
         runAsNonRoot: true
         runAsUser: 9737

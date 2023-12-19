@@ -26,6 +26,7 @@ import (
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
 	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/authz"
+	"github.com/numaproj/numaflow/server/common"
 )
 
 type SystemInfo struct {
@@ -54,6 +55,14 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	noAuthGroup := r.Group(baseHref + "auth/v1")
 	v1RoutesNoAuth(noAuthGroup, dexObj)
 
+	localUsersAuthObj, err := v1.NewLocalUsersAuthObject(authInfo.DisableAuth)
+	if err != nil {
+		panic(err)
+	}
+	// localUsersGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
+	localUsersGroup := r.Group(baseHref + "/auth/local/v1")
+	v1RoutesLocalUser(localUsersGroup, localUsersAuthObj)
+
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
 	r1Group := r.Group(baseHref + "api/v1")
@@ -63,10 +72,10 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 			panic(err)
 		}
 		// Add the AuthN/AuthZ middleware to the group.
-		r1Group.Use(authMiddleware(authorizer, dexObj, authRouteMap))
-		v1Routes(r1Group, dexObj)
+		r1Group.Use(authMiddleware(authorizer, dexObj, localUsersAuthObj, authRouteMap))
+		v1Routes(r1Group, dexObj, localUsersAuthObj)
 	} else {
-		v1Routes(r1Group, nil)
+		v1Routes(r1Group, nil, nil)
 	}
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
@@ -86,10 +95,21 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject) {
 	r.GET("/callback", handler.Callback)
 }
 
+func v1RoutesLocalUser(r gin.IRouter, localUsersAuthObject *v1.LocalUsersAuthObject) {
+	handler, err := v1.NewLocalUsersHandler(localUsersAuthObject)
+	if err != nil {
+		panic(err)
+	}
+	// Handle the login request.
+	r.POST("/login", handler.Login)
+	// Handle the logout request.
+	r.GET("/logout", handler.Logout)
+}
+
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
 // for the route along with an entry in the RouteMap in auth/route_map.go.
-func v1Routes(r gin.IRouter, dexObj *v1.DexObject) {
-	handler, err := v1.NewHandler(dexObj)
+func v1Routes(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject) {
+	handler, err := v1.NewHandler(dexObj, localUsersAuthObject)
 	if err != nil {
 		panic(err)
 	}
@@ -144,10 +164,32 @@ func v1Routes(r gin.IRouter, dexObj *v1.DexObject) {
 // authMiddleware is the middleware for AuthN/AuthZ.
 // it ensures the user is authenticated and authorized
 // to execute the requested action before sending the request to the api handler.
-func authMiddleware(authorizer authz.Authorizer, authenticator authn.Authenticator, authRouteMap authz.RouteMap) gin.HandlerFunc {
+func authMiddleware(authorizer authz.Authorizer, dexAuthenticator authn.Authenticator, localUsersAuthenticator authn.Authenticator, authRouteMap authz.RouteMap) gin.HandlerFunc {
+
 	return func(c *gin.Context) {
-		// Authenticate the user.
-		userInfo, err := authenticator.Authenticate(c)
+
+		var userInfo *authn.UserInfo
+
+		loginType, err := c.Cookie(common.LoginCookieName)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to get login type: %v", err)
+			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
+			c.Abort()
+			return
+		}
+
+		// Authenticate the user based on the login type.
+		if loginType == "dex" {
+			userInfo, err = dexAuthenticator.Authenticate(c)
+		} else if loginType == "local" {
+			userInfo, err = localUsersAuthenticator.Authenticate(c)
+		} else {
+			errMsg := fmt.Sprintf("unidentified login type received: %v", loginType)
+			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
+			c.Abort()
+			return
+		}
+
 		if err != nil {
 			errMsg := fmt.Sprintf("Failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))

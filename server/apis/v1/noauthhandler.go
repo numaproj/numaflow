@@ -70,5 +70,18 @@ func (h *noAuthHandler) Logout(c *gin.Context) {
 		}
 		c.SetCookie(cookie.Name, "", -1, "/", "", true, true)
 	}
+
+	loginString, err := c.Cookie(common.LoginCookieName)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to retrieve login type cookie: %v", err)
+		c.JSON(http.StatusBadRequest, NewNumaflowAPIResponse(&errMsg, nil))
+	}
+	if loginString == "" {
+		// no numaflow-login found, return directly
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+		return
+	}
+	c.SetCookie(common.LoginCookieName, "", -1, "/", "", true, true)
+
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }

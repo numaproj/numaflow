@@ -20,8 +20,6 @@ import glowBackground from "../../../images/background_glow.png";
 import "./style.css";
 
 export function Login() {
-  const enableFormBasedLogin = false;
-
   const { setUserInfo } = useContext<AppContextProps>(AppContext);
 
   const [loginError, setLoginError] = useState<string | undefined>();
@@ -34,6 +32,11 @@ export function Login() {
   const returnURL = searchParams.get("returnUrl");
   const code = searchParams.get("code");
   const state = searchParams.get("state");
+
+  // states for login form
+  const [formLoginError, setFormLoginError] = useState<string | undefined>();
+  const [formLoading, setFormLoading] = useState(false);
+  const [formLoadingMessage, setFormLoadingMessage] = useState("");
 
   const handleLoginClick = useCallback(async () => {
     setLoading(true);
@@ -100,6 +103,72 @@ export function Login() {
     }
   }, [code, state, setUserInfo, navigate]);
 
+  // update user info after logging in
+  const updateUserInfo = useCallback(async () => {
+    try {
+      const response = await fetch(`${getBaseHref()}/api/v1/authinfo`);
+      if (response.ok) {
+        const data = await response.json();
+        const claims = data?.data?.id_token_claims;
+        if (claims) {
+          setUserInfo({
+            email: claims.email,
+            name: claims.name,
+            username: claims.preferred_username,
+            groups: claims.groups,
+          });
+          navigate("/");
+          return;
+        }
+      }
+    } catch (e: any) {
+      setFormLoginError("Failed to retrieve user info");
+      setFormLoading(false);
+      setFormLoadingMessage("");
+    }
+  }, [navigate]);
+
+  const handleSubmitClick = useCallback(async () => {
+    setFormLoading(true);
+    setFormLoadingMessage("Logging in...");
+
+    const username = document.getElementById(
+      "usernameInput"
+    ) as HTMLInputElement;
+    const password = document.getElementById(
+      "passwordInput"
+    ) as HTMLInputElement;
+    const data = {
+      username: username?.value,
+      password: password?.value,
+    };
+
+    try {
+      const response = await fetch(`${getBaseHref()}/auth/local/v1/login`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.data) {
+          await updateUserInfo();
+          setFormLoading(false);
+          setFormLoadingMessage("");
+          return;
+        } else if (data?.errMsg) {
+          const errMsg = data.errMsg;
+          setFormLoginError(errMsg.charAt(0).toUpperCase() + errMsg.slice(1));
+        }
+      }
+      setFormLoading(false);
+      setFormLoadingMessage("");
+    } catch (e: any) {
+      setFormLoginError("Error logging in, please try again.");
+      setFormLoading(false);
+      setFormLoadingMessage("");
+    }
+  }, [updateUserInfo]);
+
   // Call callback API to set user token and info
   useEffect(() => {
     if (code && state) {
@@ -108,7 +177,7 @@ export function Login() {
   }, [code, state]);
 
   const loginContent = useMemo(() => {
-    if (loading || (code && state)) {
+    if (loading || (code && state) || formLoading) {
       // Display spinner if loading or callback in progress
       return (
         <Box
@@ -136,6 +205,11 @@ export function Login() {
               {loadingMessage && (
                 <span className="login-loading-message">{loadingMessage}</span>
               )}
+              {formLoadingMessage && (
+                <span className="login-loading-message">
+                  {formLoadingMessage}
+                </span>
+              )}
             </Box>
           </div>
         </Box>
@@ -149,6 +223,7 @@ export function Login() {
       // No error, but return URL exists, ask to login again
       errorMessage = "Session expired, please login again.";
     }
+
     return (
       <div
         style={{
@@ -182,105 +257,110 @@ export function Login() {
           >
             Login
           </Box>
-          {enableFormBasedLogin && (
-            <>
+          <Box
+            style={{
+              width: "100%",
+              margin: "2rem 0",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <Box
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                color: "#fff",
+                borderRadius: "0 3.125rem 3.125rem 0",
+                borderTop: "1px solid #0077C5",
+              }}
+            >
               <Box
-                style={{
-                  width: "100%",
-                  margin: "2rem 0",
+                sx={{
                   display: "flex",
                   flexDirection: "column",
+                  paddingBottom: "0.625rem",
+                  paddingTop: "0.5rem",
+                  paddingRight: "2rem",
+                  marginLeft: "2rem",
+                  borderRadius: "0 3.125rem 3.125rem 0",
+                  borderRight: "1px solid #0077C5",
+                  borderBottom: "1px solid #0077C5",
                 }}
               >
-                <Box
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    color: "#fff",
-                    borderRadius: "0 3.125rem 3.125rem 0",
-                    borderTop: "1px solid #0077C5",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      paddingBottom: "0.625rem",
-                      paddingTop: "0.5rem",
-                      paddingRight: "2rem",
-                      marginLeft: "2rem",
-                      borderRadius: "0 3.125rem 3.125rem 0",
-                      borderRight: "1px solid #0077C5",
-                      borderBottom: "1px solid #0077C5",
-                    }}
-                  >
-                    <label className="loginFormLabel">Username:</label>
-                    <input
-                      type="text"
-                      placeholder="Username"
-                      className="loginFormInput"
-                    />
-                  </Box>
-                </Box>
-                <Box
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    color: "#fff",
-                    borderRadius: "3.125rem0 0 3.125rem",
-                    borderBottom: "1px solid #0077C5",
-                    marginTop: "-0.0625rem",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      paddingTop: "0.625rem",
-                      paddingBottom: "0.5rem",
-                      paddingLeft: "2rem",
-                      borderRadius: "3.125rem 0 0 3.125rem",
-                      borderLeft: "1px solid #0077C5",
-                      borderTop: "1px solid #0077C5",
-                      width: "16.9375rem",
-                    }}
-                  >
-                    <label className="loginFormLabel">Password:</label>
-                    <input
-                      type="password"
-                      placeholder="Password"
-                      className="loginFormInput"
-                    />
-                  </Box>
-                </Box>
-                <Box
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    color: "#fff",
-                    alignItems: "center",
-                    marginTop: "2rem",
-                  }}
-                  className="flex column"
-                >
-                  <Button variant="contained" size="small">
-                    Submit
-                  </Button>
-                </Box>
+                <label className="loginFormLabel">Username:</label>
+                <input
+                  id="usernameInput"
+                  type="text"
+                  placeholder="Username"
+                  className="loginFormInput"
+                />
               </Box>
+            </Box>
+            <Box
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                color: "#fff",
+                borderRadius: "3.125rem0 0 3.125rem",
+                borderBottom: "1px solid #0077C5",
+                marginTop: "-0.0625rem",
+              }}
+            >
               <Box
-                style={{
-                  color: "#fff",
-                  width: "100%",
-                  alignItems: "center",
+                sx={{
                   display: "flex",
                   flexDirection: "column",
+                  paddingTop: "0.625rem",
+                  paddingBottom: "0.5rem",
+                  paddingLeft: "2rem",
+                  borderRadius: "3.125rem 0 0 3.125rem",
+                  borderLeft: "1px solid #0077C5",
+                  borderTop: "1px solid #0077C5",
+                  width: "16.9375rem",
                 }}
               >
-                Or
+                <label className="loginFormLabel">Password:</label>
+                <input
+                  id="passwordInput"
+                  type="password"
+                  placeholder="Password"
+                  className="loginFormInput"
+                />
               </Box>
-            </>
+            </Box>
+            <Box
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                color: "#fff",
+                alignItems: "center",
+                marginTop: "2rem",
+              }}
+              className="flex column"
+            >
+              <Button
+                onClick={handleSubmitClick}
+                variant="contained"
+                size="small"
+              >
+                Submit
+              </Button>
+            </Box>
+          </Box>
+          {formLoginError && (
+            <span className="form-login-error-message">{formLoginError}</span>
           )}
+          <Box
+            style={{
+              color: "#fff",
+              width: "100%",
+              alignItems: "center",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            Or
+          </Box>
           <Box
             style={{
               display: "flex",
@@ -320,9 +400,11 @@ export function Login() {
     loadingMessage,
     loginError,
     callbackError,
+    formLoginError,
+    formLoading,
+    formLoadingMessage,
     code,
     state,
-    enableFormBasedLogin,
     handleLoginClick,
     returnURL,
   ]);

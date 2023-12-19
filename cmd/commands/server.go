@@ -22,7 +22,7 @@ import (
 	"github.com/spf13/cobra"
 
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	svrcmd "github.com/numaproj/numaflow/server/cmd"
+	svrcmd "github.com/numaproj/numaflow/server/cmd/server"
 )
 
 func NewServerCommand() *cobra.Command {
