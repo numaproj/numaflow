@@ -571,6 +571,47 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#idle-detection" class="md-nav__link">
+    Idle Detection
+  </a>
+  
+    <nav class="md-nav" aria-label="Idle Detection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#threshold" class="md-nav__link">
+    Threshold
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stepinterval" class="md-nav__link">
+    StepInterval
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#incrementby" class="md-nav__link">
+    IncrementBy
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#maxdelay" class="md-nav__link">
     maxDelay
   </a>
@@ -578,7 +619,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
+  <a href="#example_1" class="md-nav__link">
     Example
   </a>
   
@@ -2128,6 +2169,47 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#idle-detection" class="md-nav__link">
+    Idle Detection
+  </a>
+  
+    <nav class="md-nav" aria-label="Idle Detection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#threshold" class="md-nav__link">
+    Threshold
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stepinterval" class="md-nav__link">
+    StepInterval
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#incrementby" class="md-nav__link">
+    IncrementBy
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#maxdelay" class="md-nav__link">
     maxDelay
   </a>
@@ -2135,7 +2217,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
+  <a href="#example_1" class="md-nav__link">
     Example
   </a>
   
@@ -2188,7 +2270,7 @@
 <p>When processing an unbounded data stream, Numaflow has to materialize the results of the processing done on the data. 
 The materialization of the output depends on the notion of time, e.g., the total number of logins served per minute. 
 Without the idea of time inbuilt into the platform, we will not be able to determine the passage of time, which is 
-necessary for grouping elements together to materialize the result. <code>Watermarks</code> is that notion of time which will help
+necessary for grouping elements together to materialize the result. <code>Watermarks</code> is that notion of time that will help
 us group unbounded data into discrete chunks. Numaflow supports watermarks out-of-the-box. 
 Source vertices generate watermarks based on the event time, and propagate to downstream vertices.</p>
 <p>Watermark is defined as <em>“a monotonically increasing timestamp of the oldest work/event not yet completed”</em>. In other words, 
@@ -2197,12 +2279,37 @@ will occur for on-time events at or before T.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <h3 id="disable-watermark">Disable Watermark<a class="headerlink" href="#disable-watermark" title="Permanent link">&para;</a></h3>
 <p>Watermarks can be disabled with by setting <code>disabled: true</code>. </p>
+<h3 id="idle-detection">Idle Detection<a class="headerlink" href="#idle-detection" title="Permanent link">&para;</a></h3>
+<p>Watermark is assigned at the source; this means that the watermark will only progress if there is data coming into the source.
+There are many cases where the source might not be getting data, causing the source to idle (e.g., data is periodic, say once
+an hour). When the source is idling the reduce vertices won't emit results because the watermark is not moving. To detect source
+idling and propagate watermark, we can use the idle detection feature. The idle source watermark progressor will make sure that
+the watermark cannot progress beyond <code>time.now() - maxDelay</code> (<code>maxDelay</code> is defined below). 
+To enable this, we provide the following setting:</p>
+<h4 id="threshold">Threshold<a class="headerlink" href="#threshold" title="Permanent link">&para;</a></h4>
+<p>Threshold is the duration after which a source is marked as Idle due to a lack of data flowing into the source.</p>
+<h4 id="stepinterval">StepInterval<a class="headerlink" href="#stepinterval" title="Permanent link">&para;</a></h4>
+<p>StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.
+ The default value is 0s, which means that once we detect an idle source, we will increment the watermark by
+<code>IncrementBy</code> for the time we detect that our source is empty (in other words, this will be a very frequent update).</p>
+<p>Default Value: 0s</p>
+<h4 id="incrementby">IncrementBy<a class="headerlink" href="#incrementby" title="Permanent link">&para;</a></h4>
+<p>IncrementBy is the duration to be added to the current watermark to progress the watermark when the source is idling.</p>
+<h4 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h4>
+<p>The below example will consider the source as idle after there is no data at the source for 5s. After 5s, every other 2s
+an idle watermark will be emitted which increments the watermark by 3s.</p>
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">watermark</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">idleSource</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span><span class="w"> </span><span class="c1"># The pipeline will be considered idle if the source has not emitted any data for given threshold value.</span>
+<span class="w">      </span><span class="nt">incrementBy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3s</span><span class="w"> </span><span class="c1"># If source is found to be idle then increment the watermark by given incrementBy value.</span>
+<span class="w">      </span><span class="nt">stepInterval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2s</span><span class="w"> </span><span class="c1"># If source is idling then publish the watermark only when step interval has passed.</span>
+</code></pre></div>
 <h3 id="maxdelay">maxDelay<a class="headerlink" href="#maxdelay" title="Permanent link">&para;</a></h3>
-<p>Watermark assignments happen at source. Sources could be out of order, so sometimes we want to extend the
+<p>Watermark assignments happen at the source. Sources could be out of order, so sometimes we want to extend the
 window (default is <code>0s</code>) to wait before we start marking data as late-data.
 You can give more time for the system to wait for late data with <code>maxDelay</code> so that the late data within the specified
-time duration will be considered as data on-time. This means, the watermark propagation will be delayed by <code>maxDelay</code>.</p>
-<h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h3>
+time duration will be considered as data on-time. This means the watermark propagation will be delayed by <code>maxDelay</code>.</p>
+<h3 id="example_1">Example<a class="headerlink" href="#example_1" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">spec</span><span class="p">:</span>
@@ -2211,7 +2318,7 @@ time duration will be considered as data on-time. This means, the watermark prop
 <span class="w">    </span><span class="nt">maxDelay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span><span class="w"> </span><span class="c1"># Optional, defaults to &quot;0s&quot;.</span>
 </code></pre></div>
 <h2 id="watermark-api">Watermark API<a class="headerlink" href="#watermark-api" title="Permanent link">&para;</a></h2>
-<p>When processing data in <a href="../../user-guide/user-defined-functions/map/map/">User Defined Functions</a>, you can get the current watermark through
+<p>When processing data in <a href="../../user-guide/user-defined-functions/user-defined-functions/">User Defined Functions</a>, you can get the current watermark through
 an API. Watermark API is supported in all our client SDKs.</p>
 <h3 id="example-golang">Example Golang<a class="headerlink" href="#example-golang" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1">// Go</span>
