@@ -15,6 +15,41 @@ will occur for on-time events at or before T.
 ### Disable Watermark
 Watermarks can be disabled with by setting `disabled: true`. 
 
+### Idle Detection
+
+Watermark is is assigned at source, this means that the watemark will only progress if there is data coming into the source.
+There are many cases where the source might not be getting data causing the source to idle (e.g., data is periodic, say once
+an hour). When the source is idling the reduce vertices won't emit results because the watermark is not moving. To detect source
+idling and propagate waterwark, we can use the idle detection feature. To enable this, we provide the following setting
+
+#### Threshold
+
+Threshold is the duration after which a source is marked as Idle due to lack of data flowing into the source.
+
+#### StepInterval
+StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.
+ The default value is 0s which means that once we detect idle source, we will be incrementing the watermark by
+`IncrementBy` for time we detect that we source is empty (in other words, this will be a very frequent update).
+
+Default Value: 0s
+    
+#### IncrementBy
+
+IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.
+
+#### Example
+
+The below example will conside the source as idle after there is no data at source for 5s. After 5s, every other 3s
+an idle watermark will be emitted which increments the watermark by 2s.
+
+``` yaml
+  watermark:
+    idleSource:
+      threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
+      incrementBy: 3s # If source is found to be idle then increment the watermark by given incrementBy value.
+      stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
+```
+
 ### maxDelay
 Watermark assignments happen at source. Sources could be out of order, so sometimes we want to extend the
 window (default is `0s`) to wait before we start marking data as late-data.
@@ -33,7 +68,7 @@ spec:
 
 ## Watermark API
 
-When processing data in [User Defined Functions](../user-guide/user-defined-functions/map/map.md), you can get the current watermark through
+When processing data in [User Defined Functions](../user-guide/user-defined-functions/user-defined-functions.md), you can get the current watermark through
 an API. Watermark API is supported in all our client SDKs.
 
 ### Example Golang
