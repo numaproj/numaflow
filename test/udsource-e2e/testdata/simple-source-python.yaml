@@ -10,7 +10,7 @@ spec:
           container:
             # A simple user-defined source for e2e testing
             # See https://github.com/numaproj/numaflow-python/tree/main/examples/source
-            image: quay.io/numaio/numaflow-python/simple-source:v0.5.3
+            image: quay.io/numaio/numaflow-python/simple-source:v0.6.0
             imagePullPolicy: Always
       limits:
         readBatchSize: 2
