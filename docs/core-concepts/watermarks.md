@@ -20,7 +20,9 @@ Watermarks can be disabled with by setting `disabled: true`.
 Watermark is assigned at the source; this means that the watermark will only progress if there is data coming into the source.
 There are many cases where the source might not be getting data, causing the source to idle (e.g., data is periodic, say once
 an hour). When the source is idling the reduce vertices won't emit results because the watermark is not moving. To detect source
-idling and propagate watermark, we can use the idle detection feature. To enable this, we provide the following setting:
+idling and propagate watermark, we can use the idle detection feature. The idle source watermark progressor will make sure that
+the watermark cannot progress beyond `time.now() - maxDelay` (`maxDelay` is defined below). 
+To enable this, we provide the following setting:
 
 #### Threshold
 
@@ -39,8 +41,8 @@ IncrementBy is the duration to be added to the current watermark to progress the
 
 #### Example
 
-The below example will consider the source as idle after there is no data at the source for 5s. After 5s, every other 3s
-an idle watermark will be emitted which increments the watermark by 2s.
+The below example will consider the source as idle after there is no data at the source for 5s. After 5s, every other 2s
+an idle watermark will be emitted which increments the watermark by 3s.
 
 ``` yaml
   watermark:
