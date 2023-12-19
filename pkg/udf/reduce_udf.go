@@ -22,31 +22,33 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/forwarder"
-	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
-	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
-	"github.com/numaproj/numaflow/pkg/udf/rpc"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce"
+	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
+	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
+	"github.com/numaproj/numaflow/pkg/sdkclient/sessionreducer"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
+	"github.com/numaproj/numaflow/pkg/udf/rpc"
+	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
+	"github.com/numaproj/numaflow/pkg/window/strategy/session"
 	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 )
 
@@ -62,10 +64,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		fromBuffer         string
 		err                error
 		natsClientPool     *jsclient.ClientPool
-		windower           window.Windower
+		windower           window.TimedWindower
 		fromVertexWmStores map[string]store.WatermarkStore
 		toVertexWmStores   map[string]store.WatermarkStore
 		idleManager        wmb.IdleManager
+		opts               []reduce.Option
+		udfApplier         applier.ReduceApplier
+		healthChecker      metrics.HealthChecker
 	)
 
 	log := logging.FromContext(ctx)
@@ -78,16 +83,70 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 	defer natsClientPool.CloseAll()
 
-	f := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Fixed
-	s := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window.Sliding
+	windowType := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window
 
-	if f != nil {
-		windower = fixed.NewFixed(f.Length.Duration)
-	} else if s != nil {
-		windower = sliding.NewSliding(s.Length.Duration, s.Slide.Duration)
+	// based on the window type create the windower, udfApplier and health checker
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
+
+	// create udf handler and wait until it is ready
+	if windowType.Fixed != nil || windowType.Sliding != nil {
+		var client reducer.Client
+		// if streaming is enabled, use the reduceStreaming address
+		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
+			client, err = reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
+		} else {
+			client, err = reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
+		}
+		if err != nil {
+			return fmt.Errorf("failed to create a new reducer gRPC client: %w", err)
+		}
+
+		reduceHandler := rpc.NewUDSgRPCAlignedReduce(client)
+		// Readiness check
+		if err := reduceHandler.WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on udf readiness check, %w", err)
+		}
+		defer func() {
+			err = reduceHandler.CloseConn(ctx)
+			if err != nil {
+				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+			}
+		}()
+
+		udfApplier = reduceHandler
+		healthChecker = reduceHandler
+	} else if windowType.Session != nil {
+		client, err := sessionreducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
+		if err != nil {
+			return fmt.Errorf("failed to create a new session reducer gRPC client: %w", err)
+		}
+
+		reduceHandler := rpc.NewGRPCBasedUnalignedReduce(client)
+		// Readiness check
+		if err := reduceHandler.WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on udf readiness check, %w", err)
+		}
+		defer func() {
+			err = reduceHandler.CloseConn(ctx)
+			if err != nil {
+				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+			}
+		}()
+
+		udfApplier = reduceHandler
+		healthChecker = reduceHandler
+	} else {
+		return fmt.Errorf("invalid window spec")
 	}
 
-	if windower == nil {
+	// create windower
+	if windowType.Fixed != nil {
+		windower = fixed.NewWindower(windowType.Fixed.Length.Duration)
+	} else if windowType.Sliding != nil {
+		windower = sliding.NewWindower(windowType.Sliding.Length.Duration, windowType.Sliding.Slide.Duration)
+	} else if windowType.Session != nil {
+		windower = session.NewWindower(windowType.Session.Timeout.Duration)
+	} else {
 		return fmt.Errorf("invalid window spec")
 	}
 
@@ -154,7 +213,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
 	}
-	getVertexPartition := GetPartitionedBufferIdx()
+	getVertexPartition := GetPartitionedBufferIdx(u.VertexInstance)
 	conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string) ([]forwarder.VertexBuffer, error) {
 		var result []forwarder.VertexBuffer
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
@@ -173,7 +232,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 				} else {
 					result = append(result, forwarder.VertexBuffer{
 						ToVertexName:         edge.To,
-						ToVertexPartitionIdx: getVertexPartition(edge.To, edge.GetToVertexPartitionCount()),
+						ToVertexPartitionIdx: getVertexPartition(edge.To, int32(edge.GetToVertexPartitionCount())),
 					})
 				}
 			} else {
@@ -187,7 +246,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 					} else {
 						result = append(result, forwarder.VertexBuffer{
 							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: getVertexPartition(edge.To, edge.GetToVertexPartitionCount()),
+							ToVertexPartitionIdx: getVertexPartition(edge.To, int32(edge.GetToVertexPartitionCount())),
 						})
 					}
 				}
@@ -197,28 +256,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return result, nil
 	})
 
-	log = log.With("protocol", "uds-grpc-reduce-udf")
-
-	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
-	sdkClient, err := reducer.New(reducer.WithMaxMessageSize(maxMessageSize))
-	if err != nil {
-		return fmt.Errorf("failed to create a new gRPC client: %w", err)
-	}
-
-	reduceHandler := rpc.NewUDSgRPCBasedReduce(sdkClient)
-	if err != nil {
-		return fmt.Errorf("failed to create gRPC client, %w", err)
-	}
-	// Readiness check
-	if err := reduceHandler.WaitUntilReady(ctx); err != nil {
-		return fmt.Errorf("failed on FIXED_AGGREGATION readiness check, %w", err)
-	}
-	defer func() {
-		err = reduceHandler.CloseConn(ctx)
-		if err != nil {
-			log.Warnw("Failed to close gRPC client conn", zap.Error(err))
-		}
-	}()
 	log.Infow("Start processing reduce udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBuffer))
 
 	// create lag readers from buffer readers
@@ -228,7 +265,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 
 	// start metrics server
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{reduceHandler}, lagReaders)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{healthChecker}, lagReaders)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -238,12 +275,12 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	storeProvider := wal.NewWALStores(u.VertexInstance, wal.WithStorePath(dfv1.DefaultStorePath), wal.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 
-	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeProvider)
+	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeProvider, windower.Type())
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)
 	}
-	opts := []reduce.Option{}
+
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -254,7 +291,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		opts = append(opts, reduce.WithAllowedLateness(allowedLateness.Duration))
 	}
 
-	op := pnf.NewOrderedProcessor(ctx, u.VertexInstance, reduceHandler, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager)
+	op := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower)
 
 	// for reduce, we read only from one partition
 	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)

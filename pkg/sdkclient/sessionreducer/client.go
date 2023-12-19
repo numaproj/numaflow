@@ -14,14 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reducer
+package sessionreducer
 
 import (
 	"context"
 	"io"
 	"log"
 
-	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
+	sessionreducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/sessionreduce/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -32,12 +32,12 @@ import (
 // client contains the grpc connection and the grpc client.
 type client struct {
 	conn    *grpc.ClientConn
-	grpcClt reducepb.ReduceClient
+	grpcClt sessionreducepb.SessionReduceClient
 }
 
 // New creates a new client object.
 func New(inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(sdkclient.ReduceAddr)
+	var opts = sdkclient.DefaultOptions(sdkclient.SessionReduceAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
@@ -61,18 +61,18 @@ func New(inputOptions ...sdkclient.Option) (Client, error) {
 
 	c := new(client)
 	c.conn = conn
-	c.grpcClt = reducepb.NewReduceClient(conn)
+	c.grpcClt = sessionreducepb.NewSessionReduceClient(conn)
 	return c, nil
 }
 
-func NewFromClient(c reducepb.ReduceClient) (Client, error) {
+func NewFromClient(c sessionreducepb.SessionReduceClient) (Client, error) {
 	return &client{
 		grpcClt: c,
 	}, nil
 }
 
 // CloseConn closes the grpc client connection.
-func (c *client) CloseConn(ctx context.Context) error {
+func (c *client) CloseConn(_ context.Context) error {
 	return c.conn.Close()
 }
 
@@ -85,19 +85,19 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 	return resp.GetReady(), nil
 }
 
-// ReduceFn applies a reduce function to a datum stream asynchronously.
-func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.ReduceRequest) (<-chan *reducepb.ReduceResponse, <-chan error) {
+// SessionReduceFn applies a reduce function to a datum stream asynchronously.
+func (c *client) SessionReduceFn(ctx context.Context, datumStreamCh <-chan *sessionreducepb.SessionReduceRequest) (<-chan *sessionreducepb.SessionReduceResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
-		responseCh = make(chan *reducepb.ReduceResponse)
+		responseCh = make(chan *sessionreducepb.SessionReduceResponse)
 	)
 
 	// stream the messages to server
-	stream, err := c.grpcClt.ReduceFn(ctx)
+	stream, err := c.grpcClt.SessionReduceFn(ctx)
 
 	if err != nil {
 		go func() {
-			errCh <- util.ToUDFErr("c.grpcClt.ReduceFn", err)
+			errCh <- util.ToUDFErr("c.grpcClt.SessionReduceFn", err)
 		}()
 	}
 
@@ -114,21 +114,21 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 					break outerLoop
 				}
 				if sendErr = stream.Send(datum); sendErr != nil {
-					errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
+					errCh <- util.ToUDFErr("SessionReduceFn stream.Send()", sendErr)
 				}
 			}
 		}
 		// close the stream after sending all the messages
 		sendErr = stream.CloseSend()
 		if sendErr != nil {
-			errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
+			errCh <- util.ToUDFErr("SessionReduceFn stream.Send()", sendErr)
 		}
 	}()
 
 	// read the response from the server stream and send it to responseCh channel
 	// any error is sent to errCh channel
 	go func() {
-		var resp *reducepb.ReduceResponse
+		var resp *sessionreducepb.SessionReduceResponse
 		var recvErr error
 		for {
 			select {
@@ -137,15 +137,15 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 				return
 			default:
 				resp, recvErr = stream.Recv()
-				// if the stream is closed, close the responseCh return
+				// if the stream is closed, close the responseCh and errCh channels and return
 				if recvErr == io.EOF {
-					// nil channel will never be selected
+					// skip selection on nil channel
 					errCh = nil
 					close(responseCh)
 					return
 				}
 				if recvErr != nil {
-					errCh <- util.ToUDFErr("ReduceFn stream.Recv()", recvErr)
+					errCh <- util.ToUDFErr("SessionReduceFn stream.Recv()", recvErr)
 				}
 				responseCh <- resp
 			}

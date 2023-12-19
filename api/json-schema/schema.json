@@ -17731,7 +17731,12 @@
       "description": "FixedWindow describes a fixed window",
       "properties": {
         "length": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "Length is the duration of the fixed window."
+        },
+        "streaming": {
+          "description": "Streaming should be set to true if the reduce udf is streaming.",
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -19094,6 +19099,16 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.SessionWindow": {
+      "description": "SessionWindow describes a session window",
+      "properties": {
+        "timeout": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "Timeout is the duration of inactivity after which a session window closes."
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.SideInput": {
       "description": "SideInput defines information of a Side Input",
       "properties": {
@@ -19235,10 +19250,16 @@
       "description": "SlidingWindow describes a sliding window",
       "properties": {
         "length": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "Length is the duration of the sliding window."
         },
         "slide": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "Slide is the slide parameter that controls the frequency at which the sliding window is created."
+        },
+        "streaming": {
+          "description": "Streaming should be set to true if the reduce udf is streaming.",
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -19802,6 +19823,9 @@
       "properties": {
         "fixed": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.FixedWindow"
+        },
+        "session": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SessionWindow"
         },
         "sliding": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SlidingWindow"

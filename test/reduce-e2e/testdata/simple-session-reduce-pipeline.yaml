@@ -1,41 +1,25 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: join-on-reduce
+  name: simple-session-sum
 spec:
-  limits:
-    readBatchSize: 50
   vertices:
     - name: in
       scale:
         min: 1
       source:
         http: {}
-    - name: atoi-0
-      scale:
-        min: 1
-      udf:
-        container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
-    - name: atoi-1
-      partitions: 2
-      scale:
-        min: 1
-      udf:
-        container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
     - name: compute-sum
-      partitions: 2
+      partitions: 1
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/session-counter:v0.6.1
+          imagePullPolicy: Always
         groupBy:
           window:
-            fixed:
-              length: 10s
+            session:
+              timeout: 10s
           keyed: true
           storage:
             persistentVolumeClaim:
@@ -51,12 +35,6 @@ spec:
             image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
   edges:
     - from: in
-      to: atoi-0
-    - from: in
-      to: atoi-1
-    - from: atoi-0
-      to: compute-sum
-    - from: atoi-1
       to: compute-sum
     - from: compute-sum
       to: sink

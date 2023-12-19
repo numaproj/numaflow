@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -33,27 +32,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/window"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
-
-// registeredWindow to track the number of windows for a start and end time.
-type registeredWindow struct {
-	startTime time.Time
-	endTime   time.Time
-	// count how many slots do we have for this window. currently we only use slot-0, so count is always 1
-	count *atomic.Int32
-}
-
-var _ window.AlignedWindower = (*registeredWindow)(nil)
-
-func (r *registeredWindow) StartTime() time.Time {
-	return r.startTime
-}
-
-func (r *registeredWindow) EndTime() time.Time {
-	return r.endTime
-}
 
 // Manager helps in managing the lifecycle of PBQ instances
 type Manager struct {
@@ -64,7 +44,7 @@ type Manager struct {
 	pbqOptions    *options
 	pbqMap        map[string]*PBQ
 	log           *zap.SugaredLogger
-	yetToBeClosed *window.SortedWindowList[*registeredWindow]
+	windowType    window.Type
 	// we need lock to access pbqMap, since deregister will be called inside pbq
 	// and each pbq will be inside a go routine, and also entire PBQ could be managed
 	// through a go routine (depends on the orchestrator)
@@ -73,7 +53,7 @@ type Manager struct {
 
 // NewManager returns new instance of manager
 // We don't intend this to be called by multiple routines.
-func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider store.StoreProvider, opts ...PBQOption) (*Manager, error) {
+func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider store.StoreProvider, windowType window.Type, opts ...PBQOption) (*Manager, error) {
 	pbqOpts := DefaultOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -91,7 +71,7 @@ func NewManager(ctx context.Context, vertexName string, pipelineName string, vr 
 		pbqMap:        make(map[string]*PBQ),
 		pbqOptions:    pbqOpts,
 		log:           logging.FromContext(ctx),
-		yetToBeClosed: window.NewSortedWindowList[*registeredWindow](),
+		windowType:    windowType,
 	}
 
 	return pbqManager, nil
@@ -110,11 +90,12 @@ func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (R
 		pipelineName:  m.pipelineName,
 		vertexReplica: m.vertexReplica,
 		store:         persistentStore,
-		output:        make(chan *isb.ReadMessage, m.pbqOptions.channelBufferSize),
+		output:        make(chan *window.TimedWindowRequest, m.pbqOptions.channelBufferSize),
 		cob:           false,
 		PartitionID:   partitionID,
 		options:       m.pbqOptions,
 		manager:       m,
+		windowType:    m.windowType, // FIXME(session): this is can be removed when we have unaligned window replay
 		log:           logging.FromContext(ctx).With("PBQ", partitionID),
 	}
 	m.register(partitionID, p)
@@ -219,15 +200,6 @@ func (m *Manager) ShutDown(ctx context.Context) {
 
 // register is intended to be used by PBQ to register itself with the manager.
 func (m *Manager) register(partitionID partition.ID, p *PBQ) {
-	ww := &registeredWindow{
-		startTime: partitionID.Start,
-		endTime:   partitionID.End,
-		count:     atomic.NewInt32(0),
-	}
-
-	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
-	ww.count.Add(1)
-
 	m.Lock()
 	defer m.Unlock()
 
@@ -247,23 +219,8 @@ func (m *Manager) register(partitionID partition.ID, p *PBQ) {
 func (m *Manager) deregister(partitionID partition.ID) error {
 
 	m.Lock()
-	ww := &registeredWindow{
-		startTime: partitionID.Start,
-		endTime:   partitionID.End,
-		count:     atomic.NewInt32(0),
-	}
-
 	delete(m.pbqMap, partitionID.String())
 	m.Unlock()
-
-	// update yetToBeClosed list
-	ww, _ = m.yetToBeClosed.InsertIfNotPresent(ww)
-	ww.count.Sub(1)
-
-	// if count is 0, delete from yetToBeClosed list
-	if ww.count.Load() == 0 {
-		m.yetToBeClosed.DeleteWindow(ww)
-	}
 
 	activePartitionCount.With(map[string]string{
 		metrics.LabelVertex:             m.vertexName,
@@ -302,16 +259,4 @@ func (m *Manager) Replay(ctx context.Context) {
 
 	wg.Wait()
 	m.log.Infow("Finished replaying records from store", zap.Duration("took", time.Since(tm)), zap.Any("partitions", partitionsIds))
-}
-
-// NextWindowToBeMaterialized returns the next keyed window that is yet to be materialized(GCed)
-// will be used by the data forwarder to publish the idle watermark. While publishing idle watermark, we have to be
-// conservative. PBQManager's view of next window to be materialized is conservative as it is on the reading side.
-// We SHOULD NOT use NextWindowToBeMaterialized to write data to because it could fail (channel could have been closed but
-// GC is yet to happen), this function should only be on readonly path.
-func (m *Manager) NextWindowToBeMaterialized() window.AlignedWindower {
-	if m.yetToBeClosed.Len() == 0 {
-		return nil
-	}
-	return m.yetToBeClosed.Front()
 }

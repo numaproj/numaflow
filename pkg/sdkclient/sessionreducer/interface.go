@@ -14,23 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// partition is a tuple containing (start, end) time and an optional slot.
-// Window contains a partition because Window containts the keys too.
-package partition
+package sessionreducer
 
 import (
-	"fmt"
-	"time"
+	"context"
+
+	sessionreducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/sessionreduce/v1"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// ID uniquely identifies a partition.
-type ID struct {
-	Start time.Time
-	End   time.Time
-	// Slot is a hash-range for keys (multiple keys can go to the same slot)
-	Slot string
-}
-
-func (p ID) String() string {
-	return fmt.Sprintf("%v-%v-%s", p.Start.UnixMilli(), p.End.UnixMilli(), p.Slot)
+// Client contains methods to call a gRPC client.
+type Client interface {
+	CloseConn(ctx context.Context) error
+	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
+	SessionReduceFn(ctx context.Context, datumStreamCh <-chan *sessionreducepb.SessionReduceRequest) (<-chan *sessionreducepb.SessionReduceResponse, <-chan error)
 }

@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: idle-source
 spec:
+  limits:
+    readBatchSize: 50
   watermark:
     idleSource:
       threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
@@ -26,7 +28,7 @@ spec:
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
         groupBy:
           window:
             fixed:

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package pbq
 
 import (
@@ -24,13 +23,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/numaproj/numaflow/pkg/window/keyed"
-
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // test cases for PBQ (store type in-memory)
@@ -43,12 +40,13 @@ func TestPBQ_ReadWrite(t *testing.T) {
 
 	ctx := context.Background()
 
-	qManager, _ := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(storeSize)), WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
+	qManager, _ := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(storeSize)),
+		window.Aligned, WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
 
-	// write 10 isb messages to persisted store
-	msgCount := 10
+	// write 10 window requests
+	count := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
+	writeRequests := testutils.BuildTestWindowRequests(int64(count), startTime, window.Append)
 
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
@@ -56,13 +54,10 @@ func TestPBQ_ReadWrite(t *testing.T) {
 		Slot:  "slot-1",
 	}
 
-	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-	kwOne.AddSlot("slot-1")
-
 	pq, err := qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
-	var readMessages []*isb.ReadMessage
+	var readRequests []*window.TimedWindowRequest
 	// run a parallel go routine which reads from pbq
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -73,7 +68,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 			select {
 			case msg, ok := <-pq.ReadCh():
 				if msg != nil {
-					readMessages = append(readMessages, msg)
+					readRequests = append(readRequests, msg)
 				}
 				if !ok {
 					break readLoop
@@ -85,15 +80,15 @@ func TestPBQ_ReadWrite(t *testing.T) {
 		wg.Done()
 	}()
 
-	for _, msg := range writeMessages {
+	for _, msg := range writeRequests {
 		err := pq.Write(ctx, &msg)
 		assert.NoError(t, err)
 	}
 	pq.CloseOfBook()
 
 	wg.Wait()
-	// count of messages read by parallel go routine should be equal to produced messages
-	assert.Len(t, readMessages, msgCount)
+	// count of requests read by parallel go routine should be equal to produced messages
+	assert.Len(t, readRequests, count)
 
 }
 
@@ -107,14 +102,15 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 
 	ctx := context.Background()
 
-	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(storeSize)), WithChannelBufferSize(int64(bufferSize)), WithReadTimeout(1*time.Second))
+	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(storeSize)),
+		window.Aligned, WithChannelBufferSize(int64(bufferSize)), WithReadTimeout(1*time.Second))
 
 	assert.NoError(t, err)
 
-	//write 10 isb messages to persisted store
-	msgCount := 10
+	//write 10 window requests to persisted store
+	count := 10
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
+	windowRequests := testutils.BuildTestWindowRequests(int64(count), startTime, window.Append)
 
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
@@ -122,14 +118,11 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 		Slot:  "slot-1",
 	}
 
-	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-	kwOne.AddSlot("slot-1")
-
 	var pq ReadWriteCloser
 	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
-	var readMessages []*isb.ReadMessage
+	var readRequests []*window.TimedWindowRequest
 	// run a parallel go routine which reads from pbq
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -142,7 +135,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 			select {
 			case msg, ok := <-pq.ReadCh():
 				if msg != nil {
-					readMessages = append(readMessages, msg)
+					readRequests = append(readRequests, msg)
 				}
 				if !ok {
 					break readLoop
@@ -154,7 +147,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 		wg.Done()
 	}()
 
-	for _, msg := range writeMessages {
+	for _, msg := range windowRequests {
 		err := pq.Write(ctx, &msg)
 		assert.NoError(t, err)
 	}
@@ -164,7 +157,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	cancelFn()
 
 	wg.Wait()
-	assert.Len(t, readMessages, 10)
+	assert.Len(t, readRequests, 10)
 }
 
 func TestPBQ_WriteWithStoreFull(t *testing.T) {
@@ -177,28 +170,26 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	var err error
 	ctx := context.Background()
 
-	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(storeSize)), WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
+	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(storeSize)),
+		window.Aligned, WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
 	assert.NoError(t, err)
 
-	// write 101 isb messages to pbq, but the store size is 100, we should get store is full error
+	// write 101 window requests to pbq, but the store size is 100, we should get store is full error
 	msgCount := 101
 	startTime := time.Now()
-	writeMessages := testutils.BuildTestReadMessages(int64(msgCount), startTime)
+	windowRequests := testutils.BuildTestWindowRequests(int64(msgCount), startTime, window.Append)
 	partitionID := partition.ID{
 		Start: time.Unix(60, 0),
 		End:   time.Unix(120, 0),
 		Slot:  "slot-1",
 	}
 
-	kwOne := keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0))
-	kwOne.AddSlot("slot-1")
-
 	var pq ReadWriteCloser
 	pq, err = qManager.CreateNewPBQ(ctx, partitionID)
 	assert.NoError(t, err)
 
-	for _, msg := range writeMessages {
-		err = pq.Write(ctx, &msg)
+	for _, req := range windowRequests {
+		err = pq.Write(ctx, &req)
 	}
 	pq.CloseOfBook()
 

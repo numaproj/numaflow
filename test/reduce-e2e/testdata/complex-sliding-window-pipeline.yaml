@@ -23,7 +23,7 @@ spec:
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
         groupBy:
           window:
             fixed:
@@ -35,7 +35,7 @@ spec:
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
         groupBy:
           window:
             fixed:
@@ -47,7 +47,7 @@ spec:
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
         groupBy:
           window:
             sliding:
@@ -57,7 +57,6 @@ spec:
           storage:
             emptyDir: {}
     - name: sink
-      partitions: 2
       scale:
         min: 1
       sink:
