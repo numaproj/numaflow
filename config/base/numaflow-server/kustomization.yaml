@@ -6,3 +6,5 @@ resources:
   - numaflow-server-rbac-config.yaml
   - numaflow-server-deployment.yaml
   - numaflow-server-service.yaml
+  - numaflow-server-local-user-config.yaml
+  - numaflow-server-secrets.yaml

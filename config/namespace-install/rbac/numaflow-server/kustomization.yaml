@@ -4,3 +4,5 @@ kind: Kustomization
 resources:
   - numaflow-server-role.yaml
   - numaflow-server-binding.yaml
+  - numaflow-server-secrets-role.yaml
+  - numaflow-server-secrets-binding.yaml

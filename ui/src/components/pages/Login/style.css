@@ -57,3 +57,8 @@
     color: #fff;
     margin-top: 2rem;
 }
+
+.form-login-error-message {
+    color: #fff;
+    margin-bottom: 1rem;
+}

@@ -11,9 +11,14 @@ export default function AccountMenu() {
   const navigate = useNavigate();
   const { userInfo } = useContext<AppContextProps>(AppContext);
 
+  const url =
+    userInfo?.email === ""
+      ? `${getBaseHref()}/auth/local/v1/logout`
+      : `${getBaseHref()}/auth/v1/logout`;
+
   const handleLogout = useCallback(async () => {
     try {
-      const response = await fetch(`${getBaseHref()}/auth/v1/logout`);
+      const response = await fetch(url);
       if (response.ok) {
         navigate("/login");
       }
@@ -21,7 +26,7 @@ export default function AccountMenu() {
     } catch (e: any) {
       // TODO on failure?
     }
-  }, []);
+  }, [url]);
 
   if (!userInfo) {
     // Non-auth, hide account menu
