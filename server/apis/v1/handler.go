@@ -65,6 +65,7 @@ type handler struct {
 	daemonClientsCache   *lru.Cache[string, *daemonclient.DaemonClient]
 	dexObj               *DexObject
 	localUsersAuthObject *LocalUsersAuthObject
+	healthChecker        *HealthChecker
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -93,6 +94,7 @@ func NewHandler(dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (
 		daemonClientsCache:   daemonClientsCache,
 		dexObj:               dexObj,
 		localUsersAuthObject: localUsersAuthObject,
+		healthChecker:        NewHealthChecker(),
 	}, nil
 }
 
@@ -876,17 +878,47 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
-// GetPipelineStatus returns the pipeline status. It is based on Health and Criticality.
-// Health can be "healthy (0) | unhealthy (1) | paused (3) | unknown (4)".
-// Health here indicates pipeline's ability to process messages.
-// A backlogged pipeline can be healthy even though it has an increasing back-pressure. Health purely means it is up and running.
-// Pipelines health will be the max(health) based of each vertex's health
-// Criticality on the other end shows whether the pipeline is working as expected.
+// GetPipelineStatus returns the pipeline status. It is based on Resource Health and Data Criticality.
+// Resource Health can be "healthy (0) | unhealthy (1) | paused (3) | unknown (4)".
+// A backlogged pipeline can be healthy even though it has an increasing back-pressure.
+// Resource Health purely means it is up and running.
+// Resource health will be the max(health) based of each vertex's health
+// Data Criticality on the other end shows whether the pipeline is working as expected.
 // It represents the pending messages, lags, etc.
-// Criticality can be "ok (0) | warning (1) | critical (2)".
-// Health and Criticality are different because ...?
+// Data Criticality can be "ok (0) | warning (1) | critical (2)".
+// GetPipelineStatus is used to return the status of a given pipeline
+// It is divided into two parts:
+// 1. Pipeline Resource Health: It is based on the health of each vertex in the pipeline
+// 2. Data Criticality: It is based on the data movement of the pipeline
 func (h *handler) GetPipelineStatus(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, "working on it")
+	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
+
+	// Get the vertex level health of the pipeline
+	resourceHealth, err := h.healthChecker.getPipelineResourceHealth(h, ns, pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the dataStatus for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+
+	// Get a new daemon client for the given pipeline
+	client, err := h.getDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
+		return
+	}
+	// Get the data criticality for the given pipeline
+	dataStatus, err := client.GetPipelineStatus(context.Background(), pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the dataStatus for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+
+	// Create a response string based on the vertex health and data criticality
+	// We combine both the states to get the final dataStatus of the pipeline
+	response := NewHealthResponse(resourceHealth.Status, dataStatus.GetStatus(),
+		resourceHealth.Message, dataStatus.GetMessage(), resourceHealth.Code, dataStatus.GetCode())
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
