@@ -316,7 +316,12 @@ message Edge {
 
 // FixedWindow describes a fixed window
 message FixedWindow {
+  // Length is the duration of the fixed window.
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
+
+  // +optional
+  // Streaming should be set to true if the reduce udf is streaming.
+  optional bool streaming = 2;
 }
 
 message ForwardConditions {
@@ -1079,6 +1084,12 @@ message Scale {
   optional uint32 scaleDownCooldownSeconds = 11;
 }
 
+// SessionWindow describes a session window
+message SessionWindow {
+  // Timeout is the duration of inactivity after which a session window closes.
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
+}
+
 // SideInput defines information of a Side Input
 message SideInput {
   optional string name = 1;
@@ -1128,9 +1139,15 @@ message Sink {
 
 // SlidingWindow describes a sliding window
 message SlidingWindow {
+  // Length is the duration of the sliding window.
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
 
+  // Slide is the slide parameter that controls the frequency at which the sliding window is created.
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration slide = 2;
+
+  // +optional
+  // Streaming should be set to true if the reduce udf is streaming.
+  optional bool streaming = 3;
 }
 
 message Source {
@@ -1380,5 +1397,8 @@ message Window {
 
   // +optional
   optional SlidingWindow sliding = 2;
+
+  // +optional
+  optional SessionWindow session = 3;
 }
 

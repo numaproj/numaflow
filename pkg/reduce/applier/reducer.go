@@ -19,19 +19,13 @@ package applier
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// ReduceApplier applies the HTTPBasedUDF on the read message and gives back a new message. Any UserError will be retried here, while
-// InternalErr can be returned and could be retried by the callee.
+// ReduceApplier applies the GRPCBasedReduceUDF on the stream of read messages and gives back a new message.
 type ReduceApplier interface {
-	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error)
-}
-
-// ApplyReduceFunc utility function used to create a Reducer implementation
-type ApplyReduceFunc func(context.Context, *partition.ID, <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error)
-
-func (a ApplyReduceFunc) ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return a(ctx, partitionID, messageStream)
+	// ApplyReduce applies the reduce UDF on the stream of window requests and streams the timed window response.
+	// doesn't wait for the response for all the keys in the window, before sending the response back.
+	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error)
 }

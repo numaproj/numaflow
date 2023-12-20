@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"google.golang.org/grpc"
@@ -40,20 +39,14 @@ type client struct {
 var _ Client = (*client)(nil)
 
 // New creates a new client object.
-func New(inputOptions ...Option) (Client, error) {
-	var opts = &options{
-		sockAddr:                   sdkclient.SinkAddr,
-		serverInfoFilePath:         sdkclient.ServerInfoFilePath,
-		serverInfoReadinessTimeout: 120 * time.Second,                   // Default timeout is 120 seconds
-		maxMessageSize:             sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
-	}
-
+func New(inputOptions ...sdkclient.Option) (Client, error) {
+	var opts = sdkclient.DefaultOptions(sdkclient.SinkAddr)
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}
 
 	// Wait for server info to be ready
-	serverInfo, err := util.WaitForServerInfo(opts.serverInfoReadinessTimeout, opts.serverInfoFilePath)
+	serverInfo, err := util.WaitForServerInfo(opts.ServerInfoReadinessTimeout(), opts.ServerInfoFilePath())
 	if err != nil {
 		return nil, err
 	}
@@ -64,9 +57,9 @@ func New(inputOptions ...Option) (Client, error) {
 
 	// connect to the server
 	c := new(client)
-	sockAddr := fmt.Sprintf("%s:%s", sdkclient.UDS, opts.sockAddr)
+	sockAddr := fmt.Sprintf("%s:%s", sdkclient.UDS, opts.UdsSockAddr())
 	conn, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.maxMessageSize), grpc.MaxCallSendMsgSize(opts.maxMessageSize)))
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.MaxMessageSize()), grpc.MaxCallSendMsgSize(opts.MaxMessageSize())))
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
 	}

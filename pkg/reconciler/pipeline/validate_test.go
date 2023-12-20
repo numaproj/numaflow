@@ -151,6 +151,30 @@ var (
 					},
 				},
 				{
+					Name: "p4",
+					UDF: &dfv1.UDF{
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
+						GroupBy: &dfv1.GroupBy{
+							Window: dfv1.Window{
+								Session: &dfv1.SessionWindow{
+									Timeout: &metav1.Duration{
+										Duration: time.Duration(10 * time.Second),
+									},
+								},
+							},
+							Storage: &dfv1.PBQStorage{
+								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+									StorageClassName: nil,
+									AccessMode:       &dfv1.DefaultAccessMode,
+									VolumeSize:       &dfv1.DefaultVolumeSize,
+								},
+							},
+						},
+					},
+				},
+				{
 					Name: "output",
 					Sink: &dfv1.Sink{},
 				},
@@ -159,7 +183,8 @@ var (
 				{From: "input", To: "p1"},
 				{From: "p1", To: "p2"},
 				{From: "p2", To: "p3"},
-				{From: "p3", To: "output"},
+				{From: "p3", To: "p4"},
+				{From: "p4", To: "output"},
 			},
 		},
 	}
@@ -665,6 +690,19 @@ func TestValidateUDF(t *testing.T) {
 		err := validateUDF(udf)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `"length" is missing`)
+	})
+
+	t.Run("bad session timeout", func(t *testing.T) {
+		udf := dfv1.UDF{
+			GroupBy: &dfv1.GroupBy{
+				Window: dfv1.Window{
+					Session: &dfv1.SessionWindow{},
+				},
+			},
+		}
+		err := validateUDF(udf)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `"timeout" is missing`)
 	})
 }
 

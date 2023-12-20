@@ -71,7 +71,7 @@ func BuildWatermarkStores(ctx context.Context, pipeline *v1alpha1.Pipeline, isbs
 }
 
 // GetPipelineWatermarks is used to return the head watermarks for a given pipeline.
-func (ps *pipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, request *daemon.GetPipelineWatermarksRequest) (*daemon.GetPipelineWatermarksResponse, error) {
+func (ps *PipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, request *daemon.GetPipelineWatermarksRequest) (*daemon.GetPipelineWatermarksResponse, error) {
 	resp := new(daemon.GetPipelineWatermarksResponse)
 	isWatermarkEnabled := !ps.pipeline.Spec.Watermark.Disabled
 

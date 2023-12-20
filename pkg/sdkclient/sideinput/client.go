@@ -22,20 +22,18 @@ type client struct {
 var _ Client = (*client)(nil)
 
 // New creates a new client object.
-func New(inputOptions ...Option) (*client, error) {
-	var opts = &options{
-		sockAddr:       sdkclient.SideInputAddr,
-		maxMessageSize: sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
-	}
+func New(inputOptions ...sdkclient.Option) (*client, error) {
+	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr)
+
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}
 	_, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	c := new(client)
-	sockAddr := fmt.Sprintf("%s:%s", sdkclient.UDS, opts.sockAddr)
+	sockAddr := fmt.Sprintf("%s:%s", sdkclient.UDS, opts.UdsSockAddr())
 	conn, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.maxMessageSize), grpc.MaxCallSendMsgSize(opts.maxMessageSize)))
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.MaxMessageSize()), grpc.MaxCallSendMsgSize(opts.MaxMessageSize())))
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
 	}
