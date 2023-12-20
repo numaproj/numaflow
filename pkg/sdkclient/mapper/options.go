@@ -19,7 +19,6 @@ package mapper
 import "time"
 
 type options struct {
-	tcpSockAddr                string
 	udsSockAddr                string
 	maxMessageSize             int
 	serverInfoFilePath         string
@@ -33,13 +32,6 @@ type Option func(*options)
 func WithUdsSockAddr(addr string) Option {
 	return func(opts *options) {
 		opts.udsSockAddr = addr
-	}
-}
-
-// WithTcpSockAddr start the client with the given TCP sock addr. This is mainly used for testing purpose.
-func WithTcpSockAddr(addr string) Option {
-	return func(opts *options) {
-		opts.tcpSockAddr = addr
 	}
 }
 

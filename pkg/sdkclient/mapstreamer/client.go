@@ -42,7 +42,6 @@ func New(inputOptions ...Option) (Client, error) {
 	var opts = &options{
 		maxMessageSize:             sdkclient.DefaultGRPCMaxMessageSize, // 64 MB
 		serverInfoFilePath:         sdkclient.ServerInfoFilePath,
-		tcpSockAddr:                sdkclient.TcpAddr,
 		udsSockAddr:                sdkclient.MapStreamAddr,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 	}
@@ -62,7 +61,7 @@ func New(inputOptions ...Option) (Client, error) {
 	}
 
 	// Connect to the server
-	conn, err := util.ConnectToServer(opts.udsSockAddr, opts.tcpSockAddr, serverInfo, opts.maxMessageSize)
+	conn, err := util.ConnectToServer(opts.udsSockAddr, serverInfo, opts.maxMessageSize)
 	if err != nil {
 		return nil, err
 	}
