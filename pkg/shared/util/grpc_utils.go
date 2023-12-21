@@ -90,7 +90,7 @@ func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessage
 		// On the client side we will create a connection to each of these server instances.
 		// The client will use a custom resolver to resolve the server address.
 		// The custom resolver will return the list of server addresses from the server info file.
-		// The client will use the list of server addresses to create the connections.
+		// The client will use the list of server addresses to create the multiple connections.
 		if err := resolver.RegMultiProcResolver(serverInfo); err != nil {
 			return nil, fmt.Errorf("failed to start Multiproc Client: %w", err)
 		}
