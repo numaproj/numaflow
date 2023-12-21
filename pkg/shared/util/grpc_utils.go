@@ -85,6 +85,12 @@ func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessage
 	var sockAddr string
 
 	if serverInfo.Protocol == info.TCP {
+		// TCP connections are used for Multiprocessing server mode, here we have multiple servers forks
+		// and each server will listen on a different port.
+		// On the client side we will create a connection to each of these server instances.
+		// The client will use a custom resolver to resolve the server address.
+		// The custom resolver will return the list of server addresses from the server info file.
+		// The client will use the list of server addresses to create the connections.
 		if err := resolver.RegMultiProcResolver(serverInfo); err != nil {
 			return nil, fmt.Errorf("failed to start Multiproc Client: %w", err)
 		}

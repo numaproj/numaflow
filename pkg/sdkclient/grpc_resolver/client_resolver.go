@@ -80,7 +80,7 @@ func (*multiProcResolver) Close()                                  {}
 func (*multiProcResolver) Resolve(target resolver.Target)          {}
 
 // buildConnAddrs Populate the connection list for the clients
-// Format (serverAddr, serverIdx) : (0.0.0.0:5551, 1)
+// Format (serverAddr, serverIdx) : (0.0.0.0:5551, 1), (0.0.0.0:5552, 2)
 func buildConnAddrs(numCpu int, servPorts []string) []string {
 	var conn = make([]string, numCpu)
 	for i := 0; i < numCpu; i++ {
