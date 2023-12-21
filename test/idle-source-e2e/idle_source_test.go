@@ -73,6 +73,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				time.Sleep(10 * time.Millisecond)
 			}
 		}
 	}()
@@ -125,7 +126,6 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 	// since the window duration is 10 second, so the count of event will be 10, when sending data to only one partition.
 	w.Expect().SinkContains("sink", "10", WithTimeout(300*time.Second))
 
-	//time.Sleep(5 * time.Minute)
 	done <- struct{}{}
 }
 
