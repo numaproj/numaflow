@@ -23,8 +23,6 @@ import (
 
 	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc/resolver"
-
-	"github.com/numaproj/numaflow/pkg/sdkclient"
 )
 
 const (
@@ -37,7 +35,7 @@ type MultiProcResolverBuilder struct {
 	addrsList []string
 }
 
-func NewMultiProcResolverBuilder(addrsList []string) *MultiProcResolverBuilder {
+func newMultiProcResolverBuilder(addrsList []string) *MultiProcResolverBuilder {
 	return &MultiProcResolverBuilder{
 		addrsList: addrsList,
 	}
@@ -81,12 +79,15 @@ func (*multiProcResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 func (*multiProcResolver) Close()                                  {}
 func (*multiProcResolver) Resolve(target resolver.Target)          {}
 
-// BuildConnAddrs Populate the connection list for the clients
+// buildConnAddrs Populate the connection list for the clients
 // Format (serverAddr, serverIdx) : (0.0.0.0:5551, 1)
-func BuildConnAddrs(numCpu int) []string {
+func buildConnAddrs(numCpu int, servPorts []string) []string {
 	var conn = make([]string, numCpu)
 	for i := 0; i < numCpu; i++ {
-		conn[i] = ConnAddr + sdkclient.TcpAddr + "," + strconv.Itoa(i+1)
+		// Use the server ports from the server info file and assign to each client
+		addr, _ := strconv.Atoi(servPorts[i])
+		// Format (serverAddr, serverIdx)
+		conn[i] = ConnAddr + ":" + strconv.Itoa(addr) + "," + strconv.Itoa(i+1)
 	}
 	return conn
 }
@@ -99,8 +100,11 @@ func RegMultiProcResolver(svrInfo *info.ServerInfo) error {
 		return err
 	}
 	log.Println("Num CPU:", numCpu)
-	conn := BuildConnAddrs(numCpu)
-	res := NewMultiProcResolverBuilder(conn)
+	// Extract the server ports from the server info file and convert it to a list
+	servPorts := strings.Split(svrInfo.Metadata["SERV_PORTS"], ",")
+	log.Println("Multiprocessing TCP Server Ports:", servPorts)
+	conn := buildConnAddrs(numCpu, servPorts)
+	res := newMultiProcResolverBuilder(conn)
 	resolver.Register(res)
 	return nil
 }

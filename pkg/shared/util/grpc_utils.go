@@ -79,15 +79,12 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 }
 
 // ConnectToServer connects to the server with the given socket address based on the server info protocol.
-func ConnectToServer(udsSockAddr string, tcpSockAddr string, serverInfo *info.ServerInfo, maxMessageSize int) (*grpc.ClientConn, error) {
+func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessageSize int) (*grpc.ClientConn, error) {
 	var conn *grpc.ClientConn
 	var err error
 	var sockAddr string
 
 	if serverInfo.Protocol == info.TCP {
-		sockAddr = getTcpSockAddr(tcpSockAddr)
-		log.Println("Multiprocessing TCP Client:", sockAddr)
-
 		if err := resolver.RegMultiProcResolver(serverInfo); err != nil {
 			return nil, fmt.Errorf("failed to start Multiproc Client: %w", err)
 		}
@@ -111,10 +108,6 @@ func ConnectToServer(udsSockAddr string, tcpSockAddr string, serverInfo *info.Se
 	}
 
 	return conn, nil
-}
-
-func getTcpSockAddr(tcpSock string) string {
-	return fmt.Sprintf("%s%s", resolver.ConnAddr, tcpSock)
 }
 
 func getUdsSockAddr(udsSock string) string {
