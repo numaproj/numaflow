@@ -258,7 +258,7 @@ spec:
               key: server.address
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.1.0
+        image: quay.io/numaproj/numaflow:v1.1.1
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -294,7 +294,7 @@ spec:
               key: server.base.href
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.1.0
+        image: quay.io/numaproj/numaflow:v1.1.1
         imagePullPolicy: Always
         name: server-init
         volumeMounts:
@@ -302,7 +302,7 @@ spec:
           name: env-volume
       - args:
         - server-secrets-init
-        image: quay.io/numaproj/numaflow:v1.1.0
+        image: quay.io/numaproj/numaflow:v1.1.1
         imagePullPolicy: Always
         name: server-secrets-init
       securityContext:
