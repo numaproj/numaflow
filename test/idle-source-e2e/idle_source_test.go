@@ -52,7 +52,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "idle-source"
+	pipelineName := "http-idle-source"
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()

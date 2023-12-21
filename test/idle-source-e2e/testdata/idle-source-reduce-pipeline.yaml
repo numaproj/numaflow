@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: idle-source
+  name: http-idle-source
 spec:
   limits:
     readBatchSize: 50
