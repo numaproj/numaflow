@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,9 +30,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"os"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -91,12 +87,9 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	topic := CreateKafkaTopic(2, 1)
-	fileData, err := os.ReadFile("testdata/kafka-pipeline.yaml")
-	is.NoError(err)
-	updatedFileData := strings.ReplaceAll(string(fileData), "my-topic", topic)
+	topic := "kafka-topic"
 
-	w := is.Given().Pipeline(updatedFileData).When().CreatePipelineAndWait()
+	w := is.Given().Pipeline("@testdata/kafka-pipeline.yaml").When().CreatePipelineAndWait()
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
@@ -105,7 +98,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 
 	done := make(chan struct{})
 	go func() {
-		startTime := time.Now().Add(-10000 * time.Hour)
+		startTime := time.Now().Add(-5000 * time.Hour)
 		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():
@@ -113,15 +106,24 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 			case <-done:
 				return
 			default:
-				SendMessage(topic, "data", generateMsg("1", startTime))
+				// send message to both partition for first 1000 messages for overcome the kafka source lazy loading wm publisher.
+				// after that send message to only one partition. so that idle source will be detected and wm will be progressed.
+				SendMessage(topic, "data", generateMsg("1", startTime), 0)
+				if i < 1000 {
+					SendMessage(topic, "data", generateMsg("2", startTime), 1)
+				}
 				time.Sleep(10 * time.Millisecond)
 				startTime = startTime.Add(1 * time.Second)
 			}
 		}
 	}()
 
-	// since the window duration is 10 second, so the count of event will be 10
-	w.Expect().SinkContains("sink", "10", WithTimeout(120*time.Second))
+	// since the window duration is 10 second, so the count of event will be 20, when sending data to only both partition.
+	w.Expect().SinkContains("sink", "20", WithTimeout(3*time.Minute))
+	// since the window duration is 10 second, so the count of event will be 10, when sending data to only one partition.
+	w.Expect().SinkContains("sink", "10", WithTimeout(3*time.Minute))
+
+	//time.Sleep(5 * time.Minute)
 	done <- struct{}{}
 }
 

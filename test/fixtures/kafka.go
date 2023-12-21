@@ -25,10 +25,10 @@ import (
 	"time"
 )
 
-func CreateKafkaTopic(partitions, replicas int32) string {
+func CreateKafkaTopic() string {
 	topic := fmt.Sprintf("e2e-topic-%s", rand.String(5))
 	log.Printf("create Kafka topic %q\n", topic)
-	InvokeE2EAPI("/kafka/create-topic?topic=%s&partitions=%d&replicas=%d", topic, partitions, replicas)
+	InvokeE2EAPI("/kafka/create-topic?topic=%s", topic)
 	return topic
 }
 
@@ -90,8 +90,8 @@ func GetKafkaCount(topic string, count int) int {
 	return count
 }
 
-func SendMessage(topic string, key string, message string) {
-	InvokeE2EAPIPOST("/kafka/produce-topic?topic=%s&key=%s", message, topic, key)
+func SendMessage(topic string, key string, message string, partition int) {
+	InvokeE2EAPIPOST("/kafka/produce-topic?topic=%s&key=%s&partition=%d", message, topic, key, partition)
 
 }
 

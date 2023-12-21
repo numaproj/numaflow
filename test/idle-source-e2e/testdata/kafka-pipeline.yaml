@@ -5,8 +5,8 @@ metadata:
 spec:
   watermark:
     idleSource:
-      threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
-      incrementBy: 3s # If source is found to be idle then increment the watermark by given incrementBy value.
+      threshold: 10s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
+      incrementBy: 5s # If source is found to be idle then increment the watermark by given incrementBy value.
       stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
   vertices:
     - name: kafka-in
@@ -14,7 +14,7 @@ spec:
         kafka:
           brokers:
             - kafka-broker:9092
-          topic: my-topic
+          topic: kafka-topic
           consumerGroup: test-group
         transformer:
           builtin:
@@ -25,14 +25,9 @@ spec:
       scale:
         min: 2
     - name: count-event
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
       udf:
         container:
-          # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-counter:v0.5.0
+          image: quay.io/numaio/numaflow-go/reduce-counter:v0.6.1
         groupBy:
           window:
             fixed:

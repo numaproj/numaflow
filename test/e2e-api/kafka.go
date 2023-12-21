@@ -32,13 +32,6 @@ func init() {
 	var brokers = []string{bootstrapServers}
 	http.HandleFunc("/kafka/create-topic", func(w http.ResponseWriter, r *http.Request) {
 		topic := r.URL.Query().Get("topic")
-		partitions, replicas, err := getKafkaPartitionAndReplicas(r.URL.Query().Get("partitions"), r.URL.Query().Get("replicas"))
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
 		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
 		if err != nil {
 			log.Println(err)
@@ -46,7 +39,7 @@ func init() {
 			return
 		}
 		defer admin.Close()
-		if err = admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: int32(partitions), ReplicationFactor: int16(replicas)}, true); err != nil {
+		if err = admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: 1, ReplicationFactor: 1}, true); err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -122,17 +115,34 @@ func init() {
 	})
 
 	http.HandleFunc("/kafka/produce-topic", func(w http.ResponseWriter, r *http.Request) {
+		var (
+			partition int
+			err       error
+		)
 		topic := r.URL.Query().Get("topic")
 		key := r.URL.Query().Get("key")
+		queryPartition := r.URL.Query().Get("partition")
+
+		config := sarama.NewConfig()
+		config.Producer.Return.Successes = true
+		if queryPartition == "" {
+			partition = 0
+		} else {
+			partition, err = strconv.Atoi(queryPartition)
+			if err != nil {
+				log.Println(err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// if partition is specified, use manual partitioner
+			config.Producer.Partitioner = sarama.NewManualPartitioner
+		}
 		buf, err := io.ReadAll(r.Body)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		config := sarama.NewConfig()
-		config.Producer.Return.Successes = true
 
 		syncProducer, err := sarama.NewSyncProducer(brokers, config)
 
@@ -142,9 +152,10 @@ func init() {
 		}
 		defer syncProducer.Close()
 		message := &sarama.ProducerMessage{
-			Topic: topic,
-			Value: sarama.ByteEncoder(buf),
-			Key:   sarama.ByteEncoder([]byte(key)),
+			Topic:     topic,
+			Value:     sarama.ByteEncoder(buf),
+			Key:       sarama.ByteEncoder([]byte(key)),
+			Partition: int32(partition),
 		}
 		if _, _, err := syncProducer.SendMessage(message); err != nil {
 			_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
@@ -208,28 +219,4 @@ func init() {
 		}
 		_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", n, mf.size, float64(n)/time.Since(start).Seconds(), topic)
 	})
-}
-
-func getKafkaPartitionAndReplicas(p, r string) (partition int, replicas int, err error) {
-	if p == "" {
-		// if partition is not specified, default to 1
-		partition = 1
-	} else {
-		partition, err = strconv.Atoi(p)
-		if err != nil {
-			return 0, 0, err
-		}
-	}
-
-	if r == "" {
-		// if replicas is not specified, default to 1
-		replicas = 1
-	} else {
-		replicas, err = strconv.Atoi(r)
-		if err != nil {
-			return 0, 0, err
-		}
-	}
-
-	return partition, replicas, nil
 }
