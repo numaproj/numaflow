@@ -81,9 +81,9 @@ func (*multiProcResolver) Resolve(target resolver.Target)          {}
 
 // buildConnAddrs Populate the connection list for the clients
 // Format (serverAddr, serverIdx) : (0.0.0.0:5551, 1), (0.0.0.0:5552, 2)
-func buildConnAddrs(numCpu int, servPorts []string) []string {
-	var conn = make([]string, numCpu)
-	for i := 0; i < numCpu; i++ {
+func buildConnAddrs(servPorts []string) []string {
+	var conn = make([]string, len(servPorts))
+	for i := 0; i < len(servPorts); i++ {
 		// Use the server ports from the server info file and assign to each client
 		addr, _ := strconv.Atoi(servPorts[i])
 		// Format (serverAddr, serverIdx)
@@ -95,15 +95,10 @@ func buildConnAddrs(numCpu int, servPorts []string) []string {
 // RegMultiProcResolver  is used to populate the connection properties based
 // on multiprocessing TCP or UDS connection
 func RegMultiProcResolver(svrInfo *info.ServerInfo) error {
-	numCpu, err := strconv.Atoi(svrInfo.Metadata["CPU_LIMIT"])
-	if err != nil {
-		return err
-	}
-	log.Println("Num CPU:", numCpu)
 	// Extract the server ports from the server info file and convert it to a list
 	servPorts := strings.Split(svrInfo.Metadata["SERV_PORTS"], ",")
 	log.Println("Multiprocessing TCP Server Ports:", servPorts)
-	conn := buildConnAddrs(numCpu, servPorts)
+	conn := buildConnAddrs(servPorts)
 	res := newMultiProcResolverBuilder(conn)
 	resolver.Register(res)
 	return nil
