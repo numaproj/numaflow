@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.1 (2023-12-21)
+
+ * [5ff77fe0](https://github.com/numaproj/numaflow/commit/5ff77fe0d6532ea5a513b7b94e6dea2af883ab2b) Update manifests to v1.1.1
+ * [5fd20ad9](https://github.com/numaproj/numaflow/commit/5fd20ad9a5c2a6d949e510633eb00887a3fa44da) chore(deps): bump golang.org/x/crypto from 0.14.0 to 0.17.0 (#1424)
+ * [da32632c](https://github.com/numaproj/numaflow/commit/da32632c9a0cb47e2b04d046471dddc3befb8766) fix: configmap const name (#1423)
+
+### Contributors
+
+ * Derek Wang
+ * dependabot[bot]
+
 ## v1.1.0 (2023-12-18)
 
  * [07d46ca9](https://github.com/numaproj/numaflow/commit/07d46ca9d0358db3625120328b428274ace54f2f) Update manifests to v1.1.0
