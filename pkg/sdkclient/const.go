@@ -2,7 +2,6 @@ package sdkclient
 
 const (
 	UDS                       = "unix"
-	TcpAddr                   = ":55551"
 	MapAddr                   = "/var/run/numaflow/map.sock"
 	ReduceAddr                = "/var/run/numaflow/reduce.sock"
 	ReduceStreamAddr          = "/var/run/numaflow/reducestream.sock"
