@@ -27,6 +27,7 @@ Once "threshold" reached to 5s(configurable) and if source is found as idle, the
 //go:generate kubectl apply -k ../../config/apps/kafka/broker -n numaflow-system
 // Wait for zookeeper to come up
 //go:generate sleep 60
+//go:generate kubectl get po -n numaflow-system
 
 package idle_source_e2e
 
