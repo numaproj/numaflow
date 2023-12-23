@@ -1,0 +1,6 @@
+resources:
+  - broker.yaml
+
+commonLabels:
+  "numaflow-e2e": "true"
+

@@ -22,7 +22,9 @@ Once "threshold" reached to 5s(configurable) and if source is found as idle, the
 */
 
 //go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
-//go:generate kubectl apply -k ../../config/apps/kafka -n numaflow-system
+//go:generate kubectl apply -k ../../config/apps/kafka/zookeeper -n numaflow-system
+//go:generate sleep 180
+//go:generate kubectl apply -k ../../config/apps/kafka/broker -n numaflow-system
 // Wait for zookeeper to come up
 //go:generate sleep 60
 
@@ -112,7 +114,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 				// send message to both partition for first 1000 messages for overcome the kafka source lazy loading wm publisher.
 				// after that send message to only one partition. so that idle source will be detected and wm will be progressed.
 				SendMessage(topic, "data", generateMsg("1", startTime), 0)
-				if i < 1000 {
+				if i < 2000 {
 					SendMessage(topic, "data", generateMsg("2", startTime), 1)
 				}
 				time.Sleep(10 * time.Millisecond)
