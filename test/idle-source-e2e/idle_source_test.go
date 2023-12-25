@@ -22,9 +22,7 @@ Once "threshold" reached to 5s(configurable) and if source is found as idle, the
 */
 
 //go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
-//go:generate kubectl apply -k ../../config/apps/kafka/zookeeper -n numaflow-system
-//go:generate sleep 180
-//go:generate kubectl apply -k ../../config/apps/kafka/broker -n numaflow-system
+//go:generate kubectl apply -k ../../config/apps/kafka -n numaflow-system
 // Wait for zookeeper to come up
 //go:generate sleep 60
 //go:generate kubectl get po -n numaflow-system
@@ -84,8 +82,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	w.Expect().
-		SinkContains("sink", "20", WithTimeout(300*time.Second)).
-		SinkContains("sink", "40", WithTimeout(300*time.Second))
+		SinkContains("sink", "20", WithTimeout(120*time.Second)).
+		SinkContains("sink", "40", WithTimeout(120*time.Second))
 	done <- struct{}{}
 }
 
