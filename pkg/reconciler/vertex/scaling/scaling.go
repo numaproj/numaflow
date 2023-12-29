@@ -224,8 +224,8 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 				return fmt.Errorf("Failed to get the pending upstream messages: %s", err.Error())
 			}
 
-			if totalPending == 0 {
-				log.Debugf("Vertex %s has 0 pending message messages, skipping scale up", vertex.Name)
+			if totalPending <= 0 {
+				log.Debugf("Vertex %s has no pending message messages, skipping scale up", vertex.Name)
 				return nil
 			}
 		}
@@ -521,9 +521,10 @@ func getPendingUpstreamMessageCount(
 	pl *dfv1.Pipeline,
 	vertex *dfv1.Vertex,
 ) (int64, error) {
+	log := logging.FromContext(ctx)
 	vMetrics, err := d.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
 	if err != nil {
-		return -1, fmt.Errorf("failed to get metrics of vertex %s from the pipeline %s", vertex.Spec.Name, pl.Name)
+		return -1, fmt.Errorf("Error while fetching the vertex metrics: %s", err.Error())
 	}
 
 	totalPendingMSGS := int64(0)
@@ -531,8 +532,8 @@ func getPendingUpstreamMessageCount(
 		pending, ok := m.Pendings["default"]
 		if !ok || pending < 0 || pending == isb.PendingNotAvailable {
 			// Pending not available, we don't do anything
-			err := fmt.Errorf("Vertex %s has no pending messages information, skip scaling.", vertex.Name)
-			return -1, err
+			log.Infow("Vertex has no pending messages information, skip scaling.", zap.String("vertex", vertex.Name))
+			return -1, nil
 		}
 
 		totalPendingMSGS += pending
