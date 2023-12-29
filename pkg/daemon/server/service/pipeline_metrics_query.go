@@ -147,9 +147,15 @@ func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	metricsArr := make([]*daemon.VertexMetrics, len(bufferList))
 
 	for idx, partitionName := range bufferList {
-		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, partitionName)
-		if err != nil {
-			return nil, err
+		var pendingCount int64
+
+		if !abstractVertex.IsASource() {
+			bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, partitionName)
+			if err != nil {
+				return nil, err
+			}
+
+			pendingCount = bufferInfo.PendingCount
 		}
 
 		vm := &daemon.VertexMetrics{
@@ -159,7 +165,7 @@ func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		// get the processing rate for each partition
 		vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
 		vm.Pendings = map[string]int64{
-			"default": bufferInfo.PendingCount,
+			"default": pendingCount,
 		}
 
 		metricsArr[idx] = vm
