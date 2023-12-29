@@ -144,17 +144,24 @@ func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	if abstractVertex.IsASource() {
 		bufferList = append(bufferList, req.GetVertex())
 	}
-	partitionPendingInfo := ps.getPending(ctx, req)
 	metricsArr := make([]*daemon.VertexMetrics, len(bufferList))
 
 	for idx, partitionName := range bufferList {
+		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, partitionName)
+		if err != nil {
+			return nil, err
+		}
+
 		vm := &daemon.VertexMetrics{
 			Pipeline: &ps.pipeline.Name,
 			Vertex:   req.Vertex,
 		}
 		// get the processing rate for each partition
 		vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
-		vm.Pendings = partitionPendingInfo[partitionName]
+		vm.Pendings = map[string]int64{
+			"default": bufferInfo.PendingCount,
+		}
+
 		metricsArr[idx] = vm
 	}
 
