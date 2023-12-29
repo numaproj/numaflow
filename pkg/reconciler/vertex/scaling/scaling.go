@@ -223,7 +223,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 			if err != nil {
 				return fmt.Errorf("Failed to get the pending upstream messages: %s", err.Error())
 			}
-	
+
 			if totalPending == 0 {
 				log.Debugf("Vertex %s has 0 pending message messages, skipping scale up", vertex.Name)
 				return nil
@@ -516,11 +516,11 @@ func KeyOfVertex(vertex dfv1.Vertex) string {
 }
 
 func getPendingUpstreamMessageCount(
-		ctx context.Context,
-		d *daemonclient.DaemonClient,
-		pl *dfv1.Pipeline,
-		vertex *dfv1.Vertex,
-	) (int64, error) {
+	ctx context.Context,
+	d *daemonclient.DaemonClient,
+	pl *dfv1.Pipeline,
+	vertex *dfv1.Vertex,
+) (int64, error) {
 	vMetrics, err := d.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
 	if err != nil {
 		return -1, fmt.Errorf("failed to get metrics of vertex %s from the pipeline %s", vertex.Spec.Name, pl.Name)
