@@ -204,15 +204,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Debugf("Vertex %s might be under processing, replicas mismatch.", vertex.Name)
 		return nil
 	}
-	if vertex.Status.Replicas == 0 { // Was scaled to 0
-		if secondsSinceLastScale >= float64(vertex.Spec.Scale.GetZeroReplicaSleepSeconds()) {
-			log.Debugf("Vertex %s has slept %v seconds, scaling up to peek.", vertex.Name, secondsSinceLastScale)
-			return s.patchVertexReplicas(ctx, vertex, 1)
-		} else {
-			log.Debugf("Vertex %q has slept %v seconds, hasn't reached zeroReplicaSleepSeconds (%v seconds).", vertex.Name, secondsSinceLastScale, vertex.Spec.Scale.GetZeroReplicaSleepSeconds())
-			return nil
-		}
-	}
+
 	var err error
 	daemonClient, _ := s.daemonClientsCache.Get(pl.GetDaemonServiceURL())
 	if daemonClient == nil {
@@ -221,6 +213,30 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 			return fmt.Errorf("failed to get daemon service client for pipeline %s, %w", pl.Name, err)
 		}
 		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), daemonClient)
+	}
+
+	if vertex.Status.Replicas == 0 { // Was scaled to 0
+		// Non source udfs don't need to scale up and peek to the check pending messages
+		// We will only scale them up if they have any pending messages
+		if !vertex.IsASource() {
+			totalPending, err := getPendingUpstreamMessageCount(ctx, daemonClient, pl, vertex)
+			if err != nil {
+				return fmt.Errorf("Failed to get the pending upstream messages: %s", err.Error())
+			}
+	
+			if totalPending == 0 {
+				log.Debugf("Vertex %s has 0 pending message messages, skipping scale up", vertex.Name)
+				return nil
+			}
+		}
+
+		if secondsSinceLastScale >= float64(vertex.Spec.Scale.GetZeroReplicaSleepSeconds()) {
+			log.Debugf("Vertex %s has slept %v seconds, scaling up to peek.", vertex.Name, secondsSinceLastScale)
+			return s.patchVertexReplicas(ctx, vertex, 1)
+		} else {
+			log.Debugf("Vertex %q has slept %v seconds, hasn't reached zeroReplicaSleepSeconds (%v seconds).", vertex.Name, secondsSinceLastScale, vertex.Spec.Scale.GetZeroReplicaSleepSeconds())
+			return nil
+		}
 	}
 
 	vMetrics, err := daemonClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
@@ -497,4 +513,30 @@ func (s *Scaler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, d
 // KeyOfVertex returns the unique key of a vertex
 func KeyOfVertex(vertex dfv1.Vertex) string {
 	return fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name)
+}
+
+func getPendingUpstreamMessageCount(
+		ctx context.Context,
+		d *daemonclient.DaemonClient,
+		pl *dfv1.Pipeline,
+		vertex *dfv1.Vertex,
+	) (int64, error) {
+	vMetrics, err := d.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
+	if err != nil {
+		return -1, fmt.Errorf("failed to get metrics of vertex %s from the pipeline %s", vertex.Spec.Name, pl.Name)
+	}
+
+	totalPendingMSGS := int64(0)
+	for _, m := range vMetrics {
+		pending, ok := m.Pendings["default"]
+		if !ok || pending < 0 || pending == isb.PendingNotAvailable {
+			// Pending not available, we don't do anything
+			err := fmt.Errorf("Vertex %s has no pending messages information, skip scaling.", vertex.Name)
+			return -1, err
+		}
+
+		totalPendingMSGS += pending
+	}
+
+	return totalPendingMSGS, nil
 }
