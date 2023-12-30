@@ -216,7 +216,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	}
 
 	if vertex.Status.Replicas == 0 { // Was scaled to 0
-		// Non source udfs don't need to scale up and peek to the check pending messages
+		// Non source udfs don't need to scale up and peek to check the pending messages
 		// We will only scale them up if they have any pending messages
 		if !vertex.IsASource() {
 			totalPending, err := getPendingUpstreamMessageCount(ctx, daemonClient, pl, vertex)
