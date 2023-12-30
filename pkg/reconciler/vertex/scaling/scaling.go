@@ -225,7 +225,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 			}
 
 			if totalPending <= 0 {
-				log.Debugf("Vertex %s doesn't have any pending messages, skipping scale up", vertex.Name)
+				log.Debugf("Vertex %s doesn't have any pending messages, skipping scaling back to 1", vertex.Name)
 				return nil
 			}
 		}
