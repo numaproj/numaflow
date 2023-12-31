@@ -221,7 +221,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		if !vertex.IsASource() {
 			totalPending, err := getPendingUpstreamMessageCount(ctx, daemonClient, pl, vertex)
 			if err != nil {
-				return fmt.Errorf("Failed to get the pending upstream messages: %s", err.Error())
+				return fmt.Errorf("failed to get the ISB pending messages: %w", err)
 			}
 
 			if totalPending <= 0 {
@@ -531,7 +531,7 @@ func getPendingUpstreamMessageCount(
 	for _, bufferName := range bufferList {
 		buffer, err := d.GetPipelineBuffer(ctx, pl.Name, bufferName)
 		if err != nil {
-			return -1, fmt.Errorf("Error while fetching the pipeline buffer : %s", err.Error())
+			return -1, fmt.Errorf("error while fetching the pipeline buffer : %w", err)
 		}
 
 		totalPendingMSGS += *buffer.PendingCount
