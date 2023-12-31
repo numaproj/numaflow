@@ -215,7 +215,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), daemonClient)
 	}
 
-	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := getBufferInfos(ctx, key, daemonClient, pl, vertex)
+	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := getBufferInfos(ctx, daemonClient, pl, vertex)
 	if err != nil {
 		log.Debugf("error while fetching buffer info, %w", err)
 		return err
@@ -503,7 +503,6 @@ func KeyOfVertex(vertex dfv1.Vertex) string {
 
 func getBufferInfos(
 	ctx context.Context,
-	key string,
 	d *daemonclient.DaemonClient,
 	pl *dfv1.Pipeline,
 	vertex *dfv1.Vertex,
