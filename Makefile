@@ -127,7 +127,7 @@ test-%:
 	$(MAKE) cleanup-e2e
 
 reinstall-numaflow-controller-ux-webhook:
-	$(MAKE) cleanup-e2e
+	$(MAKE) image
 	$(MAKE) delete-numaflow-controller-ux-webhook
 
 delete-numaflow-controller-ux-webhook:
