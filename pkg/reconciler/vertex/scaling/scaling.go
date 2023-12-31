@@ -222,19 +222,21 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	}
 
 	if vertex.Status.Replicas == 0 { // Was scaled to 0
-		// Non source udfs don't need to scale up and peek to check the pending messages
-		// We will only scale them up if they have any pending messages
+		// For non-source vertices,
+		// Check if they have any pending messages in their owned buffers,
+		// If yes, then scale them back to 1
 		if !vertex.IsASource() {
 			if totalCurrentPending <= 0 {
 				log.Debugf("Vertex %s doesn't have any pending messages, skipping scaling back to 1", vertex.Name)
 				return nil
 			} else {
-				log.Debugf("Vertex %s has some pending messages, can scale back to 1")
+				log.Debugf("Vertex %s has some pending messages, scaling back to 1", vertex.Name)
+				return s.patchVertexReplicas(ctx, vertex, 1)
 			}
 		}
 
-		// If it's not a source vertex, whenever we see there's pending messages, 
-		// Then we should scale up to 1. Which means zeroReplicaSleepSeconds only takes effect for source vertices.
+		// For source vertices,
+		// Periodically wake them up from 0 replicas to 1, to peek for the incoming messages
 		if secondsSinceLastScale >= float64(vertex.Spec.Scale.GetZeroReplicaSleepSeconds()) {
 			log.Debugf("Vertex %s has slept %v seconds, scaling up to peek.", vertex.Name, secondsSinceLastScale)
 			return s.patchVertexReplicas(ctx, vertex, 1)
