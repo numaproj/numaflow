@@ -215,16 +215,17 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), daemonClient)
 	}
 
+	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := getBufferInfos(ctx, key, daemonClient, pl, vertex)
+	if err != nil {
+		log.Debugf("error while fetching buffer info, %w", err)
+		return err
+	}
+
 	if vertex.Status.Replicas == 0 { // Was scaled to 0
 		// Non source udfs don't need to scale up and peek to check the pending messages
 		// We will only scale them up if they have any pending messages
 		if !vertex.IsASource() {
-			totalPending, err := getPendingUpstreamMessageCount(ctx, daemonClient, pl, vertex)
-			if err != nil {
-				return fmt.Errorf("failed to get the ISB pending messages: %w", err)
-			}
-
-			if totalPending <= 0 {
+			if totalCurrentPending <= 0 {
 				log.Debugf("Vertex %s doesn't have any pending messages, skipping scaling back to 1", vertex.Name)
 				return nil
 			} else {
@@ -281,27 +282,8 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	// Add pending information to cache for back pressure calculation, if there is a backpressure it will impact all the partitions.
 	// So we only need to add the total pending to the cache.
 	_ = s.vertexMetricsCache.Add(key+"/pending", totalPending)
-	partitionBufferLengths := make([]int64, 0)
-	partitionAvailableBufferLengths := make([]int64, 0)
-	totalBufferLength := int64(0)
-	targetAvailableBufferLength := int64(0)
-	if !vertex.IsASource() { // Only non-source vertex has buffer to read
-		for _, bufferName := range vertex.OwnedBuffers() {
-			if bInfo, err := daemonClient.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
-				return fmt.Errorf("failed to get the read buffer information of vertex %q, %w", vertex.Name, err)
-			} else {
-				if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == nil {
-					return fmt.Errorf("invalid read buffer information of vertex %q, length or usage limit is missing", vertex.Name)
-				}
-				partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength())*bInfo.GetBufferUsageLimit()))
-				partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
-				totalBufferLength += int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
-				targetAvailableBufferLength += int64(float64(*bInfo.BufferLength) * float64(vertex.Spec.Scale.GetTargetBufferAvailability()) / 100)
-			}
-		}
-		// Add processing rate information to cache for back pressure calculation
-		_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
-	}
+	_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
+
 	var desired int32
 	current := int32(vertex.GetReplicas())
 	// if both totalRate and totalPending are 0, we scale down to 0
@@ -519,23 +501,41 @@ func KeyOfVertex(vertex dfv1.Vertex) string {
 	return fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name)
 }
 
-func getPendingUpstreamMessageCount(
+func getBufferInfos(
 	ctx context.Context,
+	key string,
 	d *daemonclient.DaemonClient,
 	pl *dfv1.Pipeline,
 	vertex *dfv1.Vertex,
-) (int64, error) {
-	bufferList := vertex.OwnedBuffers()
+) (
+	partitionBufferLengths []int64,
+	partitionAvailableBufferLengths[]int64,
+	totalBufferLength int64,
+	totalCurrentPending int64,
+	err error,
+) {
+	partitionBufferLengths = make([]int64, 0)
+	partitionAvailableBufferLengths = make([]int64, 0)
+	totalBufferLength = int64(0)
+	totalCurrentPending = int64(0)
+	if !vertex.IsASource() { // Only non-source vertex has buffer to read
+		for _, bufferName := range vertex.OwnedBuffers() {
+			if bInfo, err := d.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
+				err = fmt.Errorf("failed to get the buffer information of vertex %q, %w", vertex.Name, err)
+				return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
+			} else {
+				if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == nil || bInfo.PendingCount == nil {
+					err = fmt.Errorf("invalid read buffer information of vertex %q, length, pendingCount or usage limit is missing", vertex.Name)
+					return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
+				}
 
-	totalPendingMSGS := int64(0)
-	for _, bufferName := range bufferList {
-		buffer, err := d.GetPipelineBuffer(ctx, pl.Name, bufferName)
-		if err != nil {
-			return -1, fmt.Errorf("error while fetching the pipeline buffer : %w", err)
+				partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength())*bInfo.GetBufferUsageLimit()))
+				partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
+				totalBufferLength += int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
+				totalCurrentPending += *bInfo.PendingCount
+			}
 		}
-
-		totalPendingMSGS += *buffer.PendingCount
 	}
 
-	return totalPendingMSGS, nil
+	return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, nil
 }
