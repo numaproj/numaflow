@@ -215,7 +215,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), daemonClient)
 	}
 
-	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := getBufferInfos(ctx, daemonClient, pl, vertex)
+	partitionBufferLengths, partitionAvailableBufferLengths, _, totalCurrentPending, err := s.getBufferInfos(ctx, key, daemonClient, pl, vertex)
 	if err != nil {
 		log.Debugf("error while fetching buffer info, %w", err)
 		return err
@@ -282,7 +282,6 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	// Add pending information to cache for back pressure calculation, if there is a backpressure it will impact all the partitions.
 	// So we only need to add the total pending to the cache.
 	_ = s.vertexMetricsCache.Add(key+"/pending", totalPending)
-	_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
 
 	var desired int32
 	current := int32(vertex.GetReplicas())
@@ -501,8 +500,9 @@ func KeyOfVertex(vertex dfv1.Vertex) string {
 	return fmt.Sprintf("%s/%s", vertex.Namespace, vertex.Name)
 }
 
-func getBufferInfos(
+func (s *Scaler) getBufferInfos(
 	ctx context.Context,
+	key string,
 	d *daemonclient.DaemonClient,
 	pl *dfv1.Pipeline,
 	vertex *dfv1.Vertex,
@@ -534,6 +534,8 @@ func getBufferInfos(
 				totalCurrentPending += *bInfo.PendingCount
 			}
 		}
+
+		_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
 	}
 
 	return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, nil
