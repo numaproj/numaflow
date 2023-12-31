@@ -227,9 +227,13 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 			if totalPending <= 0 {
 				log.Debugf("Vertex %s doesn't have any pending messages, skipping scaling back to 1", vertex.Name)
 				return nil
+			} else {
+				log.Debugf("Vertex %s has some pending messages, can scale back to 1")
 			}
 		}
 
+		// If it's not a source vertex, whenever we see there's pending messages, 
+		// Then we should scale up to 1. Which means zeroReplicaSleepSeconds only takes effect for source vertices.
 		if secondsSinceLastScale >= float64(vertex.Spec.Scale.GetZeroReplicaSleepSeconds()) {
 			log.Debugf("Vertex %s has slept %v seconds, scaling up to peek.", vertex.Name, secondsSinceLastScale)
 			return s.patchVertexReplicas(ctx, vertex, 1)
