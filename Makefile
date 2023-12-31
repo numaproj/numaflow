@@ -120,22 +120,21 @@ test-sideinputs-e2e:
 test-%:
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
-	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
-	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=numaflow-ux,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
-	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=numaflow-webhook,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
-	kubectl -n numaflow-system delete po e2e-api-pod --ignore-not-found=true
+	$(MAKE) delete-numaflow-controller-ux-webhook
 	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
 	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$*
 	$(MAKE) cleanup-e2e
-	
-delete-and-install:
-	$(MAKE) image e2eapi-image
+
+reinstall-numaflow-controller-ux-webhook:
+	$(MAKE) cleanup-e2e
+	$(MAKE) delete-numaflow-controller-ux-webhook
+
+delete-numaflow-controller-ux-webhook:
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=numaflow-ux,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=numaflow-webhook,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
 	kubectl -n numaflow-system delete po e2e-api-pod --ignore-not-found=true
-	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 
 .PHONY: cleanup-e2e
 cleanup-e2e:
