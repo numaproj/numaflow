@@ -215,9 +215,9 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), daemonClient)
 	}
 
-	partitionBufferLengths, partitionAvailableBufferLengths, _, totalCurrentPending, err := s.getBufferInfos(ctx, key, daemonClient, pl, vertex)
+	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := s.getBufferInfos(ctx, key, daemonClient, pl, vertex)
 	if err != nil {
-		log.Debugf("error while fetching buffer info, %w", err)
+		err := fmt.Errorf("error while fetching buffer info, %w", err)
 		return err
 	}
 
@@ -284,6 +284,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	// Add pending information to cache for back pressure calculation, if there is a backpressure it will impact all the partitions.
 	// So we only need to add the total pending to the cache.
 	_ = s.vertexMetricsCache.Add(key+"/pending", totalPending)
+	_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
 
 	var desired int32
 	current := int32(vertex.GetReplicas())
@@ -519,25 +520,21 @@ func (s *Scaler) getBufferInfos(
 	partitionAvailableBufferLengths = make([]int64, 0)
 	totalBufferLength = int64(0)
 	totalCurrentPending = int64(0)
-	if !vertex.IsASource() { // Only non-source vertex has buffer to read
-		for _, bufferName := range vertex.OwnedBuffers() {
-			if bInfo, err := d.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
-				err = fmt.Errorf("failed to get the buffer information of vertex %q, %w", vertex.Name, err)
+	for _, bufferName := range vertex.OwnedBuffers() {
+		if bInfo, err := d.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
+			err = fmt.Errorf("failed to get the buffer information of vertex %q, %w", vertex.Name, err)
+			return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
+		} else {
+			if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == nil || bInfo.PendingCount == nil {
+				err = fmt.Errorf("invalid read buffer information of vertex %q, length, pendingCount or usage limit is missing", vertex.Name)
 				return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
-			} else {
-				if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == nil || bInfo.PendingCount == nil {
-					err = fmt.Errorf("invalid read buffer information of vertex %q, length, pendingCount or usage limit is missing", vertex.Name)
-					return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
-				}
-
-				partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength())*bInfo.GetBufferUsageLimit()))
-				partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
-				totalBufferLength += int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
-				totalCurrentPending += *bInfo.PendingCount
 			}
-		}
 
-		_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
+			partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength())*bInfo.GetBufferUsageLimit()))
+			partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
+			totalBufferLength += int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
+			totalCurrentPending += *bInfo.PendingCount
+		}
 	}
 
 	return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, nil
