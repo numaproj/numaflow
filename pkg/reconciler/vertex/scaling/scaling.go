@@ -284,7 +284,9 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	// Add pending information to cache for back pressure calculation, if there is a backpressure it will impact all the partitions.
 	// So we only need to add the total pending to the cache.
 	_ = s.vertexMetricsCache.Add(key+"/pending", totalPending)
-	_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
+	if !vertex.IsASource() {
+		_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
+	}
 
 	var desired int32
 	current := int32(vertex.GetReplicas())
