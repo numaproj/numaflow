@@ -513,7 +513,7 @@ func getBufferInfos(
 	vertex *dfv1.Vertex,
 ) (
 	partitionBufferLengths []int64,
-	partitionAvailableBufferLengths[]int64,
+	partitionAvailableBufferLengths []int64,
 	totalBufferLength int64,
 	totalCurrentPending int64,
 	err error,
