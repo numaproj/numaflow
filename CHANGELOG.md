@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.2 (2024-01-01)
+
+ * [ac716ec4](https://github.com/numaproj/numaflow/commit/ac716ec4ab4b49f4f013f067c33d1d89936e132a) Update manifests to v1.1.2
+ * [af17d8ce](https://github.com/numaproj/numaflow/commit/af17d8ce25665ddfe8e6eb65ed97c0a743eae4f4) fix: server-secrets-init container restart  (#1433)
+
+### Contributors
+
+ * Derek Wang
+ * Vedant Gupta
+
 ## v1.1.1 (2023-12-21)
 
  * [5ff77fe0](https://github.com/numaproj/numaflow/commit/5ff77fe0d6532ea5a513b7b94e6dea2af883ab2b) Update manifests to v1.1.1
