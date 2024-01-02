@@ -4085,8 +4085,8 @@ instead. Cooldown seconds after a scaling operation before another one.
 <td>
 <em>(Optional)</em>
 <p>
-After scaling down to 0, sleep how many seconds before scaling up to
-peek.
+After scaling down the source vertex to 0, sleep how many seconds before
+scaling the source vertex back up to peek.
 </p>
 </td>
 </tr>

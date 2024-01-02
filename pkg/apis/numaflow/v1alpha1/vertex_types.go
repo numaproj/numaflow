@@ -558,7 +558,7 @@ type Scale struct {
 	// Cooldown seconds after a scaling operation before another one.
 	// +optional
 	DeprecatedCooldownSeconds *uint32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`
-	// After scaling down to 0, sleep how many seconds before scaling up to peek.
+	// After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.
 	// +optional
 	ZeroReplicaSleepSeconds *uint32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,6,opt,name=zeroReplicaSleepSeconds"`
 	// TargetProcessingSeconds is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast

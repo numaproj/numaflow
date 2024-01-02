@@ -1052,7 +1052,7 @@ message Scale {
   // +optional
   optional uint32 cooldownSeconds = 5;
 
-  // After scaling down to 0, sleep how many seconds before scaling up to peek.
+  // After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.
   // +optional
   optional uint32 zeroReplicaSleepSeconds = 6;
 
