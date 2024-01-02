@@ -291,6 +291,11 @@ spec:
           name: env-volume
       - args:
         - server-secrets-init
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         name: server-secrets-init

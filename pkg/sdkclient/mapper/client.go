@@ -53,7 +53,7 @@ func New(inputOptions ...sdkclient.Option) (Client, error) {
 	}
 
 	// Connect to the server
-	conn, err := util.ConnectToServer(opts.UdsSockAddr(), opts.TcpSockAddr(), serverInfo, opts.MaxMessageSize())
+	conn, err := util.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
 	if err != nil {
 		return nil, err
 	}

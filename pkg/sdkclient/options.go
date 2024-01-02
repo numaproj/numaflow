@@ -19,16 +19,10 @@ package sdkclient
 import "time"
 
 type Options struct {
-	tcpSockAddr                string
 	udsSockAddr                string
 	maxMessageSize             int
 	serverInfoFilePath         string
 	serverInfoReadinessTimeout time.Duration
-}
-
-// TcpSockAddr returns the TCP sock addr.
-func (o *Options) TcpSockAddr() string {
-	return o.tcpSockAddr
 }
 
 // UdsSockAddr returns the UDS sock addr.
@@ -56,7 +50,6 @@ func DefaultOptions(address string) *Options {
 	return &Options{
 		maxMessageSize:             DefaultGRPCMaxMessageSize,
 		serverInfoFilePath:         ServerInfoFilePath,
-		tcpSockAddr:                TcpAddr,
 		udsSockAddr:                address,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 	}
@@ -69,13 +62,6 @@ type Option func(*Options)
 func WithUdsSockAddr(addr string) Option {
 	return func(opts *Options) {
 		opts.udsSockAddr = addr
-	}
-}
-
-// WithTcpSockAddr start the client with the given TCP sock addr. This is mainly used for testing purpose.
-func WithTcpSockAddr(addr string) Option {
-	return func(opts *Options) {
-		opts.tcpSockAddr = addr
 	}
 }
 
