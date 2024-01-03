@@ -3453,7 +3453,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"zeroReplicaSleepSeconds": {
 						SchemaProps: spec.SchemaProps{
-							Description: "After scaling down to 0, sleep how many seconds before scaling up to peek.",
+							Description: "After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
