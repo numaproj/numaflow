@@ -115,9 +115,9 @@ export interface PipelineUpdateFetchResult {
 
 export interface PipelineVertexMetric {
   partition: number;
-  oneM: number;
-  fiveM: number;
-  fifteenM: number;
+  oneM: string;
+  fiveM: string;
+  fifteenM: string;
 }
 
 export interface PipelineVertexMetrics {
