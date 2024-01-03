@@ -39,14 +39,14 @@ export function ProcessingRates({
       rates.push({
         partition: index,
         oneM: item.processingRates["1m"]
-          ? item.processingRates["1m"].toFixed(2)+"/sec"
-          : "0/sec",
+          ? item.processingRates["1m"].toFixed(2)
+          : 0,
         fiveM: item.processingRates["5m"]
-          ? item.processingRates["5m"].toFixed(2)+"/sec"
-          : "0/sec",
+          ? item.processingRates["5m"].toFixed(2)
+          : 0,
         fifteenM: item.processingRates["15m"]
-          ? item.processingRates["15m"].toFixed(2)+"/sec"
-          : "0/sec",
+          ? item.processingRates["15m"].toFixed(2)
+          : 0,
       });
     });
     setFoundRates(rates);
