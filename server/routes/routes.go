@@ -51,17 +51,15 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	if err != nil {
 		panic(err)
 	}
-	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
-	noAuthGroup := r.Group(baseHref + "auth/v1")
-	v1RoutesNoAuth(noAuthGroup, dexObj)
 
 	localUsersAuthObj, err := v1.NewLocalUsersAuthObject(authInfo.DisableAuth)
 	if err != nil {
 		panic(err)
 	}
-	// localUsersGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
-	localUsersGroup := r.Group(baseHref + "/auth/local/v1")
-	v1RoutesLocalUser(localUsersGroup, localUsersAuthObj)
+
+	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
+	noAuthGroup := r.Group(baseHref + "auth/v1")
+	v1RoutesNoAuth(noAuthGroup, dexObj, localUsersAuthObj)
 
 	// r1Group is a group of routes that require AuthN/AuthZ when auth is enabled.
 	// they share the AuthN/AuthZ middleware.
@@ -82,28 +80,19 @@ func Routes(r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref strin
 	})
 }
 
-func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject) {
-	handler, err := v1.NewNoAuthHandler(dexObj)
+func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject) {
+	handler, err := v1.NewNoAuthHandler(dexObj, localUsersAuthObject)
 	if err != nil {
 		panic(err)
 	}
 	// Handle the login request.
 	r.GET("/login", handler.Login)
+	// Handle the login request for local users.
+	r.POST("/login", handler.LoginLocalUsers)
 	// Handle the logout request.
 	r.GET("/logout", handler.Logout)
 	// Handle the callback request.
 	r.GET("/callback", handler.Callback)
-}
-
-func v1RoutesLocalUser(r gin.IRouter, localUsersAuthObject *v1.LocalUsersAuthObject) {
-	handler, err := v1.NewLocalUsersHandler(localUsersAuthObject)
-	if err != nil {
-		panic(err)
-	}
-	// Handle the login request.
-	r.POST("/login", handler.Login)
-	// Handle the logout request.
-	r.GET("/logout", handler.Logout)
 }
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function

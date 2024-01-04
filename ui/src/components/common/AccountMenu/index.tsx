@@ -11,10 +11,7 @@ export default function AccountMenu() {
   const navigate = useNavigate();
   const { userInfo } = useContext<AppContextProps>(AppContext);
 
-  const url =
-    userInfo?.email === ""
-      ? `${getBaseHref()}/auth/local/v1/logout`
-      : `${getBaseHref()}/auth/v1/logout`;
+  const url = `${getBaseHref()}/auth/v1/logout`;
 
   const handleLogout = useCallback(async () => {
     try {
