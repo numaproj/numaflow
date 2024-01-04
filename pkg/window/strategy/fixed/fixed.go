@@ -52,6 +52,8 @@ func NewFixedWindow(length time.Duration, message *isb.ReadMessage) window.Timed
 	}
 }
 
+var _ window.TimedWindow = (*fixedWindow)(nil)
+
 func (w *fixedWindow) StartTime() time.Time {
 	return w.startTime
 }
@@ -76,21 +78,22 @@ func (w *fixedWindow) Partition() *partition.ID {
 	}
 }
 
-func (w *fixedWindow) Merge(tw window.TimedWindow) {
-	// never be invokved for Aligned Window
+func (w *fixedWindow) Merge(_ window.TimedWindow) {
+	// never be invoked for Aligned Window
 }
 
-func (w *fixedWindow) Expand(endTime time.Time) {
-	// never be invokved for Aligned Window
+func (w *fixedWindow) Expand(_ time.Time) {
+	// never be invoked for Aligned Window
 }
 
-// Windower is a implementation of TimedWindower of fixed window, windower is responsible for assigning
+// Windower is an implementation of TimedWindower of fixed window, windower is responsible for assigning
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
 	// Length is the temporal length of the window.
 	length time.Duration
 	// we track all the active windows, we store the windows sorted by end time
-	// so its easy to find the window
+	// so it's easy to find the window
+	// TODO - explain why there can be multiple active windows for fixed windower
 	activeWindows *window.SortedWindowListByEndTime
 	// closedWindows is a list of closed windows which are yet to be GCed
 	// we need to track the close windows because while publishing the watermark
@@ -117,9 +120,8 @@ func (w *Windower) Type() window.Type {
 }
 
 // AssignWindows assigns the event to the window based on give window configuration.
-// AssignWindows returns a array of TimedWindoweRequest to window message. Partition id is used to
-// identify the pbq instance to which the message should be assigned. fixedWindow message contains
-// the isb message and the window operation, where the operation can be OPEN | APPEND.
+// For fixed window, the message is assigned to one single window.
+// The operation can be either OPEN or APPEND, depending on whether the window is already present or not.
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	win, isPresent := w.activeWindows.InsertIfNotPresent(NewFixedWindow(w.length, message))
 
@@ -138,7 +140,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	return []*window.TimedWindowRequest{winOp}
 }
 
-// InsertWindow inserts window to the list of active windows
+// InsertWindow inserts a window to the list of active windows
 func (w *Windower) InsertWindow(tw window.TimedWindow) {
 	w.activeWindows.InsertIfNotPresent(tw)
 }
@@ -147,12 +149,13 @@ func (w *Windower) InsertWindow(tw window.TimedWindow) {
 // returns a list of TimedWindowRequests, each request contains the window operation and the window
 // which needs to be closed.
 func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
+	// TODO - we are updating both active and closed windows. do we need lock?
 	winOperations := make([]*window.TimedWindowRequest, 0)
 	closedWindows := w.activeWindows.RemoveWindows(time)
 	for _, win := range closedWindows {
 		winOp := &window.TimedWindowRequest{
 			ReadMessage: nil,
-			// we can call Delete here because in Aligned window, we are sure that COB has been called for all the keys
+			// we can call Delete here because in an aligned window, we are sure that COB has been called for all the keys
 			Operation: window.Delete,
 			Windows:   []window.TimedWindow{win},
 			ID:        win.Partition(),
@@ -173,7 +176,8 @@ func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
 	w.closedWindows.Delete(response.Window)
 }
 
-// OldestWindowEndTime returns the end time of the oldest window.
+// OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.
+// If there are no windows, it returns -1.
 func (w *Windower) OldestWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()

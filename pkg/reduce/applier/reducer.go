@@ -26,6 +26,6 @@ import (
 // ReduceApplier applies the GRPCBasedReduceUDF on the stream of read messages and gives back a new message.
 type ReduceApplier interface {
 	// ApplyReduce applies the reduce UDF on the stream of window requests and streams the timed window response.
-	// doesn't wait for the response for all the keys in the window, before sending the response back.
+	// It doesn't wait for the response for all the keys in the window, before sending the response back.
 	ApplyReduce(ctx context.Context, partitionID *partition.ID, messageStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error)
 }
