@@ -93,7 +93,6 @@ type Windower struct {
 	length time.Duration
 	// we track all the active windows, we store the windows sorted by end time
 	// so it's easy to find the window
-	// TODO - explain why there can be multiple active windows for fixed windower
 	activeWindows *window.SortedWindowListByEndTime
 	// closedWindows is a list of closed windows which are yet to be GCed
 	// we need to track the close windows because while publishing the watermark

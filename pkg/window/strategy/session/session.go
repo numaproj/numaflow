@@ -123,7 +123,6 @@ type Windower struct {
 	// activeWindows is a map of keys to list of active windows
 	// key is join of all the keys of the message, since session is per key
 	// we need to maintain a list of windows per key
-	// TODO - explain why there can be multiple active windows per key
 	activeWindows map[string]*window.SortedWindowListByEndTime
 
 	// closedWindows is a list of closed windows which are yet to be GCed

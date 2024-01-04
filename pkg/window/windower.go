@@ -162,7 +162,6 @@ type TimedWindowResponse struct {
 	Window TimedWindow
 	// EOF represents the end of the response for the given window.
 	// When EOF is true, it will be just a metadata payload, there won't be any WriteMessage.
-	// TODO - would it be simpler if we set WriteMessage to nil to indicate EOF?
 	EOF bool
 }
 
