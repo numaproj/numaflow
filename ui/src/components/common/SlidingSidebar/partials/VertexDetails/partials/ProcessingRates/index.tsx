@@ -82,9 +82,9 @@ export function ProcessingRates({
               foundRates.map((metric) => (
                 <TableRow key={metric.partition}>
                   <TableCell>{metric.partition}</TableCell>
-                  <TableCell>{metric.oneM}</TableCell>
-                  <TableCell>{metric.fiveM}</TableCell>
-                  <TableCell>{metric.fifteenM}</TableCell>
+                  <TableCell>{metric.oneM}/sec</TableCell>
+                  <TableCell>{metric.fiveM}/sec</TableCell>
+                  <TableCell>{metric.fifteenM}/sec</TableCell>
                 </TableRow>
               ))}
           </TableBody>
