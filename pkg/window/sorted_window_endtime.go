@@ -150,7 +150,8 @@ func (s *SortedWindowListByEndTime) Delete(window TimedWindow) (deleted bool) {
 	return deleted
 }
 
-// RemoveWindows removes a set of windows smaller than or equal to the given time.
+// RemoveWindows removes a set of windows whose end time is smaller than or equal to the given time.
+// It returns the removed windows.
 func (s *SortedWindowListByEndTime) RemoveWindows(t time.Time) []TimedWindow {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -241,7 +242,7 @@ func (s *SortedWindowListByEndTime) WindowToBeMerged(window TimedWindow) (TimedW
 		return !s.windows[i].EndTime().Before(window.EndTime())
 	})
 
-	// since its only sorted by end time, we have to check for all the windows with the same end time greater than or equal to the given window
+	// since it's only sorted by end time, we have to check for all the windows with end time greater than or equal to the given window
 	// for example if the windows are (60, 70), (50, 90) and (30, 100), if we are given a window (35,45) we should return (30,100)
 	// if we just check the window at index 0, we will return (60,70) which is incorrect
 	for i := index; i < len(s.windows); i++ {
@@ -260,6 +261,10 @@ func (s *SortedWindowListByEndTime) WindowToBeMerged(window TimedWindow) (TimedW
 	return nil, false
 }
 
+// compareKeys returns true if the keys are equal.
+// The order of the keys matters, e.g. ["a", "b"] != ["b", "a"].
+// A concrete example can be that we are tracking API calls among applications, each call can be represented as keys [client_id, service_id].
+// In this case, ["app_1", "app_2"] != ["app_2", "app_1"] because app_1 calling app_2 is different from app_2 calling app_1.
 func compareKeys(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

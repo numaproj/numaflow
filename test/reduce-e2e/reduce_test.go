@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -197,7 +195,7 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	done <- struct{}{}
 }
 
-// two reduce vertex(keyed and non keyed) followed by a sliding window vertex
+// two reduce vertices (keyed and non-keyed) followed by a sliding window vertex
 func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -222,6 +220,7 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 			case <-done:
 				return
 			default:
+				// send the number "1" and "2" to the pipeline every second
 				eventTime := strconv.Itoa(startTime + i*1000)
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))
@@ -229,10 +228,23 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 		}
 	}()
 
+	// At the keyed reduce vertex, the 5-second fixed window produces output every 5 seconds as
+	// {key: "even", value: 10(2*5s=10)} and {key: "odd", value: 5(1*5s=5)}.
+	// At the non-keyed reduce vertex, the 10-second fixed window produces output every 10 seconds as
+	// {value: 30} ((10+5)*(10s/5s) = 30)
+	// At the non-keyed sliding window vertex,
+	// the sliding window is configured with length 60s.
+	// At the first 10s, the window output is {value: 30}
+	// At the second 10s, the output is {value: 60} (30+30 = 60)
+	// It goes on like this, and at the 6th 10s, the output is {value: 180}
+	// At the 7th 10s, the output remains 180 as the window slides forward.
 	w.Expect().
 		SinkContains("sink", "30").
 		SinkContains("sink", "60").
-		SinkContains("sink", "180")
+		SinkNotContains("sink", "80").
+		SinkContains("sink", "90").
+		SinkContains("sink", "180").
+		SinkNotContains("sink", "210")
 	done <- struct{}{}
 }
 
