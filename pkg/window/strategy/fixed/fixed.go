@@ -148,7 +148,9 @@ func (w *Windower) InsertWindow(tw window.TimedWindow) {
 // returns a list of TimedWindowRequests, each request contains the window operation and the window
 // which needs to be closed.
 func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
-	// TODO - we are updating both active and closed windows. do we need lock? same question for other windower methods.
+	// FIXME - we are updating both active and closed windows.
+	// We need to make this method atomic.
+	// Same for other windower methods.
 	winOperations := make([]*window.TimedWindowRequest, 0)
 	closedWindows := w.activeWindows.RemoveWindows(time)
 	for _, win := range closedWindows {
