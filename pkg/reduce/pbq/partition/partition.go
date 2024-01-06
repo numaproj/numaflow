@@ -14,8 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// partition is a tuple containing (start, end) time and an optional slot.
-// Window contains a partition because Window containts the keys too.
+// Package partition is a tuple containing (start, end) time and an optional slot.
+// Window contains a partition because Window contains the keys too.
+// A partition is used to map a message to a pbq instance.
 package partition
 
 import (

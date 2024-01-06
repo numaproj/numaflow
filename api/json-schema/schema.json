@@ -19092,7 +19092,7 @@
           "type": "integer"
         },
         "zeroReplicaSleepSeconds": {
-          "description": "After scaling down to 0, sleep how many seconds before scaling up to peek.",
+          "description": "After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.",
           "format": "int64",
           "type": "integer"
         }

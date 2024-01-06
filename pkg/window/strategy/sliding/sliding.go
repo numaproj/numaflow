@@ -50,6 +50,8 @@ func NewSlidingWindow(startTime time.Time, endTime time.Time) window.TimedWindow
 	}
 }
 
+var _ window.TimedWindow = (*slidingWindow)(nil)
+
 func (w *slidingWindow) StartTime() time.Time {
 	return w.startTime
 }
@@ -75,15 +77,15 @@ func (w *slidingWindow) Partition() *partition.ID {
 }
 
 // Merge merges the given window with the current window.
-func (w *slidingWindow) Merge(tw window.TimedWindow) {
-	// never be invokved for Aligned Window
+func (w *slidingWindow) Merge(_ window.TimedWindow) {
+	// never be invoked for Aligned Window
 }
 
-func (w *slidingWindow) Expand(endTime time.Time) {
-	// never be invokved for Aligned Window
+func (w *slidingWindow) Expand(_ time.Time) {
+	// never be invoked for Aligned Window
 }
 
-// Windower is a implementation of TimedWindower of sliding window, windower is responsible for assigning
+// Windower is an implementation of TimedWindower of sliding window, windower is responsible for assigning
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
 	// Length is the temporal length of the window.
@@ -118,12 +120,14 @@ func (*Windower) Type() window.Type {
 }
 
 // AssignWindows assigns the event to the window based on give window configuration.
+// For sliding window, the message can be assigned to multiple windows.
+// The operation can be either OPEN or APPEND, depending on whether the window is already present or not.
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	windowOperations := make([]*window.TimedWindowRequest, 0)
 
 	// use the highest integer multiple of slide length which is less than the eventTime
-	// as the start time for the window. For example if the eventTime is 810 and slide
-	// length is 70, use 770 as the startTime of the window. In that way we can be guarantee
+	// as the start time for the window. For example, if the eventTime is 810 and slide
+	// length is 70, use 770 as the startTime of the window. In that way, we can guarantee
 	// consistency while assigning the messages to the windows.
 	startTime := time.UnixMilli((message.EventTime.UnixMilli() / w.slide.Milliseconds()) * w.slide.Milliseconds())
 	endTime := startTime.Add(w.length)
@@ -160,7 +164,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	return windowOperations
 }
 
-// InsertWindow inserts window to the list of active windows
+// InsertWindow inserts a window to the list of active windows.
 func (w *Windower) InsertWindow(tw window.TimedWindow) {
 	w.activeWindows.InsertIfNotPresent(tw)
 }
@@ -192,7 +196,8 @@ func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
 	w.closedWindows.Delete(response.Window)
 }
 
-// OldestWindowEndTime returns the end time of the oldest window.
+// OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.
+// If there are no windows, it returns -1.
 func (w *Windower) OldestWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()

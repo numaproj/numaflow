@@ -59,6 +59,8 @@ func NewSessionWindow(startTime time.Time, gap time.Duration, message *isb.ReadM
 	}
 }
 
+var _ window.TimedWindow = (*sessionWindow)(nil)
+
 func (w *sessionWindow) StartTime() time.Time {
 	return w.startTime
 }
@@ -105,17 +107,17 @@ func cloneWindow(win window.TimedWindow) *sessionWindow {
 	}
 }
 
-// Expand expands the window. An interesting property of Unaligned windows :).
+// Expand expands the window end time to the new endTime. An interesting property of Unaligned windows :).
 func (w *sessionWindow) Expand(endTime time.Time) {
 	if endTime.After(w.endTime) {
 		w.endTime = endTime
 	}
 }
 
-// Windower is a implementation of TimedWindower of session window, windower is responsible for assigning
+// Windower is an implementation of TimedWindower of session window, windower is responsible for assigning
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
-	// gap is the duration after which the session is marked as closed.
+	// gap is the duration of inactivity after which a session window is marked as closed.
 	gap time.Duration
 
 	// activeWindows is a map of keys to list of active windows
@@ -152,9 +154,8 @@ func (*Windower) Type() window.Type {
 // AssignWindows assigns the event to the window based on give window configuration. This assignment could trigger the following
 // - New window Creation
 // - Expand an existing window
-// - Append to an existing window (event time has the event-time such that gap + event-time is < window end time).
+// - Append to an existing window (the message has the event-time such that gap + event-time is < window end time).
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
-
 	var (
 		combinedKey      = strings.Join(message.Keys, delimiter)
 		windowOperations = make([]*window.TimedWindowRequest, 0)
@@ -214,7 +215,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	return windowOperations
 }
 
-// InsertWindow inserts window to the list of active windows
+// InsertWindow inserts a window to the list of active windows.
 func (w *Windower) InsertWindow(tw window.TimedWindow) {
 	combinedKey := strings.Join(tw.Keys(), delimiter)
 	if list, ok := w.activeWindows[combinedKey]; !ok {
@@ -228,7 +229,7 @@ func (w *Windower) InsertWindow(tw window.TimedWindow) {
 
 func createWindowOperation(message *isb.ReadMessage, event window.Operation, windows []window.TimedWindow, id *partition.ID) *window.TimedWindowRequest {
 	// clone the windows because the windows might be updated after the operation is sent to the server.
-	// we do inplace updates, but those will be merged later on, hence correctness won't be affected.
+	// we do in-place updates, but those will be merged later on, hence correctness won't be affected.
 	var clonedWindows = make([]window.TimedWindow, 0)
 	for _, win := range windows {
 		clonedWindows = append(clonedWindows, cloneWindow(win))
@@ -323,9 +324,8 @@ func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
 	w.closedWindows.Delete(response.Window)
 }
 
-// OldestWindowEndTime returns the end time of the oldest window.
-// if there are no closed windows, it returns the end time of the oldest active window
-// if there are no windows, it returns -1
+// OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.
+// If there are no windows, it returns -1.
 func (w *Windower) OldestWindowEndTime() time.Time {
 	if win := w.closedWindows.Front(); win != nil {
 		return win.EndTime()
