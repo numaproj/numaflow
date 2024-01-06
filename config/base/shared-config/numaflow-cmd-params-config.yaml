@@ -27,5 +27,8 @@ data:
   ### The address of the Dex server for authentication.
   # server.dex.server: http://numaflow-dex-server:5556/dex
   #
+  ### Whether to disable TLS for the Dex server.
+  # server.dex.disable.tls: "false"
+  #
   ### The external address of the Numaflow server. This is needed when using Dex for authentication.
   # server.address: https://localhost:8443

@@ -16,6 +16,33 @@ spec:
         app.kubernetes.io/component: dex-server
     spec:
       serviceAccountName: numaflow-dex-server
+      initContainers:
+      - name: dex-init
+        image: image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        args:
+        - "dex-server-init"
+        volumeMounts:
+        - mountPath: /cfg
+          name: config
+        - mountPath: /tls
+          name: tls
+        securityContext:
+          capabilities:
+            drop:
+            - ALL
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        env:
+        - name: NUMAFLOW_DEX_SERVER_TLS
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.dex.disable.tls
+                  optional: true
       containers:
         - name: dex
           image: dexidp/dex:v2.37.0
@@ -26,6 +53,8 @@ spec:
           volumeMounts:
             - mountPath: /etc/numaflow/dex/cfg
               name: config
+            - mountPath: /etc/numaflow/dex/tls
+              name: tls
           env:
             - name: GITHUB_CLIENT_ID
               valueFrom:
@@ -44,3 +73,5 @@ spec:
             items:
               - key: config.yaml
                 path: config.yaml
+        - name: tls
+          emptyDir: {}

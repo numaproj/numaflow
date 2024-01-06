@@ -21,9 +21,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
 
+	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -59,6 +62,36 @@ func NewServerInitCommand() *cobra.Command {
 	return command
 }
 
+// generate TLS and config for Dex server
+func NewDexServerInitCommand() *cobra.Command {
+	var (
+		disableTls bool
+	)
+
+	command := &cobra.Command{
+		Use:   "dex-server-init",
+		Short: "Generate dex config and TLS certificates for Dex server",
+		RunE: func(c *cobra.Command, args []string) error {
+
+			_, err := generateDexConfigYAML(disableTls)
+			if err != nil {
+				return err
+			}
+
+			if !disableTls {
+				err = enableTLS()
+				if err != nil {
+					return err
+				}
+			}
+
+			return nil
+		},
+	}
+	command.Flags().BoolVar(&disableTls, "disable-tls", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_AUTH", false), "Whether to disable authentication and authorization, defaults to false.")
+	return command
+}
+
 func setBaseHref(filename string, baseHref string) error {
 
 	file, err := os.ReadFile(filename)
@@ -77,4 +110,129 @@ func setBaseHref(filename string, baseHref string) error {
 
 	err = os.WriteFile("/opt/numaflow/index.html", file, 0644)
 	return err
+}
+
+func generateDexConfigYAML(disableTls bool) ([]byte, error) {
+
+	// check if type of connector needs redirect URI
+	// <HOSTNAME>/<base_href>/login
+	redirectURL := "<HOSTNAME>/<base_href>/login"
+
+	var (
+		config []byte
+		dexCfg map[string]interface{}
+	)
+
+	config, err := os.ReadFile("/cfg/config.yaml")
+	if err != nil {
+		return nil, err
+	}
+
+	err = yaml.Unmarshal(config, &dexCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal dex.config from configmap: %v", err)
+	}
+	// issuer URL is <HOSTNAME>/dex
+	dexCfg["issuer"] = "<HOSTNAME>/dex"
+	dexCfg["storage"] = map[string]interface{}{
+		"type": "memory",
+	}
+	// if TLS is disabled otherwise include path to certs
+	if disableTls {
+		dexCfg["web"] = map[string]interface{}{
+			"http": "0.0.0.0:5556",
+		}
+	} else {
+		dexCfg["web"] = map[string]interface{}{
+			"https":   "0.0.0.0:5556",
+			"tlsCert": "/tmp/tls.crt",
+			"tlsKey":  "/tmp/tls.key",
+		}
+	}
+
+	if oauth2Cfg, found := dexCfg["oauth2"].(map[string]interface{}); found {
+		if _, found := oauth2Cfg["skipApprovalScreen"].(bool); !found {
+			oauth2Cfg["skipApprovalScreen"] = true
+		}
+	} else {
+		dexCfg["oauth2"] = map[string]interface{}{
+			"skipApprovalScreen": true,
+		}
+	}
+
+	numaflowStaticClient := map[string]interface{}{
+		"id":     "numaflow-server-app",
+		"name":   "Numaflow Server App",
+		"public": true,
+		"redirectURIs": []string{
+			redirectURL,
+		},
+	}
+
+	staticClients, ok := dexCfg["staticClients"].([]interface{})
+	if ok {
+		dexCfg["staticClients"] = append([]interface{}{numaflowStaticClient}, staticClients...)
+	} else {
+		dexCfg["staticClients"] = []interface{}{numaflowStaticClient}
+	}
+
+	// <HOSTNAME>/dex/callback
+	dexRedirectURL := "<HOSTNAME>/dex/callback"
+	connectors, ok := dexCfg["connectors"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("malformed Dex configuration found")
+	}
+	for i, connectorIf := range connectors {
+		connector, ok := connectorIf.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("malformed Dex configuration found")
+		}
+		connectorType := connector["type"].(string)
+		if !needsRedirectURI(connectorType) {
+			continue
+		}
+		connectorCfg, ok := connector["config"].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("malformed Dex configuration found")
+		}
+		connectorCfg["redirectURI"] = dexRedirectURL
+		connector["config"] = connectorCfg
+		connectors[i] = connector
+	}
+	dexCfg["connectors"] = connectors
+	return yaml.Marshal(dexCfg)
+}
+
+// needsRedirectURI returns whether or not the given connector type needs a redirectURI
+// Update this list as necessary, as new connectors are added
+// https://dexidp.io/docs/connectors/
+func needsRedirectURI(connectorType string) bool {
+	switch connectorType {
+	case "oidc", "saml", "microsoft", "linkedin", "gitlab", "github", "bitbucket-cloud", "openshift", "gitea", "google", "oauth":
+		return true
+	}
+	return false
+}
+
+func enableTLS() error {
+
+	serverKey, serverCert, caCert, err := sharedtls.CreateCerts("numaflow", []string{"localhost", "dexserver"}, time.Now(), true, true)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile("/tls/tls.crt", serverCert, 0600)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile("/tls/tls.key", serverKey, 0600)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile("/tls/ca.crt", caCert, 0600)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
