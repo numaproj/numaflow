@@ -5,6 +5,7 @@ import (
 	"time"
 
 	evictCache "github.com/hashicorp/golang-lru/v2/expirable"
+	"go.uber.org/zap"
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -30,13 +31,15 @@ type resourceHealthResponse struct {
 // HealthChecker is the struct to hold the resource status cache for the pipeline
 type HealthChecker struct {
 	resourceStatusCache *evictCache.LRU[string, *resourceHealthResponse]
+	log                 *zap.SugaredLogger
 }
 
 // NewHealthChecker is used to create a new health checker
-func NewHealthChecker() *HealthChecker {
+func NewHealthChecker(ctx context.Context) *HealthChecker {
 	c := evictCache.NewLRU[string, *resourceHealthResponse](500, nil, resourceCacheRefreshDuration)
 	return &HealthChecker{
 		resourceStatusCache: c,
+		log:                 logging.FromContext(ctx),
 	}
 }
 
@@ -45,8 +48,6 @@ func NewHealthChecker() *HealthChecker {
 // and caches it.
 func (hc *HealthChecker) getPipelineResourceHealth(h *handler, ns string,
 	pipeline string) (*resourceHealthResponse, error) {
-	ctx := context.Background()
-	log := logging.FromContext(ctx)
 
 	// create a cache key for the pipeline
 	// It is a combination of namespace and pipeline name
@@ -55,11 +56,11 @@ func (hc *HealthChecker) getPipelineResourceHealth(h *handler, ns string,
 
 	// check if the pipeline status is cached
 	if status, ok := hc.resourceStatusCache.Get(cacheKey); ok {
-		log.Info("Pipeline status from cache: ", status)
+		hc.log.Info("Pipeline status from cache: ", status)
 		return status, nil
 	}
 	// if not present in cache, check for the current pipeline status
-	status, err := checkVertexLevelHealth(ctx, h, ns, pipeline)
+	status, err := checkVertexLevelHealth(h, ns, pipeline, hc.log)
 	if err != nil {
 		return status, err
 	}
@@ -81,9 +82,8 @@ func (hc *HealthChecker) getPipelineResourceHealth(h *handler, ns string,
 // are equal to the number of desired replicas and the pods are in running state
 // 2) If all the containers in the pod are in running state
 // if any of the above conditions are not met, the vertex is unhealthy
-func checkVertexLevelHealth(ctx context.Context, h *handler, ns string,
-	pipeline string) (*resourceHealthResponse, error) {
-	log := logging.FromContext(ctx)
+func checkVertexLevelHealth(h *handler, ns string,
+	pipeline string, log *zap.SugaredLogger) (*resourceHealthResponse, error) {
 	// get the pipeline object
 	pl, err := h.numaflowClient.Pipelines(ns).Get(context.Background(), pipeline, metav1.GetOptions{})
 	// if error return unknown status

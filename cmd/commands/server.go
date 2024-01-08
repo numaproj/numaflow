@@ -20,7 +20,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	svrcmd "github.com/numaproj/numaflow/server/cmd/server"
 )
@@ -58,7 +60,8 @@ func NewServerCommand() *cobra.Command {
 				ServerAddr:       serverAddr,
 			}
 			server := svrcmd.NewServer(opts)
-			server.Start()
+			log := logging.NewLogger().Named("server")
+			server.Start(logging.WithLogger(signals.SetupSignalHandler(), log))
 		},
 	}
 	command.Flags().BoolVar(&insecure, "insecure", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_INSECURE", false), "Whether to disable TLS, defaults to false.")
