@@ -18,7 +18,7 @@ spec:
       serviceAccountName: numaflow-dex-server
       initContainers:
       - name: dex-init
-        image: image: quay.io/numaproj/numaflow:latest
+        image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         args:
         - "dex-server-init"
@@ -38,11 +38,11 @@ spec:
             type: RuntimeDefault
         env:
         - name: NUMAFLOW_DEX_SERVER_TLS
-              valueFrom:
-                configMapKeyRef:
-                  name: numaflow-cmd-params-config
-                  key: server.dex.disable.tls
-                  optional: true
+          valueFrom:
+            configMapKeyRef:
+              name: numaflow-cmd-params-config
+              key: server.dex.disable.tls
+              optional: true
       containers:
         - name: dex
           image: dexidp/dex:v2.37.0
