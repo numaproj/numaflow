@@ -26,7 +26,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
@@ -35,10 +37,11 @@ import (
 type LocalUsersAuthObject struct {
 	kubeClient   kubernetes.Interface
 	authDisabled bool
+	log          *zap.SugaredLogger
 }
 
 // NewLocalUsersAuthObject is used to provide a new LocalUsersAuthObject
-func NewLocalUsersAuthObject(authDisabled bool) (*LocalUsersAuthObject, error) {
+func NewLocalUsersAuthObject(ctx context.Context, authDisabled bool) (*LocalUsersAuthObject, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -55,6 +58,7 @@ func NewLocalUsersAuthObject(authDisabled bool) (*LocalUsersAuthObject, error) {
 	return &LocalUsersAuthObject{
 		kubeClient:   kubeClient,
 		authDisabled: authDisabled,
+		log:          logging.FromContext(ctx),
 	}, nil
 }
 
@@ -102,7 +106,8 @@ func (l *LocalUsersAuthObject) VerifyUser(c *gin.Context, username string, passw
 		return fmt.Errorf("username or password cannot be empty")
 	}
 
-	account, err := authn.GetAccount(c.Request.Context(), username, l.kubeClient)
+	ctx := logging.WithLogger(c.Request.Context(), l.log)
+	account, err := authn.GetAccount(ctx, username, l.kubeClient)
 	if err != nil {
 		return err
 	}
