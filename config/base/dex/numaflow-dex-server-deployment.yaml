@@ -21,21 +21,12 @@ spec:
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         args:
-        - "dex-server-init"
+        - dex-server-init
         volumeMounts:
         - mountPath: /cfg
           name: config
         - mountPath: /tls
           name: tls
-        securityContext:
-          capabilities:
-            drop:
-            - ALL
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          runAsNonRoot: true
-          seccompProfile:
-            type: RuntimeDefault
         env:
         - name: NUMAFLOW_DEX_SERVER_TLS
           valueFrom:
