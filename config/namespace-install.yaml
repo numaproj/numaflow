@@ -16306,14 +16306,12 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: "issuer: <HOSTNAME>/dex\nstorage:\n  type: memory\nweb:\n  http: 0.0.0.0:5556\nstaticClients:\n
-    \ - id: numaflow-server-app\n    redirectURIs: \n      - <HOSTNAME>/<base_href>/login\n
-    \   name: 'Numaflow Server App'\n    public: true\nconnectors:\n- type: github\n
-    \ # https://dexidp.io/docs/connectors/github/\n  id: github\n  name: GitHub\n
-    \ config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n
-    \   redirectURI: <HOSTNAME>/dex/callback\n    orgs:\n    - name: <ORG_NAME>\n
-    \     teams:\n      - admin\n      - readonly\noauth2:\n  skipApprovalScreen:
-    true\n"
+  config.yaml: "staticClients:\n  - id: numaflow-server-app\n    redirectURIs: \n
+    \     - <HOSTNAME>/<base_href>/login\n    name: 'Numaflow Server App'\n    public:
+    true\nconnectors:\n- type: github\n  # https://dexidp.io/docs/connectors/github/\n
+    \ id: github\n  name: GitHub\n  config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret:
+    $GITHUB_CLIENT_SECRET\n    orgs:\n    - name: <ORG_NAME>\n      teams:\n      -
+    admin\n      - readonly\n"
 kind: ConfigMap
 metadata:
   name: numaflow-dex-server-config
@@ -16494,7 +16492,29 @@ spec:
         - containerPort: 5556
         volumeMounts:
         - mountPath: /etc/numaflow/dex/cfg
-          name: config
+          name: new-config
+        - mountPath: /etc/numaflow/dex/tls
+          name: tls
+      initContainers:
+      - args:
+        - dex-server-init
+        env:
+        - name: NUMAFLOW_DEX_SERVER_TLS
+          valueFrom:
+            configMapKeyRef:
+              key: server.dex.disable.tls
+              name: numaflow-cmd-params-config
+              optional: true
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: IfNotPresent
+        name: dex-init
+        volumeMounts:
+        - mountPath: /cfg
+          name: old-config
+        - mountPath: /tls
+          name: tls
+        - mountPath: /tmp
+          name: new-config
       serviceAccountName: numaflow-dex-server
       volumes:
       - configMap:
@@ -16502,7 +16522,11 @@ spec:
           - key: config.yaml
             path: config.yaml
           name: numaflow-dex-server-config
-        name: config
+        name: old-config
+      - emptyDir: {}
+        name: tls
+      - emptyDir: {}
+        name: new-config
 ---
 apiVersion: apps/v1
 kind: Deployment

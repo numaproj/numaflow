@@ -73,9 +73,13 @@ func NewDexServerInitCommand() *cobra.Command {
 		Short: "Generate dex config and TLS certificates for Dex server",
 		RunE: func(c *cobra.Command, args []string) error {
 
-			_, err := generateDexConfigYAML(disableTls)
+			config, err := generateDexConfigYAML(disableTls)
 			if err != nil {
 				return err
+			}
+
+			if err := os.WriteFile("/tmp/config.yaml", []byte(config), 0644); err != nil {
+				return fmt.Errorf("failed to create config.yaml: %w", err)
 			}
 
 			if !disableTls {
@@ -88,7 +92,7 @@ func NewDexServerInitCommand() *cobra.Command {
 			return nil
 		},
 	}
-	command.Flags().BoolVar(&disableTls, "disable-tls", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_AUTH", false), "Whether to disable authentication and authorization, defaults to false.")
+	command.Flags().BoolVar(&disableTls, "disable-tls", sharedutil.LookupEnvBoolOr("NUMAFLOW_DEX_SERVER_TLS", false), "Whether to disable authentication and authorization, defaults to false.")
 	return command
 }
 
@@ -183,7 +187,7 @@ func generateDexConfigYAML(disableTls bool) ([]byte, error) {
 		return nil, fmt.Errorf("malformed Dex configuration found")
 	}
 	for i, connectorIf := range connectors {
-		connector, ok := connectorIf.(map[string]interface{})
+		connector := connectorIf.(map[interface{}]interface{})
 		if !ok {
 			return nil, fmt.Errorf("malformed Dex configuration found")
 		}
@@ -191,7 +195,7 @@ func generateDexConfigYAML(disableTls bool) ([]byte, error) {
 		if !needsRedirectURI(connectorType) {
 			continue
 		}
-		connectorCfg, ok := connector["config"].(map[string]interface{})
+		connectorCfg, ok := connector["config"].(map[interface{}]interface{})
 		if !ok {
 			return nil, fmt.Errorf("malformed Dex configuration found")
 		}

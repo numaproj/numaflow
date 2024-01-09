@@ -35,6 +35,13 @@ patches:
       name: numaflow-server
   - patch: |-
       - op: add
+        path: /spec/template/spec/initContainers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: numaflow-dex-server
+  - patch: |-
+      - op: add
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: IfNotPresent
     target:
