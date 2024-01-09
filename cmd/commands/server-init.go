@@ -19,6 +19,7 @@ package commands
 import (
 	"bytes"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -66,6 +67,7 @@ func NewServerInitCommand() *cobra.Command {
 func NewDexServerInitCommand() *cobra.Command {
 	var (
 		disableTls bool
+		hostname   string
 	)
 
 	command := &cobra.Command{
@@ -73,7 +75,7 @@ func NewDexServerInitCommand() *cobra.Command {
 		Short: "Generate dex config and TLS certificates for Dex server",
 		RunE: func(c *cobra.Command, args []string) error {
 
-			config, err := generateDexConfigYAML(disableTls)
+			config, err := generateDexConfigYAML(hostname, disableTls)
 			if err != nil {
 				return err
 			}
@@ -93,6 +95,7 @@ func NewDexServerInitCommand() *cobra.Command {
 		},
 	}
 	command.Flags().BoolVar(&disableTls, "disable-tls", sharedutil.LookupEnvBoolOr("NUMAFLOW_DEX_SERVER_TLS", false), "Whether to disable authentication and authorization, defaults to false.")
+	command.Flags().StringVar(&hostname, "hostname", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
 	return command
 }
 
@@ -116,18 +119,21 @@ func setBaseHref(filename string, baseHref string) error {
 	return err
 }
 
-func generateDexConfigYAML(disableTls bool) ([]byte, error) {
+func generateDexConfigYAML(hostname string, disableTls bool) ([]byte, error) {
 
 	// check if type of connector needs redirect URI
 	// <HOSTNAME>/<base_href>/login
-	redirectURL := "<HOSTNAME>/<base_href>/login"
+	redirectURL, err := url.JoinPath(hostname, "/login")
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer redirect url from config: %v", err)
+	}
 
 	var (
 		config []byte
 		dexCfg map[string]interface{}
 	)
 
-	config, err := os.ReadFile("/cfg/config.yaml")
+	config, err = os.ReadFile("/cfg/config.yaml")
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +143,11 @@ func generateDexConfigYAML(disableTls bool) ([]byte, error) {
 		return nil, fmt.Errorf("failed to unmarshal dex.config from configmap: %v", err)
 	}
 	// issuer URL is <HOSTNAME>/dex
-	dexCfg["issuer"] = "<HOSTNAME>/dex"
+	issuerURL, err := url.JoinPath(hostname, "/dex")
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer issuer url: %v", err)
+	}
+	dexCfg["issuer"] = issuerURL
 	dexCfg["storage"] = map[string]interface{}{
 		"type": "memory",
 	}
@@ -149,8 +159,8 @@ func generateDexConfigYAML(disableTls bool) ([]byte, error) {
 	} else {
 		dexCfg["web"] = map[string]interface{}{
 			"https":   "0.0.0.0:5556",
-			"tlsCert": "/tmp/tls.crt",
-			"tlsKey":  "/tmp/tls.key",
+			"tlsCert": "/etc/numaflow/dex/tls/tls.crt",
+			"tlsKey":  "/etc/numaflow/dex/tls/tls.key",
 		}
 	}
 
@@ -181,7 +191,10 @@ func generateDexConfigYAML(disableTls bool) ([]byte, error) {
 	}
 
 	// <HOSTNAME>/dex/callback
-	dexRedirectURL := "<HOSTNAME>/dex/callback"
+	dexRedirectURL, err := url.JoinPath(hostname, "/dex/callback")
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer dex redirect url: %v", err)
+	}
 	connectors, ok := dexCfg["connectors"].([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("malformed Dex configuration found")
@@ -225,15 +238,15 @@ func enableTLS() error {
 		return err
 	}
 
-	err = os.WriteFile("/tls/tls.crt", serverCert, 0600)
+	err = os.WriteFile("/tls/tls.crt", serverCert, 0644)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile("/tls/tls.key", serverKey, 0600)
+	err = os.WriteFile("/tls/tls.key", serverKey, 0644)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile("/tls/ca.crt", caCert, 0600)
+	err = os.WriteFile("/tls/ca.crt", caCert, 0644)
 	if err != nil {
 		return err
 	}

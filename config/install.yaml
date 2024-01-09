@@ -16401,12 +16401,24 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: "staticClients:\n  - id: numaflow-server-app\n    redirectURIs: \n
-    \     - <HOSTNAME>/<base_href>/login\n    name: 'Numaflow Server App'\n    public:
-    true\nconnectors:\n- type: github\n  # https://dexidp.io/docs/connectors/github/\n
-    \ id: github\n  name: GitHub\n  config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret:
-    $GITHUB_CLIENT_SECRET\n    orgs:\n    - name: <ORG_NAME>\n      teams:\n      -
-    admin\n      - readonly\n"
+  config.yaml: |
+    staticClients:
+      - id: numaflow-server-app
+        name: 'Numaflow Server App'
+        public: true
+    connectors:
+    - type: github
+      # https://dexidp.io/docs/connectors/github/
+      id: github
+      name: GitHub
+      config:
+        clientID: $GITHUB_CLIENT_ID
+        clientSecret: $GITHUB_CLIENT_SECRET
+        orgs:
+        - name: <ORG_NAME>
+          teams:
+          - admin
+          - readonly
 kind: ConfigMap
 metadata:
   name: numaflow-dex-server-config
@@ -16595,8 +16607,12 @@ spec:
         volumeMounts:
         - mountPath: /etc/numaflow/dex/cfg
           name: new-config
-        - mountPath: /etc/numaflow/dex/tls
+        - mountPath: /etc/numaflow/dex/tls/tls.crt
           name: tls
+          subPath: tls.crt
+        - mountPath: /etc/numaflow/dex/tls/tls.key
+          name: tls
+          subPath: tls.key
       initContainers:
       - args:
         - dex-server-init
@@ -16607,8 +16623,14 @@ spec:
               key: server.dex.disable.tls
               name: numaflow-cmd-params-config
               optional: true
+        - name: NUMAFLOW_SERVER_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              key: server.address
+              name: numaflow-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         name: dex-init
         volumeMounts:
         - mountPath: /cfg

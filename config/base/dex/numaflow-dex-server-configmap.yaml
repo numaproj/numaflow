@@ -6,8 +6,6 @@ data:
   config.yaml: |
     staticClients:
       - id: numaflow-server-app
-        redirectURIs: 
-          - <HOSTNAME>/<base_href>/login
         name: 'Numaflow Server App'
         public: true
     connectors:
