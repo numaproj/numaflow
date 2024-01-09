@@ -85,9 +85,9 @@ func NewDexServerInitCommand() *cobra.Command {
 			}
 
 			if !disableTls {
-				err = enableTLS()
+				err = createTLSCerts()
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to create TLS certificates: %w", err)
 				}
 			}
 
@@ -231,9 +231,9 @@ func needsRedirectURI(connectorType string) bool {
 	return false
 }
 
-func enableTLS() error {
+func createTLSCerts() error {
 
-	serverKey, serverCert, caCert, err := sharedtls.CreateCerts("numaflow", []string{"localhost", "dexserver"}, time.Now(), true, true)
+	serverKey, serverCert, caCert, err := sharedtls.CreateCerts("numaflow", []string{"localhost", "dexserver"}, time.Now(), true, false)
 	if err != nil {
 		return err
 	}
