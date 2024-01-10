@@ -34,6 +34,7 @@ func NewServerCommand() *cobra.Command {
 		baseHref         string
 		disableAuth      bool
 		dexServerAddr    string
+		dexTls           bool
 		serverAddr       string
 	)
 
@@ -46,6 +47,9 @@ func NewServerCommand() *cobra.Command {
 			}
 			if !strings.HasSuffix(baseHref, "/") {
 				baseHref = baseHref + "/"
+			}
+			if dexTls {
+				dexServerAddr = strings.Replace(dexServerAddr, "https", "http", 1)
 			}
 			opts := svrcmd.ServerOptions{
 				Insecure:         insecure,
@@ -67,7 +71,8 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_MANAGED_NAMESPACE", sharedutil.LookupEnvStringOr("NAMESPACE", "numaflow-system")), "The namespace that the server watches when \"--namespaced\" is \"true\".")
 	command.Flags().StringVar(&baseHref, "base-href", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/"), "Base href for Numaflow server, defaults to '/'.")
 	command.Flags().BoolVar(&disableAuth, "disable-auth", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_AUTH", false), "Whether to disable authentication and authorization, defaults to false.")
-	command.Flags().StringVar(&dexServerAddr, "dex-server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_DEX_SERVER_ADDR", "http://numaflow-dex-server:5556/dex"), "The address of the Dex server.")
+	command.Flags().StringVar(&dexServerAddr, "dex-server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_DEX_SERVER_ADDR", "https://numaflow-dex-server:5556/dex"), "The address of the Dex server.")
+	command.Flags().BoolVar(&dexTls, "dex-tls", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DEX_TLS", false), "Whether to disable TLS for dex server, defaults to false.")
 	command.Flags().StringVar(&serverAddr, "server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
 	return command
 }
