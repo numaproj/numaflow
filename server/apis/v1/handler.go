@@ -69,7 +69,7 @@ type handler struct {
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -94,7 +94,7 @@ func NewHandler(dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (
 		daemonClientsCache:   daemonClientsCache,
 		dexObj:               dexObj,
 		localUsersAuthObject: localUsersAuthObject,
-		healthChecker:        NewHealthChecker(),
+		healthChecker:        NewHealthChecker(ctx),
 	}, nil
 }
 

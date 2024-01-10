@@ -24,6 +24,9 @@ import (
 )
 
 // TimedWindower is the interface for windowing strategy.
+// It manages the lifecycle of timed windows for a reduce vertex.
+// It maintains a list of timed windows locally, generates window requests to be sent to the reduce UDF,
+// and reflects the changes to the list of timed windows based on the response from the UDF.
 type TimedWindower interface {
 	// Strategy returns the window strategy.
 	Strategy() Strategy
@@ -33,17 +36,18 @@ type TimedWindower interface {
 	AssignWindows(message *isb.ReadMessage) []*TimedWindowRequest
 	// CloseWindows closes the windows that are past the watermark.
 	CloseWindows(time time.Time) []*TimedWindowRequest
-	// InsertWindow inserts window to the list of active windows
+	// InsertWindow inserts a window to the list of active windows.
 	InsertWindow(tw TimedWindow)
 	// NextWindowToBeClosed returns the next window yet to be closed.
 	NextWindowToBeClosed() TimedWindow
 	// DeleteClosedWindow deletes the window from the closed windows list.
 	DeleteClosedWindow(response *TimedWindowResponse)
-	// OldestWindowEndTime returns the end time of the oldest window.
+	// OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.
+	// If there are no windows, it returns -1.
 	OldestWindowEndTime() time.Time
 }
 
-// TimedWindow represents a time based window.
+// TimedWindow represents a time-based window.
 type TimedWindow interface {
 	// StartTime returns the start time of the window.
 	StartTime() time.Time
@@ -149,7 +153,7 @@ type TimedWindowRequest struct {
 	Windows []TimedWindow
 }
 
-// TimedWindowResponse is the response from the UDF based on how the result is propogated back.
+// TimedWindowResponse is the response from the UDF based on how the result is propagated back.
 // It could be one or more responses based on how many results the user is streaming out.
 type TimedWindowResponse struct {
 	// WriteMessage represents the isb message

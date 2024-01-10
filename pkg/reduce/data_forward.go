@@ -157,7 +157,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 	df.log.Infow("Partitions to be replayed ", zap.Int("count", len(partitions)), zap.Any("partitions", partitions))
 
 	// for aligned windows, we can create/assign a partition based on the timestamp in the payload, but this is not
-	// neccessarily true for unaligned windows.
+	// necessarily true for unaligned windows.
 
 	for _, p := range partitions {
 		// create a window for each partition and insert it to the windower
@@ -418,7 +418,7 @@ messagesLoop:
 
 			err := df.writeToPBQ(ctx, winOp)
 			// there is no point continuing because we are seeing an error.
-			// this error will ONLY BE set if we are in a error loop and ctx.Done() has been invoked.
+			// this error will ONLY BE set if we are in an error loop and ctx.Done() has been invoked.
 			if err != nil {
 				df.log.Errorw("Failed to write message, asked to stop trying", zap.Any("msgOffSet", message.ReadOffset.String()), zap.String("partitionID", winOp.ID.String()), zap.Error(err))
 				failedMessages = append(failedMessages, messages[i:]...)
