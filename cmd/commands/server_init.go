@@ -200,7 +200,7 @@ func generateDexConfigYAML(hostname string, disableTls bool) ([]byte, error) {
 		return nil, fmt.Errorf("malformed Dex configuration found")
 	}
 	for i, connectorIf := range connectors {
-		connector := connectorIf.(map[interface{}]interface{})
+		connector := connectorIf.(map[string]interface{})
 		if !ok {
 			return nil, fmt.Errorf("malformed Dex configuration found")
 		}
@@ -208,7 +208,7 @@ func generateDexConfigYAML(hostname string, disableTls bool) ([]byte, error) {
 		if !needsRedirectURI(connectorType) {
 			continue
 		}
-		connectorCfg, ok := connector["config"].(map[interface{}]interface{})
+		connectorCfg, ok := connector["config"].(map[string]interface{})
 		if !ok {
 			return nil, fmt.Errorf("malformed Dex configuration found")
 		}
