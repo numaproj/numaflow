@@ -76,7 +76,7 @@ func (w *WAL) isEnd() bool {
 // decodeWALHeader decodes the header which is encoded by encodeWALHeader.
 func decodeWALHeader(buf io.Reader) (*partition.ID, error) {
 	var err error
-	// read the fixed vals
+	// read the fixed values
 	var hp = new(walHeaderPreamble)
 	err = binary.Read(buf, binary.LittleEndian, hp)
 	if err != nil {

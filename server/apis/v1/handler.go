@@ -59,15 +59,17 @@ const (
 )
 
 type handler struct {
-	kubeClient         kubernetes.Interface
-	metricsClient      *metricsversiond.Clientset
-	numaflowClient     dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
-	dexObj             *DexObject
+	kubeClient           kubernetes.Interface
+	metricsClient        *metricsversiond.Clientset
+	numaflowClient       dfv1clients.NumaflowV1alpha1Interface
+	daemonClientsCache   *lru.Cache[string, *daemonclient.DaemonClient]
+	dexObj               *DexObject
+	localUsersAuthObject *LocalUsersAuthObject
+	healthChecker        *HealthChecker
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(dexObj *DexObject) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -86,54 +88,99 @@ func NewHandler(dexObj *DexObject) (*handler, error) {
 		_ = value.Close()
 	})
 	return &handler{
-		kubeClient:         kubeClient,
-		metricsClient:      metricsClient,
-		numaflowClient:     numaflowClient,
-		daemonClientsCache: daemonClientsCache,
-		dexObj:             dexObj,
+		kubeClient:           kubeClient,
+		metricsClient:        metricsClient,
+		numaflowClient:       numaflowClient,
+		daemonClientsCache:   daemonClientsCache,
+		dexObj:               dexObj,
+		localUsersAuthObject: localUsersAuthObject,
+		healthChecker:        NewHealthChecker(ctx),
 	}, nil
 }
 
 // AuthInfo loads and returns auth info from cookie
 func (h *handler) AuthInfo(c *gin.Context) {
-	if h.dexObj == nil {
-		errMsg := "User is not authenticated: missing Dex"
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-	}
-	cookies := c.Request.Cookies()
-	userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
-	if err != nil {
-		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	if userIdentityTokenStr == "" {
-		errMsg := "User is not authenticated, err: empty Token"
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	var userInfo authn.UserInfo
-	if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
-		errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+	if h.dexObj == nil && h.localUsersAuthObject == nil {
+		errMsg := "User is not authenticated: missing Dex and LocalAuth"
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
-	idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+	loginType, err := c.Cookie(common.LoginCookieName)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
-		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
-		return
-	}
-	var claims authn.IDTokenClaims
-	if err = idToken.Claims(&claims); err != nil {
-		errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
+		errMsg := fmt.Sprintf("Failed to get login type: %v", err)
 		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 		return
 	}
 
-	res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+	if loginType == "dex" {
+		cookies := c.Request.Cookies()
+		userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
+		if err != nil {
+			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		if userIdentityTokenStr == "" {
+			errMsg := "User is not authenticated, err: empty Token"
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		var userInfo authn.UserInfo
+		if err = json.Unmarshal([]byte(userIdentityTokenStr), &userInfo); err != nil {
+			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+
+		idToken, err := h.dexObj.verify(c.Request.Context(), userInfo.IDToken)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to verify ID token: %s", err)
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		var claims authn.IDTokenClaims
+		if err = idToken.Claims(&claims); err != nil {
+			errMsg := fmt.Sprintf("Error decoding ID token claims: %s", err)
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+
+		res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+		return
+	} else if loginType == "local" {
+		userIdentityTokenStr, err := c.Cookie(common.JWTCookieName)
+		if err != nil {
+			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		if userIdentityTokenStr == "" {
+			errMsg := "User is not authenticated, err: empty Token"
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+		claims, err := h.localUsersAuthObject.ParseToken(c, userIdentityTokenStr)
+		if err != nil {
+			errMsg := fmt.Sprintf("Failed to verify and parse token: %s", err)
+			c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
+			return
+		}
+
+		itc := authn.IDTokenClaims{
+			Iss:  claims["iss"].(string),
+			Exp:  int(claims["exp"].(float64)),
+			Iat:  int(claims["iat"].(float64)),
+			Name: claims["username"].(string),
+		}
+		res := authn.NewUserInfo(&itc, userIdentityTokenStr, "")
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
+		return
+	}
+
+	errMsg := fmt.Sprintf("Unidentified login type received: %v", loginType)
+	c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
@@ -831,17 +878,47 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
-// GetPipelineStatus returns the pipeline status. It is based on Health and Criticality.
-// Health can be "healthy (0) | unhealthy (1) | paused (3) | unknown (4)".
-// Health here indicates pipeline's ability to process messages.
-// A backlogged pipeline can be healthy even though it has an increasing back-pressure. Health purely means it is up and running.
-// Pipelines health will be the max(health) based of each vertex's health
-// Criticality on the other end shows whether the pipeline is working as expected.
+// GetPipelineStatus returns the pipeline status. It is based on Resource Health and Data Criticality.
+// Resource Health can be "healthy (0) | unhealthy (1) | paused (3) | unknown (4)".
+// A backlogged pipeline can be healthy even though it has an increasing back-pressure.
+// Resource Health purely means it is up and running.
+// Resource health will be the max(health) based of each vertex's health
+// Data Criticality on the other end shows whether the pipeline is working as expected.
 // It represents the pending messages, lags, etc.
-// Criticality can be "ok (0) | warning (1) | critical (2)".
-// Health and Criticality are different because ...?
+// Data Criticality can be "ok (0) | warning (1) | critical (2)".
+// GetPipelineStatus is used to return the status of a given pipeline
+// It is divided into two parts:
+// 1. Pipeline Resource Health: It is based on the health of each vertex in the pipeline
+// 2. Data Criticality: It is based on the data movement of the pipeline
 func (h *handler) GetPipelineStatus(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, "working on it")
+	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
+
+	// Get the vertex level health of the pipeline
+	resourceHealth, err := h.healthChecker.getPipelineResourceHealth(h, ns, pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the dataStatus for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+
+	// Get a new daemon client for the given pipeline
+	client, err := h.getDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
+		return
+	}
+	// Get the data criticality for the given pipeline
+	dataStatus, err := client.GetPipelineStatus(context.Background(), pipeline)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the dataStatus for pipeline %q: %s", pipeline, err.Error()))
+		return
+	}
+
+	// Create a response string based on the vertex health and data criticality
+	// We combine both the states to get the final dataStatus of the pipeline
+	response := NewHealthResponse(resourceHealth.Status, dataStatus.GetStatus(),
+		resourceHealth.Message, dataStatus.GetMessage(), resourceHealth.Code, dataStatus.GetCode())
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster

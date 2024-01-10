@@ -18,6 +18,7 @@ package shuffle
 
 import (
 	"hash"
+	"sync"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 
@@ -30,6 +31,9 @@ type Shuffle struct {
 	// partitionCount is the number of partitions of the buffer owned by the vertex
 	partitionCount int
 	hash           hash.Hash64
+	// we need to hold a lock because concurrent PnFs writes to buffer which internally invokes shuffle.
+	// we need the lock to protect the hash.
+	mu sync.Mutex
 }
 
 // NewShuffle accepts list of buffer identifiers(unique identifier of isb)
@@ -72,6 +76,8 @@ func (s *Shuffle) ShuffleMessages(messages []*isb.Message) map[int32][]*isb.Mess
 }
 
 func (s *Shuffle) generateHash(keys []string) uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.hash.Reset()
 	for _, k := range keys {
 		_, _ = s.hash.Write([]byte(k))

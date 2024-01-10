@@ -249,6 +249,7 @@ func (d *DexObject) handleCallback(c *gin.Context) {
 		return
 	}
 
+	c.SetCookie(common.LoginCookieName, "dex", common.UserIdentityCookieMaxAge, "/", "", true, true)
 	cookies, err := common.MakeCookieMetadata(common.UserIdentityCookieName, string(tokenStr))
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to create cookies: %v", err)

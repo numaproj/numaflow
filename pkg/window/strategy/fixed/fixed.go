@@ -25,69 +25,166 @@ package fixed
 import (
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
 
-// Fixed implements Fixed window.
-// Fixed maintains the state of active windows
-// All the operations in Fixed (see window.Windower) order the entries in the ascending order of start time.
-// So the earliest window is at the front and the oldest window is at the end.
-type Fixed struct {
+// fixedWindow TimedWindow implementation for Fixed window.
+type fixedWindow struct {
+	startTime time.Time
+	endTime   time.Time
+	slot      string
+}
+
+// NewFixedWindow returns a new window for the given message.
+func NewFixedWindow(length time.Duration, message *isb.ReadMessage) window.TimedWindow {
+	start := message.EventTime.Truncate(length)
+	end := start.Add(length)
+	// TODO: slot should be extracted based on the key
+	// we can accept an interface SlotAssigner
+	// which will assign the slot based on the key
+	slot := "slot-0"
+	return &fixedWindow{
+		startTime: start,
+		endTime:   end,
+		slot:      slot,
+	}
+}
+
+var _ window.TimedWindow = (*fixedWindow)(nil)
+
+func (w *fixedWindow) StartTime() time.Time {
+	return w.startTime
+}
+
+func (w *fixedWindow) EndTime() time.Time {
+	return w.endTime
+}
+
+func (w *fixedWindow) Slot() string {
+	return w.slot
+}
+
+func (w *fixedWindow) Keys() []string {
+	return nil
+}
+
+func (w *fixedWindow) Partition() *partition.ID {
+	return &partition.ID{
+		Start: w.startTime,
+		End:   w.endTime,
+		Slot:  w.slot,
+	}
+}
+
+func (w *fixedWindow) Merge(_ window.TimedWindow) {
+	// never be invoked for Aligned Window
+}
+
+func (w *fixedWindow) Expand(_ time.Time) {
+	// never be invoked for Aligned Window
+}
+
+// Windower is an implementation of TimedWindower of fixed window, windower is responsible for assigning
+// windows to the incoming messages and closing the windows that are past the watermark.
+type Windower struct {
 	// Length is the temporal length of the window.
-	Length time.Duration
-	// entries is the list of active windows that are currently being tracked.
-	// windows are sorted in chronological order with the earliest window at the head of the list.
-	// list.List is implemented as a doubly linked list which allows us to traverse the nodes in
-	// both the directions.
-	// Although the worst case time complexity is O(n), because of the time based ordering and
-	// since the elements are rarely out of order, the amortized complexity works out to be closer to O(1)
-	// Because most of the keys are expected to be associated with the most recent window, we always start
-	// the traversal from the tail of the list for Get and Create Operations. For Remove Operations, since
-	// the earlier windows are expected to be closed before the more recent ones, we start the traversal
-	// from the Head.
-	entries *window.SortedWindowList[window.AlignedKeyedWindower]
+	length time.Duration
+	// we track all the active windows, we store the windows sorted by end time
+	// so it's easy to find the window
+	activeWindows *window.SortedWindowListByEndTime
+	// closedWindows is a list of closed windows which are yet to be GCed
+	// we need to track the close windows because while publishing the watermark
+	// for a fixed window, we need to compare the watermark with the oldest closed window
+	closedWindows *window.SortedWindowListByEndTime
 }
 
-var _ window.Windower = (*Fixed)(nil)
-
-// NewFixed returns a Fixed windower.
-func NewFixed(length time.Duration) window.Windower {
-	return &Fixed{
-		Length:  length,
-		entries: window.NewSortedWindowList[window.AlignedKeyedWindower](),
+func NewWindower(length time.Duration) window.TimedWindower {
+	return &Windower{
+		activeWindows: window.NewSortedWindowListByEndTime(),
+		closedWindows: window.NewSortedWindowListByEndTime(),
+		length:        length,
 	}
 }
 
-// AssignWindow assigns a window for the given eventTime.
-func (f *Fixed) AssignWindow(eventTime time.Time) []window.AlignedKeyedWindower {
-	start := eventTime.Truncate(f.Length)
-	end := start.Add(f.Length)
+var _ window.TimedWindower = (*Windower)(nil)
 
-	// Assignment of windows should follow a Left inclusive and right exclusive
-	// principle. Since we use truncate here, it is guaranteed that any element
-	// on the boundary will automatically fall in to the window to the right
-	// of the boundary thereby satisfying the requirement.
-	return []window.AlignedKeyedWindower{
-		keyed.NewKeyedWindow(start, end),
+func (w *Windower) Strategy() window.Strategy {
+	return window.Fixed
+}
+
+func (w *Windower) Type() window.Type {
+	return window.Aligned
+}
+
+// AssignWindows assigns the event to the window based on give window configuration.
+// For fixed window, the message is assigned to one single window.
+// The operation can be either OPEN or APPEND, depending on whether the window is already present or not.
+func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
+	win, isPresent := w.activeWindows.InsertIfNotPresent(NewFixedWindow(w.length, message))
+
+	op := window.Open
+	if isPresent {
+		op = window.Append
 	}
-}
 
-// InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window
-func (f *Fixed) InsertIfNotPresent(kw window.AlignedKeyedWindower) (aw window.AlignedKeyedWindower, isPresent bool) {
-	return f.entries.InsertIfNotPresent(kw)
-}
-
-// RemoveWindows returns an array of keyed windows that are before the current watermark.
-// So these windows can be closed.
-func (f *Fixed) RemoveWindows(wm time.Time) []window.AlignedKeyedWindower {
-	return f.entries.RemoveWindows(wm)
-}
-
-// NextWindowToBeClosed returns the next window which is yet to be closed.
-func (f *Fixed) NextWindowToBeClosed() window.AlignedKeyedWindower {
-	if f.entries.Len() == 0 {
-		return nil
+	winOp := &window.TimedWindowRequest{
+		Operation:   op,
+		Windows:     []window.TimedWindow{win},
+		ReadMessage: message,
+		ID:          win.Partition(),
 	}
-	return f.entries.Front()
+
+	return []*window.TimedWindowRequest{winOp}
+}
+
+// InsertWindow inserts a window to the list of active windows
+func (w *Windower) InsertWindow(tw window.TimedWindow) {
+	w.activeWindows.InsertIfNotPresent(tw)
+}
+
+// CloseWindows closes the windows that are past the watermark.
+// returns a list of TimedWindowRequests, each request contains the window operation and the window
+// which needs to be closed.
+func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
+	// FIXME - we are updating both active and closed windows.
+	// We need to make this method atomic.
+	// Same for other windower methods.
+	winOperations := make([]*window.TimedWindowRequest, 0)
+	closedWindows := w.activeWindows.RemoveWindows(time)
+	for _, win := range closedWindows {
+		winOp := &window.TimedWindowRequest{
+			ReadMessage: nil,
+			// we can call Delete here because in an aligned window, we are sure that COB has been called for all the keys
+			Operation: window.Delete,
+			Windows:   []window.TimedWindow{win},
+			ID:        win.Partition(),
+		}
+		winOperations = append(winOperations, winOp)
+		w.closedWindows.InsertBack(win)
+	}
+	return winOperations
+}
+
+// NextWindowToBeClosed returns the next window yet to be closed.
+func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
+	return w.activeWindows.Front()
+}
+
+// DeleteClosedWindow deletes the window from the closed windows list.
+func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
+	w.closedWindows.Delete(response.Window)
+}
+
+// OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.
+// If there are no windows, it returns -1.
+func (w *Windower) OldestWindowEndTime() time.Time {
+	if win := w.closedWindows.Front(); win != nil {
+		return win.EndTime()
+	} else if win = w.activeWindows.Front(); win != nil {
+		return win.EndTime()
+	} else {
+		return time.UnixMilli(-1)
+	}
 }

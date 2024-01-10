@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package fixed
 
 import (
@@ -22,372 +21,237 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
-
-	"github.com/numaproj/numaflow/pkg/window/keyed"
 )
 
 func TestFixed_AssignWindow(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+	windower := NewWindower(60 * time.Second)
 
-	loc, _ := time.LoadLocation("UTC")
-	baseTime := time.Unix(1651129201, 0).In(loc)
+	readMsg := buildReadMessage(baseTime)
+	windowRequests := windower.AssignWindows(readMsg)
 
-	tests := []struct {
-		name      string
-		length    time.Duration
-		eventTime time.Time
-		want      []*keyed.AlignedKeyedWindow
-	}{
-		{
-			name:      "minute",
-			length:    time.Minute,
-			eventTime: baseTime,
-			want: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129260, 0).In(loc),
-				},
-			},
-		},
-		{
-			name:      "hour",
-			length:    time.Hour,
-			eventTime: baseTime,
-			want: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129200+3600, 0).In(loc),
-				},
-			},
-		},
-		{
-			name:      "5_minute",
-			length:    time.Minute * 5,
-			eventTime: baseTime,
-			want: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129200+300, 0).In(loc),
-				},
-			},
-		},
-		{
-			name:      "30_second",
-			length:    time.Second * 30,
-			eventTime: baseTime,
-			want: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(1651129200, 0).In(loc),
-					End:   time.Unix(1651129230, 0).In(loc),
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := NewFixed(tt.length)
-			if got := f.AssignWindow(tt.eventTime); !(got[0].StartTime().Equal(tt.want[0].Start) && got[0].EndTime().Equal(tt.want[0].End)) {
-				t.Errorf("AssignWindow() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	// since this is the first message, the window operation should be open
+	// and the window should be from 60000 to 60000 + 60 seconds
+	assert.Equal(t, 1, len(windowRequests))
+	assert.Equal(t, baseTime, windowRequests[0].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(60*time.Second), windowRequests[0].Windows[0].EndTime())
+	assert.Equal(t, &partition.ID{
+		Start: baseTime,
+		End:   baseTime.Add(60 * time.Second),
+		Slot:  "slot-0",
+	}, windowRequests[0].Windows[0].Partition())
+	assert.Equal(t, window.Open, windowRequests[0].Operation)
+
+	readMsg = buildReadMessage(baseTime.Add(1 * time.Second))
+	windowRequests = windower.AssignWindows(readMsg)
+
+	// since this is the second message, the window operation should be append
+	// and the window should be from 60000 to 60000 + 60 seconds
+	assert.Equal(t, 1, len(windowRequests))
+	assert.Equal(t, baseTime, windowRequests[0].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(60*time.Second), windowRequests[0].Windows[0].EndTime())
+	assert.Equal(t, &partition.ID{
+		Start: baseTime,
+		End:   baseTime.Add(60 * time.Second),
+		Slot:  "slot-0",
+	}, windowRequests[0].Windows[0].Partition())
+	assert.Equal(t, window.Append, windowRequests[0].Operation)
 }
 
-// TestAligned_CreateWindow tests the insertion of a new keyed window for a given interval
-// It tests early, late and existing window scenarios.
-func TestAligned_InsertIfNotPresent(t *testing.T) {
-	windows := NewFixed(60 * time.Second)
-	tests := []struct {
-		name            string
-		given           []*keyed.AlignedKeyedWindow
-		input           *keyed.AlignedKeyedWindow
-		expectedWindows []*keyed.AlignedKeyedWindow
-		isPresent       bool
-	}{
-		{
-			name:  "FirstWindow",
-			given: []*keyed.AlignedKeyedWindow{},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(0, 0),
-				End:   time.Unix(60, 0),
-			},
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(0, 0),
-					End:   time.Unix(60, 0),
-				},
-			},
-			isPresent: false,
-		},
-		{
-			name: "late_window",
-			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-			},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(60, 0),
-				End:   time.Unix(120, 0),
-			},
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(60, 0),
-					End:   time.Unix(120, 0),
-				},
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-			},
-			isPresent: false,
-		},
-		{
-			name: "early_window",
-			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-			},
-			input: &keyed.AlignedKeyedWindow{
-				Start: time.Unix(240, 0),
-				End:   time.Unix(300, 0),
-			},
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
-			},
-			isPresent: false,
-		},
-		{
-			name: "insert_middle",
-			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
-			},
-			input: keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
-			},
-			isPresent: false,
-		},
-		{
-			name: "already_present",
-			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
-			},
-			input: keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
-			},
-			isPresent: true,
-		},
+func TestFixed_InsertWindow(t *testing.T) {
+	win := &fixedWindow{
+		startTime: time.UnixMilli(60000),
+		endTime:   time.UnixMilli(60000 + 60*1000),
+		slot:      "slot-0",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			windows := windows.(*Fixed)
-			setup(windows, tt.given)
-			ret, isPresent := windows.InsertIfNotPresent(tt.input)
-			assert.Equal(t, tt.isPresent, isPresent)
-			assert.Equal(t, tt.input.Start, ret.StartTime())
-			assert.Equal(t, tt.input.End, ret.EndTime())
-			assert.Equal(t, len(tt.expectedWindows), windows.entries.Len())
-			nodes := windows.entries.Items()
-			i := 0
-			for _, kw := range tt.expectedWindows {
-				assert.Equal(t, kw.StartTime(), nodes[i].StartTime())
-				assert.Equal(t, kw.EndTime(), nodes[i].EndTime())
-				i += 1
-			}
-		})
+	windower := &Windower{
+		length:        60 * time.Second,
+		activeWindows: window.NewSortedWindowListByEndTime(),
 	}
+
+	windower.InsertWindow(win)
+
+	// since this is the first time the window is inserted, the active windows should be 1
+	assert.Equal(t, 1, windower.activeWindows.Len())
+
+	windower.InsertWindow(win)
+
+	// since this is the second time we are inserting the same window, the active windows should be 1
+	assert.Equal(t, 1, windower.activeWindows.Len())
+
+	win = &fixedWindow{
+		startTime: time.UnixMilli(120000),
+		endTime:   time.UnixMilli(120000 + 60*1000),
+		slot:      "slot-0",
+	}
+
+	windower.InsertWindow(win)
+
+	// since this is a different window, the active windows should be 2
+	assert.Equal(t, 2, windower.activeWindows.Len())
 }
 
-func TestAligned_RemoveWindow(t *testing.T) {
-	windows := NewFixed(60 * time.Second)
-	tests := []struct {
-		name            string
-		given           []*keyed.AlignedKeyedWindow
-		input           time.Time
-		expectedWindows []*keyed.AlignedKeyedWindow
-	}{
-		{
-			name:            "empty_windows",
-			given:           []*keyed.AlignedKeyedWindow{},
-			input:           time.Unix(60, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{},
-		},
-		{
-			name: "wm_on_edge",
-			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-			},
-			input: time.Unix(180, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-			},
-		},
-		{
-			name: "single_window",
-			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-			},
-			input: time.Unix(181, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-			},
-		},
-		{
-			name: "single_when_multiple",
-			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
-			},
-			input: time.Unix(181, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-			},
-		},
-		{
-			name: "multiple_removals",
-			given: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
-				{
-					Start: time.Unix(240, 0),
-					End:   time.Unix(300, 0),
-				},
-			},
-			input: time.Unix(245, 0),
-			expectedWindows: []*keyed.AlignedKeyedWindow{
-				{
-					Start: time.Unix(120, 0),
-					End:   time.Unix(180, 0),
-				},
-				{
-					Start: time.Unix(180, 0),
-					End:   time.Unix(240, 0),
-				},
-			},
-		},
+func TestFixed_CloseWindows(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+
+	win1 := &fixedWindow{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
+	}
+	win2 := &fixedWindow{
+		startTime: baseTime.Add(60 * time.Second),
+		endTime:   baseTime.Add(120 * time.Second),
+	}
+	win3 := &fixedWindow{
+		startTime: baseTime.Add(120 * time.Second),
+		endTime:   baseTime.Add(180 * time.Second),
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			setup(windows.(*Fixed), tt.given)
-			ret := windows.RemoveWindows(tt.input)
-			assert.Equal(t, len(tt.expectedWindows), len(ret))
-			for idx, kw := range tt.expectedWindows {
-				assert.Equal(t, kw.StartTime(), ret[idx].StartTime())
-				assert.Equal(t, kw.EndTime(), ret[idx].EndTime())
-			}
-		})
-	}
+	windower := NewWindower(60 * time.Second)
+
+	windower.InsertWindow(win1)
+	windower.InsertWindow(win2)
+	windower.InsertWindow(win3)
+
+	// close the window with end time less than baseTime + 120 seconds
+	windowRequests := windower.CloseWindows(baseTime.Add(120 * time.Second))
+
+	assert.Equal(t, 2, len(windowRequests))
+
+	assert.Equal(t, window.Delete, windowRequests[0].Operation)
+	assert.Equal(t, baseTime, windowRequests[0].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(60*time.Second), windowRequests[0].Windows[0].EndTime())
+
+	assert.Equal(t, window.Delete, windowRequests[1].Operation)
+	assert.Equal(t, baseTime.Add(60*time.Second), windowRequests[1].Windows[0].StartTime())
+	assert.Equal(t, baseTime.Add(120*time.Second), windowRequests[1].Windows[0].EndTime())
+
 }
 
-func TestFixed_RemoveWindows(t *testing.T) {
-	var (
-		length          = time.Second * 60
-		slidWin         = NewFixed(length)
-		eventTime       = time.Unix(60, 0)
-		expectedWindows = []window.AlignedKeyedWindower{
-			keyed.NewKeyedWindow(time.Unix(60, 0), time.Unix(120, 0)),
-			keyed.NewKeyedWindow(time.Unix(120, 0), time.Unix(180, 0)),
-			keyed.NewKeyedWindow(time.Unix(180, 0), time.Unix(240, 0)),
-			keyed.NewKeyedWindow(time.Unix(240, 0), time.Unix(300, 0)),
-		}
-	)
-	for i := 0; i < 10000; i++ {
-		win := keyed.NewKeyedWindow(eventTime, eventTime.Add(length))
-		slidWin.InsertIfNotPresent(win)
-		eventTime = eventTime.Add(length)
+func TestFixed_DeleteWindows(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+
+	win1 := &fixedWindow{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
 	}
-	closeWin := slidWin.RemoveWindows(time.Unix(300, 0))
-	assert.Equal(t, expectedWindows, closeWin)
+	win2 := &fixedWindow{
+		startTime: baseTime.Add(60 * time.Second),
+		endTime:   baseTime.Add(120 * time.Second),
+	}
+	win3 := &fixedWindow{
+		startTime: baseTime.Add(120 * time.Second),
+		endTime:   baseTime.Add(180 * time.Second),
+	}
+
+	windower := &Windower{
+		length:        60 * time.Second,
+		activeWindows: window.NewSortedWindowListByEndTime(),
+		closedWindows: window.NewSortedWindowListByEndTime(),
+	}
+
+	// insert the windows
+	windower.InsertWindow(win1)
+	windower.InsertWindow(win2)
+	windower.InsertWindow(win3)
+
+	// close all the windows
+	windower.CloseWindows(baseTime.Add(180 * time.Second))
+
+	// delete one of the windows
+	windower.DeleteClosedWindow(&window.TimedWindowResponse{
+		Window: window.NewWindowFromPartition(&partition.ID{
+			Start: baseTime,
+			End:   baseTime.Add(60 * time.Second),
+			Slot:  "slot-0",
+		}),
+	})
+
+	// since we deleted one of the windows, the closed windows should be 2
+	assert.Equal(t, 2, windower.closedWindows.Len())
 }
 
-func setup(windows *Fixed, wins []*keyed.AlignedKeyedWindow) {
-	windows.entries = window.NewSortedWindowList[window.AlignedKeyedWindower]()
-	for _, win := range wins {
-		windows.entries.InsertBack(win)
+func TestFixed_OldestClosedWindowEndTime(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+
+	win1 := &fixedWindow{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
+	}
+	win2 := &fixedWindow{
+		startTime: baseTime.Add(60 * time.Second),
+		endTime:   baseTime.Add(120 * time.Second),
+	}
+	win3 := &fixedWindow{
+		startTime: baseTime.Add(120 * time.Second),
+		endTime:   baseTime.Add(180 * time.Second),
+	}
+
+	windower := &Windower{
+		length:        60 * time.Second,
+		activeWindows: window.NewSortedWindowListByEndTime(),
+		closedWindows: window.NewSortedWindowListByEndTime(),
+	}
+
+	// insert the windows
+	windower.InsertWindow(win1)
+	windower.InsertWindow(win2)
+	windower.InsertWindow(win3)
+
+	// close all the windows
+	windower.CloseWindows(baseTime.Add(180 * time.Second))
+
+	// oldest closed window is (60000, 120000)
+	assert.Equal(t, baseTime.Add(60*time.Second), windower.OldestWindowEndTime())
+}
+
+func TestWindower_NextWindowToBeClosed(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
+
+	win1 := &fixedWindow{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
+	}
+	win2 := &fixedWindow{
+		startTime: baseTime.Add(60 * time.Second),
+		endTime:   baseTime.Add(120 * time.Second),
+	}
+	win3 := &fixedWindow{
+		startTime: baseTime.Add(120 * time.Second),
+		endTime:   baseTime.Add(180 * time.Second),
+	}
+
+	windower := &Windower{
+		length:        60 * time.Second,
+		activeWindows: window.NewSortedWindowListByEndTime(),
+		closedWindows: window.NewSortedWindowListByEndTime(),
+	}
+
+	// insert the windows
+	windower.InsertWindow(win1)
+	windower.InsertWindow(win2)
+	windower.InsertWindow(win3)
+
+	// next window to be closed is (60000, 120000)
+	assert.Equal(t, baseTime.Add(60*time.Second), windower.NextWindowToBeClosed().EndTime())
+}
+
+func buildReadMessage(time time.Time) *isb.ReadMessage {
+	return &isb.ReadMessage{
+		Message: isb.Message{
+			Header: isb.Header{
+				MessageInfo: isb.MessageInfo{
+					EventTime: time,
+				},
+			},
+		},
 	}
 }

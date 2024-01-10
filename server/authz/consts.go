@@ -42,7 +42,8 @@ const (
 	RbacPropertyDefaultPolicy = "policy.default"
 
 	// Auth scopes supported
-	ScopeGroup   = "groups"
-	ScopeEmail   = "email"
-	ScopeDefault = "default"
+	ScopeGroup    = "groups"
+	ScopeEmail    = "email"
+	ScopeUsername = "username"
+	ScopeDefault  = "default"
 )

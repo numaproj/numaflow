@@ -44,19 +44,24 @@ type metricsHttpClient interface {
 	Get(url string) (*http.Response, error)
 }
 
-// pipelineMetadataQuery has the metadata required for the pipeline queries
-type pipelineMetadataQuery struct {
+// PipelineMetadataQuery has the metadata required for the pipeline queries
+type PipelineMetadataQuery struct {
 	isbSvcClient      isbsvc.ISBService
 	pipeline          *v1alpha1.Pipeline
 	httpClient        metricsHttpClient
 	watermarkFetchers map[v1alpha1.Edge][]fetch.HeadFetcher
 	rater             rater.Ratable
+	healthChecker     *HealthChecker
 }
 
 const (
-	PipelineStatusOK      = "OK"
-	PipelineStatusError   = "Error"
-	PipelineStatusUnknown = "Unknown"
+	PipelineStatusOK       = "OK"
+	PipelineStatusError    = "Error"
+	PipelineStatusUnknown  = "unknown"
+	PipelineStatusCritical = "critical"
+	PipelineStatusWarning  = "warning"
+	PipelineStatusInactive = "inactive"
+	PipelineStatusDeleting = "deleting"
 )
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
@@ -64,9 +69,9 @@ func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
-	rater rater.Ratable) (*pipelineMetadataQuery, error) {
+	rater rater.Ratable) (*PipelineMetadataQuery, error) {
 	var err error
-	ps := pipelineMetadataQuery{
+	ps := PipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
 		httpClient: &http.Client{
@@ -77,6 +82,7 @@ func NewPipelineMetadataQuery(
 		},
 		watermarkFetchers: wmFetchers,
 		rater:             rater,
+		healthChecker:     NewHealthChecker(pipeline, isbSvcClient),
 	}
 	if err != nil {
 		return nil, err
@@ -85,45 +91,16 @@ func NewPipelineMetadataQuery(
 }
 
 // ListBuffers is used to obtain the all the edge buffers information of a pipeline
-func (ps *pipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.ListBuffersRequest) (*daemon.ListBuffersResponse, error) {
-	log := logging.FromContext(ctx)
-	resp := new(daemon.ListBuffersResponse)
-
-	buffers := []*daemon.BufferInfo{}
-	for _, buffer := range ps.pipeline.GetAllBuffers() {
-		bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, buffer)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
-		}
-		log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
-		v := ps.pipeline.FindVertexWithBuffer(buffer)
-		if v == nil {
-			return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", buffer)
-		}
-		bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, *v)
-		usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
-		if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
-			usage = x
-		}
-		b := &daemon.BufferInfo{
-			Pipeline:         &ps.pipeline.Name,
-			BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
-			PendingCount:     &bufferInfo.PendingCount,
-			AckPendingCount:  &bufferInfo.AckPendingCount,
-			TotalMessages:    &bufferInfo.TotalMessages,
-			BufferLength:     &bufferLength,
-			BufferUsageLimit: &bufferUsageLimit,
-			BufferUsage:      &usage,
-			IsFull:           pointer.Bool(usage >= bufferUsageLimit),
-		}
-		buffers = append(buffers, b)
+func (ps *PipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.ListBuffersRequest) (*daemon.ListBuffersResponse, error) {
+	resp, err := listBuffers(ctx, ps.pipeline, ps.isbSvcClient)
+	if err != nil {
+		return nil, err
 	}
-	resp.Buffers = buffers
 	return resp, nil
 }
 
 // GetBuffer is used to obtain one buffer information of a pipeline
-func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
+func (ps *PipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
 	bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, *req.Buffer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get information of buffer %q:%v", *req.Buffer, err)
@@ -157,7 +134,7 @@ func (ps *pipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 // Response contains the metrics for each partition of the vertex.
 // In the future maybe latency will also be added here?
 // Should this method live here or maybe another file?
-func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daemon.GetVertexMetricsRequest) (*daemon.GetVertexMetricsResponse, error) {
+func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daemon.GetVertexMetricsRequest) (*daemon.GetVertexMetricsResponse, error) {
 	resp := new(daemon.GetVertexMetricsResponse)
 
 	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
@@ -186,7 +163,7 @@ func (ps *pipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 }
 
 // getPending returns the pending count for each partition of the vertex
-func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]map[string]int64 {
+func (ps *PipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]map[string]int64 {
 	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
 	log := logging.FromContext(ctx)
 
@@ -247,57 +224,14 @@ func (ps *pipelineMetadataQuery) getPending(ctx context.Context, req *daemon.Get
 	return totalPendingMap
 }
 
-func (ps *pipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {
-
+func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {
+	status := ps.healthChecker.getCurrentHealth()
 	resp := new(daemon.GetPipelineStatusResponse)
-
-	// get all vertices of pipeline
-	vertices := ps.pipeline.Spec.Vertices
-
-	// loop over vertices and get metrics to check pending messages vs processing rate
-	for _, vertex := range vertices {
-		vertexReq := new(daemon.GetVertexMetricsRequest)
-		vertexReq.Vertex = &vertex.Name
-		vertexResp, err := ps.GetVertexMetrics(ctx, vertexReq)
-		// if err is not nil, more than likely autoscaling is down to 0 and metrics are not available
-		if err != nil {
-			resp.Status = &daemon.PipelineStatus{
-				Status:  pointer.String(PipelineStatusUnknown),
-				Message: pointer.String("Pipeline status is unknown."),
-			}
-			return resp, nil
-		}
-
-		totalProcessingRate := float64(0)
-		totalPending := int64(0)
-		// may need to revisit later, another concern could be that the processing rate is too slow instead of just 0
-		for _, vertexMetrics := range vertexResp.VertexMetrics {
-			if vertexMetrics.GetProcessingRates() != nil {
-				if p, ok := vertexMetrics.GetProcessingRates()["default"]; ok {
-					totalProcessingRate += p
-				}
-			}
-			if vertexMetrics.GetPendings() != nil {
-				if p, ok := vertexMetrics.GetPendings()["default"]; ok {
-					totalPending += p
-				}
-			}
-		}
-
-		if totalPending > 0 && totalProcessingRate == 0 {
-			resp.Status = &daemon.PipelineStatus{
-				Status:  pointer.String(PipelineStatusError),
-				Message: pointer.String(fmt.Sprintf("Pipeline has an error. Vertex %s is not processing pending messages.", vertex.Name)),
-			}
-			return resp, nil
-		}
-	}
-
 	resp.Status = &daemon.PipelineStatus{
-		Status:  pointer.String(PipelineStatusOK),
-		Message: pointer.String("Pipeline has no issue."),
+		Status:  pointer.String(status.Status),
+		Message: pointer.String(status.Message),
+		Code:    pointer.String(status.Code),
 	}
-
 	return resp, nil
 }
 
@@ -314,4 +248,48 @@ func getBufferLimits(pl *v1alpha1.Pipeline, v v1alpha1.AbstractVertex) (bufferLe
 		}
 	}
 	return bufferLength, bufferUsageLimit
+}
+
+// listBuffers returns the list of ISB buffers for the pipeline and their information
+// We use the isbSvcClient to get the buffer information
+func listBuffers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (*daemon.ListBuffersResponse, error) {
+	log := logging.FromContext(ctx)
+	resp := new(daemon.ListBuffersResponse)
+
+	buffers := []*daemon.BufferInfo{}
+	for _, buffer := range pipeline.GetAllBuffers() {
+		bufferInfo, err := isbSvcClient.GetBufferInfo(ctx, buffer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
+		}
+		log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
+		v := pipeline.FindVertexWithBuffer(buffer)
+		if v == nil {
+			return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", buffer)
+		}
+		bufferLength, bufferUsageLimit := getBufferLimits(pipeline, *v)
+		usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
+		if x := (float64(bufferInfo.PendingCount) + float64(bufferInfo.AckPendingCount)) / float64(bufferLength); x < usage {
+			usage = x
+		}
+		b := &daemon.BufferInfo{
+			Pipeline:         &pipeline.Name,
+			BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
+			PendingCount:     &bufferInfo.PendingCount,
+			AckPendingCount:  &bufferInfo.AckPendingCount,
+			TotalMessages:    &bufferInfo.TotalMessages,
+			BufferLength:     &bufferLength,
+			BufferUsageLimit: &bufferUsageLimit,
+			BufferUsage:      &usage,
+			IsFull:           pointer.Bool(usage >= bufferUsageLimit),
+		}
+		buffers = append(buffers, b)
+	}
+	resp.Buffers = buffers
+	return resp, nil
+}
+
+// StartHealthCheck starts the health check for the pipeline using the health checker
+func (ps *PipelineMetadataQuery) StartHealthCheck(ctx context.Context) {
+	ps.healthChecker.startHealthCheck(ctx)
 }

@@ -19,8 +19,8 @@ package rpc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,16 +28,17 @@ import (
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1/reducemock"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
-func NewMockUDSGRPCBasedReduce(mockClient *reducemock.MockReduceClient) *GRPCBasedReduce {
+func NewMockUDSGRPCBasedReduce(mockClient *reducemock.MockReduceClient) *GRPCBasedAlignedReduce {
 	c, _ := reducer.NewFromClient(mockClient)
-	return &GRPCBasedReduce{c}
+	return &GRPCBasedAlignedReduce{c}
 }
 
 func TestGRPCBasedReduce_WaitUntilReadyWithMockClient(t *testing.T) {
@@ -61,7 +62,7 @@ func TestGRPCBasedReduce_WaitUntilReadyWithMockClient(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
+func TestGRPCBasedUDF_AsyncReduceWithMockClient(t *testing.T) {
 	t.Run("test success", func(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
@@ -73,24 +74,30 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-			Results: []*reducepb.ReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &reducepb.ReduceResponse_Result{
+				Keys:  []string{"reduced_result_key_1"},
+				Value: []byte(`forward_message_1`),
+			},
+			Window: &reducepb.Window{
+				Start: timestamppb.New(time.Unix(60, 0)),
+				End:   timestamppb.New(time.Unix(120, 0)),
+				Slot:  "test-1",
 			},
 		}, nil).Times(1)
 		mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-			Results: []*reducepb.ReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &reducepb.ReduceResponse_Result{
+				Keys:  []string{"reduced_result_key_2"},
+				Value: []byte(`forward_message_2`),
 			},
-		}, io.EOF).Times(1)
+			Window: &reducepb.Window{
+				Start: timestamppb.New(time.Unix(60, 0)),
+				End:   timestamppb.New(time.Unix(120, 0)),
+				Slot:  "test-2",
+			},
+		}, nil).Times(1)
+		mockReduceClient.EXPECT().Recv().Return(nil, io.EOF).Times(1)
 
-		messageCh := make(chan *isb.ReadMessage)
-
+		requestsCh := make(chan *window.TimedWindowRequest)
 		mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -103,13 +110,16 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedReduce(mockClient)
-		messages := testutils.BuildTestReadMessages(10, time.Now())
+		requests := testutils.BuildTestWindowRequests(10, time.Now(), window.Append)
 
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
-			for index := range messages {
-				messageCh <- &messages[index]
+			defer wg.Done()
+			for index := range requests {
+				requestsCh <- &requests[index]
 			}
-			close(messageCh)
+			close(requestsCh)
 		}()
 
 		partitionID := &partition.ID{
@@ -117,11 +127,12 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			End:   time.Unix(120, 0),
 			Slot:  "test",
 		}
-		got, err := u.ApplyReduce(ctx, partitionID, messageCh)
+		responseCh, _ := u.ApplyReduce(ctx, partitionID, requestsCh)
 
-		assert.Len(t, got, 1)
-		assert.Equal(t, time.Unix(120, 0).Add(-1*time.Millisecond), got[0].EventTime)
-		assert.NoError(t, err)
+		for response := range responseCh {
+			assert.Equal(t, time.Unix(120, 0).Add(-1*time.Millisecond).UnixMilli(), response.WriteMessage.EventTime.UnixMilli())
+		}
+		wg.Wait()
 	})
 
 	t.Run("test error", func(t *testing.T) {
@@ -133,13 +144,12 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-			Results: []*reducepb.ReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &reducepb.ReduceResponse_Result{
+				Keys:  []string{"reduced_result_key"},
+				Value: []byte(`forward_message`),
 			},
-		}, errors.New("mock error for reduce")).AnyTimes()
+		}, errors.New("mock error for reduce")).Times(1)
+		mockReduceClient.EXPECT().Recv().Return(nil, io.EOF).Times(1)
 
 		mockClient.EXPECT().ReduceFn(gomock.Any(), gomock.Any()).Return(mockReduceClient, nil)
 
@@ -155,18 +165,21 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		u := NewMockUDSGRPCBasedReduce(mockClient)
 
-		messageCh := make(chan *isb.ReadMessage)
-		messages := testutils.BuildTestReadMessages(10, time.Now())
+		requestsCh := make(chan *window.TimedWindowRequest)
+		requests := testutils.BuildTestWindowRequests(10, time.Now(), window.Append)
 
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
-			for index := range messages {
+			defer wg.Done()
+			for index := range requests {
 				select {
 				case <-ctx.Done():
 					return
-				case messageCh <- &messages[index]:
+				case requestsCh <- &requests[index]:
 				}
 			}
-			close(messageCh)
+			close(requestsCh)
 		}()
 
 		partitionID := &partition.ID{
@@ -175,16 +188,34 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 			Slot:  "test",
 		}
 
-		_, err := u.ApplyReduce(ctx, partitionID, messageCh)
+		responseCh, errCh := u.ApplyReduce(ctx, partitionID, requestsCh)
 
-		assert.ErrorIs(t, err, ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
-		})
+	readLoop:
+		for {
+			select {
+			case err := <-errCh:
+				if err == ctx.Err() {
+					assert.Fail(t, "context error")
+					break readLoop
+				}
+				if err != nil {
+					assert.ErrorIs(t, err, ApplyUDFErr{
+						UserUDFErr: false,
+						Message:    err.Error(),
+						InternalErr: InternalErr{
+							Flag:        true,
+							MainCarDown: false,
+						},
+					})
+				}
+			case _, ok := <-responseCh:
+				if !ok {
+					break readLoop
+				}
+			}
+
+		}
+		wg.Wait()
 	})
 
 	t.Run("test context close", func(t *testing.T) {
@@ -196,20 +227,16 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 		mockReduceClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-			Results: []*reducepb.ReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &reducepb.ReduceResponse_Result{
+				Keys:  []string{"reduced_result_key"},
+				Value: []byte(`forward_message`),
 			},
 		}, nil).Times(1)
 
 		mockReduceClient.EXPECT().Recv().Return(&reducepb.ReduceResponse{
-			Results: []*reducepb.ReduceResponse_Result{
-				{
-					Keys:  []string{"reduced_result_key"},
-					Value: []byte(`forward_message`),
-				},
+			Result: &reducepb.ReduceResponse_Result{
+				Keys:  []string{"reduced_result_key"},
+				Value: []byte(`forward_message`),
 			},
 		}, io.EOF).Times(1)
 
@@ -220,15 +247,28 @@ func TestGRPCBasedUDF_BasicReduceWithMockClient(t *testing.T) {
 
 		u := NewMockUDSGRPCBasedReduce(mockClient)
 
-		messageCh := make(chan *isb.ReadMessage)
+		requests := make(chan *window.TimedWindowRequest)
 
 		partitionID := &partition.ID{
 			Start: time.Unix(60, 0),
 			End:   time.Unix(120, 0),
 			Slot:  "test",
 		}
-		_, err := u.ApplyReduce(ctx, partitionID, messageCh)
+		respCh, errCh := u.ApplyReduce(ctx, partitionID, requests)
 
-		assert.Error(t, err, ctx.Err())
+	readLoop:
+		for {
+			select {
+			case err := <-errCh:
+				if err != nil {
+					assert.Error(t, err, ctx.Err())
+					break readLoop
+				}
+			case _, ok := <-respCh:
+				if !ok {
+					break readLoop
+				}
+			}
+		}
 	})
 }

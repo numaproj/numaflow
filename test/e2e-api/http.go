@@ -21,10 +21,11 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/numaproj/numaflow/test/fixtures"
 	"io"
 	"log"
 	"net/http"
+
+	"github.com/numaproj/numaflow/test/fixtures"
 )
 
 var httpClient *http.Client

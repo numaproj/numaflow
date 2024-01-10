@@ -1072,6 +1072,20 @@ Description
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
+<p>
+Length is the duration of the fixed window.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>streaming</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Streaming should be set to true if the reduce udf is streaming.
+</p>
 </td>
 </tr>
 </tbody>
@@ -4071,8 +4085,8 @@ instead. Cooldown seconds after a scaling operation before another one.
 <td>
 <em>(Optional)</em>
 <p>
-After scaling down to 0, sleep how many seconds before scaling up to
-peek.
+After scaling down the source vertex to 0, sleep how many seconds before
+scaling the source vertex back up to peek.
 </p>
 </td>
 </tr>
@@ -4141,6 +4155,45 @@ CooldownSeconds if not set.
 ScaleDownCooldownSeconds defines the cooldown seconds after a scaling
 operation, before a follow-up scaling down. It defaults to the
 CooldownSeconds if not set.
+</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.SessionWindow">
+SessionWindow
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Window">Window</a>)
+</p>
+<p>
+<p>
+SessionWindow describes a session window
+</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>timeout</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<p>
+Timeout is the duration of inactivity after which a session window
+closes.
 </p>
 </td>
 </tr>
@@ -4398,6 +4451,9 @@ Description
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
+<p>
+Length is the duration of the sliding window.
+</p>
 </td>
 </tr>
 <tr>
@@ -4407,6 +4463,21 @@ Kubernetes meta/v1.Duration </a> </em>
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 <td>
+<p>
+Slide is the slide parameter that controls the frequency at which the
+sliding window is created.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>streaming</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Streaming should be set to true if the reduce udf is streaming.
+</p>
 </td>
 </tr>
 </tbody>
@@ -5517,6 +5588,16 @@ Description
 <td>
 <code>sliding</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SlidingWindow"> SlidingWindow
+</a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>session</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SessionWindow"> SessionWindow
 </a> </em>
 </td>
 <td>

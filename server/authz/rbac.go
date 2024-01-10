@@ -17,6 +17,7 @@ limitations under the License.
 package authz
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"path"
@@ -29,6 +30,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -38,7 +40,6 @@ import (
 var (
 	//go:embed rbac-model.conf
 	rbacModel string
-	logger    = logging.NewLogger()
 )
 
 const (
@@ -63,11 +64,12 @@ type CasbinObject struct {
 	authRouteMap  RouteMap
 	opts          *options
 	rwMutex       *sync.RWMutex
+	log           *zap.SugaredLogger
 }
 
 // NewCasbinObject returns a new CasbinObject. It initializes the Casbin Enforcer with the model and policy.
 // It also initializes the config reader to watch for changes in the config file.
-func NewCasbinObject(authRouteMap RouteMap, inputOptions ...Option) (*CasbinObject, error) {
+func NewCasbinObject(ctx context.Context, authRouteMap RouteMap, inputOptions ...Option) (*CasbinObject, error) {
 	// Set the default options.
 	var opts = DefaultOptions()
 	// Apply the input options.
@@ -85,6 +87,7 @@ func NewCasbinObject(authRouteMap RouteMap, inputOptions ...Option) (*CasbinObje
 		return nil, err
 	}
 	currentScopes := getRBACScopes(configReader)
+	logger := logging.FromContext(ctx)
 	logger.Infow("Auth Scopes", "scopes", currentScopes)
 	// Set the default policy for authorization.
 	policyDefault := getDefaultPolicy(configReader)
@@ -98,6 +101,7 @@ func NewCasbinObject(authRouteMap RouteMap, inputOptions ...Option) (*CasbinObje
 		authRouteMap:  authRouteMap,
 		opts:          opts,
 		rwMutex:       &sync.RWMutex{},
+		log:           logger,
 	}
 
 	// Watch for changes in the config file.
@@ -133,7 +137,7 @@ func (cas *CasbinObject) Authorize(c *gin.Context, userInfo *authn.UserInfo) boo
 	// If the user does not have any policy defined, allocate a default policy for the user.
 	if !userHasPolicies {
 		defaultPolicy := cas.getDefaultPolicy()
-		logger.Debugw("No policy defined for the user, allocating default policy",
+		cas.log.Debugw("No policy defined for the user, allocating default policy",
 			"DefaultPolicy", defaultPolicy)
 		ok := enforceCheck(cas.enforcer, defaultPolicy, resource, object, action)
 		if ok {
@@ -156,6 +160,10 @@ func getSubjectFromScope(scopes []string, userInfo *authn.UserInfo) []string {
 	// If the scope is email, fetch the email from the user identity token.
 	if slices.Contains(scopes, ScopeEmail) {
 		scopedList = append(scopedList, userInfo.IDTokenClaims.Email)
+	}
+	// If the scope is username, fetch the name from the user identity token.
+	if slices.Contains(scopes, ScopeUsername) {
+		scopedList = append(scopedList, userInfo.IDTokenClaims.Name)
 	}
 	return scopedList
 }
@@ -288,7 +296,7 @@ func enforceCheck(enforcer *casbin.Enforcer, user, resource, object, action stri
 // configFileReload is used to reload the config file when it is changed. This is used to reload the policy without
 // restarting the server. The config file is in the format of yaml. The config file is read by viper.
 func (cas *CasbinObject) configFileReload(e fsnotify.Event) {
-	logger.Infow("RBAC conf file updated:", "fileName", e.Name)
+	cas.log.Infow("RBAC conf file updated:", "fileName", e.Name)
 	err := cas.configReader.ReadInConfig()
 	if err != nil {
 		return
@@ -302,7 +310,7 @@ func (cas *CasbinObject) configFileReload(e fsnotify.Event) {
 	// clear the userPermCount cache
 	cas.userPermCount = &sync.Map{}
 
-	logger.Infow("Auth Scopes Updated", "scopes", cas.getCurrentScopes())
+	cas.log.Infow("Auth Scopes Updated", "scopes", cas.getCurrentScopes())
 }
 
 // getDefaultPolicy returns the default policy from the rbac properties file. The default policy is used when the
@@ -331,7 +339,7 @@ func (cas *CasbinObject) hasPermissionsDefined(user string) bool {
 	// get the permissions for the user
 	cnt, err := cas.enforcer.GetImplicitPermissionsForUser(user)
 	if err != nil {
-		logger.Errorw("Failed to get permissions for user", "user", user, "error", err)
+		cas.log.Errorw("Failed to get permissions for user", "user", user, "error", err)
 		return false
 	}
 	// If the user has permissions in the policy, len(cnt) > 0

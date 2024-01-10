@@ -21,13 +21,13 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.5.0
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
           imagePullPolicy: Always
     - name: si-e2e
       udf:
         container:
           # A reduce side input udf, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input/udf
-          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:v0.0.2"
+          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:dev"
           imagePullPolicy: Always
         groupBy:
           window:
@@ -36,7 +36,7 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 10Gi
+              volumeSize: 2Gi
               accessMode: ReadWriteOnce
       sideInputs:
         - myticker

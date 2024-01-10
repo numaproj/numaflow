@@ -19,7 +19,7 @@ package pbq
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // ReadWriteCloser is an unified interface to PBQ read and write interfaces. Close is only for Writer.
@@ -31,7 +31,7 @@ type ReadWriteCloser interface {
 // Reader provides methods to read from PBQ.
 type Reader interface {
 	// ReadCh exposes channel to read from PBQ
-	ReadCh() <-chan *isb.ReadMessage
+	ReadCh() <-chan *window.TimedWindowRequest
 	// GC does garbage collection, it deletes all the persisted data from the store
 	GC() error
 }
@@ -39,8 +39,8 @@ type Reader interface {
 // WriteCloser provides methods to write data to the PQB and close the PBQ.
 // No data can be written to PBQ after cob.
 type WriteCloser interface {
-	// Write writes message to PBQ
-	Write(ctx context.Context, msg *isb.ReadMessage) error
+	// Write writes the TimedWindowRequest to PBQ
+	Write(ctx context.Context, msg *window.TimedWindowRequest) error
 	// CloseOfBook (cob) closes PBQ, no writes will be accepted after cob
 	CloseOfBook()
 	// Close to handle context close on writer

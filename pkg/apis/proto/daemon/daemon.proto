@@ -49,6 +49,7 @@ message VertexMetrics {
 message PipelineStatus {
   required string status = 1;
   required string message = 2;
+  required string code = 3;
 }
 
 message ListBuffersRequest {

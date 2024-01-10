@@ -119,7 +119,6 @@ func NewDataForward(
 	}
 	// add logger from parent ctx to child context.
 	isdf.ctx = logging.WithLogger(ctx, defaultOptions.logger)
-	// set the current watermark
 	return &isdf, nil
 }
 

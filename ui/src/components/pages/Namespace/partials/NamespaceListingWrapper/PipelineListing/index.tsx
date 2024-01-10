@@ -152,7 +152,7 @@ export function PipelineListing({
     if (statusFilter !== ALL) {
       filtered = filtered.filter((p) => {
         const currentStatus = p?.pipeline?.status?.phase || UNKNOWN;
-        if (currentStatus.toLowerCase() === status.toLowerCase()) {
+        if (currentStatus.toLowerCase() === statusFilter.toLowerCase()) {
           return true;
         } else {
           return false;

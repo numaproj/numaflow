@@ -16,5 +16,5 @@ data:
     # We can have multiple scopes, and the first scope that matches with the policy will be used.
     # The default value is "groups", which means that the groups field of the user's token will be examined
     # The other possible value is "email", which means that the email field of the user's token will be examined
-    # It can be provided as a comma-separated list, e.g "groups,email"
-    # policy.scopes: groups,email
+    # It can be provided as a comma-separated list, e.g "groups,email,username"
+    policy.scopes: groups,email,username

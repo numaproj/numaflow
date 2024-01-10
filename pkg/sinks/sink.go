@@ -140,7 +140,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	}
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
-		sdkClient, err = sinkclient.New(sinkclient.WithMaxMessageSize(maxMessageSize))
+		sdkClient, err = sinkclient.New(sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create sdk client, %w", err)
 		}
