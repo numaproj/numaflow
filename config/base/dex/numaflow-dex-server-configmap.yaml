@@ -4,10 +4,6 @@ metadata:
   name: numaflow-dex-server-config
 data:
   config.yaml: |
-    staticClients:
-      - id: numaflow-server-app
-        name: 'Numaflow Server App'
-        public: true
     connectors:
     - type: github
       # https://dexidp.io/docs/connectors/github/

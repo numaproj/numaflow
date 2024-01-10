@@ -30,7 +30,7 @@ spec:
         - mountPath: /tmp
           name: new-config
         env:
-        - name: NUMAFLOW_DEX_SERVER_TLS
+        - name: NUMAFLOW_SERVER_DEX_TLS
           valueFrom:
             configMapKeyRef:
               name: numaflow-cmd-params-config
@@ -50,8 +50,9 @@ spec:
           ports:
             - containerPort: 5556
           volumeMounts:
-            - mountPath: /etc/numaflow/dex/cfg
+            - mountPath: /etc/numaflow/dex/cfg/config.yaml
               name: new-config
+              subPath: config.yaml
             - mountPath: /etc/numaflow/dex/tls/tls.crt
               name: tls
               subPath: tls.crt

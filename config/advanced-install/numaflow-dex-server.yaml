@@ -40,11 +40,7 @@ subjects:
 ---
 apiVersion: v1
 data:
-  config.yaml: |
-    staticClients:
-      - id: numaflow-server-app
-        name: 'Numaflow Server App'
-        public: true
+  config.yaml: |-
     connectors:
     - type: github
       # https://dexidp.io/docs/connectors/github/
@@ -122,8 +118,9 @@ spec:
         ports:
         - containerPort: 5556
         volumeMounts:
-        - mountPath: /etc/numaflow/dex/cfg
+        - mountPath: /etc/numaflow/dex/cfg/config.yaml
           name: new-config
+          subPath: config.yaml
         - mountPath: /etc/numaflow/dex/tls/tls.crt
           name: tls
           subPath: tls.crt
@@ -134,7 +131,7 @@ spec:
       - args:
         - dex-server-init
         env:
-        - name: NUMAFLOW_DEX_SERVER_TLS
+        - name: NUMAFLOW_SERVER_DEX_TLS
           valueFrom:
             configMapKeyRef:
               key: server.dex.disable.tls
