@@ -311,6 +311,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// publish source watermark and assign IsLate attribute based on new event time.
 	var writeMessages []*isb.WriteMessage
 	var transformedReadMessages []*isb.ReadMessage
+	latestEtMap := make(map[int32]int64)
+
 	for _, m := range transformerResults {
 		writeMessages = append(writeMessages, m.writeMessages...)
 		for _, message := range m.writeMessages {
@@ -318,8 +320,16 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// since we use message event time instead of the watermark to determine and publish source watermarks,
 			// time.UnixMilli(-1) is assigned to the message watermark. transformedReadMessages are immediately
 			// used below for publishing source watermarks.
+			if latestEt, ok := latestEtMap[m.readMessage.ReadOffset.PartitionIdx()]; !ok || message.EventTime.UnixNano() < latestEt {
+				latestEtMap[m.readMessage.ReadOffset.PartitionIdx()] = message.EventTime.UnixNano()
+			}
 			transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
 		}
+	}
+
+	// print the latest event time for each partition
+	for partition, latestEt := range latestEtMap {
+		df.opts.logger.Infow("Latest event time for partition - ", zap.Int32("partition", partition), zap.Int64("latestEt", int64(time.Since(time.Unix(0, latestEt)).Minutes())))
 	}
 	// publish source watermark
 	df.srcWMPublisher.PublishSourceWatermarks(transformedReadMessages)

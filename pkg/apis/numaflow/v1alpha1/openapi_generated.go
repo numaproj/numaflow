@@ -1213,6 +1213,12 @@ func schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref common.ReferenceCallb
 							Format:      "int64",
 						},
 					},
+					"jitter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Jitter is the jitter for the message generation, used to simulate out of order messages",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 				},
 			},
 		},

@@ -256,4 +256,18 @@ var (
 		Name:      "partitions_inflight",
 		Help:      "Total number of partitions in flight",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
+
+	// ActiveWindowsCount is used to indicate the number of active windows
+	ActiveWindowsCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "reduce",
+		Name:      "active_windows",
+		Help:      "Total number of active windows",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
+
+	// ClosedWindowsCount is used to indicate the number of closed windows
+	ClosedWindowsCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "reduce",
+		Name:      "closed_windows",
+		Help:      "Total number of closed windows",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
 )

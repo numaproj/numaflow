@@ -32,7 +32,13 @@ type GeneratorSource struct {
 	// +optional
 	MsgSize *int32 `json:"msgSize,omitempty" protobuf:"bytes,3,opt,name=msgSize"`
 	// KeyCount is the number of unique keys in the payload
+	// +optional
 	KeyCount *int32 `json:"keyCount,omitempty" protobuf:"bytes,4,opt,name=keyCount"`
 	// Value is an optional uint64 value to be written in to the payload
+	// +optional
 	Value *uint64 `json:"value,omitempty" protobuf:"bytes,5,opt,name=value"`
+	// Jitter is the jitter for the message generation, used to simulate out of order messages
+	// +kubebuilder:default="0s"
+	// +optional
+	Jitter *metav1.Duration `json:"jitter,omitempty" protobuf:"bytes,6,opt,name=jitter"`
 }

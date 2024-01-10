@@ -19,6 +19,7 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -142,20 +143,33 @@ func (r *kafkaSource) Partitions(context.Context) []int32 {
 }
 
 func (r *kafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
+	latestEtMap := make(map[int32]int64)
 	msgs := make([]*isb.ReadMessage, 0, count)
 	timeout := time.After(r.readTimeout)
 loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-r.handler.messages:
-			kafkaSourceReadCount.With(map[string]string{metrics.LabelVertex: r.vertexName, metrics.LabelPipeline: r.pipelineName}).Inc()
+			kafkaSourceReadCount.With(map[string]string{
+				metrics.LabelVertex:        r.vertexName,
+				metrics.LabelPipeline:      r.pipelineName,
+				metrics.LabelPartitionName: strconv.Itoa(int(m.Partition)),
+			}).Inc()
 			msgs = append(msgs, toReadMessage(m))
+			// update the latest event time for the partition
+			if latestEt, ok := latestEtMap[m.Partition]; !ok || m.Timestamp.UnixNano() < latestEt {
+				latestEtMap[m.Partition] = m.Timestamp.UnixNano()
+			}
 		case <-timeout:
 			// log that timeout has happened and don't return an error
 			r.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", r.readTimeout))
 			break loop
 		}
 	}
+	//// print the latest event time for each partition
+	//for partition, latestEt := range latestEtMap {
+	//	r.logger.Infow("Latest event time for partition - ", zap.Int32("partition", partition), zap.Int64("latestEt", int64(time.Since(time.Unix(0, latestEt)).Minutes())))
+	//}
 	return msgs, nil
 }
 
@@ -175,7 +189,7 @@ func (r *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("supplied-offset", offset.String()), zap.Error(err))
 			continue
 		}
-		r.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset, "")
+		r.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset+1, "")
 		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: r.vertexName, metrics.LabelPipeline: r.pipelineName}).Inc()
 
 	}

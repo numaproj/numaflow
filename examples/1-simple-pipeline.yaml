@@ -1,25 +1,42 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: simple-pipeline
+  name: second-pipeline
 spec:
+  # Optional, if not specified, defaults to "default"
+  interStepBufferServiceName: simple-isb
   vertices:
     - name: in
+      scale:
+        min: 3
       source:
         # A self data generating source
         generator:
-          rpu: 5
+          rpu: 3000
+          msgSize: 1000
           duration: 1s
-    - name: cat
+    - name: first-cat
+      scale:
+        min: 3
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
+    - name: second-cat
+      scale:
+        min: 3
       udf:
         builtin:
           name: cat # A built-in UDF which simply cats the message
     - name: out
+      scale:
+        min: 2
       sink:
         # A simple log printing sink
-        log: {}
+        blackhole: {}
   edges:
     - from: in
-      to: cat
-    - from: cat
+      to: first-cat
+    - from: first-cat
+      to: second-cat
+    - from: second-cat
       to: out

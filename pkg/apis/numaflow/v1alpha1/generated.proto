@@ -380,10 +380,17 @@ message GeneratorSource {
   optional int32 msgSize = 3;
 
   // KeyCount is the number of unique keys in the payload
+  // +optional
   optional int32 keyCount = 4;
 
   // Value is an optional uint64 value to be written in to the payload
+  // +optional
   optional uint64 value = 5;
+
+  // Jitter is the jitter for the message generation, used to simulate out of order messages
+  // +kubebuilder:default="0s"
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration jitter = 6;
 }
 
 message GetDaemonDeploymentReq {

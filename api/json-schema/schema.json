@@ -17819,6 +17819,10 @@
         "duration": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
+        "jitter": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "Jitter is the jitter for the message generation, used to simulate out of order messages"
+        },
         "keyCount": {
           "description": "KeyCount is the number of unique keys in the payload",
           "format": "int32",

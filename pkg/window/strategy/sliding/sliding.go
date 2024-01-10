@@ -22,9 +22,12 @@ limitations under the License.
 package sliding
 
 import (
+	"strconv"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
 )
@@ -86,6 +89,9 @@ func (w *slidingWindow) Expand(endTime time.Time) {
 // Windower is a implementation of TimedWindower of sliding window, windower is responsible for assigning
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
+	vertexName    string
+	pipelineName  string
+	vertexReplica int32
 	// Length is the temporal length of the window.
 	length time.Duration
 	slide  time.Duration
@@ -97,8 +103,11 @@ type Windower struct {
 	closedWindows *window.SortedWindowListByEndTime
 }
 
-func NewWindower(length time.Duration, slide time.Duration) window.TimedWindower {
+func NewWindower(length time.Duration, slide time.Duration, vertexInstance *dfv1.VertexInstance) window.TimedWindower {
 	return &Windower{
+		vertexName:    vertexInstance.Vertex.Name,
+		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica: vertexInstance.Replica,
 		length:        length,
 		slide:         slide,
 		activeWindows: window.NewSortedWindowListByEndTime(),
@@ -179,6 +188,19 @@ func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 		windowOperations = append(windowOperations, operation)
 		w.closedWindows.InsertBack(win)
 	}
+
+	metrics.ActiveWindowsCount.With(map[string]string{
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.vertexReplica)),
+	}).Set(float64(w.activeWindows.Len()))
+
+	metrics.ClosedWindowsCount.With(map[string]string{
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.vertexReplica)),
+	}).Set(float64(w.closedWindows.Len()))
+
 	return windowOperations
 }
 

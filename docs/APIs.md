@@ -1330,6 +1330,7 @@ Size of each generated message
 <code>keyCount</code></br> <em> int32 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>
 KeyCount is the number of unique keys in the payload
 </p>
@@ -1340,8 +1341,23 @@ KeyCount is the number of unique keys in the payload
 <code>value</code></br> <em> uint64 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>
 Value is an optional uint64 value to be written in to the payload
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>jitter</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Jitter is the jitter for the message generation, used to simulate out of
+order messages
 </p>
 </td>
 </tr>

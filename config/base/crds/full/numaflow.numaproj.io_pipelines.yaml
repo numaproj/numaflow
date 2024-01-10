@@ -6928,6 +6928,9 @@ spec:
                             duration:
                               default: 1s
                               type: string
+                            jitter:
+                              default: 0s
+                              type: string
                             keyCount:
                               format: int32
                               type: integer
