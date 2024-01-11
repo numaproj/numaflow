@@ -22,10 +22,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
 )
+
+var keyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "test-pl",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
 
 func TestNewWindow(t *testing.T) {
 	startTime := time.Now()
@@ -43,7 +56,7 @@ func TestNewWindow(t *testing.T) {
 func TestAssignWindows_NewWindow(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
 	gap := time.Second * 10
-	windower := NewWindower(gap)
+	windower := NewWindower(gap, keyedVertex)
 
 	message := buildReadMessage(baseTime, []string{"key1"})
 	windowOperations := windower.AssignWindows(message)
@@ -151,7 +164,7 @@ func TestSession_CloseWindowsWithoutMerge(t *testing.T) {
 		endTime:   baseTime.Add(90 * time.Second),
 	}
 
-	windower := NewWindower(10 * time.Second)
+	windower := NewWindower(10*time.Second, keyedVertex)
 
 	windower.InsertWindow(win1)
 	windower.InsertWindow(win2)
@@ -198,7 +211,7 @@ func TestSession_CloseWindowsWithMerge(t *testing.T) {
 		slot:      "slot-0",
 	}
 
-	windower := NewWindower(10 * time.Second)
+	windower := NewWindower(10*time.Second, keyedVertex)
 
 	windower.InsertWindow(win1)
 	windower.InsertWindow(win2)
@@ -554,7 +567,7 @@ func TestWindower_NextWindowToBeClosed(t *testing.T) {
 		keys:      []string{"key-1"},
 	}
 
-	windower := NewWindower(10 * time.Second)
+	windower := NewWindower(10*time.Second, keyedVertex)
 
 	windower.InsertWindow(win1)
 	windower.InsertWindow(win2)

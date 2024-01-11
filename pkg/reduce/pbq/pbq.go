@@ -72,6 +72,9 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) err
 		switch request.Operation {
 		case window.Open, window.Append, window.Expand:
 			// this is a blocking call, ctx.Done() will be ignored.
+			if p.windowType == window.Unaligned {
+				return nil
+			}
 			writeErr = p.store.Write(request.ReadMessage)
 		case window.Close, window.Merge:
 		// these do not have request.ReadMessage, only metadata fields are used

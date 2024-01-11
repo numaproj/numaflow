@@ -21,14 +21,27 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
+var keyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "test-pl",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
+
 func TestSliding_AssignWindowsLengthDivisibleBySlide(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
-	windower := NewWindower(time.Minute, 20*time.Second)
+	windower := NewWindower(time.Minute, 20*time.Second, keyedVertex)
 
 	readMsg := buildReadMessage(baseTime.Add(10 * time.Second))
 	windowRequests := windower.AssignWindows(readMsg)
@@ -75,7 +88,7 @@ func TestSliding_AssignWindowsLengthDivisibleBySlide(t *testing.T) {
 func TestSliding_AssignWindowsLengthNotDivisibleBySlide(t *testing.T) {
 	// length 60s, slide 40s
 	baseTime := time.Unix(600, 0)
-	windower := NewWindower(time.Minute, 40*time.Second)
+	windower := NewWindower(time.Minute, 40*time.Second, keyedVertex)
 
 	readMsg := buildReadMessage(baseTime.Add(10 * time.Second))
 	windowRequests := windower.AssignWindows(readMsg)
@@ -159,7 +172,7 @@ func TestSliding_CloseWindows(t *testing.T) {
 		endTime:   baseTime.Add(40 * time.Second),
 	}
 
-	windower := NewWindower(60*time.Second, 10*time.Second)
+	windower := NewWindower(60*time.Second, 10*time.Second, keyedVertex)
 
 	windower.InsertWindow(win1)
 	windower.InsertWindow(win2)

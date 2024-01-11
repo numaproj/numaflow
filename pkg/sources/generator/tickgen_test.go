@@ -176,27 +176,15 @@ func TestStop(t *testing.T) {
 	}
 }
 
-func TestTimeParsing(t *testing.T) {
-	rbytes := recordGenerator(8, nil, time.Now().UnixNano())
-	parsedtime := parseTime(rbytes)
-	assert.True(t, parsedtime > 0)
-}
-
-func TestUnparseableTime(t *testing.T) {
-	rbytes := []byte("this is unparseable as json")
-	parsedtime := parseTime(rbytes)
-	assert.True(t, parsedtime == 0)
-}
-
 func TestTimeForValidTime(t *testing.T) {
 	nanotime := time.Now().UnixNano()
-	parsedtime := timeFromNanos(nanotime)
+	parsedtime := timeFromNanos(nanotime, 0)
 	assert.Equal(t, nanotime, parsedtime.UnixNano())
 }
 
 func TestTimeForInvalidTime(t *testing.T) {
 	nanotime := int64(-1)
-	parsedtime := timeFromNanos(nanotime)
+	parsedtime := timeFromNanos(nanotime, 0)
 	assert.True(t, parsedtime.UnixNano() > 0)
 }
 
