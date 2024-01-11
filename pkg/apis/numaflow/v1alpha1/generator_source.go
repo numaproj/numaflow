@@ -38,6 +38,8 @@ type GeneratorSource struct {
 	// +optional
 	Value *uint64 `json:"value,omitempty" protobuf:"bytes,5,opt,name=value"`
 	// Jitter is the jitter for the message generation, used to simulate out of order messages
+	// for example if the jitter is 10s, then the message's event time will be delayed by a random
+	// time between 0 and 10s which will result in the message being out of order by 0 to 10s
 	// +kubebuilder:default="0s"
 	// +optional
 	Jitter *metav1.Duration `json:"jitter,omitempty" protobuf:"bytes,6,opt,name=jitter"`

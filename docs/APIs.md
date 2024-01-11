@@ -1357,7 +1357,9 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 Jitter is the jitter for the message generation, used to simulate out of
-order messages
+order messages for example if the jitter is 10s, then the message’s
+event time will be delayed by a random time between 0 and 10s which will
+result in the message being out of order by 0 to 10s
 </p>
 </td>
 </tr>
