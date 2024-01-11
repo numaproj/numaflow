@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
@@ -74,6 +75,18 @@ func (f *forwardTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer,
 	}
 	f.count++
 	return steps, nil
+}
+
+var keyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "test-pipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
 }
 
 // TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
@@ -160,7 +173,7 @@ func TestPnFHandleAlignedWindowResponses(t *testing.T) {
 		close(responseCh)
 	}()
 
-	windower := fixed.NewWindower(60 * time.Second)
+	windower := fixed.NewWindower(60*time.Second, keyedVertex)
 	windower.InsertWindow(window.NewWindowFromPartition(id))
 
 	wmPublishers, _ := buildPublisherMapAndOTStore(toBuffersMap)

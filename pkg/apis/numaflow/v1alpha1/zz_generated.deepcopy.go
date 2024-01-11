@@ -598,6 +598,11 @@ func (in *GeneratorSource) DeepCopyInto(out *GeneratorSource) {
 		*out = new(uint64)
 		**out = **in
 	}
+	if in.Jitter != nil {
+		in, out := &in.Jitter, &out.Jitter
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	return
 }
 
