@@ -5,12 +5,17 @@ import (
 
 	"github.com/numaproj/numaflow-go/pkg/info"
 
-	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // SDKServerInfo wait for the server to start and return the server info
-func SDKServerInfo(opts *sdkclient.Options) (*info.ServerInfo, error) {
+func SDKServerInfo(inputOptions ...Option) (*info.ServerInfo, error) {
+	var opts = DefaultOptions()
+
+	for _, inputOption := range inputOptions {
+		inputOption(opts)
+	}
+
 	serverInfo, err := util.WaitForServerInfo(opts.ServerInfoReadinessTimeout(), opts.ServerInfoFilePath())
 	if err != nil {
 		return nil, err

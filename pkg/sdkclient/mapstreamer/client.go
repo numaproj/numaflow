@@ -22,11 +22,11 @@ import (
 	"io"
 
 	mapstreampb "github.com/numaproj/numaflow-go/pkg/apis/proto/mapstream/v1"
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -37,17 +37,11 @@ type client struct {
 }
 
 // New creates a new client object.
-func New(inputOptions ...sdkclient.Option) (Client, error) {
+func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.MapStreamAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
-	}
-
-	// Wait for server info to be ready
-	serverInfo, err := sdkserverinfo.SDKServerInfo(opts)
-	if err != nil {
-		return nil, err
 	}
 
 	// Connect to the server

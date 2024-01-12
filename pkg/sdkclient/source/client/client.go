@@ -27,7 +27,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -38,21 +37,13 @@ type client struct {
 
 var _ Client = (*client)(nil)
 
-// New creates a new client object.
+// New creates a new client object. Source doesn't require server info to start ATM.
 func New(inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SourceAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}
-
-	// Wait for server info to be ready
-	serverInfo, err := sdkserverinfo.SDKServerInfo(opts)
-	if err != nil {
-		return nil, err
-	}
-	// Source doesn't require server info to start ATM
-	_ = serverInfo
 
 	// connect to the grpc server
 	c := new(client)
