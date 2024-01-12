@@ -6,7 +6,7 @@ detailed below.
 
 ### 1. Register application for Github
 
-In Github, register a new application named `Numaflow Server App`. The callback address should be the
+In Github, register a new OAuth application named `Numaflow Server App`. The callback address should be the
 homepage of your Numaflow UI + `/dex/callback`. In most cases this should be `https://localhost:8443/dex/callback`.
 If you are using a different `baseHref` for your installation, you must also include that.
 
@@ -17,7 +17,7 @@ a new client secret.
 
 ### 2. Configuring Numaflow
 
-First we need to configure `server.disable.auth` to `false` in the ConfigMap `numaflow-cmd-params-config`.
+First we need to configure `server.disable.auth` to `false` in the ConfigMap `numaflow-cmd-params-config` at `config/base/shared-config/numaflow-cmd-params-config.yaml`.
 This will enable authorization and authentication for the UX server.
 
 ```yaml
@@ -31,7 +31,7 @@ data:
   #
 ```
 
-Next we need to configure the `numaflow-dex-server-config` ConfigMap.
+Next we need to configure the `numaflow-dex-server-config` ConfigMap at `config/base/dex/numaflow-dex-server-configmap.yaml`.
 Change `<ORG_NAME>` to your organization you created the application under and include the correct teams.
 This file will be read by the init container of the Dex server and generate the config it will server.
 
