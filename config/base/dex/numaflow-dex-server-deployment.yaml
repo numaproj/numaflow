@@ -24,11 +24,11 @@ spec:
         - dex-server-init
         volumeMounts:
         - mountPath: /cfg
-          name: old-config
+          name: connector-config
         - mountPath: /tls
           name: tls
         - mountPath: /tmp
-          name: new-config
+          name: generated-dex-config
         env:
         - name: NUMAFLOW_SERVER_DEX_TLS
           valueFrom:
@@ -51,7 +51,7 @@ spec:
             - containerPort: 5556
           volumeMounts:
             - mountPath: /etc/numaflow/dex/cfg/config.yaml
-              name: new-config
+              name: generated-dex-config
               subPath: config.yaml
             - mountPath: /etc/numaflow/dex/tls/tls.crt
               name: tls
@@ -71,7 +71,7 @@ spec:
                   name: numaflow-dex-secrets
                   key: dex-github-client-secret
       volumes:
-        - name: old-config
+        - name: connector-config
           configMap:
             name: numaflow-dex-server-config
             items:
@@ -79,5 +79,5 @@ spec:
                 path: config.yaml
         - name: tls
           emptyDir: {}
-        - name: new-config
+        - name: generated-dex-config
           emptyDir: {}

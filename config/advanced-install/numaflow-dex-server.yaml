@@ -119,7 +119,7 @@ spec:
         - containerPort: 5556
         volumeMounts:
         - mountPath: /etc/numaflow/dex/cfg/config.yaml
-          name: new-config
+          name: generated-dex-config
           subPath: config.yaml
         - mountPath: /etc/numaflow/dex/tls/tls.crt
           name: tls
@@ -148,11 +148,11 @@ spec:
         name: dex-init
         volumeMounts:
         - mountPath: /cfg
-          name: old-config
+          name: connector-config
         - mountPath: /tls
           name: tls
         - mountPath: /tmp
-          name: new-config
+          name: generated-dex-config
       serviceAccountName: numaflow-dex-server
       volumes:
       - configMap:
@@ -160,8 +160,8 @@ spec:
           - key: config.yaml
             path: config.yaml
           name: numaflow-dex-server-config
-        name: old-config
+        name: connector-config
       - emptyDir: {}
         name: tls
       - emptyDir: {}
-        name: new-config
+        name: generated-dex-config
