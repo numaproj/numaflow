@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 	"google.golang.org/grpc"
@@ -28,7 +27,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -48,14 +46,12 @@ func New(inputOptions ...sdkclient.Option) (Client, error) {
 	}
 
 	// Wait for server info to be ready
-	serverInfo, err := util.WaitForServerInfo(opts.ServerInfoReadinessTimeout(), opts.ServerInfoFilePath())
+	serverInfo, err := sdkclient.SDKServerInfo(opts)
 	if err != nil {
 		return nil, err
 	}
-
-	if serverInfo != nil {
-		log.Printf("ServerInfo: %v\n", serverInfo)
-	}
+	// Source doesn't require server info to start ATM
+	_ = serverInfo
 
 	// connect to the grpc server
 	c := new(client)

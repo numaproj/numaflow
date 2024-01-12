@@ -18,7 +18,6 @@ package sourcetransformer
 
 import (
 	"context"
-	"log"
 
 	transformpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
 	"google.golang.org/grpc"
@@ -43,13 +42,9 @@ func New(inputOptions ...sdkclient.Option) (Client, error) {
 	}
 
 	// Wait for server info to be ready
-	serverInfo, err := util.WaitForServerInfo(opts.ServerInfoReadinessTimeout(), opts.ServerInfoFilePath())
+	serverInfo, err := sdkclient.SDKServerInfo(opts)
 	if err != nil {
 		return nil, err
-	}
-
-	if serverInfo != nil {
-		log.Printf("ServerInfo: %v\n", serverInfo)
 	}
 
 	// Connect to the server

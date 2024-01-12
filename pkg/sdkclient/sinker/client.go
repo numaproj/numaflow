@@ -19,7 +19,6 @@ package sinker
 import (
 	"context"
 	"fmt"
-	"log"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"google.golang.org/grpc"
@@ -27,7 +26,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -46,14 +44,12 @@ func New(inputOptions ...sdkclient.Option) (Client, error) {
 	}
 
 	// Wait for server info to be ready
-	serverInfo, err := util.WaitForServerInfo(opts.ServerInfoReadinessTimeout(), opts.ServerInfoFilePath())
+	serverInfo, err := sdkclient.SDKServerInfo(opts)
 	if err != nil {
 		return nil, err
 	}
-
-	if serverInfo != nil {
-		log.Printf("ServerInfo: %v\n", serverInfo)
-	}
+	// Sinker doesn't require server info to start ATM
+	_ = serverInfo
 
 	// connect to the server
 	c := new(client)
