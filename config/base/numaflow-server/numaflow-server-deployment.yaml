@@ -120,7 +120,7 @@ spec:
                 name: numaflow-cmd-params-config
                 key: server.address
                 optional: true
-          - name: NUMAFLOW_DEX_SERVER_TLS
+          - name: NUMAFLOW_DISABLE_DEX_SERVER_TLS
             valueFrom:
               configMapKeyRef:
                 name: numaflow-cmd-params-config

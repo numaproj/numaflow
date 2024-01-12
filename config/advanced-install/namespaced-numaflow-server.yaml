@@ -247,7 +247,7 @@ spec:
               key: server.address
               name: numaflow-cmd-params-config
               optional: true
-        - name: NUMAFLOW_DEX_SERVER_TLS
+        - name: NUMAFLOW_DISABLE_DEX_SERVER_TLS
           valueFrom:
             configMapKeyRef:
               key: server.dex.disable.tls

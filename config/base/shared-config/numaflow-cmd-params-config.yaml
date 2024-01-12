@@ -24,7 +24,7 @@ data:
   ### Whether to disable authentication and authorization for the UX server, defaults to false.
   server.disable.auth: "true"
   #
-  ### Whether to disable TLS for the Dex server.
+  ### Whether to disable TLS for the Dex server, defaults to false.
   # server.dex.disable.tls: "false"
   #
   ### The external address of the Numaflow server. This is needed when using Dex for authentication.

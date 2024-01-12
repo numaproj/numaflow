@@ -94,7 +94,7 @@ func NewDexServerInitCommand() *cobra.Command {
 			return nil
 		},
 	}
-	command.Flags().BoolVar(&disableTls, "disable-tls", sharedutil.LookupEnvBoolOr("NUMAFLOW_DEX_SERVER_TLS", false), "Whether to disable authentication and authorization, defaults to false.")
+	command.Flags().BoolVar(&disableTls, "disable-tls", sharedutil.LookupEnvBoolOr("NUMAFLOW_DISABLE_DEX_SERVER_TLS", false), "Whether to disable authentication and authorization, defaults to false.")
 	command.Flags().StringVar(&hostname, "hostname", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
 	return command
 }
