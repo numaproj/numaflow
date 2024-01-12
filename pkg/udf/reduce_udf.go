@@ -96,6 +96,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		var client reducer.Client
 		// if streaming is enabled, use the reduceStreaming address
 		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
