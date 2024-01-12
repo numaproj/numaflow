@@ -24,6 +24,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -42,7 +43,7 @@ func New(inputOptions ...sdkclient.Option) (Client, error) {
 	}
 
 	// Wait for server info to be ready
-	serverInfo, err := sdkclient.SDKServerInfo(opts)
+	serverInfo, err := sdkserverinfo.SDKServerInfo(opts)
 	if err != nil {
 		return nil, err
 	}
