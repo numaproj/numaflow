@@ -291,7 +291,7 @@ spec:
         - controller
         env:
         - name: NUMAFLOW_IMAGE
-          value: quay.io/numaproj/numaflow:v1.1.2
+          value: quay.io/numaproj/numaflow:v1.1.3
         - name: NAMESPACE
           valueFrom:
             fieldRef:
@@ -314,7 +314,7 @@ spec:
               key: controller.disable.leader.election
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.1.2
+        image: quay.io/numaproj/numaflow:v1.1.3
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
