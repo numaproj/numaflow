@@ -124,6 +124,44 @@ func (s *SDKsSuite) TestReduceSDK() {
 	done <- struct{}{}
 }
 
+func (s *SDKsSuite) TestReduceStreamSDK() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	w := s.Given().Pipeline("@testdata/reduce-stream/reduce-stream-go.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "reduce-stream-go"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	done := make(chan struct{})
+	go func() {
+		// publish messages to source vertex, with event time starting from 60000
+		startTime := 60000
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				eventTime := strconv.Itoa(startTime + i*1000)
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+			}
+		}
+	}()
+
+	// The reduce stream application summarizes the input messages and returns the sum when the sum is greater than 100.
+	// Since we are sending 3s, the first returned message should be 102.
+	// There should be no other values.
+	w.Expect().SinkContains("sink", "102")
+	w.Expect().SinkNotContains("sink", "99")
+	w.Expect().SinkNotContains("sink", "105")
+	done <- struct{}{}
+}
+
 func (s *SDKsSuite) TestSourceTransformer() {
 	var wg sync.WaitGroup
 	wg.Add(3)
