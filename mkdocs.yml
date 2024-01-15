@@ -114,6 +114,7 @@ nav:
           - UI Server Access Path: "operations/ui-access-path.md"
           - operations/metrics/metrics.md
           - operations/grafana.md
+          - Dex Server: "operations/dex.md"
       - Security: operations/security.md          
   - Contributor Guide:
       - development/development.md
