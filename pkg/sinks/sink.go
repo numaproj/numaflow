@@ -24,6 +24,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -140,7 +141,12 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	}
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
-		sdkClient, err = sinkclient.New(sdkclient.WithMaxMessageSize(maxMessageSize))
+		// Wait for server info to be ready
+		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		if err != nil {
+			return err
+		}
+		sdkClient, err = sinkclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create sdk client, %w", err)
 		}

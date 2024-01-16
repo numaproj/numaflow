@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -37,7 +38,7 @@ type client struct {
 var _ Client = (*client)(nil)
 
 // New creates a new client object. Sinker client doesn't require server info to start ATM.
-func New(inputOptions ...sdkclient.Option) (Client, error) {
+func New(_ *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SinkAddr)
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
