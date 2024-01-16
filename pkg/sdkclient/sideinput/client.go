@@ -21,7 +21,7 @@ type client struct {
 
 var _ Client = (*client)(nil)
 
-// New creates a new client object.
+// New creates a new client object. SideInput doesn't require server info to start ATM.
 func New(inputOptions ...sdkclient.Option) (*client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr)
 
