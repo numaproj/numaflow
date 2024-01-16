@@ -12,7 +12,7 @@ The callback address should be the homepage of your Numaflow UI + `/dex/callback
 After registering this application, you will be given a client ID. You will need this value and also generate
 a new client secret.
 
-![Register OAuth App](../assets/creating-application-github.png "Register OAuth App")
+![Register OAuth App](../../assets/creating-application-github.png "Register OAuth App")
 
 ### 2. Configuring Numaflow
 
@@ -76,5 +76,3 @@ If you are enabling/disabling authorization and authentication for the Numaflow 
 
 Any changes or additions to the connectors in the `numaflow-dex-server-config` ConfigMap will need to be read and
 generated again requiring a restart as well.
-
-
