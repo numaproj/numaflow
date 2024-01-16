@@ -131,12 +131,6 @@ spec:
       - args:
         - dex-server-init
         env:
-        - name: NUMAFLOW_SERVER_DEX_TLS
-          valueFrom:
-            configMapKeyRef:
-              key: server.dex.disable.tls
-              name: numaflow-cmd-params-config
-              optional: true
         - name: NUMAFLOW_SERVER_ADDRESS
           valueFrom:
             configMapKeyRef:

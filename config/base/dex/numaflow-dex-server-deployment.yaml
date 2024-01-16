@@ -30,12 +30,6 @@ spec:
         - mountPath: /tmp
           name: generated-dex-config
         env:
-        - name: NUMAFLOW_SERVER_DEX_TLS
-          valueFrom:
-            configMapKeyRef:
-              name: numaflow-cmd-params-config
-              key: server.dex.disable.tls
-              optional: true
         - name: NUMAFLOW_SERVER_ADDRESS
           valueFrom:
             configMapKeyRef:
