@@ -2193,6 +2193,9 @@ instead of in a batch at the end. The streaming mode can be enabled by setting t
 <span class="w">      </span><span class="nt">metadata</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">numaflow.numaproj.io/map-stream</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">      </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">        </span><span class="c1"># mapstreaming won&#39;t work if readBatchSize is != 1      </span>
+<span class="w">        </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 </code></pre></div>
 <p>Check the links below to see the UDF examples in streaming mode for different languages.</p>
 <ul>
