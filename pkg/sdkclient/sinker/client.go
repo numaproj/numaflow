@@ -36,7 +36,7 @@ type client struct {
 
 var _ Client = (*client)(nil)
 
-// New creates a new client object. Sinker doesn't require server info to start ATM.
+// New creates a new client object. Sinker client doesn't require server info to start ATM.
 func New(inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SinkAddr)
 	for _, inputOption := range inputOptions {

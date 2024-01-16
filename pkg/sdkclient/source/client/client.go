@@ -37,7 +37,7 @@ type client struct {
 
 var _ Client = (*client)(nil)
 
-// New creates a new client object. Source doesn't require server info to start ATM.
+// New creates a new client object. Source client doesn't require server info to start ATM.
 func New(inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SourceAddr)
 
