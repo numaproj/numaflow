@@ -141,11 +141,11 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	// create windower
 	if windowType.Fixed != nil {
-		windower = fixed.NewWindower(windowType.Fixed.Length.Duration)
+		windower = fixed.NewWindower(windowType.Fixed.Length.Duration, u.VertexInstance)
 	} else if windowType.Sliding != nil {
-		windower = sliding.NewWindower(windowType.Sliding.Length.Duration, windowType.Sliding.Slide.Duration)
+		windower = sliding.NewWindower(windowType.Sliding.Length.Duration, windowType.Sliding.Slide.Duration, u.VertexInstance)
 	} else if windowType.Session != nil {
-		windower = session.NewWindower(windowType.Session.Timeout.Duration)
+		windower = session.NewWindower(windowType.Session.Timeout.Duration, u.VertexInstance)
 	} else {
 		return fmt.Errorf("invalid window spec")
 	}

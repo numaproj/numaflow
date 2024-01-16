@@ -18,10 +18,13 @@ package session
 
 import (
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
 )
@@ -117,6 +120,10 @@ func (w *sessionWindow) Expand(endTime time.Time) {
 // Windower is an implementation of TimedWindower of session window, windower is responsible for assigning
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
+	vertexName    string
+	pipelineName  string
+	vertexReplica int32
+
 	// gap is the duration of inactivity after which a session window is marked as closed.
 	gap time.Duration
 
@@ -131,8 +138,11 @@ type Windower struct {
 	closedWindows *window.SortedWindowListByEndTime
 }
 
-func NewWindower(gap time.Duration) window.TimedWindower {
+func NewWindower(gap time.Duration, vertexInstance *dfv1.VertexInstance) window.TimedWindower {
 	return &Windower{
+		vertexName:    vertexInstance.Vertex.Name,
+		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica: vertexInstance.Replica,
 		gap:           gap,
 		activeWindows: make(map[string]*window.SortedWindowListByEndTime),
 		closedWindows: window.NewSortedWindowListByEndTime(),
@@ -245,11 +255,20 @@ func createWindowOperation(message *isb.ReadMessage, event window.Operation, win
 // CloseWindows closes the windows that are past the watermark
 // and also merges the windows that should be merged.
 func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
-
 	windowOperations := make([]*window.TimedWindowRequest, 0)
 
-	for _, list := range w.activeWindows {
+	totalActiveWindows := 0
+	for key, list := range w.activeWindows {
+
 		closedWindows := list.RemoveWindows(time)
+		totalActiveWindows += list.Len()
+
+		// it is safe to delete the key from the map because we are iterating over the map
+		// we need this to clean up the activeWindows map when there are no active windows
+		// for a key
+		if list.Len() == 0 {
+			delete(w.activeWindows, key)
+		}
 
 		// nothing to close
 		if len(closedWindows) == 0 {
@@ -293,6 +312,18 @@ func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 			}
 		}
 	}
+
+	metrics.ActiveWindowsCount.With(map[string]string{
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.vertexReplica)),
+	}).Set(float64(totalActiveWindows))
+
+	metrics.ClosedWindowsCount.With(map[string]string{
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.vertexReplica)),
+	}).Set(float64(w.closedWindows.Len()))
 
 	return windowOperations
 }

@@ -23,6 +23,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	rand2 "math/rand"
 	"time"
 
 	"go.uber.org/zap"
@@ -42,7 +43,6 @@ import (
 )
 
 var log = logging.NewLogger()
-var timeAttr = "Createdts"
 
 type Data struct {
 	Value uint64 `json:"value,omitempty"`
@@ -63,6 +63,7 @@ type record struct {
 	data   []byte
 	offset int64
 	key    string
+	ts     int64
 }
 
 var recordGenerator = func(size int32, value *uint64, createdTS int64) []byte {
@@ -107,6 +108,7 @@ type memGen struct {
 	lifecycleCtx   context.Context                    // lifecycleCtx context is used to control the lifecycle of this instance.
 	readTimeout    time.Duration                      // read timeout for the reader
 	vertexInstance *dfv1.VertexInstance               // vertex instance
+	jitter         time.Duration
 	logger         *zap.SugaredLogger
 }
 
@@ -161,6 +163,11 @@ func NewMemGen(
 		value = vertexInstance.Vertex.Spec.Source.Generator.Value
 	}
 
+	var jitter time.Duration
+	if vertexInstance.Vertex.Spec.Source.Generator.Jitter != nil {
+		jitter = vertexInstance.Vertex.Spec.Source.Generator.Jitter.Duration
+	}
+
 	genSrc := &memGen{
 		rpu:            rpu,
 		keyCount:       keyCount,
@@ -173,6 +180,7 @@ func NewMemGen(
 		vertexInstance: vertexInstance,
 		srcChan:        make(chan record, rpu*int(keyCount)*5),
 		readTimeout:    3 * time.Second, // default timeout
+		jitter:         jitter,
 	}
 
 	for _, o := range opts {
@@ -236,7 +244,7 @@ loop:
 		select {
 		case r := <-mg.srcChan:
 			tickgenSourceReadCount.With(map[string]string{metrics.LabelVertex: mg.vertexName, metrics.LabelPipeline: mg.pipelineName}).Inc()
-			msgs = append(msgs, mg.newReadMessage(r.key, r.data, r.offset))
+			msgs = append(msgs, mg.newReadMessage(r.key, r.data, r.offset, r.ts))
 		case <-timeout:
 			mg.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
 			break loop
@@ -305,8 +313,8 @@ func (mg *memGen) NewWorker(ctx context.Context, rate int) func(chan time.Time, 
 				for i := 0; i < rate; i++ {
 					for k := int32(0); k < mg.keyCount; k++ {
 						key := fmt.Sprintf("key-%d-%d", mg.vertexInstance.Replica, k)
-						payload := mg.genFn(mg.msgSize, mg.value, t)
-						r := record{data: payload, offset: time.Now().UTC().UnixNano(), key: key}
+						d := mg.genFn(mg.msgSize, mg.value, t)
+						r := record{data: d, offset: time.Now().UTC().UnixNano(), key: key, ts: t}
 						select {
 						case <-ctx.Done():
 							log.Info("Context.Done is called. returning from the inner function")
@@ -359,12 +367,12 @@ func (mg *memGen) generator(ctx context.Context, rate int, timeunit time.Duratio
 	}()
 }
 
-func (mg *memGen) newReadMessage(key string, payload []byte, offset int64) *isb.ReadMessage {
+func (mg *memGen) newReadMessage(key string, payload []byte, offset int64, et int64) *isb.ReadMessage {
 	readOffset := isb.NewSimpleIntPartitionOffset(offset, mg.vertexInstance.Replica)
 	msg := isb.Message{
 		Header: isb.Header{
 			// TODO: insert the right time based on the generator
-			MessageInfo: isb.MessageInfo{EventTime: timeFromNanos(parseTime(payload))},
+			MessageInfo: isb.MessageInfo{EventTime: timeFromNanos(et, mg.jitter)},
 			ID:          readOffset.String(),
 			Keys:        []string{key},
 		},
@@ -377,28 +385,15 @@ func (mg *memGen) newReadMessage(key string, payload []byte, offset int64) *isb.
 	}
 }
 
-func timeFromNanos(etime int64) time.Time {
+func timeFromNanos(etime int64, jitter time.Duration) time.Time {
 	// un-parseable json or invalid time format will be substituted with current time.
 	if etime > 0 {
-		return time.Unix(0, etime)
+		updatedTs := time.Unix(0, etime)
+		if jitter.Seconds() == 0 {
+			return updatedTs
+		}
+		d := rand2.Intn(int(jitter.Seconds()))
+		return updatedTs.Add(time.Duration(-d) * time.Second)
 	}
 	return time.Now()
-}
-
-func parseTime(payload []byte) int64 {
-	var anyJson map[string]interface{}
-	unmarshalErr := json.Unmarshal(payload, &anyJson)
-
-	if unmarshalErr != nil {
-		log.Debug("Payload [{}] is not valid json. could not extract time, returning 0", payload)
-		return 0
-	}
-
-	// for now, let's pretend that the time unit is nanos and that the time attribute is known
-	eventTime := anyJson[timeAttr]
-	if i, ok := eventTime.(float64); ok {
-		return int64(i)
-	} else {
-		return 0
-	}
 }
