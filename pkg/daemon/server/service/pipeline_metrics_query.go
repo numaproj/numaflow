@@ -55,9 +55,9 @@ type PipelineMetadataQuery struct {
 }
 
 const (
-	PipelineStatusOK       = "OK"
+	PipelineStatusHealthy  = "healthy"
 	PipelineStatusError    = "Error"
-	PipelineStatusUnknown  = "unknown"
+	PipelineStatusUnknown  = "Unknown"
 	PipelineStatusCritical = "critical"
 	PipelineStatusWarning  = "warning"
 	PipelineStatusInactive = "inactive"

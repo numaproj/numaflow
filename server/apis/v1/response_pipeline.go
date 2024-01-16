@@ -23,8 +23,8 @@ const (
 	PipelineStatusCritical  = "critical"
 	PipelineStatusWarning   = "warning"
 	PipelineStatusInactive  = "inactive"
-	PipelineStatusUnknown   = "unknown"
-	PipelineStatusDeleting  = "deleting"
+	PipelineStatusUnknown   = "Unknown"
+	PipelineStatusDeleting  = "Deleting"
 	PipelineStatusUnhealthy = "unhealthy"
 )
 

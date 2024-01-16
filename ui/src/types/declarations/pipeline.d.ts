@@ -159,3 +159,19 @@ export interface PipelineWatermarksFetchProps {
   pipeline: string;
   loadOnRefresh?: boolean;
 }
+
+export interface PipelineHealthFetchResult {
+  data?: PipelineHealthData;
+  loading: boolean;
+  error: any;
+  refresh: () => void;
+}
+
+export interface PipelineHealthData {
+  dataHealthCode?: string;
+  dataHealthMessage: string;
+  dataHealthStatus: string;
+  resourceHealthCode0?: string;
+  resourceHealthMessage: string;
+  resourceHealthStatus: string;
+}

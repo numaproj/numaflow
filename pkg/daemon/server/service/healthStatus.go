@@ -399,7 +399,7 @@ func convertVertexStateToPipelineState(vertexState []*vertexState) *dataHealthRe
 		PipelineStatusUnknown:  3,
 		PipelineStatusCritical: 2,
 		PipelineStatusWarning:  1,
-		PipelineStatusOK:       0,
+		PipelineStatusHealthy:  0,
 	}
 
 	// initialize the max state to 0 (ie Healthy state)
@@ -436,9 +436,9 @@ func convertVertexStateToPipelineState(vertexState []*vertexState) *dataHealthRe
 // and the code corresponding to Unknown
 func generateDataHealthResponse(state string, vertex string) *dataHealthResponse {
 	switch state {
-	case PipelineStatusOK:
+	case PipelineStatusHealthy:
 		return newDataHealthResponse(
-			PipelineStatusOK,
+			PipelineStatusHealthy,
 			"Pipeline dataflow is healthy",
 			"D1")
 	case PipelineStatusWarning:

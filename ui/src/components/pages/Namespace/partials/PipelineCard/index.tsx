@@ -26,8 +26,10 @@ import {
   PAUSING,
   DELETING,
   getBaseHref,
+  GetConsolidatedHealthStatus,
 } from "../../../../../utils";
 import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
+import { usePipelineHealthFetch } from "../../../../../utils/fetchWrappers/pipelineHealthFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
@@ -49,7 +51,7 @@ export function PipelineCard({
   isbData,
   refresh,
 }: PipelineCardProps) {
-  const { setSidebarProps, systemInfo } =
+  const { addError, setSidebarProps, systemInfo } =
     useContext<AppContextProps>(AppContext);
   const [editOption] = useState("edit");
   const [deleteOption] = useState("delete");
@@ -139,6 +141,38 @@ export function PipelineCard({
   const handeDeleteCancel = useCallback(() => {
     setDeleteProps(undefined);
   }, []);
+
+  const {
+    data: healthData,
+    loading: healthLoading,
+    error: healthError,
+  } = usePipelineHealthFetch({
+    namespaceId: namespace,
+    pipelineId: data?.name,
+    addError,
+    pipelineAbleToLoad,
+  });
+
+  useEffect(() => {
+    if (healthError) {
+      addError(healthError);
+    }
+  }, [healthError]);
+
+  const getHealth = useCallback(
+    (pipelineStatus: string) => {
+      if (healthData) {
+        const { resourceHealthStatus, dataHealthStatus } = healthData;
+        return GetConsolidatedHealthStatus(
+          pipelineStatus,
+          resourceHealthStatus,
+          dataHealthStatus
+        );
+      }
+      return UNKNOWN;
+    },
+    [healthData]
+  );
 
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
   const isbSize =
@@ -449,7 +483,11 @@ export function PipelineCard({
                 className={"pipeline-logo"}
               />
               <img
-                src={IconsStatusMap[statusData?.status]}
+                src={
+                  IconsStatusMap[
+                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                  ]
+                }
                 alt="Health"
                 className={"pipeline-logo"}
               />
@@ -463,7 +501,13 @@ export function PipelineCard({
               }}
             >
               <span>{StatusString[pipelineStatus]}</span>
-              <span>{StatusString[statusData?.status]}</span>
+              <span>
+                {
+                  StatusString[
+                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                  ]
+                }
+              </span>
             </Box>
           </Grid>
           <Grid

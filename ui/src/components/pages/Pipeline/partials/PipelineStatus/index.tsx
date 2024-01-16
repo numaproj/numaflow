@@ -1,10 +1,14 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import { IconsStatusMap, StatusString } from "../../../../../utils";
+import {
+  IconsStatusMap,
+  HTMLlTooltip,
+  StatusString,
+} from "../../../../../utils";
 
 import "./style.css";
 
-export function PipelineStatus({ status, healthStatus }) {
+export function PipelineStatus({ status, healthStatus, healthData }) {
   return (
     <Box
       sx={{
@@ -12,7 +16,7 @@ export function PipelineStatus({ status, healthStatus }) {
         flexDirection: "column",
         marginTop: "0.375rem",
         flexGrow: 1,
-        paddingLeft: "1rem"
+        paddingLeft: "1rem",
       }}
     >
       <Box sx={{ width: "fit-content" }}>
@@ -41,9 +45,30 @@ export function PipelineStatus({ status, healthStatus }) {
               }}
             >
               <span className="pipeline-logo-text">{StatusString[status]}</span>
-              <span className="pipeline-logo-text">
-                {StatusString[healthStatus]}
-              </span>
+              <HTMLlTooltip
+                title={
+                  <Box>
+                    <Box className={"health-tooltip-text"}>
+                      <Box style={{ fontWeight: 600 }}>
+                        Resource Health ({healthData.resourceHealthStatus}) :
+                      </Box>
+                      <Box>{healthData.resourceHealthMessage}</Box>
+                    </Box>
+                    <Box className={"health-tooltip-text"}>
+                      <Box style={{ fontWeight: 600 }}>
+                        DataFlow Health ({healthData.dataHealthStatus}) :
+                      </Box>
+                      <Box>{healthData.dataHealthMessage}</Box>
+                    </Box>
+                  </Box>
+                }
+                placement="right-end"
+                arrow
+              >
+                <span className="pipeline-logo-text">
+                  {StatusString[healthStatus]}
+                </span>
+              </HTMLlTooltip>
             </Box>
           </Box>
         </Box>
