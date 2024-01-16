@@ -33,6 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -183,7 +184,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// if the source is a user-defined source, we create a gRPC client for it.
 	var udsGRPCClient *udsource.GRPCBasedUDSource
 	if sp.VertexInstance.Vertex.IsUDSource() {
-		srcClient, err := sourceclient.New()
+		// Wait for server info to be ready
+		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		if err != nil {
+			return err
+		}
+
+		srcClient, err := sourceclient.New(serverInfo)
 		if err != nil {
 			return fmt.Errorf("failed to create a new gRPC client: %w", err)
 		}
@@ -206,7 +213,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	}
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
-		sdkClient, err = sourcetransformer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
+		// Wait for server info to be ready
+		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		if err != nil {
+			return err
+		}
+
+		sdkClient, err = sourcetransformer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}

@@ -36,6 +36,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sessionreducer"
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -90,12 +91,18 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	// create udf handler and wait until it is ready
 	if windowType.Fixed != nil || windowType.Sliding != nil {
+		// Wait for server info to be ready
+		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		if err != nil {
+			return err
+		}
+
 		var client reducer.Client
 		// if streaming is enabled, use the reduceStreaming address
 		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
-			client, err = reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
+			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
 		} else {
-			client, err = reducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
+			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		}
 		if err != nil {
 			return fmt.Errorf("failed to create a new reducer gRPC client: %w", err)
@@ -116,7 +123,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		udfApplier = reduceHandler
 		healthChecker = reduceHandler
 	} else if windowType.Session != nil {
-		client, err := sessionreducer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
+		// Wait for server info to be ready
+		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		if err != nil {
+			return err
+		}
+
+		client, err := sessionreducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create a new session reducer gRPC client: %w", err)
 		}

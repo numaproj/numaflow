@@ -16,13 +16,9 @@ limitations under the License.
 
 package sdkclient
 
-import "time"
-
 type Options struct {
-	udsSockAddr                string
-	maxMessageSize             int
-	serverInfoFilePath         string
-	serverInfoReadinessTimeout time.Duration
+	udsSockAddr    string
+	maxMessageSize int
 }
 
 // UdsSockAddr returns the UDS sock addr.
@@ -35,23 +31,11 @@ func (o *Options) MaxMessageSize() int {
 	return o.maxMessageSize
 }
 
-// ServerInfoFilePath returns the server info file path.
-func (o *Options) ServerInfoFilePath() string {
-	return o.serverInfoFilePath
-}
-
-// ServerInfoReadinessTimeout returns the server info readiness timeout.
-func (o *Options) ServerInfoReadinessTimeout() time.Duration {
-	return o.serverInfoReadinessTimeout
-}
-
 // DefaultOptions returns the default options.
 func DefaultOptions(address string) *Options {
 	return &Options{
-		maxMessageSize:             DefaultGRPCMaxMessageSize,
-		serverInfoFilePath:         ServerInfoFilePath,
-		udsSockAddr:                address,
-		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
+		maxMessageSize: DefaultGRPCMaxMessageSize,
+		udsSockAddr:    address,
 	}
 }
 
@@ -69,19 +53,5 @@ func WithUdsSockAddr(addr string) Option {
 func WithMaxMessageSize(size int) Option {
 	return func(opts *Options) {
 		opts.maxMessageSize = size
-	}
-}
-
-// WithServerInfoFilePath sets the server info file path to the given path.
-func WithServerInfoFilePath(f string) Option {
-	return func(o *Options) {
-		o.serverInfoFilePath = f
-	}
-}
-
-// WithServerInfoReadinessTimeout sets the server info readiness timeout to the given timeout.
-func WithServerInfoReadinessTimeout(t time.Duration) Option {
-	return func(o *Options) {
-		o.serverInfoReadinessTimeout = t
 	}
 }
