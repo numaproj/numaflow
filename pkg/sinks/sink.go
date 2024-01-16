@@ -146,6 +146,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		sdkClient, err = sinkclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create sdk client, %w", err)

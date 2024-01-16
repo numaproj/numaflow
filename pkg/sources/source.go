@@ -189,6 +189,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		srcClient, err := sourceclient.New(serverInfo)
 		if err != nil {
 			return fmt.Errorf("failed to create a new gRPC client: %w", err)
