@@ -13,7 +13,7 @@
     
     
       
-        <title>Controller Configuration - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Dex Server - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#controller-configmap" class="md-skip">
+        <a href="#dex-server" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Controller Configuration
+              Dex Server
             
           </span>
         </div>
@@ -1711,65 +1711,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Controller Configuration
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../controller-configmap/" class="md-nav__link">
         Controller Configuration
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#configuration-structure" class="md-nav__link">
-    Configuration Structure
-  </a>
-  
-    <nav class="md-nav" aria-label="Configuration Structure">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#isb-service-configuration" class="md-nav__link">
-    ISB Service Configuration
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1821,11 +1767,75 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../dex/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Dex Server
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Dex Server
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#dex-server" class="md-nav__link">
+    Dex Server
+  </a>
+  
+    <nav class="md-nav" aria-label="Dex Server">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-register-application-for-github" class="md-nav__link">
+    1. Register application for Github
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-configuring-numaflow" class="md-nav__link">
+    2. Configuring Numaflow
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-restarting-pods" class="md-nav__link">
+    3. Restarting Pods
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2083,8 +2093,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -2093,16 +2101,30 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#configuration-structure" class="md-nav__link">
-    Configuration Structure
+  <a href="#dex-server" class="md-nav__link">
+    Dex Server
   </a>
   
-    <nav class="md-nav" aria-label="Configuration Structure">
+    <nav class="md-nav" aria-label="Dex Server">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#isb-service-configuration" class="md-nav__link">
-    ISB Service Configuration
+  <a href="#1-register-application-for-github" class="md-nav__link">
+    1. Register application for Github
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-configuring-numaflow" class="md-nav__link">
+    2. Configuring Numaflow
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-restarting-pods" class="md-nav__link">
+    3. Restarting Pods
   </a>
   
 </li>
@@ -2124,45 +2146,74 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/operations/controller-configmap.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/operations/dex.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="controller-configmap">Controller ConfigMap<a class="headerlink" href="#controller-configmap" title="Permanent link">&para;</a></h1>
-<p>The controller ConfigMap is used for controller-wide settings.</p>
-<p>For a detailed example, please see <a href="../numaflow-controller-config.yaml"><code>numaflow-controller-config.yaml</code></a>.</p>
-<h2 id="configuration-structure">Configuration Structure<a class="headerlink" href="#configuration-structure" title="Permanent link">&para;</a></h2>
-<p>The configuration should be under <code>controller-config.yaml</code> key in the ConfigMap, as a string in <code>yaml</code> format:</p>
+  <h1>Dex Server</h1>
+
+<h2 id="dex-server">Dex Server<a class="headerlink" href="#dex-server" title="Permanent link">&para;</a></h2>
+<p>Numaflow currently installs with a <a href="https://github.com/dexidp/dex">Dex</a> Server for authentication integration. Currently,
+the only supported identity provider is Github. SSO configuration of Numaflow UI will require editing a few files
+detailed below.</p>
+<h3 id="1-register-application-for-github">1. Register application for Github<a class="headerlink" href="#1-register-application-for-github" title="Permanent link">&para;</a></h3>
+<p>In Github, register a new OAuth application. If you are using a different <code>baseHref</code> for your installation, you must include this in the homepage URL only.
+The callback address should be the homepage of your Numaflow UI + <code>/dex/callback</code>. In most cases this should be <code>https://localhost:8443/dex/callback</code>.</p>
+<p>After registering this application, you will be given a client ID. You will need this value and also generate
+a new client secret.</p>
+<p><img alt="Register OAuth App" src="../../assets/creating-application-github.png" title="Register OAuth App" /></p>
+<h3 id="2-configuring-numaflow">2. Configuring Numaflow<a class="headerlink" href="#2-configuring-numaflow" title="Permanent link">&para;</a></h3>
+<p>First we need to configure <code>server.disable.auth</code> to <code>false</code> in the ConfigMap <code>numaflow-cmd-params-config</code> at <code>config/base/shared-config/numaflow-cmd-params-config.yaml</code>.
+This will enable authorization and authentication for the UX server.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
 <span class="nt">metadata</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-config</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
 <span class="nt">data</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">controller-config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<span class="w">    </span><span class="no">isbsvc:</span>
-<span class="w">      </span><span class="no">jetstream:</span>
-<span class="w">        </span><span class="no">...</span>
+<span class="w">  </span><span class="c1">### Whether to disable authentication and authorization for the UX server, defaults to false.</span>
+<span class="w">  </span><span class="nt">server.disable.auth</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span>
+<span class="w">  </span><span class="c1">#</span>
 </code></pre></div>
-<h3 id="isb-service-configuration">ISB Service Configuration<a class="headerlink" href="#isb-service-configuration" title="Permanent link">&para;</a></h3>
-<p>One of the important configuration items in the ConfigMap is about <a href="../../core-concepts/inter-step-buffer-service/">ISB Service</a>. We currently use 3rd party technologies such as <code>JetStream</code> to implement ISB Services, if those applications have new releases, to make them available in Numaflow, the new versions need to be added in the ConfigMap.</p>
-<p>For example, there's a new <code>Nats JetStream</code> version <code>x.y.x</code> available, a new version configuration like below needs to be added before it can be referenced in the <code>InterStepBufferService</code> spec.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<p>Next we need to configure the <code>numaflow-dex-server-config</code> ConfigMap at <code>config/base/dex/numaflow-dex-server-configmap.yaml</code>.
+Change <code>&lt;ORG_NAME&gt;</code> to your organization you created the application under and include the correct teams.
+This file will be read by the init container of the Dex server and generate the config it will server.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <span class="nt">metadata</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-config</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-dex-server-config</span>
 <span class="nt">data</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">controller-config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<span class="w">    </span><span class="no">isbsvc:</span>
-<span class="w">      </span><span class="no">jetstream:</span>
-<span class="w">        </span><span class="no">versions:</span>
-<span class="w">          </span><span class="no">- version: x.y.x   # Name it whatever you want, it will be referenced in the InterStepBufferService spec.</span>
-<span class="w">            </span><span class="no">natsImage: nats:x.y.x</span>
-<span class="w">            </span><span class="no">metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1</span>
-<span class="w">            </span><span class="no">configReloaderImage: natsio/nats-server-config-reloader:0.7.0</span>
-<span class="w">            </span><span class="no">startCommand: /nats-server</span>
+<span class="w">  </span><span class="nt">config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">    </span><span class="no">connectors:</span>
+<span class="w">    </span><span class="no">- type: github</span>
+<span class="w">      </span><span class="no"># https://dexidp.io/docs/connectors/github/</span>
+<span class="w">      </span><span class="no">id: github</span>
+<span class="w">      </span><span class="no">name: GitHub</span>
+<span class="w">      </span><span class="no">config:</span>
+<span class="w">        </span><span class="no">clientID: $GITHUB_CLIENT_ID</span>
+<span class="w">        </span><span class="no">clientSecret: $GITHUB_CLIENT_SECRET</span>
+<span class="w">        </span><span class="no">orgs:</span>
+<span class="w">        </span><span class="no">- name: &lt;ORG_NAME&gt;</span>
+<span class="w">          </span><span class="no">teams:</span>
+<span class="w">          </span><span class="no">- admin</span>
+<span class="w">          </span><span class="no">- readonly</span>
 </code></pre></div>
+<p>Finally we will need to create/update the <code>numaflow-dex-secrets</code> Secret.
+You will need to add the client ID and secret you created earlier for the application here.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-dex-secrets</span>
+<span class="nt">stringData</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># https://dexidp.io/docs/connectors/github/</span>
+<span class="w">  </span><span class="nt">dex-github-client-id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;GITHUB_CLIENT_ID&gt;</span>
+<span class="w">  </span><span class="nt">dex-github-client-secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;GITHUB_CLIENT_SECRET&gt;</span>
+</code></pre></div>
+<h3 id="3-restarting-pods">3. Restarting Pods<a class="headerlink" href="#3-restarting-pods" title="Permanent link">&para;</a></h3>
+<p>If you are enabling/disabling authorization and authentication for the Numaflow server, it will need to be restarted.</p>
+<p>Any changes or additions to the connectors in the <code>numaflow-dex-server-config</code> ConfigMap will need to be read and
+generated again requiring a restart as well.</p>
 
               
             </article>
@@ -2183,7 +2234,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../validating-webhook/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Validating Webhook" rel="prev">
+        <a href="../grafana/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Grafana" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -2192,20 +2243,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Validating Webhook
+              Grafana
             </div>
           </div>
         </a>
       
       
         
-        <a href="../ui-access-path/" class="md-footer__link md-footer__link--next" aria-label="Next: UI Server Access Path" rel="next">
+        <a href="../security/" class="md-footer__link md-footer__link--next" aria-label="Next: Security" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              UI Server Access Path
+              Security
             </div>
           </div>
           <div class="md-footer__button md-icon">
