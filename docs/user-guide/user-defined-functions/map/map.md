@@ -45,6 +45,7 @@ spec:
         annotations:
           numaflow.numaproj.io/map-stream: "true"
       limits:
+        # mapstreaming won't work if readBatchSize is != 1      
         readBatchSize: 1
 ```
 
