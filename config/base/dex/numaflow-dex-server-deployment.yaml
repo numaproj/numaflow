@@ -42,6 +42,12 @@ spec:
               name: numaflow-cmd-params-config
               key: server.address
               optional: true
+        - name: NUMAFLOW_SERVER_BASE_HREF
+          valueFrom:
+            configMapKeyRef:
+              name: numaflow-cmd-params-config
+              key: server.base.href
+              optional: true
       containers:
         - name: dex
           image: dexidp/dex:v2.37.0

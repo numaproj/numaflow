@@ -34,6 +34,7 @@ func NewDexServerInitCommand() *cobra.Command {
 	var (
 		disableTls bool
 		hostname   string
+		baseHref   string
 	)
 
 	command := &cobra.Command{
@@ -41,7 +42,7 @@ func NewDexServerInitCommand() *cobra.Command {
 		Short: "Generate dex config and TLS certificates for Dex server",
 		RunE: func(c *cobra.Command, args []string) error {
 
-			config, err := generateDexConfigYAML(hostname, disableTls)
+			config, err := generateDexConfigYAML(hostname, baseHref, disableTls)
 			if err != nil {
 				return err
 			}
@@ -62,14 +63,15 @@ func NewDexServerInitCommand() *cobra.Command {
 	}
 	command.Flags().BoolVar(&disableTls, "disable-tls", sharedutil.LookupEnvBoolOr("NUMAFLOW_DISABLE_DEX_SERVER_TLS", false), "Whether to disable authentication and authorization, defaults to false.")
 	command.Flags().StringVar(&hostname, "hostname", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
+	command.Flags().StringVar(&baseHref, "base-href", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/"), "Base href for Numaflow server, defaults to '/'.")
 	return command
 }
 
-func generateDexConfigYAML(hostname string, disableTls bool) ([]byte, error) {
+func generateDexConfigYAML(hostname, baseHref string, disableTls bool) ([]byte, error) {
 
 	// check if type of connector needs redirect URI
 	// <HOSTNAME>/<base_href>/login
-	redirectURL, err := url.JoinPath(hostname, "/login")
+	redirectURL, err := url.JoinPath(hostname, baseHref, "/login")
 	if err != nil {
 		return nil, fmt.Errorf("failed to infer redirect url from config: %v", err)
 	}

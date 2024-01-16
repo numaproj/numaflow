@@ -6,9 +6,8 @@ detailed below.
 
 ### 1. Register application for Github
 
-In Github, register a new OAuth application. The callback address should be the
-homepage of your Numaflow UI + `/dex/callback`. In most cases this should be `https://localhost:8443/dex/callback`.
-If you are using a different `baseHref` for your installation, you must also include that.
+In Github, register a new OAuth application. If you are using a different `baseHref` for your installation, you must include this in the homepage URL only.
+The callback address should be the homepage of your Numaflow UI + `/dex/callback`. In most cases this should be `https://localhost:8443/dex/callback`.
 
 After registering this application, you will be given a client ID. You will need this value and also generate
 a new client secret.
