@@ -50,13 +50,15 @@ export function PipelineStatus({ status, healthStatus, healthData }) {
                   <Box>
                     <Box className={"health-tooltip-text"}>
                       <Box style={{ fontWeight: 600 }}>
-                        Resource Health ({healthData.resourceHealthStatus}) :
+                        Resource Health (
+                        {healthData.resourceHealthStatus.toUpperCase()}) :
                       </Box>
                       <Box>{healthData.resourceHealthMessage}</Box>
                     </Box>
                     <Box className={"health-tooltip-text"}>
                       <Box style={{ fontWeight: 600 }}>
-                        DataFlow Health ({healthData.dataHealthStatus}) :
+                        Data Flow Health (
+                        {healthData.dataHealthStatus.toUpperCase()}) :
                       </Box>
                       <Box>{healthData.dataHealthMessage}</Box>
                     </Box>

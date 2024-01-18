@@ -166,6 +166,15 @@ const (
 
 	// UDF map streaming
 	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
+
+	// Pipeline health status
+	PipelineStatusHealthy   = "healthy"
+	PipelineStatusUnknown   = "unknown"
+	PipelineStatusCritical  = "critical"
+	PipelineStatusWarning   = "warning"
+	PipelineStatusInactive  = "inactive"
+	PipelineStatusDeleting  = "deleting"
+	PipelineStatusUnhealthy = "unhealthy"
 )
 
 var (

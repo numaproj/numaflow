@@ -54,16 +54,6 @@ type PipelineMetadataQuery struct {
 	healthChecker     *HealthChecker
 }
 
-const (
-	PipelineStatusHealthy  = "healthy"
-	PipelineStatusError    = "Error"
-	PipelineStatusUnknown  = "Unknown"
-	PipelineStatusCritical = "critical"
-	PipelineStatusWarning  = "warning"
-	PipelineStatusInactive = "inactive"
-	PipelineStatusDeleting = "deleting"
-)
-
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
 func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,

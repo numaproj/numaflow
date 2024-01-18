@@ -95,8 +95,8 @@ func newDataHealthResponse(status string, message string, code string) *dataHeal
 }
 
 // defaultDataHealthResponse is the default response returned by the data health check API
-var defaultDataHealthResponse = newDataHealthResponse(PipelineStatusUnknown,
-	"Pipeline dataflow is in an unknown state",
+var defaultDataHealthResponse = newDataHealthResponse(v1alpha1.PipelineStatusUnknown,
+	"Pipeline data flow is in an unknown state",
 	"D4")
 
 // HealthChecker is the struct type for health checker.
@@ -396,10 +396,10 @@ func convertVertexStateToPipelineState(vertexState []*vertexState) *dataHealthRe
 
 	// unknown > critical > warning > ok
 	stateMap := map[string]int{
-		PipelineStatusUnknown:  3,
-		PipelineStatusCritical: 2,
-		PipelineStatusWarning:  1,
-		PipelineStatusHealthy:  0,
+		v1alpha1.PipelineStatusUnknown:  3,
+		v1alpha1.PipelineStatusCritical: 2,
+		v1alpha1.PipelineStatusWarning:  1,
+		v1alpha1.PipelineStatusHealthy:  0,
 	}
 
 	// initialize the max state to 0 (ie Healthy state)
@@ -423,8 +423,8 @@ func convertVertexStateToPipelineState(vertexState []*vertexState) *dataHealthRe
 	}
 
 	// if we reach here, return unknown state
-	return newDataHealthResponse(PipelineStatusUnknown,
-		"Pipeline dataflow is in an unknown state",
+	return newDataHealthResponse(v1alpha1.PipelineStatusUnknown,
+		"Pipeline data flow is in an unknown state",
 		"D4")
 }
 
@@ -436,25 +436,25 @@ func convertVertexStateToPipelineState(vertexState []*vertexState) *dataHealthRe
 // and the code corresponding to Unknown
 func generateDataHealthResponse(state string, vertex string) *dataHealthResponse {
 	switch state {
-	case PipelineStatusHealthy:
+	case v1alpha1.PipelineStatusHealthy:
 		return newDataHealthResponse(
-			PipelineStatusHealthy,
-			"Pipeline dataflow is healthy",
+			v1alpha1.PipelineStatusHealthy,
+			"Pipeline data flow is healthy",
 			"D1")
-	case PipelineStatusWarning:
+	case v1alpha1.PipelineStatusWarning:
 		return newDataHealthResponse(
-			PipelineStatusWarning,
-			fmt.Sprintf("Dataflow is in warning state for  %s", vertex),
+			v1alpha1.PipelineStatusWarning,
+			fmt.Sprintf("Pipeline data flow is in a warning state for  %s", vertex),
 			"D2")
-	case PipelineStatusCritical:
+	case v1alpha1.PipelineStatusCritical:
 		return newDataHealthResponse(
-			PipelineStatusCritical,
-			fmt.Sprintf("Dataflow is in critical state for %s", vertex),
+			v1alpha1.PipelineStatusCritical,
+			fmt.Sprintf("Pipeline data flow is in a critical state for %s", vertex),
 			"D3")
-	case PipelineStatusUnknown:
+	case v1alpha1.PipelineStatusUnknown:
 		return newDataHealthResponse(
-			PipelineStatusUnknown,
-			fmt.Sprintf("Pipeline dataflow is in an unknown state due to %s", vertex),
+			v1alpha1.PipelineStatusUnknown,
+			fmt.Sprintf("Pipeline data flow is in an unknown state due to %s", vertex),
 			"D4")
 	default:
 		return defaultDataHealthResponse

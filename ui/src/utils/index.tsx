@@ -328,32 +328,51 @@ export const DurationString = (duration: number): string => {
   }
 };
 
+const compareIgnoreCase = (a: string, b: string): boolean => {
+  return a.toLowerCase() === b.toLowerCase();
+};
+
 export const GetConsolidatedHealthStatus = (
   pipelineStatus: string,
   resourceHealthStatus: string,
   dataHealthStatus: string
 ): string => {
-  if (pipelineStatus === PAUSING || pipelineStatus === PAUSED) {
+  if (
+    compareIgnoreCase(pipelineStatus, PAUSING) ||
+    compareIgnoreCase(pipelineStatus, PAUSED)
+  ) {
     return INACTIVE_STATUS;
   }
 
-  if (pipelineStatus === DELETING || resourceHealthStatus === DELETING) {
-    return UNKNOWN;
+  if (
+    compareIgnoreCase(pipelineStatus, DELETING) ||
+    compareIgnoreCase(resourceHealthStatus, DELETING)
+  ) {
+    return DELETING;
   }
 
-  if (resourceHealthStatus === HEALTHY && dataHealthStatus === HEALTHY) {
+  if (
+    compareIgnoreCase(resourceHealthStatus, HEALTHY) &&
+    compareIgnoreCase(dataHealthStatus, HEALTHY)
+  ) {
     return HEALTHY;
   }
 
-  if (resourceHealthStatus === UNHEALTHY) {
+  if (compareIgnoreCase(resourceHealthStatus, UNHEALTHY)) {
     return UNHEALTHY;
   }
 
-  if (resourceHealthStatus === CRITICAL || dataHealthStatus === CRITICAL) {
+  if (
+    compareIgnoreCase(resourceHealthStatus, CRITICAL) ||
+    compareIgnoreCase(dataHealthStatus, CRITICAL)
+  ) {
     return CRITICAL;
   }
 
-  if (resourceHealthStatus === WARNING || dataHealthStatus === WARNING) {
+  if (
+    compareIgnoreCase(resourceHealthStatus, WARNING) ||
+    compareIgnoreCase(dataHealthStatus, WARNING)
+  ) {
     return WARNING;
   }
 
