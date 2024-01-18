@@ -193,5 +193,5 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	}
 	pq.CloseOfBook()
 
-	assert.Error(t, err, store.WriteStoreFullErr)
+	assert.Error(t, err, store.ErrWriteStoreFull)
 }

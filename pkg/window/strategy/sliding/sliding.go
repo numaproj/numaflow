@@ -214,8 +214,8 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 }
 
 // DeleteClosedWindow deletes the window from the closed windows list
-func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
-	w.closedWindows.Delete(response.Window)
+func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
+	w.closedWindows.Delete(window)
 }
 
 // OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.
