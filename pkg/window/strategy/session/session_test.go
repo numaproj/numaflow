@@ -470,24 +470,20 @@ func TestSession_DeleteWindows(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(180 * time.Second))
 
 	// delete one of the windows
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
-			Start: baseTime,
-			End:   baseTime.Add(60 * time.Second),
-			Slot:  "slot-0",
-		}, []string{"key-1"}),
-	})
+	windower.DeleteClosedWindow(window.NewWindowFromPartitionAndKeys(&partition.ID{
+		Start: baseTime,
+		End:   baseTime.Add(60 * time.Second),
+		Slot:  "slot-0",
+	}, []string{"key-1"}))
 
 	// since we deleted one of the windows, the closed windows should be 3
 	assert.Equal(t, 3, windower.closedWindows.Len())
 
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
-			Start: baseTime.Add(60 * time.Second),
-			End:   baseTime.Add(120 * time.Second),
-			Slot:  "slot-0",
-		}, []string{"key-1"}),
-	})
+	windower.DeleteClosedWindow(window.NewWindowFromPartitionAndKeys(&partition.ID{
+		Start: baseTime.Add(60 * time.Second),
+		End:   baseTime.Add(120 * time.Second),
+		Slot:  "slot-0",
+	}, []string{"key-1"}))
 	// since we deleted two windows, the closed windows should be 2
 	assert.Equal(t, 2, windower.closedWindows.Len())
 }
@@ -533,13 +529,11 @@ func TestWindower_OldestClosedWindowEndTime(t *testing.T) {
 	assert.Equal(t, baseTime.Add(70*time.Second), windower.OldestWindowEndTime())
 
 	// delete one of the windows
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
-			Start: baseTime,
-			End:   baseTime.Add(70 * time.Second),
-			Slot:  "slot-0",
-		}, []string{"key-1"}),
-	})
+	windower.DeleteClosedWindow(window.NewWindowFromPartitionAndKeys(&partition.ID{
+		Start: baseTime,
+		End:   baseTime.Add(70 * time.Second),
+		Slot:  "slot-0",
+	}, []string{"key-1"}))
 
 	// since we deleted (60, 130) window, now the oldest window end time will be 90
 	assert.Equal(t, baseTime.Add(90*time.Second), windower.OldestWindowEndTime())

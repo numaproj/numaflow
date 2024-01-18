@@ -41,7 +41,7 @@ type TimedWindower interface {
 	// NextWindowToBeClosed returns the next window yet to be closed.
 	NextWindowToBeClosed() TimedWindow
 	// DeleteClosedWindow deletes the window from the closed windows list.
-	DeleteClosedWindow(response *TimedWindowResponse)
+	DeleteClosedWindow(tw TimedWindow)
 	// OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.
 	// If there are no windows, it returns -1.
 	OldestWindowEndTime() time.Time

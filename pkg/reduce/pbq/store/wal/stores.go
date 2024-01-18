@@ -106,6 +106,7 @@ func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
 			metrics.LabelVertex:             ws.vertexName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Inc()
+		
 		wal = &WAL{
 			fp:                fp,
 			openMode:          os.O_WRONLY,

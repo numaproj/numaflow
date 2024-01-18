@@ -154,7 +154,7 @@ outerLoop:
 				p.publishWM(ctx, response.Window.Partition())
 
 				// delete the closed windows which are tracked by the windower
-				p.windower.DeleteClosedWindow(response)
+				p.windower.DeleteClosedWindow(response.Window)
 				continue
 			}
 
@@ -192,7 +192,7 @@ outerLoop:
 	// once we have received all the responses from the UDF.
 	p.publishWM(ctx, p.partitionId)
 	// delete the closed windows which are tracked by the windower
-	p.windower.DeleteClosedWindow(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(p.partitionId)})
+	p.windower.DeleteClosedWindow(window.NewWindowFromPartition(p.partitionId))
 
 	// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
 	err := p.pbqReader.GC()
