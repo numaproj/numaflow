@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -34,18 +33,12 @@ type SessionSuite struct {
 	E2ESuite
 }
 
-func (s *SessionSuite) TestReduceStream() {
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		s.testReduceStream("java")
-	}()
-	go func() {
-		defer wg.Done()
-		s.testReduceStream("go")
-	}()
-	wg.Wait()
+func (s *SessionSuite) TestReduceStreamGo() {
+	s.testReduceStream("go")
+}
+
+func (s *SessionSuite) TestReduceStreamJava() {
+	s.testReduceStream("java")
 }
 
 func (s *SessionSuite) testReduceStream(lang string) {
@@ -84,7 +77,6 @@ func (s *SessionSuite) testReduceStream(lang string) {
 	w.Expect().SinkNotContains("sink", "99")
 	w.Expect().SinkNotContains("sink", "105")
 	done <- struct{}{}
-
 }
 
 // FIXME(session): add test for keyed session window
