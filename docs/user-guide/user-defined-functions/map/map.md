@@ -44,6 +44,9 @@ spec:
       metadata:
         annotations:
           numaflow.numaproj.io/map-stream: "true"
+      limits:
+        # mapstreaming won't work if readBatchSize is != 1      
+        readBatchSize: 1
 ```
 
 Check the links below to see the UDF examples in streaming mode for different languages.

@@ -50,4 +50,5 @@ func init() {
 	rootCmd.AddCommand(NewSideInputsInitCommand())
 	rootCmd.AddCommand(NewSideInputsManagerCommand())
 	rootCmd.AddCommand(NewSideInputsSynchronizerCommand())
+	rootCmd.AddCommand(NewDexServerInitCommand())
 }

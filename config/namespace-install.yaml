@@ -16365,14 +16365,20 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: "issuer: <HOSTNAME>/dex\nstorage:\n  type: memory\nweb:\n  http: 0.0.0.0:5556\nstaticClients:\n
-    \ - id: numaflow-server-app\n    redirectURIs: \n      - <HOSTNAME>/<base_href>/login\n
-    \   name: 'Numaflow Server App'\n    public: true\nconnectors:\n- type: github\n
-    \ # https://dexidp.io/docs/connectors/github/\n  id: github\n  name: GitHub\n
-    \ config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n
-    \   redirectURI: <HOSTNAME>/dex/callback\n    orgs:\n    - name: <ORG_NAME>\n
-    \     teams:\n      - admin\n      - readonly\noauth2:\n  skipApprovalScreen:
-    true\n"
+  config.yaml: |-
+    connectors:
+    - type: github
+      # https://dexidp.io/docs/connectors/github/
+      id: github
+      name: GitHub
+      config:
+        clientID: $GITHUB_CLIENT_ID
+        clientSecret: $GITHUB_CLIENT_SECRET
+        orgs:
+        - name: <ORG_NAME>
+          teams:
+          - admin
+          - readonly
 kind: ConfigMap
 metadata:
   name: numaflow-dex-server-config
@@ -16565,8 +16571,41 @@ spec:
         ports:
         - containerPort: 5556
         volumeMounts:
-        - mountPath: /etc/numaflow/dex/cfg
-          name: config
+        - mountPath: /etc/numaflow/dex/cfg/config.yaml
+          name: generated-dex-config
+          subPath: config.yaml
+        - mountPath: /etc/numaflow/dex/tls/tls.crt
+          name: tls
+          subPath: tls.crt
+        - mountPath: /etc/numaflow/dex/tls/tls.key
+          name: tls
+          subPath: tls.key
+      initContainers:
+      - args:
+        - dex-server-init
+        env:
+        - name: NUMAFLOW_SERVER_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              key: server.address
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_BASE_HREF
+          valueFrom:
+            configMapKeyRef:
+              key: server.base.href
+              name: numaflow-cmd-params-config
+              optional: true
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        name: dex-init
+        volumeMounts:
+        - mountPath: /cfg
+          name: connector-config
+        - mountPath: /tls
+          name: tls
+        - mountPath: /tmp
+          name: generated-dex-config
       serviceAccountName: numaflow-dex-server
       volumes:
       - configMap:
@@ -16574,7 +16613,11 @@ spec:
           - key: config.yaml
             path: config.yaml
           name: numaflow-dex-server-config
-        name: config
+        name: connector-config
+      - emptyDir: {}
+        name: tls
+      - emptyDir: {}
+        name: generated-dex-config
 ---
 apiVersion: apps/v1
 kind: Deployment

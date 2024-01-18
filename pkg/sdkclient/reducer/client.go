@@ -19,9 +19,9 @@ package reducer
 import (
 	"context"
 	"io"
-	"log"
 
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -36,21 +36,11 @@ type client struct {
 }
 
 // New creates a new client object.
-func New(inputOptions ...sdkclient.Option) (Client, error) {
+func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.ReduceAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
-	}
-
-	// Wait for server info to be ready
-	serverInfo, err := util.WaitForServerInfo(opts.ServerInfoReadinessTimeout(), opts.ServerInfoFilePath())
-	if err != nil {
-		return nil, err
-	}
-
-	if serverInfo != nil {
-		log.Printf("ServerInfo: %v\n", serverInfo)
 	}
 
 	// Connect to the server
