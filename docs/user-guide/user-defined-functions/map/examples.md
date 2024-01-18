@@ -8,7 +8,7 @@ Please read [map](./map.md) to get the best out of these examples.
 
 #### What is ISB Service?
 An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), which is used to pass data between vertices of a numaflow pipeline.
-Please refer to the doc [Intern-Step Buffer Service](../../../core-concepts/inter-step-buffer.md) for more information on ISB.
+Please refer to the doc [Inter-Step Buffer Service](../../../core-concepts/inter-step-buffer.md) for more information on ISB.
 
 
 #### How to install the ISB Service
@@ -35,6 +35,7 @@ isbsvc-default-js-2                          3/3     Running     0          19s
 ```
 
 ---
+
 **NOTE**
 
 The Source used in the examples is an HTTP source producing messages with values 5 and 10 with event time
@@ -46,9 +47,10 @@ An example will be as follows,
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "5" ${http-source-url}
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "10" ${http-source-url}
 ```
+
 ---
 
-## Creating a simple Map pipeline
+## Creating a Simple Map Pipeline
 
 Now we will walk you through creating a map pipeline. In our example, this is called the `even-odd` pipeline, illustrated by the following diagram:
 
