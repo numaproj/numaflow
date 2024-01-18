@@ -8,7 +8,7 @@ Please read [reduce](./reduce.md) to get the best out of these examples.
 
 #### What is ISB Service?
 An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), which is used to pass data between vertices of a numaflow pipeline.
-Please refer to the doc [Intern-Step Buffer Service](../../../core-concepts/inter-step-buffer.md) for more information on ISB.
+Please refer to the doc [Inter-Step Buffer Service](../../../core-concepts/inter-step-buffer.md) for more information on ISB.
 
 
 #### How to install the ISB Service
@@ -35,6 +35,7 @@ isbsvc-default-js-2                          3/3     Running     0          19s
 ```
 
 ---
+
 **NOTE**
 
 The Source used in the examples is an HTTP source producing messages with values 5 and 10 with event time
@@ -46,9 +47,10 @@ An example will be as follows,
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "5" ${http-source-url}
 curl -kq -X POST -H "x-numaflow-event-time: 60000" -d "10" ${http-source-url}
 ```
+
 ---
 
-## sum pipeline using fixed window
+## Sum Pipeline Using Fixed Window
 
 This is a simple reduce pipeline that just does summation (sum of numbers) but uses fixed window.
 The snippet for the reduce vertex is as follows.
@@ -103,7 +105,7 @@ two different windows with a start time of 60000 and an end time of 120000. So t
 If we had used a non keyed window (`keyed: false`), we would have seen one single output with value
 of 900(300 of odd + 600 of even) for each window.
 
-## sum pipeline using sliding window
+## Sum Pipeline Using Sliding Window
 
 This is a simple reduce pipeline that just does summation (sum of numbers) but uses sliding window.
 The snippet for the reduce vertex is as follows.
@@ -152,7 +154,7 @@ and because the slide duration is 10s, a next set of windows will be created wit
 `Payload -  50  Key -  odd  Start -  10000  End -  70000`, we see 50 here for odd because the
 first window has only 10 elements
 
-## complex reduce pipeline
+## Complex Reduce Pipeline
 
 In the complex reduce example, we will
 
