@@ -1266,31 +1266,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url" class="md-nav__link">
-    curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;5&quot; ${http-source-url}
-curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; ${http-source-url}
-
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#sum-pipeline-using-fixed-window" class="md-nav__link">
-    sum pipeline using fixed window
+    Sum Pipeline Using Fixed Window
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#sum-pipeline-using-sliding-window" class="md-nav__link">
-    sum pipeline using sliding window
+    Sum Pipeline Using Sliding Window
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#complex-reduce-pipeline" class="md-nav__link">
-    complex reduce pipeline
+    Complex Reduce Pipeline
   </a>
   
 </li>
@@ -2185,31 +2176,22 @@ curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; $
 </li>
       
         <li class="md-nav__item">
-  <a href="#curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url" class="md-nav__link">
-    curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;5&quot; ${http-source-url}
-curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; ${http-source-url}
-
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#sum-pipeline-using-fixed-window" class="md-nav__link">
-    sum pipeline using fixed window
+    Sum Pipeline Using Fixed Window
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#sum-pipeline-using-sliding-window" class="md-nav__link">
-    sum pipeline using sliding window
+    Sum Pipeline Using Sliding Window
   </a>
   
 </li>
       
         <li class="md-nav__item">
   <a href="#complex-reduce-pipeline" class="md-nav__link">
-    complex reduce pipeline
+    Complex Reduce Pipeline
   </a>
   
 </li>
@@ -2238,7 +2220,7 @@ curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; $
 <h3 id="inter-step-buffer-service-isb-service">Inter-Step Buffer Service (ISB Service)<a class="headerlink" href="#inter-step-buffer-service-isb-service" title="Permanent link">&para;</a></h3>
 <h4 id="what-is-isb-service">What is ISB Service?<a class="headerlink" href="#what-is-isb-service" title="Permanent link">&para;</a></h4>
 <p>An Inter-Step Buffer Service is described by a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>, which is used to pass data between vertices of a numaflow pipeline.
-Please refer to the doc <a href="../../../../core-concepts/inter-step-buffer/">Intern-Step Buffer Service</a> for more information on ISB.</p>
+Please refer to the doc <a href="../../../../core-concepts/inter-step-buffer/">Inter-Step Buffer Service</a> for more information on ISB.</p>
 <h4 id="how-to-install-the-isb-service">How to install the ISB Service<a class="headerlink" href="#how-to-install-the-isb-service" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
@@ -2262,10 +2244,11 @@ isbsvc-default-js-2<span class="w">                          </span><span class=
 starting from 60000. Please refer to the doc <a href="../../../sources/http/">http source</a> on how to use an HTTP
 source.
 An example will be as follows,</p>
-<h2 id="curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url"><div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;5&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;5&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;10&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
-</code></pre></div><a class="headerlink" href="#curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url" title="Permanent link">&para;</a></h2>
-<h2 id="sum-pipeline-using-fixed-window">sum pipeline using fixed window<a class="headerlink" href="#sum-pipeline-using-fixed-window" title="Permanent link">&para;</a></h2>
+</code></pre></div>
+<hr />
+<h2 id="sum-pipeline-using-fixed-window">Sum Pipeline Using Fixed Window<a class="headerlink" href="#sum-pipeline-using-fixed-window" title="Permanent link">&para;</a></h2>
 <p>This is a simple reduce pipeline that just does summation (sum of numbers) but uses fixed window.
 The snippet for the reduce vertex is as follows.</p>
 <p><img alt="plot" src="../../../../assets/simple-reduce.png" /></p>
@@ -2304,7 +2287,7 @@ two different windows with a start time of 60000 and an end time of 120000. So t
 300(5 * 60) and 600(10 * 60).</p>
 <p>If we had used a non keyed window (<code>keyed: false</code>), we would have seen one single output with value
 of 900(300 of odd + 600 of even) for each window.</p>
-<h2 id="sum-pipeline-using-sliding-window">sum pipeline using sliding window<a class="headerlink" href="#sum-pipeline-using-sliding-window" title="Permanent link">&para;</a></h2>
+<h2 id="sum-pipeline-using-sliding-window">Sum Pipeline Using Sliding Window<a class="headerlink" href="#sum-pipeline-using-sliding-window" title="Permanent link">&para;</a></h2>
 <p>This is a simple reduce pipeline that just does summation (sum of numbers) but uses sliding window.
 The snippet for the reduce vertex is as follows.</p>
 <p><img alt="plot" src="../../../../assets/simple-reduce.png" /></p>
@@ -2340,7 +2323,7 @@ and because the slide duration is 10s, a next set of windows will be created wit
 70000 and an end time of 130000. Since it's a sum operation the output will be 300(5 * 60) and 600(10 * 60).</p>
 <p><code>Payload -  50  Key -  odd  Start -  10000  End -  70000</code>, we see 50 here for odd because the
 first window has only 10 elements</p>
-<h2 id="complex-reduce-pipeline">complex reduce pipeline<a class="headerlink" href="#complex-reduce-pipeline" title="Permanent link">&para;</a></h2>
+<h2 id="complex-reduce-pipeline">Complex Reduce Pipeline<a class="headerlink" href="#complex-reduce-pipeline" title="Permanent link">&para;</a></h2>
 <p>In the complex reduce example, we will</p>
 <ul>
 <li>chain of reduce functions</li>

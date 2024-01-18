@@ -1130,17 +1130,8 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url" class="md-nav__link">
-    curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;5&quot; ${http-source-url}
-curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; ${http-source-url}
-
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#creating-a-simple-map-pipeline" class="md-nav__link">
-    Creating a simple Map pipeline
+    Creating a Simple Map Pipeline
   </a>
   
 </li>
@@ -2171,17 +2162,8 @@ curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; $
 </li>
       
         <li class="md-nav__item">
-  <a href="#curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url" class="md-nav__link">
-    curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;5&quot; ${http-source-url}
-curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; ${http-source-url}
-
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#creating-a-simple-map-pipeline" class="md-nav__link">
-    Creating a simple Map pipeline
+    Creating a Simple Map Pipeline
   </a>
   
 </li>
@@ -2210,7 +2192,7 @@ curl -kq -X POST -H &quot;x-numaflow-event-time: 60000&quot; -d &quot;10&quot; $
 <h3 id="inter-step-buffer-service-isb-service">Inter-Step Buffer Service (ISB Service)<a class="headerlink" href="#inter-step-buffer-service-isb-service" title="Permanent link">&para;</a></h3>
 <h4 id="what-is-isb-service">What is ISB Service?<a class="headerlink" href="#what-is-isb-service" title="Permanent link">&para;</a></h4>
 <p>An Inter-Step Buffer Service is described by a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>, which is used to pass data between vertices of a numaflow pipeline.
-Please refer to the doc <a href="../../../../core-concepts/inter-step-buffer/">Intern-Step Buffer Service</a> for more information on ISB.</p>
+Please refer to the doc <a href="../../../../core-concepts/inter-step-buffer/">Inter-Step Buffer Service</a> for more information on ISB.</p>
 <h4 id="how-to-install-the-isb-service">How to install the ISB Service<a class="headerlink" href="#how-to-install-the-isb-service" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
@@ -2234,10 +2216,11 @@ isbsvc-default-js-2<span class="w">                          </span><span class=
 starting from 60000. Please refer to the doc <a href="../../../sources/http/">http source</a> on how to use an HTTP
 source.
 An example will be as follows,</p>
-<h2 id="curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url"><div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;5&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;5&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 60000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;10&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
-</code></pre></div><a class="headerlink" href="#curl-kq-x-post-h-x-numaflow-event-time-60000-d-5-http-source-url-curl-kq-x-post-h-x-numaflow-event-time-60000-d-10-http-source-url" title="Permanent link">&para;</a></h2>
-<h2 id="creating-a-simple-map-pipeline">Creating a simple Map pipeline<a class="headerlink" href="#creating-a-simple-map-pipeline" title="Permanent link">&para;</a></h2>
+</code></pre></div>
+<hr />
+<h2 id="creating-a-simple-map-pipeline">Creating a Simple Map Pipeline<a class="headerlink" href="#creating-a-simple-map-pipeline" title="Permanent link">&para;</a></h2>
 <p>Now we will walk you through creating a map pipeline. In our example, this is called the <code>even-odd</code> pipeline, illustrated by the following diagram:</p>
 <p><img alt="Pipeline Diagram" src="../../../../assets/even-odd-square.png" /></p>
 <p>There are five vertices in this example of a map pipeline. An <a href="../../../sources/http/">HTTP</a> source vertex which serves an HTTP endpoint to receive numbers as source data, a <a href="../map/">UDF</a> vertex to tag the ingested numbers with the key <code>even</code> or <code>odd</code>, three <a href="../../../sinks/log/">Log</a> sinks, one to print the <code>even</code> numbers, one to print the <code>odd</code> numbers, and the other one to print both the even and odd numbers.</p>
