@@ -82,9 +82,9 @@ func decodeWALHeader(buf io.Reader) (*partition.ID, error) {
 	if err != nil {
 		return nil, err
 	}
-	// read the variadic key
-	var key = make([]rune, hp.SLen)
-	err = binary.Read(buf, binary.LittleEndian, key)
+	// read the variadic slot
+	var slot = make([]rune, hp.SLen)
+	err = binary.Read(buf, binary.LittleEndian, slot)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func decodeWALHeader(buf io.Reader) (*partition.ID, error) {
 	return &partition.ID{
 		Start: time.UnixMilli(hp.S).In(location),
 		End:   time.UnixMilli(hp.E).In(location),
-		Slot:  string(key),
+		Slot:  string(slot),
 	}, nil
 }
 

@@ -121,7 +121,7 @@ type readMessageHeaderPreamble struct {
 //	| start time (int64) | end time (int64) | slot-len (int16) | slot []rune |
 //	+--------------------+------------------+------------------+-------------+
 //
-// We require the key-len because key is variadic.
+// We require the slot-len because slot is variadic.
 func (w *WAL) encodeWALHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	defer func() {
 		if err != nil {

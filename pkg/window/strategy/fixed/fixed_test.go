@@ -178,13 +178,11 @@ func TestFixed_DeleteWindows(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(180 * time.Second))
 
 	// delete one of the windows
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartition(&partition.ID{
-			Start: baseTime,
-			End:   baseTime.Add(60 * time.Second),
-			Slot:  "slot-0",
-		}),
-	})
+	windower.DeleteClosedWindow(window.NewWindowFromPartition(&partition.ID{
+		Start: baseTime,
+		End:   baseTime.Add(60 * time.Second),
+		Slot:  "slot-0",
+	}))
 
 	// since we deleted one of the windows, the closed windows should be 2
 	assert.Equal(t, 2, windower.closedWindows.Len())
