@@ -30,7 +30,12 @@ To add a new **policy**, add a new line in the format:
 p, <user/group>, <namespace>, <resource>, <action>
 ```
 
-The namespace, resource and action can be replaced with "\*" to allow access to all namespaces, resources and actions respectively.
+- User/Group: The user/group requesting access to a resource. This is the identifier extracted from the authentication token, such as a username, email address, or ID. Or could be a group defined in the groups section.
+- Resource: The namespace in the cluster which is being accessed by the user. This can allow for selective access to namespaces.
+- Object : This could be a specific resource in the namespace, such as a pipeline, isbsvc or any event based resource.
+- Action: The action being performed on the resource using the API. These follow the standard HTTP verbs, such as GET, POST, PUT, DELETE, etc.
+
+The namespace, resource and action supports a ***wildcard*** `*` as an allow all function.
 
 Few examples:
 
@@ -44,6 +49,8 @@ Few examples:
 ```
 g, <user>, <group>
 ```
+
+Here user is the identifier extracted from the authentication token, such as a username, email address, or ID. And group is the name of the group to which the user is being added.
 
 These are useful for defining a set of users with the same permissions. The group can be used in the policy definition in place of the user. And thus any user added to the group will have the same permissions as the group.
 
