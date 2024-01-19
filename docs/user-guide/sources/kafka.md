@@ -83,7 +83,7 @@ console-consumer-94457 quickstart-events 0          56              56          
 console-consumer-94457 quickstart-events 1          38              38              0               -               -               -
 console-consumer-94457 quickstart-events 2          4               4               0               -               -               -
 ```
-To achieve that, before the pipeline start, we need to first stop the consumers in the consumer group `console-consumer-94457` because offsets can only be reset if the group 'console-consumer-94457' is inactive. Then, reset the offsets using the desired date and time. The example command below uses UTC time.
+To achieve that, before the pipeline start, we need to first stop the consumers in the consumer group `console-consumer-94457` because offsets can only be reset if the group `console-consumer-94457` is inactive. Then, reset the offsets using the desired date and time. The example command below uses UTC time.
 ```shell
 ➜  kafka_2.13-3.6.1 bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --execute --reset-offsets --group console-consumer-94457 --topic quickstart-events --to-datetime 2024-01-19T19:26:00.000
 
