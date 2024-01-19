@@ -10,6 +10,7 @@ import {
   SummarySectionType,
 } from "../../common/SummaryPageLayout";
 import { usePipelineSummaryFetch } from "../../../utils/fetchWrappers/pipelineFetch";
+import { usePipelineHealthFetch } from "../../../utils/fetchWrappers/pipelineHealthFetch";
 import { PipelineStatus } from "./partials/PipelineStatus";
 import { PipelineSummaryStatus } from "./partials/PipelineSummaryStatus";
 import { PipelineISBStatus } from "./partials/PipelineISBStatus";
@@ -17,7 +18,7 @@ import { PipelineISBSummaryStatus } from "./partials/PipelineISBSummaryStatus";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
-import { UNKNOWN } from "../../../utils";
+import { GetConsolidatedHealthStatus, UNKNOWN } from "../../../utils";
 import { SidebarType } from "../../common/SlidingSidebar";
 
 import "./style.css";
@@ -52,10 +53,18 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
     refresh: graphRefresh,
   } = usePipelineViewFetch(namespaceId, pipelineId, addError);
 
+  const {
+    data: healthData,
+    loading: healthLoading,
+    error: healthError,
+    refresh: healthRefresh,
+  } = usePipelineHealthFetch({ namespaceId, pipelineId, addError });
+
   const refresh = useCallback(() => {
     graphRefresh();
     summaryRefresh();
-  }, [graphRefresh, summaryRefresh]);
+    healthRefresh();
+  }, [graphRefresh, summaryRefresh, healthRefresh]);
 
   const handleK8sEventsClick = useCallback(() => {
     if (!namespaceId || !pipelineId || !setSidebarProps) {
@@ -79,8 +88,20 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
     });
   }, [namespaceId, pipelineId, setSidebarProps, vertices]);
 
+  const getHealth = useCallback(
+    (pipelineStatus: string) => {
+      const { resourceHealthStatus, dataHealthStatus } = healthData;
+      return GetConsolidatedHealthStatus(
+        pipelineStatus,
+        resourceHealthStatus,
+        dataHealthStatus
+      );
+    },
+    [healthData]
+  );
+
   const summarySections: SummarySection[] = useMemo(() => {
-    if (summaryLoading) {
+    if (summaryLoading || healthLoading) {
       return [
         {
           type: SummarySectionType.CUSTOM,
@@ -93,7 +114,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
         },
       ];
     }
-    if (error) {
+    if (error || healthError) {
       return [
         {
           type: SummarySectionType.CUSTOM,
@@ -101,7 +122,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
             <ErrorDisplay
               key="pipeline-summary-error"
               title="Error loading pipeline summary"
-              message={error}
+              message={error || healthError || ""}
             />
           ),
         },
@@ -113,6 +134,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
     const pipelineData = data?.pipelineData;
     const isbData = data?.isbData;
     const pipelineStatus = pipelineData?.pipeline?.status?.phase || UNKNOWN;
+    const pipelineHealthStatus = getHealth(pipelineStatus);
     return [
       // pipeline collection
       {
@@ -120,7 +142,8 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
         customComponent: (
           <PipelineStatus
             status={pipelineStatus}
-            healthStatus={pipelineData?.status}
+            healthStatus={pipelineHealthStatus}
+            healthData={healthData}
             key={"pipeline-status"}
           />
         ),
@@ -165,7 +188,16 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
         ),
       },
     ];
-  }, [summaryLoading, error, data, pipelineId, refresh]);
+  }, [
+    summaryLoading,
+    error,
+    data,
+    pipelineId,
+    refresh,
+    healthData,
+    healthLoading,
+    healthError,
+  ]);
 
   const content = useMemo(() => {
     if (pipelineErr || buffersErr) {

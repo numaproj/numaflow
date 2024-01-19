@@ -16,6 +16,8 @@ limitations under the License.
 
 package v1
 
+import dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+
 // ActiveStatus contains the number of objects in healthy, warning, and critical status.
 type ActiveStatus struct {
 	Healthy  int `json:"Healthy"`
@@ -28,11 +30,11 @@ func (as *ActiveStatus) isEmpty() bool {
 }
 
 func (as *ActiveStatus) increment(status string) {
-	if status == PipelineStatusHealthy {
+	if status == dfv1.PipelineStatusHealthy {
 		as.Healthy++
-	} else if status == PipelineStatusWarning {
+	} else if status == dfv1.PipelineStatusWarning {
 		as.Warning++
-	} else if status == PipelineStatusCritical {
+	} else if status == dfv1.PipelineStatusCritical {
 		as.Critical++
 	}
 }
