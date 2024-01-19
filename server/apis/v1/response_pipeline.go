@@ -18,16 +18,6 @@ package v1
 
 import "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 
-const (
-	PipelineStatusHealthy   = "healthy"
-	PipelineStatusCritical  = "critical"
-	PipelineStatusWarning   = "warning"
-	PipelineStatusInactive  = "inactive"
-	PipelineStatusUnknown   = "unknown"
-	PipelineStatusDeleting  = "deleting"
-	PipelineStatusUnhealthy = "unhealthy"
-)
-
 // Pipelines is a list of pipelines
 type Pipelines []PipelineInfo
 
