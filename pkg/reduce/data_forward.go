@@ -404,14 +404,12 @@ func (df *DataForward) writeMessagesToWindows(ctx context.Context, messages []*i
 
 messagesLoop:
 	for i, message := range messages {
-		if df.shouldDropMessage(message) {
-			writtenMessages = append(writtenMessages, message)
-			continue
+		var windowOperations []*window.TimedWindowRequest
+		if message.IsLate {
+			windowOperations = df.handleLateMessage(message)
+		} else {
+			windowOperations = df.handleOnTimeMessage(message)
 		}
-
-		// identify and add window for the message
-		windowOperations := df.windower.AssignWindows(message)
-
 		// for each window we will have a PBQ. A message could belong to multiple windows (e.g., sliding).
 		// We need to write the messages to these PBQs
 		for _, winOp := range windowOperations {
@@ -426,42 +424,53 @@ messagesLoop:
 			}
 		}
 
+		// even if the message is late and dropped, we still consider it written
+		// so that the messages will be acked. Because we don't have to persist
+		// the late messages.
 		writtenMessages = append(writtenMessages, message)
 	}
 	return writtenMessages, failedMessages, err
 }
 
-func (df *DataForward) shouldDropMessage(message *isb.ReadMessage) bool {
-	if message.IsLate {
-		// we should be able to get the late message in as long as there is an open window
-		nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
-		// if there is no window open, drop the message
-		if nextWinAsSeenByWriter == nil || df.windower.Type() == window.Unaligned {
-			df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
-			return true
-		} else if message.EventTime.Before(nextWinAsSeenByWriter.StartTime()) { // if the message doesn't fall in the next window that is about to be closed drop it.
-			df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
-			metrics.ReduceDroppedMessagesCount.With(map[string]string{
-				metrics.LabelVertex:             df.vertexName,
-				metrics.LabelPipeline:           df.pipelineName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-				metrics.LabelReason:             "late"}).Inc()
-			return true
+func (df *DataForward) handleLateMessage(message *isb.ReadMessage) []*window.TimedWindowRequest {
+	lateMessageWindowRequests := make([]*window.TimedWindowRequest, 0)
+	// we should be able to get the late message in as long as there is an open window
+	// for unaligned windows, we never consider late messages, we always drop them
+	if df.windower.Type() == window.Unaligned {
+		return lateMessageWindowRequests
+	}
 
-			// mark it as a successfully written message as the message will be acked to avoid subsequent retries
-		} else { // if the message falls in the next window that is about to be closed, keep it
-			df.log.Debugw("Keeping the late message for next condition check because COB has not happened yet", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed.startTime", nextWinAsSeenByWriter.StartTime().UnixMilli()))
-		}
+	nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
+	// if there is no window open, drop the message
+	if nextWinAsSeenByWriter == nil {
+		df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+		return lateMessageWindowRequests
+	}
+	// if the message doesn't fall in the next window that is about to be closed drop it.
+	if message.EventTime.Before(nextWinAsSeenByWriter.StartTime()) {
+		df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
+		return lateMessageWindowRequests
 	}
 
 	// We will accept data as long as window is open. If a straggler (late data) makes in before the window is closed,
 	// it is accepted.
+	// since the window is not closed yet, we can send an append request.
+	lateMessageWindowRequests = append(lateMessageWindowRequests, &window.TimedWindowRequest{
+		Operation:   window.Append,
+		ReadMessage: message,
+		ID:          nextWinAsSeenByWriter.Partition(),
+		Windows:     []window.TimedWindow{nextWinAsSeenByWriter},
+	})
 
+	return lateMessageWindowRequests
+}
+
+func (df *DataForward) handleOnTimeMessage(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	// NOTE(potential bug): if we get a message where the event-time is < (watermark-allowedLateness), skip processing the message.
 	// This could be due to a couple of problem, eg. ack was not registered, etc.
 	// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
 	// to be violated.
-	if !message.IsLate && message.EventTime.Before(message.Watermark.Add(-1*df.opts.allowedLateness)) {
+	if message.EventTime.Before(message.Watermark.Add(-1 * df.opts.allowedLateness)) {
 		// TODO: track as a counter metric
 		df.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
 		// mark it as a successfully written message as the message will be acked to avoid subsequent retries
@@ -472,10 +481,11 @@ func (df *DataForward) shouldDropMessage(message *isb.ReadMessage) bool {
 			metrics.LabelPipeline:           df.pipelineName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 			metrics.LabelReason:             "watermark_issue"}).Inc()
-		return true
+		return []*window.TimedWindowRequest{}
 	}
 
-	return false
+	// for on time messages, we can invoke the assign windows function directly
+	return df.windower.AssignWindows(message)
 }
 
 // writeToPBQ writes to the PBQ. It will return error only if it is not failing to write to PBQ and is in a continuous
