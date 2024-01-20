@@ -432,10 +432,12 @@ messagesLoop:
 	return writtenMessages, failedMessages, err
 }
 
+// handleLateMessage handles the late message and returns the timed window requests to be written to PBQ.
+// if the message is dropped, it returns an empty slice.
 func (df *DataForward) handleLateMessage(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	lateMessageWindowRequests := make([]*window.TimedWindowRequest, 0)
 	// we should be able to get the late message in as long as there is an open window
-	// for unaligned windows, we never consider late messages, we always drop them
+	// for unaligned windows, we never consider late messages since the windows are not aligned.
 	if df.windower.Type() == window.Unaligned {
 		return lateMessageWindowRequests
 	}
@@ -465,6 +467,7 @@ func (df *DataForward) handleLateMessage(message *isb.ReadMessage) []*window.Tim
 	return lateMessageWindowRequests
 }
 
+// handleOnTimeMessage handles the on-time message and returns the timed window requests to be written to PBQ.
 func (df *DataForward) handleOnTimeMessage(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	// NOTE(potential bug): if we get a message where the event-time is < (watermark-allowedLateness), skip processing the message.
 	// This could be due to a couple of problem, eg. ack was not registered, etc.
@@ -484,7 +487,6 @@ func (df *DataForward) handleOnTimeMessage(message *isb.ReadMessage) []*window.T
 		return []*window.TimedWindowRequest{}
 	}
 
-	// for on time messages, we can invoke the assign windows function directly
 	return df.windower.AssignWindows(message)
 }
 
