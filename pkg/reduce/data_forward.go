@@ -460,6 +460,7 @@ func (df *DataForward) handleLateMessage(message *isb.ReadMessage) []window.Alig
 }
 
 // handleOnTimeMessage handles the on time message and returns an array of window.AlignedKeyedWindower to which the message belongs.
+// FIXME: this code works only fir FIXED window and not for Sliding window.
 func (df *DataForward) handleOnTimeMessage(message *isb.ReadMessage) []window.AlignedKeyedWindower {
 	// NOTE(potential bug): if we get a message where the event-time is < (watermark-allowedLateness), skip processing the message.
 	// This could be due to a couple of problem, eg. ack was not registered, etc.
