@@ -437,7 +437,8 @@ messagesLoop:
 func (df *DataForward) handleLateMessage(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	lateMessageWindowRequests := make([]*window.TimedWindowRequest, 0)
 	// we should be able to get the late message in as long as there is an open window
-	// for unaligned windows, we never consider late messages since the windows are not aligned.
+	// for unaligned windows, we never consider late messages since it will expand the existing window, which is not the ideal behavior
+	// (for aligned, the windows start and end are fixed).
 	if df.windower.Type() == window.Unaligned {
 		return lateMessageWindowRequests
 	}
