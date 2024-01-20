@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.4 (2024-01-20)
+
+ * [7ffb521b](https://github.com/numaproj/numaflow/commit/7ffb521bcc15612d04fe66de33d199e8c8391a7a) Update manifests to v1.1.4
+ * [de780b95](https://github.com/numaproj/numaflow/commit/de780b95da57437ceb4fc5d7bc77619c7e9deb2d) fix: bug in late message handling for sliding window (#1472)
+
+### Contributors
+
+ * Derek Wang
+ * Yashash H L
+
 ## v1.1.3 (2024-01-14)
 
  * [0b96acf9](https://github.com/numaproj/numaflow/commit/0b96acf9ba9b478e7284e6b5724822ac26a09ba8) Update manifests to v1.1.3
