@@ -114,8 +114,9 @@ nav:
           - UI Server:
             - UI Server Access Path: "operations/ui-access-path.md"
             - Authentication:
+              - Overview: "operations/authn/authentication.md"
+              - SSO with Dex: "operations/authn/dex.md"
               - Local Users: "operations/authn/local-users.md"
-              - Dex: "operations/authn/dex.md"
             - Authorization: "operations/authz/rbac.md"
           - operations/metrics/metrics.md
           - operations/grafana.md
@@ -128,6 +129,7 @@ nav:
           - specifications/autoscaling.md
           - Edges, Buffers and Buckets: "specifications/edges-buffers-buckets.md"
           - Side Inputs: "specifications/side-inputs.md"
+          - UI Authorization: "specifications/authorization.md"
       - development/debugging.md
       - development/static-code-analysis.md
       - development/releasing.md

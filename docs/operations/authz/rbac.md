@@ -1,28 +1,27 @@
-## **Configuring AuthZ in Numaflow**
+# Authorization
 
-We utilize a role-based access control (RBAC) model to manage authorization in Numaflow. Along with this we use Casbin as the library for the implementation of these policies.
+Numaflow UI utilizes a role-based access control (RBAC) model to manage authorization, the RBAC policy and permissions are defined in the ConfigMap `numaflow-server-rbac-config`.
 
-The current RBAC policy and permissions are defined in the file [numaflow-server-rbac-config.yaml](https://github.com/numaproj/numaflow/blob/main/config/base/numaflow-server/numaflow-server-rbac-config.yaml). This file is loaded into the Casbin enforcer and used to enforce the policies.
+There are two main sections in the ConfigMap.
 
-There are two main sections in the file:
+## Rules
 
-1. **Rules section**:
-
-Policies and groups are the two main entities defined in this section.
-Both of them work in conjunction with each other. The groups are used to define a set of users with the same permissions and the policies are used to define the specific permissions for these users or groups. 
-
+`Policies` and `groups` are the two main entities defined in rules section, both of them work in conjunction with each other. The `groups` are used to define a set of users with the same permissions and the `policies` are used to define the specific permissions for these users or groups.
 
 ```
 # Policies go here
 p, role:admin, *, *, *
 p, role:readonly, *, *, GET
+
 # Groups go here
-# g, admin, role:admin
-# g, my-github-org:my-github-team, role:readonly
+g, admin, role:admin
+g, my-github-org:my-github-team, role:readonly
 ```
-Here we have defined two policies for the custom groups `role:admin` and `role:readonly`. 
-- The first policy allows the group role:admin to access all resources in all namespaces with all actions.
-- The second policy allows the group role:readonly to access all resources in all namespaces with the GET action.
+
+Here we have defined two policies for the custom groups `role:admin` and `role:readonly`.
+
+- The first policy allows the group `role:admin` to access all resources in all namespaces with all actions.
+- The second policy allows the group `role:readonly` to access all resources in all namespaces with the `GET` action.
 
 To add a new **policy**, add a new line in the format:
 
@@ -30,12 +29,12 @@ To add a new **policy**, add a new line in the format:
 p, <user/group>, <namespace>, <resource>, <action>
 ```
 
-- User/Group: The user/group requesting access to a resource. This is the identifier extracted from the authentication token, such as a username, email address, or ID. Or could be a group defined in the groups section.
-- Resource: The namespace in the cluster which is being accessed by the user. This can allow for selective access to namespaces.
-- Object : This could be a specific resource in the namespace, such as a pipeline, isbsvc or any event based resource.
-- Action: The action being performed on the resource using the API. These follow the standard HTTP verbs, such as GET, POST, PUT, DELETE, etc.
+- `User/Group`: The user/group requesting access to a resource. This is the identifier extracted from the authentication token, such as a username, email address, or ID. Or could be a group defined in the groups section.
+- `Resource`: The namespace in the cluster which is being accessed by the user. This can allow for selective access to namespaces.
+- `Object` : This could be a specific resource in the namespace, such as a pipeline, isbsvc or any event based resource.
+- `Action`: The action being performed on the resource using the API. These follow the standard HTTP verbs, such as GET, POST, PUT, DELETE, etc.
 
-The namespace, resource and action supports a ***wildcard*** `*` as an allow all function.
+The namespace, resource and action supports a **_wildcard_** `*` as an allow all function.
 
 Few examples:
 
@@ -59,7 +58,9 @@ Few examples:
 - a group line `g, test@test.com, role:readonly` would add the user with the given email address to the group role:readonly.
 - a group line `g, test_user, role:admin` would add the user with the given username to the group role:admin.
 
-2. **Configuration**: This defines certain properties for the Casbin enforcer. The properties are defined in the following format:
+## Configuration
+
+This defines certain properties for the Casbin enforcer. The properties are defined in the following format:
 
 ```
   rbac-conf.yaml: |
@@ -79,9 +80,4 @@ Multiple scopes can be provided as a comma-separated, e.g `"groups,email,usernam
 
 This scope information is used to extract the user information from the token and then used to enforce the policies. Thus is it important to have the rules defined in the above section to map with the scopes expected in the configuration.
 
-
 **Note**: The rbac-conf.yaml file can be updated during runtime and the changes will be reflected immediately. This is useful for changing the default role for all users or adding a new scope to be used for rbac enforcement.
-
-### Additional Resources
-
-- [Casbin Documentation](https://casbin.org/)

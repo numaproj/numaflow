@@ -1,23 +1,21 @@
-## Dex Server
+# Dex Server
 
-Numaflow currently installs with a [Dex](https://github.com/dexidp/dex) Server for authentication integration. Currently,
-the only supported identity provider is Github. SSO configuration of Numaflow UI will require editing a few files
+Numaflow comes with a [Dex](https://github.com/dexidp/dex) Server for authentication integration. Currently,
+the supported identity provider is Github. SSO configuration of Numaflow UI will require editing some configuration
 detailed below.
 
-### 1. Register application for Github
+## 1. Register application for Github
 
-In Github, register a new OAuth application. If you are using a different `baseHref` for your installation, you must include this in the homepage URL only.
-The callback address should be the homepage of your Numaflow UI + `/dex/callback`. In most cases this should be `https://localhost:8443/dex/callback`.
+In Github, register a new OAuth application. The callback address should be the homepage of your Numaflow UI + `/dex/callback`.
 
 After registering this application, you will be given a client ID. You will need this value and also generate
 a new client secret.
 
 ![Register OAuth App](../../assets/creating-application-github.png "Register OAuth App")
 
-### 2. Configuring Numaflow
+## 2. Configuring Numaflow
 
-First we need to configure `server.disable.auth` to `false` in the ConfigMap `numaflow-cmd-params-config` at `config/base/shared-config/numaflow-cmd-params-config.yaml`.
-This will enable authorization and authentication for the UX server.
+First we need to configure `server.disable.auth` to `false` in the ConfigMap `numaflow-cmd-params-config`. This will enable authentication and authorization for the UX server.
 
 ```yaml
 apiVersion: v1
@@ -30,9 +28,7 @@ data:
   #
 ```
 
-Next we need to configure the `numaflow-dex-server-config` ConfigMap at `config/base/dex/numaflow-dex-server-configmap.yaml`.
-Change `<ORG_NAME>` to your organization you created the application under and include the correct teams.
-This file will be read by the init container of the Dex server and generate the config it will server.
+Next we need to configure the `numaflow-dex-server-config` ConfigMap. Change `<ORG_NAME>` to your organization you created the application under and include the correct teams. This file will be read by the init container of the Dex server and generate the config it will server.
 
 ```yaml
 kind: ConfigMap
@@ -56,8 +52,7 @@ data:
           - readonly
 ```
 
-Finally we will need to create/update the `numaflow-dex-secrets` Secret.
-You will need to add the client ID and secret you created earlier for the application here.
+Finally we will need to create/update the `numaflow-dex-secrets` Secret. You will need to add the client ID and secret you created earlier for the application here.
 
 ```yaml
 apiVersion: v1
@@ -70,7 +65,7 @@ stringData:
   dex-github-client-secret: <GITHUB_CLIENT_SECRET>
 ```
 
-### 3. Restarting Pods
+## 3. Restarting Pods
 
 If you are enabling/disabling authorization and authentication for the Numaflow server, it will need to be restarted.
 
