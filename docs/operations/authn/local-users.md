@@ -16,7 +16,7 @@ otherwise they will fall back to the default policy specified by `policy.default
 Numaflow comes with a built-in `admin` user that has full access to the system.
 It is recommended to use `admin` user for initial configuration then switch to local users or configure SSO integration.
 
-## Accessing admin user
+## Accessing with admin user
 
 A built-in `admin` user comes with a randomly generated password that is stored in `numaflow-server-secrets` Secret:
 
