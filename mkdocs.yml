@@ -112,7 +112,7 @@ nav:
       - Configuration:
           - Controller Configuration: "operations/controller-configmap.md"
           - UI Server:
-            - UI Server Access Path: "operations/ui-access-path.md"
+            - Access Path: "operations/ui-access-path.md"
             - Authentication:
               - Overview: "operations/authn/authentication.md"
               - SSO with Dex: "operations/authn/dex.md"
