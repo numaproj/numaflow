@@ -40,4 +40,4 @@ The policy model for us follows the following structure for all policies defined
 - Object : This could be a specific resource in the namespace, such as a pipeline, isbsvc or any event based resource. We have wildcard "\*" to allow access to all resources.
 - Action: The action being performed on the resource using the API. These follow the standard HTTP verbs, such as GET, POST, PUT, DELETE, etc. We have wildcard "\*" to allow access to all actions.
 
-Refer to the [RBAC](../operations/authz/rbac.md) to learn more about how to configure authorization policies for Numaflow UI.
+Refer to the [RBAC](../operations/ui/authz/rbac.md) to learn more about how to configure authorization policies for Numaflow UI.
