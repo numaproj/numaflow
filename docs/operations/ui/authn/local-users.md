@@ -1,15 +1,17 @@
 # Local Users
 
-In addition to the authentication using Dex, we also provide an authentication mechanism for local user based on JSON Web Token(JWT).
+In addition to the authentication using Dex, we also provide an authentication mechanism for local user based on JSON 
+Web Token (JWT).
 
-![Login UI](../../assets/login_ui.png "Login UI")
+![Login UI](../../../assets/login_ui.png "Login UI")
 
 ---
 
 #### NOTE
 
 When you create local users, each of those users will need additional [RBAC](../authz/rbac.md) rules set up,
-otherwise they will fall back to the default policy specified by `policy.default` field of the `numaflow-server-rbac-config` ConfigMap.
+otherwise they will fall back to the default policy specified by `policy.default` field of the `numaflow-server-rbac-config`
+ConfigMap.
 
 ---
 
