@@ -19,7 +19,7 @@ spec:
       udf:
         container:
           # compute the sum, see TODO
-          image: quay.io/numaio/numaflow-java/reduce-stream-sum:keran-0.6.5
+          image: quay.io/numaio/numaflow-java/reduce-stream-sum:v0.6.0
         groupBy:
           window:
             fixed:
