@@ -29,19 +29,19 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
-type SessionSuite struct {
+type ReduceSDKSuite struct {
 	E2ESuite
 }
 
-func (s *SessionSuite) TestReduceStreamGo() {
+func (s *ReduceSDKSuite) TestReduceStreamGo() {
 	s.testReduceStream("go")
 }
 
-func (s *SessionSuite) TestReduceStreamJava() {
+func (s *ReduceSDKSuite) TestReduceStreamJava() {
 	s.testReduceStream("java")
 }
 
-func (s *SessionSuite) testReduceStream(lang string) {
+func (s *ReduceSDKSuite) testReduceStream(lang string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := s.Given().Pipeline(fmt.Sprintf("@testdata/reduce-stream/reduce-stream-%s.yaml", lang)).
@@ -82,5 +82,5 @@ func (s *SessionSuite) testReduceStream(lang string) {
 // FIXME(session): add test for keyed session window
 
 func TestSessionSuite(t *testing.T) {
-	suite.Run(t, new(SessionSuite))
+	suite.Run(t, new(ReduceSDKSuite))
 }

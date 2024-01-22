@@ -108,7 +108,6 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 		for {
 			select {
 			case <-ctx.Done():
-				print("kerantest - i am returning without closing the send stream.")
 				return
 			case datum, ok := <-datumStreamCh:
 				if !ok {
@@ -120,12 +119,10 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 			}
 		}
 		// close the stream after sending all the messages
-		print("kerantest - i am closing the send stream.")
 		sendErr = stream.CloseSend()
 		if sendErr != nil {
 			errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
 		}
-		print("kerantest - i am here at the end of the read goroutine.")
 	}()
 
 	// read the response from the server stream and send it to responseCh channel
@@ -140,10 +137,8 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 				return
 			default:
 				resp, recvErr = stream.Recv()
-				print("kerantest - i received a response from the stream.")
 				// if the stream is closed, close the responseCh return
 				if recvErr == io.EOF {
-					print("kerantest - i received a recvErr EOF response from the stream.")
 					// nil channel will never be selected
 					errCh = nil
 					close(responseCh)
