@@ -153,6 +153,8 @@ type unalignedTimedWindow struct {
 }
 
 // NewUnalignedTimedWindow returns a new TimedWindow for the given start time, end time, slot and keys.
+// We track the keys for Unaligned windows. Because for unaligned windows the start and end times for
+// each window are only dependent on the specific key.
 func NewUnalignedTimedWindow(st time.Time, et time.Time, slot string, keys []string) TimedWindow {
 	return &unalignedTimedWindow{
 		startTime: st,
