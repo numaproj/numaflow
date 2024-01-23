@@ -145,7 +145,7 @@ readLoop:
 			// FIXME: support for session window
 			var w window.TimedWindow
 			if p.windowType == window.Aligned {
-				w = window.NewWindowFromPartition(&p.PartitionID)
+				w = window.NewAlignedTimedWindow(p.PartitionID.Start, p.PartitionID.End, p.PartitionID.Slot)
 			} else {
 				p.log.Errorw("unAligned window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowType))
 			}
