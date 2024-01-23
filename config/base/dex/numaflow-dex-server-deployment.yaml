@@ -16,6 +16,32 @@ spec:
         app.kubernetes.io/component: dex-server
     spec:
       serviceAccountName: numaflow-dex-server
+      initContainers:
+      - name: dex-init
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        args:
+        - dex-server-init
+        volumeMounts:
+        - mountPath: /cfg
+          name: connector-config
+        - mountPath: /tls
+          name: tls
+        - mountPath: /tmp
+          name: generated-dex-config
+        env:
+        - name: NUMAFLOW_SERVER_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              name: numaflow-cmd-params-config
+              key: server.address
+              optional: true
+        - name: NUMAFLOW_SERVER_BASE_HREF
+          valueFrom:
+            configMapKeyRef:
+              name: numaflow-cmd-params-config
+              key: server.base.href
+              optional: true
       containers:
         - name: dex
           image: dexidp/dex:v2.37.0
@@ -24,8 +50,15 @@ spec:
           ports:
             - containerPort: 5556
           volumeMounts:
-            - mountPath: /etc/numaflow/dex/cfg
-              name: config
+            - mountPath: /etc/numaflow/dex/cfg/config.yaml
+              name: generated-dex-config
+              subPath: config.yaml
+            - mountPath: /etc/numaflow/dex/tls/tls.crt
+              name: tls
+              subPath: tls.crt
+            - mountPath: /etc/numaflow/dex/tls/tls.key
+              name: tls
+              subPath: tls.key
           env:
             - name: GITHUB_CLIENT_ID
               valueFrom:
@@ -38,9 +71,13 @@ spec:
                   name: numaflow-dex-secrets
                   key: dex-github-client-secret
       volumes:
-        - name: config
+        - name: connector-config
           configMap:
             name: numaflow-dex-server-config
             items:
               - key: config.yaml
                 path: config.yaml
+        - name: tls
+          emptyDir: {}
+        - name: generated-dex-config
+          emptyDir: {}

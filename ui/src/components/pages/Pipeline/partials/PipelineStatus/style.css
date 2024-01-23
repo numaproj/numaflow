@@ -9,3 +9,8 @@
     font-weight: 400;
     margin-top: 0.125rem;
 }
+
+.health-tooltip-text {
+    display: flex;
+    flex-direction: column;
+}
