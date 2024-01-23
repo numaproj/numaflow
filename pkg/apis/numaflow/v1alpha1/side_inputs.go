@@ -115,7 +115,7 @@ func (si SideInput) getInitContainer(pipeline Pipeline, req GetSideInputDeployme
 		Env:             req.Env,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       standardResources,
+		Resources:       *standardResources.DeepCopy(),
 		Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
 	c.Args = append(c.Args, "--side-inputs-store="+pipeline.GetSideInputsStoreName())
@@ -144,7 +144,7 @@ func (si SideInput) getNumaContainer(pipeline Pipeline, req GetSideInputDeployme
 		Env:             envVars,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       standardResources,
+		Resources:       *standardResources.DeepCopy(),
 		Args:            []string{"side-inputs-manager", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + pipeline.GetSideInputsStoreName()},
 	}
 	if x := pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.ContainerTemplate != nil {
