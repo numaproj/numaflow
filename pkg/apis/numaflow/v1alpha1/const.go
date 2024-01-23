@@ -165,6 +165,9 @@ const (
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 
+	// KeysDelimitter is the delimitter used to join keys
+	KeysDelimitter = ":"
+
 	// UDF map streaming
 	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
 
