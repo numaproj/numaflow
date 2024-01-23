@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.5 (2024-01-23)
+
+ * [e5bcf32e](https://github.com/numaproj/numaflow/commit/e5bcf32e345454c577ecdd8a17e48e44d546730b) Update manifests to v1.1.5
+ * [266cb227](https://github.com/numaproj/numaflow/commit/266cb2276d29c3ddbfd5cdb5ce16f9a50da62042) fix(controller): incorrect cpu/mem resources calculation (#1477)
+
+### Contributors
+
+ * Derek Wang
+
 ## v1.1.4 (2024-01-20)
 
  * [7ffb521b](https://github.com/numaproj/numaflow/commit/7ffb521bcc15612d04fe66de33d199e8c8391a7a) Update manifests to v1.1.4
