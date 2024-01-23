@@ -16,6 +16,7 @@ limitations under the License.
 package sliding
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -126,6 +127,7 @@ func TestSliding_InsertWindow(t *testing.T) {
 		startTime: time.UnixMilli(60000),
 		endTime:   time.UnixMilli(60000 + 60*1000),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", 60000, 60000+60*1000, "slot-0"),
 	}
 
 	windower := &Windower{
@@ -162,14 +164,19 @@ func TestSliding_CloseWindows(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-10*time.Second).UnixMilli(), baseTime.Add(50*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-20*time.Second).UnixMilli(), baseTime.Add(40*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := NewWindower(60*time.Second, 10*time.Second, keyedVertex)
@@ -204,14 +211,19 @@ func TestSliding_DeleteWindows(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-10*time.Second).UnixMilli(), baseTime.Add(50*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-20*time.Second).UnixMilli(), baseTime.Add(40*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{
@@ -230,11 +242,17 @@ func TestSliding_DeleteWindows(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(120 * time.Second))
 
 	// delete one of the windows
-	windower.DeleteClosedWindow(window.NewWindowFromPartition(&partition.ID{
-		Start: baseTime,
-		End:   baseTime.Add(60 * time.Second),
-		Slot:  "slot-0",
-	}))
+	windower.DeleteClosedWindow(&slidingWindow{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
+		partition: &partition.ID{
+			Slot:  "slot-0",
+			Start: baseTime,
+			End:   baseTime.Add(60 * time.Second),
+		},
+	})
 
 	// since we deleted one of the windows, the closed windows should be 2
 	assert.Equal(t, 2, windower.closedWindows.Len())
@@ -247,14 +265,19 @@ func TestSliding_OldestClosedWindowEndTime(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-10*time.Second).UnixMilli(), baseTime.Add(50*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-20*time.Second).UnixMilli(), baseTime.Add(40*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{
@@ -283,14 +306,19 @@ func TestSliding_NextWindowToBeClosed(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-10*time.Second).UnixMilli(), baseTime.Add(50*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-20*time.Second).UnixMilli(), baseTime.Add(40*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{
