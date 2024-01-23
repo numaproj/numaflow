@@ -163,7 +163,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 		// create a window for each partition and insert it to the windower
 		// so that the window can be closed when the watermark
 		// crosses the window.
-		var timedWindow = window.NewWindowFromPartition(&p)
+		var timedWindow = window.NewAlignedTimedWindow(p.Start, p.End, p.Slot)
 
 		df.windower.InsertWindow(timedWindow)
 

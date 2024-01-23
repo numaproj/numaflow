@@ -217,12 +217,10 @@ func parseSessionReduceResponse(response *sessionreducepb.SessionReduceResponse)
 
 	return &window.TimedWindowResponse{
 		WriteMessage: taggedMessage,
-		Window: window.NewWindowFromPartitionAndKeys(
-			&partition.ID{
-				Start: time.UnixMilli(response.GetKeyedWindow().GetStart().AsTime().UnixMilli()),
-				End:   time.UnixMilli(response.GetKeyedWindow().GetEnd().AsTime().UnixMilli()),
-				Slot:  response.GetKeyedWindow().GetSlot(),
-			},
+		Window: window.NewUnalignedTimedWindow(
+			response.GetKeyedWindow().GetStart().AsTime(),
+			response.GetKeyedWindow().GetEnd().AsTime(),
+			response.GetKeyedWindow().GetSlot(),
 			response.GetKeyedWindow().GetKeys(),
 		),
 		EOF: response.GetEOF(),

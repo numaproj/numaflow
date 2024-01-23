@@ -103,8 +103,7 @@ func (s *SortedWindowListByEndTime) InsertIfNotPresent(window TimedWindow) (Time
 
 	// Check if the window is already present in the list
 	for i := index; i < len(s.windows); i++ {
-		if s.windows[i].Partition().String() == window.Partition().String() &&
-			compareKeys(s.windows[i].Keys(), window.Keys()) {
+		if s.windows[i].ID() == window.ID() {
 			return s.windows[i], true
 		}
 
@@ -136,8 +135,7 @@ func (s *SortedWindowListByEndTime) Delete(window TimedWindow) (deleted bool) {
 
 	// Delete the window if it is present in the list
 	for i := index; i < len(s.windows); i++ {
-		if s.windows[i].Partition().String() == window.Partition().String() &&
-			compareKeys(s.windows[i].Keys(), window.Keys()) {
+		if s.windows[i].ID() == window.ID() {
 			s.windows = append(s.windows[:i], s.windows[i+1:]...)
 			deleted = true
 			break
