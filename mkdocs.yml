@@ -111,10 +111,15 @@ nav:
       - Validating Webhook: operations/validating-webhook.md
       - Configuration:
           - Controller Configuration: "operations/controller-configmap.md"
-          - UI Server Access Path: "operations/ui-access-path.md"
+          - UI Server:
+            - Access Path: "operations/ui/ui-access-path.md"
+            - Authentication:
+              - Overview: "operations/ui/authn/authentication.md"
+              - SSO with Dex: "operations/ui/authn/dex.md"
+              - Local Users: "operations/ui/authn/local-users.md"
+            - Authorization: "operations/ui/authz/rbac.md"
           - operations/metrics/metrics.md
           - operations/grafana.md
-          - Dex Server: "operations/dex.md"
       - Security: operations/security.md          
   - Contributor Guide:
       - development/development.md
@@ -124,6 +129,7 @@ nav:
           - specifications/autoscaling.md
           - Edges, Buffers and Buckets: "specifications/edges-buffers-buckets.md"
           - Side Inputs: "specifications/side-inputs.md"
+          - UI Authorization: "specifications/authorization.md"
       - development/debugging.md
       - development/static-code-analysis.md
       - development/releasing.md
