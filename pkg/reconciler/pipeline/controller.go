@@ -844,8 +844,13 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 			scaleTo := replicas
 			// if vtx does not support autoscaling and min is set, scale up to min
 			if replicas == 1 {
-				if !vertex.Scalable() && vertex.Spec.Scale.Min != nil && *vertex.Spec.Scale.Min > 1 {
-					scaleTo = *vertex.Spec.Scale.Min
+				if !vertex.Scalable() {
+					// reduce UDF uses partition count to determine replica count
+					if vertex.IsReduceUDF() {
+						scaleTo = int32(vertex.GetPartitionCount())
+					} else if vertex.Spec.Scale.Min != nil && *vertex.Spec.Scale.Min > 1 {
+						scaleTo = *vertex.Spec.Scale.Min
+					}
 				}
 			}
 			vertex.Spec.Replicas = pointer.Int32(scaleTo)
