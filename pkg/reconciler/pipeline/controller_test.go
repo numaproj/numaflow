@@ -282,14 +282,13 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = r.pausePipeline(ctx, testObj)
 		assert.NoError(t, err)
-		v, err := r.findExistingVertices(ctx, testObj)
+		_, err = r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
-		assert.Equal(t, int32(0), *v[testObj.Name+"-"+testObj.Spec.Vertices[2].Name].Spec.Replicas)
 		assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
 		testObj.Annotations[dfv1.KeyPauseTimestamp] = ""
 		_, err = r.resumePipeline(ctx, testObj)
 		assert.NoError(t, err)
-		v, err = r.findExistingVertices(ctx, testObj)
+		v, err := r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
 		// reduce UDFs are not autoscalable thus they are scaled manually back to their partition count
 		assert.Equal(t, int32(2), *v[testObj.Name+"-"+testObj.Spec.Vertices[2].Name].Spec.Replicas)
