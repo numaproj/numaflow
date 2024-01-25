@@ -13,6 +13,10 @@ spec:
             - my-broker2:19700
           topic: my-topic
           consumerGroup: my-consumer-group
+          config: | # Optional.
+            consumer:
+              offsets:
+                initial: -2 # -2 for sarama.OffsetOldest, -1 for sarama.OffsetNewest. Default to sarama.OffsetNewest.
           tls: # Optional.
             insecureSkipVerify: # Optional, where to skip TLS verification. Default to false.
             caCertSecret: # Optional, a secret reference, which contains the CA Cert.

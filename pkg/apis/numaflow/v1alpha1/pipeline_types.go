@@ -252,7 +252,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		Name:            CtrMain,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       standardResources,
+		Resources:       *standardResources.DeepCopy(),
 		Env:             envVars,
 		Args:            []string{"daemon-server", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
@@ -335,7 +335,7 @@ func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.C
 		Env:             envVars,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       standardResources,
+		Resources:       *standardResources.DeepCopy(),
 		Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
 	c.Args = append(c.Args, "--buffers="+strings.Join(p.GetAllBuffers(), ","))
