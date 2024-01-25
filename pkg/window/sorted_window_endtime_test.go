@@ -17,12 +17,14 @@ limitations under the License.
 package window
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/stretchr/testify/assert"
 )
 
 type TestWindow struct {
@@ -30,6 +32,7 @@ type TestWindow struct {
 	end   time.Time
 	slot  string
 	keys  []string
+	id    string
 }
 
 func (t *TestWindow) StartTime() time.Time {
@@ -53,17 +56,44 @@ func (t *TestWindow) Partition() *partition.ID {
 }
 
 func (t *TestWindow) Merge(tw TimedWindow) {
-	//TODO implement me
-	panic("implement me")
+	if tw.StartTime().Before(t.start) {
+		t.start = tw.StartTime()
+	}
+
+	if tw.EndTime().After(t.end) {
+		t.end = tw.EndTime()
+	}
+
+	if len(t.keys) > 0 {
+		t.id = fmt.Sprintf("%d-%d-%s-%s", t.start.UnixMilli(), t.end.UnixMilli(), t.slot, strings.Join(t.keys, dfv1.KeysDelimitter))
+	} else {
+		t.id = fmt.Sprintf("%d-%d-%s", t.start.UnixMilli(), t.end.UnixMilli(), t.slot)
+	}
+
 }
 
 func (t *TestWindow) Expand(et time.Time) {
-	//TODO implement me
-	panic("implement me")
+	if et.After(t.end) {
+		t.end = et
+	}
+
+	if len(t.keys) > 0 {
+		t.id = fmt.Sprintf("%d-%d-%s-%s", t.start.UnixMilli(), t.end.UnixMilli(), t.slot, strings.Join(t.keys, dfv1.KeysDelimitter))
+	} else {
+		t.id = fmt.Sprintf("%d-%d-%s", t.start.UnixMilli(), t.end.UnixMilli(), t.slot)
+	}
 }
 
 func (t *TestWindow) Keys() []string {
 	return t.keys
+}
+
+func (t *TestWindow) ID() string {
+	if len(t.id) == 0 {
+		return fmt.Sprintf("%d-%d-%s-%s", t.start.UnixMilli(), t.end.UnixMilli(), t.slot, strings.Join(t.keys, dfv1.KeysDelimitter))
+	}
+
+	return t.id
 }
 
 func TestSortedWindowListByEndTime_InsertIfNotPresent(t *testing.T) {

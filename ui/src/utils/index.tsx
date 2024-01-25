@@ -19,6 +19,7 @@ export const RUNNING = "Running";
 export const ACTIVE = "Running";
 export const INACTIVE = "Not-Running";
 export const INACTIVE_STATUS = "inactive";
+export const UNHEALTHY = "unhealthy";
 export const HEALTHY = "healthy";
 export const WARNING = "warning";
 export const CRITICAL0 = "critical0";
@@ -248,6 +249,7 @@ export const IconsStatusMap = {
   [ACTIVE]: circleCheck,
   [INACTIVE]: circleDash,
   [INACTIVE_STATUS]: circleDash,
+  [UNHEALTHY]: critical,
   [HEALTHY]: heartFill,
   [WARNING]: warning,
   [CRITICAL]: critical,
@@ -275,6 +277,7 @@ export const StatusString: StatusStringType = {
   [ACTIVE]: "Running",
   [INACTIVE]: "Inactive",
   [INACTIVE_STATUS]: "Inactive",
+  [UNHEALTHY]: "Unhealthy",
   [HEALTHY]: "Healthy",
   [WARNING]: "Warning",
   [CRITICAL]: "Critical",
@@ -323,6 +326,57 @@ export const DurationString = (duration: number): string => {
   } else {
     return `${milliseconds}ms`;
   }
+};
+
+const compareIgnoreCase = (a: string, b: string): boolean => {
+  return a.toLowerCase() === b.toLowerCase();
+};
+
+export const GetConsolidatedHealthStatus = (
+  pipelineStatus: string,
+  resourceHealthStatus: string,
+  dataHealthStatus: string
+): string => {
+  if (
+    compareIgnoreCase(pipelineStatus, PAUSING) ||
+    compareIgnoreCase(pipelineStatus, PAUSED)
+  ) {
+    return INACTIVE_STATUS;
+  }
+
+  if (
+    compareIgnoreCase(pipelineStatus, DELETING) ||
+    compareIgnoreCase(resourceHealthStatus, DELETING)
+  ) {
+    return DELETING;
+  }
+
+  if (
+    compareIgnoreCase(resourceHealthStatus, HEALTHY) &&
+    compareIgnoreCase(dataHealthStatus, HEALTHY)
+  ) {
+    return HEALTHY;
+  }
+
+  if (compareIgnoreCase(resourceHealthStatus, UNHEALTHY)) {
+    return UNHEALTHY;
+  }
+
+  if (
+    compareIgnoreCase(resourceHealthStatus, CRITICAL) ||
+    compareIgnoreCase(dataHealthStatus, CRITICAL)
+  ) {
+    return CRITICAL;
+  }
+
+  if (
+    compareIgnoreCase(resourceHealthStatus, WARNING) ||
+    compareIgnoreCase(dataHealthStatus, WARNING)
+  ) {
+    return WARNING;
+  }
+
+  return UNKNOWN;
 };
 
 export const GetISBType = (spec: IsbServiceSpec): string | null => {

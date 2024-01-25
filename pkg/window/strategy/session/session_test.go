@@ -16,6 +16,7 @@ limitations under the License.
 package session
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -24,7 +25,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -67,7 +67,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	assert.Equal(t, 1, len(windowOperations[0].Windows))
 	assert.Equal(t, baseTime, windowOperations[0].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(gap), windowOperations[0].Windows[0].EndTime())
-	assert.Equal(t, &SharedSessionPartition, windowOperations[0].ID)
+	assert.Equal(t, &window.SharedUnalignedPartition, windowOperations[0].ID)
 
 	// 2nd message should be assigned to the same window, since key is same
 	message = buildReadMessage(baseTime.Add(5*time.Second), []string{"key1"})
@@ -81,7 +81,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	// 0th index we should have the old window, and 1st index we should have the new window
 	assert.Equal(t, baseTime.Add(gap), windowOperations[0].Windows[0].EndTime())
 	assert.Equal(t, message.EventTime.Add(gap), windowOperations[0].Windows[1].EndTime())
-	assert.Equal(t, &SharedSessionPartition, windowOperations[0].ID)
+	assert.Equal(t, &window.SharedUnalignedPartition, windowOperations[0].ID)
 
 	// 3rd message should be assigned to a new window, since key is different
 	message = buildReadMessage(baseTime, []string{"key2"})
@@ -93,7 +93,7 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	assert.Equal(t, 1, len(windowOperations[0].Windows))
 	assert.Equal(t, baseTime, windowOperations[0].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(gap), windowOperations[0].Windows[0].EndTime())
-	assert.Equal(t, &SharedSessionPartition, windowOperations[0].ID)
+	assert.Equal(t, &window.SharedUnalignedPartition, windowOperations[0].ID)
 
 	// 4th message should be assigned to a new window, because of the gap duration
 	message = buildReadMessage(baseTime.Add(20*time.Second), []string{"key2"})
@@ -105,22 +105,27 @@ func TestAssignWindows_NewWindow(t *testing.T) {
 	assert.Equal(t, 1, len(windowOperations[0].Windows))
 	assert.Equal(t, baseTime.Add(20*time.Second), windowOperations[0].Windows[0].StartTime())
 	assert.Equal(t, baseTime.Add(30*time.Second), windowOperations[0].Windows[0].EndTime())
-	assert.Equal(t, &SharedSessionPartition, windowOperations[0].ID)
+	assert.Equal(t, &window.SharedUnalignedPartition, windowOperations[0].ID)
 }
 
 func TestSession_InsertWindow(t *testing.T) {
+	baseTime := time.UnixMilli(60000)
 	win1 := &sessionWindow{
-		startTime: time.UnixMilli(60000),
-		endTime:   time.UnixMilli(60000 + 60*1000),
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 
 	win2 := &sessionWindow{
-		startTime: time.UnixMilli(60000),
-		endTime:   time.UnixMilli(60000 + 60*1000),
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0", "key-2"),
 	}
 
 	windower := &Windower{
@@ -139,6 +144,8 @@ func TestSession_InsertWindow(t *testing.T) {
 		endTime:   time.UnixMilli(120000 + 60*1000),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", time.UnixMilli(120000).UnixMilli(), time.UnixMilli(120000+60*1000).UnixMilli(), "slot-0", "key-2"),
 	}
 
 	windower.InsertWindow(win2)
@@ -154,14 +161,25 @@ func TestSession_CloseWindowsWithoutMerge(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(10 * time.Second),
 		slot:      "slot-0",
+		partition: &window.SharedUnalignedPartition,
+		keys:      []string{"key-1"},
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.UnixMilli(), baseTime.Add(10*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win2 := &sessionWindow{
 		startTime: baseTime.Add(30 * time.Second),
 		endTime:   baseTime.Add(59 * time.Second),
+		slot:      "slot-0",
+		partition: &window.SharedUnalignedPartition,
+		keys:      []string{"key-1"},
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(30*time.Second).UnixMilli(), baseTime.Add(59*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win3 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
+		slot:      "slot-0",
+		partition: &window.SharedUnalignedPartition,
+		keys:      []string{"key-1"},
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(90*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 
 	windower := NewWindower(10*time.Second, keyedVertex)
@@ -199,16 +217,25 @@ func TestSession_CloseWindowsWithMerge(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(20 * time.Second),
 		slot:      "slot-0",
+		partition: &window.SharedUnalignedPartition,
+		keys:      []string{"key-1"},
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.UnixMilli(), baseTime.Add(20*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win2 := &sessionWindow{
 		startTime: baseTime.Add(11 * time.Second),
 		endTime:   baseTime.Add(59 * time.Second),
 		slot:      "slot-0",
+		partition: &window.SharedUnalignedPartition,
+		keys:      []string{"key-1"},
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(11*time.Second).UnixMilli(), baseTime.Add(59*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win3 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
 		slot:      "slot-0",
+		partition: &window.SharedUnalignedPartition,
+		keys:      []string{"key-1"},
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(90*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 
 	windower := NewWindower(10*time.Second, keyedVertex)
@@ -246,18 +273,24 @@ func TestSession_CloseWindowsWithMerge(t *testing.T) {
 		endTime:   baseTime.Add(89 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(89*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win2 = &sessionWindow{
 		startTime: baseTime.Add(50 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(50*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win3 = &sessionWindow{
 		startTime: baseTime.Add(30 * time.Second),
 		endTime:   baseTime.Add(150 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(30*time.Second).UnixMilli(), baseTime.Add(150*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 
 	win4 := &sessionWindow{
@@ -265,18 +298,24 @@ func TestSession_CloseWindowsWithMerge(t *testing.T) {
 		endTime:   baseTime.Add(50 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(30*time.Second).UnixMilli(), baseTime.Add(50*time.Second).UnixMilli(), "slot-0", "key-2"),
 	}
 	win5 := &sessionWindow{
 		startTime: baseTime.Add(40 * time.Second),
 		endTime:   baseTime.Add(80 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(40*time.Second).UnixMilli(), baseTime.Add(80*time.Second).UnixMilli(), "slot-0", "key-2"),
 	}
 	win6 := &sessionWindow{
 		startTime: baseTime.Add(10 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(10*time.Second).UnixMilli(), baseTime.Add(90*time.Second).UnixMilli(), "slot-0", "key-2"),
 	}
 
 	windower.InsertWindow(win1)
@@ -318,6 +357,8 @@ func TestSession_CloseWindowsComplex(t *testing.T) {
 		endTime:   time.Unix(119, 0),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", 60, 119, "slot-0", "key-1"),
 	}
 
 	win2 := &sessionWindow{
@@ -325,6 +366,8 @@ func TestSession_CloseWindowsComplex(t *testing.T) {
 		endTime:   time.Unix(218, 0),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", 159, 218, "slot-0", "key-1"),
 	}
 
 	win3 := &sessionWindow{
@@ -332,6 +375,8 @@ func TestSession_CloseWindowsComplex(t *testing.T) {
 		endTime:   time.Unix(279, 0),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", 258, 279, "slot-0", "key-1"),
 	}
 
 	win4 := &sessionWindow{
@@ -339,6 +384,8 @@ func TestSession_CloseWindowsComplex(t *testing.T) {
 		endTime:   time.Unix(317, 0),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", 262, 317, "slot-0", "key-1"),
 	}
 
 	win5 := &sessionWindow{
@@ -346,6 +393,8 @@ func TestSession_CloseWindowsComplex(t *testing.T) {
 		endTime:   time.Unix(416, 0),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", 357, 416, "slot-0", "key-1"),
 	}
 
 	win6 := &sessionWindow{
@@ -353,6 +402,8 @@ func TestSession_CloseWindowsComplex(t *testing.T) {
 		endTime:   time.Unix(515, 0),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", 456, 515, "slot-0", "key-1"),
 	}
 
 	win7 := &sessionWindow{
@@ -360,6 +411,8 @@ func TestSession_CloseWindowsComplex(t *testing.T) {
 		endTime:   time.Unix(573, 0),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", 514, 573, "slot-0", "key-1"),
 	}
 
 	windower := &Windower{
@@ -434,24 +487,32 @@ func TestSession_DeleteWindows(t *testing.T) {
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win2 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win3 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0", "key-2"),
 	}
 	win4 := &sessionWindow{
 		startTime: baseTime.Add(120 * time.Second),
 		endTime:   baseTime.Add(180 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(120*time.Second).UnixMilli(), baseTime.Add(180*time.Second).UnixMilli(), "slot-0", "key-2"),
 	}
 
 	windower := &Windower{
@@ -470,24 +531,22 @@ func TestSession_DeleteWindows(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(180 * time.Second))
 
 	// delete one of the windows
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
-			Start: baseTime,
-			End:   baseTime.Add(60 * time.Second),
-			Slot:  "slot-0",
-		}, []string{"key-1"}),
-	})
+	windower.DeleteClosedWindow(window.NewUnalignedTimedWindow(
+		baseTime,
+		baseTime.Add(60*time.Second),
+		"slot-0",
+		[]string{"key-1"},
+	))
 
 	// since we deleted one of the windows, the closed windows should be 3
 	assert.Equal(t, 3, windower.closedWindows.Len())
 
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
-			Start: baseTime.Add(60 * time.Second),
-			End:   baseTime.Add(120 * time.Second),
-			Slot:  "slot-0",
-		}, []string{"key-1"}),
-	})
+	windower.DeleteClosedWindow(window.NewUnalignedTimedWindow(
+		baseTime.Add(60*time.Second),
+		baseTime.Add(120*time.Second),
+		"slot-0",
+		[]string{"key-1"},
+	))
 	// since we deleted two windows, the closed windows should be 2
 	assert.Equal(t, 2, windower.closedWindows.Len())
 }
@@ -500,18 +559,24 @@ func TestWindower_OldestClosedWindowEndTime(t *testing.T) {
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win2 := &sessionWindow{
 		startTime: baseTime.Add(40 * time.Second),
 		endTime:   baseTime.Add(70 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(40*time.Second).UnixMilli(), baseTime.Add(70*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win3 := &sessionWindow{
 		startTime: baseTime.Add(10 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-2"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(10*time.Second).UnixMilli(), baseTime.Add(90*time.Second).UnixMilli(), "slot-0", "key-2"),
 	}
 
 	windower := &Windower{
@@ -533,13 +598,12 @@ func TestWindower_OldestClosedWindowEndTime(t *testing.T) {
 	assert.Equal(t, baseTime.Add(70*time.Second), windower.OldestWindowEndTime())
 
 	// delete one of the windows
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartitionAndKeys(&partition.ID{
-			Start: baseTime,
-			End:   baseTime.Add(70 * time.Second),
-			Slot:  "slot-0",
-		}, []string{"key-1"}),
-	})
+	windower.DeleteClosedWindow(window.NewUnalignedTimedWindow(
+		baseTime,
+		baseTime.Add(70*time.Second),
+		"slot-0",
+		[]string{"key-1"},
+	))
 
 	// since we deleted (60, 130) window, now the oldest window end time will be 90
 	assert.Equal(t, baseTime.Add(90*time.Second), windower.OldestWindowEndTime())
@@ -553,18 +617,24 @@ func TestWindower_NextWindowToBeClosed(t *testing.T) {
 		endTime:   baseTime.Add(10 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.UnixMilli(), baseTime.Add(10*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win2 := &sessionWindow{
 		startTime: baseTime.Add(30 * time.Second),
 		endTime:   baseTime.Add(59 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(30*time.Second).UnixMilli(), baseTime.Add(59*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 	win3 := &sessionWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(90 * time.Second),
 		slot:      "slot-0",
 		keys:      []string{"key-1"},
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(90*time.Second).UnixMilli(), "slot-0", "key-1"),
 	}
 
 	windower := NewWindower(10*time.Second, keyedVertex)

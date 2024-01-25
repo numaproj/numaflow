@@ -17,7 +17,7 @@ limitations under the License.
 package session
 
 import (
-	"math"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -29,22 +29,14 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-const delimiter = ":"
-
-// SharedSessionPartition is a common partition for session window.
-// session windows share a common pbq, this partition is used to identify the pbq instance.
-var SharedSessionPartition = partition.ID{
-	Start: time.UnixMilli(0),
-	End:   time.UnixMilli(math.MaxInt64),
-	Slot:  "slot-0",
-}
-
 // sessionWindow TimedWindow implementation for Session window.
 type sessionWindow struct {
 	startTime time.Time
 	endTime   time.Time
 	slot      string
 	keys      []string
+	partition *partition.ID
+	id        string
 }
 
 func NewSessionWindow(startTime time.Time, gap time.Duration, message *isb.ReadMessage) window.TimedWindow {
@@ -59,6 +51,8 @@ func NewSessionWindow(startTime time.Time, gap time.Duration, message *isb.ReadM
 		endTime:   end,
 		slot:      slot,
 		keys:      message.Keys,
+		partition: &window.SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", start.UnixMilli(), end.UnixMilli(), slot, strings.Join(message.Keys, dfv1.KeysDelimitter)),
 	}
 }
 
@@ -81,15 +75,21 @@ func (w *sessionWindow) Keys() []string {
 }
 
 func (w *sessionWindow) Partition() *partition.ID {
-	return &partition.ID{
-		Start: w.startTime,
-		End:   w.endTime,
-		Slot:  w.slot,
-	}
+	// session windows share a common pbq, this partition is used to identify the common pbq instance.
+	return w.partition
+}
+
+func (w *sessionWindow) ID() string {
+	return w.id
 }
 
 // Merge window merges two windows. This operation of merge happens in Unaligned windows.
 func (w *sessionWindow) Merge(tw window.TimedWindow) {
+
+	if !tw.StartTime().Before(w.startTime) && !tw.EndTime().After(w.endTime) {
+		return
+	}
+
 	// expand the start and end to accommodate the new window
 	if tw.StartTime().Before(w.startTime) {
 		w.startTime = tw.StartTime()
@@ -98,6 +98,21 @@ func (w *sessionWindow) Merge(tw window.TimedWindow) {
 	if tw.EndTime().After(w.endTime) {
 		w.endTime = tw.EndTime()
 	}
+
+	// udpate the id with the new start and end time
+	w.id = fmt.Sprintf("%d-%d-%s-%s", w.startTime.UnixMilli(), w.endTime.UnixMilli(), w.slot, strings.Join(w.keys, dfv1.KeysDelimitter))
+}
+
+// Expand expands the window end time to the new endTime. An interesting property of Unaligned windows :).
+func (w *sessionWindow) Expand(endTime time.Time) {
+	if !endTime.After(w.endTime) {
+		return
+	}
+
+	w.endTime = endTime
+	// udpate the id with the new end time
+	w.id = fmt.Sprintf("%d-%d-%s-%s", w.startTime.UnixMilli(), w.endTime.UnixMilli(), w.slot, strings.Join(w.keys, dfv1.KeysDelimitter))
+
 }
 
 // cloneWindow makes a deep copy of the window.
@@ -107,13 +122,6 @@ func cloneWindow(win window.TimedWindow) *sessionWindow {
 		endTime:   win.EndTime(),
 		slot:      win.Slot(),
 		keys:      win.Keys(),
-	}
-}
-
-// Expand expands the window end time to the new endTime. An interesting property of Unaligned windows :).
-func (w *sessionWindow) Expand(endTime time.Time) {
-	if endTime.After(w.endTime) {
-		w.endTime = endTime
 	}
 }
 
@@ -167,7 +175,7 @@ func (*Windower) Type() window.Type {
 // - Append to an existing window (the message has the event-time such that gap + event-time is < window end time).
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	var (
-		combinedKey      = strings.Join(message.Keys, delimiter)
+		combinedKey      = strings.Join(message.Keys, dfv1.KeysDelimitter)
 		windowOperations = make([]*window.TimedWindowRequest, 0)
 		win              = NewSessionWindow(message.EventTime, w.gap, message)
 	)
@@ -182,7 +190,7 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 		list = window.NewSortedWindowListByEndTime()
 		// since it's the first window, we can insert it at the front
 		list.InsertFront(win)
-		windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &SharedSessionPartition))
+		windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &window.SharedUnalignedPartition))
 		w.activeWindows[combinedKey] = list
 
 		return windowOperations
@@ -208,11 +216,11 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 
 			// update the reference of the window in the list with the expanded window
 			windowToBeMerged.Merge(win)
-			windowOperations = append(windowOperations, createWindowOperation(message, window.Expand, []window.TimedWindow{oldWindow, windowToBeMerged}, &SharedSessionPartition))
+			windowOperations = append(windowOperations, createWindowOperation(message, window.Expand, []window.TimedWindow{oldWindow, windowToBeMerged}, &window.SharedUnalignedPartition))
 		} else { // no need to expand, message doesn't change the window end-time.
 			// if the returned window is same as the window created by the message, that means
 			// the message belongs to an existing window and it's an append operation
-			windowOperations = append(windowOperations, createWindowOperation(message, window.Append, []window.TimedWindow{windowToBeMerged}, &SharedSessionPartition))
+			windowOperations = append(windowOperations, createWindowOperation(message, window.Append, []window.TimedWindow{windowToBeMerged}, &window.SharedUnalignedPartition))
 		}
 
 		return windowOperations
@@ -220,14 +228,14 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 
 	// if the window cannot be merged, that means we need to create a new window to the active windows list
 	list.Insert(win)
-	windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &SharedSessionPartition))
+	windowOperations = append(windowOperations, createWindowOperation(message, window.Open, []window.TimedWindow{win}, &window.SharedUnalignedPartition))
 
 	return windowOperations
 }
 
 // InsertWindow inserts a window to the list of active windows.
 func (w *Windower) InsertWindow(tw window.TimedWindow) {
-	combinedKey := strings.Join(tw.Keys(), delimiter)
+	combinedKey := strings.Join(tw.Keys(), dfv1.KeysDelimitter)
 	if list, ok := w.activeWindows[combinedKey]; !ok {
 		list = window.NewSortedWindowListByEndTime()
 		list.InsertFront(tw)
@@ -286,7 +294,7 @@ func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 			if len(windows) > 1 {
 
 				// make UDF aware that windows have to be merged
-				windowOperations = append(windowOperations, createWindowOperation(nil, window.Merge, windows, &SharedSessionPartition))
+				windowOperations = append(windowOperations, createWindowOperation(nil, window.Merge, windows, &window.SharedUnalignedPartition))
 
 				// merge the first window with subsequent windows and it grows as it merges
 				var mergedWindow = cloneWindow(windows[0])
@@ -334,25 +342,25 @@ func (w *Windower) handleWindowToBeMerged(canBeMerged bool, toBeMerged window.Ti
 	if canBeMerged {
 		oldWindow := cloneWindow(toBeMerged)
 		toBeMerged.Merge(latestWin)
-		return createWindowOperation(nil, window.Merge, []window.TimedWindow{latestWin, oldWindow}, &SharedSessionPartition)
+		return createWindowOperation(nil, window.Merge, []window.TimedWindow{latestWin, oldWindow}, &window.SharedUnalignedPartition)
 	}
 
 	w.closedWindows.Insert(latestWin)
-	return createWindowOperation(nil, window.Close, []window.TimedWindow{latestWin}, &SharedSessionPartition)
+	return createWindowOperation(nil, window.Close, []window.TimedWindow{latestWin}, &window.SharedUnalignedPartition)
 }
 
 // NextWindowToBeClosed returns the next window yet to be closed.
 func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 	return &sessionWindow{
-		startTime: SharedSessionPartition.Start,
-		endTime:   SharedSessionPartition.End,
-		slot:      SharedSessionPartition.Slot,
+		startTime: window.SharedUnalignedPartition.Start,
+		endTime:   window.SharedUnalignedPartition.End,
+		slot:      window.SharedUnalignedPartition.Slot,
 	}
 }
 
 // DeleteClosedWindow deletes the window from the closed windows list.
-func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
-	w.closedWindows.Delete(response.Window)
+func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
+	w.closedWindows.Delete(window)
 }
 
 // OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.

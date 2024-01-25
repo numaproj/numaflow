@@ -165,7 +165,7 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 			Message: ret,
 			Tags:    nil,
 		},
-		Window: window.NewWindowFromPartition(partitionID),
+		Window: window.NewAlignedTimedWindow(partitionID.Start, partitionID.End, partitionID.Slot),
 	}
 	responseCh <- response
 	return responseCh, errCh
@@ -221,7 +221,7 @@ func (s SessionSumReduceTest) ApplyReduce(ctx context.Context, partitionID *part
 					}
 					response := &window.TimedWindowResponse{
 						WriteMessage: outputMsg,
-						Window:       window.NewWindowFromPartition(partitionID),
+						Window:       window.NewAlignedTimedWindow(partitionID.Start, partitionID.End, partitionID.Slot),
 					}
 					responseCh <- response
 				}
@@ -283,7 +283,7 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 		}
 		response := &window.TimedWindowResponse{
 			WriteMessage: msg,
-			Window:       window.NewWindowFromPartition(partitionID),
+			Window:       window.NewAlignedTimedWindow(partitionID.Start, partitionID.End, partitionID.Slot),
 		}
 		responseCh <- response
 	}
@@ -342,7 +342,7 @@ func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 
 		response := &window.TimedWindowResponse{
 			WriteMessage: ret,
-			Window:       window.NewWindowFromPartition(partitionID),
+			Window:       window.NewAlignedTimedWindow(partitionID.Start, partitionID.End, partitionID.Slot),
 		}
 		responseCh <- response
 	}

@@ -16,6 +16,7 @@ limitations under the License.
 package fixed
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -153,14 +154,34 @@ func TestFixed_DeleteWindows(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime,
+			End:   baseTime.Add(60 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &fixedWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(60 * time.Second),
+			End:   baseTime.Add(120 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &fixedWindow{
 		startTime: baseTime.Add(120 * time.Second),
 		endTime:   baseTime.Add(180 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(120 * time.Second),
+			End:   baseTime.Add(180 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(120*time.Second).UnixMilli(), baseTime.Add(180*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{
@@ -178,12 +199,16 @@ func TestFixed_DeleteWindows(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(180 * time.Second))
 
 	// delete one of the windows
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartition(&partition.ID{
-			Start: baseTime,
-			End:   baseTime.Add(60 * time.Second),
+	windower.DeleteClosedWindow(&fixedWindow{
+		startTime: baseTime.Add(60 * time.Second),
+		endTime:   baseTime.Add(120 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(60 * time.Second),
+			End:   baseTime.Add(120 * time.Second),
 			Slot:  "slot-0",
-		}),
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0"),
 	})
 
 	// since we deleted one of the windows, the closed windows should be 2
@@ -197,14 +222,34 @@ func TestFixed_OldestClosedWindowEndTime(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime,
+			End:   baseTime.Add(60 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &fixedWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(60 * time.Second),
+			End:   baseTime.Add(120 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &fixedWindow{
 		startTime: baseTime.Add(120 * time.Second),
 		endTime:   baseTime.Add(180 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(120 * time.Second),
+			End:   baseTime.Add(180 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(120*time.Second).UnixMilli(), baseTime.Add(180*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{
@@ -232,14 +277,34 @@ func TestWindower_NextWindowToBeClosed(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime,
+			End:   baseTime.Add(60 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &fixedWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(60 * time.Second),
+			End:   baseTime.Add(120 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &fixedWindow{
 		startTime: baseTime.Add(120 * time.Second),
 		endTime:   baseTime.Add(180 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(120 * time.Second),
+			End:   baseTime.Add(180 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(120*time.Second).UnixMilli(), baseTime.Add(180*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{

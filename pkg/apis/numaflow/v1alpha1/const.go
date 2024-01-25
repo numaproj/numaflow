@@ -164,8 +164,20 @@ const (
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 
+	// KeysDelimitter is the delimitter used to join keys
+	KeysDelimitter = ":"
+
 	// UDF map streaming
 	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
+
+	// Pipeline health status
+	PipelineStatusHealthy   = "healthy"
+	PipelineStatusUnknown   = "unknown"
+	PipelineStatusCritical  = "critical"
+	PipelineStatusWarning   = "warning"
+	PipelineStatusInactive  = "inactive"
+	PipelineStatusDeleting  = "deleting"
+	PipelineStatusUnhealthy = "unhealthy"
 )
 
 var (

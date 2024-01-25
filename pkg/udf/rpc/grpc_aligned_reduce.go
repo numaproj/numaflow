@@ -251,11 +251,11 @@ func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowR
 	// because for fixed and sliding we don't track keys.
 	return &window.TimedWindowResponse{
 		WriteMessage: taggedMessage,
-		Window: window.NewWindowFromPartition(&partition.ID{
-			Start: response.GetWindow().GetStart().AsTime(),
-			End:   response.GetWindow().GetEnd().AsTime(),
-			Slot:  response.GetWindow().GetSlot(),
-		}),
+		Window: window.NewAlignedTimedWindow(
+			response.GetWindow().GetStart().AsTime(),
+			response.GetWindow().GetEnd().AsTime(),
+			response.GetWindow().GetSlot(),
+		),
 		// this will be set once the SDK has sent the last message
 		EOF: response.GetEOF(),
 	}

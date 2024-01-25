@@ -22,6 +22,7 @@ limitations under the License.
 package sliding
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -37,6 +38,8 @@ type slidingWindow struct {
 	startTime time.Time
 	endTime   time.Time
 	slot      string
+	partition *partition.ID
+	id        string
 }
 
 func NewSlidingWindow(startTime time.Time, endTime time.Time) window.TimedWindow {
@@ -50,6 +53,12 @@ func NewSlidingWindow(startTime time.Time, endTime time.Time) window.TimedWindow
 		startTime: startTime,
 		endTime:   endTime,
 		slot:      slot,
+		partition: &partition.ID{
+			Start: startTime,
+			End:   endTime,
+			Slot:  slot,
+		},
+		id: fmt.Sprintf("%d-%d-%s", startTime.UnixMilli(), endTime.UnixMilli(), slot),
 	}
 }
 
@@ -72,11 +81,11 @@ func (w *slidingWindow) Keys() []string {
 }
 
 func (w *slidingWindow) Partition() *partition.ID {
-	return &partition.ID{
-		Start: w.startTime,
-		End:   w.endTime,
-		Slot:  w.slot,
-	}
+	return w.partition
+}
+
+func (w *slidingWindow) ID() string {
+	return w.id
 }
 
 // Merge merges the given window with the current window.
@@ -214,8 +223,8 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 }
 
 // DeleteClosedWindow deletes the window from the closed windows list
-func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
-	w.closedWindows.Delete(response.Window)
+func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
+	w.closedWindows.Delete(window)
 }
 
 // OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.

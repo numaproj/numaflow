@@ -23,6 +23,7 @@ limitations under the License.
 package fixed
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -37,7 +38,9 @@ import (
 type fixedWindow struct {
 	startTime time.Time
 	endTime   time.Time
+	partition *partition.ID
 	slot      string
+	id        string
 }
 
 // NewFixedWindow returns a new window for the given message.
@@ -52,6 +55,12 @@ func NewFixedWindow(length time.Duration, message *isb.ReadMessage) window.Timed
 		startTime: start,
 		endTime:   end,
 		slot:      slot,
+		partition: &partition.ID{
+			Start: start,
+			End:   end,
+			Slot:  slot,
+		},
+		id: fmt.Sprintf("%d-%d-%s", start.UnixMilli(), end.UnixMilli(), slot),
 	}
 }
 
@@ -74,11 +83,11 @@ func (w *fixedWindow) Keys() []string {
 }
 
 func (w *fixedWindow) Partition() *partition.ID {
-	return &partition.ID{
-		Start: w.startTime,
-		End:   w.endTime,
-		Slot:  w.slot,
-	}
+	return w.partition
+}
+
+func (w *fixedWindow) ID() string {
+	return w.id
 }
 
 func (w *fixedWindow) Merge(_ window.TimedWindow) {
@@ -195,8 +204,8 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 }
 
 // DeleteClosedWindow deletes the window from the closed windows list.
-func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
-	w.closedWindows.Delete(response.Window)
+func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
+	w.closedWindows.Delete(window)
 }
 
 // OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.
