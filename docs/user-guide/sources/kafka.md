@@ -66,7 +66,7 @@ spec:
 ### How to start the Kafka Source from a specific offset based on datetime?
 In order to start the Kafka Source from a specific offset based on datetime, we need to reset the offset before we start the pipeline.
 
-For example, we have a topic `quickstart-events` with 3 partitions and a consumer group `console-consumer-94457`. This example uses [Kafka 3.6.1](https://downloads.apache.org/kafka/3.6.1/RELEASE_NOTES.html).
+For example, we have a topic `quickstart-events` with 3 partitions and a consumer group `console-consumer-94457`. This example uses [Kafka 3.6.1](https://downloads.apache.org/kafka/3.6.1/RELEASE_NOTES.html) and localhost.
 ```shell
 ➜  kafka_2.13-3.6.1 bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic quickstart-events            
 Topic: quickstart-events	TopicId: WqIN6j7hTQqGZUQWdF7AdA	PartitionCount: 3	ReplicationFactor: 1	Configs: 
@@ -97,3 +97,32 @@ console-consumer-94457         quickstart-events              1          26
 console-consumer-94457         quickstart-events              2          0 
 ```
 Now, we can start the pipeline, and the Kafka source will start consuming the topic `quickstart-events` with consumer group `console-consumer-94457` from the `NEW-OFFSET`.
+
+You may need to create a property file which contains the connectivity details and use it to connect to the clusters. Below are two example `config.properties` files: `SASL/PLAIN` and `TSL`.
+```text
+ssl.endpoint.identification.algorithm=https
+sasl.mechanism=PLAIN
+request.timeout.ms=20000
+bootstrap.servers=<BOOSTRAP_BROKER_LIST>
+retry.backoff.ms=500
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+   username="<CLUSTER_API_KEY>" \
+   password="<CLUSTER_API_SECRET>";
+security.protocol=SASL_SSL
+```
+```text
+request.timeout.ms=20000
+bootstrap.servers=<BOOSTRAP_BROKER_LIST>
+security.protocol=SSL
+ssl.enabled.protocols=TLSv1.2
+ssl.truststore.location=<JKS_FILE_PATH>
+ssl.truststore.password=<PASSWORD>
+```
+Run the command with the `--command-config` option.
+```shell
+kafka-consumer-groups --bootstrap-server <BOOTSTRAP_BROKER_LIST> --command-config config.properties --execute --reset-offsets --group <GROUP_NAME> --topic <TOPIC_NAME> --to-datetime <DATETIME_STRING>
+```
+
+Reference:
+- [How to Use Kafka Tools With Confluent Cloud](https://docs.confluent.io/kafka/operations-tools/use-kafka-tools-ccloud.html#create-a-configuration-file)
+- [Apache Kafka Security](https://kafka.apache.org/documentation/#security)
