@@ -120,7 +120,7 @@ ssl.truststore.password=<PASSWORD>
 ```
 Run the command with the `--command-config` option.
 ```shell
-kafka-consumer-groups --bootstrap-server <BOOTSTRAP_BROKER_LIST> --command-config config.properties --execute --reset-offsets --group <GROUP_NAME> --topic <TOPIC_NAME> --to-datetime <DATETIME_STRING>
+bin/kafka-consumer-groups.sh --bootstrap-server <BOOTSTRAP_BROKER_LIST> --command-config config.properties --execute --reset-offsets --group <GROUP_NAME> --topic <TOPIC_NAME> --to-datetime <DATETIME_STRING>
 ```
 
 Reference:
