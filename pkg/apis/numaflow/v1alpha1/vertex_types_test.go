@@ -143,6 +143,7 @@ func TestGetVertexReplicas(t *testing.T) {
 	v.Spec.FromEdges = []CombinedEdge{
 		{Edge: Edge{From: "a", To: "b"}},
 	}
+	v.Spec.Replicas = pointer.Int32(5)
 	assert.Equal(t, 1, v.GetReplicas())
 	v.Spec.Replicas = pointer.Int32(1000)
 	assert.Equal(t, 1, v.GetReplicas())
