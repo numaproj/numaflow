@@ -223,40 +223,77 @@ func Test_buildReducesVertices(t *testing.T) {
 }
 
 func Test_pauseAndResumePipeline(t *testing.T) {
-	cl := fake.NewClientBuilder().Build()
-	ctx := context.TODO()
-	testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
-	testIsbSvc.Status.MarkConfigured()
-	testIsbSvc.Status.MarkDeployed()
-	err := cl.Create(ctx, testIsbSvc)
-	assert.Nil(t, err)
-	r := &pipelineReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   fakeConfig,
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-	}
-	testObj := testPipeline.DeepCopy()
-	testObj.Spec.Vertices[0].Scale.Min = pointer.Int32(3)
-	_, err = r.reconcile(ctx, testObj)
-	assert.NoError(t, err)
-	_, err = r.pausePipeline(ctx, testObj)
-	assert.NoError(t, err)
-	v, err := r.findExistingVertices(ctx, testObj)
-	assert.NoError(t, err)
-	assert.Equal(t, int32(0), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
-	assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
-	testObj.Annotations[dfv1.KeyPauseTimestamp] = ""
-	_, err = r.resumePipeline(ctx, testObj)
-	assert.NoError(t, err)
-	v, err = r.findExistingVertices(ctx, testObj)
-	assert.NoError(t, err)
-	// when auto-scaling is enabled, while resuming the pipeline, instead of setting the replicas to Scale.Min,
-	// we set it to one and let auto-scaling to scale up
-	assert.Equal(t, int32(1), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
-	assert.NoError(t, err)
+
+	t.Run("test normal pipeline", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		r := &pipelineReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   fakeConfig,
+			image:    testFlowImage,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Scale.Min = pointer.Int32(3)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		_, err = r.pausePipeline(ctx, testObj)
+		assert.NoError(t, err)
+		v, err := r.findExistingVertices(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(0), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+		assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
+		testObj.Annotations[dfv1.KeyPauseTimestamp] = ""
+		_, err = r.resumePipeline(ctx, testObj)
+		assert.NoError(t, err)
+		v, err = r.findExistingVertices(ctx, testObj)
+		assert.NoError(t, err)
+		// when auto-scaling is enabled, while resuming the pipeline, instead of setting the replicas to Scale.Min,
+		// we set it to one and let auto-scaling to scale up
+		assert.Equal(t, int32(1), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+		assert.NoError(t, err)
+	})
+
+	t.Run("test reduce pipeline", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		r := &pipelineReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   fakeConfig,
+			image:    testFlowImage,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testReducePipeline.DeepCopy()
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		_, err = r.pausePipeline(ctx, testObj)
+		assert.NoError(t, err)
+		_, err = r.findExistingVertices(ctx, testObj)
+		assert.NoError(t, err)
+		assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
+		testObj.Annotations[dfv1.KeyPauseTimestamp] = ""
+		_, err = r.resumePipeline(ctx, testObj)
+		assert.NoError(t, err)
+		v, err := r.findExistingVertices(ctx, testObj)
+		assert.NoError(t, err)
+		// reduce UDFs are not autoscalable thus they are scaled manually back to their partition count
+		assert.Equal(t, int32(2), *v[testObj.Name+"-"+testObj.Spec.Vertices[2].Name].Spec.Replicas)
+		assert.NoError(t, err)
+	})
 }
 
 func Test_copyVertexLimits(t *testing.T) {
