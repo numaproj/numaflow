@@ -842,10 +842,17 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 	for _, vertex := range existingVertices {
 		if origin := *vertex.Spec.Replicas; origin != replicas && filter(vertex) {
 			scaleTo := replicas
-			// if vtx does not support autoscaling and min is set, scale up to min
+			// if replicas equals to 1, it means we are resuming a paused pipeline
+			// in this case, if a vertex doesn't support auto-scaling, we scale up based on the vertex's configuration:
+			// for a reducer, we scale up to the partition count
+			// for a non-reducer, if min is set, we scale up to min
 			if replicas == 1 {
-				if !vertex.Scalable() && vertex.Spec.Scale.Min != nil && *vertex.Spec.Scale.Min > 1 {
-					scaleTo = *vertex.Spec.Scale.Min
+				if !vertex.Scalable() {
+					if vertex.IsReduceUDF() {
+						scaleTo = int32(vertex.GetPartitionCount())
+					} else if vertex.Spec.Scale.Min != nil && *vertex.Spec.Scale.Min > 1 {
+						scaleTo = *vertex.Spec.Scale.Min
+					}
 				}
 			}
 			vertex.Spec.Replicas = pointer.Int32(scaleTo)

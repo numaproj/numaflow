@@ -395,6 +395,10 @@ func (v Vertex) GetToBuffers() []string {
 
 func (v Vertex) GetReplicas() int {
 	if v.IsReduceUDF() {
+		// Replicas will be 0 only when pausing a pipeline
+		if v.Spec.Replicas != nil && int(*v.Spec.Replicas) == 0 {
+			return 0
+		}
 		// Replica of a reduce vertex is determined by the partitions.
 		return v.GetPartitionCount()
 	}
