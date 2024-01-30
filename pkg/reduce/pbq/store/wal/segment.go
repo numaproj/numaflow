@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"hash/crc32"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -60,8 +59,6 @@ type WAL struct {
 	openMode int
 	// createTime is the timestamp when the WAL segment is created.
 	createTime time.Time
-	// closed indicates whether the file has been closed
-	closed bool
 	// corrupted indicates whether the data of the file has been corrupted
 	corrupted   bool
 	partitionID *partition.ID
@@ -97,21 +94,6 @@ func (w *WAL) writeWALHeader() (err error) {
 	// Only increase the write offset when we successfully write for atomicity.
 	w.wOffset += int64(wrote)
 	return err
-}
-
-// walHeaderPreamble is the header preamble (excludes variadic key)
-type walHeaderPreamble struct {
-	S    int64
-	E    int64
-	SLen int16
-}
-
-// readMessageHeaderPreamble is the header for each WAL entry
-type readMessageHeaderPreamble struct {
-	WaterMark  int64
-	Offset     int64
-	MessageLen int64
-	Checksum   uint32
 }
 
 // encodeWALHeader builds the WAL header. WAL header is per WAL and has information to build the WAL partition.
@@ -243,11 +225,6 @@ func (w *WAL) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
 	return msgBinary, nil
 }
 
-func calculateChecksum(data []byte) uint32 {
-	crc32q := crc32.MakeTable(IEEE)
-	return crc32.Checksum(data, crc32q)
-}
-
 // Write writes the message to the WAL. The format as follow is
 //
 //	+-------------------+----------------+-----------------+--------------+----------------+
@@ -350,8 +327,6 @@ func (w *WAL) Close() (err error) {
 	if err != nil {
 		return err
 	}
-
-	w.closed = true
 
 	return nil
 }

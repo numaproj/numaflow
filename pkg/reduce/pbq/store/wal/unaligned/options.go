@@ -13,6 +13,7 @@ type options struct {
 	segmentSize             int64
 	syncDuration            time.Duration
 	openMode                int
+	maxBatchSize            int64
 	segmentRotationDuration time.Duration
 }
 
@@ -25,6 +26,7 @@ func DefaultOptions() *options {
 		syncDuration:            dfv1.DefaultStoreSyncDuration,
 		openMode:                os.O_WRONLY,
 		segmentRotationDuration: 5 * time.Minute,
+		maxBatchSize:            dfv1.DefaultStoreMaxBufferSize,
 	}
 }
 
@@ -63,5 +65,12 @@ func WithSyncDuration(maxDuration time.Duration) Option {
 func WithSegmentRotationDuration(maxDuration time.Duration) Option {
 	return func(options *options) {
 		options.segmentRotationDuration = maxDuration
+	}
+}
+
+// WithMaxBatchSize sets the WAL buffer max size option
+func WithMaxBatchSize(size int64) Option {
+	return func(options *options) {
+		options.maxBatchSize = size
 	}
 }
