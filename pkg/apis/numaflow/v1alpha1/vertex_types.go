@@ -224,7 +224,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		env:             envVars,
 		image:           req.Image,
 		imagePullPolicy: req.PullPolicy,
-		resources:       standardResources,
+		resources:       *standardResources.DeepCopy(),
 		volumeMounts:    volumeMounts,
 	})
 	if err != nil {
@@ -276,7 +276,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			Env:             req.Env,
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
-			Resources:       standardResources,
+			Resources:       *standardResources.DeepCopy(),
 			Args:            []string{"side-inputs-synchronizer", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		}
 		sideInputsWatcher.Env = append(sideInputsWatcher.Env, v.commonEnvs()...)
@@ -321,7 +321,7 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 			Env:             envVars,
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
-			Resources:       standardResources,
+			Resources:       *standardResources.DeepCopy(),
 			Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 		},
 	}
@@ -331,7 +331,7 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 			Env:             envVars,
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
-			Resources:       standardResources,
+			Resources:       *standardResources.DeepCopy(),
 			Args:            []string{"side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		})
 	}
@@ -395,6 +395,10 @@ func (v Vertex) GetToBuffers() []string {
 
 func (v Vertex) GetReplicas() int {
 	if v.IsReduceUDF() {
+		// Replicas will be 0 only when pausing a pipeline
+		if v.Spec.Replicas != nil && int(*v.Spec.Replicas) == 0 {
+			return 0
+		}
 		// Replica of a reduce vertex is determined by the partitions.
 		return v.GetPartitionCount()
 	}
