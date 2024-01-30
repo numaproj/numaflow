@@ -28,7 +28,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
 )
 
 type walStores struct {
@@ -42,7 +42,7 @@ type walStores struct {
 	replicaIndex int32
 }
 
-func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) store.StoreProvider {
+func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) aligned.StoreProvider {
 	s := &walStores{
 		storePath:    dfv1.DefaultStorePath,
 		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
@@ -57,7 +57,7 @@ func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) store.Sto
 	return s
 }
 
-func (ws *walStores) CreateStore(_ context.Context, partitionID partition.ID) (store.Store, error) {
+func (ws *walStores) CreateStore(_ context.Context, partitionID partition.ID) (aligned.Store, error) {
 	// Create wal dir if not exist
 	var err error
 	if _, err = os.Stat(ws.storePath); os.IsNotExist(err) {
