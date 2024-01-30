@@ -21,7 +21,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
 
 	"go.uber.org/zap"
 )
@@ -41,7 +41,7 @@ type memoryStore struct {
 // this function will be invoked during bootstrap if there is a restart
 func (m *memoryStore) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 	if m.isEmpty() || m.readPos >= m.writePos {
-		m.log.Errorw(store.ErrReadStoreEmpty.Error())
+		m.log.Errorw(aligned.ErrReadStoreEmpty.Error())
 		return []*isb.ReadMessage{}, true, nil
 	}
 
@@ -56,12 +56,12 @@ func (m *memoryStore) Read(size int64) ([]*isb.ReadMessage, bool, error) {
 // WriteToStore writes a message to store
 func (m *memoryStore) Write(msg *isb.ReadMessage) error {
 	if m.writePos >= m.storeSize {
-		m.log.Errorw(store.ErrWriteStoreFull.Error(), zap.Any("msg header", msg.Header))
-		return store.ErrWriteStoreFull
+		m.log.Errorw(aligned.ErrWriteStoreFull.Error(), zap.Any("msg header", msg.Header))
+		return aligned.ErrWriteStoreFull
 	}
 	if m.closed {
-		m.log.Errorw(store.ErrWriteStoreClosed.Error(), zap.Any("msg header", msg.Header))
-		return store.ErrWriteStoreClosed
+		m.log.Errorw(aligned.ErrWriteStoreClosed.Error(), zap.Any("msg header", msg.Header))
+		return aligned.ErrWriteStoreClosed
 	}
 	m.storage[m.writePos] = msg
 	m.writePos += 1

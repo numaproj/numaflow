@@ -26,7 +26,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -36,7 +36,7 @@ type PBQ struct {
 	vertexName    string
 	pipelineName  string
 	vertexReplica int32
-	store         store.Store
+	store         aligned.Store
 	output        chan *window.TimedWindowRequest
 	cob           bool // cob to avoid panic in case writes happen after close of book
 	PartitionID   partition.ID

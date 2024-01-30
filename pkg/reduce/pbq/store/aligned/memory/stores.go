@@ -23,7 +23,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -34,7 +34,7 @@ type memoryStores struct {
 	sync.RWMutex
 }
 
-func NewMemoryStores(opts ...Option) store.StoreProvider {
+func NewMemoryStores(opts ...Option) aligned.StoreProvider {
 	s := &memoryStores{
 		storeSize:  100000,
 		partitions: make(map[partition.ID]*memoryStore),
@@ -46,7 +46,7 @@ func NewMemoryStores(opts ...Option) store.StoreProvider {
 	return s
 }
 
-func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (aligned.Store, error) {
 	ms.Lock()
 	defer ms.Unlock()
 	if memStore, ok := ms.partitions[partitionID]; ok {

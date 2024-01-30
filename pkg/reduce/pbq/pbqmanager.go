@@ -29,7 +29,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
 	"github.com/numaproj/numaflow/pkg/window"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -40,7 +40,7 @@ type Manager struct {
 	vertexName    string
 	pipelineName  string
 	vertexReplica int32
-	storeProvider store.StoreProvider
+	storeProvider aligned.StoreProvider
 	pbqOptions    *options
 	pbqMap        map[string]*PBQ
 	log           *zap.SugaredLogger
@@ -53,7 +53,7 @@ type Manager struct {
 
 // NewManager returns new instance of manager
 // We don't intend this to be called by multiple routines.
-func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider store.StoreProvider, windowType window.Type, opts ...PBQOption) (*Manager, error) {
+func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider aligned.StoreProvider, windowType window.Type, opts ...PBQOption) (*Manager, error) {
 	pbqOpts := DefaultOptions()
 	for _, opt := range opts {
 		if opt != nil {
