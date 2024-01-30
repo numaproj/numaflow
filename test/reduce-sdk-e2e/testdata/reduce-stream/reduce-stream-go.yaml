@@ -23,7 +23,8 @@ spec:
         groupBy:
           window:
             fixed:
-              length: 60s
+              # set window size to a high number as 10 minutes so that we verify early return by reduce streamer.
+              length: 600s
               streaming: true
           keyed: true
           storage:
