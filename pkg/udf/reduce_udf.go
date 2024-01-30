@@ -31,7 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
+	wal2 "github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/wal"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
@@ -286,7 +286,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
-	storeProvider := wal.NewWALStores(u.VertexInstance, wal.WithStorePath(dfv1.DefaultStorePath), wal.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
+	storeProvider := wal2.NewWALStores(u.VertexInstance, wal2.WithStorePath(dfv1.DefaultStorePath), wal2.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal2.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 
 	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeProvider, windower.Type())
 	if err != nil {
