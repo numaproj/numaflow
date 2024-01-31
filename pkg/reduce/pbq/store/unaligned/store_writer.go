@@ -84,7 +84,7 @@ func (s *store) Write(message *isb.ReadMessage) error {
 	currTime := time.Now()
 
 	// sync file if the batch size is reached or sync duration is reached
-	if s.currWriteOffset-s.prevSyncedWOffset >= s.maxBatchSize || currTime.Sub(s.prevSyncedTime) >= s.opts.syncDuration {
+	if s.currWriteOffset-s.prevSyncedWOffset >= s.maxBatchSize || currTime.Sub(s.prevSyncedTime) >= s.syncDuration {
 		if err = s.sync(); err != nil {
 			return err
 		}
@@ -94,7 +94,7 @@ func (s *store) Write(message *isb.ReadMessage) error {
 	s.currWriteOffset += int64(wrote)
 
 	// rotate the segment if the segment size is reached or segment duration is reached
-	if currTime.Sub(s.segmentCreateTime) >= s.segmentRotationDuration || s.currWriteOffset >= s.opts.segmentSize {
+	if currTime.Sub(s.segmentCreateTime) >= s.segmentRotationDuration || s.currWriteOffset >= s.segmentSize {
 		if err = s.rotateFile(); err != nil {
 			return err
 		}
@@ -142,7 +142,7 @@ func (s *store) rotateFile() error {
 	}
 
 	// rename the current data file to the segment file
-	if err := os.Rename(filepath.Join(s.storeDataPath, CurrentSegmentName), s.segmentFilePath(s.opts.storeDataPath)); err != nil {
+	if err := os.Rename(filepath.Join(s.storeDataPath, CurrentSegmentName), s.segmentFilePath(s.storeDataPath)); err != nil {
 		return err
 	}
 

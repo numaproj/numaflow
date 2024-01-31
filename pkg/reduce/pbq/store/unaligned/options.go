@@ -36,22 +36,22 @@ func WithSegmentSize(size int64) StoreWriterOption {
 	}
 }
 
-type GCTrackerOption func(tracker *gCEventsTracker)
+type GCTrackerOption func(tracker *gcEventsTracker)
 
 func WithGCTrackerRotationDuration(rotationDuration time.Duration) GCTrackerOption {
-	return func(tracker *gCEventsTracker) {
+	return func(tracker *gcEventsTracker) {
 		tracker.rotationDuration = rotationDuration
 	}
 }
 
 func WithEventsPath(path string) GCTrackerOption {
-	return func(tracker *gCEventsTracker) {
+	return func(tracker *gcEventsTracker) {
 		tracker.eventsPath = path
 	}
 }
 
 func WithGCTrackerSyncDuration(maxDuration time.Duration) GCTrackerOption {
-	return func(tracker *gCEventsTracker) {
+	return func(tracker *gcEventsTracker) {
 		tracker.syncDuration = maxDuration
 	}
 }

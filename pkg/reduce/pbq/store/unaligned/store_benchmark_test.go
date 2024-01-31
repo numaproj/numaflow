@@ -17,7 +17,7 @@ func BenchmarkBufioWriter(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		buffer.Write([]byte(output + fmt.Sprintf("yashash - %d\n", i)))
+		buffer.Write([]byte(output + fmt.Sprintf("%d\n", i)))
 		buffer.Flush()
 	}
 }
@@ -32,7 +32,7 @@ func BenchmarkFileWriteAt(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		file.WriteAt([]byte(output+fmt.Sprintf("yashash - %d\n", i)), int64(i))
+		file.WriteAt([]byte(output+fmt.Sprintf("%d\n", i)), int64(i))
 	}
 }
 

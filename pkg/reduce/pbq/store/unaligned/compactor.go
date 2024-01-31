@@ -207,6 +207,7 @@ func (c *compactor) compactFile(fileName string) error {
 			return err
 		}
 
+		// skip deleted messages
 		// we should copy the message only if the message should not be deleted
 		if !c.shouldDeleteMessage(mp.EventTime, string(key)) {
 			continue
