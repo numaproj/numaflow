@@ -21,7 +21,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/window"
 )
 
 // Store provides methods to read, write and delete data from the store.
@@ -43,19 +42,4 @@ type StoreProvider interface {
 	DiscoverPartitions(context.Context) ([]partition.ID, error)
 	// DeleteStore deletes the store
 	DeleteStore(partition.ID) error
-}
-
-// Compactor compacts the store by deleting the persisted messages
-// which belongs to the materialized window.
-type Compactor interface {
-	// Start starts the compactor
-	Start(ctx context.Context) error
-
-	// Stop stops the compactor
-	Stop(ctx context.Context) error
-}
-
-// GCEventsTracker tracks the GC events
-type GCEventsTracker interface {
-	TrackGCEvent(window window.TimedWindow) error
 }

@@ -16,7 +16,9 @@ limitations under the License.
 
 package wal
 
-import "time"
+import (
+	"time"
+)
 
 type Option func(stores *walStores)
 
@@ -38,46 +40,5 @@ func WithMaxBufferSize(size int64) Option {
 func WithSyncDuration(maxDuration time.Duration) Option {
 	return func(stores *walStores) {
 		stores.syncDuration = maxDuration
-	}
-}
-
-type GCTrackerOption func(tracker *gCEventsTracker)
-
-// WithGCTrackerMaxSize sets the WAL GC tracker max size option
-func WithGCTrackerRotationDuration(rotationDuration time.Duration) GCTrackerOption {
-	return func(tracker *gCEventsTracker) {
-		tracker.rotationDuration = rotationDuration
-	}
-}
-
-func WithEventsPath(path string) GCTrackerOption {
-	return func(tracker *gCEventsTracker) {
-		tracker.eventsPath = path
-	}
-}
-
-func WithGCTrackerSyncDuration(maxDuration time.Duration) GCTrackerOption {
-	return func(tracker *gCEventsTracker) {
-		tracker.syncDuration = maxDuration
-	}
-}
-
-type CompactorOption func(c *compactor)
-
-func WithCompactorMaxFileSize(maxFileSize int64) CompactorOption {
-	return func(c *compactor) {
-		c.maxFileSize = maxFileSize
-	}
-}
-
-func WithCompactorSyncDuration(maxDuration time.Duration) CompactorOption {
-	return func(c *compactor) {
-		c.syncDuration = maxDuration
-	}
-}
-
-func WithCompactionDuration(maxDuration time.Duration) CompactorOption {
-	return func(c *compactor) {
-		c.compactionDuration = maxDuration
 	}
 }

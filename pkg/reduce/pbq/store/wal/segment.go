@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -96,6 +97,21 @@ func (w *WAL) writeWALHeader() (err error) {
 	return err
 }
 
+// walHeaderPreamble is the header preamble (excludes variadic key)
+type walHeaderPreamble struct {
+	S    int64
+	E    int64
+	SLen int16
+}
+
+// readMessageHeaderPreamble is the header for each WAL entry
+type readMessageHeaderPreamble struct {
+	WaterMark  int64
+	Offset     int64
+	MessageLen int64
+	Checksum   uint32
+}
+
 // encodeWALHeader builds the WAL header. WAL header is per WAL and has information to build the WAL partition.
 // The header is of the following format.
 //
@@ -132,6 +148,11 @@ func (w *WAL) encodeWALHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	err = binary.Write(buf, binary.LittleEndian, []rune(id.Slot))
 
 	return buf, err
+}
+
+func calculateChecksum(data []byte) uint32 {
+	crc32q := crc32.MakeTable(IEEE)
+	return crc32.Checksum(data, crc32q)
 }
 
 // encodeWALMessage builds the WAL message.

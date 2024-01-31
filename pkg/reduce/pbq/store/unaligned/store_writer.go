@@ -9,7 +9,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 )
 
 const (
@@ -19,23 +18,24 @@ const (
 )
 
 type store struct {
-	parittionID       *partition.ID // partitionID is the partition ID for the store
-	currDataFp        *os.File      // currDataFp is the current data file pointer to which the data is being written
-	currWriteOffset   int64         // currWriteOffset is the current write offset
-	prevSyncedWOffset int64         // prevSyncedWOffset is the previous synced write offset
-	dataBufWriter     *bufio.Writer // dataBufWriter is the buffered writer for the data file
-	prevSyncedTime    time.Time     // prevSyncedTime is the previous synced time
-	segmentCreateTime time.Time     // segmentCreateTime is the time when the segment is created
-	encoder           *wal.Encoder  // encoder is the encoder for the WAL entries and header
-	opts              *options      // opts is the options for the store
+	parittionID             *partition.ID // partitionID is the partition ID for the store
+	currDataFp              *os.File      // currDataFp is the current data file pointer to which the data is being written
+	currWriteOffset         int64         // currWriteOffset is the current write offset
+	prevSyncedWOffset       int64         // prevSyncedWOffset is the previous synced write offset
+	dataBufWriter           *bufio.Writer // dataBufWriter is the buffered writer for the data file
+	prevSyncedTime          time.Time     // prevSyncedTime is the previous synced time
+	segmentCreateTime       time.Time     // segmentCreateTime is the time when the segment is created
+	encoder                 *Encoder      // encoder is the encoder for the WAL entries and header
+	storeDataPath           string
+	segmentSize             int64
+	syncDuration            time.Duration
+	openMode                int
+	maxBatchSize            int64
+	segmentRotationDuration time.Duration
 }
 
 // NewStore returns a new store instance
-func NewWriterStore(partitionId *partition.ID, opts ...Option) (StoreWriter, error) {
-	dOpts := DefaultOptions()
-	for _, opt := range opts {
-		opt(dOpts)
-	}
+func NewWriterStore(partitionId *partition.ID, opts ...StoreWriterOption) (StoreWriter, error) {
 
 	s := &store{
 		currDataFp:        nil,
@@ -43,10 +43,13 @@ func NewWriterStore(partitionId *partition.ID, opts ...Option) (StoreWriter, err
 		currWriteOffset:   0,
 		prevSyncedWOffset: 0,
 		prevSyncedTime:    time.Now(),
-		opts:              dOpts,
 		segmentCreateTime: time.Now(),
-		encoder:           wal.NewEncoder(),
+		encoder:           NewEncoder(),
 		parittionID:       partitionId,
+	}
+
+	for _, opt := range opts {
+		opt(s)
 	}
 
 	// open the current data file
@@ -56,13 +59,12 @@ func NewWriterStore(partitionId *partition.ID, opts ...Option) (StoreWriter, err
 
 // Write writes the message to the WAL. The format as follow is
 //
-//	+-----------------+------------------+-------------------+-------------------+----------------+----------------+
-//	| keyLen  | eventtime (int64) | watermark (int64) | offset (int64) | msg-len (int64) | key | message []byte |
-//	+-----------------+------------------+-------------------+-------------------+----------------+----------------+
+//	+--------------------+-------------------+-----------------+------------------+-----------------+------------+--------------+----------------+
+//	| event time (int64) | watermark (int64) | offset (int64)  | msg-len (int64)  | key-len (int64) | key []byte | CRC (uint32) | message []byte |
+//	+--------------------+-------------------+-----------------+------------------+-----------------+------------+--------------+----------------+
 //
 // CRC will be used for detecting ReadMessage corruptions.
 func (s *store) Write(message *isb.ReadMessage) error {
-	var err error
 
 	// encode the message
 	entry, err := s.encoder.EncodeMessage(message)
@@ -82,27 +84,28 @@ func (s *store) Write(message *isb.ReadMessage) error {
 	currTime := time.Now()
 
 	// sync file if the batch size is reached or sync duration is reached
-	if s.currWriteOffset-s.prevSyncedWOffset >= s.opts.maxBatchSize || currTime.Sub(s.prevSyncedTime) >= s.opts.syncDuration {
+	if s.currWriteOffset-s.prevSyncedWOffset >= s.maxBatchSize || currTime.Sub(s.prevSyncedTime) >= s.opts.syncDuration {
 		if err = s.sync(); err != nil {
-			return err
-		}
-	}
-
-	// rotate the segment if the segment size is reached or segment duration is reached
-	if currTime.Sub(s.segmentCreateTime) >= s.opts.segmentRotationDuration || s.currWriteOffset >= s.opts.segmentSize {
-		if err = s.rotateFile(); err != nil {
 			return err
 		}
 	}
 
 	// Only increase the write offset when we successfully write for atomicity.
 	s.currWriteOffset += int64(wrote)
-	return err
+
+	// rotate the segment if the segment size is reached or segment duration is reached
+	if currTime.Sub(s.segmentCreateTime) >= s.segmentRotationDuration || s.currWriteOffset >= s.opts.segmentSize {
+		if err = s.rotateFile(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // openFile opens a new data file
 func (s *store) openFile() error {
-	dataFilePath := filepath.Join(s.opts.storeDataPath, CurrentSegmentName)
+	dataFilePath := filepath.Join(s.storeDataPath, CurrentSegmentName)
 
 	var err error
 	if s.currDataFp, err = os.OpenFile(dataFilePath, os.O_WRONLY|os.O_CREATE, 0644); err != nil {
@@ -139,7 +142,7 @@ func (s *store) rotateFile() error {
 	}
 
 	// rename the current data file to the segment file
-	if err := os.Rename(filepath.Join(s.opts.storeDataPath, CurrentSegmentName), s.segmentFilePath(s.opts.storeDataPath)); err != nil {
+	if err := os.Rename(filepath.Join(s.storeDataPath, CurrentSegmentName), s.segmentFilePath(s.opts.storeDataPath)); err != nil {
 		return err
 	}
 

@@ -1,4 +1,4 @@
-package wal
+package unaligned
 
 import (
 	"encoding/binary"
@@ -8,9 +8,13 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 )
 
 const dMessageHeaderSize = 22
+
+var location *time.Location
+var errChecksumMismatch = fmt.Errorf("data checksum not match")
 
 // Decoder is a decoder for the WAL entries and header.
 type Decoder struct{}
@@ -57,7 +61,7 @@ func (d *Decoder) DecodeMessage(buf io.Reader) (*isb.ReadMessage, int64, error) 
 	if err != nil {
 		return nil, 0, err
 	}
-	size := EntryHeaderSize + entryHeader.MessageLen
+	size := wal.EntryHeaderSize + entryHeader.MessageLen
 
 	return &isb.ReadMessage{
 		Message:    *entryBody,
@@ -97,7 +101,6 @@ func (d *Decoder) DecodeDeleteMessage(buf io.Reader) (*DeletionMessage, int64, e
 	return &dmsg, size, nil
 }
 
-// decodeWALMessageHeader decodes the WALMessage header from the given io.Reader.
 func (d *Decoder) DecodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
 	// read the fixed vals
 	var entryHeader = new(readMessageHeaderPreamble)
@@ -108,7 +111,6 @@ func (d *Decoder) DecodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPream
 	return entryHeader, nil
 }
 
-// decodeWALBody decodes the WAL message body from the given io.Reader
 func (d *Decoder) DecodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPreamble) (*isb.Message, error) {
 	var err error
 

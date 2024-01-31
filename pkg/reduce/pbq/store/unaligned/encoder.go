@@ -1,4 +1,4 @@
-package wal
+package unaligned
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 )
 
 // walHeaderPreamble is the header preamble (excludes variadic key)
@@ -75,7 +76,6 @@ func (e *Encoder) EncodeHeader(id *partition.ID) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Encode encodes the given isb message
 func (e *Encoder) EncodeMessage(message *isb.ReadMessage) ([]byte, error) {
 	e.buf.Reset()
 
@@ -136,7 +136,7 @@ func (e *Encoder) EncodeDeletionEvent(message *DeletionMessage) ([]byte, error) 
 }
 
 func calculateChecksum(data []byte) uint32 {
-	crc32q := crc32.MakeTable(IEEE)
+	crc32q := crc32.MakeTable(wal.IEEE)
 	return crc32.Checksum(data, crc32q)
 }
 

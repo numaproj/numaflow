@@ -1,4 +1,4 @@
-package wal
+package unaligned
 
 import (
 	"bufio"
@@ -13,14 +13,10 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 const (
-	OperationPrefix       = "operation"
-	CompactedPrefix       = "compacted"
-	compactEventsFileName = "compacted-events-file"
+	CompactedPrefix = "compacted"
 )
 
 type compactor struct {
@@ -38,8 +34,8 @@ type compactor struct {
 	syncDuration       time.Duration
 }
 
-// Newcompactor returns a new compactor instance
-func Newcompactor(storeDataPath string, storeEventsPath string, opts ...CompactorOption) (store.Compactor, error) {
+// NewCompactor returns a new compactor instance
+func NewCompactor(storeDataPath string, storeEventsPath string, opts ...CompactorOption) (Compactor, error) {
 
 	c := &compactor{
 		storeDataPath:   storeDataPath,
@@ -249,7 +245,7 @@ func (c *compactor) shouldDeleteMessage(eventTime int64, key string) bool {
 	return false
 }
 
-// writeToFile writes the message to the compacted file
+// writeToFile writes the message to the compacted file and rotates the file if the max file size is reached
 func (c *compactor) writeToFile(header *readMessageHeaderPreamble, key string, payload []byte) error {
 	buf := new(bytes.Buffer)
 	// write the message to the output file
@@ -283,7 +279,7 @@ func (c *compactor) writeToFile(header *readMessageHeaderPreamble, key string, p
 	c.compWriteOffset += int64(bytesCount)
 
 	if c.compWriteOffset >= c.maxFileSize {
-		c.rotateCompactionFile()
+		_ = c.rotateCompactionFile()
 	}
 
 	return nil
@@ -322,4 +318,15 @@ func (c *compactor) openCompactionFile() error {
 		return err
 	}
 	return nil
+}
+
+// decodeWALMessageHeader decodes the WALMessage header which is encoded by encodeWALMessageHeader.
+func decodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
+	// read the fixed vals
+	var entryHeader = new(readMessageHeaderPreamble)
+	err := binary.Read(buf, binary.LittleEndian, entryHeader)
+	if err != nil {
+		return nil, err
+	}
+	return entryHeader, nil
 }

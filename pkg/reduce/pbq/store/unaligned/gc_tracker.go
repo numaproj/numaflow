@@ -1,4 +1,4 @@
-package wal
+package unaligned
 
 import (
 	"bufio"
@@ -12,10 +12,11 @@ import (
 	"sync"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
-	"github.com/numaproj/numaflow/pkg/window"
 	"go.uber.org/zap"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
+	"github.com/numaproj/numaflow/pkg/window"
 )
 
 const (
@@ -35,7 +36,7 @@ type gCEventsTracker struct {
 }
 
 // NewgCEventsTracker returns a new GC tracker instance
-func NewgCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (store.GCEventsTracker, error) {
+func NewgCEventsTracker(ctx context.Context, opts ...wal.GCTrackerOption) (GCEventsTracker, error) {
 	tracker := &gCEventsTracker{
 		currEventsFile:  nil,
 		eventsBufWriter: nil,
