@@ -620,9 +620,53 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Kafka Source
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         Kafka Source
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#faq" class="md-nav__link">
+    FAQ
+  </a>
+  
+    <nav class="md-nav" aria-label="FAQ">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime" class="md-nav__link">
+    How to start the Kafka Source from a specific offset based on datetime?
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -2164,6 +2208,34 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#faq" class="md-nav__link">
+    FAQ
+  </a>
+  
+    <nav class="md-nav" aria-label="FAQ">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime" class="md-nav__link">
+    How to start the Kafka Source from a specific offset based on datetime?
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2240,6 +2312,60 @@
 <span class="w">              </span><span class="c1"># Set this to false if using a non-Kafka SASL proxy</span>
 <span class="w">              </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span>
 </code></pre></div>
+<h2 id="faq">FAQ<a class="headerlink" href="#faq" title="Permanent link">&para;</a></h2>
+<h3 id="how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime">How to start the Kafka Source from a specific offset based on datetime?<a class="headerlink" href="#how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime" title="Permanent link">&para;</a></h3>
+<p>In order to start the Kafka Source from a specific offset based on datetime, we need to reset the offset before we start the pipeline.</p>
+<p>For example, we have a topic <code>quickstart-events</code> with 3 partitions and a consumer group <code>console-consumer-94457</code>. This example uses <a href="https://downloads.apache.org/kafka/3.6.1/RELEASE_NOTES.html">Kafka 3.6.1</a> and localhost.
+<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--describe<span class="w"> </span>--topic<span class="w"> </span>quickstart-events<span class="w">            </span>
+Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>TopicId:<span class="w"> </span>WqIN6j7hTQqGZUQWdF7AdA<span class="w"> </span>PartitionCount:<span class="w"> </span><span class="m">3</span><span class="w">   </span>ReplicationFactor:<span class="w"> </span><span class="m">1</span><span class="w">    </span>Configs:<span class="w"> </span>
+<span class="w">    </span>Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>Partition:<span class="w"> </span><span class="m">0</span><span class="w">    </span>Leader:<span class="w"> </span><span class="m">0</span><span class="w">   </span>Replicas:<span class="w"> </span><span class="m">0</span><span class="w"> </span>Isr:<span class="w"> </span><span class="m">0</span>
+<span class="w">    </span>Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>Partition:<span class="w"> </span><span class="m">1</span><span class="w">    </span>Leader:<span class="w"> </span><span class="m">0</span><span class="w">   </span>Replicas:<span class="w"> </span><span class="m">0</span><span class="w"> </span>Isr:<span class="w"> </span><span class="m">0</span>
+<span class="w">    </span>Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>Partition:<span class="w"> </span><span class="m">2</span><span class="w">    </span>Leader:<span class="w"> </span><span class="m">0</span><span class="w">   </span>Replicas:<span class="w"> </span><span class="m">0</span><span class="w"> </span>Isr:<span class="w"> </span><span class="m">0</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--list<span class="w"> </span>--all-groups<span class="w">                                                                                                     </span>
+console-consumer-94457
+</code></pre></div>
+We have already consumed all the available messages in the topic <code>quickstart-events</code>, but we want to go back to some datetime and re-consume the data from that datetime.
+<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--describe<span class="w"> </span>--group<span class="w"> </span>console-consumer-94457<span class="w">                          </span>
+
+GROUP<span class="w">                  </span>TOPIC<span class="w">             </span>PARTITION<span class="w">  </span>CURRENT-OFFSET<span class="w">  </span>LOG-END-OFFSET<span class="w">  </span>LAG<span class="w">             </span>CONSUMER-ID<span class="w">     </span>HOST<span class="w">            </span>CLIENT-ID
+console-consumer-94457<span class="w"> </span>quickstart-events<span class="w"> </span><span class="m">0</span><span class="w">          </span><span class="m">56</span><span class="w">              </span><span class="m">56</span><span class="w">              </span><span class="m">0</span><span class="w">               </span>-<span class="w">               </span>-<span class="w">               </span>-
+console-consumer-94457<span class="w"> </span>quickstart-events<span class="w"> </span><span class="m">1</span><span class="w">          </span><span class="m">38</span><span class="w">              </span><span class="m">38</span><span class="w">              </span><span class="m">0</span><span class="w">               </span>-<span class="w">               </span>-<span class="w">               </span>-
+console-consumer-94457<span class="w"> </span>quickstart-events<span class="w"> </span><span class="m">2</span><span class="w">          </span><span class="m">4</span><span class="w">               </span><span class="m">4</span><span class="w">               </span><span class="m">0</span><span class="w">               </span>-<span class="w">               </span>-<span class="w">               </span>-
+</code></pre></div>
+To achieve that, before the pipeline start, we need to first stop the consumers in the consumer group <code>console-consumer-94457</code> because offsets can only be reset if the group <code>console-consumer-94457</code> is inactive. Then, reset the offsets using the desired date and time. The example command below uses UTC time.
+<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--execute<span class="w"> </span>--reset-offsets<span class="w"> </span>--group<span class="w"> </span>console-consumer-94457<span class="w"> </span>--topic<span class="w"> </span>quickstart-events<span class="w"> </span>--to-datetime<span class="w"> </span><span class="m">2024</span>-01-19T19:26:00.000
+
+GROUP<span class="w">                          </span>TOPIC<span class="w">                          </span>PARTITION<span class="w">  </span>NEW-OFFSET<span class="w">     </span>
+console-consumer-94457<span class="w">         </span>quickstart-events<span class="w">              </span><span class="m">0</span><span class="w">          </span><span class="m">54</span><span class="w">             </span>
+console-consumer-94457<span class="w">         </span>quickstart-events<span class="w">              </span><span class="m">1</span><span class="w">          </span><span class="m">26</span><span class="w">             </span>
+console-consumer-94457<span class="w">         </span>quickstart-events<span class="w">              </span><span class="m">2</span><span class="w">          </span><span class="m">0</span><span class="w"> </span>
+</code></pre></div>
+Now, we can start the pipeline, and the Kafka source will start consuming the topic <code>quickstart-events</code> with consumer group <code>console-consumer-94457</code> from the <code>NEW-OFFSET</code>.</p>
+<p>You may need to create a property file which contains the connectivity details and use it to connect to the clusters. Below are two example <code>config.properties</code> files: <code>SASL/PLAIN</code> and <code>TSL</code>.
+<div class="highlight"><pre><span></span><code>ssl.endpoint.identification.algorithm=https
+sasl.mechanism=PLAIN
+request.timeout.ms=20000
+bootstrap.servers=&lt;BOOSTRAP_BROKER_LIST&gt;
+retry.backoff.ms=500
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+   username=&quot;&lt;CLUSTER_API_KEY&gt;&quot; \
+   password=&quot;&lt;CLUSTER_API_SECRET&gt;&quot;;
+security.protocol=SASL_SSL
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>request.timeout.ms=20000
+bootstrap.servers=&lt;BOOSTRAP_BROKER_LIST&gt;
+security.protocol=SSL
+ssl.enabled.protocols=TLSv1.2
+ssl.truststore.location=&lt;JKS_FILE_PATH&gt;
+ssl.truststore.password=&lt;PASSWORD&gt;
+</code></pre></div>
+Run the command with the <code>--command-config</code> option.
+<div class="highlight"><pre><span></span><code>bin/kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>&lt;BOOTSTRAP_BROKER_LIST&gt;<span class="w"> </span>--command-config<span class="w"> </span>config.properties<span class="w"> </span>--execute<span class="w"> </span>--reset-offsets<span class="w"> </span>--group<span class="w"> </span>&lt;GROUP_NAME&gt;<span class="w"> </span>--topic<span class="w"> </span>&lt;TOPIC_NAME&gt;<span class="w"> </span>--to-datetime<span class="w"> </span>&lt;DATETIME_STRING&gt;
+</code></pre></div></p>
+<p>Reference:
+- <a href="https://docs.confluent.io/kafka/operations-tools/use-kafka-tools-ccloud.html#create-a-configuration-file">How to Use Kafka Tools With Confluent Cloud</a>
+- <a href="https://kafka.apache.org/documentation/#security">Apache Kafka Security</a></p>
 
               
             </article>
