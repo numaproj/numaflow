@@ -25,8 +25,8 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/memory"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -193,5 +193,5 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	}
 	pq.CloseOfBook()
 
-	assert.Error(t, err, store.ErrWriteStoreFull)
+	assert.Error(t, err, aligned.ErrWriteStoreFull)
 }

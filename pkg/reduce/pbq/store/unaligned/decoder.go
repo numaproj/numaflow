@@ -8,10 +8,12 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 )
 
-const dMessageHeaderSize = 22
+const (
+	dMessageHeaderSize = 22
+	EntryHeaderSize    = 28
+)
 
 var location *time.Location
 var errChecksumMismatch = fmt.Errorf("data checksum not match")
@@ -61,7 +63,7 @@ func (d *Decoder) DecodeMessage(buf io.Reader) (*isb.ReadMessage, int64, error) 
 	if err != nil {
 		return nil, 0, err
 	}
-	size := wal.EntryHeaderSize + entryHeader.MessageLen
+	size := EntryHeaderSize + entryHeader.MessageLen
 
 	return &isb.ReadMessage{
 		Message:    *entryBody,

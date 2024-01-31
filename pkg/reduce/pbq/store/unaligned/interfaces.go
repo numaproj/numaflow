@@ -25,7 +25,6 @@ type StoreReader interface {
 type Compactor interface {
 	// Start starts the compactor
 	Start(ctx context.Context) error
-
 	// Stop stops the compactor
 	Stop(ctx context.Context) error
 }

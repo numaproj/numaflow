@@ -18,14 +18,14 @@ package noop
 
 import (
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
 )
 
 // PBQNoOpStore is a no-op pbq store which does not do any operation but can be safely invoked.
 type PBQNoOpStore struct {
 }
 
-var _ store.Store = (*PBQNoOpStore)(nil)
+var _ aligned.Store = (*PBQNoOpStore)(nil)
 
 func NewPBQNoOpStore() (*PBQNoOpStore, error) {
 	return &PBQNoOpStore{}, nil

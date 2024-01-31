@@ -25,8 +25,8 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/noop"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/noop"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
