@@ -15,7 +15,6 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -30,19 +29,23 @@ type gcEventsTracker struct {
 	eventsBufWriter  *bufio.Writer // buffer writer for the events file
 	prevSyncedTime   time.Time     // previous synced time
 	syncDuration     time.Duration // sync duration
-	encoder          *Encoder      // encoder for the events file
+	encoder          *encoder      // encoder for the events file
 	rotationDuration time.Duration // rotation duration
+	stopSignal       chan struct{} // stopSignal channel
+	doneCh           chan struct{} // done channel
 	mu               sync.Mutex
 }
 
 // NewGCEventsTracker returns a new GC tracker instance
-func NewGCEventsTracker(ctx context.Context, opts ...wal.GCTrackerOption) (GCEventsTracker, error) {
+func NewGCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (GCEventsTracker, error) {
 	tracker := &gcEventsTracker{
 		currEventsFile:  nil,
 		eventsBufWriter: nil,
 		prevSyncedTime:  time.Now(),
-		encoder:         NewEncoder(),
+		encoder:         newEncoder(),
 		mu:              sync.Mutex{},
+		stopSignal:      make(chan struct{}),
+		doneCh:          make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -60,11 +63,14 @@ func NewGCEventsTracker(ctx context.Context, opts ...wal.GCTrackerOption) (GCEve
 
 // keepRotating keeps rotating the events file
 func (g *gcEventsTracker) keepRotating(ctx context.Context) {
-	rotationTimer := time.NewTimer(g.rotationDuration)
+	rotationTimer := time.NewTicker(g.rotationDuration)
 
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-g.stopSignal:
+			close(g.doneCh)
 			return
 		case <-rotationTimer.C:
 			// rotate the file
@@ -107,7 +113,7 @@ func (g *gcEventsTracker) openEventsFile() error {
 	eventFilePath := filepath.Join(g.eventsPath, currentEventsFile)
 
 	var err error
-	if g.currEventsFile, err = os.OpenFile(eventFilePath, os.O_WRONLY|os.O_CREATE, 0644); err != nil {
+	if g.currEventsFile, err = os.OpenFile(eventFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644); err != nil {
 		return err
 	}
 
@@ -125,7 +131,7 @@ func (g *gcEventsTracker) TrackGCEvent(window window.TimedWindow) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	deletionMessage := &DeletionMessage{
+	dms := &deletionMessage{
 		St:   window.StartTime().UnixMilli(),
 		Et:   window.EndTime().UnixMilli(),
 		Slot: window.Slot(),
@@ -133,7 +139,7 @@ func (g *gcEventsTracker) TrackGCEvent(window window.TimedWindow) error {
 	}
 
 	// encode and write the deletion message
-	dbytes, err := g.encoder.EncodeDeletionEvent(deletionMessage)
+	dbytes, err := g.encoder.encodeDeletionEvent(dms)
 	if err != nil {
 		return err
 	}
@@ -159,4 +165,29 @@ func (g *gcEventsTracker) flushAndSync() error {
 
 	g.prevSyncedTime = time.Now()
 	return g.currEventsFile.Sync()
+}
+
+// Close closes the tracker by flushing and syncing the current events file
+func (g *gcEventsTracker) Close() error {
+	// stop the rotation by closing the stopSignal channel
+	// and wait for the done channel to be closed
+	close(g.stopSignal)
+	<-g.doneCh
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := g.flushAndSync(); err != nil {
+		return err
+	}
+
+	if err := g.currEventsFile.Close(); err != nil {
+		return err
+	}
+
+	// rename the current events file to the events file
+	if err := os.Rename(filepath.Join(g.eventsPath, currentEventsFile), g.getEventsFilePath()); err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -15,20 +15,30 @@ const (
 	EntryHeaderSize    = 28
 )
 
-var location *time.Location
-var errChecksumMismatch = fmt.Errorf("data checksum not match")
+var (
+	location            *time.Location
+	errChecksumMismatch = fmt.Errorf("data checksum not match")
+)
 
-// Decoder is a decoder for the WAL entries and header.
-type Decoder struct{}
-
-// NewDecoder returns a new decoder
-func NewDecoder() *Decoder {
-	return &Decoder{}
+func init() {
+	var err error
+	location, err = time.LoadLocation("UTC")
+	if err != nil {
+		panic(fmt.Sprint("cannot load UTC", err))
+	}
 }
 
-// DecodeHeader decodes the header from the given io.Reader.
+// decoder is a decoder for the WAL entries and header.
+type decoder struct{}
+
+// newDecoder returns a new decoder
+func newDecoder() *decoder {
+	return &decoder{}
+}
+
+// decodeHeader decodes the header from the given io.Reader.
 // the header of the WAL file is a partition.ID, so it returns a partition.ID.
-func (d *Decoder) DecodeHeader(buf io.Reader) (*partition.ID, error) {
+func (d *decoder) decodeHeader(buf io.Reader) (*partition.ID, error) {
 	var err error
 
 	// read the fixed values
@@ -52,14 +62,14 @@ func (d *Decoder) DecodeHeader(buf io.Reader) (*partition.ID, error) {
 	}, nil
 }
 
-// DecodeMessage decodes the isb message from the given io.Reader.
-func (d *Decoder) DecodeMessage(buf io.Reader) (*isb.ReadMessage, int64, error) {
-	entryHeader, err := d.DecodeWALMessageHeader(buf)
+// decodeMessage decodes the isb read message from the given io.Reader.
+func (d *decoder) decodeMessage(buf io.Reader) (*isb.ReadMessage, int64, error) {
+	entryHeader, err := d.decodeWALMessageHeader(buf)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	entryBody, err := d.DecodeWALBody(buf, entryHeader)
+	entryBody, err := d.decodeWALBody(buf, entryHeader)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -72,16 +82,17 @@ func (d *Decoder) DecodeMessage(buf io.Reader) (*isb.ReadMessage, int64, error) 
 	}, size, nil
 }
 
-func (d *Decoder) DecodeDeleteMessage(buf io.Reader) (*DeletionMessage, int64, error) {
-	dmsg := DeletionMessage{}
+// decodeDeletionMessage decodes deletion message from the given io.Reader
+func (d *decoder) decodeDeletionMessage(buf io.Reader) (*deletionMessage, int64, error) {
+	dms := deletionMessage{}
 
 	dMessageHeader := deletionMessageHeaderPreamble{}
 	if err := binary.Read(buf, binary.LittleEndian, &dMessageHeader); err != nil {
 		return nil, 0, err
 	}
 
-	dmsg.St = dMessageHeader.St
-	dmsg.Et = dMessageHeader.Et
+	dms.St = dMessageHeader.St
+	dms.Et = dMessageHeader.Et
 
 	// read the slot
 	var slot = make([]rune, dMessageHeader.SLen)
@@ -89,22 +100,22 @@ func (d *Decoder) DecodeDeleteMessage(buf io.Reader) (*DeletionMessage, int64, e
 		return nil, 0, err
 	}
 
-	dmsg.Slot = string(slot)
+	dms.Slot = string(slot)
 
-	// read the keys
+	// read the key
 	var key = make([]rune, dMessageHeader.KLen)
 	if err := binary.Read(buf, binary.LittleEndian, key); err != nil {
 		return nil, 0, err
 	}
 
-	dmsg.Key = string(key)
+	dms.Key = string(key)
 
 	size := dMessageHeaderSize + int64(dMessageHeader.SLen) + int64(dMessageHeader.KLen)
-	return &dmsg, size, nil
+	return &dms, size, nil
 }
 
-func (d *Decoder) DecodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
-	// read the fixed vals
+// decodeWALMessageHeader decodes the WAL message header from the given io.Reader.
+func (d *decoder) decodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
 	var entryHeader = new(readMessageHeaderPreamble)
 	err := binary.Read(buf, binary.LittleEndian, entryHeader)
 	if err != nil {
@@ -113,7 +124,8 @@ func (d *Decoder) DecodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPream
 	return entryHeader, nil
 }
 
-func (d *Decoder) DecodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPreamble) (*isb.Message, error) {
+// decodeWALBody decodes the WAL message body from the given io.Reader.
+func (d *decoder) decodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPreamble) (*isb.Message, error) {
 	var err error
 
 	body := make([]byte, entryHeader.MessageLen)
@@ -124,10 +136,10 @@ func (d *Decoder) DecodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPre
 	if int64(size) != entryHeader.MessageLen {
 		return nil, fmt.Errorf("expected to read length of %d, but wrote only %d", entryHeader.MessageLen, size)
 	}
-
 	// verify the checksum
 	checksum := calculateChecksum(body)
 	if checksum != entryHeader.Checksum {
+		println("header - ", entryHeader.MessageLen, " ", entryHeader.Checksum, " ", entryHeader.KeyLen, " ", entryHeader.Offset, " ", entryHeader.WaterMark, " ", entryHeader.EventTime)
 		return nil, errChecksumMismatch
 	}
 

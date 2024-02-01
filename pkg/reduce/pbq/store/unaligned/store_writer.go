@@ -14,27 +14,26 @@ import (
 const (
 	IEEE               = 0xedb88320
 	SegmentPrefix      = "segment"
-	CurrentSegmentName = "segment-current"
+	CurrentSegmentName = "current" + "-" + SegmentPrefix
 )
 
 type store struct {
-	parittionID             *partition.ID // partitionID is the partition ID for the store
+	partitionID             *partition.ID // partitionID is the partition ID for the store
 	currDataFp              *os.File      // currDataFp is the current data file pointer to which the data is being written
 	currWriteOffset         int64         // currWriteOffset is the current write offset
 	prevSyncedWOffset       int64         // prevSyncedWOffset is the previous synced write offset
 	dataBufWriter           *bufio.Writer // dataBufWriter is the buffered writer for the data file
 	prevSyncedTime          time.Time     // prevSyncedTime is the previous synced time
 	segmentCreateTime       time.Time     // segmentCreateTime is the time when the segment is created
-	encoder                 *Encoder      // encoder is the encoder for the WAL entries and header
+	encoder                 *encoder      // encoder is the encoder for the WAL entries and header
 	storeDataPath           string
 	segmentSize             int64
 	syncDuration            time.Duration
-	openMode                int
 	maxBatchSize            int64
 	segmentRotationDuration time.Duration
 }
 
-// NewStore returns a new store instance
+// NewWriterStore returns a new store instance
 func NewWriterStore(partitionId *partition.ID, opts ...StoreWriterOption) (StoreWriter, error) {
 
 	s := &store{
@@ -44,8 +43,8 @@ func NewWriterStore(partitionId *partition.ID, opts ...StoreWriterOption) (Store
 		prevSyncedWOffset: 0,
 		prevSyncedTime:    time.Now(),
 		segmentCreateTime: time.Now(),
-		encoder:           NewEncoder(),
-		parittionID:       partitionId,
+		encoder:           newEncoder(),
+		partitionID:       partitionId,
 	}
 
 	for _, opt := range opts {
@@ -53,22 +52,26 @@ func NewWriterStore(partitionId *partition.ID, opts ...StoreWriterOption) (Store
 	}
 
 	// open the current data file
-	s.openFile()
+	err := s.openFile()
+	if err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
 // Write writes the message to the WAL. The format as follow is
 //
-//	+--------------------+-------------------+-----------------+------------------+-----------------+------------+--------------+----------------+
-//	| event time (int64) | watermark (int64) | offset (int64)  | msg-len (int64)  | key-len (int64) | key []byte | CRC (uint32) | message []byte |
-//	+--------------------+-------------------+-----------------+------------------+-----------------+------------+--------------+----------------+
+//	+--------------------+-------------------+-----------------+------------------+-----------------+-------------+------------+----------------+
+//	| event time (int64) | watermark (int64) | offset (int64)  | msg-len (int64)  | key-len (int64) | CRC (uint32 | key []byte | message []byte |
+//	+--------------------+-------------------+-----------------+------------------+-----------------+-------------+------------+----------------+
 //
 // CRC will be used for detecting ReadMessage corruptions.
 func (s *store) Write(message *isb.ReadMessage) error {
 
 	// encode the message
-	entry, err := s.encoder.EncodeMessage(message)
+	entry, err := s.encoder.encodeMessage(message)
 	if err != nil {
+		println("Error while encoding the message", err.Error())
 		return err
 	}
 
@@ -85,12 +88,12 @@ func (s *store) Write(message *isb.ReadMessage) error {
 
 	// sync file if the batch size is reached or sync duration is reached
 	if s.currWriteOffset-s.prevSyncedWOffset >= s.maxBatchSize || currTime.Sub(s.prevSyncedTime) >= s.syncDuration {
-		if err = s.sync(); err != nil {
+		if err = s.flushAndSync(); err != nil {
 			return err
 		}
 	}
 
-	// Only increase the write offset when we successfully write for atomicity.
+	// Only increase the offset when we successfully write for atomicity.
 	s.currWriteOffset += int64(wrote)
 
 	// rotate the segment if the segment size is reached or segment duration is reached
@@ -108,7 +111,7 @@ func (s *store) openFile() error {
 	dataFilePath := filepath.Join(s.storeDataPath, CurrentSegmentName)
 
 	var err error
-	if s.currDataFp, err = os.OpenFile(dataFilePath, os.O_WRONLY|os.O_CREATE, 0644); err != nil {
+	if s.currDataFp, err = os.OpenFile(dataFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644); err != nil {
 		return err
 	}
 
@@ -123,8 +126,7 @@ func (s *store) openFile() error {
 	s.currWriteOffset = 0
 
 	// write the wal header to the new file
-	s.writeWALHeader()
-	return nil
+	return s.writeWALHeader()
 }
 
 // rotateFile rotates the current data file to the segment file
@@ -132,7 +134,7 @@ func (s *store) openFile() error {
 func (s *store) rotateFile() error {
 
 	// Sync data before rotating the file
-	if err := s.sync(); err != nil {
+	if err := s.flushAndSync(); err != nil {
 		return err
 	}
 
@@ -155,32 +157,18 @@ func (s *store) segmentFilePath(storePath string) string {
 	return filepath.Join(storePath, SegmentPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
 }
 
-// sync syncs the data and operation files in the store.
-func (s *store) sync() error {
-	// no data is written, no need to sync
-	if s.currDataFp == nil {
-		return nil
+// flushAndSync flushes the buffered data to the writer and syncs the file to disk.
+func (s *store) flushAndSync() error {
+	if err := s.dataBufWriter.Flush(); err != nil {
+		return err
 	}
 
-	// flust and sync data and operation files
-	if err := flushAndSync(s.dataBufWriter, s.currDataFp); err != nil {
+	if err := s.currDataFp.Sync(); err != nil {
 		return err
 	}
 
 	s.prevSyncedWOffset = s.currWriteOffset
 	s.prevSyncedTime = time.Now()
-	return nil
-}
-
-// flushAndSync flushes the buffered data to the writer and syncs the file to disk.
-func flushAndSync(w *bufio.Writer, f *os.File) error {
-	if err := w.Flush(); err != nil {
-		return err
-	}
-
-	if err := f.Sync(); err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -188,10 +176,18 @@ func flushAndSync(w *bufio.Writer, f *os.File) error {
 // Close closes store
 func (s *store) Close() error {
 	// sync data before closing
-	s.sync()
+	err := s.flushAndSync()
+	if err != nil {
+		return err
+	}
 
 	// close the current data segment
-	if err := s.currDataFp.Close(); err != nil {
+	if err = s.currDataFp.Close(); err != nil {
+		return err
+	}
+
+	// rename the current data file to the segment file
+	if err = os.Rename(filepath.Join(s.storeDataPath, CurrentSegmentName), s.segmentFilePath(s.storeDataPath)); err != nil {
 		return err
 	}
 
@@ -199,17 +195,17 @@ func (s *store) Close() error {
 }
 
 // writeWALHeader writes the WAL header to the file.
-func (w *store) writeWALHeader() (err error) {
-	header, err := w.encoder.EncodeHeader(w.parittionID)
+func (s *store) writeWALHeader() error {
+	header, err := s.encoder.encodeHeader(s.partitionID)
 	if err != nil {
 		return err
 	}
-	wrote, err := w.dataBufWriter.Write(header)
+	wrote, err := s.dataBufWriter.Write(header)
 	if wrote != len(header) {
 		return fmt.Errorf("expected to write %d, but wrote only %d, %w", len(header), wrote, err)
 	}
 
-	// Only increase the write offset when we successfully write for atomicity.
-	w.currWriteOffset += int64(wrote)
+	// Only increase the offset when we successfully write for atomicity.
+	s.currWriteOffset += int64(wrote)
 	return err
 }

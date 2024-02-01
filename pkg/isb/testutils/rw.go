@@ -41,7 +41,7 @@ type PayloadForTest struct {
 func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 	var messages = make([]isb.Message, 0, count)
 	for i := int64(0); i < count; i++ {
-		tmpTime := startTime.Add(time.Duration(i) * time.Minute)
+		tmpTime := startTime.Add(time.Duration(i) * time.Second)
 		result, _ := json.Marshal(PayloadForTest{
 			Key:   fmt.Sprintf("paydload_%d", i),
 			Value: i,
@@ -53,7 +53,7 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 						EventTime: tmpTime,
 					},
 					ID:   fmt.Sprintf("%d-testVertex-0-0", i), // TODO: hard coded ID suffix ATM, make configurable if needed
-					Keys: []string{},
+					Keys: []string{"key-1", "key-2"},
 				},
 				Body: isb.Body{Payload: result},
 			},
@@ -103,6 +103,7 @@ func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.Read
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
 			ReadOffset: isb.NewSimpleIntPartitionOffset(int64(offset), 0),
+			Watermark:  writeMessage.EventTime,
 		}
 	}
 

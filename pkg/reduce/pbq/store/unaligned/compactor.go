@@ -8,18 +8,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
 const (
 	CompactedPrefix = "compacted"
+	CurrCompacted   = "current" + "-" + CompactedPrefix
 )
 
+// compactor is a compactor for the data files
 type compactor struct {
+	partitionID        *partition.ID
 	compactKeyMap      map[string]int64
 	storeEventsPath    string
 	storeDataPath      string
@@ -29,24 +35,28 @@ type compactor struct {
 	prevSyncedTime     time.Time
 	maxFileSize        int64
 	mu                 sync.Mutex
-	decoder            *Decoder
+	dc                 *decoder
+	ec                 *encoder
 	compactionDuration time.Duration
 	syncDuration       time.Duration
 }
 
 // NewCompactor returns a new compactor instance
-func NewCompactor(storeDataPath string, storeEventsPath string, opts ...CompactorOption) (Compactor, error) {
+func NewCompactor(partitionId *partition.ID, storeDataPath string, storeEventsPath string, opts ...CompactorOption) (Compactor, error) {
 
 	c := &compactor{
+		partitionID:     partitionId,
 		storeDataPath:   storeDataPath,
 		storeEventsPath: storeEventsPath,
 		compactKeyMap:   make(map[string]int64),
 		prevSyncedTime:  time.Now(),
 		mu:              sync.Mutex{},
-		decoder:         NewDecoder(),
+		dc:              newDecoder(),
+		ec:              newEncoder(),
 		compWriteOffset: 0,
 	}
 
+	// open the first compaction file to write to
 	if err := c.openCompactionFile(); err != nil {
 		return nil, err
 	}
@@ -55,20 +65,35 @@ func NewCompactor(storeDataPath string, storeEventsPath string, opts ...Compacto
 		opt(c)
 	}
 
-	c.compBufWriter = bufio.NewWriter(c.currCompactedFile)
-
 	return c, nil
 }
 
 // Start starts the compactor
 func (c *compactor) Start(ctx context.Context) error {
-	// TODO write logic to compact if there are any event files left
+	// in case of incomplete compaction we should compact the data files
+	// before starting the compactor
+	if err := c.compact(ctx); err != nil {
+		return err
+	}
 	go c.keepCompacting(ctx)
 	return nil
 }
 
-func (c *compactor) Stop(ctx context.Context) error {
-	// TODO
+func (c *compactor) Stop() error {
+	// flush the buffer and sync the file
+	if err := c.flushAndSync(); err != nil {
+		return err
+	}
+
+	// Close the current data file
+	if err := c.currCompactedFile.Close(); err != nil {
+		return err
+	}
+
+	// rename the current compaction file to the segment file
+	if err := os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.storeDataPath)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -79,24 +104,49 @@ func (c *compactor) getFilePath(storePath string) string {
 
 // keepCompacting keeps compacting the data files every compaction duration
 func (c *compactor) keepCompacting(ctx context.Context) {
-	compTimer := time.NewTimer(c.compactionDuration)
+	compTimer := time.NewTicker(c.compactionDuration)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		default:
-			<-compTimer.C
+		case <-compTimer.C:
+			err := c.compact(ctx)
+			// TODO: retry
+			log.Println("compaction error - ", err.Error())
 		}
-		// TODO error handling
-		eventFiles, _ := filesInDir(c.storeEventsPath)
-		// build the compaction key map
-		c.buildCompactionKeyMap(eventFiles)
-		// compact the data files based on the compaction key map
-		c.compactDataFiles(ctx)
 	}
 
 }
 
+// compact reads all the events file and constructs the compaction key map
+// and then compacts the data files based on the compaction key map
+func (c *compactor) compact(ctx context.Context) error {
+	// get all the events files
+	eventFiles, _ := filesInDir(c.storeEventsPath)
+	// build the compaction key map
+	c.buildCompactionKeyMap(eventFiles)
+	// compact the data files based on the compaction key map
+	// log map
+	for k, v := range c.compactKeyMap {
+		log.Println("key - ", k, "value - ", v)
+	}
+	err := c.compactDataFiles(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	// delete the events files
+	for _, eventFile := range eventFiles {
+		if err := os.Remove(filepath.Join(c.storeEventsPath, eventFile.Name())); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// buildCompactionKeyMap builds the compaction key map from the event files
 func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) {
 	c.compactKeyMap = make(map[string]int64)
 
@@ -109,7 +159,7 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) {
 
 		// iterate over all the delete events and delete the messages
 		for {
-			cEvent, _, err := c.decoder.DecodeDeleteMessage(opFile)
+			cEvent, _, err := c.dc.decodeDeletionMessage(opFile)
 			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
@@ -126,6 +176,11 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) {
 			}
 		}
 	}
+
+	// log map
+	for k, v := range c.compactKeyMap {
+		log.Println("key - ", k, "value - ", v)
+	}
 }
 
 // filesInDir lists all the files in the given directory except the current file
@@ -135,7 +190,9 @@ func filesInDir(dirPath string) ([]os.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer dir.Close()
+	defer func(dir *os.File) {
+		_ = dir.Close()
+	}(dir)
 
 	// read all files from the dir
 	files, err := dir.Readdir(-1)
@@ -143,11 +200,8 @@ func filesInDir(dirPath string) ([]os.FileInfo, error) {
 		return nil, err
 	}
 
-	if len(files) <= 1 {
-		return []os.FileInfo{}, nil
-	}
-
 	// ignore the files which has "current" in their file name
+	// because it will in use by the writer
 	for i := 0; i < len(files); i++ {
 		if strings.Contains(files[i].Name(), "current") {
 			files = append(files[:i], files[i+1:]...)
@@ -155,20 +209,22 @@ func filesInDir(dirPath string) ([]os.FileInfo, error) {
 		}
 	}
 
-	// return the files expect the last one because its being
-	// used as the current data file
 	return files, nil
 }
 
+// compactDataFiles compacts the data files
 func (c *compactor) compactDataFiles(ctx context.Context) error {
 
+	// get all the data files
 	dataFiles, err := filesInDir(c.storeDataPath)
+	println("data files - ", len(dataFiles))
 	if err != nil {
 		return err
 	}
 
 	// iterate over all the data files and compact them
 	for _, dataFile := range dataFiles {
+		println("data file - ", dataFile.Name())
 		if err := c.compactFile(dataFile.Name()); err != nil {
 			return err
 		}
@@ -177,32 +233,47 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	return nil
 }
 
+// compactFile compacts the given data file
+// it copies the messages from the data file to the compaction file if the message should not be deleted
+// and deletes the data file after compaction
 func (c *compactor) compactFile(fileName string) error {
+	// open the data file (read only)
 	dp, err := os.Open(filepath.Join(c.storeDataPath, fileName))
 	if err != nil {
 		return err
 	}
 
+	// read and decode the WAL header
+	_, err = c.dc.decodeHeader(dp)
+	if err != nil {
+		println("err - ", err.Error())
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+
+	}
+
 	for {
-		// read and decode the WAL header
-		_, err := c.decoder.DecodeHeader(dp)
+		// read and decode the WAL message header
+		mp, err := decodeWALMessageHeader(dp)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break // end of file reached, break the loop
-			} else {
-				return err
 			}
+			return err
 		}
 
-		// read and decode the WAL message header
-		mp, err := decodeWALMessageHeader(dp)
+		// read the key
+		key := make([]rune, mp.KeyLen)
+		err = binary.Read(dp, binary.LittleEndian, &key)
 		if err != nil {
 			return err
 		}
 
-		// read the variadic slot
-		key := make([]rune, mp.KeyLen)
-		err = binary.Read(dp, binary.LittleEndian, &key)
+		// read the payload
+		var payload = make([]byte, mp.MessageLen)
+		_, err = dp.Read(payload)
 		if err != nil {
 			return err
 		}
@@ -213,13 +284,6 @@ func (c *compactor) compactFile(fileName string) error {
 			continue
 		}
 
-		// read the payload
-		var payload = make([]byte, mp.MessageLen)
-		err = binary.Read(dp, binary.LittleEndian, payload)
-		if err != nil {
-			return err
-		}
-
 		// write the message to the output file
 		if err := c.writeToFile(mp, string(key), payload); err != nil {
 			return err
@@ -227,7 +291,7 @@ func (c *compactor) compactFile(fileName string) error {
 
 	}
 
-	// delete the data file, since its been compactecd
+	// delete the data file, since it's been compacted
 	if err := os.Remove(filepath.Join(c.storeDataPath, fileName)); err != nil {
 		return err
 	}
@@ -249,7 +313,7 @@ func (c *compactor) shouldDeleteMessage(eventTime int64, key string) bool {
 // writeToFile writes the message to the compacted file and rotates the file if the max file size is reached
 func (c *compactor) writeToFile(header *readMessageHeaderPreamble, key string, payload []byte) error {
 	buf := new(bytes.Buffer)
-	// write the message to the output file
+	// write the header
 	if err := binary.Write(buf, binary.LittleEndian, header); err != nil {
 		return err
 	}
@@ -269,15 +333,15 @@ func (c *compactor) writeToFile(header *readMessageHeaderPreamble, key string, p
 		return err
 	}
 
+	// update the write offset
+	c.compWriteOffset += int64(bytesCount)
+
 	// sync the file if the sync duration is reached
 	if time.Since(c.prevSyncedTime) > c.syncDuration {
 		if err := c.flushAndSync(); err != nil {
 			return err
 		}
-		c.prevSyncedTime = time.Now()
 	}
-
-	c.compWriteOffset += int64(bytesCount)
 
 	if c.compWriteOffset >= c.maxFileSize {
 		_ = c.rotateCompactionFile()
@@ -299,6 +363,11 @@ func (c *compactor) rotateCompactionFile() error {
 		return err
 	}
 
+	// rename the current compaction file to the segment file
+	if err := os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.storeDataPath)); err != nil {
+		return err
+	}
+
 	// Open the next data file
 	return c.openCompactionFile()
 }
@@ -308,26 +377,57 @@ func (c *compactor) flushAndSync() error {
 	if err := c.compBufWriter.Flush(); err != nil {
 		return err
 	}
-	return c.currCompactedFile.Sync()
+	if err := c.currCompactedFile.Sync(); err != nil {
+		return err
+	}
+
+	// update the previous synced time
+	c.prevSyncedTime = time.Now()
+	return nil
 }
 
 // openCompactionFile opens a new compaction file
 func (c *compactor) openCompactionFile() error {
 	var err error
-	c.currCompactedFile, err = os.OpenFile(c.getFilePath(c.storeDataPath), os.O_WRONLY|os.O_CREATE, 0644)
+	c.currCompactedFile, err = os.OpenFile(filepath.Join(c.storeDataPath, CurrCompacted), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
-	return nil
+
+	// reset the offset
+	c.compWriteOffset = 0
+
+	// reset the write buffer
+	if c.compBufWriter == nil {
+		c.compBufWriter = bufio.NewWriter(c.currCompactedFile)
+	} else {
+		c.compBufWriter.Reset(c.currCompactedFile)
+	}
+	return c.writeWALHeader()
 }
 
 // decodeWALMessageHeader decodes the WALMessage header which is encoded by encodeWALMessageHeader.
 func decodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
-	// read the fixed vals
 	var entryHeader = new(readMessageHeaderPreamble)
 	err := binary.Read(buf, binary.LittleEndian, entryHeader)
 	if err != nil {
 		return nil, err
 	}
 	return entryHeader, nil
+}
+
+// writeWALHeader writes the WAL header to the file.
+func (c *compactor) writeWALHeader() error {
+	header, err := c.ec.encodeHeader(c.partitionID)
+	if err != nil {
+		return err
+	}
+	wrote, err := c.compBufWriter.Write(header)
+	if wrote != len(header) {
+		return fmt.Errorf("expected to write %d, but wrote only %d, %w", len(header), wrote, err)
+	}
+
+	// Only increase the offset when we successfully write for atomicity.
+	c.compWriteOffset += int64(wrote)
+	return err
 }

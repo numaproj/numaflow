@@ -26,10 +26,11 @@ type Compactor interface {
 	// Start starts the compactor
 	Start(ctx context.Context) error
 	// Stop stops the compactor
-	Stop(ctx context.Context) error
+	Stop() error
 }
 
 // GCEventsTracker tracks the GC events
 type GCEventsTracker interface {
 	TrackGCEvent(window window.TimedWindow) error
+	Close() error
 }

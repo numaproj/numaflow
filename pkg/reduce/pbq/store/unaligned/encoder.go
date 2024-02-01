@@ -10,7 +10,6 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/wal"
 )
 
 // walHeaderPreamble is the header preamble (excludes variadic key)
@@ -22,14 +21,15 @@ type walHeaderPreamble struct {
 
 // readMessageHeaderPreamble is the header for each WAL entry
 type readMessageHeaderPreamble struct {
-	WaterMark  int64
 	EventTime  int64
+	WaterMark  int64
 	Offset     int64
 	MessageLen int64
 	KeyLen     int32
 	Checksum   uint32
 }
 
+// deletionMessageHeaderPreamble is the header for each deletion event
 type deletionMessageHeaderPreamble struct {
 	St   int64
 	Et   int64
@@ -37,25 +37,28 @@ type deletionMessageHeaderPreamble struct {
 	KLen int32
 }
 
-type DeletionMessage struct {
+// deletionMessage is the deletion event for a keyed window
+type deletionMessage struct {
 	St   int64
 	Et   int64
 	Slot string
 	Key  string
 }
 
-// Encoder is an encoder for the WAL entries and header.
-type Encoder struct {
+// encoder is an encoder for the WAL entries and header.
+type encoder struct {
 	buf *bytes.Buffer
 }
 
-// NewEncoder returns a new encoder
-func NewEncoder() *Encoder {
-	return &Encoder{}
+// newEncoder returns a new encoder
+func newEncoder() *encoder {
+	return &encoder{
+		buf: &bytes.Buffer{},
+	}
 }
 
-// EncodeHeader encodes the header of the WAL file.
-func (e *Encoder) EncodeHeader(id *partition.ID) ([]byte, error) {
+// encodeHeader encodes the header of the WAL file.
+func (e *encoder) encodeHeader(id *partition.ID) ([]byte, error) {
 	e.buf.Reset()
 	buf := e.buf
 	hp := walHeaderPreamble{
@@ -70,13 +73,14 @@ func (e *Encoder) EncodeHeader(id *partition.ID) ([]byte, error) {
 	}
 
 	// write the slot
-	if err := binary.Write(buf, binary.LittleEndian, []byte(id.Slot)); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, []rune(id.Slot)); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-func (e *Encoder) EncodeMessage(message *isb.ReadMessage) ([]byte, error) {
+// encodeMessage encodes the given isb.ReadMessage to a binary format.
+func (e *encoder) encodeMessage(message *isb.ReadMessage) ([]byte, error) {
 	e.buf.Reset()
 
 	combinedKey := strings.Join(message.Keys, dfv1.KeysDelimitter)
@@ -96,7 +100,7 @@ func (e *Encoder) EncodeMessage(message *isb.ReadMessage) ([]byte, error) {
 	}
 
 	// Write the combinedKey to the buffer
-	if err := e.writeToBuffer(e.buf, []byte(combinedKey)); err != nil {
+	if err := binary.Write(e.buf, binary.LittleEndian, []rune(combinedKey)); err != nil {
 		return nil, err
 	}
 
@@ -107,7 +111,8 @@ func (e *Encoder) EncodeMessage(message *isb.ReadMessage) ([]byte, error) {
 	return e.buf.Bytes(), nil
 }
 
-func (e *Encoder) EncodeDeletionEvent(message *DeletionMessage) ([]byte, error) {
+// encodeDeletionEvent encodes the given deletionMessage to a binary format.
+func (e *encoder) encodeDeletionEvent(message *deletionMessage) ([]byte, error) {
 	e.buf.Reset()
 
 	cMessageHeader := deletionMessageHeaderPreamble{
@@ -127,7 +132,7 @@ func (e *Encoder) EncodeDeletionEvent(message *DeletionMessage) ([]byte, error) 
 		return nil, err
 	}
 
-	// write the keys
+	// write the key
 	if err := binary.Write(e.buf, binary.LittleEndian, []rune(message.Key)); err != nil {
 		return nil, err
 	}
@@ -136,12 +141,12 @@ func (e *Encoder) EncodeDeletionEvent(message *DeletionMessage) ([]byte, error) 
 }
 
 func calculateChecksum(data []byte) uint32 {
-	crc32q := crc32.MakeTable(wal.IEEE)
+	crc32q := crc32.MakeTable(IEEE)
 	return crc32.Checksum(data, crc32q)
 }
 
 // encodeWALMessageHeader encodes the WALMessage header.
-func (e *Encoder) encodeWALMessageHeader(message *isb.ReadMessage, bodyLen int64, checksum uint32, keyLen int32) error {
+func (e *encoder) encodeWALMessageHeader(message *isb.ReadMessage, bodyLen int64, checksum uint32, keyLen int32) error {
 
 	offset, err := message.ReadOffset.Sequence()
 	if err != nil {
@@ -165,7 +170,7 @@ func (e *Encoder) encodeWALMessageHeader(message *isb.ReadMessage, bodyLen int64
 
 // encodeWALMessageBody uses ReadMessage.Message field as the body of the WAL message, encodes the
 // ReadMessage.Message, and returns.
-func (e *Encoder) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
+func (e *encoder) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
 	msgBinary, err := readMsg.Message.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("encodeWALMessageBody encountered encode err: %w", err)
@@ -173,7 +178,7 @@ func (e *Encoder) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error)
 	return msgBinary, nil
 }
 
-func (e *Encoder) writeToBuffer(buf *bytes.Buffer, data []byte) error {
+func (e *encoder) writeToBuffer(buf *bytes.Buffer, data []byte) error {
 	wrote, err := buf.Write(data)
 	if err != nil {
 		return err
