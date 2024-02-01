@@ -3,11 +3,12 @@ package sideinput
 import (
 	"context"
 	"fmt"
+	"github.com/numaproj/numaflow-go/pkg/info"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 	"time"
 
 	sideinputpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
@@ -19,24 +20,21 @@ type client struct {
 	grpcClt sideinputpb.SideInputClient
 }
 
-var _ Client = (*client)(nil)
-
-// New creates a new client object. SideInput doesn't require server info to start ATM.
-func New(inputOptions ...sdkclient.Option) (*client, error) {
+// New creates a new client object.
+func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}
-	_, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-	c := new(client)
-	sockAddr := fmt.Sprintf("%s:%s", sdkclient.UDS, opts.UdsSockAddr())
-	conn, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.MaxMessageSize()), grpc.MaxCallSendMsgSize(opts.MaxMessageSize())))
+
+	// Connect to the server
+	conn, err := util.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
+		return nil, err
 	}
+
+	c := new(client)
 	c.conn = conn
 	c.grpcClt = sideinputpb.NewSideInputClient(conn)
 	return c, nil
@@ -50,12 +48,12 @@ func NewFromClient(c sideinputpb.SideInputClient) (Client, error) {
 }
 
 // CloseConn closes the grpc connection.
-func (c client) CloseConn(ctx context.Context) error {
+func (c *client) CloseConn(ctx context.Context) error {
 	return c.conn.Close()
 }
 
 // IsReady checks if the grpc connection is ready to use.
-func (c client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
+func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 	resp, err := c.grpcClt.IsReady(ctx, in)
 	if err != nil {
 		return false, err
@@ -64,7 +62,7 @@ func (c client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 }
 
 // RetrieveSideInput retrieves the side input value and returns the updated payload.
-func (c client) RetrieveSideInput(ctx context.Context, in *emptypb.Empty) (*sideinputpb.SideInputResponse, error) {
+func (c *client) RetrieveSideInput(ctx context.Context, in *emptypb.Empty) (*sideinputpb.SideInputResponse, error) {
 	retrieveResponse, err := c.grpcClt.RetrieveSideInput(ctx, in)
 	// TODO check which error to use
 	if err != nil {
@@ -74,12 +72,12 @@ func (c client) RetrieveSideInput(ctx context.Context, in *emptypb.Empty) (*side
 }
 
 // IsHealthy checks if the client is healthy.
-func (c client) IsHealthy(ctx context.Context) error {
+func (c *client) IsHealthy(ctx context.Context) error {
 	return c.WaitUntilReady(ctx)
 }
 
 // WaitUntilReady waits until the client is connected.
-func (c client) WaitUntilReady(ctx context.Context) error {
+func (c *client) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
