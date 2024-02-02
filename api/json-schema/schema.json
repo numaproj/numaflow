@@ -17861,13 +17861,17 @@
         },
         "PullPolicy": {
           "type": "string"
+        },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       },
       "required": [
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "StandardResources"
       ],
       "type": "object"
     },
@@ -17953,6 +17957,9 @@
         "ServiceName": {
           "type": "string"
         },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "StartCommand": {
           "type": "string"
         }
@@ -17971,7 +17978,8 @@
         "ServerEncryptionSecretName",
         "ConfigMapName",
         "PvcNameIfNeeded",
-        "StartCommand"
+        "StartCommand",
+        "StandardResources"
       ],
       "type": "object"
     },
@@ -18049,6 +18057,9 @@
         "ServiceName": {
           "type": "string"
         },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "TLSEnabled": {
           "type": "boolean"
         }
@@ -18068,7 +18079,8 @@
         "PvcNameIfNeeded",
         "ConfConfigMapName",
         "ScriptsConfigMapName",
-        "HealthConfigMapName"
+        "HealthConfigMapName",
+        "StandardResources"
       ],
       "type": "object"
     },
@@ -18088,13 +18100,17 @@
         },
         "PullPolicy": {
           "type": "string"
+        },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       },
       "required": [
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "StandardResources"
       ],
       "type": "object"
     },
@@ -18117,6 +18133,9 @@
         },
         "SideInputsStoreName": {
           "type": "string"
+        },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       },
       "required": [
@@ -18124,7 +18143,8 @@
         "Image",
         "PullPolicy",
         "Env",
-        "SideInputsStoreName"
+        "SideInputsStoreName",
+        "StandardResources"
       ],
       "type": "object"
     },

@@ -17855,7 +17855,8 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "StandardResources"
       ],
       "properties": {
         "Env": {
@@ -17872,6 +17873,9 @@
         },
         "PullPolicy": {
           "type": "string"
+        },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       }
     },
@@ -17925,7 +17929,8 @@
         "ServerEncryptionSecretName",
         "ConfigMapName",
         "PvcNameIfNeeded",
-        "StartCommand"
+        "StartCommand",
+        "StandardResources"
       ],
       "properties": {
         "ClientPort": {
@@ -17974,6 +17979,9 @@
         "ServiceName": {
           "type": "string"
         },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "StartCommand": {
           "type": "string"
         }
@@ -18020,7 +18028,8 @@
         "PvcNameIfNeeded",
         "ConfConfigMapName",
         "ScriptsConfigMapName",
-        "HealthConfigMapName"
+        "HealthConfigMapName",
+        "StandardResources"
       ],
       "properties": {
         "ConfConfigMapName": {
@@ -18071,6 +18080,9 @@
         "ServiceName": {
           "type": "string"
         },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "TLSEnabled": {
           "type": "boolean"
         }
@@ -18082,7 +18094,8 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "StandardResources"
       ],
       "properties": {
         "Env": {
@@ -18099,6 +18112,9 @@
         },
         "PullPolicy": {
           "type": "string"
+        },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       }
     },
@@ -18109,7 +18125,8 @@
         "Image",
         "PullPolicy",
         "Env",
-        "SideInputsStoreName"
+        "SideInputsStoreName",
+        "StandardResources"
       ],
       "properties": {
         "Env": {
@@ -18129,6 +18146,9 @@
         },
         "SideInputsStoreName": {
           "type": "string"
+        },
+        "StandardResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       }
     },
