@@ -222,7 +222,7 @@ $(GOPATH)/bin/golangci-lint:
 .PHONY: lint
 lint: $(GOPATH)/bin/golangci-lint
 	go mod tidy
-	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
+	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m --enable goimports
 
 .PHONY: start
 start: image
