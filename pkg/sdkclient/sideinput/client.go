@@ -3,15 +3,16 @@ package sideinput
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow-go/pkg/info"
-	"github.com/numaproj/numaflow/pkg/shared/util"
 	"time"
 
 	sideinputpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/numaproj/numaflow-go/pkg/info"
+
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // client contains the grpc connection and the grpc client.
