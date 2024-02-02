@@ -21,13 +21,21 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // GlobalConfig is the configuration for the controllers, it is
 // supposed to be populated from the configmap attached to the
 // controller manager.
 type GlobalConfig struct {
-	ISBSvc *ISBSvcConfig `json:"isbsvc"`
+	StandardResources *ResourceConfig `json:"standardResources"`
+	ISBSvc            *ISBSvcConfig   `json:"isbsvc"`
+}
+
+type ResourceConfig struct {
+	Memory string `json:"memory"`
+	CPU    string `json:"cpu"`
 }
 
 type ISBSvcConfig struct {
@@ -67,6 +75,27 @@ type JetStreamVersion struct {
 	MetricsExporterImage string `json:"metricsExporterImage"`
 	ConfigReloaderImage  string `json:"configReloaderImage"`
 	StartCommand         string `json:"startCommand"`
+}
+
+func (g *GlobalConfig) GetStandardResources() corev1.ResourceRequirements {
+	// the standard resources used by the `init` and `main`containers.
+	standardResources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			"cpu":    resource.MustParse("100m"),
+			"memory": resource.MustParse("128Mi"),
+		},
+	}
+
+	if g.StandardResources != nil {
+		if g.StandardResources.CPU != "" {
+			standardResources.Requests["cpu"] = resource.MustParse(g.StandardResources.CPU)
+		}
+		if g.StandardResources.Memory != "" {
+			standardResources.Requests["memory"] = resource.MustParse(g.StandardResources.Memory)
+		}
+	}
+
+	return standardResources
 }
 
 func (g *GlobalConfig) GetRedisVersion(version string) (*RedisVersion, error) {

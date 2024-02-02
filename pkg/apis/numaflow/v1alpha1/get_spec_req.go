@@ -21,21 +21,22 @@ import (
 )
 
 type GetRedisStatefulSetSpecReq struct {
-	ServiceName               string            `protobuf:"bytes,1,opt,name=serviceName"`
-	Labels                    map[string]string `protobuf:"bytes,2,rep,name=labels"`
-	RedisImage                string            `protobuf:"bytes,3,opt,name=redisImage"`
-	SentinelImage             string            `protobuf:"bytes,4,opt,name=sentinelImage"`
-	MetricsExporterImage      string            `protobuf:"bytes,5,opt,name=metricsExporterImage"`
-	InitContainerImage        string            `protobuf:"bytes,6,opt,name=initContainerImage"`
-	RedisContainerPort        int32             `protobuf:"bytes,7,opt,name=redisContainerPort"`
-	SentinelContainerPort     int32             `protobuf:"bytes,8,opt,name=sentinelContainerPort"`
-	RedisMetricsContainerPort int32             `protobuf:"bytes,9,opt,name=redisMetricsContainerPort"`
-	CredentialSecretName      string            `protobuf:"bytes,10,opt,name=credentialSecretName"`
-	TLSEnabled                bool              `protobuf:"bytes,11,opt,name=tlsEnabled"`
-	PvcNameIfNeeded           string            `protobuf:"bytes,12,opt,name=pvcNameIfNeeded"`
-	ConfConfigMapName         string            `protobuf:"bytes,13,opt,name=confConfigMapName"`
-	ScriptsConfigMapName      string            `protobuf:"bytes,14,opt,name=scriptsConfigMapName"`
-	HealthConfigMapName       string            `protobuf:"bytes,15,opt,name=healthConfigMapName"`
+	ServiceName               string                      `protobuf:"bytes,1,opt,name=serviceName"`
+	Labels                    map[string]string           `protobuf:"bytes,2,rep,name=labels"`
+	RedisImage                string                      `protobuf:"bytes,3,opt,name=redisImage"`
+	SentinelImage             string                      `protobuf:"bytes,4,opt,name=sentinelImage"`
+	MetricsExporterImage      string                      `protobuf:"bytes,5,opt,name=metricsExporterImage"`
+	InitContainerImage        string                      `protobuf:"bytes,6,opt,name=initContainerImage"`
+	RedisContainerPort        int32                       `protobuf:"bytes,7,opt,name=redisContainerPort"`
+	SentinelContainerPort     int32                       `protobuf:"bytes,8,opt,name=sentinelContainerPort"`
+	RedisMetricsContainerPort int32                       `protobuf:"bytes,9,opt,name=redisMetricsContainerPort"`
+	CredentialSecretName      string                      `protobuf:"bytes,10,opt,name=credentialSecretName"`
+	TLSEnabled                bool                        `protobuf:"bytes,11,opt,name=tlsEnabled"`
+	PvcNameIfNeeded           string                      `protobuf:"bytes,12,opt,name=pvcNameIfNeeded"`
+	ConfConfigMapName         string                      `protobuf:"bytes,13,opt,name=confConfigMapName"`
+	ScriptsConfigMapName      string                      `protobuf:"bytes,14,opt,name=scriptsConfigMapName"`
+	HealthConfigMapName       string                      `protobuf:"bytes,15,opt,name=healthConfigMapName"`
+	StandardResources         corev1.ResourceRequirements `protobuf:"bytes,16,opt,name=standardResources"`
 }
 
 type GetRedisServiceSpecReq struct {
@@ -45,35 +46,38 @@ type GetRedisServiceSpecReq struct {
 }
 
 type GetVertexPodSpecReq struct {
-	ISBSvcType          ISBSvcType        `protobuf:"bytes,1,opt,name=isbSvcType"`
-	Image               string            `protobuf:"bytes,2,opt,name=image"`
-	PullPolicy          corev1.PullPolicy `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
-	Env                 []corev1.EnvVar   `protobuf:"bytes,4,rep,name=env"`
-	SideInputsStoreName string            `protobuf:"bytes,5,opt,name=sideInputsStoreName"`
+	ISBSvcType          ISBSvcType                  `protobuf:"bytes,1,opt,name=isbSvcType"`
+	Image               string                      `protobuf:"bytes,2,opt,name=image"`
+	PullPolicy          corev1.PullPolicy           `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
+	Env                 []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
+	SideInputsStoreName string                      `protobuf:"bytes,5,opt,name=sideInputsStoreName"`
+	StandardResources   corev1.ResourceRequirements `protobuf:"bytes,6,opt,name=standardResources"`
 }
 
 type GetDaemonDeploymentReq struct {
-	ISBSvcType ISBSvcType        `protobuf:"bytes,1,opt,name=isbSvcType"`
-	Image      string            `protobuf:"bytes,2,opt,name=image"`
-	PullPolicy corev1.PullPolicy `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
-	Env        []corev1.EnvVar   `protobuf:"bytes,4,rep,name=env"`
+	ISBSvcType        ISBSvcType                  `protobuf:"bytes,1,opt,name=isbSvcType"`
+	Image             string                      `protobuf:"bytes,2,opt,name=image"`
+	PullPolicy        corev1.PullPolicy           `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
+	Env               []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
+	StandardResources corev1.ResourceRequirements `protobuf:"bytes,5,opt,name=standardResources"`
 }
 
 type GetJetStreamStatefulSetSpecReq struct {
-	ServiceName                string            `protobuf:"bytes,1,rep,name=serviceName"`
-	Labels                     map[string]string `protobuf:"bytes,2,rep,name=labels"`
-	NatsImage                  string            `protobuf:"bytes,3,opt,name=natsImage"`
-	MetricsExporterImage       string            `protobuf:"bytes,4,opt,name=metricsExporterImage"`
-	ConfigReloaderImage        string            `protobuf:"bytes,5,opt,name=configReloaderImage"`
-	ClusterPort                int32             `protobuf:"bytes,6,opt,name=clusterPort"`
-	ClientPort                 int32             `protobuf:"bytes,7,opt,name=clientPort"`
-	MonitorPort                int32             `protobuf:"bytes,8,opt,name=monitorPort"`
-	MetricsPort                int32             `protobuf:"bytes,9,opt,name=metricsPort"`
-	ServerAuthSecretName       string            `protobuf:"bytes,10,opt,name=serverAuthSecretName"`
-	ServerEncryptionSecretName string            `protobuf:"bytes,11,opt,name=serverEncryptionSecretName"`
-	ConfigMapName              string            `protobuf:"bytes,12,opt,name=configMapName"`
-	PvcNameIfNeeded            string            `protobuf:"bytes,13,opt,name=pvcNameIfNeeded"`
-	StartCommand               string            `protobuf:"bytes,14,opt,name=startCommand"`
+	ServiceName                string                      `protobuf:"bytes,1,rep,name=serviceName"`
+	Labels                     map[string]string           `protobuf:"bytes,2,rep,name=labels"`
+	NatsImage                  string                      `protobuf:"bytes,3,opt,name=natsImage"`
+	MetricsExporterImage       string                      `protobuf:"bytes,4,opt,name=metricsExporterImage"`
+	ConfigReloaderImage        string                      `protobuf:"bytes,5,opt,name=configReloaderImage"`
+	ClusterPort                int32                       `protobuf:"bytes,6,opt,name=clusterPort"`
+	ClientPort                 int32                       `protobuf:"bytes,7,opt,name=clientPort"`
+	MonitorPort                int32                       `protobuf:"bytes,8,opt,name=monitorPort"`
+	MetricsPort                int32                       `protobuf:"bytes,9,opt,name=metricsPort"`
+	ServerAuthSecretName       string                      `protobuf:"bytes,10,opt,name=serverAuthSecretName"`
+	ServerEncryptionSecretName string                      `protobuf:"bytes,11,opt,name=serverEncryptionSecretName"`
+	ConfigMapName              string                      `protobuf:"bytes,12,opt,name=configMapName"`
+	PvcNameIfNeeded            string                      `protobuf:"bytes,13,opt,name=pvcNameIfNeeded"`
+	StartCommand               string                      `protobuf:"bytes,14,opt,name=startCommand"`
+	StandardResources          corev1.ResourceRequirements `protobuf:"bytes,15,opt,name=standardResources"`
 }
 
 type GetJetStreamServiceSpecReq struct {
@@ -85,8 +89,9 @@ type GetJetStreamServiceSpecReq struct {
 }
 
 type GetSideInputDeploymentReq struct {
-	ISBSvcType ISBSvcType        `protobuf:"bytes,1,opt,name=isbSvcType"`
-	Image      string            `protobuf:"bytes,2,opt,name=image"`
-	PullPolicy corev1.PullPolicy `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
-	Env        []corev1.EnvVar   `protobuf:"bytes,4,rep,name=env"`
+	ISBSvcType        ISBSvcType                  `protobuf:"bytes,1,opt,name=isbSvcType"`
+	Image             string                      `protobuf:"bytes,2,opt,name=image"`
+	PullPolicy        corev1.PullPolicy           `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
+	Env               []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
+	StandardResources corev1.ResourceRequirements `protobuf:"bytes,5,opt,name=standardResources"`
 }

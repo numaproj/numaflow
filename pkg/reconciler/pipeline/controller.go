@@ -380,6 +380,7 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 		Image:      r.image,
 		PullPolicy: corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
 		Env:        envs,
+		StandardResources:   r.config.GetStandardResources(),
 	}
 	deploy, err := pl.GetDaemonDeploymentObj(req)
 	if err != nil {
@@ -446,6 +447,7 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 		Image:      r.image,
 		PullPolicy: corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
 		Env:        envs,
+		StandardResources: r.config.GetStandardResources(),
 	}
 
 	newObjs, err := pl.GetSideInputsManagerDeployments(req)
