@@ -19,8 +19,9 @@ package manager
 import (
 	"context"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 
 	cronlib "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
