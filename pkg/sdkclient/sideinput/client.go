@@ -21,8 +21,10 @@ type client struct {
 	grpcClt sideinputpb.SideInputClient
 }
 
+var _ Client = (*client)(nil)
+
 // New creates a new client object.
-func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
+func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (*client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr)
 
 	for _, inputOption := range inputOptions {
@@ -49,12 +51,12 @@ func NewFromClient(c sideinputpb.SideInputClient) (Client, error) {
 }
 
 // CloseConn closes the grpc connection.
-func (c *client) CloseConn(ctx context.Context) error {
+func (c client) CloseConn(ctx context.Context) error {
 	return c.conn.Close()
 }
 
 // IsReady checks if the grpc connection is ready to use.
-func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
+func (c client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 	resp, err := c.grpcClt.IsReady(ctx, in)
 	if err != nil {
 		return false, err
@@ -63,7 +65,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 }
 
 // RetrieveSideInput retrieves the side input value and returns the updated payload.
-func (c *client) RetrieveSideInput(ctx context.Context, in *emptypb.Empty) (*sideinputpb.SideInputResponse, error) {
+func (c client) RetrieveSideInput(ctx context.Context, in *emptypb.Empty) (*sideinputpb.SideInputResponse, error) {
 	retrieveResponse, err := c.grpcClt.RetrieveSideInput(ctx, in)
 	// TODO check which error to use
 	if err != nil {
@@ -73,12 +75,12 @@ func (c *client) RetrieveSideInput(ctx context.Context, in *emptypb.Empty) (*sid
 }
 
 // IsHealthy checks if the client is healthy.
-func (c *client) IsHealthy(ctx context.Context) error {
+func (c client) IsHealthy(ctx context.Context) error {
 	return c.WaitUntilReady(ctx)
 }
 
 // WaitUntilReady waits until the client is connected.
-func (c *client) WaitUntilReady(ctx context.Context) error {
+func (c client) WaitUntilReady(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():

@@ -12,6 +12,4 @@ type Client interface {
 	CloseConn(ctx context.Context) error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
 	RetrieveSideInput(ctx context.Context, in *emptypb.Empty) (*sideinputpb.SideInputResponse, error)
-	WaitUntilReady(ctx context.Context) error
-	IsHealthy(ctx context.Context) error
 }
