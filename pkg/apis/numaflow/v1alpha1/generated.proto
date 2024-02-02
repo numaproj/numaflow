@@ -404,7 +404,7 @@ message GetDaemonDeploymentReq {
 
   repeated k8s.io.api.core.v1.EnvVar env = 4;
 
-  optional k8s.io.api.core.v1.ResourceRequirements standardResources = 5;
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
 }
 
 message GetJetStreamServiceSpecReq {
@@ -448,7 +448,7 @@ message GetJetStreamStatefulSetSpecReq {
 
   optional string startCommand = 14;
 
-  optional k8s.io.api.core.v1.ResourceRequirements standardResources = 15;
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 15;
 }
 
 message GetRedisServiceSpecReq {
@@ -490,7 +490,7 @@ message GetRedisStatefulSetSpecReq {
 
   optional string healthConfigMapName = 15;
 
-  optional k8s.io.api.core.v1.ResourceRequirements standardResources = 16;
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 16;
 }
 
 message GetSideInputDeploymentReq {
@@ -502,7 +502,7 @@ message GetSideInputDeploymentReq {
 
   repeated k8s.io.api.core.v1.EnvVar env = 4;
 
-  optional k8s.io.api.core.v1.ResourceRequirements standardResources = 5;
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
 }
 
 message GetVertexPodSpecReq {
@@ -516,7 +516,7 @@ message GetVertexPodSpecReq {
 
   optional string sideInputsStoreName = 5;
 
-  optional k8s.io.api.core.v1.ResourceRequirements standardResources = 6;
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 6;
 }
 
 // GroupBy indicates it is a reducer UDF

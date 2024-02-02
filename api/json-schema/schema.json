@@ -17847,6 +17847,9 @@
     },
     "io.numaproj.numaflow.v1alpha1.GetDaemonDeploymentReq": {
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
@@ -17861,9 +17864,6 @@
         },
         "PullPolicy": {
           "type": "string"
-        },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       },
       "required": [
@@ -17871,7 +17871,7 @@
         "Image",
         "PullPolicy",
         "Env",
-        "StandardResources"
+        "DefaultResources"
       ],
       "type": "object"
     },
@@ -17925,6 +17925,9 @@
         "ConfigReloaderImage": {
           "type": "string"
         },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Labels": {
           "additionalProperties": {
             "type": "string"
@@ -17957,9 +17960,6 @@
         "ServiceName": {
           "type": "string"
         },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
-        },
         "StartCommand": {
           "type": "string"
         }
@@ -17979,7 +17979,7 @@
         "ConfigMapName",
         "PvcNameIfNeeded",
         "StartCommand",
-        "StandardResources"
+        "DefaultResources"
       ],
       "type": "object"
     },
@@ -18014,6 +18014,9 @@
         },
         "CredentialSecretName": {
           "type": "string"
+        },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
         "HealthConfigMapName": {
           "type": "string"
@@ -18057,9 +18060,6 @@
         "ServiceName": {
           "type": "string"
         },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
-        },
         "TLSEnabled": {
           "type": "boolean"
         }
@@ -18080,12 +18080,15 @@
         "ConfConfigMapName",
         "ScriptsConfigMapName",
         "HealthConfigMapName",
-        "StandardResources"
+        "DefaultResources"
       ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.GetSideInputDeploymentReq": {
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
@@ -18100,9 +18103,6 @@
         },
         "PullPolicy": {
           "type": "string"
-        },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       },
       "required": [
@@ -18110,12 +18110,15 @@
         "Image",
         "PullPolicy",
         "Env",
-        "StandardResources"
+        "DefaultResources"
       ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.GetVertexPodSpecReq": {
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
@@ -18133,9 +18136,6 @@
         },
         "SideInputsStoreName": {
           "type": "string"
-        },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       },
       "required": [
@@ -18144,7 +18144,7 @@
         "PullPolicy",
         "Env",
         "SideInputsStoreName",
-        "StandardResources"
+        "DefaultResources"
       ],
       "type": "object"
     },

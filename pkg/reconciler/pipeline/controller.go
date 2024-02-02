@@ -376,11 +376,11 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
 	envs = append(envs, corev1.EnvVar{Name: dfv1.EnvPipelineName, Value: pl.Name})
 	req := dfv1.GetDaemonDeploymentReq{
-		ISBSvcType:        isbSvcType,
-		Image:             r.image,
-		PullPolicy:        corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
-		Env:               envs,
-		StandardResources: r.config.GetStandardResources(),
+		ISBSvcType:       isbSvcType,
+		Image:            r.image,
+		PullPolicy:       corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
+		Env:              envs,
+		DefaultResources: r.config.GetDefaultContainerResources(),
 	}
 	deploy, err := pl.GetDaemonDeploymentObj(req)
 	if err != nil {
@@ -443,11 +443,11 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
 	envs = append(envs, corev1.EnvVar{Name: dfv1.EnvPipelineName, Value: pl.Name})
 	req := dfv1.GetSideInputDeploymentReq{
-		ISBSvcType:        isbSvcType,
-		Image:             r.image,
-		PullPolicy:        corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
-		Env:               envs,
-		StandardResources: r.config.GetStandardResources(),
+		ISBSvcType:       isbSvcType,
+		Image:            r.image,
+		PullPolicy:       corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
+		Env:              envs,
+		DefaultResources: r.config.GetDefaultContainerResources(),
 	}
 
 	newObjs, err := pl.GetSideInputsManagerDeployments(req)

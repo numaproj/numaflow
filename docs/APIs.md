@@ -1418,7 +1418,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 </tr>
 <tr>
 <td>
-<code>StandardResources</code></br> <em>
+<code>DefaultResources</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -1598,7 +1598,7 @@ Description
 </tr>
 <tr>
 <td>
-<code>StandardResources</code></br> <em>
+<code>DefaultResources</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -1771,7 +1771,7 @@ Description
 </tr>
 <tr>
 <td>
-<code>StandardResources</code></br> <em>
+<code>DefaultResources</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -1833,7 +1833,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 </tr>
 <tr>
 <td>
-<code>StandardResources</code></br> <em>
+<code>DefaultResources</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
@@ -1902,7 +1902,7 @@ Kubernetes core/v1.PullPolicy </a> </em>
 </tr>
 <tr>
 <td>
-<code>StandardResources</code></br> <em>
+<code>DefaultResources</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>

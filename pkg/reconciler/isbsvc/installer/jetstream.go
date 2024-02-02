@@ -222,7 +222,7 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 		ConfigMapName:              generateJetStreamConfigMapName(r.isbSvc),
 		PvcNameIfNeeded:            generateJetStreamPVCName(r.isbSvc),
 		StartCommand:               jsVersion.StartCommand,
-		StandardResources:          r.config.GetStandardResources(),
+		DefaultResources:           r.config.GetDefaultContainerResources(),
 	})
 	hash := sharedutil.MustHash(spec)
 	obj := &appv1.StatefulSet{

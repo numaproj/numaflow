@@ -17856,9 +17856,12 @@
         "Image",
         "PullPolicy",
         "Env",
-        "StandardResources"
+        "DefaultResources"
       ],
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "type": "array",
           "items": {
@@ -17873,9 +17876,6 @@
         },
         "PullPolicy": {
           "type": "string"
-        },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       }
     },
@@ -17930,7 +17930,7 @@
         "ConfigMapName",
         "PvcNameIfNeeded",
         "StartCommand",
-        "StandardResources"
+        "DefaultResources"
       ],
       "properties": {
         "ClientPort": {
@@ -17946,6 +17946,9 @@
         },
         "ConfigReloaderImage": {
           "type": "string"
+        },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
         "Labels": {
           "type": "object",
@@ -17978,9 +17981,6 @@
         },
         "ServiceName": {
           "type": "string"
-        },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
         "StartCommand": {
           "type": "string"
@@ -18029,7 +18029,7 @@
         "ConfConfigMapName",
         "ScriptsConfigMapName",
         "HealthConfigMapName",
-        "StandardResources"
+        "DefaultResources"
       ],
       "properties": {
         "ConfConfigMapName": {
@@ -18037,6 +18037,9 @@
         },
         "CredentialSecretName": {
           "type": "string"
+        },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
         "HealthConfigMapName": {
           "type": "string"
@@ -18080,9 +18083,6 @@
         "ServiceName": {
           "type": "string"
         },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
-        },
         "TLSEnabled": {
           "type": "boolean"
         }
@@ -18095,9 +18095,12 @@
         "Image",
         "PullPolicy",
         "Env",
-        "StandardResources"
+        "DefaultResources"
       ],
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "type": "array",
           "items": {
@@ -18112,9 +18115,6 @@
         },
         "PullPolicy": {
           "type": "string"
-        },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       }
     },
@@ -18126,9 +18126,12 @@
         "PullPolicy",
         "Env",
         "SideInputsStoreName",
-        "StandardResources"
+        "DefaultResources"
       ],
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "type": "array",
           "items": {
@@ -18146,9 +18149,6 @@
         },
         "SideInputsStoreName": {
           "type": "string"
-        },
-        "StandardResources": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         }
       }
     },

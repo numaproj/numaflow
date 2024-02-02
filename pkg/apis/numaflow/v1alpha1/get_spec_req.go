@@ -36,7 +36,7 @@ type GetRedisStatefulSetSpecReq struct {
 	ConfConfigMapName         string                      `protobuf:"bytes,13,opt,name=confConfigMapName"`
 	ScriptsConfigMapName      string                      `protobuf:"bytes,14,opt,name=scriptsConfigMapName"`
 	HealthConfigMapName       string                      `protobuf:"bytes,15,opt,name=healthConfigMapName"`
-	StandardResources         corev1.ResourceRequirements `protobuf:"bytes,16,opt,name=standardResources"`
+	DefaultResources          corev1.ResourceRequirements `protobuf:"bytes,16,opt,name=defaultResources"`
 }
 
 type GetRedisServiceSpecReq struct {
@@ -51,15 +51,15 @@ type GetVertexPodSpecReq struct {
 	PullPolicy          corev1.PullPolicy           `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
 	Env                 []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
 	SideInputsStoreName string                      `protobuf:"bytes,5,opt,name=sideInputsStoreName"`
-	StandardResources   corev1.ResourceRequirements `protobuf:"bytes,6,opt,name=standardResources"`
+	DefaultResources    corev1.ResourceRequirements `protobuf:"bytes,6,opt,name=defaultResources"`
 }
 
 type GetDaemonDeploymentReq struct {
-	ISBSvcType        ISBSvcType                  `protobuf:"bytes,1,opt,name=isbSvcType"`
-	Image             string                      `protobuf:"bytes,2,opt,name=image"`
-	PullPolicy        corev1.PullPolicy           `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
-	Env               []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
-	StandardResources corev1.ResourceRequirements `protobuf:"bytes,5,opt,name=standardResources"`
+	ISBSvcType       ISBSvcType                  `protobuf:"bytes,1,opt,name=isbSvcType"`
+	Image            string                      `protobuf:"bytes,2,opt,name=image"`
+	PullPolicy       corev1.PullPolicy           `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
+	Env              []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
+	DefaultResources corev1.ResourceRequirements `protobuf:"bytes,5,opt,name=defaultResources"`
 }
 
 type GetJetStreamStatefulSetSpecReq struct {
@@ -77,7 +77,7 @@ type GetJetStreamStatefulSetSpecReq struct {
 	ConfigMapName              string                      `protobuf:"bytes,12,opt,name=configMapName"`
 	PvcNameIfNeeded            string                      `protobuf:"bytes,13,opt,name=pvcNameIfNeeded"`
 	StartCommand               string                      `protobuf:"bytes,14,opt,name=startCommand"`
-	StandardResources          corev1.ResourceRequirements `protobuf:"bytes,15,opt,name=standardResources"`
+	DefaultResources           corev1.ResourceRequirements `protobuf:"bytes,15,opt,name=defaultResources"`
 }
 
 type GetJetStreamServiceSpecReq struct {
@@ -89,9 +89,9 @@ type GetJetStreamServiceSpecReq struct {
 }
 
 type GetSideInputDeploymentReq struct {
-	ISBSvcType        ISBSvcType                  `protobuf:"bytes,1,opt,name=isbSvcType"`
-	Image             string                      `protobuf:"bytes,2,opt,name=image"`
-	PullPolicy        corev1.PullPolicy           `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
-	Env               []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
-	StandardResources corev1.ResourceRequirements `protobuf:"bytes,5,opt,name=standardResources"`
+	ISBSvcType       ISBSvcType                  `protobuf:"bytes,1,opt,name=isbSvcType"`
+	Image            string                      `protobuf:"bytes,2,opt,name=image"`
+	PullPolicy       corev1.PullPolicy           `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
+	Env              []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
+	DefaultResources corev1.ResourceRequirements `protobuf:"bytes,5,opt,name=defaultResources"`
 }

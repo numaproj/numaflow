@@ -29,13 +29,12 @@ import (
 // supposed to be populated from the configmap attached to the
 // controller manager.
 type GlobalConfig struct {
-	StandardResources *ResourceConfig `json:"standardResources"`
-	ISBSvc            *ISBSvcConfig   `json:"isbsvc"`
+	Defaults *DefaultConfig `json:"defaults"`
+	ISBSvc   *ISBSvcConfig  `json:"isbsvc"`
 }
 
-type ResourceConfig struct {
-	Memory string `json:"memory"`
-	CPU    string `json:"cpu"`
+type DefaultConfig struct {
+	ContainerResources map[string]interface{} `json:"containerResources"`
 }
 
 type ISBSvcConfig struct {
@@ -77,25 +76,34 @@ type JetStreamVersion struct {
 	StartCommand         string `json:"startCommand"`
 }
 
-func (g *GlobalConfig) GetStandardResources() corev1.ResourceRequirements {
-	// the standard resources used by the `init` and `main`containers.
-	standardResources := corev1.ResourceRequirements{
+func (g *GlobalConfig) GetDefaultContainerResources() corev1.ResourceRequirements {
+	// the standard resources used by the `init` and `main` containers.
+	defaultResources := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{},
 		Requests: corev1.ResourceList{
 			"cpu":    resource.MustParse("100m"),
 			"memory": resource.MustParse("128Mi"),
 		},
 	}
 
-	if g.StandardResources != nil {
-		if g.StandardResources.CPU != "" {
-			standardResources.Requests["cpu"] = resource.MustParse(g.StandardResources.CPU)
-		}
-		if g.StandardResources.Memory != "" {
-			standardResources.Requests["memory"] = resource.MustParse(g.StandardResources.Memory)
+	if g.Defaults == nil || g.Defaults.ContainerResources == nil {
+		return defaultResources
+	}
+
+	updateResources := func(resourceType string, resourceList corev1.ResourceList) {
+		if resources, ok := g.Defaults.ContainerResources[resourceType]; ok {
+			for key, value := range resources.(map[string]interface{}) {
+				if strValue, ok := value.(string); ok && strValue != "" {
+					resourceList[corev1.ResourceName(key)] = resource.MustParse(strValue)
+				}
+			}
 		}
 	}
 
-	return standardResources
+	updateResources("requests", defaultResources.Requests)
+	updateResources("limits", defaultResources.Limits)
+
+	return defaultResources
 }
 
 func (g *GlobalConfig) GetRedisVersion(version string) (*RedisVersion, error) {

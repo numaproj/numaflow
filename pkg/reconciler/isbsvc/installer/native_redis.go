@@ -538,7 +538,7 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 		ConfConfigMapName:         generateRedisConfigMapName(r.isbSvc),
 		HealthConfigMapName:       generateHealthConfigMapName(r.isbSvc),
 		ScriptsConfigMapName:      generateScriptsConfigMapName(r.isbSvc),
-		StandardResources:         r.config.GetStandardResources(),
+		DefaultResources:          r.config.GetDefaultContainerResources(),
 	})
 	hash := sharedutil.MustHash(spec)
 	obj := &appv1.StatefulSet{
