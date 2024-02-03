@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
 // GlobalConfig is the configuration for the controllers, it is
@@ -34,7 +35,7 @@ type GlobalConfig struct {
 }
 
 type DefaultConfig struct {
-	ContainerResources map[string]interface{} `json:"containerResources"`
+	ContainerResources string `json:"containerResources"`
 }
 
 type ISBSvcConfig struct {
@@ -86,24 +87,14 @@ func (g *GlobalConfig) GetDefaultContainerResources() corev1.ResourceRequirement
 		},
 	}
 
-	if g.Defaults == nil || g.Defaults.ContainerResources == nil {
+	if g.Defaults == nil || g.Defaults.ContainerResources == "" {
 		return defaultResources
 	}
 
-	updateResources := func(resourceType string, resourceList corev1.ResourceList) {
-		if resources, ok := g.Defaults.ContainerResources[resourceType]; ok {
-			for key, value := range resources.(map[string]interface{}) {
-				if strValue, ok := value.(string); ok && strValue != "" {
-					resourceList[corev1.ResourceName(key)] = resource.MustParse(strValue)
-				}
-			}
-		}
-	}
+	var resourceConfig corev1.ResourceRequirements
+	yaml.Unmarshal([]byte(g.Defaults.ContainerResources), &resourceConfig)
 
-	updateResources("requests", defaultResources.Requests)
-	updateResources("limits", defaultResources.Limits)
-
-	return defaultResources
+	return resourceConfig
 }
 
 func (g *GlobalConfig) GetRedisVersion(version string) (*RedisVersion, error) {
