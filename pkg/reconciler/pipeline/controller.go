@@ -375,12 +375,17 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 	log := logging.FromContext(ctx)
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
 	envs = append(envs, corev1.EnvVar{Name: dfv1.EnvPipelineName, Value: pl.Name})
+	defaultContainerResources, err := r.config.GetDefaultContainerResources()
+	if err != nil {
+		return fmt.Errorf("failed to get default container resources, err: %w", err)
+	}
+
 	req := dfv1.GetDaemonDeploymentReq{
 		ISBSvcType:       isbSvcType,
 		Image:            r.image,
 		PullPolicy:       corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
 		Env:              envs,
-		DefaultResources: r.config.GetDefaultContainerResources(),
+		DefaultResources: *defaultContainerResources,
 	}
 	deploy, err := pl.GetDaemonDeploymentObj(req)
 	if err != nil {
@@ -442,12 +447,17 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 	log := logging.FromContext(ctx)
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
 	envs = append(envs, corev1.EnvVar{Name: dfv1.EnvPipelineName, Value: pl.Name})
+	defaultContainerResources, err := r.config.GetDefaultContainerResources()
+	if err != nil {
+		return fmt.Errorf("failed to get default container resources, err: %w", err)
+	}
+
 	req := dfv1.GetSideInputDeploymentReq{
 		ISBSvcType:       isbSvcType,
 		Image:            r.image,
 		PullPolicy:       corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
 		Env:              envs,
-		DefaultResources: r.config.GetDefaultContainerResources(),
+		DefaultResources: *defaultContainerResources,
 	}
 
 	newObjs, err := pl.GetSideInputsManagerDeployments(req)
