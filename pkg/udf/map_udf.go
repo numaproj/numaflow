@@ -240,7 +240,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			defer finalWg.Done()
 			log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferPartitionName), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
 
-			stopped := forwarder.Start()
+			stopped := isdf.Start()
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
@@ -254,7 +254,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 			<-ctx.Done()
 			log.Info("SIGTERM, exiting inside partition...", zap.String("partition", fromBufferPartitionName))
-			forwarder.Stop()
+			isdf.Stop()
 			wg.Wait()
 			log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
 		}(bufferPartition, forwarder)

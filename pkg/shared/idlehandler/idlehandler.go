@@ -59,7 +59,14 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 	// publish WMB (this will naturally incr or set the timestamp of rl.wmbOffset)
 	if vertexType == dfv1.VertexTypeSource || vertexType == dfv1.VertexTypeMapUDF ||
 		vertexType == dfv1.VertexTypeReduceUDF {
-		wmPublisher.PublishIdleWatermark(wm, idleManager.Get(toPartitionName), toVertexPartition)
+		// We create one forwarder for each fromPartitions, and all the forwarders share one idleManager.
+		// Therefore, it's possible that one forwarder marks the toPartition to be "idling" and tries to
+		// publish a valid idle watermark while another forwarder just marks the toPartition to be "active"
+		// right after. In that case, the offset we get here will be nil, and we ignore the "idling"
+		// and consider the toPartition to be "active"
+		if offset := idleManager.Get(toPartitionName); offset != nil {
+			wmPublisher.PublishIdleWatermark(wm, offset, toVertexPartition)
+		}
 	} else {
 		// for Sink vertex, and it does not care about the offset during watermark publishing
 		wmPublisher.PublishIdleWatermark(wm, nil, toVertexPartition)
