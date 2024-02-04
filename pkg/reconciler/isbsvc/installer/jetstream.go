@@ -208,11 +208,6 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 		return fmt.Errorf("failed to get jetstream version, err: %w", err)
 	}
 
-	defaultContainerResources, err := r.config.GetDefaultContainerResources()
-	if err != nil {
-		return fmt.Errorf("failed to get default container resources, err: %w", err)
-	}
-
 	spec := r.isbSvc.Spec.JetStream.GetStatefulSetSpec(dfv1.GetJetStreamStatefulSetSpecReq{
 		ServiceName:                generateJetStreamServiceName(r.isbSvc),
 		Labels:                     r.labels,
@@ -228,7 +223,7 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 		ConfigMapName:              generateJetStreamConfigMapName(r.isbSvc),
 		PvcNameIfNeeded:            generateJetStreamPVCName(r.isbSvc),
 		StartCommand:               jsVersion.StartCommand,
-		DefaultResources:           *defaultContainerResources,
+		DefaultResources:           r.config.GetDefaultContainerResources(),
 	})
 	hash := sharedutil.MustHash(spec)
 	obj := &appv1.StatefulSet{

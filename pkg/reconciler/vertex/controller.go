@@ -351,10 +351,6 @@ func (r *vertexReconciler) buildReduceVertexPVCSpec(vertex *dfv1.Vertex, replica
 
 func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig, replicaIndex int) (*corev1.PodSpec, error) {
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
-	defaultContainerResources, err := r.config.GetDefaultContainerResources()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get default container resources, err: %w", err)
-	}
 
 	podSpec, err := vertex.GetPodSpec(dfv1.GetVertexPodSpecReq{
 		ISBSvcType:          isbSvcType,
@@ -362,7 +358,7 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 		PullPolicy:          corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
 		Env:                 envs,
 		SideInputsStoreName: pl.GetSideInputsStoreName(),
-		DefaultResources:    *defaultContainerResources,
+		DefaultResources:    r.config.GetDefaultContainerResources(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate pod spec, error: %w", err)

@@ -15,10 +15,36 @@ metadata:
   name: numaflow-controller-config
 data:
   controller-config.yaml: |
+    defaults:
+      containerResources: |
+        ...
     isbsvc:
       jetstream:
         ...
 ```
+
+### Default Controller Configuration
+
+Currently, we support configuring the init and main container resources for steps across all the pipelines. The configuration is under `defaults` key in the ConfigMap.
+
+For example, to set the default container resources for steps across all the pipelines:
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-controller-config
+data:
+  controller-config.yaml: |
+    defaults:
+      containerResources: |
+        limits:
+          memory: "256Mi"
+          cpu: "200m"
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+```
+
 
 ### ISB Service Configuration
 

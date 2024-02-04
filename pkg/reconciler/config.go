@@ -77,7 +77,7 @@ type JetStreamVersion struct {
 	StartCommand         string `json:"startCommand"`
 }
 
-func (g *GlobalConfig) GetDefaultContainerResources() (*corev1.ResourceRequirements, error) {
+func (g *GlobalConfig) GetDefaultContainerResources() corev1.ResourceRequirements {
 	// the standard resources used by the `init` and `main` containers.
 	defaultResources := corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{},
@@ -88,16 +88,16 @@ func (g *GlobalConfig) GetDefaultContainerResources() (*corev1.ResourceRequireme
 	}
 
 	if g.Defaults == nil || g.Defaults.ContainerResources == "" {
-		return &defaultResources, nil
+		return defaultResources
 	}
 
 	var resourceConfig corev1.ResourceRequirements
 	err := yaml.Unmarshal([]byte(g.Defaults.ContainerResources), &resourceConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed unmarshal configuration file. %w", err)
+		panic(fmt.Errorf("failed to unmarshal default container resources, %w", err))
 	}
 
-	return &resourceConfig, nil
+	return resourceConfig
 }
 
 func (g *GlobalConfig) GetRedisVersion(version string) (*RedisVersion, error) {
