@@ -1755,6 +1755,13 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#default-controller-configuration" class="md-nav__link">
+    Default Controller Configuration
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#isb-service-configuration" class="md-nav__link">
     ISB Service Configuration
   </a>
@@ -2223,6 +2230,13 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#default-controller-configuration" class="md-nav__link">
+    Default Controller Configuration
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#isb-service-configuration" class="md-nav__link">
     ISB Service Configuration
   </a>
@@ -2263,10 +2277,31 @@
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-config</span>
 <span class="nt">data</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">controller-config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">    </span><span class="no">defaults:</span>
+<span class="w">      </span><span class="no">containerResources: |</span>
+<span class="w">        </span><span class="no">...</span>
 <span class="w">    </span><span class="no">isbsvc:</span>
 <span class="w">      </span><span class="no">jetstream:</span>
 <span class="w">        </span><span class="no">...</span>
 </code></pre></div>
+<h3 id="default-controller-configuration">Default Controller Configuration<a class="headerlink" href="#default-controller-configuration" title="Permanent link">&para;</a></h3>
+<p>Currently, we support configuring the init and main container resources for steps across all the pipelines. The configuration is under <code>defaults</code> key in the ConfigMap.</p>
+<p>For example, to set the default container resources for steps across all the pipelines:
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-config</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">controller-config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">    </span><span class="no">defaults:</span>
+<span class="w">      </span><span class="no">containerResources: |</span>
+<span class="w">        </span><span class="no">limits:</span>
+<span class="w">          </span><span class="no">memory: &quot;256Mi&quot;</span>
+<span class="w">          </span><span class="no">cpu: &quot;200m&quot;</span>
+<span class="w">        </span><span class="no">requests:</span>
+<span class="w">          </span><span class="no">memory: &quot;128Mi&quot;</span>
+<span class="w">          </span><span class="no">cpu: &quot;100m&quot;</span>
+</code></pre></div></p>
 <h3 id="isb-service-configuration">ISB Service Configuration<a class="headerlink" href="#isb-service-configuration" title="Permanent link">&para;</a></h3>
 <p>One of the important configuration items in the ConfigMap is about <a href="../../core-concepts/inter-step-buffer-service/">ISB Service</a>. We currently use 3rd party technologies such as <code>JetStream</code> to implement ISB Services, if those applications have new releases, to make them available in Numaflow, the new versions need to be added in the ConfigMap.</p>
 <p>For example, there's a new <code>Nats JetStream</code> version <code>x.y.x</code> available, a new version configuration like below needs to be added before it can be referenced in the <code>InterStepBufferService</code> spec.</p>
