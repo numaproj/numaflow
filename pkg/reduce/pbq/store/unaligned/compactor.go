@@ -273,9 +273,16 @@ func (c *compactor) compactFile(fileName string) error {
 
 		// read the payload
 		var payload = make([]byte, mp.MessageLen)
-		_, err = dp.Read(payload)
+		read, err := dp.Read(payload)
 		if err != nil {
 			return err
+		}
+
+		mp.Checksum = calculateChecksum(payload)
+		println("checksum - ", mp.Checksum, " len - ", mp.MessageLen, " watermark - ", mp.WaterMark, " event time - ", mp.EventTime, " offset - ", mp.Offset, " key len - ", mp.KeyLen)
+
+		if read != int(mp.MessageLen) {
+			return fmt.Errorf("expected to read length of %d, but read only %d", mp.MessageLen, read)
 		}
 
 		// skip deleted messages
