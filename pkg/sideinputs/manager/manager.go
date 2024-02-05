@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
+
 	cronlib "github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -80,8 +82,14 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", sim.isbSvcType)
 	}
 
+	// Wait for server info to be ready
+	serverInfo, err := sdkserverinfo.SDKServerInfo()
+	if err != nil {
+		return err
+	}
+
 	// Create a new gRPC client for Side Input
-	sideInputClient, err := sideinput.New()
+	sideInputClient, err := sideinput.New(serverInfo)
 	if err != nil {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
