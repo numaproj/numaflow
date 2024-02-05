@@ -21,13 +21,21 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
 // GlobalConfig is the configuration for the controllers, it is
 // supposed to be populated from the configmap attached to the
 // controller manager.
 type GlobalConfig struct {
-	ISBSvc *ISBSvcConfig `json:"isbsvc"`
+	Defaults *DefaultConfig `json:"defaults"`
+	ISBSvc   *ISBSvcConfig  `json:"isbsvc"`
+}
+
+type DefaultConfig struct {
+	ContainerResources string `json:"containerResources"`
 }
 
 type ISBSvcConfig struct {
@@ -67,6 +75,29 @@ type JetStreamVersion struct {
 	MetricsExporterImage string `json:"metricsExporterImage"`
 	ConfigReloaderImage  string `json:"configReloaderImage"`
 	StartCommand         string `json:"startCommand"`
+}
+
+func (g *GlobalConfig) GetDefaultContainerResources() corev1.ResourceRequirements {
+	// the standard resources used by the `init` and `main` containers.
+	defaultResources := corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{},
+		Requests: corev1.ResourceList{
+			"cpu":    resource.MustParse("100m"),
+			"memory": resource.MustParse("128Mi"),
+		},
+	}
+
+	if g.Defaults == nil || g.Defaults.ContainerResources == "" {
+		return defaultResources
+	}
+
+	var resourceConfig corev1.ResourceRequirements
+	err := yaml.Unmarshal([]byte(g.Defaults.ContainerResources), &resourceConfig)
+	if err != nil {
+		panic(fmt.Errorf("failed to unmarshal default container resources, %w", err))
+	}
+
+	return resourceConfig
 }
 
 func (g *GlobalConfig) GetRedisVersion(version string) (*RedisVersion, error) {

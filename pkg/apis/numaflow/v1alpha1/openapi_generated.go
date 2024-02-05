@@ -1267,12 +1267,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetDaemonDeploymentReq(ref common.Referen
 							},
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env"},
+				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "DefaultResources"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar"},
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -1444,10 +1450,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetJetStreamStatefulSetSpecReq(ref common
 							Format:  "",
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ServiceName", "Labels", "NatsImage", "MetricsExporterImage", "ConfigReloaderImage", "ClusterPort", "ClientPort", "MonitorPort", "MetricsPort", "ServerAuthSecretName", "ServerEncryptionSecretName", "ConfigMapName", "PvcNameIfNeeded", "StartCommand"},
+				Required: []string{"ServiceName", "Labels", "NatsImage", "MetricsExporterImage", "ConfigReloaderImage", "ClusterPort", "ClientPort", "MonitorPort", "MetricsPort", "ServerAuthSecretName", "ServerEncryptionSecretName", "ConfigMapName", "PvcNameIfNeeded", "StartCommand", "DefaultResources"},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -1612,10 +1626,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetRedisStatefulSetSpecReq(ref common.Ref
 							Format:  "",
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ServiceName", "Labels", "RedisImage", "SentinelImage", "MetricsExporterImage", "InitContainerImage", "RedisContainerPort", "SentinelContainerPort", "RedisMetricsContainerPort", "CredentialSecretName", "TLSEnabled", "PvcNameIfNeeded", "ConfConfigMapName", "ScriptsConfigMapName", "HealthConfigMapName"},
+				Required: []string{"ServiceName", "Labels", "RedisImage", "SentinelImage", "MetricsExporterImage", "InitContainerImage", "RedisContainerPort", "SentinelContainerPort", "RedisMetricsContainerPort", "CredentialSecretName", "TLSEnabled", "PvcNameIfNeeded", "ConfConfigMapName", "ScriptsConfigMapName", "HealthConfigMapName", "DefaultResources"},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -1659,12 +1681,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetSideInputDeploymentReq(ref common.Refe
 							},
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env"},
+				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "DefaultResources"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar"},
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -1715,12 +1743,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceC
 							Format:  "",
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "SideInputsStoreName"},
+				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "SideInputsStoreName", "DefaultResources"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar"},
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
