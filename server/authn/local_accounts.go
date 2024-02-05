@@ -19,12 +19,13 @@ package authn
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"golang.org/x/crypto/bcrypt"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"strconv"
-	"strings"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"

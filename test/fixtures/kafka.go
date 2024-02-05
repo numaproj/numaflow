@@ -19,10 +19,11 @@ package fixtures
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"log"
 	"strconv"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/rand"
 )
 
 func CreateKafkaTopic() string {
