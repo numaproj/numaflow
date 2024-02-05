@@ -19,10 +19,12 @@ limitations under the License.
 package sideinput_e2e
 
 import (
-	. "github.com/numaproj/numaflow/test/fixtures"
-	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/suite"
+
+	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
 type SideInputUDSSuite struct {
