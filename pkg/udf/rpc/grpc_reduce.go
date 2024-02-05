@@ -136,6 +136,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 		}
 	}()
 
+	index := 0
 	// wait for the reduceFn to finish
 	for {
 		select {
@@ -144,6 +145,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 				return nil, convertToUdfError(err)
 			}
 		case result = <-responseCh:
+			index++
 			taggedMessages := make([]*isb.WriteMessage, 0)
 			for _, response := range result.GetResults() {
 				keys := response.Keys
@@ -155,6 +157,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 								IsLate:    false,
 							},
 							Keys: keys,
+							ID:   fmt.Sprintf("%s-%d", partitionID.String(), index),
 						},
 						Body: isb.Body{
 							Payload: response.Value,

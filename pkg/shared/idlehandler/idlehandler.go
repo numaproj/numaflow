@@ -18,6 +18,8 @@ package idlehandler
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -28,7 +30,7 @@ import (
 )
 
 // PublishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
-func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
+func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark, vertexReplica int32) {
 
 	var toPartitionName = toBufferPartition.GetName()
 	var toVertexPartition = toBufferPartition.GetPartitionIdx()
@@ -40,7 +42,7 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 			// so, we do nothing here
 		} else { // if the toBuffer partition doesn't exist, then we get a new idle situation
 			// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
-			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
+			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB, ID: fmt.Sprintf("%d-%d", vertexReplica, time.Now().UnixNano())}}}
 			writeOffsets, errs := toBufferPartition.Write(ctx, ctrlMessage)
 			// we only write one ctrl message, so there's one and only one error in the array, use index=0 to get the error
 			if errs[0] != nil {
@@ -59,7 +61,14 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 	// publish WMB (this will naturally incr or set the timestamp of rl.wmbOffset)
 	if vertexType == dfv1.VertexTypeSource || vertexType == dfv1.VertexTypeMapUDF ||
 		vertexType == dfv1.VertexTypeReduceUDF {
-		wmPublisher.PublishIdleWatermark(wm, idleManager.Get(toPartitionName), toVertexPartition)
+		// We create one forwarder for each fromPartitions, and all the forwarders share one idleManager.
+		// Therefore, it's possible that one forwarder marks the toPartition to be "idling" and tries to
+		// publish a valid idle watermark while another forwarder just marks the toPartition to be "active"
+		// right after. In that case, the offset we get here will be nil, and we ignore the "idling"
+		// and consider the toPartition to be "active"
+		if offset := idleManager.Get(toPartitionName); offset != nil {
+			wmPublisher.PublishIdleWatermark(wm, offset, toVertexPartition)
+		}
 	} else {
 		// for Sink vertex, and it does not care about the offset during watermark publishing
 		wmPublisher.PublishIdleWatermark(wm, nil, toVertexPartition)

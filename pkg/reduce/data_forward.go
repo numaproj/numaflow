@@ -216,7 +216,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.wmPublishers[toVertexName]; ok {
 					for _, bufferPartition := range toVertexBuffer {
-						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)), df.vertexReplica)
 					}
 				}
 			}
@@ -236,7 +236,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				for toVertexName, toVertexBuffer := range df.toBuffers {
 					if publisher, ok := df.wmPublishers[toVertexName]; ok {
 						for _, bufferPartition := range toVertexBuffer {
-							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+							idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark), df.vertexReplica)
 						}
 					}
 				}
@@ -386,7 +386,7 @@ func (df *DataForward) Process(ctx context.Context, messages []*isb.ReadMessage)
 			for toVertexName, toVertexBuffer := range df.toBuffers {
 				if publisher, ok := df.wmPublishers[toVertexName]; ok {
 					for _, bufferPartition := range toVertexBuffer {
-						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark))
+						idlehandler.PublishIdleWatermark(ctx, bufferPartition, publisher, df.idleManager, df.log, dfv1.VertexTypeReduceUDF, wmb.Watermark(watermark), df.vertexReplica)
 					}
 				}
 			}
