@@ -17846,9 +17846,13 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "DefaultResources"
       ],
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "type": "array",
           "items": {
@@ -17916,7 +17920,8 @@
         "ServerEncryptionSecretName",
         "ConfigMapName",
         "PvcNameIfNeeded",
-        "StartCommand"
+        "StartCommand",
+        "DefaultResources"
       ],
       "properties": {
         "ClientPort": {
@@ -17932,6 +17937,9 @@
         },
         "ConfigReloaderImage": {
           "type": "string"
+        },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
         "Labels": {
           "type": "object",
@@ -18011,7 +18019,8 @@
         "PvcNameIfNeeded",
         "ConfConfigMapName",
         "ScriptsConfigMapName",
-        "HealthConfigMapName"
+        "HealthConfigMapName",
+        "DefaultResources"
       ],
       "properties": {
         "ConfConfigMapName": {
@@ -18019,6 +18028,9 @@
         },
         "CredentialSecretName": {
           "type": "string"
+        },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
         "HealthConfigMapName": {
           "type": "string"
@@ -18073,9 +18085,13 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "DefaultResources"
       ],
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "type": "array",
           "items": {
@@ -18100,9 +18116,13 @@
         "Image",
         "PullPolicy",
         "Env",
-        "SideInputsStoreName"
+        "SideInputsStoreName",
+        "DefaultResources"
       ],
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "type": "array",
           "items": {
