@@ -113,6 +113,10 @@ func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
 }
 
 func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
+	labels := map[string]string{"buffer": jr.GetName()}
+	defer func(t time.Time) {
+		isbReadTime.With(labels).Observe(float64(time.Since(t).Microseconds()))
+	}(time.Now())
 	var err error
 	var result []*isb.ReadMessage
 	msgs, err := jr.sub.Fetch(int(count), nats.MaxWait(jr.opts.readTimeOut))
@@ -144,6 +148,10 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 }
 
 func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error {
+	labels := map[string]string{"buffer": jr.GetName()}
+	defer func(t time.Time) {
+		isbAckTime.With(labels).Observe(float64(time.Since(t).Microseconds()))
+	}(time.Now())
 	errs := make([]error, len(offsets))
 	done := make(chan struct{})
 	wg := &sync.WaitGroup{}
