@@ -205,7 +205,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create a new gRPC client: %w", err)
 	}
 
-	reduceHandler := rpc.NewUDSgRPCBasedReduce(sdkClient)
+	reduceHandler := rpc.NewUDSgRPCBasedReduce(sdkClient, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Replica)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC client, %w", err)
 	}

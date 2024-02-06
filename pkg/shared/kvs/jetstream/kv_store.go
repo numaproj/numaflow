@@ -284,7 +284,7 @@ retryLoop:
 				}
 				jss.log.Errorw("Failed to get keys", zap.String("watcher", jss.GetKVName()), zap.Error(err))
 			}
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 
 	}

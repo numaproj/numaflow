@@ -262,10 +262,13 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 				Subject: jw.subject,
 				Data:    payload,
 			}
-			if pubAck, err := jw.js.PublishMsg(m, nats.MsgId(message.Header.ID), nats.AckWait(2*time.Second)); err != nil { // nats.MsgId() is for exactly-once writing
+			if pubAck, err := jw.js.PublishMsg(m, nats.AckWait(2*time.Second)); err != nil { // nats.MsgId() is for exactly-once writing
 				errs[idx] = err
 				isbWriteErrors.With(metricsLabels).Inc()
 			} else {
+				if pubAck.Duplicate {
+					jw.log.Infow("Duplicate message", zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain), zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence))
+				}
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}
 				errs[idx] = nil
 				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain))

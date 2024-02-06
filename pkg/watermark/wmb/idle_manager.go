@@ -18,6 +18,7 @@ package wmb
 
 import (
 	"sync"
+	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 )
@@ -26,6 +27,7 @@ import (
 type idleManager struct {
 	// wmbOffset is a toBuffer partition name to the write offset of the idle watermark map.
 	wmbOffset map[string]isb.Offset
+	idlingMap map[string]time.Time
 	lock      sync.RWMutex
 }
 
@@ -33,6 +35,7 @@ type idleManager struct {
 func NewIdleManager(length int) IdleManager {
 	return &idleManager{
 		wmbOffset: make(map[string]isb.Offset, length),
+		idlingMap: make(map[string]time.Time, length),
 	}
 }
 
@@ -64,4 +67,5 @@ func (im *idleManager) Reset(toBufferPartitionName string) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
 	im.wmbOffset[toBufferPartitionName] = nil
+	im.idlingMap[toBufferPartitionName] = time.Now()
 }
