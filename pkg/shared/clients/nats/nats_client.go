@@ -52,7 +52,7 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		nats.MaxReconnects(-1),
 		// every one second we will try to ping the server, if we don't get a pong back
 		// after two attempts, we will consider the connection lost and try to reconnect
-		nats.PingInterval(1 * time.Second),
+		nats.PingInterval(20 * time.Second),
 		// error handler for the connection
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
 			log.Errorw("Nats default: error occurred for subscription", zap.Error(err))
@@ -61,7 +61,7 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		nats.ClosedHandler(func(nc *nats.Conn) {
 			log.Info("Nats default: connection closed")
 		}),
-		// retry on failed connect should be true, else it wont try to reconnect during initial connect
+		// retry on failed connect should be true, else it won't try to reconnect during initial connect
 		nats.RetryOnFailedConnect(true),
 		// disconnect handler to log when we lose connection
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
@@ -73,6 +73,13 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		}),
 		// Write (and flush) timeout
 		nats.FlusherTimeout(10 * time.Second),
+
+		// If the server doesn't respond to 2 pings we will reconnect
+		nats.MaxPingsOutstanding(2),
+
+		nats.LameDuckModeHandler(func(nc *nats.Conn) {
+			log.Info("Nats default: entering lame duck mode to avoid reconnect storm")
+		}),
 	}
 
 	url, existing := os.LookupEnv(dfv1.EnvISBSvcJetStreamURL)
