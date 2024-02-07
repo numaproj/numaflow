@@ -29,6 +29,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 )
 
+const (
+	sinkAddr       = "/var/run/numaflow/sink.sock"
+	serverInfoFile = "/var/run/numaflow/sinker-server-info"
+)
+
 // client contains the grpc connection and the grpc client.
 type client struct {
 	conn    *grpc.ClientConn
@@ -39,7 +44,7 @@ var _ Client = (*client)(nil)
 
 // New creates a new client object. Sinker client doesn't require server info to start ATM.
 func New(_ *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(sdkclient.SinkAddr)
+	var opts = sdkclient.DefaultOptions(sinkAddr, serverInfoFile)
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}

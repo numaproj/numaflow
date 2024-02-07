@@ -29,6 +29,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
+const (
+	sessionReduceAddr = "/var/run/numaflow/sessionreduce.sock"
+	serverInfoFile    = "/var/run/numaflow/sessionreducer-server-info"
+)
+
 // client contains the grpc connection and the grpc client.
 type client struct {
 	conn    *grpc.ClientConn
@@ -37,7 +42,7 @@ type client struct {
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(sdkclient.SessionReduceAddr)
+	var opts = sdkclient.DefaultOptions(sessionReduceAddr, serverInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

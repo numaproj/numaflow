@@ -20,7 +20,6 @@ func (o *Options) ServerInfoReadinessTimeout() time.Duration {
 // DefaultOptions returns the default options.
 func DefaultOptions() *Options {
 	return &Options{
-		serverInfoFilePath:         ServerInfoFilePath,
 		serverInfoReadinessTimeout: 120 * time.Second, // Default timeout is 120 seconds
 	}
 }

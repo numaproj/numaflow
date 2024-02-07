@@ -17,8 +17,9 @@ limitations under the License.
 package sdkclient
 
 type Options struct {
-	udsSockAddr    string
-	maxMessageSize int
+	udsSockAddr        string
+	maxMessageSize     int
+	serverInfoFilePath string
 }
 
 // UdsSockAddr returns the UDS sock addr.
@@ -32,10 +33,11 @@ func (o *Options) MaxMessageSize() int {
 }
 
 // DefaultOptions returns the default options.
-func DefaultOptions(address string) *Options {
+func DefaultOptions(address string, serverInfoFile string) *Options {
 	return &Options{
-		maxMessageSize: DefaultGRPCMaxMessageSize,
-		udsSockAddr:    address,
+		maxMessageSize:     DefaultGRPCMaxMessageSize,
+		udsSockAddr:        address,
+		serverInfoFilePath: serverInfoFile,
 	}
 }
 
@@ -53,5 +55,12 @@ func WithUdsSockAddr(addr string) Option {
 func WithMaxMessageSize(size int) Option {
 	return func(opts *Options) {
 		opts.maxMessageSize = size
+	}
+}
+
+// WithServerInfoFilePath sets the server information file path to the given path.
+func WithServerInfoFilePath(path string) Option {
+	return func(opts *Options) {
+		opts.serverInfoFilePath = path
 	}
 }

@@ -15,6 +15,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
+const (
+	sideInputAddr  = "/var/run/numaflow/sideinput.sock"
+	serverInfoFile = "/var/run/numaflow/sideinput-server-info"
+)
+
 // client contains the grpc connection and the grpc client.
 type client struct {
 	conn    *grpc.ClientConn
@@ -25,7 +30,7 @@ var _ Client = (*client)(nil)
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (*client, error) {
-	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr)
+	var opts = sdkclient.DefaultOptions(sideInputAddr, serverInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

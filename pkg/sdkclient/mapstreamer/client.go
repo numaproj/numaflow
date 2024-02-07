@@ -30,6 +30,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
+const (
+	mapStreamAddr  = "/var/run/numaflow/mapstream.sock"
+	serverInfoFile = "/var/run/numaflow/mapstreamer-server-info"
+)
+
 // client contains the grpc connection and the grpc client.
 type client struct {
 	conn    *grpc.ClientConn
@@ -38,7 +43,7 @@ type client struct {
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(sdkclient.MapStreamAddr)
+	var opts = sdkclient.DefaultOptions(mapStreamAddr, serverInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
