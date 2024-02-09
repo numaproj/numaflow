@@ -37,7 +37,7 @@ import (
 
 func NewMockUDSGRPCBasedReduce(mockClient *reducemock.MockReduceClient) *GRPCBasedReduce {
 	c, _ := reducer.NewFromClient(mockClient)
-	return &GRPCBasedReduce{c}
+	return &GRPCBasedReduce{c, "test-vtx", 0}
 }
 
 func TestGRPCBasedReduce_WaitUntilReadyWithMockClient(t *testing.T) {

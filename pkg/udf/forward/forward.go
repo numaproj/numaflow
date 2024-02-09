@@ -228,7 +228,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		for toVertexName, toVertexBuffer := range isdf.toBuffers {
 			for _, partition := range toVertexBuffer {
 				if p, ok := isdf.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, partition, p, isdf.idleManager, isdf.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeMapUDF, isdf.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					idlehandler.PublishIdleWatermark(ctx, partition, p, isdf.idleManager, isdf.opts.logger, isdf.vertexName, isdf.pipelineName, dfv1.VertexTypeMapUDF, isdf.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 				}
 			}
 		}
