@@ -18,17 +18,21 @@ package idlehandler
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"time"
 
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // PublishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
-func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
+func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager wmb.IdleManager, logger *zap.SugaredLogger, vertexName string, pipelineName string, vertexType dfv1.VertexType, vertexReplica int32, wm wmb.Watermark) {
 
 	var toPartitionName = toBufferPartition.GetName()
 	var toVertexPartition = toBufferPartition.GetPartitionIdx()
@@ -40,7 +44,7 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 			// so, we do nothing here
 		} else { // if the toBuffer partition doesn't exist, then we get a new idle situation
 			// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
-			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
+			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB, ID: fmt.Sprintf("%d-%d", vertexReplica, time.Now().UnixNano())}}}
 			writeOffsets, errs := toBufferPartition.Write(ctx, ctrlMessage)
 			// we only write one ctrl message, so there's one and only one error in the array, use index=0 to get the error
 			if errs[0] != nil {
@@ -53,6 +57,8 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 				// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
 				idleManager.Update(toPartitionName, writeOffsets[0])
 			}
+			metrics.CtrlMessagesCount.With(map[string]string{metrics.LabelVertex: vertexName, metrics.LabelPipeline: pipelineName, metrics.LabelVertexType: string(vertexType), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(vertexReplica)), metrics.LabelPartitionName: toPartitionName}).Add(1)
+
 		}
 	}
 
