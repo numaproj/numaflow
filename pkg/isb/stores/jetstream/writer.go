@@ -38,7 +38,7 @@ type jetStreamWriter struct {
 	partitionIdx int32
 	stream       string
 	subject      string
-	client       *jsclient.NATSClient
+	client       *jsclient.Client
 	js           nats.JetStreamContext
 	opts         *writeOptions
 	isFull       *atomic.Bool
@@ -46,7 +46,7 @@ type jetStreamWriter struct {
 }
 
 // NewJetStreamBufferWriter is used to provide a new instance of JetStreamBufferWriter
-func NewJetStreamBufferWriter(ctx context.Context, client *jsclient.NATSClient, name, stream, subject string, partitionIdx int32, opts ...WriteOption) (isb.BufferWriter, error) {
+func NewJetStreamBufferWriter(ctx context.Context, client *jsclient.Client, name, stream, subject string, partitionIdx int32, opts ...WriteOption) (isb.BufferWriter, error) {
 	o := defaultWriteOptions()
 	for _, opt := range opts {
 		if opt != nil {

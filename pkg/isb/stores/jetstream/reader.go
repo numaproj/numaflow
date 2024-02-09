@@ -36,7 +36,7 @@ type jetStreamReader struct {
 	name                   string
 	stream                 string
 	subject                string
-	client                 *jsclient.NATSClient
+	client                 *jsclient.Client
 	sub                    *nats.Subscription
 	opts                   *readOptions
 	inProgressTickDuration time.Duration
@@ -45,7 +45,7 @@ type jetStreamReader struct {
 }
 
 // NewJetStreamBufferReader is used to provide a new JetStream buffer reader connection
-func NewJetStreamBufferReader(ctx context.Context, client *jsclient.NATSClient, name, stream, subject string, partitionIdx int32, opts ...ReadOption) (isb.BufferReader, error) {
+func NewJetStreamBufferReader(ctx context.Context, client *jsclient.Client, name, stream, subject string, partitionIdx int32, opts ...ReadOption) (isb.BufferReader, error) {
 	log := logging.FromContext(ctx).With("bufferReader", name).With("stream", stream).With("subject", subject)
 	o := defaultReadOptions()
 	for _, opt := range opts {

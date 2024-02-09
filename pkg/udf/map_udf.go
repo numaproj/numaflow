@@ -88,6 +88,10 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			return err
 		}
 	case dfv1.ISBSvcTypeJetStream:
+		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
+		if err != nil {
+			return err
+		}
 
 		// build watermark progressors
 		// multiple go routines can share the same set of writers since nats conn is thread safe
@@ -115,10 +119,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, toVertexWmStores)
 
-			readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
-			if err != nil {
-				return err
-			}
 			idleManager = wmb.NewIdleManager(len(writers))
 		}
 	default:
