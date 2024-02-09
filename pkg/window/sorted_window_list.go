@@ -18,7 +18,6 @@ package window
 
 import (
 	"container/list"
-	"strings"
 	"sync"
 	"time"
 )
@@ -71,14 +70,6 @@ func (s *SortedWindowList[W]) InsertBack(kw W) {
 
 // InsertIfNotPresent inserts a window to the list of active windows if not present and returns the window.
 func (s *SortedWindowList[W]) InsertIfNotPresent(kw W) (aw W, isPresent bool) {
-
-	// print snap shot of all the windows using string builder
-	var sb strings.Builder = strings.Builder{}
-
-	for e := s.windows.Front(); e != nil; e = e.Next() {
-		sb.WriteString(e.Value.(W).StartTime().String() + " \n")
-	}
-
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	// this could be the first window

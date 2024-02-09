@@ -18,9 +18,7 @@ package idlehandler
 
 import (
 	"context"
-	"fmt"
 	"strconv"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -44,7 +42,7 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 			// so, we do nothing here
 		} else { // if the toBuffer partition doesn't exist, then we get a new idle situation
 			// if wmbOffset is nil, create a new WMB and write a ctrl message to ISB
-			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB, ID: fmt.Sprintf("%d-%d", vertexReplica, time.Now().UnixNano())}}}
+			var ctrlMessage = []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
 			writeOffsets, errs := toBufferPartition.Write(ctx, ctrlMessage)
 			// we only write one ctrl message, so there's one and only one error in the array, use index=0 to get the error
 			if errs[0] != nil {

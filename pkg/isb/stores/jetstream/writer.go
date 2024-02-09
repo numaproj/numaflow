@@ -262,13 +262,16 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 				Subject: jw.subject,
 				Data:    payload,
 			}
-			if pubAck, err := jw.js.PublishMsg(m, nats.AckWait(2*time.Second)); err != nil { // nats.MsgId() is for exactly-once writing
+			pubOpts := []nats.PubOpt{nats.AckWait(2 * time.Second)}
+			// nats.MsgId() is for exactly-once writing
+			// we don't need to set MsgId for control message
+			if message.Header.Kind != isb.WMB {
+				pubOpts = append(pubOpts, nats.MsgId(message.Header.ID))
+			}
+			if pubAck, err := jw.js.PublishMsg(m, pubOpts...); err != nil {
 				errs[idx] = err
 				isbWriteErrors.With(metricsLabels).Inc()
 			} else {
-				if pubAck.Duplicate {
-					jw.log.Infow("Duplicate message", zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain), zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence))
-				}
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}
 				errs[idx] = nil
 				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain))
