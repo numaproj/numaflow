@@ -50,7 +50,7 @@ func NewClientPool(ctx context.Context, opts ...Option) (*ClientPool, error) {
 
 // NextAvailableClient returns the next available NATS client. This code need not be optimized because this is
 // not in hot code path. It is only during connection creation/startup.
-func (p *ClientPool) NextAvailableClient() *NATSClient {
+func (p *ClientPool) NextAvailableClient() *Client {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -61,7 +61,7 @@ func (p *ClientPool) NextAvailableClient() *NATSClient {
 	// get the first client and move it to the back of the list
 	front := p.clients.Front()
 	p.clients.MoveToBack(front)
-	return front.Value.(*NATSClient)
+	return front.Value.(*Client)
 }
 
 // CloseAll closes all the clients in the pool
@@ -70,6 +70,6 @@ func (p *ClientPool) CloseAll() {
 	defer p.mutex.Unlock()
 
 	for e := p.clients.Front(); e != nil; e = e.Next() {
-		e.Value.(*NATSClient).Close()
+		e.Value.(*Client).Close()
 	}
 }

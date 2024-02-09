@@ -37,7 +37,7 @@ import (
 type jetStreamStore struct {
 	ctx               context.Context
 	kvName            string
-	client            *jsclient.NATSClient
+	client            *jsclient.Client
 	kv                nats.KeyValue
 	previousFetchTime time.Time
 	doneCh            chan struct{}
@@ -49,7 +49,7 @@ type jetStreamStore struct {
 var _ kvs.KVStorer = (*jetStreamStore)(nil)
 
 // NewKVJetStreamKVStore returns KVJetStreamStore.
-func NewKVJetStreamKVStore(ctx context.Context, kvName string, client *jsclient.NATSClient, opts ...Option) (kvs.KVStorer, error) {
+func NewKVJetStreamKVStore(ctx context.Context, kvName string, client *jsclient.Client, opts ...Option) (kvs.KVStorer, error) {
 	var err error
 
 	kvOpts := defaultOptions()
