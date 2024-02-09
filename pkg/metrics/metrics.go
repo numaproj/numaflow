@@ -257,3 +257,13 @@ var (
 		Help:      "Total number of partitions in flight",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
 )
+
+// Ctrl Message Metric
+var (
+	// CtrlMessagesCount is used to indicate the number of total ctrl messages sent.
+	CtrlMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "idlemanager",
+		Name:      "ctrl_msg_total",
+		Help:      "Total number of ctrl Messages sent",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+)
