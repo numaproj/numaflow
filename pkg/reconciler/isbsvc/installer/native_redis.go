@@ -300,7 +300,7 @@ func (r *redisInstaller) createHealthConfigMap(ctx context.Context) error {
 func (r *redisInstaller) createConfConfigMap(ctx context.Context) error {
 	data := make(map[string]string)
 	redisConf, masterConf, replicaConf, sentinelConf := "", "", "", ""
-	if x := r.config.ISBSvc.Redis.Settings; x != nil {
+	if x := r.config.GetISBSvcConfig().Redis.Settings; x != nil {
 		if x.Redis != "" {
 			redisConf = x.Redis
 		}
@@ -518,7 +518,7 @@ func (r *redisInstaller) createRedisHeadlessService(ctx context.Context) error {
 }
 
 func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
-	redisVersion, err := r.config.GetRedisVersion(r.isbSvc.Spec.Redis.Native.Version)
+	redisVersion, err := r.config.GetISBSvcConfig().GetRedisVersion(r.isbSvc.Spec.Redis.Native.Version)
 	if err != nil {
 		return fmt.Errorf("failed to get redis version, err: %w", err)
 	}
@@ -539,7 +539,7 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 		ConfConfigMapName:         generateRedisConfigMapName(r.isbSvc),
 		HealthConfigMapName:       generateHealthConfigMapName(r.isbSvc),
 		ScriptsConfigMapName:      generateScriptsConfigMapName(r.isbSvc),
-		DefaultResources:          r.config.GetDefaultContainerResources(),
+		DefaultResources:          r.config.GetDefaults().GetDefaultContainerResources(),
 	})
 	hash := sharedutil.MustHash(spec)
 	obj := &appv1.StatefulSet{
