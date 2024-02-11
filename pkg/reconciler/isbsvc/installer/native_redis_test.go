@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
@@ -45,7 +46,7 @@ func TestNativeRedisBadInstallation(t *testing.T) {
 		installer := &redisInstaller{
 			client:   fake.NewClientBuilder().Build(),
 			isbSvc:   badIsbs,
-			config:   fakeConfig,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			labels:   testLabels,
 			logger:   zaptest.NewLogger(t).Sugar(),
 			recorder: record.NewFakeRecorder(64),
@@ -81,7 +82,7 @@ func TestNativeRedisCreateObjects(t *testing.T) {
 		client:     cl,
 		kubeClient: k8sfake.NewSimpleClientset(),
 		isbSvc:     testNativeRedisIsbSvc,
-		config:     fakeConfig,
+		config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
 		recorder:   record.NewFakeRecorder(64),
@@ -183,7 +184,7 @@ func Test_NativeRedisInstall_Uninstall(t *testing.T) {
 		client:     cl,
 		kubeClient: k8sfake.NewSimpleClientset(),
 		isbSvc:     testNativeRedisIsbSvc,
-		config:     fakeConfig,
+		config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 		labels:     testLabels,
 		logger:     zaptest.NewLogger(t).Sugar(),
 		recorder:   record.NewFakeRecorder(64),

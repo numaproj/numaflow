@@ -358,7 +358,7 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 		PullPolicy:          corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
 		Env:                 envs,
 		SideInputsStoreName: pl.GetSideInputsStoreName(),
-		DefaultResources:    r.config.GetDefaultContainerResources(),
+		DefaultResources:    r.config.GetDefaults().GetDefaultContainerResources(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate pod spec, error: %w", err)
