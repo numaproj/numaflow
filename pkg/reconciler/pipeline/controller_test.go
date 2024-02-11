@@ -64,21 +64,18 @@ var (
 		},
 	}
 
-	fakeConfig = &reconciler.GlobalConfig{
-		ISBSvc: &reconciler.ISBSvcConfig{
-			Redis: &reconciler.RedisConfig{
-				Versions: []reconciler.RedisVersion{
-					{
-						Version:            testVersion,
-						RedisImage:         testImage,
-						SentinelImage:      testSImage,
-						RedisExporterImage: testRedisExporterImage,
-					},
+	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
+		Redis: &reconciler.RedisConfig{
+			Versions: []reconciler.RedisVersion{
+				{
+					Version:            testVersion,
+					RedisImage:         testImage,
+					SentinelImage:      testSImage,
+					RedisExporterImage: testRedisExporterImage,
 				},
 			},
 		},
 	}
-
 	fakeIsbSvcConfig = dfv1.BufferServiceConfig{
 		Redis: &dfv1.RedisConfig{
 			URL:         "xxx",
@@ -110,7 +107,7 @@ func init() {
 
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
-	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+	r := NewReconciler(cl, scheme.Scheme, reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig), testFlowImage, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 	_, ok := r.(*pipelineReconciler)
 	assert.True(t, ok)
 }
@@ -127,7 +124,7 @@ func Test_reconcile(t *testing.T) {
 		r := &pipelineReconciler{
 			client:   cl,
 			scheme:   scheme.Scheme,
-			config:   fakeConfig,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			image:    testFlowImage,
 			logger:   zaptest.NewLogger(t).Sugar(),
 			recorder: record.NewFakeRecorder(64),
@@ -148,6 +145,8 @@ func Test_reconcile(t *testing.T) {
 }
 
 func Test_reconcileEvents(t *testing.T) {
+
+	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	t.Run("test reconcile - invalid name", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
@@ -235,7 +234,7 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		r := &pipelineReconciler{
 			client:   cl,
 			scheme:   scheme.Scheme,
-			config:   fakeConfig,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			image:    testFlowImage,
 			logger:   zaptest.NewLogger(t).Sugar(),
 			recorder: record.NewFakeRecorder(64),
@@ -272,7 +271,7 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		r := &pipelineReconciler{
 			client:   cl,
 			scheme:   scheme.Scheme,
-			config:   fakeConfig,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			image:    testFlowImage,
 			logger:   zaptest.NewLogger(t).Sugar(),
 			recorder: record.NewFakeRecorder(64),
@@ -480,7 +479,7 @@ func Test_cleanupBuffers(t *testing.T) {
 	r := &pipelineReconciler{
 		client: cl,
 		scheme: scheme.Scheme,
-		config: fakeConfig,
+		config: reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 		image:  testFlowImage,
 		logger: zaptest.NewLogger(t).Sugar(),
 	}
@@ -522,7 +521,7 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 	r := &pipelineReconciler{
 		client:   cl,
 		scheme:   scheme.Scheme,
-		config:   fakeConfig,
+		config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 		image:    testFlowImage,
 		logger:   zaptest.NewLogger(t).Sugar(),
 		recorder: record.NewFakeRecorder(64),
@@ -557,7 +556,7 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 	r := &pipelineReconciler{
 		client:   cl,
 		scheme:   scheme.Scheme,
-		config:   fakeConfig,
+		config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 		image:    testFlowImage,
 		logger:   zaptest.NewLogger(t).Sugar(),
 		recorder: record.NewFakeRecorder(64),
