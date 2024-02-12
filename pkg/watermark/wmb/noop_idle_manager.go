@@ -23,7 +23,7 @@ import (
 type noOpIdleManager struct {
 }
 
-// NewNoOpIdleManager returns an no op singleIdleManager object as the IdleManager Interface type
+// NewNoOpIdleManager returns an no op idleManager object as the IdleManager Interface type
 func NewNoOpIdleManager() IdleManager {
 	return &noOpIdleManager{}
 }
