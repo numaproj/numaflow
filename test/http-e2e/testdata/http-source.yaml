@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: http-source
 spec:
+  watermark:
+    disabled: true
   vertices:
     - name: in
       source:
