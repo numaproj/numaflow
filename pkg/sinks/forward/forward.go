@@ -198,7 +198,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
-		idlehandler.PublishIdleWatermark(ctx, df.toBuffer, df.wmPublisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSink, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+		idlehandler.PublishIdleWatermark(ctx, "", df.toBuffer, df.wmPublisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSink, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 		return
 	}
 

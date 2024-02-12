@@ -28,7 +28,7 @@ import (
 )
 
 // PublishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
-func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
+func PublishIdleWatermark(ctx context.Context, fromBufferPartitionName string, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager wmb.IdleManager, logger *zap.SugaredLogger, vertexType dfv1.VertexType, wm wmb.Watermark) {
 
 	var toPartitionName = toBufferPartition.GetName()
 	var toVertexPartition = toBufferPartition.GetPartitionIdx()
@@ -51,7 +51,7 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 
 			if len(writeOffsets) == 1 {
 				// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
-				idleManager.Update("", toPartitionName, writeOffsets[0])
+				idleManager.Update(fromBufferPartitionName, toPartitionName, writeOffsets[0])
 			}
 		}
 	}
