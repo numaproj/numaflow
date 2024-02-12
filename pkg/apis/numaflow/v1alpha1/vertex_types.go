@@ -224,7 +224,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		env:             envVars,
 		image:           req.Image,
 		imagePullPolicy: req.PullPolicy,
-		resources:       *standardResources.DeepCopy(),
+		resources:       req.DefaultResources,
 		volumeMounts:    volumeMounts,
 	})
 	if err != nil {
@@ -276,7 +276,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			Env:             req.Env,
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
-			Resources:       *standardResources.DeepCopy(),
+			Resources:       req.DefaultResources,
 			Args:            []string{"side-inputs-synchronizer", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		}
 		sideInputsWatcher.Env = append(sideInputsWatcher.Env, v.commonEnvs()...)
@@ -321,7 +321,7 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 			Env:             envVars,
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
-			Resources:       *standardResources.DeepCopy(),
+			Resources:       req.DefaultResources,
 			Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 		},
 	}
@@ -331,7 +331,7 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 			Env:             envVars,
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
-			Resources:       *standardResources.DeepCopy(),
+			Resources:       req.DefaultResources,
 			Args:            []string{"side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		})
 	}

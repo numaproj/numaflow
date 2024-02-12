@@ -6,6 +6,7 @@ spec:
   sideInputs:
     - name: myticker
       container:
+        # see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/sideInput-function
         image: "quay.io/numaio/numaflow-sideinput/sideinput-sink-e2e-test:latest"
         imagePullPolicy: Always
       trigger:
@@ -18,6 +19,7 @@ spec:
       source:
         udsource:
           container:
+            # see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/simple-source-with-sideinput
             image: "quay.io/numaio/numaflow-source/simple_source_with_sideinput:latest"
       sideInputs:
         - myticker
@@ -25,6 +27,7 @@ spec:
       sink:
         udsink:
           container:
+            # see https://github.com/numaproj/numaflow-sinks/tree/78693ec48a5b8bc7ca7be2898dd8dd722392b53a/redis-e2e-test-sink
             image: "quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0"
       sideInputs:
         - myticker
