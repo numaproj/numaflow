@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -91,18 +92,19 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	// create udf handler and wait until it is ready
 	if windowType.Fixed != nil || windowType.Sliding != nil {
+		var serverInfo *info.ServerInfo
 		var client reducer.Client
 		// if streaming is enabled, use the reduceStreaming address
 		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
 			// Wait for server info to be ready
-			serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceStreamServerInfoFile))
+			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceStreamServerInfoFile))
 			if err != nil {
 				return err
 			}
 			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr), sdkclient.WithServerInfoFilePath(sdkserverinfo.ReduceStreamServerInfoFile))
 		} else {
 			// Wait for server info to be ready
-			serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceServerInfoFile))
+			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceServerInfoFile))
 			if err != nil {
 				return err
 			}
