@@ -64,26 +64,24 @@ var (
 		},
 	}
 
-	fakeConfig = &reconciler.GlobalConfig{
-		ISBSvc: &reconciler.ISBSvcConfig{
-			Redis: &reconciler.RedisConfig{
-				Versions: []reconciler.RedisVersion{
-					{
-						Version:            testVersion,
-						RedisImage:         testImage,
-						SentinelImage:      testSImage,
-						RedisExporterImage: testRedisExporterImage,
-					},
+	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
+		Redis: &reconciler.RedisConfig{
+			Versions: []reconciler.RedisVersion{
+				{
+					Version:            testVersion,
+					RedisImage:         testImage,
+					SentinelImage:      testSImage,
+					RedisExporterImage: testRedisExporterImage,
 				},
 			},
-			JetStream: &reconciler.JetStreamConfig{
-				Versions: []reconciler.JetStreamVersion{
-					{
-						Version:              testVersion,
-						NatsImage:            testJSImage,
-						ConfigReloaderImage:  testJSReloaderImage,
-						MetricsExporterImage: testJSMetricsImage,
-					},
+		},
+		JetStream: &reconciler.JetStreamConfig{
+			Versions: []reconciler.JetStreamVersion{
+				{
+					Version:              testVersion,
+					NatsImage:            testJSImage,
+					ConfigReloaderImage:  testJSReloaderImage,
+					MetricsExporterImage: testJSMetricsImage,
 				},
 			},
 		},
@@ -111,7 +109,7 @@ func init() {
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	kubeClient := k8sfake.NewSimpleClientset()
-	r := NewReconciler(cl, kubeClient, scheme.Scheme, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+	r := NewReconciler(cl, kubeClient, scheme.Scheme, reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig), zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 	_, ok := r.(*interStepBufferServiceReconciler)
 	assert.True(t, ok)
 }
@@ -125,7 +123,7 @@ func TestReconcileNativeRedis(t *testing.T) {
 			client:     cl,
 			kubeClient: k8sfake.NewSimpleClientset(),
 			scheme:     scheme.Scheme,
-			config:     fakeConfig,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			logger:     zaptest.NewLogger(t).Sugar(),
 			recorder:   record.NewFakeRecorder(64),
 		}
@@ -166,7 +164,7 @@ func TestReconcileJetStream(t *testing.T) {
 			client:     cl,
 			kubeClient: k8sfake.NewSimpleClientset(),
 			scheme:     scheme.Scheme,
-			config:     fakeConfig,
+			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			logger:     zaptest.NewLogger(t).Sugar(),
 			recorder:   record.NewFakeRecorder(64),
 		}
@@ -206,7 +204,7 @@ func TestNeedsUpdate(t *testing.T) {
 		r := &interStepBufferServiceReconciler{
 			client: cl,
 			scheme: scheme.Scheme,
-			config: fakeConfig,
+			config: reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			logger: zaptest.NewLogger(t).Sugar(),
 		}
 		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
@@ -226,7 +224,7 @@ func TestNeedsUpdate(t *testing.T) {
 		r := &interStepBufferServiceReconciler{
 			client: cl,
 			scheme: scheme.Scheme,
-			config: fakeConfig,
+			config: reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			logger: zaptest.NewLogger(t).Sugar(),
 		}
 		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
