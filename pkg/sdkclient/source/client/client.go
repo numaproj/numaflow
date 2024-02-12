@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	sourceAddr     = "/var/run/numaflow/source.sock"
-	serverInfoFile = "/var/run/numaflow/sourcer-server-info"
+	SourceAddr     = "/var/run/numaflow/source.sock"
+	ServerInfoFile = "/var/run/numaflow/sourcer-server-info"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -45,7 +45,7 @@ var _ Client = (*client)(nil)
 
 // New creates a new client object. Source client doesn't require server info to start ATM.
 func New(_ *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(sourceAddr, serverInfoFile)
+	var opts = sdkclient.DefaultOptions(SourceAddr, ServerInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

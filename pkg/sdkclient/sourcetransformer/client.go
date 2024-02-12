@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	sourceTransformerAddr = "/var/run/numaflow/sourcetransform.sock"
-	serverInfoFile        = "/var/run/numaflow/sourcetransformer-server-info"
+	SourceTransformerAddr = "/var/run/numaflow/sourcetransform.sock"
+	ServerInfoFile        = "/var/run/numaflow/sourcetransformer-server-info"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -41,7 +41,7 @@ type client struct {
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(sourceTransformerAddr, serverInfoFile)
+	var opts = sdkclient.DefaultOptions(SourceTransformerAddr, ServerInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

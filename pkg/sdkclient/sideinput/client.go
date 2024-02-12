@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	sideInputAddr  = "/var/run/numaflow/sideinput.sock"
-	serverInfoFile = "/var/run/numaflow/sideinput-server-info"
+	SideInputAddr  = "/var/run/numaflow/sideinput.sock"
+	ServerInfoFile = "/var/run/numaflow/sideinput-server-info"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -30,7 +30,7 @@ var _ Client = (*client)(nil)
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (*client, error) {
-	var opts = sdkclient.DefaultOptions(sideInputAddr, serverInfoFile)
+	var opts = sdkclient.DefaultOptions(SideInputAddr, ServerInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

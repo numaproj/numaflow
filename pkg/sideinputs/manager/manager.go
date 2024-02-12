@@ -83,7 +83,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	}
 
 	// Wait for server info to be ready
-	serverInfo, err := sdkserverinfo.SDKServerInfo()
+	serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sideinput.ServerInfoFile))
 	if err != nil {
 		return err
 	}

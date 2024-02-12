@@ -133,7 +133,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if enableMapUdfStream {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(mapstreamer.ServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	} else {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(mapper.ServerInfoFile))
 		if err != nil {
 			return err
 		}

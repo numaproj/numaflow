@@ -53,11 +53,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
 )
 
-const (
-	reduceStreamAddr           = "/var/run/numaflow/reducestream.sock"
-	reduceStreamServerInfoFile = "/var/run/numaflow/reducestreamer-server-info"
-)
-
 type ReduceUDFProcessor struct {
 	ISBSvcType     dfv1.ISBSvcType
 	VertexInstance *dfv1.VertexInstance
@@ -96,17 +91,21 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	// create udf handler and wait until it is ready
 	if windowType.Fixed != nil || windowType.Sliding != nil {
-		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
-		if err != nil {
-			return err
-		}
-
 		var client reducer.Client
 		// if streaming is enabled, use the reduceStreaming address
 		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
-			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(reduceStreamAddr), sdkclient.WithServerInfoFilePath(reduceStreamServerInfoFile))
+			// Wait for server info to be ready
+			serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(reducer.ReduceStreamServerInfoFile))
+			if err != nil {
+				return err
+			}
+			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(reducer.ReduceStreamAddr), sdkclient.WithServerInfoFilePath(reducer.ReduceStreamServerInfoFile))
 		} else {
+			// Wait for server info to be ready
+			serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(reducer.ReduceServerInfoFile))
+			if err != nil {
+				return err
+			}
 			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		}
 		if err != nil {
@@ -129,7 +128,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		healthChecker = reduceHandler
 	} else if windowType.Session != nil {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sessionreducer.ServerInfoFile))
 		if err != nil {
 			return err
 		}

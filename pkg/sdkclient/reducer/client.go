@@ -30,8 +30,10 @@ import (
 )
 
 const (
-	reduceAddr     = "/var/run/numaflow/reduce.sock"
-	serverInfoFile = "/var/run/numaflow/reducer-server-info"
+	ReduceAddr                 = "/var/run/numaflow/reduce.sock"
+	ReduceServerInfoFile       = "/var/run/numaflow/reducer-server-info"
+	ReduceStreamAddr           = "/var/run/numaflow/reducestream.sock"
+	ReduceStreamServerInfoFile = "/var/run/numaflow/reducestreamer-server-info"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -42,7 +44,7 @@ type client struct {
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(reduceAddr, serverInfoFile)
+	var opts = sdkclient.DefaultOptions(ReduceAddr, ReduceServerInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
