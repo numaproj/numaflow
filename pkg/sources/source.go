@@ -185,7 +185,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var udsGRPCClient *udsource.GRPCBasedUDSource
 	if sp.VertexInstance.Vertex.IsUDSource() {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sourceclient.ServerInfoFile))
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SourceServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -214,7 +214,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sourcetransformer.ServerInfoFile))
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SourceTransformerServerInfoFile))
 		if err != nil {
 			return err
 		}

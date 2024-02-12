@@ -12,12 +12,8 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/info"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-)
-
-const (
-	SideInputAddr  = "/var/run/numaflow/sideinput.sock"
-	ServerInfoFile = "/var/run/numaflow/sideinput-server-info"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -30,7 +26,7 @@ var _ Client = (*client)(nil)
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (*client, error) {
-	var opts = sdkclient.DefaultOptions(SideInputAddr, ServerInfoFile)
+	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr, sdkserverinfo.SideInputServerInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

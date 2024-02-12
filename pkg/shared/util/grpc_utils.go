@@ -70,7 +70,7 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 
 	if err := info.WaitUntilReady(ctx, info.WithServerInfoFilePath(filePath)); err != nil {
 		errMsg := fmt.Errorf("failed to wait until server info at location %q is ready: %w. Reattempting with default path %q", filePath, err, defaultServerInfoFilePath)
-		log.Printf(errMsg.Error())
+		log.Print(errMsg.Error())
 
 		// use a fall-back default server info path, in order to accommodate older sdk versions
 		filePath = defaultServerInfoFilePath

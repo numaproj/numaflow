@@ -25,12 +25,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-)
-
-const (
-	MapAddr        = "/var/run/numaflow/map.sock"
-	ServerInfoFile = "/var/run/numaflow/mapper-server-info"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -41,7 +37,7 @@ type client struct {
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(MapAddr, ServerInfoFile)
+	var opts = sdkclient.DefaultOptions(sdkclient.MapAddr, sdkserverinfo.MapServerInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

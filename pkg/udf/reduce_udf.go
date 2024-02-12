@@ -95,14 +95,14 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		// if streaming is enabled, use the reduceStreaming address
 		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
 			// Wait for server info to be ready
-			serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(reducer.ReduceStreamServerInfoFile))
+			serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceStreamServerInfoFile))
 			if err != nil {
 				return err
 			}
-			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(reducer.ReduceStreamAddr), sdkclient.WithServerInfoFilePath(reducer.ReduceStreamServerInfoFile))
+			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr), sdkclient.WithServerInfoFilePath(sdkserverinfo.ReduceStreamServerInfoFile))
 		} else {
 			// Wait for server info to be ready
-			serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(reducer.ReduceServerInfoFile))
+			serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceServerInfoFile))
 			if err != nil {
 				return err
 			}
@@ -128,7 +128,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		healthChecker = reduceHandler
 	} else if windowType.Session != nil {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sessionreducer.ServerInfoFile))
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SessionReduceServerInfoFile))
 		if err != nil {
 			return err
 		}

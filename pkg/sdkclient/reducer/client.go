@@ -26,14 +26,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-)
-
-const (
-	ReduceAddr                 = "/var/run/numaflow/reduce.sock"
-	ReduceServerInfoFile       = "/var/run/numaflow/reducer-server-info"
-	ReduceStreamAddr           = "/var/run/numaflow/reducestream.sock"
-	ReduceStreamServerInfoFile = "/var/run/numaflow/reducestreamer-server-info"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -44,7 +38,7 @@ type client struct {
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(ReduceAddr, ReduceServerInfoFile)
+	var opts = sdkclient.DefaultOptions(sdkclient.ReduceAddr, sdkserverinfo.ReduceServerInfoFile)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
