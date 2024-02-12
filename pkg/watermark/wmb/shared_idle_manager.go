@@ -24,6 +24,7 @@ import (
 )
 
 // sharedIdleManager manages the idle watermark whether the control message is a duplicate and also keeps track of the idle WMB's offset.
+// sharedIdleManager is shared across multiple forwarders. ATM our map and sink use sharedIdleManager.
 type sharedIdleManager struct {
 	// wmbOffset is a toBuffer partition name to the write offset of the idle watermark map.
 	wmbOffset map[string]isb.Offset

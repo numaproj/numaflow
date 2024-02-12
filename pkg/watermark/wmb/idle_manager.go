@@ -23,6 +23,7 @@ import (
 )
 
 // singleIdleManager manages the idle watermark whether the control message is a duplicate and also keeps track of the idle WMB's offset.
+// singleIdleManager is used for one single forwarder and is not shared. ATM our source and reduce use singleIdleManager.
 type singleIdleManager struct {
 	// wmbOffset is a toBuffer partition name to the write offset of the idle watermark map.
 	wmbOffset map[string]isb.Offset
@@ -53,6 +54,7 @@ func (im *singleIdleManager) Get(toBufferPartitionName string) isb.Offset {
 }
 
 // Update will update the existing item or add if not present for the given toBuffer partition name.
+// we don't need fromBufferPartitionName because singleIdleManager is not shared.
 func (im *singleIdleManager) Update(_, toBufferPartitionName string, newOffset isb.Offset) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
@@ -60,6 +62,7 @@ func (im *singleIdleManager) Update(_, toBufferPartitionName string, newOffset i
 }
 
 // Reset will clear the item for the given toBuffer partition name.
+// we don't need fromBufferPartitionName because singleIdleManager is not shared.
 func (im *singleIdleManager) Reset(_, toBufferPartitionName string) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
