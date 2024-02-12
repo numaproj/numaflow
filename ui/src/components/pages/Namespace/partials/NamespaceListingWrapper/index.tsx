@@ -413,7 +413,7 @@ export function NamespaceListingWrapper({
         {tabValue === PIPELINE ? (
           <PipelineListing
             pipelineData={pipelineData}
-            isbData={undefined}
+            isbData={isbData}
             totalCount={data.pipelinesCount}
             statusFilter={status}
             healthFilter={health}

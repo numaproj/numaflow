@@ -65,16 +65,14 @@ var (
 		},
 	}
 
-	fakeConfig = &reconciler.GlobalConfig{
-		ISBSvc: &reconciler.ISBSvcConfig{
-			Redis: &reconciler.RedisConfig{
-				Versions: []reconciler.RedisVersion{
-					{
-						Version:            testVersion,
-						RedisImage:         testImage,
-						SentinelImage:      testSImage,
-						RedisExporterImage: testRedisExporterImage,
-					},
+	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
+		Redis: &reconciler.RedisConfig{
+			Versions: []reconciler.RedisVersion{
+				{
+					Version:            testVersion,
+					RedisImage:         testImage,
+					SentinelImage:      testSImage,
+					RedisExporterImage: testRedisExporterImage,
 				},
 			},
 		},
@@ -170,12 +168,14 @@ func init() {
 
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
-	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, scaling.NewScaler(cl), zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+	r := NewReconciler(cl, scheme.Scheme, reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig), testFlowImage, scaling.NewScaler(cl), zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 	_, ok := r.(*vertexReconciler)
 	assert.True(t, ok)
 }
 
 func Test_BuildPodSpec(t *testing.T) {
+
+	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	t.Run("test source", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		r := &vertexReconciler{
@@ -420,6 +420,7 @@ func Test_BuildPodSpec(t *testing.T) {
 }
 
 func Test_reconcile(t *testing.T) {
+	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	t.Run("test reconcile source", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
@@ -653,7 +654,7 @@ func Test_reconcileEvents(t *testing.T) {
 		r := &vertexReconciler{
 			client:   cl,
 			scheme:   scheme.Scheme,
-			config:   fakeConfig,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			image:    testFlowImage,
 			scaler:   scaling.NewScaler(cl),
 			logger:   zaptest.NewLogger(t).Sugar(),
