@@ -76,13 +76,13 @@ func TestCompactor(t *testing.T) {
 	//assert.Equal(t, 1, len(files))
 
 	// read from file and check if the data is correct
-	decoder := newDecoder()
+	d := newDecoder()
 
 	// read the file
 	file, err := os.OpenFile(filepath.Join(dataDir, files[0].Name()), os.O_RDONLY, 0644)
 	assert.NoError(t, err)
 
-	header, err := decoder.decodeHeader(file)
+	header, err := d.decodeHeader(file)
 	assert.NoError(t, err)
 
 	assert.Equal(t, int64(0), header.Start.UnixMilli())
@@ -90,7 +90,7 @@ func TestCompactor(t *testing.T) {
 	assert.Equal(t, "slot-0", header.Slot)
 
 	for {
-		msg, count, err := decoder.decodeMessage(file)
+		msg, _, err := d.decodeMessage(file)
 		if err != nil {
 			if err.Error() == "EOF" {
 				break
@@ -98,8 +98,8 @@ func TestCompactor(t *testing.T) {
 				assert.NoError(t, err)
 			}
 		}
-
-		println("read bytes - ", count)
-		println("message - ", msg.EventTime.UnixMilli())
+		if msg.EventTime.Before(windows[len(windows)-1].EndTime()) {
+			assert.Fail(t, "not compacted")
+		}
 	}
 }

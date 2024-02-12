@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -126,10 +127,7 @@ func (c *compactor) compact(ctx context.Context) error {
 	// build the compaction key map
 	c.buildCompactionKeyMap(eventFiles)
 	// compact the data files based on the compaction key map
-	// log map
-	for k, v := range c.compactKeyMap {
-		log.Println("key - ", k, "value - ", v)
-	}
+
 	err := c.compactDataFiles(ctx)
 
 	if err != nil {
@@ -176,11 +174,6 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) {
 			}
 		}
 	}
-
-	// log map
-	for k, v := range c.compactKeyMap {
-		log.Println("key - ", k, "value - ", v)
-	}
 }
 
 // filesInDir lists all the files in the given directory except the current file
@@ -209,6 +202,10 @@ func filesInDir(dirPath string) ([]os.FileInfo, error) {
 		}
 	}
 
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime().Before(files[j].ModTime())
+	})
+
 	return files, nil
 }
 
@@ -217,14 +214,12 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 
 	// get all the data files
 	dataFiles, err := filesInDir(c.storeDataPath)
-	println("data files - ", len(dataFiles))
 	if err != nil {
 		return err
 	}
 
 	// iterate over all the data files and compact them
 	for _, dataFile := range dataFiles {
-		println("data file - ", dataFile.Name())
 		if err := c.compactFile(dataFile.Name()); err != nil {
 			return err
 		}
@@ -237,6 +232,7 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 // it copies the messages from the data file to the compaction file if the message should not be deleted
 // and deletes the data file after compaction
 func (c *compactor) compactFile(fileName string) error {
+	log.Println("compacting file - ", fileName)
 	// open the data file (read only)
 	dp, err := os.Open(filepath.Join(c.storeDataPath, fileName))
 	if err != nil {
@@ -279,7 +275,6 @@ func (c *compactor) compactFile(fileName string) error {
 		}
 
 		mp.Checksum = calculateChecksum(payload)
-		println("checksum - ", mp.Checksum, " len - ", mp.MessageLen, " watermark - ", mp.WaterMark, " event time - ", mp.EventTime, " offset - ", mp.Offset, " key len - ", mp.KeyLen)
 
 		if read != int(mp.MessageLen) {
 			return fmt.Errorf("expected to read length of %d, but read only %d", mp.MessageLen, read)
@@ -326,13 +321,15 @@ func (c *compactor) writeToFile(header *readMessageHeaderPreamble, key string, p
 	}
 
 	// write the key
-	if err := binary.Write(buf, binary.LittleEndian, []byte(key)); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, []rune(key)); err != nil {
 		return err
 	}
 
 	// write the payload
-	if err := binary.Write(buf, binary.LittleEndian, payload); err != nil {
+	if wrote, err := buf.Write(payload); err != nil {
 		return err
+	} else if wrote != len(payload) {
+		return fmt.Errorf("expected to write %d, but wrote only %d", len(payload), wrote)
 	}
 
 	bytesCount, err := c.compBufWriter.Write(buf.Bytes())

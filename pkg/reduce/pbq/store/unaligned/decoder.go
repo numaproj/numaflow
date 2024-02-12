@@ -63,23 +63,29 @@ func (d *decoder) decodeHeader(buf io.Reader) (*partition.ID, error) {
 }
 
 // decodeMessage decodes the isb read message from the given io.Reader.
-func (d *decoder) decodeMessage(buf io.Reader) (*isb.ReadMessage, int64, error) {
+func (d *decoder) decodeMessage(buf io.Reader) (*isb.ReadMessage, string, error) {
 	entryHeader, err := d.decodeWALMessageHeader(buf)
 	if err != nil {
-		return nil, 0, err
+		return nil, "", err
+	}
+
+	// read the key
+	key := make([]rune, entryHeader.KeyLen)
+	err = binary.Read(buf, binary.LittleEndian, &key)
+	if err != nil {
+		return nil, "", err
 	}
 
 	entryBody, err := d.decodeWALBody(buf, entryHeader)
 	if err != nil {
-		return nil, 0, err
+		return nil, "", err
 	}
-	size := EntryHeaderSize + entryHeader.MessageLen
 
 	return &isb.ReadMessage{
 		Message:    *entryBody,
 		Watermark:  time.UnixMilli(entryHeader.WaterMark).In(location),
 		ReadOffset: isb.SimpleIntOffset(func() int64 { return entryHeader.Offset }),
-	}, size, nil
+	}, string(key), nil
 }
 
 // decodeDeletionMessage decodes deletion message from the given io.Reader
@@ -140,6 +146,12 @@ func (d *decoder) decodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPre
 	checksum := calculateChecksum(body)
 	if checksum != entryHeader.Checksum {
 		println("header - ", entryHeader.MessageLen, " ", entryHeader.Checksum, " ", entryHeader.KeyLen, " ", entryHeader.Offset, " ", entryHeader.WaterMark, " ", entryHeader.EventTime)
+		println("body - ", string(body))
+		var message = new(isb.Message)
+		err = message.UnmarshalBinary(body)
+		if err != nil {
+			println("error - ", err.Error())
+		}
 		return nil, errChecksumMismatch
 	}
 

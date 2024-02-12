@@ -108,6 +108,7 @@ func (e *encoder) encodeMessage(message *isb.ReadMessage) ([]byte, error) {
 	if err := e.writeToBuffer(e.buf, body); err != nil {
 		return nil, err
 	}
+
 	return e.buf.Bytes(), nil
 }
 
