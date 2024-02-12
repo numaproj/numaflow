@@ -76,7 +76,7 @@ func TestRead(t *testing.T) {
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"writer": publishWMStore,
 	}
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, wmb.NewIdleManager(len(toBuffers)))
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, wmb.NewSingleIdleManager(len(toBuffers)))
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -135,7 +135,7 @@ func TestStop(t *testing.T) {
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"writer": publishWMStore,
 	}
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, wmb.NewIdleManager(len(toBuffers)))
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, wmb.NewSingleIdleManager(len(toBuffers)))
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

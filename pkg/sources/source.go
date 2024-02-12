@@ -163,7 +163,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 				writersMap[e.To] = bufferWriters
 			}
-			idleManager = wmb.NewIdleManager(len(writersMap))
+			idleManager = wmb.NewSingleIdleManager(len(writersMap))
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)

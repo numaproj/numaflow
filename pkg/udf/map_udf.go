@@ -119,7 +119,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			idleManager = wmb.NewIdleManager(len(writers))
+			idleManager = wmb.NewSingleIdleManager(len(writers))
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)

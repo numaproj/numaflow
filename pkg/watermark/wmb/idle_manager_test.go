@@ -31,7 +31,7 @@ func TestNewIdleManager(t *testing.T) {
 			return int64(100)
 		})
 	)
-	idleManager := NewIdleManager(10)
+	idleManager := NewSingleIdleManager(10)
 	assert.NotNil(t, idleManager)
 	assert.True(t, idleManager.NeedToSendCtrlMsg(toBufferName))
 	idleManager.Update("", toBufferName, o)

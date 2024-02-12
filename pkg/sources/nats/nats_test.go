@@ -83,7 +83,7 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (sourcer.Sourcer, error)
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"testVertex": publishWMStores,
 	}
-	return New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, wmb.NewIdleManager(len(toBuffers)), WithReadTimeout(1*time.Second))
+	return New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, wmb.NewSingleIdleManager(len(toBuffers)), WithReadTimeout(1*time.Second))
 }
 
 func Test_Single(t *testing.T) {

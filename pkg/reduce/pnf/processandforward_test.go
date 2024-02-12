@@ -187,7 +187,7 @@ func TestPnFHandleAlignedWindowResponses(t *testing.T) {
 		windower:           windower,
 		toBuffers:          toBuffersMap,
 		wmPublishers:       wmPublishers,
-		idleManager:        wmb.NewIdleManager(len(toBuffersMap)),
+		idleManager:        wmb.NewSingleIdleManager(len(toBuffersMap)),
 		pbqReader:          &pbqReader{},
 		done:               make(chan struct{}),
 		latestWriteOffsets: latestWriteOffsets,
@@ -269,7 +269,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		toBuffers:      toBuffers,
 		whereToDecider: whereto,
 		wmPublishers:   pw,
-		idleManager:    wmb.NewIdleManager(len(toBuffers)),
+		idleManager:    wmb.NewSingleIdleManager(len(toBuffers)),
 	}
 
 	return pf, otStore
