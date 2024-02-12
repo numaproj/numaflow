@@ -284,7 +284,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	if len(writeOffsets) > 0 {
 		df.wmPublisher.PublishWatermark(processorWM, nil, int32(0))
 		// reset because the toBuffer is no longer idling
-		df.idleManager.Reset("", df.toBuffer.GetName())
+		df.idleManager.Reset(df.fromBufferPartition.GetName(), df.toBuffer.GetName())
 	}
 
 	err = df.ackFromBuffer(ctx, readOffsets)
