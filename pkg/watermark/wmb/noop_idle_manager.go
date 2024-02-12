@@ -23,7 +23,7 @@ import (
 type noOpIdleManager struct {
 }
 
-// NewNoOpIdleManager returns an no op idleManager object as the IdleManager Interface type
+// NewNoOpIdleManager returns an no op singleIdleManager object as the IdleManager Interface type
 func NewNoOpIdleManager() IdleManager {
 	return &noOpIdleManager{}
 }
@@ -38,8 +38,8 @@ func (n *noOpIdleManager) Get(string) isb.Offset {
 	return isb.SimpleIntOffset(func() int64 { return int64(-1) })
 }
 
-func (n *noOpIdleManager) Update(string, isb.Offset) {
+func (n *noOpIdleManager) Update(string, string, isb.Offset) {
 }
 
-func (n *noOpIdleManager) Reset(string) {
+func (n *noOpIdleManager) Reset(string, string) {
 }

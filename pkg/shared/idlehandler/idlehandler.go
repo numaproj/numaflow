@@ -51,7 +51,7 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 
 			if len(writeOffsets) == 1 {
 				// we only write one ctrl message, so there's only one offset in the array, use index=0 to get the offset
-				idleManager.Update(toPartitionName, writeOffsets[0])
+				idleManager.Update("", toPartitionName, writeOffsets[0])
 			}
 		}
 	}

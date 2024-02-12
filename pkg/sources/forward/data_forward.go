@@ -399,7 +399,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 						activeWatermarkBuffers[toVertexName][index] = true
 						// update the watermark configs for lastTimestampSrcWMUpdated, lastFetchedSrcWatermark and lastTimestampIdleWMFound.
 						// reset because the toBuffer partition is no longer idling
-						df.idleManager.Reset(df.toBuffers[toVertexName][index].GetName())
+						df.idleManager.Reset("", df.toBuffers[toVertexName][index].GetName())
 					}
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer

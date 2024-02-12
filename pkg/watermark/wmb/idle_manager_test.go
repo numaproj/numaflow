@@ -34,10 +34,10 @@ func TestNewIdleManager(t *testing.T) {
 	idleManager := NewIdleManager(10)
 	assert.NotNil(t, idleManager)
 	assert.True(t, idleManager.NeedToSendCtrlMsg(toBufferName))
-	idleManager.Update(toBufferName, o)
+	idleManager.Update("", toBufferName, o)
 	getOffset := idleManager.Get(toBufferName)
 	assert.Equal(t, o.String(), getOffset.String())
 	assert.False(t, idleManager.NeedToSendCtrlMsg(toBufferName))
-	idleManager.Reset(toBufferName)
+	idleManager.Reset("", toBufferName)
 	assert.True(t, idleManager.NeedToSendCtrlMsg(toBufferName))
 }

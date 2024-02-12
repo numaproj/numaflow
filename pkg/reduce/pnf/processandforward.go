@@ -379,7 +379,7 @@ func (p *processAndForward) publishWM(ctx context.Context, endTime time.Time) {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is not idling
-					p.idleManager.Reset(p.toBuffers[toVertexName][index].GetName())
+					p.idleManager.Reset("", p.toBuffers[toVertexName][index].GetName())
 				}
 			}
 		}
