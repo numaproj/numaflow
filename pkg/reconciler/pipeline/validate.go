@@ -242,6 +242,9 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if min > max {
 		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
 	}
+	if max == 0 {
+		return fmt.Errorf("vertex %q: max number of replicas can not be 0", v.Name)
+	}
 	if v.Partitions != nil {
 		if *v.Partitions < 0 {
 			return fmt.Errorf("vertex %q: number of partitions should not be smaller than 0", v.Name)

@@ -602,6 +602,18 @@ func TestValidateVertex(t *testing.T) {
 		assert.Contains(t, err.Error(), "or equal to")
 	})
 
+	t.Run("max == 0", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			Name: "my-vertex",
+			Scale: dfv1.Scale{
+				Max: pointer.Int32(0),
+			},
+		}
+		err := validateVertex(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "can not be 0")
+	})
+
 	t.Run("good init container", func(t *testing.T) {
 		v := dfv1.AbstractVertex{Name: "my-vertex", InitContainers: goodContainers}
 		err := validateVertex(v)
