@@ -4,34 +4,34 @@ import (
 	"time"
 )
 
-type StoreWriterOption func(stores *store)
+type WALOption func(stores *WAL)
 
-func WithStoreDataPath(path string) StoreWriterOption {
-	return func(stores *store) {
+func WithStoreDataPath(path string) WALOption {
+	return func(stores *WAL) {
 		stores.storeDataPath = path
 	}
 }
 
-func WithSyncDuration(maxDuration time.Duration) StoreWriterOption {
-	return func(stores *store) {
+func WithSyncDuration(maxDuration time.Duration) WALOption {
+	return func(stores *WAL) {
 		stores.syncDuration = maxDuration
 	}
 }
 
-func WithMaxBatchSize(size int64) StoreWriterOption {
-	return func(stores *store) {
+func WithMaxBatchSize(size int64) WALOption {
+	return func(stores *WAL) {
 		stores.maxBatchSize = size
 	}
 }
 
-func WithSegmentRotationDuration(maxDuration time.Duration) StoreWriterOption {
-	return func(stores *store) {
+func WithSegmentRotationDuration(maxDuration time.Duration) WALOption {
+	return func(stores *WAL) {
 		stores.segmentRotationDuration = maxDuration
 	}
 }
 
-func WithSegmentSize(size int64) StoreWriterOption {
-	return func(stores *store) {
+func WithSegmentSize(size int64) WALOption {
+	return func(stores *WAL) {
 		stores.segmentSize = size
 	}
 }

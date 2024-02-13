@@ -22,7 +22,7 @@ func TestCompactor(t *testing.T) {
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
-	s, err := NewWriterStore(&pid, WithStoreOptions(dataDir))
+	s, err := NewStore(&pid, WithStoreOptions(dataDir))
 	assert.NoError(t, err)
 
 	// create read messages
