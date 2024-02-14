@@ -327,10 +327,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	// print the latest event time for each partition
-	for partition, latestEt := range latestEtMap {
-		df.opts.logger.Infow("Latest event time for partition - ", zap.Int32("partition", partition), zap.Int64("latestEt", int64(time.Since(time.Unix(0, latestEt)).Minutes())))
-	}
 	// publish source watermark
 	df.srcWMPublisher.PublishSourceWatermarks(transformedReadMessages)
 	// update the watermark configs for lastTimestampSrcWMUpdated, lastFetchedSrcWatermark and lastTimestampIdleWMFound.
