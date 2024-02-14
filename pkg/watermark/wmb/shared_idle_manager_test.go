@@ -64,7 +64,6 @@ func Test_sharedIdleManager_Get(t *testing.T) {
 	type fields struct {
 		wmbOffset                  map[string]isb.Offset
 		forwarderActiveToPartition map[string]map[string]bool
-		lock                       sync.RWMutex
 	}
 	type args struct {
 		toBufferPartitionName string
@@ -95,7 +94,6 @@ func Test_sharedIdleManager_Get(t *testing.T) {
 						"testToBufferPartition0": false,
 					},
 				},
-				lock: sync.RWMutex{},
 			},
 			args: args{
 				toBufferPartitionName: "testToBufferPartition0",
@@ -108,7 +106,7 @@ func Test_sharedIdleManager_Get(t *testing.T) {
 			im := &sharedIdleManager{
 				wmbOffset:                  tt.fields.wmbOffset,
 				forwarderActiveToPartition: tt.fields.forwarderActiveToPartition,
-				lock:                       tt.fields.lock,
+				lock:                       sync.RWMutex{},
 			}
 			gotOffset := im.Get(tt.args.toBufferPartitionName)
 			gotSequence, err := gotOffset.Sequence()
@@ -122,7 +120,6 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 	type fields struct {
 		wmbOffset                  map[string]isb.Offset
 		forwarderActiveToPartition map[string]map[string]bool
-		lock                       sync.RWMutex
 	}
 	type args struct {
 		toBufferPartitionName string
@@ -148,7 +145,6 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 						"testToBufferPartition0": false,
 					},
 				},
-				lock: sync.RWMutex{},
 			},
 			args: args{
 				toBufferPartitionName: "testToBufferPartition0",
@@ -169,7 +165,6 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 						"testToBufferPartition0": false,
 					},
 				},
-				lock: sync.RWMutex{},
 			},
 			args: args{
 				toBufferPartitionName: "testToBufferPartition0",
@@ -188,7 +183,6 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 						"testToBufferPartition0": true,
 					},
 				},
-				lock: sync.RWMutex{},
 			},
 			args: args{
 				toBufferPartitionName: "testToBufferPartition0",
@@ -201,7 +195,7 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 			im := &sharedIdleManager{
 				wmbOffset:                  tt.fields.wmbOffset,
 				forwarderActiveToPartition: tt.fields.forwarderActiveToPartition,
-				lock:                       tt.fields.lock,
+				lock:                       sync.RWMutex{},
 			}
 			assert.Equalf(t, tt.want, im.NeedToSendCtrlMsg(tt.args.toBufferPartitionName), "NeedToSendCtrlMsg(%v)", tt.args.toBufferPartitionName)
 		})
@@ -212,7 +206,6 @@ func Test_sharedIdleManager_Reset(t *testing.T) {
 	type fields struct {
 		wmbOffset                  map[string]isb.Offset
 		forwarderActiveToPartition map[string]map[string]bool
-		lock                       sync.RWMutex
 	}
 	type args struct {
 		fromBufferPartitionName string
@@ -244,7 +237,6 @@ func Test_sharedIdleManager_Reset(t *testing.T) {
 					"testToBufferPartition0": o, // should be reset to nil
 				},
 				forwarderActiveToPartition: testMap,
-				lock:                       sync.RWMutex{},
 			},
 			args: args{
 				fromBufferPartitionName: "testFromBufferPartition0",
@@ -257,7 +249,7 @@ func Test_sharedIdleManager_Reset(t *testing.T) {
 			im := &sharedIdleManager{
 				wmbOffset:                  tt.fields.wmbOffset,
 				forwarderActiveToPartition: tt.fields.forwarderActiveToPartition,
-				lock:                       tt.fields.lock,
+				lock:                       sync.RWMutex{},
 			}
 			// before
 			beforeReset, err := im.Get(tt.args.toBufferPartitionName).Sequence()
@@ -277,7 +269,6 @@ func Test_sharedIdleManager_Update(t *testing.T) {
 	type fields struct {
 		wmbOffset                  map[string]isb.Offset
 		forwarderActiveToPartition map[string]map[string]bool
-		lock                       sync.RWMutex
 	}
 	type args struct {
 		fromBufferPartitionName string
@@ -308,7 +299,6 @@ func Test_sharedIdleManager_Update(t *testing.T) {
 			fields: fields{
 				wmbOffset:                  map[string]isb.Offset{},
 				forwarderActiveToPartition: testMap,
-				lock:                       sync.RWMutex{},
 			},
 			args: args{
 				fromBufferPartitionName: "testFromBufferPartition0",
@@ -322,7 +312,7 @@ func Test_sharedIdleManager_Update(t *testing.T) {
 			im := &sharedIdleManager{
 				wmbOffset:                  tt.fields.wmbOffset,
 				forwarderActiveToPartition: tt.fields.forwarderActiveToPartition,
-				lock:                       tt.fields.lock,
+				lock:                       sync.RWMutex{},
 			}
 			// before
 			assert.Nil(t, im.Get(tt.args.toBufferPartitionName))
