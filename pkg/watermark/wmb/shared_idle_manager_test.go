@@ -127,13 +127,74 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 	type args struct {
 		toBufferPartitionName string
 	}
+	var o = isb.SimpleIntOffset(func() int64 {
+		return int64(100)
+	})
 	tests := []struct {
 		name   string
 		fields fields
 		args   args
 		want   bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "send_new_idle",
+			fields: fields{
+				wmbOffset: map[string]isb.Offset{},
+				forwarderActiveToPartition: map[string]map[string]bool{
+					"testFromBufferPartition0": {
+						"testToBufferPartition0": false,
+					},
+					"testFromBufferPartition1": {
+						"testToBufferPartition0": false,
+					},
+				},
+				lock: sync.RWMutex{},
+			},
+			args: args{
+				toBufferPartitionName: "testToBufferPartition0",
+			},
+			want: true,
+		},
+		{
+			name: "dont_send_already_idle",
+			fields: fields{
+				wmbOffset: map[string]isb.Offset{
+					"testToBufferPartition0": o,
+				},
+				forwarderActiveToPartition: map[string]map[string]bool{
+					"testFromBufferPartition0": {
+						"testToBufferPartition0": false,
+					},
+					"testFromBufferPartition1": {
+						"testToBufferPartition0": false,
+					},
+				},
+				lock: sync.RWMutex{},
+			},
+			args: args{
+				toBufferPartitionName: "testToBufferPartition0",
+			},
+			want: false,
+		},
+		{
+			name: "dont_send_at_least_one_active",
+			fields: fields{
+				wmbOffset: map[string]isb.Offset{},
+				forwarderActiveToPartition: map[string]map[string]bool{
+					"testFromBufferPartition0": {
+						"testToBufferPartition0": false,
+					},
+					"testFromBufferPartition1": {
+						"testToBufferPartition0": true,
+					},
+				},
+				lock: sync.RWMutex{},
+			},
+			args: args{
+				toBufferPartitionName: "testToBufferPartition0",
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -157,12 +218,39 @@ func Test_sharedIdleManager_Reset(t *testing.T) {
 		fromBufferPartitionName string
 		toBufferPartitionName   string
 	}
+	var (
+		o = isb.SimpleIntOffset(func() int64 {
+			return int64(100)
+		})
+		sequence, _ = o.Sequence()
+		testMap     = map[string]map[string]bool{
+			"testFromBufferPartition0": {
+				"testToBufferPartition0": false,
+			},
+			"testFromBufferPartition1": {
+				"testToBufferPartition0": true,
+			},
+		}
+	)
 	tests := []struct {
 		name   string
 		fields fields
 		args   args
 	}{
-		// TODO: Add test cases.
+		{
+			name: "good",
+			fields: fields{
+				wmbOffset: map[string]isb.Offset{
+					"testToBufferPartition0": o, // should be reset to nil
+				},
+				forwarderActiveToPartition: testMap,
+				lock:                       sync.RWMutex{},
+			},
+			args: args{
+				fromBufferPartitionName: "testFromBufferPartition0",
+				toBufferPartitionName:   "testToBufferPartition0",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -171,7 +259,16 @@ func Test_sharedIdleManager_Reset(t *testing.T) {
 				forwarderActiveToPartition: tt.fields.forwarderActiveToPartition,
 				lock:                       tt.fields.lock,
 			}
+			// before
+			beforeReset, err := im.Get(tt.args.toBufferPartitionName).Sequence()
+			assert.Nil(t, err)
+			assert.Equal(t, sequence, beforeReset)
+			assert.False(t, testMap[tt.args.fromBufferPartitionName][tt.args.toBufferPartitionName])
+			// reset
 			im.Reset(tt.args.fromBufferPartitionName, tt.args.toBufferPartitionName)
+			// after
+			assert.Nil(t, im.Get(tt.args.toBufferPartitionName))
+			assert.True(t, testMap[tt.args.fromBufferPartitionName][tt.args.toBufferPartitionName])
 		})
 	}
 }
@@ -187,12 +284,38 @@ func Test_sharedIdleManager_Update(t *testing.T) {
 		toBufferPartitionName   string
 		newOffset               isb.Offset
 	}
+	var (
+		o = isb.SimpleIntOffset(func() int64 {
+			return int64(100)
+		})
+		sequence, _ = o.Sequence()
+		testMap     = map[string]map[string]bool{
+			"testFromBufferPartition0": {
+				"testToBufferPartition0": true,
+			},
+			"testFromBufferPartition1": {
+				"testToBufferPartition0": false,
+			},
+		}
+	)
 	tests := []struct {
 		name   string
 		fields fields
 		args   args
 	}{
-		// TODO: Add test cases.
+		{
+			name: "good",
+			fields: fields{
+				wmbOffset:                  map[string]isb.Offset{},
+				forwarderActiveToPartition: testMap,
+				lock:                       sync.RWMutex{},
+			},
+			args: args{
+				fromBufferPartitionName: "testFromBufferPartition0",
+				toBufferPartitionName:   "testToBufferPartition0",
+				newOffset:               o,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -201,7 +324,16 @@ func Test_sharedIdleManager_Update(t *testing.T) {
 				forwarderActiveToPartition: tt.fields.forwarderActiveToPartition,
 				lock:                       tt.fields.lock,
 			}
+			// before
+			assert.Nil(t, im.Get(tt.args.toBufferPartitionName))
+			assert.True(t, testMap[tt.args.fromBufferPartitionName][tt.args.toBufferPartitionName])
+			// update
 			im.Update(tt.args.fromBufferPartitionName, tt.args.toBufferPartitionName, tt.args.newOffset)
+			// after
+			afterUpdate, err := im.Get(tt.args.toBufferPartitionName).Sequence()
+			assert.Nil(t, err)
+			assert.Equal(t, sequence, afterUpdate)
+			assert.False(t, testMap[tt.args.fromBufferPartitionName][tt.args.toBufferPartitionName])
 		})
 	}
 }
