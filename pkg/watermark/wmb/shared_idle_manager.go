@@ -87,6 +87,7 @@ func (im *sharedIdleManager) Update(fromBufferPartitionName string, toBufferPart
 func (im *sharedIdleManager) Reset(fromBufferPartitionName string, toBufferPartitionName string) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
+	// set to true means mark the fromBufferPartition forwarder as active
 	im.forwarderActiveToPartition[fromBufferPartitionName][toBufferPartitionName] = true
 	im.wmbOffset[toBufferPartitionName] = nil
 }
