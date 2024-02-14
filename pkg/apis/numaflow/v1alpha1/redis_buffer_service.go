@@ -410,7 +410,7 @@ redis_exporter`},
 		spec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:            "volume-permissions",
-				Resources:       *standardResources.DeepCopy(),
+				Resources:       req.DefaultResources,
 				SecurityContext: &corev1.SecurityContext{RunAsUser: &runAsUser0},
 				VolumeMounts:    []corev1.VolumeMount{{Name: req.PvcNameIfNeeded, MountPath: "/data"}},
 				Image:           req.InitContainerImage,

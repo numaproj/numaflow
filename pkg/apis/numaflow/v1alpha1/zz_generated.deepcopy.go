@@ -621,6 +621,7 @@ func (in *GetDaemonDeploymentReq) DeepCopyInto(out *GetDaemonDeploymentReq) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	in.DefaultResources.DeepCopyInto(&out.DefaultResources)
 	return
 }
 
@@ -667,6 +668,7 @@ func (in *GetJetStreamStatefulSetSpecReq) DeepCopyInto(out *GetJetStreamStateful
 			(*out)[key] = val
 		}
 	}
+	in.DefaultResources.DeepCopyInto(&out.DefaultResources)
 	return
 }
 
@@ -713,6 +715,7 @@ func (in *GetRedisStatefulSetSpecReq) DeepCopyInto(out *GetRedisStatefulSetSpecR
 			(*out)[key] = val
 		}
 	}
+	in.DefaultResources.DeepCopyInto(&out.DefaultResources)
 	return
 }
 
@@ -736,6 +739,7 @@ func (in *GetSideInputDeploymentReq) DeepCopyInto(out *GetSideInputDeploymentReq
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	in.DefaultResources.DeepCopyInto(&out.DefaultResources)
 	return
 }
 
@@ -759,6 +763,7 @@ func (in *GetVertexPodSpecReq) DeepCopyInto(out *GetVertexPodSpecReq) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	in.DefaultResources.DeepCopyInto(&out.DefaultResources)
 	return
 }
 

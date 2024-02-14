@@ -17838,6 +17838,9 @@
     },
     "io.numaproj.numaflow.v1alpha1.GetDaemonDeploymentReq": {
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
@@ -17858,7 +17861,8 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "DefaultResources"
       ],
       "type": "object"
     },
@@ -17912,6 +17916,9 @@
         "ConfigReloaderImage": {
           "type": "string"
         },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Labels": {
           "additionalProperties": {
             "type": "string"
@@ -17962,7 +17969,8 @@
         "ServerEncryptionSecretName",
         "ConfigMapName",
         "PvcNameIfNeeded",
-        "StartCommand"
+        "StartCommand",
+        "DefaultResources"
       ],
       "type": "object"
     },
@@ -17997,6 +18005,9 @@
         },
         "CredentialSecretName": {
           "type": "string"
+        },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
         "HealthConfigMapName": {
           "type": "string"
@@ -18059,12 +18070,16 @@
         "PvcNameIfNeeded",
         "ConfConfigMapName",
         "ScriptsConfigMapName",
-        "HealthConfigMapName"
+        "HealthConfigMapName",
+        "DefaultResources"
       ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.GetSideInputDeploymentReq": {
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
@@ -18085,12 +18100,16 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "DefaultResources"
       ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.GetVertexPodSpecReq": {
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
@@ -18115,7 +18134,8 @@
         "Image",
         "PullPolicy",
         "Env",
-        "SideInputsStoreName"
+        "SideInputsStoreName",
+        "DefaultResources"
       ],
       "type": "object"
     },

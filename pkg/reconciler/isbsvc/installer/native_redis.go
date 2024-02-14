@@ -522,6 +522,7 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get redis version, err: %w", err)
 	}
+
 	spec := r.isbSvc.Spec.Redis.Native.GetStatefulSetSpec(dfv1.GetRedisStatefulSetSpecReq{
 		ServiceName:               generateRedisHeadlessServiceName(r.isbSvc),
 		Labels:                    r.labels,
@@ -538,6 +539,7 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 		ConfConfigMapName:         generateRedisConfigMapName(r.isbSvc),
 		HealthConfigMapName:       generateHealthConfigMapName(r.isbSvc),
 		ScriptsConfigMapName:      generateScriptsConfigMapName(r.isbSvc),
+		DefaultResources:          r.config.GetDefaultContainerResources(),
 	})
 	hash := sharedutil.MustHash(spec)
 	obj := &appv1.StatefulSet{

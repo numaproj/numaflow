@@ -133,6 +133,11 @@ metadata:
 apiVersion: v1
 data:
   controller-config.yaml: |
+    defaults:
+      containerResources: |
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
     isbsvc:
       redis:
         # Default Redis settings, could be overridden by InterStepBufferService specs

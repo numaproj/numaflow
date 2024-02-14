@@ -1384,6 +1384,15 @@ Kubernetes core/v1.PullPolicy </a> </em>
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
+</td>
+<td>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetJetStreamServiceSpecReq">
@@ -1555,6 +1564,15 @@ Description
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
+</td>
+<td>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetRedisServiceSpecReq">
@@ -1719,6 +1737,15 @@ Description
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
+</td>
+<td>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetSideInputDeploymentReq">
@@ -1768,6 +1795,15 @@ Kubernetes core/v1.PullPolicy </a> </em>
 <code>Env</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
 <td>
 </td>
@@ -1828,6 +1864,15 @@ Kubernetes core/v1.PullPolicy </a> </em>
 <tr>
 <td>
 <code>SideInputsStoreName</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
 <td>
 </td>
