@@ -72,12 +72,6 @@ func (m *memoryStore) Close() error {
 	return nil
 }
 
-// isEmpty check if there are any records persisted in store
-func (m *memoryStore) isEmpty() bool {
-	// is empty should return true when the store is created and no messages are written
-	return m.writePos == 0
-}
-
 func (m *memoryStore) PartitionID() partition.ID {
 	return m.partitionID
 }

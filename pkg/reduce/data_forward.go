@@ -82,6 +82,7 @@ func NewDataForward(ctx context.Context,
 	fromBuffer isb.BufferReader,
 	toBuffers map[string][]isb.BufferWriter,
 	pbqManager *pbq.Manager,
+	storeManager store.Manager,
 	whereToDecider forwarder.ToWhichStepDecider,
 	fw fetch.Fetcher,
 	watermarkPublishers map[string]publish.Publisher,
@@ -111,6 +112,7 @@ func NewDataForward(ctx context.Context,
 		keyed:               vertexInstance.Vertex.Spec.UDF.GroupBy.Keyed,
 		idleManager:         idleManager,
 		pbqManager:          pbqManager,
+		storeManager:        storeManager,
 		whereToDecider:      whereToDecider,
 		of:                  of,
 		wmbChecker:          wmb.NewWMBChecker(2), // TODO: make configurable
@@ -168,8 +170,10 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 		df.associatePBQAndPnF(ctx, &p)
 	}
 	eg := errgroup.Group{}
+	df.log.Info("Number of partitions to replay: ", len(existingStores))
 	// replay the messages from each store in parallel
 	for _, sr := range existingStores {
+		df.log.Info("Replaying messages from partition: ", sr.PartitionID().String())
 		func(ctx context.Context, s store.Store) {
 			eg.Go(func() error {
 				pid := s.PartitionID()
@@ -178,11 +182,17 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 					select {
 					case <-ctx.Done():
 						return nil
-					case err = <-errCh:
+					case err, ok := <-errCh:
+						if !ok {
+							return nil
+						}
 						if err != nil {
 							return err
 						}
-					case msg := <-readCh:
+					case msg, ok := <-readCh:
+						if !ok {
+							return nil
+						}
 						// TODO: support unaligned windows
 						tw := window.NewAlignedTimedWindow(pid.Start, pid.End, pid.Slot)
 						request := &window.TimedWindowRequest{

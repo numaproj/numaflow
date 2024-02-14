@@ -389,9 +389,12 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 	var err error
 	var pbqManager *pbq.Manager
+	var storeManager store.Manager
 
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(100))
 	// create pbqManager
-	pbqManager, err = pbq.NewManager(child, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
+	pbqManager, err = pbq.NewManager(child, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -413,7 +416,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	op := pnf.NewPnFManager(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower)
 
 	var reduceDataForwarder *DataForward
-	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher,
+	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, wmpublisher, publisher,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -477,9 +480,13 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		toVertexName: {toBuffer},
 	}
 
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -506,7 +513,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffers, pbqManager, CounterReduceTest{}, f, publisherMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffers, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -689,9 +696,13 @@ func TestReduceDataForward_Count(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -712,7 +723,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -770,9 +781,13 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -795,7 +810,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 
 	var reduceDataForward *DataForward
 	allowedLatency := 1000
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
 		windower, idleManager, op, WithReadBatchSize(int64(batchSize)),
 		WithAllowedLateness(time.Duration(allowedLatency)*time.Millisecond),
 	)
@@ -855,9 +870,13 @@ func TestReduceDataForward_Sum(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -878,7 +897,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -937,9 +956,13 @@ func TestReduceDataForward_Max(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -960,7 +983,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	op := pnf.NewPnFManager(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -1019,9 +1042,13 @@ func TestReduceDataForward_FixedSumWithDifferentKeys(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1043,7 +1070,7 @@ func TestReduceDataForward_FixedSumWithDifferentKeys(t *testing.T) {
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 
 	assert.NoError(t, err)
@@ -1122,9 +1149,13 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1146,7 +1177,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	op := pnf.NewPnFManager(ctx, keyedVertex, SessionSumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, SessionSumReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, SessionSumReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 
 	assert.NoError(t, err)
@@ -1223,9 +1254,13 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1247,7 +1282,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -1310,12 +1345,13 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	// create a store provider
-	storeProvider := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(100))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(cctx, "reduce", pipelineName, 0, storeProvider,
+	pbqManager, err = pbq.NewManager(cctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1337,7 +1373,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(cctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(cctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(1))
 	assert.NoError(t, err)
 
@@ -1363,7 +1399,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	var discoveredStores []store.Store
 	for {
-		discoveredStores, _ = storeProvider.DiscoverStores(ctx)
+		discoveredStores, _ = storeManager.DiscoverStores(ctx)
 
 		if len(discoveredStores) == 1 {
 			break
@@ -1407,9 +1443,13 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 		toVertexName: {buffer1, buffer2},
 	}
 
+	var storeManager store.Manager
+	// create store manager
+	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1431,7 +1471,7 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, &myForwardTestRoundRobin{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, &myForwardTestRoundRobin{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 
 	assert.NoError(t, err)
