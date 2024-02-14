@@ -182,10 +182,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 					select {
 					case <-ctx.Done():
 						return nil
-					case err, ok := <-errCh:
-						if !ok {
-							return nil
-						}
+					case err := <-errCh:
 						if err != nil {
 							return err
 						}

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package wal
+package fs
 
 import (
 	"context"
@@ -30,7 +30,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
-type walStores struct {
+type fsWAL struct {
 	storePath string
 	// maxBufferSize max size of batch before it's flushed to store
 	maxBatchSize int64
@@ -42,8 +42,9 @@ type walStores struct {
 	activeStores map[string]store.Store
 }
 
-func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) store.Manager {
-	s := &walStores{
+// NewFSManager is a FileSystem Stores Manager.
+func NewFSManager(vertexInstance *dfv1.VertexInstance, opts ...Option) store.Manager {
+	s := &fsWAL{
 		storePath:    dfv1.DefaultStorePath,
 		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
 		syncDuration: dfv1.DefaultStoreSyncDuration,
@@ -58,13 +59,14 @@ func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) store.Man
 	return s
 }
 
-func (ws *walStores) CreateStore(_ context.Context, partitionID partition.ID) (store.Store, error) {
+// CreateStore creates the FS WAL.
+func (ws *fsWAL) CreateStore(_ context.Context, partitionID partition.ID) (store.Store, error) {
 	// check if the store is already present
 	// during crash recovery, we might have already created the store while replaying
 	if store, ok := ws.activeStores[partitionID.String()]; ok {
 		return store, nil
 	}
-	// Create wal dir if not exist
+	// Create fs dir if not exist
 	var err error
 	if _, err = os.Stat(ws.storePath); os.IsNotExist(err) {
 		err = os.Mkdir(ws.storePath, 0755)
@@ -86,7 +88,7 @@ func (ws *walStores) CreateStore(_ context.Context, partitionID partition.ID) (s
 }
 
 // DiscoverStores returns all the stores present in the storePath
-func (ws *walStores) DiscoverStores(_ context.Context) ([]store.Store, error) {
+func (ws *fsWAL) DiscoverStores(_ context.Context) ([]store.Store, error) {
 	files, err := os.ReadDir(ws.storePath)
 	if os.IsNotExist(err) {
 		return []store.Store{}, nil
@@ -110,7 +112,7 @@ func (ws *walStores) DiscoverStores(_ context.Context) ([]store.Store, error) {
 }
 
 // DeleteStore deletes the store for the given partitionID
-func (ws *walStores) DeleteStore(partitionID partition.ID) error {
+func (ws *fsWAL) DeleteStore(partitionID partition.ID) error {
 	var err error
 	defer func() {
 		if err != nil {

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package wal
+package fs
 
 import (
 	"context"
@@ -60,7 +60,7 @@ func TestWalStores(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	storeProvider := NewWALStores(vi, WithStorePath(tmp))
+	storeProvider := NewFSManager(vi, WithStorePath(tmp))
 
 	for _, partitionID := range partitionIds {
 		_, err = storeProvider.CreateStore(ctx, partitionID)

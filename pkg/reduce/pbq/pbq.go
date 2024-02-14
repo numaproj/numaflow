@@ -75,6 +75,7 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, per
 			if p.windowType == window.Unaligned {
 				return nil
 			}
+			// during replay we do not have to persist
 			if persist {
 				writeErr = p.store.Write(request.ReadMessage)
 			}

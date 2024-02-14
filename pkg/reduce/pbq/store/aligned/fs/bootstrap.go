@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package wal
+package fs
 
 import (
 	"encoding/binary"
@@ -99,7 +99,7 @@ func (w *WAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 
 	go func() {
 		defer close(messages)
-		defer close(errs)
+		defer func() { errs = nil }()
 
 		// decode read message and send it to the channel
 		// dont use Read method
