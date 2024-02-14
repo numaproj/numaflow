@@ -17,8 +17,6 @@ limitations under the License.
 package memory
 
 import (
-	"math"
-
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
@@ -37,20 +35,19 @@ type memoryStore struct {
 	partitionID partition.ID
 }
 
-// ReadFromStore will return upto N messages persisted in store
+// Replay will replay all the messages persisted in store
 // this function will be invoked during bootstrap if there is a restart
-func (m *memoryStore) Read(size int64) ([]*isb.ReadMessage, bool, error) {
-	if m.isEmpty() || m.readPos >= m.writePos {
-		m.log.Errorw(aligned.ErrReadStoreEmpty.Error())
-		return []*isb.ReadMessage{}, true, nil
-	}
-
-	// if size is greater than the number of messages in the store
-	// we will assign size with the number of messages in the store
-	size = int64(math.Min(float64(size), float64(m.writePos-m.readPos)))
-	readMessages := m.storage[m.readPos : m.readPos+size]
-	m.readPos += size
-	return readMessages, false, nil
+func (m *memoryStore) Replay() (<-chan *isb.ReadMessage, <-chan error) {
+	msgChan := make(chan *isb.ReadMessage)
+	errChan := make(chan error)
+	go func() {
+		for _, msg := range m.storage {
+			msgChan <- msg
+		}
+		close(msgChan)
+		close(errChan)
+	}()
+	return msgChan, errChan
 }
 
 // WriteToStore writes a message to store
@@ -79,4 +76,8 @@ func (m *memoryStore) Close() error {
 func (m *memoryStore) isEmpty() bool {
 	// is empty should return true when the store is created and no messages are written
 	return m.writePos == 0
+}
+
+func (m *memoryStore) PartitionID() partition.ID {
+	return m.partitionID
 }

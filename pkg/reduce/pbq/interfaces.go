@@ -40,7 +40,7 @@ type Reader interface {
 // No data can be written to PBQ after cob.
 type WriteCloser interface {
 	// Write writes the TimedWindowRequest to PBQ
-	Write(ctx context.Context, msg *window.TimedWindowRequest) error
+	Write(ctx context.Context, msg *window.TimedWindowRequest, persist bool) error
 	// CloseOfBook (cob) closes PBQ, no writes will be accepted after cob
 	CloseOfBook()
 	// Close to handle context close on writer

@@ -18,7 +18,6 @@ package wal
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -28,7 +27,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 type walStores struct {
@@ -40,9 +39,10 @@ type walStores struct {
 	pipelineName string
 	vertexName   string
 	replicaIndex int32
+	activeStores map[string]store.Store
 }
 
-func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) aligned.StoreProvider {
+func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) store.Manager {
 	s := &walStores{
 		storePath:    dfv1.DefaultStorePath,
 		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
@@ -50,6 +50,7 @@ func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) aligned.S
 		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
 		vertexName:   vertexInstance.Vertex.Spec.AbstractVertex.Name,
 		replicaIndex: vertexInstance.Replica,
+		activeStores: make(map[string]store.Store),
 	}
 	for _, o := range opts {
 		o(s)
@@ -57,7 +58,12 @@ func NewWALStores(vertexInstance *dfv1.VertexInstance, opts ...Option) aligned.S
 	return s
 }
 
-func (ws *walStores) CreateStore(_ context.Context, partitionID partition.ID) (aligned.Store, error) {
+func (ws *walStores) CreateStore(_ context.Context, partitionID partition.ID) (store.Store, error) {
+	// check if the store is already present
+	// during crash recovery, we might have already created the store while replaying
+	if store, ok := ws.activeStores[partitionID.String()]; ok {
+		return store, nil
+	}
 	// Create wal dir if not exist
 	var err error
 	if _, err = os.Stat(ws.storePath); os.IsNotExist(err) {
@@ -67,149 +73,43 @@ func (ws *walStores) CreateStore(_ context.Context, partitionID partition.ID) (a
 		}
 	}
 
-	// let's open or create, initialize and return a new WAL
-	wal, err := ws.openOrCreateWAL(&partitionID)
+	filePath := getSegmentFilePath(&partitionID, ws.storePath)
+	// we are interested only in the number of new files created
+	filesCount.With(map[string]string{
+		metrics.LabelPipeline:           ws.pipelineName,
+		metrics.LabelVertex:             ws.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
+	}).Inc()
 
-	return wal, err
+	return NewWriteOnlyWAL(&partitionID, filePath, ws.maxBatchSize, ws.syncDuration, ws.pipelineName, ws.vertexName, ws.replicaIndex)
+
 }
 
-// openOrCreateWAL open or creates a new WAL segment.
-func (ws *walStores) openOrCreateWAL(id *partition.ID) (*WAL, error) {
-	var err error
-
-	defer func() {
-		// increment active WAL count only if we are able to successfully create/open one.
-		if err == nil {
-			activeFilesCount.With(map[string]string{
-				metrics.LabelPipeline:           ws.pipelineName,
-				metrics.LabelVertex:             ws.vertexName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
-			}).Inc()
-		}
-	}()
-
-	filePath := getSegmentFilePath(id, ws.storePath)
-	stat, err := os.Stat(filePath)
-
-	var fp *os.File
-	var wal *WAL
-	if os.IsNotExist(err) {
-		// here we are explicitly giving O_WRONLY because we will not be using this to read. Our read is only during
-		// boot up.
-		fp, err = os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0644)
-		if err != nil {
-			return nil, err
-		}
-		// we are interested only in the number of new files created
-		filesCount.With(map[string]string{
-			metrics.LabelPipeline:           ws.pipelineName,
-			metrics.LabelVertex:             ws.vertexName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
-		}).Inc()
-
-		wal = &WAL{
-			fp:                fp,
-			openMode:          os.O_WRONLY,
-			createTime:        time.Now(),
-			wOffset:           0,
-			rOffset:           0,
-			readUpTo:          0,
-			partitionID:       id,
-			prevSyncedWOffset: 0,
-			prevSyncedTime:    time.Time{},
-			walStores:         ws,
-			numOfUnsyncedMsgs: 0,
-		}
-
-		err = wal.writeWALHeader()
-		if err != nil {
-			return nil, err
-		}
-	} else if err != nil {
-		return nil, err
-	} else {
-		// here we are explicitly giving O_RDWR because we will be using this to read too. Our read is only during
-		// bootstrap.
-		fp, err = os.OpenFile(filePath, os.O_RDWR, stat.Mode())
-		if err != nil {
-			return nil, err
-		}
-		wal = &WAL{
-			fp:                fp,
-			openMode:          os.O_RDWR,
-			createTime:        time.Now(),
-			wOffset:           0,
-			rOffset:           0,
-			readUpTo:          stat.Size(),
-			partitionID:       id,
-			prevSyncedWOffset: 0,
-			prevSyncedTime:    time.Time{},
-			walStores:         ws,
-			numOfUnsyncedMsgs: 0,
-		}
-		readPartition, err := wal.readWALHeader()
-		if err != nil {
-			return nil, err
-		}
-		if id.Slot != readPartition.Slot {
-			return nil, fmt.Errorf("expected partition key %s, but got %s", id.Slot, readPartition.Slot)
-		}
-	}
-
-	return wal, err
-}
-
-func (ws *walStores) DiscoverPartitions(_ context.Context) ([]partition.ID, error) {
+// DiscoverStores returns all the stores present in the storePath
+func (ws *walStores) DiscoverStores(_ context.Context) ([]store.Store, error) {
 	files, err := os.ReadDir(ws.storePath)
 	if os.IsNotExist(err) {
-		return []partition.ID{}, nil
+		return []store.Store{}, nil
 	} else if err != nil {
 		return nil, err
 	}
-	partitions := make([]partition.ID, 0)
+	partitions := make([]store.Store, 0)
 
 	for _, f := range files {
 		if strings.HasPrefix(f.Name(), SegmentPrefix) && !f.IsDir() {
 			filePath := filepath.Join(ws.storePath, f.Name())
-			wal, err := ws.openWAL(filePath)
+			wal, err := NewReadWriteWAL(filePath, ws.maxBatchSize, ws.syncDuration, ws.pipelineName, ws.vertexName, ws.replicaIndex)
 			if err != nil {
 				return nil, err
 			}
-			partitions = append(partitions, *wal.partitionID)
+			partitions = append(partitions, wal)
 		}
 	}
 
 	return partitions, nil
 }
 
-// openWAL returns a WAL if present
-func (ws *walStores) openWAL(filePath string) (*WAL, error) {
-	stat, err := os.Stat(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("filed to open WAL file %q, %w", filePath, err)
-	}
-
-	// here we are explicitly giving O_RDWR because we will be using this to read too. Our read is only during
-	// boot up.
-	fp, err := os.OpenFile(filePath, os.O_RDWR, stat.Mode())
-	if err != nil {
-		return nil, err
-	}
-
-	w := &WAL{
-		fp:        fp,
-		openMode:  os.O_RDWR,
-		walStores: ws,
-	}
-
-	w.partitionID, err = w.readWALHeader()
-
-	return w, err
-}
-
+// DeleteStore deletes the store for the given partitionID
 func (ws *walStores) DeleteStore(partitionID partition.ID) error {
 	var err error
 	defer func() {

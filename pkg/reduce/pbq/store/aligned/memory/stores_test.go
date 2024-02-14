@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 func TestMemoryStores(t *testing.T) {
@@ -55,19 +56,19 @@ func TestMemoryStores(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	var discoveredPartitions []partition.ID
-	discoveredPartitions, err = storeProvider.DiscoverPartitions(ctx)
+	var discoveredStores []store.Store
+	discoveredStores, err = storeProvider.DiscoverStores(ctx)
 	assert.NoError(t, err)
 
-	assert.Len(t, discoveredPartitions, len(partitionIds))
+	assert.Len(t, discoveredStores, len(partitionIds))
 
 	for _, partitionID := range partitionIds {
 		err = storeProvider.DeleteStore(partitionID)
 		assert.NoError(t, err)
 	}
 
-	discoveredPartitions, err = storeProvider.DiscoverPartitions(ctx)
+	discoveredStores, err = storeProvider.DiscoverStores(ctx)
 	assert.NoError(t, err)
 
-	assert.Len(t, discoveredPartitions, 0)
+	assert.Len(t, discoveredStores, 0)
 }

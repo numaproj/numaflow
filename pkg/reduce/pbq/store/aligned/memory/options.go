@@ -19,13 +19,13 @@ package memory
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 type Option func(stores *memoryStores)
 
 // WithDiscoverer sets the discover func of memorystores
-func WithDiscoverer(f func(ctx context.Context) ([]partition.ID, error)) Option {
+func WithDiscoverer(f func(ctx context.Context) ([]store.Store, error)) Option {
 	return func(stores *memoryStores) {
 		stores.discoverFunc = f
 	}

@@ -29,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 var vi = &dfv1.VertexInstance{
@@ -63,14 +64,14 @@ func Test_writeReadHeader(t *testing.T) {
 	fmt.Println(fName)
 	assert.NoError(t, err)
 
-	openWAL, err := wal.walStores.openWAL(fName)
+	openWAL, err := NewWriteOnlyWAL(&id, fName, dfv1.DefaultStoreMaxBufferSize, dfv1.DefaultStoreSyncDuration, "testPipeline", "testVertex", 0)
 	assert.NoError(t, err)
 	// we have already read the header in OpenWAL
-	_, err = openWAL.readWALHeader()
+	_, err = openWAL.(*WAL).readWALHeader()
 	assert.Error(t, err)
 
 	// compare the original ID with read ID
-	assert.Equal(t, id, *openWAL.partitionID)
+	assert.Equal(t, id, *openWAL.(*WAL).partitionID)
 
 	err = openWAL.Close()
 	assert.NoError(t, err)
@@ -144,17 +145,36 @@ func Test_writeReadEntry(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Reopen the WAL for read and write.
-	store, err := stores.CreateStore(context.Background(), id)
+	discoveredStores, err := stores.DiscoverStores(context.Background())
+	assert.Len(t, discoveredStores, 1)
 	assert.NoError(t, err)
+	store := discoveredStores[0]
 	newWal := store.(*WAL)
 	// we have already read the header in OpenWAL
 	_, err = newWal.readWALHeader()
 	assert.Error(t, err)
 
-	actualMessages, finished, err := newWal.Read(10000)
-	assert.NoError(t, err)
+	msgCh, errCh := newWal.Replay()
+	actualMessages := make([]*isb.ReadMessage, 0)
+outerLoop:
+	for {
+		select {
+		case msg, ok := <-msgCh:
+			if msg != nil {
+				actualMessages = append(actualMessages, msg)
+			}
+			if !ok {
+				break outerLoop
+			}
+		case err, ok := <-errCh:
+			if !ok {
+				break outerLoop
+			}
+			assert.NoError(t, err)
+			break outerLoop
+		}
+	}
 	// Check we reach the end of file
-	assert.Equal(t, true, finished)
 	assert.Equal(t, newWal.readUpTo, newWal.rOffset)
 
 	assert.Len(t, actualMessages, 1)
@@ -233,6 +253,7 @@ func Test_encodeDecodeEntry(t *testing.T) {
 }
 
 func Test_batchSyncWithMaxBatchSize(t *testing.T) {
+	ctx := context.Background()
 	id := partition.ID{
 		Start: time.Unix(1665109020, 0).In(location),
 		End:   time.Unix(1665109020, 0).Add(time.Minute).In(location),
@@ -257,7 +278,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	assert.Equal(t, int64(0), tempWAL.prevSyncedWOffset)
 	assert.NoError(t, err)
 
-	tempWAL.walStores.maxBatchSize = 10
+	tempWAL.maxBatchSize = 10
 	assert.NoError(t, err)
 	err = wal.Write(&message)
 	assert.NoError(t, err)
@@ -267,17 +288,36 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Reopen the WAL for read and write.
-	store, err := stores.CreateStore(context.Background(), id)
+	discoveredStores, err := stores.DiscoverStores(ctx)
+	assert.Len(t, discoveredStores, 1)
 	assert.NoError(t, err)
-	newWal := store.(*WAL)
+	newWal := discoveredStores[0].(*WAL)
 	// we have already read the header in OpenWAL
 	_, err = newWal.readWALHeader()
 	assert.Error(t, err)
 
-	actualMessages, finished, err := newWal.Read(10000)
-	assert.NoError(t, err)
+	msgCh, errCh := newWal.Replay()
+	actualMessages := make([]*isb.ReadMessage, 0)
+outerLoop:
+	for {
+		select {
+		case msg, ok := <-msgCh:
+			if msg != nil {
+				actualMessages = append(actualMessages, msg)
+			}
+			if !ok {
+				break outerLoop
+			}
+		case err, ok := <-errCh:
+			if !ok {
+				break outerLoop
+			}
+			assert.NoError(t, err)
+			break outerLoop
+		}
+	}
+
 	// Check we reach the end of file
-	assert.Equal(t, true, finished)
 	assert.Equal(t, newWal.readUpTo, newWal.rOffset)
 
 	assert.Len(t, actualMessages, 2)
@@ -305,12 +345,20 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := NewWALStores(vi, WithStorePath(tmp))
+	stores := &walStores{
+		storePath:    tmp,
+		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
+		syncDuration: 0,
+		pipelineName: vi.Vertex.Spec.PipelineName,
+		vertexName:   vi.Vertex.Spec.AbstractVertex.Name,
+		replicaIndex: vi.Replica,
+		activeStores: make(map[string]store.Store),
+	}
+
 	wal, err := stores.CreateStore(context.Background(), id)
 	assert.NoError(t, err)
 
 	tempWAL := wal.(*WAL)
-	tempWAL.walStores.syncDuration = 0
 
 	startTime := time.Unix(1665109020, 0).In(location)
 	msgCount := 2
@@ -323,7 +371,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	assert.NoError(t, err)
 
 	storePrevSyncedTime = tempWAL.prevSyncedTime
-	tempWAL.walStores.syncDuration = 10 * time.Second
+	tempWAL.syncDuration = 10 * time.Second
 	assert.NoError(t, err)
 	err = wal.Write(&message)
 	assert.NoError(t, err)
@@ -333,17 +381,35 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Reopen the WAL for read and write.
-	store, err := stores.CreateStore(context.Background(), id)
+	discoverStores, err := stores.DiscoverStores(context.Background())
+	assert.Len(t, discoverStores, 1)
 	assert.NoError(t, err)
-	newWal := store.(*WAL)
+	newWal := discoverStores[0].(*WAL)
 	// we have already read the header in OpenWAL
 	_, err = newWal.readWALHeader()
 	assert.Error(t, err)
 
-	actualMessages, finished, err := newWal.Read(10000)
-	assert.NoError(t, err)
+	msgCh, errCh := newWal.Replay()
+	actualMessages := make([]*isb.ReadMessage, 0)
+outerLoop:
+	for {
+		select {
+		case msg, ok := <-msgCh:
+			if msg != nil {
+				actualMessages = append(actualMessages, msg)
+			}
+			if !ok {
+				break outerLoop
+			}
+		case err, ok := <-errCh:
+			if !ok {
+				break outerLoop
+			}
+			assert.NoError(t, err)
+			break outerLoop
+		}
+	}
 	// Check we reach the end of file
-	assert.Equal(t, true, finished)
 	assert.Equal(t, newWal.readUpTo, newWal.rOffset)
 
 	assert.Len(t, actualMessages, 2)

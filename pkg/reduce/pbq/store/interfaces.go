@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package aligned
+package store
 
 import (
 	"context"
@@ -25,21 +25,24 @@ import (
 
 // Store provides methods to read, write and delete data from the store.
 type Store interface {
-	// Read returns upto N(size) messages from the persisted store, it also returns
-	// a boolean flag to indicate if the end of file has been reached.
-	Read(size int64) ([]*isb.ReadMessage, bool, error)
+	// Replay to replay persisted messages during startup
+	// returns a channel to read messages and a channel to read errors
+	Replay() (<-chan *isb.ReadMessage, <-chan error)
 	// Write writes message to persistence store
 	Write(msg *isb.ReadMessage) error
+	// PartitionID returns the partition ID of the store
+	PartitionID() partition.ID
 	// Close closes store
 	Close() error
 }
 
-// StoreProvider defines the functions for store implementation
-type StoreProvider interface {
+// Manager defines the interface to manage the stores.
+type Manager interface {
 	// CreateStore returns a new store instance.
 	CreateStore(context.Context, partition.ID) (Store, error)
-	// DiscoverPartitions discovers all the managed partitions.
-	DiscoverPartitions(context.Context) ([]partition.ID, error)
+	// DiscoverStores discovers all the existing stores.
+	// This is used to recover from a crash and replay all the messages from the store.
+	DiscoverStores(context.Context) ([]Store, error)
 	// DeleteStore deletes the store
 	DeleteStore(partition.ID) error
 }

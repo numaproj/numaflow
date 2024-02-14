@@ -26,7 +26,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -36,7 +36,7 @@ type PBQ struct {
 	vertexName    string
 	pipelineName  string
 	vertexReplica int32
-	store         aligned.Store
+	store         store.Store
 	output        chan *window.TimedWindowRequest
 	cob           bool // cob to avoid panic in case writes happen after close of book
 	PartitionID   partition.ID
@@ -52,7 +52,7 @@ var _ ReadWriteCloser = (*PBQ)(nil)
 // Write accepts a window request and writes it to the PBQ, only the isb message is written to the store.
 // The other metadata like operation etc are recomputed from WAL.
 // request can never be nil.
-func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) error {
+func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, persist bool) error {
 	// if cob we should return
 	if p.cob {
 		p.log.Errorw("Failed to write request to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("request", request))
@@ -75,7 +75,9 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) err
 			if p.windowType == window.Unaligned {
 				return nil
 			}
-			writeErr = p.store.Write(request.ReadMessage)
+			if persist {
+				writeErr = p.store.Write(request.ReadMessage)
+			}
 		case window.Close, window.Merge:
 		// these do not have request.ReadMessage, only metadata fields are used
 		default:
@@ -128,42 +130,4 @@ func (p *PBQ) GC() error {
 	defer p.mu.Unlock()
 	p.store = nil
 	return p.manager.deregister(p.PartitionID)
-}
-
-// replayRecordsFromStore replays store messages when replay flag is set during start up time. It replays by reading from
-// the store and writing to the PBQ channel.
-// FIXME: works only for fixed and sliding window
-func (p *PBQ) replayRecordsFromStore(ctx context.Context) {
-	size := p.options.readBatchSize
-readLoop:
-	for {
-		readMessages, eof, err := p.store.Read(size)
-		if err != nil {
-			p.log.Errorw("Error while replaying records from store", zap.Any("ID", p.PartitionID), zap.Error(err))
-		}
-		for _, msg := range readMessages {
-			// FIXME: support for session window
-			var w window.TimedWindow
-			if p.windowType == window.Aligned {
-				w = window.NewAlignedTimedWindow(p.PartitionID.Start, p.PartitionID.End, p.PartitionID.Slot)
-			} else {
-				p.log.Errorw("unAligned window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowType))
-			}
-			// select to avoid infinite blocking while writing to output channel
-			select {
-			case p.output <- &window.TimedWindowRequest{
-				ReadMessage: msg,
-				Operation:   window.Append,
-				Windows:     []window.TimedWindow{w},
-				ID:          &p.PartitionID,
-			}:
-			case <-ctx.Done():
-				break readLoop
-			}
-		}
-		// after replaying all the messages from store, unset replay flag
-		if eof {
-			break
-		}
-	}
 }

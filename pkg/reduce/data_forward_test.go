@@ -34,6 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/memory"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
@@ -1360,11 +1361,11 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		}
 	}
 
-	var discoveredPartitions []partition.ID
+	var discoveredStores []store.Store
 	for {
-		discoveredPartitions, _ = storeProvider.DiscoverPartitions(ctx)
+		discoveredStores, _ = storeProvider.DiscoverStores(ctx)
 
-		if len(discoveredPartitions) == 1 {
+		if len(discoveredStores) == 1 {
 			break
 		}
 		select {
@@ -1377,7 +1378,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	}
 
 	// even though we have 2 different keys
-	assert.Len(t, discoveredPartitions, 1)
+	assert.Len(t, discoveredStores, 1)
 
 }
 

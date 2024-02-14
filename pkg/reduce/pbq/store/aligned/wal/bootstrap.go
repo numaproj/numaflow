@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -44,10 +43,6 @@ func (w *WAL) IsCorrupted() bool {
 }
 
 func (w *WAL) readWALHeader() (*partition.ID, error) {
-	if w.openMode == os.O_WRONLY {
-		return nil, fmt.Errorf("opened using O_WRONLY")
-	}
-
 	if w.rOffset > 0 {
 		return nil, fmt.Errorf("header has already been read, current readoffset is at %d", w.rOffset)
 	}
@@ -96,40 +91,37 @@ func decodeWALHeader(buf io.Reader) (*partition.ID, error) {
 	}, nil
 }
 
-func (w *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
-	if w.openMode == os.O_WRONLY {
-		return nil, false, fmt.Errorf("opened using O_WRONLY")
-	}
+// Replay replays the WAL messages, returns a channel to read messages and a channel to read errors.
+func (w *WAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
+	messages := make(chan *isb.ReadMessage)
+	errs := make(chan error)
 
-	if w.rOffset < w.wOffset {
-		return nil, false, fmt.Errorf("read can only happen at startup not after any new writes")
-	}
+	go func() {
+		defer close(messages)
+		defer close(errs)
 
-	messages := make([]*isb.ReadMessage, 0)
-	// if size is greater than the number of messages in the store
-	// we will assign size with the number of messages in the store
-	start := w.rOffset
-	for size > w.rOffset-start && !w.isEnd() {
-		message, sizeRead, err := decodeReadMessage(w.fp)
-		if err != nil {
-			if errors.Is(err, errChecksumMismatch) {
-				w.corrupted = true
+		// decode read message and send it to the channel
+		// dont use Read method
+		for !w.isEnd() {
+			message, sizeRead, err := decodeReadMessage(w.fp)
+			if err != nil {
+				if errors.Is(err, errChecksumMismatch) {
+					w.corrupted = true
+				}
+				errs <- err
+				return
 			}
-			return nil, false, err
-		}
 
-		w.rOffset += sizeRead
-		messages = append(messages, message)
-	}
-	currentTime := time.Now()
-	if w.isEnd() {
+			w.rOffset += sizeRead
+			messages <- message
+		}
 		w.wOffset = w.rOffset
 		w.prevSyncedWOffset = w.wOffset
-		w.prevSyncedTime = currentTime
+		w.prevSyncedTime = time.Now()
 		w.numOfUnsyncedMsgs = 0
-		return messages, true, nil
-	}
-	return messages, false, nil
+		return
+	}()
+	return messages, errs
 }
 
 // decodeReadMessage decodes the WALMessage which is encoded by encodeWALMessage.

@@ -67,19 +67,18 @@ func TestWalStores(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	var discoveredPartitions []partition.ID
-	discoveredPartitions, err = storeProvider.DiscoverPartitions(ctx)
+	discoverStores, err := storeProvider.DiscoverStores(ctx)
 	assert.NoError(t, err)
 
-	assert.Len(t, discoveredPartitions, len(partitionIds))
+	assert.Len(t, discoverStores, len(partitionIds))
 
 	for _, partitionID := range partitionIds {
 		err = storeProvider.DeleteStore(partitionID)
 		assert.NoError(t, err)
 	}
 
-	discoveredPartitions, err = storeProvider.DiscoverPartitions(ctx)
+	discoverStores, err = storeProvider.DiscoverStores(ctx)
 	assert.NoError(t, err)
 
-	assert.Len(t, discoveredPartitions, 0)
+	assert.Len(t, discoverStores, 0)
 }
