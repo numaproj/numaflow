@@ -387,14 +387,10 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		toVertexName: {to},
 	}
 
-	var err error
-	var pbqManager *pbq.Manager
-	var storeManager store.Manager
-
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(100))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(100))
 	// create pbqManager
-	pbqManager, err = pbq.NewManager(child, "reduce", pipelineName, 0, storeManager,
+	pbqManager, err := pbq.NewManager(child, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
