@@ -76,7 +76,3 @@ func PublishIdleWatermark(ctx context.Context, toBufferPartition isb.BufferWrite
 		wmPublisher.PublishIdleWatermark(wm, nil, toVertexPartition)
 	}
 }
-
-// disable writing control messages and check if we still see duplicate messages
-// Check if kafka is redelivering the messages because of ack timeout
-// ISB write latency
