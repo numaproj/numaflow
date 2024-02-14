@@ -52,7 +52,7 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*Client, er
 		nats.MaxReconnects(-1),
 		// every one second we will try to ping the server, if we don't get a pong back
 		// after two attempts, we will consider the connection lost and try to reconnect
-		nats.PingInterval(1 * time.Second),
+		nats.PingInterval(3 * time.Second),
 		// error handler for the connection
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
 			log.Errorw("Nats default: error occurred for subscription", zap.Error(err))
