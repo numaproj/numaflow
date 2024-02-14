@@ -32,8 +32,6 @@ import (
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 )
 
-const defaultServerInfoFilePath = "/var/run/numaflow/server-info"
-
 // ToUDFErr converts gRPC error to UDF Error
 func ToUDFErr(name string, err error) error {
 	if err == nil {
