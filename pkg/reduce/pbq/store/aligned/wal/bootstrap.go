@@ -119,7 +119,6 @@ func (w *WAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 		w.prevSyncedWOffset = w.wOffset
 		w.prevSyncedTime = time.Now()
 		w.numOfUnsyncedMsgs = 0
-		return
 	}()
 	return messages, errs
 }

@@ -480,9 +480,8 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		toVertexName: {toBuffer},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -696,9 +695,8 @@ func TestReduceDataForward_Count(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -781,9 +779,8 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -870,9 +867,8 @@ func TestReduceDataForward_Sum(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -956,9 +952,8 @@ func TestReduceDataForward_Max(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1042,9 +1037,8 @@ func TestReduceDataForward_FixedSumWithDifferentKeys(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1149,9 +1143,8 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1254,9 +1247,8 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1345,9 +1337,8 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(100))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(100))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1443,9 +1434,8 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 		toVertexName: {buffer1, buffer2},
 	}
 
-	var storeManager store.Manager
 	// create store manager
-	storeManager = memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
