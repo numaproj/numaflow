@@ -201,6 +201,9 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 							Windows:     []window.TimedWindow{tw},
 							ID:          &pid,
 						}
+						// we don't want to persist the messages again
+						// because they are already persisted in the store
+						// so we set persist to false
 						err = df.writeToPBQ(ctx, request, false)
 						if err != nil {
 							return err

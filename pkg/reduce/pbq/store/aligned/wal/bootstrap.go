@@ -92,6 +92,7 @@ func decodeWALHeader(buf io.Reader) (*partition.ID, error) {
 }
 
 // Replay replays the WAL messages, returns a channel to read messages and a channel to read errors.
+// channel will be closed after all the messages are read from the WAL.
 func (w *WAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 	messages := make(chan *isb.ReadMessage)
 	errs := make(chan error)
