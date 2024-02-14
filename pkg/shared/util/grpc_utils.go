@@ -69,16 +69,7 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	defer cancel()
 
 	if err := info.WaitUntilReady(ctx, info.WithServerInfoFilePath(filePath)); err != nil {
-		errMsg := fmt.Errorf("failed to wait until server info at location %q is ready: %w. Reattempting with default path %q", filePath, err, defaultServerInfoFilePath)
-		log.Print(errMsg.Error())
-
-		// use a fall-back default server info path, in order to accommodate older sdk versions
-		filePath = defaultServerInfoFilePath
-		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		if err := info.WaitUntilReady(ctx, info.WithServerInfoFilePath(filePath)); err != nil {
-			return nil, fmt.Errorf("failed to wait until server info at location %q is ready: %w", filePath, err)
-		}
+		return nil, fmt.Errorf("failed to wait until server info is ready: %w", err)
 	}
 
 	serverInfo, err := info.Read(info.WithServerInfoFilePath(filePath))
