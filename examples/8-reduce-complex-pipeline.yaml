@@ -7,11 +7,10 @@ spec:
     readBatchSize: 50
   vertices:
     - name: in
+      scale:
+        min: 1
       source:
-        # A self data generating source
-        generator:
-          rpu: 100
-          duration: 1s
+        http: {}
     - name: atoi
       scale:
         min: 1
@@ -24,7 +23,7 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-counter:v0.6.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             fixed:
@@ -38,7 +37,7 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-counter:v0.6.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             fixed:
@@ -52,7 +51,7 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-counter:v0.6.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             sliding:
