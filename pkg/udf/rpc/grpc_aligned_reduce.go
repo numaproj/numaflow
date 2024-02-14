@@ -113,6 +113,7 @@ func (u *GRPCBasedAlignedReduce) ApplyReduce(ctx context.Context, partitionID *p
 				}
 				// create a unique message id for each response message which will be used for deduplication
 				msgId := fmt.Sprintf("%s-%d-%s-%d", u.vertexName, u.vertexReplica, partitionID.String(), index)
+				index++
 				responseCh <- parseReduceResponse(result, msgId)
 			case err := <-reduceErrCh:
 				// ctx.Done() event will be handled by the AsyncReduceFn method
