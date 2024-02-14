@@ -108,7 +108,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to create a new reducer gRPC client: %w", err)
 		}
 
-		reduceHandler := rpc.NewUDSgRPCAlignedReduce(client)
+		reduceHandler := rpc.NewUDSgRPCAlignedReduce(u.VertexInstance.Vertex.Name, u.VertexInstance.Replica, client)
 		// Readiness check
 		if err := reduceHandler.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on udf readiness check, %w", err)
