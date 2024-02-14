@@ -97,10 +97,10 @@ func (u *GRPCBasedAlignedReduce) ApplyReduce(ctx context.Context, partitionID *p
 
 	grpcCtx := metadata.NewOutgoingContext(ctx, metadata.New(mdMap))
 
-	index := 0
 	// invoke the AsyncReduceFn method with reduceRequests channel and send the result to responseCh channel
 	// and any error to errCh channel
 	go func() {
+		index := 0
 		resultCh, reduceErrCh := u.client.ReduceFn(grpcCtx, reduceRequests)
 		for {
 			select {
