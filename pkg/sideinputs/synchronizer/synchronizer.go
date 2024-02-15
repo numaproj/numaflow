@@ -57,7 +57,7 @@ func NewSideInputsSynchronizer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInp
 // and keeps on watching for updates for all the side inputs while writing the new values to the disk.
 func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 	var (
-		natsClient     *jsclient.NATSClient
+		natsClient     *jsclient.Client
 		err            error
 		sideInputStore kvs.KVStorer
 	)
