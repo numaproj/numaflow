@@ -83,6 +83,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings":                  schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                           schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                      schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLSCRAMSHA":                   schema_pkg_apis_numaflow_v1alpha1_SASLSCRAMSHA(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                          schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SessionWindow":                  schema_pkg_apis_numaflow_v1alpha1_SessionWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput":                      schema_pkg_apis_numaflow_v1alpha1_SideInput(ref),
@@ -3406,16 +3407,62 @@ func schema_pkg_apis_numaflow_v1alpha1_SASL(ref common.ReferenceCallback) common
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"),
 						},
 					},
+					"scramsha256": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASLSCRAMSHA256 contains the sasl plain config",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLSCRAMSHA"),
+						},
+					},
+					"scramsha512": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASLSCRAMSHA512 contains the sasl plain config",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLSCRAMSHA"),
+						},
+					},
 				},
 				Required: []string{"mechanism"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLSCRAMSHA"},
 	}
 }
 
 func schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"userSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UserSecret refers to the secret that contains the user",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"passwordSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PasswordSecret refers to the secret that contains the password",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"handshake": {
+						SchemaProps: spec.SchemaProps{
+							Default: false,
+							Type:    []string{"boolean"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"userSecret", "handshake"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_SASLSCRAMSHA(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{

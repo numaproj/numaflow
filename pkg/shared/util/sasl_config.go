@@ -72,6 +72,52 @@ func GetSASL(saslConfig *dfv1.SASL) (*struct {
 			}
 			config.Net.SASL.Handshake = plain.Handshake
 		}
+	case dfv1.SASLTypeSCRAMSHA256:
+		if scram := saslConfig.SCRAMSHA256; scram != nil {
+			config.Net.SASL.Enable = true
+			config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA256} }
+			if scram.UserSecret != nil {
+				user, err := GetSecretFromVolume(scram.UserSecret)
+				if err != nil {
+					return nil, err
+				} else {
+					config.Net.SASL.User = user
+				}
+			}
+			if scram.PasswordSecret != nil {
+				password, err := GetSecretFromVolume(scram.PasswordSecret)
+				if err != nil {
+					return nil, err
+				} else {
+					config.Net.SASL.Password = password
+				}
+			}
+			config.Net.SASL.Handshake = scram.Handshake
+		}
+	case dfv1.SASLTypeSCRAMSHA512:
+		if scram := saslConfig.SCRAMSHA512; scram != nil {
+			config.Net.SASL.Enable = true
+			config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
+			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
+			if scram.UserSecret != nil {
+				user, err := GetSecretFromVolume(scram.UserSecret)
+				if err != nil {
+					return nil, err
+				} else {
+					config.Net.SASL.User = user
+				}
+			}
+			if scram.PasswordSecret != nil {
+				password, err := GetSecretFromVolume(scram.PasswordSecret)
+				if err != nil {
+					return nil, err
+				} else {
+					config.Net.SASL.Password = password
+				}
+			}
+			config.Net.SASL.Handshake = scram.Handshake
+		}
 	default:
 		return nil, fmt.Errorf("SASL mechanism not supported: %s", *saslConfig.Mechanism)
 	}

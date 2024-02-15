@@ -19036,6 +19036,14 @@
         "plain": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain",
           "description": "SASLPlain contains the sasl plain config"
+        },
+        "scramsha256": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLSCRAMSHA",
+          "description": "SASLSCRAMSHA256 contains the sasl plain config"
+        },
+        "scramsha512": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLSCRAMSHA",
+          "description": "SASLSCRAMSHA512 contains the sasl plain config"
         }
       },
       "required": [
@@ -19044,6 +19052,26 @@
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.SASLPlain": {
+      "properties": {
+        "handshake": {
+          "type": "boolean"
+        },
+        "passwordSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "PasswordSecret refers to the secret that contains the password"
+        },
+        "userSecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "UserSecret refers to the secret that contains the user"
+        }
+      },
+      "required": [
+        "userSecret",
+        "handshake"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.SASLSCRAMSHA": {
       "properties": {
         "handshake": {
           "type": "boolean"
