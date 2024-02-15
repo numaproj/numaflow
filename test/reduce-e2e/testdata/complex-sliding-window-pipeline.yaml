@@ -17,13 +17,13 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
     - name: keyed-fixed-sum
       partitions: 2
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.2
         groupBy:
           window:
             fixed:
@@ -35,7 +35,7 @@ spec:
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.2
         groupBy:
           window:
             fixed:
@@ -47,7 +47,7 @@ spec:
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.2
         groupBy:
           window:
             sliding:
@@ -63,7 +63,7 @@ spec:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
       to: atoi

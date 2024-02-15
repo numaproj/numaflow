@@ -14,7 +14,7 @@ spec:
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/session-counter:v0.6.1
+          image: quay.io/numaio/numaflow-go/session-counter:v0.6.2
           imagePullPolicy: Always
         groupBy:
           window:
@@ -32,7 +32,7 @@ spec:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
       to: compute-sum
