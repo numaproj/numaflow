@@ -29,7 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 )
 
 var vi = &dfv1.VertexInstance{
@@ -52,9 +52,9 @@ func Test_writeReadHeader(t *testing.T) {
 
 	tmp := t.TempDir()
 	stores := NewFSManager(vi, WithStorePath(tmp))
-	store, err := stores.CreateStore(context.Background(), id)
+	store, err := stores.CreateWAL(context.Background(), id)
 	assert.NoError(t, err)
-	wal := store.(*WAL)
+	wal := store.(*alignedWAL)
 	fName := wal.fp.Name()
 	assert.NoError(t, err)
 	// read will fail because the file was opened only in write only mode
@@ -64,14 +64,14 @@ func Test_writeReadHeader(t *testing.T) {
 	fmt.Println(fName)
 	assert.NoError(t, err)
 
-	openWAL, err := NewWriteOnlyWAL(&id, fName, dfv1.DefaultStoreMaxBufferSize, dfv1.DefaultStoreSyncDuration, "testPipeline", "testVertex", 0)
+	openWAL, err := NewAlignedWriteOnlyWAL(&id, fName, dfv1.DefaultStoreMaxBufferSize, dfv1.DefaultStoreSyncDuration, "testPipeline", "testVertex", 0)
 	assert.NoError(t, err)
 	// we have already read the header in OpenWAL
-	_, err = openWAL.(*WAL).readWALHeader()
+	_, err = openWAL.(*alignedWAL).readWALHeader()
 	assert.Error(t, err)
 
 	// compare the original ID with read ID
-	assert.Equal(t, id, *openWAL.(*WAL).partitionID)
+	assert.Equal(t, id, *openWAL.(*alignedWAL).partitionID)
 
 	err = openWAL.Close()
 	assert.NoError(t, err)
@@ -107,9 +107,9 @@ func Test_encodeDecodeHeader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := t.TempDir()
 			stores := NewFSManager(vi, WithStorePath(tmp))
-			wal, err := stores.CreateStore(context.Background(), *tt.id)
+			wal, err := stores.CreateWAL(context.Background(), *tt.id)
 			assert.NoError(t, err)
-			newWal := wal.(*WAL)
+			newWal := wal.(*alignedWAL)
 			got, err := newWal.encodeWALHeader(tt.id)
 			if !tt.wantErr(t, err, fmt.Sprintf("encodeWALHeader(%v)", tt.id)) {
 				return
@@ -132,7 +132,7 @@ func Test_writeReadEntry(t *testing.T) {
 
 	tmp := t.TempDir()
 	stores := NewFSManager(vi, WithStorePath(tmp))
-	wal, err := stores.CreateStore(context.Background(), id)
+	wal, err := stores.CreateWAL(context.Background(), id)
 	assert.NoError(t, err)
 
 	startTime := time.Unix(1665109020, 0).In(location)
@@ -144,12 +144,12 @@ func Test_writeReadEntry(t *testing.T) {
 	err = wal.Close()
 	assert.NoError(t, err)
 
-	// Reopen the WAL for read and write.
-	discoveredStores, err := stores.DiscoverStores(context.Background())
+	// Reopen the alignedWAL for read and write.
+	discoveredStores, err := stores.DiscoverWALs(context.Background())
 	assert.Len(t, discoveredStores, 1)
 	assert.NoError(t, err)
 	store := discoveredStores[0]
-	newWal := store.(*WAL)
+	newWal := store.(*alignedWAL)
 	// we have already read the header in OpenWAL
 	_, err = newWal.readWALHeader()
 	assert.Error(t, err)
@@ -228,9 +228,9 @@ func Test_encodeDecodeEntry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmp := t.TempDir()
 			stores := NewFSManager(vi, WithStorePath(tmp))
-			wal, err := stores.CreateStore(context.Background(), partition.ID{})
+			wal, err := stores.CreateWAL(context.Background(), partition.ID{})
 			assert.NoError(t, err)
-			newWal := wal.(*WAL)
+			newWal := wal.(*alignedWAL)
 
 			got, err := newWal.encodeWALMessage(tt.message)
 			if !tt.wantErr(t, err, fmt.Sprintf("encodeWALMessage(%v)", tt.message)) {
@@ -262,10 +262,10 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 
 	tmp := t.TempDir()
 	stores := NewFSManager(vi, WithStorePath(tmp))
-	wal, err := stores.CreateStore(context.Background(), id)
+	wal, err := stores.CreateWAL(context.Background(), id)
 	assert.NoError(t, err)
 
-	tempWAL := wal.(*WAL)
+	tempWAL := wal.(*alignedWAL)
 	tempWAL.prevSyncedTime = time.Now()
 
 	startTime := time.Unix(1665109020, 0).In(location)
@@ -287,11 +287,11 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	err = wal.Close()
 	assert.NoError(t, err)
 
-	// Reopen the WAL for read and write.
-	discoveredStores, err := stores.DiscoverStores(ctx)
+	// Reopen the alignedWAL for read and write.
+	discoveredStores, err := stores.DiscoverWALs(ctx)
 	assert.Len(t, discoveredStores, 1)
 	assert.NoError(t, err)
-	newWal := discoveredStores[0].(*WAL)
+	newWal := discoveredStores[0].(*alignedWAL)
 	// we have already read the header in OpenWAL
 	_, err = newWal.readWALHeader()
 	assert.Error(t, err)
@@ -345,20 +345,20 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	stores := &fsWAL{
+	stores := &fsManager{
 		storePath:    tmp,
 		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
 		syncDuration: 0,
 		pipelineName: vi.Vertex.Spec.PipelineName,
 		vertexName:   vi.Vertex.Spec.AbstractVertex.Name,
 		replicaIndex: vi.Replica,
-		activeStores: make(map[string]store.Store),
+		activeWals:   make(map[string]wal.WAL),
 	}
 
-	wal, err := stores.CreateStore(context.Background(), id)
+	wal, err := stores.CreateWAL(context.Background(), id)
 	assert.NoError(t, err)
 
-	tempWAL := wal.(*WAL)
+	tempWAL := wal.(*alignedWAL)
 
 	startTime := time.Unix(1665109020, 0).In(location)
 	msgCount := 2
@@ -380,11 +380,11 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	err = wal.Close()
 	assert.NoError(t, err)
 
-	// Reopen the WAL for read and write.
-	discoverStores, err := stores.DiscoverStores(context.Background())
+	// Reopen the alignedWAL for read and write.
+	discoverStores, err := stores.DiscoverWALs(context.Background())
 	assert.Len(t, discoverStores, 1)
 	assert.NoError(t, err)
-	newWal := discoverStores[0].(*WAL)
+	newWal := discoverStores[0].(*alignedWAL)
 	// we have already read the header in OpenWAL
 	_, err = newWal.readWALHeader()
 	assert.Error(t, err)

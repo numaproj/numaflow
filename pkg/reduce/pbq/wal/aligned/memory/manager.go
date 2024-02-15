@@ -23,19 +23,19 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-type memoryStores struct {
+type memManager struct {
 	storeSize    int64
-	discoverFunc func(ctx context.Context) ([]store.Store, error)
+	discoverFunc func(ctx context.Context) ([]wal.WAL, error)
 	partitions   map[partition.ID]*memoryStore
 	sync.RWMutex
 }
 
-func NewMemoryStores(opts ...Option) store.Manager {
-	s := &memoryStores{
+func NewMemManager(opts ...Option) wal.Manager {
+	s := &memManager{
 		storeSize:  100000,
 		partitions: make(map[partition.ID]*memoryStore),
 	}
@@ -46,7 +46,7 @@ func NewMemoryStores(opts ...Option) store.Manager {
 	return s
 }
 
-func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+func (ms *memManager) CreateWAL(ctx context.Context, partitionID partition.ID) (wal.WAL, error) {
 	ms.Lock()
 	defer ms.Unlock()
 	if memStore, ok := ms.partitions[partitionID]; ok {
@@ -65,11 +65,11 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 	return memStore, nil
 }
 
-func (ms *memoryStores) DiscoverStores(ctx context.Context) ([]store.Store, error) {
+func (ms *memManager) DiscoverWALs(ctx context.Context) ([]wal.WAL, error) {
 	ms.RLock()
 	defer ms.RUnlock()
 	if ms.discoverFunc == nil {
-		s := make([]store.Store, 0)
+		s := make([]wal.WAL, 0)
 		for _, val := range ms.partitions {
 			s = append(s, val)
 		}
@@ -78,7 +78,7 @@ func (ms *memoryStores) DiscoverStores(ctx context.Context) ([]store.Store, erro
 	return ms.discoverFunc(ctx)
 }
 
-func (ms *memoryStores) DeleteStore(partitionID partition.ID) error {
+func (ms *memManager) DeleteWAL(partitionID partition.ID) error {
 	ms.Lock()
 	defer ms.Unlock()
 	memStore, ok := ms.partitions[partitionID]

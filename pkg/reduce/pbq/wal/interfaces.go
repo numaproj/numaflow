@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package store
+package wal
 
 import (
 	"context"
@@ -23,8 +23,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
-// Store provides methods to read, write and delete data from the store.
-type Store interface {
+// WAL provides methods to read, write and delete data from the persistence store.
+type WAL interface {
 	// Replay to replay persisted messages during startup
 	// returns a channel to read messages and a channel to read errors
 	Replay() (<-chan *isb.ReadMessage, <-chan error)
@@ -38,11 +38,11 @@ type Store interface {
 
 // Manager defines the interface to manage the stores.
 type Manager interface {
-	// CreateStore returns a new store instance.
-	CreateStore(context.Context, partition.ID) (Store, error)
-	// DiscoverStores discovers all the existing stores.
+	// CreateWAL returns a new wal instance.
+	CreateWAL(context.Context, partition.ID) (WAL, error)
+	// DiscoverWALs discovers all the existing wals.
 	// This is used to recover from a crash and replay all the messages from the store.
-	DiscoverStores(context.Context) ([]Store, error)
-	// DeleteStore deletes the store
-	DeleteStore(partition.ID) error
+	DiscoverWALs(context.Context) ([]WAL, error)
+	// DeleteWAL deletes the wal.
+	DeleteWAL(partition.ID) error
 }

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
@@ -46,15 +47,18 @@ type compactor struct {
 func NewCompactor(partitionId *partition.ID, storeDataPath string, storeEventsPath string, opts ...CompactorOption) (Compactor, error) {
 
 	c := &compactor{
-		partitionID:     partitionId,
-		storeDataPath:   storeDataPath,
-		storeEventsPath: storeEventsPath,
-		compactKeyMap:   make(map[string]int64),
-		prevSyncedTime:  time.Now(),
-		mu:              sync.Mutex{},
-		dc:              newDecoder(),
-		ec:              newEncoder(),
-		compWriteOffset: 0,
+		compactionDuration: dfv1.DefaultCompactionDuration,
+		maxFileSize:        dfv1.DefaultCompactorMaxFileSize,
+		syncDuration:       dfv1.DefaultCompactorSyncDuration,
+		partitionID:        partitionId,
+		storeDataPath:      storeDataPath,
+		storeEventsPath:    storeEventsPath,
+		compactKeyMap:      make(map[string]int64),
+		prevSyncedTime:     time.Now(),
+		mu:                 sync.Mutex{},
+		dc:                 newDecoder(),
+		ec:                 newEncoder(),
+		compWriteOffset:    0,
 	}
 
 	// open the first compaction file to write to
@@ -239,10 +243,9 @@ func (c *compactor) compactFile(fileName string) error {
 		return err
 	}
 
-	// read and decode the WAL header
+	// read and decode the unalignedWAL header
 	_, err = c.dc.decodeHeader(dp)
 	if err != nil {
-		println("err - ", err.Error())
 		if errors.Is(err, io.EOF) {
 			return nil
 		}
@@ -251,7 +254,7 @@ func (c *compactor) compactFile(fileName string) error {
 	}
 
 	for {
-		// read and decode the WAL message header
+		// read and decode the unalignedWAL message header
 		mp, err := decodeWALMessageHeader(dp)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
@@ -420,7 +423,7 @@ func decodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
 	return entryHeader, nil
 }
 
-// writeWALHeader writes the WAL header to the file.
+// writeWALHeader writes the unalignedWAL header to the file.
 func (c *compactor) writeWALHeader() error {
 	header, err := c.ec.encodeHeader(c.partitionID)
 	if err != nil {

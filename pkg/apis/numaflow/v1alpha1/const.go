@@ -154,10 +154,21 @@ const (
 	PathPBQMount = "/var/numaflow/pbq"
 
 	// Default persistent store options
-	DefaultStoreSyncDuration  = 2 * time.Second        // Default sync duration for pbq
-	DefaultStoreMaxBufferSize = 100000                 // Default buffer size for pbq in bytes
-	DefaultStorePath          = PathPBQMount + "/wals" // Default store path
-	DefaultStoreOpPath        = PathPBQMount + "/ops"
+	DefaultStoreSyncDuration       = 2 * time.Second        // Default sync duration for pbq
+	DefaultStoreMaxBufferSize      = 100000                 // Default buffer size for pbq in bytes
+	DefaultStorePath               = PathPBQMount + "/wals" // Default store path
+	DefaultSegmentRotationDuration = 20 * time.Second       // Default segment rotation duration
+	DefaultStoreSegmentSize        = 20 * 1024 * 1024       // Default segment size
+
+	// Default GC tracker options
+	DefaultGCTrackerRotationDuration = 20 * time.Second         // Default rotation duration for the GC tracker
+	DefaultStoreEventsPath           = PathPBQMount + "/events" // Default store path for operations
+	DefaultGCTrackerSyncDuration     = 2 * time.Second          // Default sync duration for the GC tracker
+
+	// Default compactor options
+	DefaultCompactorSyncDuration = 2 * time.Second  // Default rotation duration for the compactor
+	DefaultCompactorMaxFileSize  = 20 * 1024 * 1024 // Default max file size for the compactor
+	DefaultCompactionDuration    = 20 * time.Second // Default compaction duration
 
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"

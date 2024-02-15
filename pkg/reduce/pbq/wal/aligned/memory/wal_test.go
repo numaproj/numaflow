@@ -37,7 +37,7 @@ func TestMemoryStore_WriteToStore(t *testing.T) {
 		Slot:  "new-partition",
 	}
 	// create a store of size 100 (it can store max 100 messages)
-	memStore, err := NewMemoryStores(WithStoreSize(100)).CreateStore(ctx, partitionID)
+	memStore, err := NewMemManager(WithStoreSize(100)).CreateWAL(ctx, partitionID)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -61,7 +61,7 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 	}
 
 	// create a store of size 100 (it can store max 100 messages)
-	memStore, err := NewMemoryStores(WithStoreSize(100)).CreateStore(ctx, partitionID)
+	memStore, err := NewMemManager(WithStoreSize(100)).CreateWAL(ctx, partitionID)
 	assert.NoError(t, err)
 
 	//write 10 isb messages to persisted store
@@ -108,7 +108,7 @@ func TestEmptyStore_Read(t *testing.T) {
 		Slot:  "new-partition",
 	}
 
-	memStore, err := NewMemoryStores(WithStoreSize(storeSize)).CreateStore(ctx, partitionID)
+	memStore, err := NewMemManager(WithStoreSize(storeSize)).CreateWAL(ctx, partitionID)
 	assert.NoError(t, err)
 	msgCh, errCh := memStore.Replay()
 	readMessages := make([]*isb.ReadMessage, 0)
@@ -146,7 +146,7 @@ func TestFullStore_Write(t *testing.T) {
 		Slot:  "new-partition",
 	}
 
-	memStore, err := NewMemoryStores(WithStoreSize(storeSize)).CreateStore(ctx, partitionID)
+	memStore, err := NewMemManager(WithStoreSize(storeSize)).CreateWAL(ctx, partitionID)
 	assert.NoError(t, err)
 
 	//write 100 isb messages to persisted store

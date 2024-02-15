@@ -25,8 +25,8 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/memory"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/noop"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/noop"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -34,7 +34,7 @@ func TestManager_ListPartitions(t *testing.T) {
 	size := int64(100)
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemManager(memory.WithStoreSize(size)),
 		window.Aligned, WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -73,7 +73,7 @@ func TestManager_GetPBQ(t *testing.T) {
 	size := int64(100)
 	var pb1, pb2 ReadWriteCloser
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemManager(memory.WithStoreSize(size)),
 		window.Aligned, WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -98,7 +98,7 @@ func TestPBQFlow(t *testing.T) {
 	size := int64(100)
 
 	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)),
+	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemManager(memory.WithStoreSize(size)),
 		window.Aligned, WithReadTimeout(1*time.Second), WithChannelBufferSize(10))
 	assert.NoError(t, err)
 

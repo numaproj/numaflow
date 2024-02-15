@@ -19,7 +19,7 @@ type walHeaderPreamble struct {
 	SLen int16
 }
 
-// readMessageHeaderPreamble is the header for each WAL entry
+// readMessageHeaderPreamble is the header for each unalignedWAL entry
 type readMessageHeaderPreamble struct {
 	EventTime  int64
 	WaterMark  int64
@@ -45,7 +45,7 @@ type deletionMessage struct {
 	Key  string
 }
 
-// encoder is an encoder for the WAL entries and header.
+// encoder is an encoder for the unalignedWAL entries and header.
 type encoder struct {
 	buf *bytes.Buffer
 }
@@ -57,7 +57,7 @@ func newEncoder() *encoder {
 	}
 }
 
-// encodeHeader encodes the header of the WAL file.
+// encodeHeader encodes the header of the unalignedWAL file.
 func (e *encoder) encodeHeader(id *partition.ID) ([]byte, error) {
 	e.buf.Reset()
 	buf := e.buf
@@ -169,7 +169,7 @@ func (e *encoder) encodeWALMessageHeader(message *isb.ReadMessage, bodyLen int64
 
 }
 
-// encodeWALMessageBody uses ReadMessage.Message field as the body of the WAL message, encodes the
+// encodeWALMessageBody uses ReadMessage.Message field as the body of the unalignedWAL message, encodes the
 // ReadMessage.Message, and returns.
 func (e *encoder) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
 	msgBinary, err := readMsg.Message.MarshalBinary()

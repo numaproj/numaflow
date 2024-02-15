@@ -29,7 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 )
 
 const (
@@ -43,38 +43,38 @@ var (
 	errChecksumMismatch = fmt.Errorf("data checksum not match")
 )
 
-// WAL implements a write-ahead-log. It represents both reader and writer. This WAL is write heavy and read is
-// infrequent, meaning a read will only happen during a boot up. WAL will only have one segment since these are
+// alignedWAL implements a write-ahead-log. It represents both reader and writer. This alignedWAL is write heavy and read is
+// infrequent, meaning a read will only happen during a boot up. alignedWAL will only have one segment since these are
 // relatively short-lived.
-type WAL struct {
+type alignedWAL struct {
 	pipelineName      string
 	vertexName        string
 	replicaIndex      int32
 	maxBatchSize      int64         // maxBatchSize is the maximum size of the batch before we sync the file.
 	syncDuration      time.Duration // syncDuration is the duration after which the writer will sync the file.
-	fp                *os.File      // fp is the file pointer to the WAL segment
+	fp                *os.File      // fp is the file pointer to the alignedWAL segment
 	wOffset           int64         // wOffset is the write offset as tracked by the writer
 	rOffset           int64         // rOffset is the read offset as tracked when reading.
 	readUpTo          int64         // readUpTo is the read offset at which the reader will stop reading.
-	createTime        time.Time     // createTime is the timestamp when the WAL segment is created.
+	createTime        time.Time     // createTime is the timestamp when the alignedWAL segment is created.
 	corrupted         bool          // corrupted indicates whether the data of the file has been corrupted
-	partitionID       *partition.ID // partitionID is the partition ID of the WAL segment
+	partitionID       *partition.ID // partitionID is the partition ID of the alignedWAL segment
 	prevSyncedWOffset int64         // prevSyncedWOffset is the write offset that is already synced as tracked by the writer
 	prevSyncedTime    time.Time     // prevSyncedTime is the time when the last sync was made
 	numOfUnsyncedMsgs int64
 }
 
-// NewWriteOnlyWAL creates a new WAL instance for write-only. This will be used in happy path where we are only
-// writing to the WAL.
-func NewWriteOnlyWAL(id *partition.ID,
+// NewAlignedWriteOnlyWAL creates a new alignedWAL instance for write-only. This will be used in happy path where we are only
+// writing to the alignedWAL.
+func NewAlignedWriteOnlyWAL(id *partition.ID,
 	filePath string,
 	maxBufferSize int64,
 	syncDuration time.Duration,
 	pipelineName string,
 	vertexName string,
-	replica int32) (store.Store, error) {
+	replica int32) (wal.WAL, error) {
 
-	wal := &WAL{
+	wal := &alignedWAL{
 		pipelineName:      pipelineName,
 		vertexName:        vertexName,
 		replicaIndex:      replica,
@@ -105,15 +105,15 @@ func NewWriteOnlyWAL(id *partition.ID,
 	return wal, nil
 }
 
-// NewReadWriteWAL creates a new WAL instance for read-write. This will be used during boot up where we will be replaying
-// the messages from the WAL and then writing to it.
-func NewReadWriteWAL(filePath string,
+// NewAlignedReadWriteWAL creates a new alignedWAL instance for read-write. This will be used during boot up where we will be replaying
+// the messages from the alignedWAL and then writing to it.
+func NewAlignedReadWriteWAL(filePath string,
 	maxBufferSize int64,
 	syncDuration time.Duration,
 	pipelineName string,
 	vertexName string,
-	replica int32) (store.Store, error) {
-	wal := &WAL{
+	replica int32) (wal.WAL, error) {
+	wal := &alignedWAL{
 		pipelineName:      pipelineName,
 		vertexName:        vertexName,
 		replicaIndex:      replica,
@@ -136,7 +136,7 @@ func NewReadWriteWAL(filePath string,
 	}
 	wal.fp = fp
 
-	// read the partition ID from the WAL header and set it in the WAL.
+	// read the partition ID from the alignedWAL header and set it in the alignedWAL.
 	readPartition, err := wal.readWALHeader()
 	if err != nil {
 		return nil, err
@@ -153,12 +153,12 @@ func NewReadWriteWAL(filePath string,
 	return wal, nil
 }
 
-func (w *WAL) PartitionID() partition.ID {
+func (w *alignedWAL) PartitionID() partition.ID {
 	return *w.partitionID
 }
 
-// writeWALHeader writes the WAL header to the file.
-func (w *WAL) writeWALHeader() (err error) {
+// writeWALHeader writes the alignedWAL header to the file.
+func (w *alignedWAL) writeWALHeader() (err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
@@ -190,7 +190,7 @@ type walHeaderPreamble struct {
 	SLen int16
 }
 
-// readMessageHeaderPreamble is the header for each WAL entry
+// readMessageHeaderPreamble is the header for each alignedWAL entry
 type readMessageHeaderPreamble struct {
 	WaterMark  int64
 	Offset     int64
@@ -198,7 +198,7 @@ type readMessageHeaderPreamble struct {
 	Checksum   uint32
 }
 
-// encodeWALHeader builds the WAL header. WAL header is per WAL and has information to build the WAL partition.
+// encodeWALHeader builds the alignedWAL header. alignedWAL header is per alignedWAL and has information to build the alignedWAL partition.
 // The header is of the following format.
 //
 //	+--------------------+------------------+------------------+-------------+
@@ -206,7 +206,7 @@ type readMessageHeaderPreamble struct {
 //	+--------------------+------------------+------------------+-------------+
 //
 // We require the slot-len because slot is variadic.
-func (w *WAL) encodeWALHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
+func (w *alignedWAL) encodeWALHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
@@ -241,8 +241,8 @@ func calculateChecksum(data []byte) uint32 {
 	return crc32.Checksum(data, crc32q)
 }
 
-// encodeWALMessage builds the WAL message.
-func (w *WAL) encodeWALMessage(message *isb.ReadMessage) (buf *bytes.Buffer, err error) {
+// encodeWALMessage builds the alignedWAL message.
+func (w *alignedWAL) encodeWALMessage(message *isb.ReadMessage) (buf *bytes.Buffer, err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
@@ -284,9 +284,9 @@ func (w *WAL) encodeWALMessage(message *isb.ReadMessage) (buf *bytes.Buffer, err
 	return buf, nil
 }
 
-// encodeWALMessageHeader creates the header of the WAL message. The header is mainly for checksum, verifying the
+// encodeWALMessageHeader creates the header of the alignedWAL message. The header is mainly for checksum, verifying the
 // correctness of the WALMessage.
-func (w *WAL) encodeWALMessageHeader(message *isb.ReadMessage, messageLen int64, checksum uint32) (*bytes.Buffer, error) {
+func (w *alignedWAL) encodeWALMessageHeader(message *isb.ReadMessage, messageLen int64, checksum uint32) (*bytes.Buffer, error) {
 	watermark := message.Watermark.UnixMilli()
 
 	offset, err := message.ReadOffset.Sequence()
@@ -316,9 +316,9 @@ func (w *WAL) encodeWALMessageHeader(message *isb.ReadMessage, messageLen int64,
 	return buf, nil
 }
 
-// encodeWALMessageBody uses ReadMessage.Message field as the body of the WAL message, encodes the
+// encodeWALMessageBody uses ReadMessage.Message field as the body of the alignedWAL message, encodes the
 // ReadMessage.Message, and returns.
-func (w *WAL) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
+func (w *alignedWAL) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
 	msgBinary, err := readMsg.Message.MarshalBinary()
 	if err != nil {
 		walErrors.With(map[string]string{
@@ -332,14 +332,14 @@ func (w *WAL) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
 	return msgBinary, nil
 }
 
-// Write writes the message to the WAL. The format as follow is
+// Write writes the message to the alignedWAL. The format as follow is
 //
 //	+-------------------+----------------+-----------------+--------------+----------------+
 //	| watermark (int64) | offset (int64) | msg-len (int64) | CRC (unit32) | message []byte |
 //	+-------------------+----------------+-----------------+--------------+----------------+
 //
 // CRC will be used for detecting ReadMessage corruptions.
-func (w *WAL) Write(message *isb.ReadMessage) (err error) {
+func (w *alignedWAL) Write(message *isb.ReadMessage) (err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
@@ -406,8 +406,8 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	return err
 }
 
-// Close closes the WAL Segment.
-func (w *WAL) Close() (err error) {
+// Close closes the alignedWAL Segment.
+func (w *alignedWAL) Close() (err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{

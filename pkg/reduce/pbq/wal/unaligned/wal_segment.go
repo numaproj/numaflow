@@ -8,9 +8,10 @@ import (
 	"path/filepath"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 )
 
 const (
@@ -19,8 +20,9 @@ const (
 	CurrentSegmentName = "current" + "-" + SegmentPrefix
 )
 
-type WAL struct {
-	partitionID             *partition.ID // partitionID is the partition ID for the WAL
+// unalignedWAL is an unaligned write-ahead log
+type unalignedWAL struct {
+	partitionID             *partition.ID // partitionID is the partition ID for the unalignedWAL
 	currDataFp              *os.File      // currDataFp is the current data file pointer to which the data is being written
 	currWriteOffset         int64         // currWriteOffset is the current write offset
 	currReadOffset          int64         // currReadOffset is the current read offset
@@ -28,9 +30,9 @@ type WAL struct {
 	dataBufWriter           *bufio.Writer // dataBufWriter is the buffered writer for the data file
 	prevSyncedTime          time.Time     // prevSyncedTime is the previous synced time
 	segmentCreateTime       time.Time     // segmentCreateTime is the time when the segment is created
-	encoder                 *encoder      // encoder is the encoder for the WAL entries and header
-	decoder                 *decoder      // decoder is the decoder for the WAL entries and header
-	storeDataPath           string        // storeDataPath is the path to the WAL data
+	encoder                 *encoder      // encoder is the encoder for the unalignedWAL entries and header
+	decoder                 *decoder      // decoder is the decoder for the unalignedWAL entries and header
+	storeDataPath           string        // storeDataPath is the path to the unalignedWAL data
 	segmentSize             int64         // segmentSize is the max size of the segment
 	syncDuration            time.Duration // syncDuration is the duration after which the data is synced to the disk
 	maxBatchSize            int64         // maxBatchSize is the maximum batch size before the data is synced to the disk
@@ -38,19 +40,24 @@ type WAL struct {
 	files                   []os.FileInfo
 }
 
-// NewWALWriter returns a new store writer instance
-func NewWALWriter(partitionId *partition.ID, opts ...WALOption) (store.Writer, error) {
+// NewUnalignedWriteOnlyWAL returns a new store writer instance
+func NewUnalignedWriteOnlyWAL(partitionId *partition.ID, opts ...WALOption) (wal.WAL, error) {
 
-	s := &WAL{
-		currDataFp:        nil,
-		dataBufWriter:     nil,
-		currWriteOffset:   0,
-		prevSyncedWOffset: 0,
-		prevSyncedTime:    time.Now(),
-		segmentCreateTime: time.Now(),
-		encoder:           newEncoder(),
-		decoder:           newDecoder(),
-		partitionID:       partitionId,
+	s := &unalignedWAL{
+		storeDataPath:           dfv1.DefaultStorePath,
+		segmentSize:             dfv1.DefaultStoreSegmentSize,
+		maxBatchSize:            dfv1.DefaultStoreMaxBufferSize,
+		syncDuration:            dfv1.DefaultStoreSyncDuration,
+		segmentRotationDuration: dfv1.DefaultSegmentRotationDuration,
+		currDataFp:              nil,
+		dataBufWriter:           nil,
+		currWriteOffset:         0,
+		prevSyncedWOffset:       0,
+		prevSyncedTime:          time.Now(),
+		segmentCreateTime:       time.Now(),
+		encoder:                 newEncoder(),
+		decoder:                 newDecoder(),
+		partitionID:             partitionId,
 	}
 
 	for _, opt := range opts {
@@ -65,27 +72,31 @@ func NewWALWriter(partitionId *partition.ID, opts ...WALOption) (store.Writer, e
 	return s, nil
 }
 
-// NewWALReader returns a new store reader instance
-func NewWALReader(storeDataPath string, opts ...WALOption) (store.Reader, error) {
+// NewUnalignedReadWriteWAL returns a new WAL instance for reading and writing
+func NewUnalignedReadWriteWAL(opts ...WALOption) (wal.WAL, error) {
 	var err error
 
-	s := &WAL{
-		currDataFp:        nil,
-		dataBufWriter:     nil,
-		currWriteOffset:   0,
-		prevSyncedWOffset: 0,
-		prevSyncedTime:    time.Now(),
-		segmentCreateTime: time.Now(),
-		encoder:           newEncoder(),
-		decoder:           newDecoder(),
-		storeDataPath:     storeDataPath,
+	s := &unalignedWAL{
+		storeDataPath:           dfv1.DefaultStorePath,
+		segmentSize:             dfv1.DefaultStoreSegmentSize,
+		maxBatchSize:            dfv1.DefaultStoreMaxBufferSize,
+		syncDuration:            dfv1.DefaultStoreSyncDuration,
+		segmentRotationDuration: dfv1.DefaultSegmentRotationDuration,
+		currDataFp:              nil,
+		dataBufWriter:           nil,
+		currWriteOffset:         0,
+		prevSyncedWOffset:       0,
+		prevSyncedTime:          time.Now(),
+		segmentCreateTime:       time.Now(),
+		encoder:                 newEncoder(),
+		decoder:                 newDecoder(),
 	}
 
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	s.files, err = filesInDir(storeDataPath)
+	s.files, err = filesInDir(s.storeDataPath)
 	if err != nil {
 		return nil, err
 	}
@@ -99,14 +110,14 @@ func NewWALReader(storeDataPath string, opts ...WALOption) (store.Reader, error)
 	return s, nil
 }
 
-// Write writes the message to the WAL. The format as follow is
+// Write writes the message to the unalignedWAL. The format as follow is
 //
 //	+--------------------+-------------------+-----------------+------------------+-----------------+-------------+------------+----------------+
 //	| event time (int64) | watermark (int64) | offset (int64)  | msg-len (int64)  | key-len (int64) | CRC (uint32 | key []byte | message []byte |
 //	+--------------------+-------------------+-----------------+------------------+-----------------+-------------+------------+----------------+
 //
 // CRC will be used for detecting ReadMessage corruptions.
-func (s *WAL) Write(message *isb.ReadMessage) error {
+func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 
 	// encode the message
 	entry, err := s.encoder.encodeMessage(message)
@@ -146,59 +157,80 @@ func (s *WAL) Write(message *isb.ReadMessage) error {
 	return nil
 }
 
-func (s *WAL) Read(size int64) ([]*isb.ReadMessage, bool, error) {
-	// Initialize variables
-	var messages []*isb.ReadMessage
-	var endOfFiles bool
+// Replay replays persisted messages during startup
+// returns a channel to read messages and a channel to read errors
+func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 
-	// Main loop to read messages
-	// It will break if we have collected enough messages or if we have read through all files
-	for len(messages) < int(size) && !endOfFiles {
-		// If there's no current file being read
-		if s.currDataFp == nil {
-			// If there's no more files in the list, break
-			if len(s.files) == 0 {
-				endOfFiles = true
-				break
-			}
+	// Initialize channels
+	msgChan := make(chan *isb.ReadMessage)
+	errChan := make(chan error)
 
-			// Open the next file in the list
-			err := s.openReadFile()
-			if err != nil {
-				return nil, false, err
-			}
-		}
+	go func() {
+		defer close(msgChan)
+		defer func() { errChan = nil }()
 
-		// Try to decode a message from the file
-		message, _, err := s.decoder.decodeMessage(s.currDataFp)
-
-		// If there's an error...
-		if err != nil {
-			// If end of file is reached, close file and reset file pointer
-			if err == io.EOF {
-				err = s.currDataFp.Close()
-				if err != nil {
-					return nil, false, err
+		// Main loop to read messages
+		// It will break if we have read through all files
+		for {
+			// If there's no current file being read
+			if s.currDataFp == nil {
+				// If there's no more files in the list, break
+				if len(s.files) == 0 {
+					break
 				}
-				s.currDataFp = nil
-			} else {
-				// If other error, return error
-				return nil, false, err
+
+				// Open the next file in the list
+				err := s.openReadFile()
+				if err != nil {
+					errChan <- err
+					return
+				}
 			}
 
-			// Continue to next iteration
-			continue
+			// Try to decode a message from the file
+			message, _, err := s.decoder.decodeMessage(s.currDataFp)
+
+			// If there's an error...
+			if err != nil {
+				// If end of file is reached, close file and reset file pointer
+				if err == io.EOF {
+					err = s.currDataFp.Close()
+					if err != nil {
+						errChan <- err
+						return
+					}
+					s.currDataFp = nil
+				} else {
+					// If other error, return error
+					errChan <- err
+					return
+				}
+
+				// Continue to next iteration
+				continue
+			}
+
+			// If message is successfully decoded, append to the messages slice
+			msgChan <- message
 		}
 
-		// If message is successfully decoded, append to the messages slice
-		messages = append(messages, message)
-	}
-
-	// Return messages, the end of files flag, and no error if everything went smoothly
-	return messages, endOfFiles, nil
+		// once replay is done, we have to open a new file to write
+		// since we use the same wal for reading and writing
+		err := s.openFile()
+		if err != nil {
+			errChan <- err
+			return
+		}
+	}()
+	return msgChan, errChan
 }
 
-func (s *WAL) openReadFile() error {
+// PartitionID returns the partition ID of the store
+func (s *unalignedWAL) PartitionID() partition.ID {
+	return *s.partitionID
+}
+
+func (s *unalignedWAL) openReadFile() error {
 	// Open the first file in the list
 	currFile, err := os.OpenFile(s.files[0].Name(), os.O_RDONLY, 0644)
 	if err != nil {
@@ -209,12 +241,14 @@ func (s *WAL) openReadFile() error {
 	// Remove opened file from the list
 	s.files = s.files[1:]
 
-	_, err = s.decoder.decodeHeader(s.currDataFp)
+	pid, err := s.decoder.decodeHeader(s.currDataFp)
+	s.partitionID = pid
+
 	return err
 }
 
 // openFile opens a new data file
-func (s *WAL) openFile() error {
+func (s *unalignedWAL) openFile() error {
 	dataFilePath := filepath.Join(s.storeDataPath, CurrentSegmentName)
 
 	var err error
@@ -238,7 +272,7 @@ func (s *WAL) openFile() error {
 
 // rotateFile rotates the current data file to the segment file
 // and updates the current data file to a new file.
-func (s *WAL) rotateFile() error {
+func (s *unalignedWAL) rotateFile() error {
 
 	// Sync data before rotating the file
 	if err := s.flushAndSync(); err != nil {
@@ -260,12 +294,12 @@ func (s *WAL) rotateFile() error {
 }
 
 // segmentFilePath creates the file path for the segment file located in the storage path.
-func (s *WAL) segmentFilePath(storePath string) string {
+func (s *unalignedWAL) segmentFilePath(storePath string) string {
 	return filepath.Join(storePath, SegmentPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
 }
 
 // flushAndSync flushes the buffered data to the writer and syncs the file to disk.
-func (s *WAL) flushAndSync() error {
+func (s *unalignedWAL) flushAndSync() error {
 	if err := s.dataBufWriter.Flush(); err != nil {
 		return err
 	}
@@ -280,8 +314,8 @@ func (s *WAL) flushAndSync() error {
 	return nil
 }
 
-// Close closes WAL
-func (s *WAL) Close() error {
+// Close closes unalignedWAL
+func (s *unalignedWAL) Close() error {
 	// sync data before closing
 	err := s.flushAndSync()
 	if err != nil {
@@ -301,8 +335,8 @@ func (s *WAL) Close() error {
 	return nil
 }
 
-// writeWALHeader writes the WAL header to the file.
-func (s *WAL) writeWALHeader() error {
+// writeWALHeader writes the unalignedWAL header to the file.
+func (s *unalignedWAL) writeWALHeader() error {
 	header, err := s.encoder.encodeHeader(s.partitionID)
 	if err != nil {
 		return err

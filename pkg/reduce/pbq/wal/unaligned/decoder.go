@@ -28,7 +28,7 @@ func init() {
 	}
 }
 
-// decoder is a decoder for the WAL entries and header.
+// decoder is a decoder for the unalignedWAL entries and header.
 type decoder struct{}
 
 // newDecoder returns a new decoder
@@ -37,7 +37,7 @@ func newDecoder() *decoder {
 }
 
 // decodeHeader decodes the header from the given io.Reader.
-// the header of the WAL file is a partition.ID, so it returns a partition.ID.
+// the header of the unalignedWAL file is a partition.ID, so it returns a partition.ID.
 func (d *decoder) decodeHeader(buf io.Reader) (*partition.ID, error) {
 	var err error
 
@@ -120,7 +120,7 @@ func (d *decoder) decodeDeletionMessage(buf io.Reader) (*deletionMessage, int64,
 	return &dms, size, nil
 }
 
-// decodeWALMessageHeader decodes the WAL message header from the given io.Reader.
+// decodeWALMessageHeader decodes the unalignedWAL message header from the given io.Reader.
 func (d *decoder) decodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
 	var entryHeader = new(readMessageHeaderPreamble)
 	err := binary.Read(buf, binary.LittleEndian, entryHeader)
@@ -130,7 +130,7 @@ func (d *decoder) decodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPream
 	return entryHeader, nil
 }
 
-// decodeWALBody decodes the WAL message body from the given io.Reader.
+// decodeWALBody decodes the unalignedWAL message body from the given io.Reader.
 func (d *decoder) decodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPreamble) (*isb.Message, error) {
 	var err error
 

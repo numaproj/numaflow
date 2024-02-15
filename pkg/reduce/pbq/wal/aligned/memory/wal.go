@@ -19,7 +19,7 @@ package memory
 import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned"
 
 	"go.uber.org/zap"
 )

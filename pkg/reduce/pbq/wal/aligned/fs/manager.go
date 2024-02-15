@@ -27,10 +27,10 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 )
 
-type fsWAL struct {
+type fsManager struct {
 	storePath string
 	// maxBufferSize max size of batch before it's flushed to store
 	maxBatchSize int64
@@ -39,19 +39,19 @@ type fsWAL struct {
 	pipelineName string
 	vertexName   string
 	replicaIndex int32
-	activeStores map[string]store.Store
+	activeWals   map[string]wal.WAL
 }
 
-// NewFSManager is a FileSystem Stores Manager.
-func NewFSManager(vertexInstance *dfv1.VertexInstance, opts ...Option) store.Manager {
-	s := &fsWAL{
+// NewFSManager is a FileSystem WAL Manager.
+func NewFSManager(vertexInstance *dfv1.VertexInstance, opts ...Option) wal.Manager {
+	s := &fsManager{
 		storePath:    dfv1.DefaultStorePath,
 		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
 		syncDuration: dfv1.DefaultStoreSyncDuration,
 		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
 		vertexName:   vertexInstance.Vertex.Spec.AbstractVertex.Name,
 		replicaIndex: vertexInstance.Replica,
-		activeStores: make(map[string]store.Store),
+		activeWals:   make(map[string]wal.WAL),
 	}
 	for _, o := range opts {
 		o(s)
@@ -59,11 +59,11 @@ func NewFSManager(vertexInstance *dfv1.VertexInstance, opts ...Option) store.Man
 	return s
 }
 
-// CreateStore creates the FS WAL.
-func (ws *fsWAL) CreateStore(_ context.Context, partitionID partition.ID) (store.Store, error) {
+// CreateWAL creates the FS alignedWAL.
+func (ws *fsManager) CreateWAL(_ context.Context, partitionID partition.ID) (wal.WAL, error) {
 	// check if the store is already present
 	// during crash recovery, we might have already created the store while replaying
-	if store, ok := ws.activeStores[partitionID.String()]; ok {
+	if store, ok := ws.activeWals[partitionID.String()]; ok {
 		return store, nil
 	}
 	// Create fs dir if not exist
@@ -83,36 +83,41 @@ func (ws *fsWAL) CreateStore(_ context.Context, partitionID partition.ID) (store
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 	}).Inc()
 
-	return NewWriteOnlyWAL(&partitionID, filePath, ws.maxBatchSize, ws.syncDuration, ws.pipelineName, ws.vertexName, ws.replicaIndex)
-
+	w, err := NewAlignedWriteOnlyWAL(&partitionID, filePath, ws.maxBatchSize, ws.syncDuration, ws.pipelineName, ws.vertexName, ws.replicaIndex)
+	if err != nil {
+		return nil, err
+	}
+	ws.activeWals[w.PartitionID().String()] = w
+	return w, nil
 }
 
-// DiscoverStores returns all the stores present in the storePath
-func (ws *fsWAL) DiscoverStores(_ context.Context) ([]store.Store, error) {
+// DiscoverWALs returns all the wals present in the storePath
+func (ws *fsManager) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
 	files, err := os.ReadDir(ws.storePath)
 	if os.IsNotExist(err) {
-		return []store.Store{}, nil
+		return []wal.WAL{}, nil
 	} else if err != nil {
 		return nil, err
 	}
-	partitions := make([]store.Store, 0)
+	partitions := make([]wal.WAL, 0)
 
 	for _, f := range files {
 		if strings.HasPrefix(f.Name(), SegmentPrefix) && !f.IsDir() {
 			filePath := filepath.Join(ws.storePath, f.Name())
-			wal, err := NewReadWriteWAL(filePath, ws.maxBatchSize, ws.syncDuration, ws.pipelineName, ws.vertexName, ws.replicaIndex)
+			wl, err := NewAlignedReadWriteWAL(filePath, ws.maxBatchSize, ws.syncDuration, ws.pipelineName, ws.vertexName, ws.replicaIndex)
 			if err != nil {
 				return nil, err
 			}
-			partitions = append(partitions, wal)
+			partitions = append(partitions, wl)
+			ws.activeWals[wl.PartitionID().String()] = wl
 		}
 	}
 
 	return partitions, nil
 }
 
-// DeleteStore deletes the store for the given partitionID
-func (ws *fsWAL) DeleteStore(partitionID partition.ID) error {
+// DeleteWAL deletes the wal for the given partitionID
+func (ws *fsManager) DeleteWAL(partitionID partition.ID) error {
 	var err error
 	defer func() {
 		if err != nil {
@@ -148,5 +153,6 @@ func (ws *fsWAL) DeleteStore(partitionID partition.ID) error {
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Dec()
 	}
+	delete(ws.activeWals, partitionID.String())
 	return err
 }

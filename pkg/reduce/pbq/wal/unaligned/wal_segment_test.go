@@ -31,7 +31,7 @@ func TestStore_Write(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	// close the WAL
+	// close the unalignedWAL
 	err = s.Close()
 	assert.NoError(t, err)
 
@@ -42,7 +42,7 @@ func TestStore_Write(t *testing.T) {
 }
 
 func WithStoreOptions(path string) WALOption {
-	return func(s *WAL) {
+	return func(s *unalignedWAL) {
 		s.storeDataPath = path
 		s.segmentSize = 1024
 		s.syncDuration = time.Second

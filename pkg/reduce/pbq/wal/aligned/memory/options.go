@@ -14,31 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fs
+package memory
 
 import (
-	"time"
+	"context"
+
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 )
 
-type Option func(stores *fsWAL)
+type Option func(stores *memManager)
 
-// WithStorePath sets the WAL store path
-func WithStorePath(path string) Option {
-	return func(stores *fsWAL) {
-		stores.storePath = path
+// WithDiscoverer sets the discover func of memory wal manager
+func WithDiscoverer(f func(ctx context.Context) ([]wal.WAL, error)) Option {
+	return func(stores *memManager) {
+		stores.discoverFunc = f
 	}
 }
 
-// WithMaxBufferSize sets the WAL buffer max size option
-func WithMaxBufferSize(size int64) Option {
-	return func(stores *fsWAL) {
-		stores.maxBatchSize = size
-	}
-}
-
-// WithSyncDuration sets the WAL sync duration option
-func WithSyncDuration(maxDuration time.Duration) Option {
-	return func(stores *fsWAL) {
-		stores.syncDuration = maxDuration
+// WithStoreSize sets the store size
+func WithStoreSize(size int64) Option {
+	return func(stores *memManager) {
+		stores.storeSize = size
 	}
 }

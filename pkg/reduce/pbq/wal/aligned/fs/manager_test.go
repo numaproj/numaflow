@@ -14,22 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package memory
+package fs
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestMemoryStores(t *testing.T) {
+func TestWalStores(t *testing.T) {
+	vi = &dfv1.VertexInstance{
+		Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+			},
+		}},
+		Hostname: "test-host",
+		Replica:  0,
+	}
 	var err error
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 	partitionIds := []partition.ID{
@@ -49,26 +58,27 @@ func TestMemoryStores(t *testing.T) {
 			Slot:  "test-3",
 		},
 	}
-	storeProvider := NewMemoryStores(WithStoreSize(100))
+
+	tmp := t.TempDir()
+	storeProvider := NewFSManager(vi, WithStorePath(tmp))
 
 	for _, partitionID := range partitionIds {
-		_, err := storeProvider.CreateStore(ctx, partitionID)
+		_, err = storeProvider.CreateWAL(ctx, partitionID)
 		assert.NoError(t, err)
 	}
 
-	var discoveredStores []store.Store
-	discoveredStores, err = storeProvider.DiscoverStores(ctx)
+	discoverStores, err := storeProvider.DiscoverWALs(ctx)
 	assert.NoError(t, err)
 
-	assert.Len(t, discoveredStores, len(partitionIds))
+	assert.Len(t, discoverStores, len(partitionIds))
 
 	for _, partitionID := range partitionIds {
-		err = storeProvider.DeleteStore(partitionID)
+		err = storeProvider.DeleteWAL(partitionID)
 		assert.NoError(t, err)
 	}
 
-	discoveredStores, err = storeProvider.DiscoverStores(ctx)
+	discoverStores, err = storeProvider.DiscoverWALs(ctx)
 	assert.NoError(t, err)
 
-	assert.Len(t, discoveredStores, 0)
+	assert.Len(t, discoverStores, 0)
 }

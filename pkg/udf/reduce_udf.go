@@ -31,7 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/fs"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/fs"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"

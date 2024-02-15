@@ -39,13 +39,16 @@ type gcEventsTracker struct {
 // NewGCEventsTracker returns a new GC tracker instance
 func NewGCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (GCEventsTracker, error) {
 	tracker := &gcEventsTracker{
-		currEventsFile:  nil,
-		eventsBufWriter: nil,
-		prevSyncedTime:  time.Now(),
-		encoder:         newEncoder(),
-		mu:              sync.Mutex{},
-		stopSignal:      make(chan struct{}),
-		doneCh:          make(chan struct{}),
+		syncDuration:     dfv1.DefaultGCTrackerSyncDuration,
+		rotationDuration: dfv1.DefaultGCTrackerRotationDuration,
+		eventsPath:       dfv1.DefaultStoreEventsPath,
+		currEventsFile:   nil,
+		eventsBufWriter:  nil,
+		prevSyncedTime:   time.Now(),
+		encoder:          newEncoder(),
+		mu:               sync.Mutex{},
+		stopSignal:       make(chan struct{}),
+		doneCh:           make(chan struct{}),
 	}
 
 	for _, opt := range opts {

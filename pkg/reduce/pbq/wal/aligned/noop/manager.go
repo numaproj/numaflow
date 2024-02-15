@@ -14,26 +14,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package memory
+package noop
 
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 )
 
-type Option func(stores *memoryStores)
-
-// WithDiscoverer sets the discover func of memorystores
-func WithDiscoverer(f func(ctx context.Context) ([]store.Store, error)) Option {
-	return func(stores *memoryStores) {
-		stores.discoverFunc = f
-	}
+type noopManager struct {
 }
 
-// WithStoreSize sets the store size
-func WithStoreSize(size int64) Option {
-	return func(stores *memoryStores) {
-		stores.storeSize = size
-	}
+func NewNoopStores() wal.Manager {
+	return &noopManager{}
+}
+
+func (ns *noopManager) CreateWAL(ctx context.Context, partitionID partition.ID) (wal.WAL, error) {
+	return &noopWAL{}, nil
+}
+
+func (ns *noopManager) DiscoverWALs(ctx context.Context) ([]wal.WAL, error) {
+	return []wal.WAL{}, nil
+}
+
+func (ns *noopManager) DeleteWAL(partitionID partition.ID) error {
+	return nil
 }

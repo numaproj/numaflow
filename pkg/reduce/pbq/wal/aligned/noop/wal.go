@@ -19,31 +19,31 @@ package noop
 import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 )
 
-// PBQNoOpStore is a no-op pbq store which does not do any operation but can be safely invoked.
-type PBQNoOpStore struct {
+// noopWAL is a no-op pbq store which does not do any operation but can be safely invoked.
+type noopWAL struct {
 }
 
-var _ store.Store = (*PBQNoOpStore)(nil)
+var _ wal.WAL = (*noopWAL)(nil)
 
-func NewPBQNoOpStore() (*PBQNoOpStore, error) {
-	return &PBQNoOpStore{}, nil
+func NewPBQNoOpStore() (wal.WAL, error) {
+	return &noopWAL{}, nil
 }
 
-func (p *PBQNoOpStore) Replay() (<-chan *isb.ReadMessage, <-chan error) {
+func (p *noopWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 	return nil, nil
 }
 
-func (p *PBQNoOpStore) Write(msg *isb.ReadMessage) error {
+func (p *noopWAL) Write(msg *isb.ReadMessage) error {
 	return nil
 }
 
-func (p *PBQNoOpStore) Close() error {
+func (p *noopWAL) Close() error {
 	return nil
 }
 
-func (p *PBQNoOpStore) PartitionID() partition.ID {
+func (p *noopWAL) PartitionID() partition.ID {
 	return partition.ID{}
 }

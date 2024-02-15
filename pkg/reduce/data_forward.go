@@ -44,7 +44,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -70,7 +70,7 @@ type DataForward struct {
 	wmbChecker          wmb.WMBChecker // wmbChecker checks if the idle watermark is valid when the len(readMessage) is 0.
 	pbqManager          *pbq.Manager
 	whereToDecider      forwarder.ToWhichStepDecider
-	storeManager        store.Manager
+	storeManager        wal.Manager
 	of                  *pnf.Manager
 	opts                *Options
 	log                 *zap.SugaredLogger
@@ -82,7 +82,7 @@ func NewDataForward(ctx context.Context,
 	fromBuffer isb.BufferReader,
 	toBuffers map[string][]isb.BufferWriter,
 	pbqManager *pbq.Manager,
-	storeManager store.Manager,
+	storeManager wal.Manager,
 	whereToDecider forwarder.ToWhichStepDecider,
 	fw fetch.Fetcher,
 	watermarkPublishers map[string]publish.Publisher,
@@ -153,7 +153,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 		return nil
 	}
 
-	existingStores, err := df.storeManager.DiscoverStores(ctx)
+	existingStores, err := df.storeManager.DiscoverWALs(ctx)
 	if err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 	// replay the messages from each store in parallel
 	for _, sr := range existingStores {
 		df.log.Info("Replaying messages from partition: ", sr.PartitionID().String())
-		func(ctx context.Context, s store.Store) {
+		func(ctx context.Context, s wal.WAL) {
 			eg.Go(func() error {
 				pid := s.PartitionID()
 				readCh, errCh := s.Replay()

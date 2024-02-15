@@ -38,11 +38,11 @@ func init() {
 }
 
 // IsCorrupted checks whether the file is corrupt
-func (w *WAL) IsCorrupted() bool {
+func (w *alignedWAL) IsCorrupted() bool {
 	return w.corrupted
 }
 
-func (w *WAL) readWALHeader() (*partition.ID, error) {
+func (w *alignedWAL) readWALHeader() (*partition.ID, error) {
 	if w.rOffset > 0 {
 		return nil, fmt.Errorf("header has already been read, current readoffset is at %d", w.rOffset)
 	}
@@ -62,7 +62,7 @@ func (w *WAL) readWALHeader() (*partition.ID, error) {
 	return id, err
 }
 
-func (w *WAL) isEnd() bool {
+func (w *alignedWAL) isEnd() bool {
 	// TODO: If we are done reading, check that we got the expected
 	// number of entries and return EOF.
 	return w.rOffset >= w.readUpTo
@@ -91,9 +91,9 @@ func decodeWALHeader(buf io.Reader) (*partition.ID, error) {
 	}, nil
 }
 
-// Replay replays the WAL messages, returns a channel to read messages and a channel to read errors.
-// channel will be closed after all the messages are read from the WAL.
-func (w *WAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
+// Replay replays the alignedWAL messages, returns a channel to read messages and a channel to read errors.
+// channel will be closed after all the messages are read from the alignedWAL.
+func (w *alignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 	messages := make(chan *isb.ReadMessage)
 	errs := make(chan error)
 

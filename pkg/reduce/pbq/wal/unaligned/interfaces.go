@@ -6,7 +6,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// Compactor compacts the WAL by deleting the persisted messages
+// Compactor compacts the unalignedWAL by deleting the persisted messages
 // which belongs to the materialized window.
 type Compactor interface {
 	// Start starts the compactor
