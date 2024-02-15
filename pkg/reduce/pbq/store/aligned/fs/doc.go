@@ -14,5 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package wal implements write-ahead-log.
-package wal
+// Package fs implements write-ahead-log on FileSystem.
+package fs

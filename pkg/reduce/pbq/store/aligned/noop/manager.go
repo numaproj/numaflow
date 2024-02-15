@@ -20,22 +20,22 @@ import (
 	"context"
 
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 type noopStores struct {
 }
 
-func NewNoopStores() aligned.StoreProvider {
+func NewNoopStores() store.Manager {
 	return &noopStores{}
 }
 
-func (ns *noopStores) CreateStore(ctx context.Context, partitionID partition.ID) (aligned.Store, error) {
+func (ns *noopStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
 	return &PBQNoOpStore{}, nil
 }
 
-func (ns *noopStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
-	return []partition.ID{}, nil
+func (ns *noopStores) DiscoverStores(ctx context.Context) ([]store.Store, error) {
+	return []store.Store{}, nil
 }
 
 func (ns *noopStores) DeleteStore(partitionID partition.ID) error {

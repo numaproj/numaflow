@@ -14,31 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package wal
+package memory
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
-func TestWalStores(t *testing.T) {
-	vi = &dfv1.VertexInstance{
-		Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
-			PipelineName: "testPipeline",
-			AbstractVertex: dfv1.AbstractVertex{
-				Name: "testVertex",
-			},
-		}},
-		Hostname: "test-host",
-		Replica:  0,
-	}
+func TestMemoryStores(t *testing.T) {
 	var err error
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 	partitionIds := []partition.ID{
@@ -58,28 +49,26 @@ func TestWalStores(t *testing.T) {
 			Slot:  "test-3",
 		},
 	}
-
-	tmp := t.TempDir()
-	storeProvider := NewWALStores(vi, WithStorePath(tmp))
+	storeProvider := NewMemoryStores(WithStoreSize(100))
 
 	for _, partitionID := range partitionIds {
-		_, err = storeProvider.CreateStore(ctx, partitionID)
+		_, err := storeProvider.CreateStore(ctx, partitionID)
 		assert.NoError(t, err)
 	}
 
-	var discoveredPartitions []partition.ID
-	discoveredPartitions, err = storeProvider.DiscoverPartitions(ctx)
+	var discoveredStores []store.Store
+	discoveredStores, err = storeProvider.DiscoverStores(ctx)
 	assert.NoError(t, err)
 
-	assert.Len(t, discoveredPartitions, len(partitionIds))
+	assert.Len(t, discoveredStores, len(partitionIds))
 
 	for _, partitionID := range partitionIds {
 		err = storeProvider.DeleteStore(partitionID)
 		assert.NoError(t, err)
 	}
 
-	discoveredPartitions, err = storeProvider.DiscoverPartitions(ctx)
+	discoveredStores, err = storeProvider.DiscoverStores(ctx)
 	assert.NoError(t, err)
 
-	assert.Len(t, discoveredPartitions, 0)
+	assert.Len(t, discoveredStores, 0)
 }

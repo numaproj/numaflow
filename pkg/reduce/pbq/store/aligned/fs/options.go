@@ -14,29 +14,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package wal
+package fs
 
 import "time"
 
-type Option func(stores *walStores)
+type Option func(stores *fsWAL)
 
 // WithStorePath sets the WAL store path
 func WithStorePath(path string) Option {
-	return func(stores *walStores) {
+	return func(stores *fsWAL) {
 		stores.storePath = path
 	}
 }
 
 // WithMaxBufferSize sets the WAL buffer max size option
 func WithMaxBufferSize(size int64) Option {
-	return func(stores *walStores) {
+	return func(stores *fsWAL) {
 		stores.maxBatchSize = size
 	}
 }
 
 // WithSyncDuration sets the WAL sync duration option
 func WithSyncDuration(maxDuration time.Duration) Option {
-	return func(stores *walStores) {
+	return func(stores *fsWAL) {
 		stores.syncDuration = maxDuration
 	}
 }
