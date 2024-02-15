@@ -36,7 +36,7 @@ type jetStreamReader struct {
 	name                   string
 	stream                 string
 	subject                string
-	client                 *jsclient.NATSClient
+	client                 *jsclient.Client
 	sub                    *nats.Subscription
 	opts                   *readOptions
 	inProgressTickDuration time.Duration
@@ -45,7 +45,7 @@ type jetStreamReader struct {
 }
 
 // NewJetStreamBufferReader is used to provide a new JetStream buffer reader connection
-func NewJetStreamBufferReader(ctx context.Context, client *jsclient.NATSClient, name, stream, subject string, partitionIdx int32, opts ...ReadOption) (isb.BufferReader, error) {
+func NewJetStreamBufferReader(ctx context.Context, client *jsclient.Client, name, stream, subject string, partitionIdx int32, opts ...ReadOption) (isb.BufferReader, error) {
 	log := logging.FromContext(ctx).With("bufferReader", name).With("stream", stream).With("subject", subject)
 	o := defaultReadOptions()
 	for _, opt := range opts {
@@ -113,6 +113,10 @@ func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
 }
 
 func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
+	labels := map[string]string{"buffer": jr.GetName()}
+	defer func(t time.Time) {
+		isbReadTime.With(labels).Observe(float64(time.Since(t).Microseconds()))
+	}(time.Now())
 	var err error
 	var result []*isb.ReadMessage
 	msgs, err := jr.sub.Fetch(int(count), nats.MaxWait(jr.opts.readTimeOut))
@@ -144,6 +148,10 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 }
 
 func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error {
+	labels := map[string]string{"buffer": jr.GetName()}
+	defer func(t time.Time) {
+		isbAckTime.With(labels).Observe(float64(time.Since(t).Microseconds()))
+	}(time.Now())
 	errs := make([]error, len(offsets))
 	done := make(chan struct{})
 	wg := &sync.WaitGroup{}

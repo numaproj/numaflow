@@ -14,31 +14,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package wal
+package noop
 
 import (
-	"time"
+	"context"
+
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
-type Option func(stores *walStores)
-
-// WithStorePath sets the WAL store path
-func WithStorePath(path string) Option {
-	return func(stores *walStores) {
-		stores.storePath = path
-	}
+type noopStores struct {
 }
 
-// WithMaxBufferSize sets the WAL buffer max size option
-func WithMaxBufferSize(size int64) Option {
-	return func(stores *walStores) {
-		stores.maxBatchSize = size
-	}
+func NewNoopStores() store.Manager {
+	return &noopStores{}
 }
 
-// WithSyncDuration sets the WAL sync duration option
-func WithSyncDuration(maxDuration time.Duration) Option {
-	return func(stores *walStores) {
-		stores.syncDuration = maxDuration
-	}
+func (ns *noopStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
+	return &PBQNoOpStore{}, nil
+}
+
+func (ns *noopStores) DiscoverStores(ctx context.Context) ([]store.Store, error) {
+	return []store.Store{}, nil
+}
+
+func (ns *noopStores) DeleteStore(partitionID partition.ID) error {
+	return nil
 }

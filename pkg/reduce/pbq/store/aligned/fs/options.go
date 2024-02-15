@@ -14,30 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package noop
+package fs
 
 import (
-	"context"
-
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
+	"time"
 )
 
-type noopStores struct {
+type Option func(stores *fsWAL)
+
+// WithStorePath sets the WAL store path
+func WithStorePath(path string) Option {
+	return func(stores *fsWAL) {
+		stores.storePath = path
+	}
 }
 
-func NewNoopStores() aligned.StoreProvider {
-	return &noopStores{}
+// WithMaxBufferSize sets the WAL buffer max size option
+func WithMaxBufferSize(size int64) Option {
+	return func(stores *fsWAL) {
+		stores.maxBatchSize = size
+	}
 }
 
-func (ns *noopStores) CreateStore(ctx context.Context, partitionID partition.ID) (aligned.Store, error) {
-	return &PBQNoOpStore{}, nil
-}
-
-func (ns *noopStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
-	return []partition.ID{}, nil
-}
-
-func (ns *noopStores) DeleteStore(partitionID partition.ID) error {
-	return nil
+// WithSyncDuration sets the WAL sync duration option
+func WithSyncDuration(maxDuration time.Duration) Option {
+	return func(stores *fsWAL) {
+		stores.syncDuration = maxDuration
+	}
 }

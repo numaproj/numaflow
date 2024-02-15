@@ -17,13 +17,13 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.5.0
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
     - name: keyed-fixed-sum
       partitions: 2
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             fixed:
@@ -31,13 +31,13 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 10Gi
+              volumeSize: 2Gi
               accessMode: ReadWriteOnce
     - name: non-keyed-fixed-sum
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             fixed:
@@ -45,13 +45,13 @@ spec:
           keyed: false
           storage:
             persistentVolumeClaim:
-              volumeSize: 10Gi
+              volumeSize: 2Gi
               accessMode: ReadWriteOnce
     - name: non-keyed-sliding-sum
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             sliding:
@@ -60,7 +60,7 @@ spec:
           keyed: false
           storage:
             persistentVolumeClaim:
-              volumeSize: 10Gi
+              volumeSize: 2Gi
               accessMode: ReadWriteOnce
     - name: sink
       scale:
