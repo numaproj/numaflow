@@ -56,7 +56,7 @@ func NewSideInputsInitializer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInpu
 // and update the values on the disk. This would exit once all the side inputs are initialized.
 func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	var (
-		natsClient     *jsclient.NATSClient
+		natsClient     *jsclient.Client
 		err            error
 		sideInputStore kvs.KVStorer
 	)

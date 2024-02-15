@@ -20,7 +20,7 @@ spec:
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             fixed:
