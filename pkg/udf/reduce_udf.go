@@ -108,7 +108,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to create a new reducer gRPC client: %w", err)
 		}
 
-		reduceHandler := rpc.NewUDSgRPCAlignedReduce(client)
+		reduceHandler := rpc.NewUDSgRPCAlignedReduce(u.VertexInstance.Vertex.Name, u.VertexInstance.Replica, client)
 		// Readiness check
 		if err := reduceHandler.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on udf readiness check, %w", err)
@@ -185,10 +185,14 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			return err
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		// build watermark progressors
-		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
-			// use　default no op fetcher, publisher, idleManager
-		} else {
+		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
+		if err != nil {
+			return err
+		}
+
+		// created watermark related components only if watermark is enabled
+		// otherwise no op will used
+		if !u.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			// create from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
@@ -208,10 +212,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, toVertexWmStores)
 
-			readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
-			if err != nil {
-				return err
-			}
 			idleManager = wmb.NewIdleManager(len(writers))
 		}
 	default:

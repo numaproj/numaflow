@@ -236,7 +236,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
-						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, fetchedWm)
+						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSource, df.vertexReplica, fetchedWm)
 					}
 				}
 			}
@@ -327,10 +327,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	// print the latest event time for each partition
-	for partition, latestEt := range latestEtMap {
-		df.opts.logger.Infow("Latest event time for partition - ", zap.Int32("partition", partition), zap.Int64("latestEt", int64(time.Since(time.Unix(0, latestEt)).Minutes())))
-	}
 	// publish source watermark
 	df.srcWMPublisher.PublishSourceWatermarks(transformedReadMessages)
 	// update the watermark configs for lastTimestampSrcWMUpdated, lastFetchedSrcWatermark and lastTimestampIdleWMFound.
@@ -420,7 +416,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
-						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, processorWM)
+						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSource, df.vertexReplica, processorWM)
 					}
 				}
 			}
