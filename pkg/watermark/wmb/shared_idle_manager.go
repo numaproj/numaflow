@@ -28,27 +28,20 @@ import (
 type sharedIdleManager struct {
 	// wmbOffset is a toBuffer partition name to the write offset of the idle watermark map.
 	wmbOffset map[string]isb.Offset
-	// forwarderIdlePartition is a map[fromPartitionName]map[toPartitionName]bool to record the activeToPartitions
+	// forwarderIdlePartition is a map[toPartitionName]int to record the activeToPartitions
 	// for the given forwarder.
-	forwarderActiveToPartition map[string]map[string]bool
+	forwarderActiveToPartition map[string]int64
 	lock                       sync.RWMutex
 }
 
 // NewSharedIdleManager returns an sharedIdleManager object as the IdleManager interface type to track the watermark idle status.
-func NewSharedIdleManager(fromBufferPartitions []string, numOfToPartitions int) (IdleManager, error) {
-	var forwarderIdleToPartition = make(map[string]map[string]bool, len(fromBufferPartitions))
-	if fromBufferPartitions == nil {
-		return nil, fmt.Errorf("missing fromBufferPartitions to create a new shared idle manager")
-	} else {
-		for _, fromPartition := range fromBufferPartitions {
-			// default value is false for all to partitions
-			// meaning all of them are considered as inactive when the pod starts
-			forwarderIdleToPartition[fromPartition] = make(map[string]bool)
-		}
+func NewSharedIdleManager(numOfFromPartitions int, numOfToPartitions int) (IdleManager, error) {
+	if numOfFromPartitions <= 1 {
+		return nil, fmt.Errorf("failed to create a new shared idle manager: numOfFromPartitions should be > 1")
 	}
 	return &sharedIdleManager{
 		wmbOffset:                  make(map[string]isb.Offset, numOfToPartitions),
-		forwarderActiveToPartition: forwarderIdleToPartition,
+		forwarderActiveToPartition: make(map[string]int64, numOfToPartitions),
 	}, nil
 }
 
@@ -56,12 +49,9 @@ func NewSharedIdleManager(fromBufferPartitions []string, numOfToPartitions int) 
 func (im *sharedIdleManager) NeedToSendCtrlMsg(toBufferPartitionName string) bool {
 	im.lock.RLock()
 	defer im.lock.RUnlock()
-	for _, activePartitions := range im.forwarderActiveToPartition {
-		if activePartitions[toBufferPartitionName] {
-			// at least one (forwarder, toBufferPartition) is active
-			// no need to send ctrl msg
-			return false
-		}
+	if im.forwarderActiveToPartition[toBufferPartitionName] != 0 {
+		// only send ctrl msg when all bits are 0 (0 means inactive)
+		return false
 	}
 	// if the given partition doesn't have a control message
 	// the map entry will be empty, return true
@@ -76,18 +66,31 @@ func (im *sharedIdleManager) Get(toBufferPartitionName string) isb.Offset {
 }
 
 // Update will update the existing item or add if not present for the given toBuffer partition name.
-func (im *sharedIdleManager) Update(fromBufferPartitionName string, toBufferPartitionName string, newOffset isb.Offset) {
+func (im *sharedIdleManager) Update(fromBufferPartitionIndex int32, toBufferPartitionName string, newOffset isb.Offset) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
-	im.forwarderActiveToPartition[fromBufferPartitionName][toBufferPartitionName] = false
+	// clear means the fromBufferPartition forwarder is inactive as the default value is 0
+	im.forwarderActiveToPartition[toBufferPartitionName] = clearBit(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex))
 	im.wmbOffset[toBufferPartitionName] = newOffset
 }
 
 // Reset will clear the item for the given toBuffer partition name.
-func (im *sharedIdleManager) Reset(fromBufferPartitionName string, toBufferPartitionName string) {
+func (im *sharedIdleManager) Reset(fromBufferPartitionIndex int32, toBufferPartitionName string) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
-	// set to true means mark the fromBufferPartition forwarder as active
-	im.forwarderActiveToPartition[fromBufferPartitionName][toBufferPartitionName] = true
+	// set to 1 means mark the fromBufferPartition forwarder as active
+	im.forwarderActiveToPartition[toBufferPartitionName] = setBit(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex))
 	im.wmbOffset[toBufferPartitionName] = nil
+}
+
+// setBit sets the bit at pos in the integer n.
+func setBit(n int64, pos uint) int64 {
+	n |= 1 << pos
+	return n
+}
+
+// clearBit clears the bit at pos in n.
+func clearBit(n int64, pos uint) int64 {
+	n &^= 1 << pos
+	return n
 }

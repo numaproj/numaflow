@@ -11,8 +11,8 @@ import (
 
 func TestNewSharedIdleManager(t *testing.T) {
 	type args struct {
-		fromBufferPartitions []string
-		numOfToPartitions    int
+		numOfFromPartitions int
+		numOfToPartitions   int
 	}
 	tests := []struct {
 		name    string
@@ -23,39 +23,36 @@ func TestNewSharedIdleManager(t *testing.T) {
 		{
 			name: "good",
 			args: args{
-				fromBufferPartitions: []string{"testFromBufferPartition0", "testFromBufferPartition1"},
-				numOfToPartitions:    2,
+				numOfFromPartitions: 2,
+				numOfToPartitions:   2,
 			},
 			want: &sharedIdleManager{
-				wmbOffset: make(map[string]isb.Offset, 2),
-				forwarderActiveToPartition: map[string]map[string]bool{
-					"testFromBufferPartition0": make(map[string]bool),
-					"testFromBufferPartition1": make(map[string]bool),
-				},
-				lock: sync.RWMutex{},
+				wmbOffset:                  make(map[string]isb.Offset, 2),
+				forwarderActiveToPartition: make(map[string]int64, 2),
+				lock:                       sync.RWMutex{},
 			},
 			wantErr: "",
 		},
 		{
 			name: "bad",
 			args: args{
-				fromBufferPartitions: nil,
-				numOfToPartitions:    2,
+				numOfFromPartitions: 1,
+				numOfToPartitions:   2,
 			},
 			want:    nil,
-			wantErr: "missing fromBufferPartitions to create a new shared idle manager",
+			wantErr: "failed to create a new shared idle manager: numOfFromPartitions should be > 1",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewSharedIdleManager(tt.args.fromBufferPartitions, tt.args.numOfToPartitions)
+			got, err := NewSharedIdleManager(tt.args.numOfFromPartitions, tt.args.numOfToPartitions)
 			if err != nil {
 				assert.Equal(t, tt.wantErr, err.Error())
 			} else {
 				// if err is nil, then wantErr must be empty
 				assert.Equal(t, "", tt.wantErr)
 			}
-			assert.Equalf(t, tt.want, got, "NewSharedIdleManager(%v, %v)", tt.args.fromBufferPartitions, tt.args.numOfToPartitions)
+			assert.Equalf(t, tt.want, got, "NewSharedIdleManager(%v, %v)", tt.args.numOfFromPartitions, tt.args.numOfToPartitions)
 		})
 	}
 }
@@ -63,7 +60,7 @@ func TestNewSharedIdleManager(t *testing.T) {
 func Test_sharedIdleManager_Get(t *testing.T) {
 	type fields struct {
 		wmbOffset                  map[string]isb.Offset
-		forwarderActiveToPartition map[string]map[string]bool
+		forwarderActiveToPartition map[string]int64
 	}
 	type args struct {
 		toBufferPartitionName string
@@ -86,13 +83,9 @@ func Test_sharedIdleManager_Get(t *testing.T) {
 				wmbOffset: map[string]isb.Offset{
 					"testToBufferPartition0": o,
 				},
-				forwarderActiveToPartition: map[string]map[string]bool{
-					"testFromBufferPartition0": {
-						"testToBufferPartition0": false,
-					},
-					"testFromBufferPartition1": {
-						"testToBufferPartition0": false,
-					},
+				forwarderActiveToPartition: map[string]int64{
+					// all forwarders are inactive
+					"testToBufferPartition0": 0,
 				},
 			},
 			args: args{
@@ -119,7 +112,7 @@ func Test_sharedIdleManager_Get(t *testing.T) {
 func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 	type fields struct {
 		wmbOffset                  map[string]isb.Offset
-		forwarderActiveToPartition map[string]map[string]bool
+		forwarderActiveToPartition map[string]int64
 	}
 	type args struct {
 		toBufferPartitionName string
@@ -137,13 +130,9 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 			name: "send_new_idle",
 			fields: fields{
 				wmbOffset: map[string]isb.Offset{},
-				forwarderActiveToPartition: map[string]map[string]bool{
-					"testFromBufferPartition0": {
-						"testToBufferPartition0": false,
-					},
-					"testFromBufferPartition1": {
-						"testToBufferPartition0": false,
-					},
+				forwarderActiveToPartition: map[string]int64{
+					// all forwarders are inactive
+					"testToBufferPartition0": 0,
 				},
 			},
 			args: args{
@@ -157,13 +146,9 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 				wmbOffset: map[string]isb.Offset{
 					"testToBufferPartition0": o,
 				},
-				forwarderActiveToPartition: map[string]map[string]bool{
-					"testFromBufferPartition0": {
-						"testToBufferPartition0": false,
-					},
-					"testFromBufferPartition1": {
-						"testToBufferPartition0": false,
-					},
+				forwarderActiveToPartition: map[string]int64{
+					// all forwarders are inactive
+					"testToBufferPartition0": 0,
 				},
 			},
 			args: args{
@@ -175,13 +160,9 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 			name: "dont_send_at_least_one_active",
 			fields: fields{
 				wmbOffset: map[string]isb.Offset{},
-				forwarderActiveToPartition: map[string]map[string]bool{
-					"testFromBufferPartition0": {
-						"testToBufferPartition0": false,
-					},
-					"testFromBufferPartition1": {
-						"testToBufferPartition0": true,
-					},
+				forwarderActiveToPartition: map[string]int64{
+					// forwarder0 is inactive while forwarder1 is active -> binary 10 -> decimal 2
+					"testToBufferPartition0": 2,
 				},
 			},
 			args: args{
@@ -205,24 +186,20 @@ func Test_sharedIdleManager_NeedToSendCtrlMsg(t *testing.T) {
 func Test_sharedIdleManager_Reset(t *testing.T) {
 	type fields struct {
 		wmbOffset                  map[string]isb.Offset
-		forwarderActiveToPartition map[string]map[string]bool
+		forwarderActiveToPartition map[string]int64
 	}
 	type args struct {
-		fromBufferPartitionName string
-		toBufferPartitionName   string
+		fromBufferPartitionIndex int32
+		toBufferPartitionName    string
 	}
 	var (
 		o = isb.SimpleIntOffset(func() int64 {
 			return int64(100)
 		})
 		sequence, _ = o.Sequence()
-		testMap     = map[string]map[string]bool{
-			"testFromBufferPartition0": {
-				"testToBufferPartition0": false,
-			},
-			"testFromBufferPartition1": {
-				"testToBufferPartition0": true,
-			},
+		testMap     = map[string]int64{
+			// forwarder0 is inactive while forwarder1 is active -> binary 10 -> decimal 2
+			"testToBufferPartition0": 2,
 		}
 	)
 	tests := []struct {
@@ -239,8 +216,8 @@ func Test_sharedIdleManager_Reset(t *testing.T) {
 				forwarderActiveToPartition: testMap,
 			},
 			args: args{
-				fromBufferPartitionName: "testFromBufferPartition0",
-				toBufferPartitionName:   "testToBufferPartition0",
+				fromBufferPartitionIndex: 0,
+				toBufferPartitionName:    "testToBufferPartition0",
 			},
 		},
 	}
@@ -255,12 +232,13 @@ func Test_sharedIdleManager_Reset(t *testing.T) {
 			beforeReset, err := im.Get(tt.args.toBufferPartitionName).Sequence()
 			assert.Nil(t, err)
 			assert.Equal(t, sequence, beforeReset)
-			assert.False(t, testMap[tt.args.fromBufferPartitionName][tt.args.toBufferPartitionName])
+			assert.Equal(t, int64(2), testMap[tt.args.toBufferPartitionName])
 			// reset
-			im.Reset(tt.args.fromBufferPartitionName, tt.args.toBufferPartitionName)
+			im.Reset(tt.args.fromBufferPartitionIndex, tt.args.toBufferPartitionName)
 			// after
 			assert.Nil(t, im.Get(tt.args.toBufferPartitionName))
-			assert.True(t, testMap[tt.args.fromBufferPartitionName][tt.args.toBufferPartitionName])
+			// now both bits should be 1 -> 11 -> 3
+			assert.Equal(t, int64(3), testMap[tt.args.toBufferPartitionName])
 		})
 	}
 }
@@ -268,25 +246,21 @@ func Test_sharedIdleManager_Reset(t *testing.T) {
 func Test_sharedIdleManager_Update(t *testing.T) {
 	type fields struct {
 		wmbOffset                  map[string]isb.Offset
-		forwarderActiveToPartition map[string]map[string]bool
+		forwarderActiveToPartition map[string]int64
 	}
 	type args struct {
-		fromBufferPartitionName string
-		toBufferPartitionName   string
-		newOffset               isb.Offset
+		fromBufferPartitionIndex int32
+		toBufferPartitionName    string
+		newOffset                isb.Offset
 	}
 	var (
 		o = isb.SimpleIntOffset(func() int64 {
 			return int64(100)
 		})
 		sequence, _ = o.Sequence()
-		testMap     = map[string]map[string]bool{
-			"testFromBufferPartition0": {
-				"testToBufferPartition0": true,
-			},
-			"testFromBufferPartition1": {
-				"testToBufferPartition0": false,
-			},
+		testMap     = map[string]int64{
+			// forwarder0 is active while forwarder1 is inactive -> binary 01 -> decimal 1
+			"testToBufferPartition0": 1,
 		}
 	)
 	tests := []struct {
@@ -301,9 +275,9 @@ func Test_sharedIdleManager_Update(t *testing.T) {
 				forwarderActiveToPartition: testMap,
 			},
 			args: args{
-				fromBufferPartitionName: "testFromBufferPartition0",
-				toBufferPartitionName:   "testToBufferPartition0",
-				newOffset:               o,
+				fromBufferPartitionIndex: 0,
+				toBufferPartitionName:    "testToBufferPartition0",
+				newOffset:                o,
 			},
 		},
 	}
@@ -316,14 +290,15 @@ func Test_sharedIdleManager_Update(t *testing.T) {
 			}
 			// before
 			assert.Nil(t, im.Get(tt.args.toBufferPartitionName))
-			assert.True(t, testMap[tt.args.fromBufferPartitionName][tt.args.toBufferPartitionName])
+			assert.Equal(t, int64(1), testMap[tt.args.toBufferPartitionName])
 			// update
-			im.Update(tt.args.fromBufferPartitionName, tt.args.toBufferPartitionName, tt.args.newOffset)
+			im.Update(tt.args.fromBufferPartitionIndex, tt.args.toBufferPartitionName, tt.args.newOffset)
 			// after
 			afterUpdate, err := im.Get(tt.args.toBufferPartitionName).Sequence()
 			assert.Nil(t, err)
 			assert.Equal(t, sequence, afterUpdate)
-			assert.False(t, testMap[tt.args.fromBufferPartitionName][tt.args.toBufferPartitionName])
+			// now the bits should be 0 -> 00 -> 0
+			assert.Equal(t, int64(0), testMap[tt.args.toBufferPartitionName])
 		})
 	}
 }

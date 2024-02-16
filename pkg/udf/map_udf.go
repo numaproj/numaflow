@@ -116,11 +116,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, toVertexWmStores)
-			var fromBufferPartitionNames = make([]string, len(readers))
-			for _, reader := range readers {
-				fromBufferPartitionNames = append(fromBufferPartitionNames, reader.GetName())
-			}
-			idleManager, err = wmb.NewSharedIdleManager(fromBufferPartitionNames, len(writers))
+			idleManager, err = wmb.NewSharedIdleManager(len(readers), len(writers))
 			if err != nil {
 				return err
 			}

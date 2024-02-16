@@ -132,12 +132,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, sinkWmStores)
-			var fromBufferPartitions = make([]string, len(readers))
-			for _, reader := range readers {
-				fromBufferPartitions = append(fromBufferPartitions, reader.GetName())
-			}
 			// sink vertex has only one toBuffer, so the length is 1
-			idleManager, err = wmb.NewSharedIdleManager(fromBufferPartitions, 1)
+			idleManager, err = wmb.NewSharedIdleManager(len(readers), 1)
 			if err != nil {
 				return err
 			}
