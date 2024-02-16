@@ -38,8 +38,8 @@ func (n *noOpIdleManager) Get(string) isb.Offset {
 	return isb.SimpleIntOffset(func() int64 { return int64(-1) })
 }
 
-func (n *noOpIdleManager) Update(string, isb.Offset) {
+func (n *noOpIdleManager) Update(int32, string, isb.Offset) {
 }
 
-func (n *noOpIdleManager) Reset(string) {
+func (n *noOpIdleManager) Reset(int32, string) {
 }

@@ -53,14 +53,14 @@ func (im *idleManager) Get(toBufferPartitionName string) isb.Offset {
 }
 
 // Update will update the existing item or add if not present for the given toBuffer partition name.
-func (im *idleManager) Update(toBufferPartitionName string, newOffset isb.Offset) {
+func (im *idleManager) Update(fromBufferPartitionIndex int32, toBufferPartitionName string, newOffset isb.Offset) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
 	im.wmbOffset[toBufferPartitionName] = newOffset
 }
 
 // Reset will clear the item for the given toBuffer partition name.
-func (im *idleManager) Reset(toBufferPartitionName string) {
+func (im *idleManager) Reset(fromBufferPartitionIndex int32, toBufferPartitionName string) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
 	im.wmbOffset[toBufferPartitionName] = nil
