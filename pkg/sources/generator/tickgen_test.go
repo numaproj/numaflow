@@ -78,7 +78,7 @@ func TestRead(t *testing.T) {
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager))
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
