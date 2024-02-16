@@ -41,5 +41,8 @@ func (n *noOpIdleManager) Get(string) isb.Offset {
 func (n *noOpIdleManager) Update(int32, string, isb.Offset) {
 }
 
-func (n *noOpIdleManager) Reset(int32, string) {
+func (n *noOpIdleManager) MarkActive(int32, string) {
+}
+
+func (n *noOpIdleManager) MarkIdle(int32, string) {
 }

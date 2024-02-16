@@ -81,13 +81,25 @@ func (im *idleManager) Update(fromBufferPartitionIndex int32, toBufferPartitionN
 	im.wmbOffset[toBufferPartitionName] = newOffset
 }
 
-// Reset will clear the item for the given toBuffer partition name.
-func (im *idleManager) Reset(fromBufferPartitionIndex int32, toBufferPartitionName string) {
+// MarkActive marks active for the given toBuffer partition name.
+func (im *idleManager) MarkActive(fromBufferPartitionIndex int32, toBufferPartitionName string) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
 	// set to 1 means mark the fromBufferPartition forwarder as active
 	im.forwarderActiveToPartition[toBufferPartitionName] = setBit(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex))
 	im.wmbOffset[toBufferPartitionName] = nil
+}
+
+// MarkIdle marks idle for the given toBuffer partition name if it's not idle.
+func (im *idleManager) MarkIdle(fromBufferPartitionIndex int32, toBufferPartitionName string) {
+	im.lock.Lock()
+	defer im.lock.Unlock()
+	if !isBitSet(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex)) {
+		// the bit value at position fromBufferPartitionIndex is 0, meaning it's already idle, can skip
+		return
+	}
+	// set active to idle
+	im.forwarderActiveToPartition[toBufferPartitionName] = clearBit(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex))
 }
 
 // setBit sets the bit at pos in the integer n.
@@ -100,4 +112,10 @@ func setBit(n uint64, pos uint) uint64 {
 func clearBit(n uint64, pos uint) uint64 {
 	n &^= uint64(1) << pos
 	return n
+}
+
+// isBitSet checks if the bit at pos in n is set to 1.
+func isBitSet(n uint64, pos uint) bool {
+	conditionCheck := uint64(1) << pos
+	return (n & conditionCheck) != 0
 }

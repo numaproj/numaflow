@@ -39,7 +39,7 @@ func TestNewIdleManager(t *testing.T) {
 	getOffset := im.Get(toBufferName)
 	assert.Equal(t, o.String(), getOffset.String())
 	assert.False(t, im.NeedToSendCtrlMsg(toBufferName))
-	im.Reset(0, toBufferName)
+	im.MarkActive(0, toBufferName)
 	assert.True(t, im.NeedToSendCtrlMsg(toBufferName))
 
 	type args struct {
@@ -275,7 +275,7 @@ func Test_idleManager_Reset(t *testing.T) {
 			assert.Equal(t, sequence, beforeReset)
 			assert.Equal(t, uint64(2), testMap[tt.args.toBufferPartitionName])
 			// reset
-			im.Reset(tt.args.fromBufferPartitionIndex, tt.args.toBufferPartitionName)
+			im.MarkActive(tt.args.fromBufferPartitionIndex, tt.args.toBufferPartitionName)
 			// after
 			assert.Nil(t, im.Get(tt.args.toBufferPartitionName))
 			// now both bits should be 1 -> 11 -> 3
