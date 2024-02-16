@@ -29,10 +29,11 @@ type idleManager struct {
 	// for each "toPartition" we have an integer represents in binary, and mark the #n bit as 1 if the #n forwarder
 	// is sending to the "toPartition"
 	// example:
-	//   if we have three forwarders, the initial value in binary format will be {"toPartition": 000} which is 0 in decimal
-	//   if forwarder0 is sending data to the toPartition, then the value will become {"toPartition": 001} which is 1 in decimal
-	//   if forwarder1 is sending data to the toPartition, then the value will become {"toPartition": 011} which is 3 in decimal
-	// when we do the ctrlMsg check, we reply on the value to decide if we need to send a ctrlMsg
+	//   if we have three forwarders, the initial value in binary format will be {"toPartition": 000}, which is 0 in decimal
+	//   if forwarder0 is sending data to the toPartition, then the value will become {"toPartition": 001}
+	//   if forwarder1 is sending data to the toPartition, then the value will become {"toPartition": 010}
+	//   if forwarder2 is sending data to the toPartition, then the value will become {"toPartition": 100}
+	// when we do the ctrlMsg check, we rely on the value (0 or non-0) to decide if we need to send a ctrlMsg
 	// note that we use uint64, therefore there is a limit of maximum 64 partitions
 	forwarderActiveToPartition map[string]uint64
 	// wmbOffset is a toBuffer partition name to the write offset of the idle watermark map.
