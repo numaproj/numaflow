@@ -58,10 +58,6 @@ func TestCompactor(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotEmpty(t, files)
 
-	for _, file := range files {
-		println(file.Name())
-	}
-
 	// create compactor with the data and event directories
 	c, err := NewCompactor(&pid, dataDir, eventDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
 	assert.NoError(t, err)

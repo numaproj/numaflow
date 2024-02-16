@@ -37,11 +37,6 @@ func TestGcEventsTracker_TrackGCEvent(t *testing.T) {
 	files, err := os.ReadDir(tempDir)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, files)
-
-	for _, file := range files {
-		println(file.Name())
-	}
-
 }
 
 func buildTestWindows(ts time.Time, count int, windowSize time.Duration) []window.TimedWindow {

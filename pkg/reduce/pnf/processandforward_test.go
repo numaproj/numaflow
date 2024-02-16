@@ -198,11 +198,6 @@ func TestPnFHandleAlignedWindowResponses(t *testing.T) {
 
 	wg.Wait()
 
-	for _, writeOffsets := range latestWriteOffsets {
-		for _, offsets := range writeOffsets {
-			println(offsets[0].Sequence())
-		}
-	}
 	assert.Equal(t, true, test1Buffer11.IsFull())
 	assert.Equal(t, true, test1Buffer12.IsFull())
 	assert.Equal(t, true, test1Buffer21.IsFull())

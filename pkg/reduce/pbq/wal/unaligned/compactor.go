@@ -249,7 +249,6 @@ func filesInDir(dirPath string) ([]os.FileInfo, error) {
 		if strings.Contains(files[i].Name(), "current") {
 			continue
 		}
-		log.Println("files in dir - ", files[i].Name())
 		cfs = append(cfs, files[i])
 	}
 

@@ -174,10 +174,8 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 
 // replayForUnalignedWindows replays the messages for unaligned windows
 func (df *DataForward) replayForUnalignedWindows(ctx context.Context, discoveredWals []wal.WAL) error {
-	println("len(discoveredWals): ", len(discoveredWals))
 	for _, s := range discoveredWals {
 		p := s.PartitionID()
-		println("p: ", p.String())
 		// associate the PBQ and PnF
 		df.associatePBQAndPnF(ctx, &p)
 	}
