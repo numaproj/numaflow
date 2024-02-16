@@ -211,6 +211,7 @@ func parseSessionReduceResponse(response *sessionreducepb.SessionReduceResponse)
 			Body: isb.Body{
 				Payload: result.GetValue(),
 			},
+			// FIXME: dedup for unaligned windows
 		},
 		Tags: result.GetTags(),
 	}

@@ -40,11 +40,17 @@ import (
 
 // GRPCBasedAlignedReduce is a reduce applier that uses gRPC client to invoke the aligned reduce UDF. It implements the applier.ReduceApplier interface.
 type GRPCBasedAlignedReduce struct {
-	client reducer.Client
+	vertexName    string
+	vertexReplica int32
+	client        reducer.Client
 }
 
-func NewUDSgRPCAlignedReduce(client reducer.Client) *GRPCBasedAlignedReduce {
-	return &GRPCBasedAlignedReduce{client: client}
+func NewUDSgRPCAlignedReduce(vertexName string, vertexReplica int32, client reducer.Client) *GRPCBasedAlignedReduce {
+	return &GRPCBasedAlignedReduce{
+		vertexName:    vertexName,
+		vertexReplica: vertexReplica,
+		client:        client,
+	}
 }
 
 // IsHealthy checks if the map udf is healthy.
@@ -94,6 +100,7 @@ func (u *GRPCBasedAlignedReduce) ApplyReduce(ctx context.Context, partitionID *p
 	// invoke the AsyncReduceFn method with reduceRequests channel and send the result to responseCh channel
 	// and any error to errCh channel
 	go func() {
+		index := 0
 		resultCh, reduceErrCh := u.client.ReduceFn(grpcCtx, reduceRequests)
 		for {
 			select {
@@ -104,7 +111,10 @@ func (u *GRPCBasedAlignedReduce) ApplyReduce(ctx context.Context, partitionID *p
 					close(responseCh)
 					return
 				}
-				responseCh <- parseReduceResponse(result)
+				// create a unique message id for each response message which will be used for deduplication
+				msgId := fmt.Sprintf("%s-%d-%s-%d", u.vertexName, u.vertexReplica, partitionID.String(), index)
+				index++
+				responseCh <- parseReduceResponse(result, msgId)
 			case err := <-reduceErrCh:
 				// ctx.Done() event will be handled by the AsyncReduceFn method
 				// so we don't need a separate case for ctx.Done() here
@@ -230,7 +240,7 @@ func convertToUdfError(err error) ApplyUDFErr {
 }
 
 // parseReduceResponse parse the SDK response to TimedWindowResponse
-func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowResponse {
+func parseReduceResponse(response *reducepb.ReduceResponse, msgId string) *window.TimedWindowResponse {
 	taggedMessage := &isb.WriteMessage{
 		Message: isb.Message{
 			Header: isb.Header{
@@ -239,6 +249,7 @@ func parseReduceResponse(response *reducepb.ReduceResponse) *window.TimedWindowR
 					IsLate:    false,
 				},
 				Keys: response.GetResult().GetKeys(),
+				ID:   msgId,
 			},
 			Body: isb.Body{
 				Payload: response.GetResult().GetValue(),

@@ -139,7 +139,7 @@ func TestPBQFlow(t *testing.T) {
 
 	readRequests := testutils.BuildTestWindowRequests(int64(msgsCount), time.Now(), window.Append)
 	for _, msg := range readRequests {
-		err := pq.Write(ctx, &msg)
+		err := pq.Write(ctx, &msg, true)
 		assert.NoError(t, err)
 	}
 
@@ -196,10 +196,9 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 
 	requests := testutils.BuildTestWindowRequests(int64(msgsCount), time.Now(), window.Append)
 	for _, msg := range requests {
-		err := pq.Write(ctx, &msg)
+		err := pq.Write(ctx, &msg, true)
 		assert.NoError(t, err)
 	}
-	pbqManager.Replay(ctx)
 
 	pq.CloseOfBook()
 	assert.NoError(t, err)
@@ -208,88 +207,4 @@ func TestPBQFlowWithNoOpStore(t *testing.T) {
 	// since it's a no-op store, there should no messages to reply
 	// no of windowRequests will be equal to no of produced messages
 	assert.Len(t, windowRequests, msgsCount)
-}
-
-func TestManager_Replay(t *testing.T) {
-	size := int64(100)
-
-	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(size)), window.Aligned, WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
-	assert.NoError(t, err)
-	testPartition := partition.ID{
-		Start: time.Unix(60, 0),
-		End:   time.Unix(120, 0),
-		Slot:  "slot-1",
-	}
-
-	var pq ReadWriteCloser
-	pq, err = pbqManager.CreateNewPBQ(ctx, testPartition)
-	assert.NoError(t, err)
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	var readRequests []*window.TimedWindowRequest
-	// go routine which reads the requests from pbq
-	go func() {
-	readLoop:
-		for {
-			select {
-			case msg, ok := <-pq.ReadCh():
-				if msg != nil {
-					readRequests = append(readRequests, msg)
-				}
-				if !ok {
-					break readLoop
-				}
-			case <-ctx.Done():
-				break readLoop
-			}
-		}
-		wg.Done()
-	}()
-
-	// write 50 requests to pbq
-	msgsCount := 50
-	writeRequests := testutils.BuildTestWindowRequests(int64(msgsCount), time.Now(), window.Append)
-
-	for _, msg := range writeRequests {
-		err := pq.Write(ctx, &msg)
-		assert.NoError(t, err)
-	}
-
-	// after writing, replay records from the store using Manager
-	pbqManager.Replay(ctx)
-
-	pq.CloseOfBook()
-	wg.Wait()
-	// number of read requests should be twice compared to number of requests produced
-	// since we replayed the messages which are persisted in store
-	assert.Len(t, readRequests, 2*msgsCount)
-}
-
-func TestManager_StartUp(t *testing.T) {
-	size := int64(100)
-
-	pID1 := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
-		Slot:  "test-partition-1",
-	}
-
-	pID2 := partition.ID{
-		Start: time.Now(),
-		End:   time.Now(),
-		Slot:  "test-partition-2",
-	}
-	dp := func(context.Context) ([]partition.ID, error) {
-		return []partition.ID{pID1,
-			pID2}, nil
-	}
-	stores := memory.NewMemoryStores(memory.WithStoreSize(size), memory.WithDiscoverer(dp))
-	ctx := context.Background()
-	pbqManager, err := NewManager(ctx, "reduce", "test-pipeline", 0, stores, window.Aligned, WithReadTimeout(1*time.Second), WithChannelBufferSize(10), WithReadBatchSize(10))
-	assert.NoError(t, err)
-	ids, err := pbqManager.GetExistingPartitions(ctx)
-	assert.NoError(t, err)
-	assert.Len(t, ids, 2)
 }

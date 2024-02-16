@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package wal
+package fs
 
 import (
 	"bytes"
@@ -29,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 )
 
 const (
@@ -46,31 +47,115 @@ var (
 // infrequent, meaning a read will only happen during a boot up. WAL will only have one segment since these are
 // relatively short-lived.
 type WAL struct {
-	// fp is the file pointer to the WAL segment
-	fp *os.File
-	// wOffset is the write offset as tracked by the writer
-	wOffset int64
-	// rOffset is the read offset as tracked when reading. Reading only
-	// happens during boostrap. It is highly unlikely to reread the data
-	// once boostrap sequence has been completed.
-	rOffset int64
-	// readUpTo is the read offset at which the reader will stop reading.
-	readUpTo int64
-	// openMode denotes which mode we opened the file in. Only during boot up we will open in read-write mode
-	openMode int
-	// createTime is the timestamp when the WAL segment is created.
-	createTime time.Time
-	// closed indicates whether the file has been closed
-	closed bool
-	// corrupted indicates whether the data of the file has been corrupted
-	corrupted   bool
-	partitionID *partition.ID
-	// prevSyncedWOffset is the write offset that is already synced as tracked by the writer
-	prevSyncedWOffset int64
-	// prevSyncedTime is the time when the last sync was made
-	prevSyncedTime    time.Time
-	walStores         *walStores
+	pipelineName      string
+	vertexName        string
+	replicaIndex      int32
+	maxBatchSize      int64         // maxBatchSize is the maximum size of the batch before we sync the file.
+	syncDuration      time.Duration // syncDuration is the duration after which the writer will sync the file.
+	fp                *os.File      // fp is the file pointer to the WAL segment
+	wOffset           int64         // wOffset is the write offset as tracked by the writer
+	rOffset           int64         // rOffset is the read offset as tracked when reading.
+	readUpTo          int64         // readUpTo is the read offset at which the reader will stop reading.
+	createTime        time.Time     // createTime is the timestamp when the WAL segment is created.
+	closed            bool          // closed indicates whether the file has been closed
+	corrupted         bool          // corrupted indicates whether the data of the file has been corrupted
+	partitionID       *partition.ID // partitionID is the partition ID of the WAL segment
+	prevSyncedWOffset int64         // prevSyncedWOffset is the write offset that is already synced as tracked by the writer
+	prevSyncedTime    time.Time     // prevSyncedTime is the time when the last sync was made
 	numOfUnsyncedMsgs int64
+}
+
+// NewWriteOnlyWAL creates a new WAL instance for write-only. This will be used in happy path where we are only
+// writing to the WAL.
+func NewWriteOnlyWAL(id *partition.ID,
+	filePath string,
+	maxBufferSize int64,
+	syncDuration time.Duration,
+	pipelineName string,
+	vertexName string,
+	replica int32) (store.Store, error) {
+
+	wal := &WAL{
+		pipelineName:      pipelineName,
+		vertexName:        vertexName,
+		replicaIndex:      replica,
+		createTime:        time.Now(),
+		wOffset:           0,
+		rOffset:           0,
+		readUpTo:          0,
+		partitionID:       id,
+		prevSyncedWOffset: 0,
+		prevSyncedTime:    time.Time{},
+		numOfUnsyncedMsgs: 0,
+		maxBatchSize:      maxBufferSize,
+		syncDuration:      syncDuration,
+	}
+
+	// here we are explicitly giving O_WRONLY because we will not be using this to read. Our read is only during
+	// boot up.
+	fp, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return nil, err
+	}
+	wal.fp = fp
+	err = wal.writeWALHeader()
+	if err != nil {
+		return nil, err
+	}
+
+	return wal, nil
+}
+
+// NewReadWriteWAL creates a new WAL instance for read-write. This will be used during boot up where we will be replaying
+// the messages from the WAL and then writing to it.
+func NewReadWriteWAL(filePath string,
+	maxBufferSize int64,
+	syncDuration time.Duration,
+	pipelineName string,
+	vertexName string,
+	replica int32) (store.Store, error) {
+	wal := &WAL{
+		pipelineName:      pipelineName,
+		vertexName:        vertexName,
+		replicaIndex:      replica,
+		createTime:        time.Now(),
+		wOffset:           0,
+		rOffset:           0,
+		readUpTo:          0,
+		prevSyncedWOffset: 0,
+		prevSyncedTime:    time.Time{},
+		numOfUnsyncedMsgs: 0,
+		maxBatchSize:      maxBufferSize,
+		syncDuration:      syncDuration,
+	}
+
+	// here we are explicitly giving O_RDWR because we will be using this to read too. Our read is only during
+	// boot up.
+	fp, err := os.OpenFile(filePath, os.O_RDWR, 0644)
+	if err != nil {
+		return nil, err
+	}
+	wal.fp = fp
+
+	// read the partition ID from the WAL header and set it in the WAL.
+	readPartition, err := wal.readWALHeader()
+	if err != nil {
+		return nil, err
+	}
+	wal.partitionID = readPartition
+
+	// set the read up to the end of the file.
+	stat, err := os.Stat(filePath)
+	if err != nil {
+		return nil, err
+	}
+	wal.readUpTo = stat.Size()
+
+	return wal, nil
+}
+
+func (w *WAL) PartitionID() partition.ID {
+	return *w.partitionID
 }
 
 // writeWALHeader writes the WAL header to the file.
@@ -78,9 +163,9 @@ func (w *WAL) writeWALHeader() (err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metrics.LabelPipeline:           w.walStores.pipelineName,
-				metrics.LabelVertex:             w.walStores.vertexName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				metrics.LabelPipeline:           w.pipelineName,
+				metrics.LabelVertex:             w.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 				labelErrorKind:                  "writeWALHeader",
 			}).Inc()
 		}
@@ -126,9 +211,9 @@ func (w *WAL) encodeWALHeader(id *partition.ID) (buf *bytes.Buffer, err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metrics.LabelPipeline:           w.walStores.pipelineName,
-				metrics.LabelVertex:             w.walStores.vertexName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				metrics.LabelPipeline:           w.pipelineName,
+				metrics.LabelVertex:             w.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 				labelErrorKind:                  "encodeWALHeader",
 			}).Inc()
 		}
@@ -157,9 +242,9 @@ func (w *WAL) encodeWALMessage(message *isb.ReadMessage) (buf *bytes.Buffer, err
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metrics.LabelPipeline:           w.walStores.pipelineName,
-				metrics.LabelVertex:             w.walStores.vertexName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				metrics.LabelPipeline:           w.pipelineName,
+				metrics.LabelVertex:             w.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 				labelErrorKind:                  "encodeWALMessage",
 			}).Inc()
 		}
@@ -217,9 +302,9 @@ func (w *WAL) encodeWALMessageHeader(message *isb.ReadMessage, messageLen int64,
 	err = binary.Write(buf, binary.LittleEndian, msgHeader)
 	if err != nil {
 		walErrors.With(map[string]string{
-			metrics.LabelPipeline:           w.walStores.pipelineName,
-			metrics.LabelVertex:             w.walStores.vertexName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+			metrics.LabelPipeline:           w.pipelineName,
+			metrics.LabelVertex:             w.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 			labelErrorKind:                  "encodeWALMessageHeader",
 		}).Inc()
 		return nil, err
@@ -233,9 +318,9 @@ func (w *WAL) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
 	msgBinary, err := readMsg.Message.MarshalBinary()
 	if err != nil {
 		walErrors.With(map[string]string{
-			metrics.LabelPipeline:           w.walStores.pipelineName,
-			metrics.LabelVertex:             w.walStores.vertexName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+			metrics.LabelPipeline:           w.pipelineName,
+			metrics.LabelVertex:             w.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 			labelErrorKind:                  "encodeWALMessageBody",
 		}).Inc()
 		return nil, fmt.Errorf("encodeWALMessageBody encountered encode err: %w", err)
@@ -259,9 +344,9 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metrics.LabelPipeline:           w.walStores.pipelineName,
-				metrics.LabelVertex:             w.walStores.vertexName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				metrics.LabelPipeline:           w.pipelineName,
+				metrics.LabelVertex:             w.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 				labelErrorKind:                  "write",
 			}).Inc()
 		}
@@ -269,9 +354,9 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	encodeStart := time.Now()
 	entry, err := w.encodeWALMessage(message)
 	entryEncodeLatency.With(map[string]string{
-		metrics.LabelPipeline:           w.walStores.pipelineName,
-		metrics.LabelVertex:             w.walStores.vertexName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 	}).Observe(float64(time.Since(encodeStart).Milliseconds()))
 	if err != nil {
 		return err
@@ -280,9 +365,9 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	writeStart := time.Now()
 	wrote, err := w.fp.WriteAt(entry.Bytes(), w.wOffset)
 	entryWriteLatency.With(map[string]string{
-		metrics.LabelPipeline:           w.walStores.pipelineName,
-		metrics.LabelVertex:             w.walStores.vertexName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 	}).Observe(float64(time.Since(writeStart).Milliseconds()))
 	if wrote != entry.Len() {
 		return fmt.Errorf("expected to write %d, but wrote only %d, %w", entry.Len(), wrote, err)
@@ -295,26 +380,26 @@ func (w *WAL) Write(message *isb.ReadMessage) (err error) {
 	// Only increase the write offset when we successfully write for atomicity.
 	w.wOffset += int64(wrote)
 	entriesBytesCount.With(map[string]string{
-		metrics.LabelPipeline:           w.walStores.pipelineName,
-		metrics.LabelVertex:             w.walStores.vertexName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 	}).Add(float64(wrote))
 	entriesCount.With(map[string]string{
-		metrics.LabelPipeline:           w.walStores.pipelineName,
-		metrics.LabelVertex:             w.walStores.vertexName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 	}).Inc()
 	currentTime := time.Now()
 
-	if w.wOffset-w.prevSyncedWOffset > w.walStores.maxBatchSize || currentTime.Sub(w.prevSyncedTime) > w.walStores.syncDuration {
+	if w.wOffset-w.prevSyncedWOffset > w.maxBatchSize || currentTime.Sub(w.prevSyncedTime) > w.syncDuration {
 		w.prevSyncedWOffset = w.wOffset
 		w.prevSyncedTime = currentTime
 		fSyncStart := time.Now()
 		err = w.fp.Sync()
 		fileSyncWaitTime.With(map[string]string{
-			metrics.LabelPipeline:           w.walStores.pipelineName,
-			metrics.LabelVertex:             w.walStores.vertexName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+			metrics.LabelPipeline:           w.pipelineName,
+			metrics.LabelVertex:             w.vertexName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 		}).Observe(float64(time.Since(fSyncStart).Milliseconds()))
 		w.numOfUnsyncedMsgs = 0
 		return err
@@ -327,9 +412,9 @@ func (w *WAL) Close() (err error) {
 	defer func() {
 		if err != nil {
 			walErrors.With(map[string]string{
-				metrics.LabelPipeline:           w.walStores.pipelineName,
-				metrics.LabelVertex:             w.walStores.vertexName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+				metrics.LabelPipeline:           w.pipelineName,
+				metrics.LabelVertex:             w.vertexName,
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 				labelErrorKind:                  "close",
 			}).Inc()
 		}
@@ -337,9 +422,9 @@ func (w *WAL) Close() (err error) {
 	start := time.Now()
 	err = w.fp.Sync()
 	fileSyncWaitTime.With(map[string]string{
-		metrics.LabelPipeline:           w.walStores.pipelineName,
-		metrics.LabelVertex:             w.walStores.vertexName,
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.walStores.replicaIndex)),
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.replicaIndex)),
 	}).Observe(float64(time.Since(start).Milliseconds()))
 
 	if err != nil {
