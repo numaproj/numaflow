@@ -7,7 +7,7 @@ labels: "bug"
 **Describe the bug**
 A clear and concise description of what the bug is.
 
->For quick help and support, join our [slack](https://numaproj.slack.com/join/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg#/shared-invite/email) channel
+>For quick help and support, join our [slack](https://numaproj.slack.com/join/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg#/shared-invite/email) channel.
 
 **To Reproduce**
 Steps to reproduce the behavior:
