@@ -4,7 +4,7 @@ about: Create a report to help us improve
 labels: "bug"
 ---
 
-We encourage you to join our vibrant Slack community for quick help and support. The Slack channel can be accessed via [link](https://numaproj.slack.com/join/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg#/shared-invite/email) 
+For quick help and support, join our [slack](https://numaproj.slack.com/join/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg#/shared-invite/email) channel
 
 **Describe the bug**
 A clear and concise description of what the bug is.
