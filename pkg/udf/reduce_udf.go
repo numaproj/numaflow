@@ -212,7 +212,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, toVertexWmStores)
 
-			idleManager, _ = wmb.NewIdleManager(0, len(writers))
+			idleManager, _ = wmb.NewIdleManager(1, len(writers))
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
