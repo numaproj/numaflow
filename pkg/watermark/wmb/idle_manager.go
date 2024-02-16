@@ -17,6 +17,7 @@ limitations under the License.
 package wmb
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -24,16 +25,30 @@ import (
 
 // idleManager manages the idle watermark whether the control message is a duplicate and also keeps track of the idle WMB's offset.
 type idleManager struct {
+	// forwarderActivePartition is a map[toPartitionName]uint64 to record if a forwarder is sending to the toPartition.
+	// for each "toPartition" we have an integer represents in binary, and mark the #n bit as 1 if the #n forwarder
+	// is sending to the "toPartition"
+	// example:
+	//   if we have three forwarders, the initial value in binary format will be {"toPartition": 000} which is 0 in decimal
+	//   if forwarder0 is sending data to the toPartition, then the value will become {"toPartition": 001} which is 1 in decimal
+	//   if forwarder1 is sending data to the toPartition, then the value will become {"toPartition": 011} which is 3 in decimal
+	// when we do the ctrlMsg check, we reply on the value to decide if we need to send a ctrlMsg
+	// note that we use uint64, therefore there is a limit of maximum 64 partitions
+	forwarderActiveToPartition map[string]uint64
 	// wmbOffset is a toBuffer partition name to the write offset of the idle watermark map.
 	wmbOffset map[string]isb.Offset
 	lock      sync.RWMutex
 }
 
 // NewIdleManager returns an idleManager object as the IdleManager interface type to track the watermark idle status.
-func NewIdleManager(length int) IdleManager {
-	return &idleManager{
-		wmbOffset: make(map[string]isb.Offset, length),
+func NewIdleManager(numOfFromPartitions int, numOfToPartitions int) (IdleManager, error) {
+	if numOfFromPartitions <= 0 || numOfFromPartitions >= 64 {
+		return nil, fmt.Errorf("failed to create a new idle manager: numOfFromPartitions should be > 0 and < 64")
 	}
+	return &idleManager{
+		forwarderActiveToPartition: make(map[string]uint64, numOfToPartitions),
+		wmbOffset:                  make(map[string]isb.Offset, numOfToPartitions),
+	}, nil
 }
 
 // NeedToSendCtrlMsg returns true if the given partition hasn't got any control message and needs to create a new control message
@@ -56,6 +71,8 @@ func (im *idleManager) Get(toBufferPartitionName string) isb.Offset {
 func (im *idleManager) Update(fromBufferPartitionIndex int32, toBufferPartitionName string, newOffset isb.Offset) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
+	// clear means the fromBufferPartition forwarder is inactive as the default value is 0
+	im.forwarderActiveToPartition[toBufferPartitionName] = clearBit(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex))
 	im.wmbOffset[toBufferPartitionName] = newOffset
 }
 
@@ -63,5 +80,19 @@ func (im *idleManager) Update(fromBufferPartitionIndex int32, toBufferPartitionN
 func (im *idleManager) Reset(fromBufferPartitionIndex int32, toBufferPartitionName string) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
+	// set to 1 means mark the fromBufferPartition forwarder as active
+	im.forwarderActiveToPartition[toBufferPartitionName] = setBit(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex))
 	im.wmbOffset[toBufferPartitionName] = nil
+}
+
+// setBit sets the bit at pos in the integer n.
+func setBit(n uint64, pos uint) uint64 {
+	n |= uint64(1) << pos
+	return n
+}
+
+// clearBit clears the bit at pos in n.
+func clearBit(n uint64, pos uint) uint64 {
+	n &^= uint64(1) << pos
+	return n
 }

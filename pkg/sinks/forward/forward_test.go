@@ -159,7 +159,7 @@ func TestNewDataForward(t *testing.T) {
 
 		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 		fetchWatermark := &testForwardFetcher{}
-		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(1))
+		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(0, 1))
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -243,7 +243,7 @@ func TestNewDataForward(t *testing.T) {
 		publishWatermark := map[string]publish.Publisher{
 			testVertexName: &testForwarderPublisher{},
 		}
-		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(1))
+		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(0, 1))
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -326,7 +326,7 @@ func TestWriteToBuffer(t *testing.T) {
 			publishWatermark := map[string]publish.Publisher{
 				"to1": &testForwarderPublisher{},
 			}
-			f, err := NewDataForward(vertexInstance, fromStep, buffer, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1))
+			f, err := NewDataForward(vertexInstance, fromStep, buffer, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(0, 1))
 
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())

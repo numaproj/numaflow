@@ -85,7 +85,7 @@ func Test_NewHTTP(t *testing.T) {
 	toVertexWmStores := map[string]store.WatermarkStore{
 		"test": publishWMStores,
 	}
-	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, wmb.NewIdleManager(len(toBuffers)))
+	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, wmb.NewIdleManager(0, len(toBuffers)))
 	assert.NoError(t, err)
 	assert.False(t, h.(*httpSource).ready)
 	assert.Equal(t, v.Spec.Name, h.GetName())
