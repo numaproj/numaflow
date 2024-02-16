@@ -236,7 +236,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
-						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSource, df.vertexReplica, fetchedWm)
+						idlehandler.PublishIdleWatermark(ctx, 0, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSource, df.vertexReplica, fetchedWm)
 					}
 				}
 			}
@@ -416,7 +416,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
-						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSource, df.vertexReplica, processorWM)
+						idlehandler.PublishIdleWatermark(ctx, 0, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSource, df.vertexReplica, processorWM)
 					}
 				}
 			}

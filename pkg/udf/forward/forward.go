@@ -228,7 +228,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		for toVertexName, toVertexBuffer := range isdf.toBuffers {
 			for _, partition := range toVertexBuffer {
 				if p, ok := isdf.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, partition, p, isdf.idleManager, isdf.opts.logger, isdf.vertexName, isdf.pipelineName, dfv1.VertexTypeMapUDF, isdf.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+					idlehandler.PublishIdleWatermark(ctx, isdf.fromBufferPartition.GetPartitionIdx(), partition, p, isdf.idleManager, isdf.opts.logger, isdf.vertexName, isdf.pipelineName, dfv1.VertexTypeMapUDF, isdf.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 				}
 			}
 		}
@@ -378,7 +378,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 					// use the watermark of the current read batch for the idle watermark
 					// same as read len==0 because there's no event published to the buffer
 					if p, ok := isdf.wmPublishers[bufferName]; ok {
-						idlehandler.PublishIdleWatermark(ctx, isdf.toBuffers[bufferName][index], p, isdf.idleManager, isdf.opts.logger, isdf.vertexName, isdf.pipelineName, dfv1.VertexTypeMapUDF, isdf.vertexReplica, processorWM)
+						idlehandler.PublishIdleWatermark(ctx, isdf.fromBufferPartition.GetPartitionIdx(), isdf.toBuffers[bufferName][index], p, isdf.idleManager, isdf.opts.logger, isdf.vertexName, isdf.pipelineName, dfv1.VertexTypeMapUDF, isdf.vertexReplica, processorWM)
 					}
 				}
 			}
