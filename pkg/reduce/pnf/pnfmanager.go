@@ -47,6 +47,7 @@ type Manager struct {
 	idleManager         wmb.IdleManager
 	windower            window.TimedWindower
 	pnfRoutines         []*processAndForward
+	opts                []Option
 	log                 *zap.SugaredLogger
 	sync.RWMutex
 }
@@ -60,7 +61,8 @@ func NewPnFManager(ctx context.Context,
 	whereToDecider forwarder.ToWhichStepDecider,
 	watermarkPublishers map[string]publish.Publisher,
 	idleManager wmb.IdleManager,
-	windower window.TimedWindower) *Manager {
+	windower window.TimedWindower,
+	opts ...Option) *Manager {
 
 	of := &Manager{
 		vertexName:          vertexInstance.Vertex.Spec.Name,
@@ -75,6 +77,7 @@ func NewPnFManager(ctx context.Context,
 		windower:            windower,
 		pnfRoutines:         make([]*processAndForward, 0),
 		log:                 logging.FromContext(ctx),
+		opts:                opts,
 	}
 
 	return of

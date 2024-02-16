@@ -32,6 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/fs"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
@@ -305,6 +306,24 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 
 	op := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower)
+
+	// create and start the compactor if the window type is unaligned
+	if windower.Type() == window.Unaligned {
+		compactor, err := unaligned.NewCompactor(&window.SharedUnalignedPartition, dfv1.DefaultStorePath, dfv1.DefaultStoreEventsPath)
+		if err != nil {
+			return fmt.Errorf("failed to create compactor, %w", err)
+		}
+		err = compactor.Start(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to start compactor, %w", err)
+		}
+		defer func(compactor unaligned.Compactor) {
+			err = compactor.Stop()
+			if err != nil {
+				log.Errorw("Failed to stop compactor", zap.Error(err))
+			}
+		}(compactor)
+	}
 
 	// for reduce, we read only from one partition
 	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, storeManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)

@@ -63,6 +63,7 @@ type processAndForward struct {
 	windower           window.TimedWindower
 	latestWriteOffsets map[string][][]isb.Offset
 	done               chan struct{}
+	opts               *options
 }
 
 // newProcessAndForward will return a new processAndForward instance
@@ -78,7 +79,16 @@ func newProcessAndForward(ctx context.Context,
 	pw map[string]publish.Publisher,
 	idleManager wmb.IdleManager,
 	manager *pbq.Manager,
-	windower window.TimedWindower) *processAndForward {
+	windower window.TimedWindower,
+	opts ...Option) *processAndForward {
+
+	// apply the options
+	dOpts := &options{}
+	for _, opt := range opts {
+		if err := opt(dOpts); err != nil {
+			logging.FromContext(ctx).Panic("Got an error while applying options", zap.Error(err))
+		}
+	}
 
 	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
 	// which will be used for publishing the watermark when the window is closed.
@@ -103,6 +113,7 @@ func newProcessAndForward(ctx context.Context,
 		done:               make(chan struct{}),
 		latestWriteOffsets: latestWriteOffsets,
 		log:                logging.FromContext(ctx),
+		opts:               dOpts,
 	}
 	// start the processAndForward routine. This go-routine is collected by the Shutdown method which
 	// listens on the done channel.
@@ -148,13 +159,18 @@ outerLoop:
 			if response.EOF {
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
-				// FIXME(session): we need to compact the pbq for unAligned when we have received the EOF response from the UDF.
 				// we should not use p.partitionId here, we should use the partition id from the response.
 				// because for unaligned p.partitionId indicates the shared partition id for the key.
 				p.publishWM(ctx, response.Window.EndTime())
 
 				// delete the closed windows which are tracked by the windower
 				p.windower.DeleteClosedWindow(response.Window)
+
+				// FIXME: retry
+				err := p.opts.gcEventsTracker.TrackGCEvent(response.Window)
+				if err != nil {
+					p.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.Any("partitionID", p.partitionId))
+				}
 				continue
 			}
 
