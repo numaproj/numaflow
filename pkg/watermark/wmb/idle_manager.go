@@ -90,16 +90,15 @@ func (im *idleManager) MarkActive(fromBufferPartitionIndex int32, toBufferPartit
 	im.wmbOffset[toBufferPartitionName] = nil
 }
 
-// MarkIdle marks idle for the given toBuffer partition name if it's not idle.
+// MarkIdle marks idle for the given toBuffer partition name if it's active
 func (im *idleManager) MarkIdle(fromBufferPartitionIndex int32, toBufferPartitionName string) {
 	im.lock.Lock()
 	defer im.lock.Unlock()
-	if !isBitSet(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex)) {
-		// the bit value at position fromBufferPartitionIndex is 0, meaning it's already idle, can skip
-		return
+	if isBitSet(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex)) {
+		// the bit value at position fromBufferPartitionIndex is 1, meaning it's marked as active, sets to idle
+		im.forwarderActiveToPartition[toBufferPartitionName] = clearBit(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex))
 	}
-	// set active to idle
-	im.forwarderActiveToPartition[toBufferPartitionName] = clearBit(im.forwarderActiveToPartition[toBufferPartitionName], uint(fromBufferPartitionIndex))
+	// the bit value is 0, meaning it's already idling, no action required
 }
 
 // setBit sets the bit at pos in the integer n.

@@ -31,9 +31,9 @@ import (
 
 // PublishIdleWatermark publishes a ctrl message with isb.Kind set to WMB. We only send one ctrl message when
 func PublishIdleWatermark(ctx context.Context, fromBufferPartitionIndex int32, toBufferPartition isb.BufferWriter, wmPublisher publish.Publisher, idleManager wmb.IdleManager, logger *zap.SugaredLogger, vertexName string, pipelineName string, vertexType dfv1.VertexType, vertexReplica int32, wm wmb.Watermark) {
-
 	var toPartitionName = toBufferPartition.GetName()
 	var toVertexPartition = toBufferPartition.GetPartitionIdx()
+	idleManager.MarkIdle(fromBufferPartitionIndex, toPartitionName)
 
 	if idleManager.NeedToSendCtrlMsg(toPartitionName) {
 		if vertexType == dfv1.VertexTypeSink {
