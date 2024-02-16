@@ -56,6 +56,10 @@ func NewIdleManager(numOfFromPartitions int, numOfToPartitions int) (IdleManager
 func (im *idleManager) NeedToSendCtrlMsg(toBufferPartitionName string) bool {
 	im.lock.RLock()
 	defer im.lock.RUnlock()
+	if im.forwarderActiveToPartition[toBufferPartitionName] != 0 {
+		// only send ctrl msg when all bits are 0 (0 means inactive)
+		return false
+	}
 	// if the given partition doesn't have a control message
 	// the map entry will be empty, return true
 	return im.wmbOffset[toBufferPartitionName] == nil
