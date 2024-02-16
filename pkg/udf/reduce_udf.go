@@ -31,6 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/fs"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
@@ -287,9 +288,14 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
-	storeManager := fs.NewFSManager(u.VertexInstance, fs.WithStorePath(dfv1.DefaultStorePath), fs.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), fs.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
+	var walManager wal.Manager
+	if windower.Type() == window.Aligned {
+		walManager = fs.NewFSManager(u.VertexInstance)
+	} else {
+		walManager = unaligned.NewFSManager(dfv1.DefaultStorePath, u.VertexInstance)
+	}
 
-	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeManager, windower.Type())
+	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, walManager, windower.Type())
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)
@@ -305,11 +311,16 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		opts = append(opts, reduce.WithAllowedLateness(allowedLateness.Duration))
 	}
 
-	op := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower)
+	gcEventsTracker, err := unaligned.NewGCEventsTracker(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create gc events tracker, %w", err)
+	}
+
+	op := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnf.WithGCEventsTracker(gcEventsTracker))
 
 	// create and start the compactor if the window type is unaligned
-	if windower.Type() == window.Unaligned {
-		compactor, err := unaligned.NewCompactor(&window.SharedUnalignedPartition, dfv1.DefaultStorePath, dfv1.DefaultStoreEventsPath)
+	if windowType.Session != nil {
+		compactor, err := unaligned.NewCompactor(&window.SharedUnalignedPartition, dfv1.DefaultStorePath, dfv1.DefaultStoreEventsPath, unaligned.WithCompactionDuration(windowType.Session.Timeout.Duration))
 		if err != nil {
 			return fmt.Errorf("failed to create compactor, %w", err)
 		}
@@ -320,13 +331,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		defer func(compactor unaligned.Compactor) {
 			err = compactor.Stop()
 			if err != nil {
-				log.Errorw("Failed to stop compactor", zap.Error(err))
+				log.Errorw("failed to stop compactor", zap.Error(err))
 			}
 		}(compactor)
 	}
 
 	// for reduce, we read only from one partition
-	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, storeManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
+	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, walManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}

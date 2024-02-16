@@ -89,7 +89,7 @@ func (op *Manager) AsyncSchedulePnF(ctx context.Context,
 	partitionID *partition.ID,
 	pbq pbq.Reader,
 ) {
-	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.reduceApplier, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager, op.windower)
+	pf := newProcessAndForward(ctx, op.vertexName, op.pipelineName, op.vertexReplica, partitionID, op.reduceApplier, pbq, op.toBuffers, op.whereToDecider, op.watermarkPublishers, op.idleManager, op.pbqManager, op.windower, op.opts...)
 	op.pnfRoutines = append(op.pnfRoutines, pf)
 }
 

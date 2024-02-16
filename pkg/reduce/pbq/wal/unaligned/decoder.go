@@ -145,13 +145,6 @@ func (d *decoder) decodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPre
 	// verify the checksum
 	checksum := calculateChecksum(body)
 	if checksum != entryHeader.Checksum {
-		println("header - ", entryHeader.MessageLen, " ", entryHeader.Checksum, " ", entryHeader.KeyLen, " ", entryHeader.Offset, " ", entryHeader.WaterMark, " ", entryHeader.EventTime)
-		println("body - ", string(body))
-		var message = new(isb.Message)
-		err = message.UnmarshalBinary(body)
-		if err != nil {
-			println("error - ", err.Error())
-		}
 		return nil, errChecksumMismatch
 	}
 

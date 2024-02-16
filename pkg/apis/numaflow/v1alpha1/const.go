@@ -155,10 +155,10 @@ const (
 
 	// Default persistent store options
 	DefaultStoreSyncDuration       = 2 * time.Second        // Default sync duration for pbq
-	DefaultStoreMaxBufferSize      = 100000                 // Default buffer size for pbq in bytes
+	DefaultStoreMaxBufferSize      = 5 * 1024 * 1024        // Default buffer size for pbq in bytes
 	DefaultStorePath               = PathPBQMount + "/wals" // Default store path
 	DefaultSegmentRotationDuration = 20 * time.Second       // Default segment rotation duration
-	DefaultStoreSegmentSize        = 20 * 1024 * 1024       // Default segment size
+	DefaultStoreSegmentSize        = 30 * 1024 * 1024       // Default segment size
 
 	// Default GC tracker options
 	DefaultGCTrackerRotationDuration = 20 * time.Second         // Default rotation duration for the GC tracker

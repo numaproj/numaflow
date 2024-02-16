@@ -18,8 +18,8 @@ package unaligned
 
 import (
 	"context"
+	"log"
 	"os"
-	"strings"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -76,28 +76,23 @@ func (ws *fsWAL) CreateWAL(_ context.Context, partitionID partition.ID) (wal.WAL
 
 // DiscoverWALs returns all the wals present in the storePath
 func (ws *fsWAL) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
-	files, err := os.ReadDir(ws.storePath)
-	if os.IsNotExist(err) {
-		return []wal.WAL{}, nil
+	partitions := make([]wal.WAL, 0)
+	files, err := filesInDir(ws.storePath)
+
+	if os.IsNotExist(err) || len(files) == 0 {
+		return partitions, nil
 	} else if err != nil {
 		return nil, err
 	}
-	partitions := make([]wal.WAL, 0)
 
-	for _, f := range files {
-		if strings.HasPrefix(f.Name(), SegmentPrefix) && !f.IsDir() {
-			wl, err := NewUnalignedReadWriteWAL(ws.fsOpts...)
-			if err != nil {
-				return nil, err
-			}
-			partitions = append(partitions, wl)
-			// add to activeWals, to avoid creating the same wal again
-			// after replay.
-			ws.activeWals[wl.PartitionID().String()] = wl
-		}
+	for _, file := range files {
+		log.Println("discovered file: ", file.Name())
 	}
 
-	return partitions, nil
+	// there will only be one wal because we use shared partition
+	// for unaligned windows
+	wl, err := NewUnalignedReadWriteWAL(ws.fsOpts...)
+	return append(partitions, wl), err
 }
 
 // DeleteWAL deletes the store for the given partitionID

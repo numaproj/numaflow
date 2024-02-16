@@ -2,6 +2,7 @@ package unaligned
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -183,4 +184,75 @@ readLoop:
 	for i := 0; i < 199; i++ {
 		assert.Equal(t, readMessages[i+101].EventTime.UnixMilli(), replayedMessages[i].EventTime.UnixMilli())
 	}
+}
+
+func TestFilesInDir(t *testing.T) {
+	dir := t.TempDir()
+	// create some files
+	for i := 0; i < 10; i++ {
+		file, err := os.Create(filepath.Join(dir, fmt.Sprintf("file-%d", i)))
+		assert.NoError(t, err)
+		err = file.Close()
+		assert.NoError(t, err)
+	}
+
+	files, err := filesInDir(dir)
+	assert.NoError(t, err)
+	assert.Len(t, files, 10)
+
+	// add current file
+	file, err := os.Create(filepath.Join(dir, "current-segment"))
+	assert.NoError(t, err)
+	err = file.Close()
+	assert.NoError(t, err)
+
+	files, err = filesInDir(dir)
+	assert.NoError(t, err)
+	assert.Len(t, files, 10)
+
+	// remove all files except current
+	for i := 0; i < 10; i++ {
+		err = os.Remove(filepath.Join(dir, fmt.Sprintf("file-%d", i)))
+		assert.NoError(t, err)
+	}
+
+	files, err = filesInDir(dir)
+	assert.NoError(t, err)
+	assert.Len(t, files, 0)
+
+	// add 2 more files at the end
+	file, err = os.Create(filepath.Join(dir, "file-1"))
+	assert.NoError(t, err)
+	err = file.Close()
+	assert.NoError(t, err)
+
+	file, err = os.Create(filepath.Join(dir, "file-2"))
+	assert.NoError(t, err)
+	err = file.Close()
+	assert.NoError(t, err)
+
+	files, err = filesInDir(dir)
+	assert.NoError(t, err)
+	assert.Len(t, files, 2)
+
+	// add another current file
+	file, err = os.Create(filepath.Join(dir, "current-compacted"))
+	assert.NoError(t, err)
+	err = file.Close()
+	assert.NoError(t, err)
+
+	files, err = filesInDir(dir)
+	assert.NoError(t, err)
+	assert.Len(t, files, 2)
+
+	// remove except current
+	err = os.Remove(filepath.Join(dir, "file-1"))
+	assert.NoError(t, err)
+
+	err = os.Remove(filepath.Join(dir, "file-2"))
+	assert.NoError(t, err)
+
+	files, err = filesInDir(dir)
+	assert.NoError(t, err)
+	assert.Len(t, files, 0)
 }

@@ -55,8 +55,17 @@ func NewGCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (GCEventsT
 		opt(tracker)
 	}
 
+	var err error
+	// Create event dir if not exist
+	if _, err = os.Stat(tracker.eventsPath); os.IsNotExist(err) {
+		err = os.Mkdir(tracker.eventsPath, 0755)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// open the events file
-	err := tracker.openEventsFile()
+	err = tracker.openEventsFile()
 
 	// keep rotating the file
 	go tracker.keepRotating(ctx)
@@ -92,6 +101,19 @@ func (g *gcEventsTracker) rotateEventsFile() error {
 
 	if err := g.flushAndSync(); err != nil {
 		return err
+	}
+
+	// check the size of event file before rotating
+	// if its zero we don't need to rotate
+	// can happen when the watermark is not progressing
+	// and the file is not getting written
+	fileInfo, err := g.currEventsFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	if fileInfo.Size() == 0 {
+		return nil
 	}
 
 	// close the current file

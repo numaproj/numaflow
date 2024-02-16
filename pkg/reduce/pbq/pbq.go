@@ -71,10 +71,6 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, per
 	case p.output <- request:
 		switch request.Operation {
 		case window.Open, window.Append, window.Expand:
-			// this is a blocking call, ctx.Done() will be ignored.
-			if p.windowType == window.Unaligned {
-				return nil
-			}
 			// during replay we do not have to persist
 			if persist {
 				writeErr = p.store.Write(request.ReadMessage)

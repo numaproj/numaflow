@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -245,6 +246,11 @@ func (s *unalignedWAL) openReadFile() error {
 	s.files = s.files[1:]
 
 	pid, err := s.decoder.decodeHeader(s.currDataFp)
+	if err != nil {
+		log.Println("Error while decoding the header", err.Error())
+		return err
+	}
+	log.Println("Assigned partition ID - ", pid.String())
 	s.partitionID = pid
 
 	return err
@@ -276,6 +282,21 @@ func (s *unalignedWAL) openFile() error {
 // rotateFile rotates the current data file to the segment file
 // and updates the current data file to a new file.
 func (s *unalignedWAL) rotateFile() error {
+	defer func() {
+		s.segmentCreateTime = time.Now()
+	}()
+	// check the size of the current data file before rotating
+	// if its zero we don't need to rotate
+	// can happen when there are no messages to write
+	// within the rotation duration
+	fileInfo, err := s.currDataFp.Stat()
+	if err != nil {
+		return err
+	}
+
+	if fileInfo.Size() == 0 {
+		return nil
+	}
 
 	// Sync data before rotating the file
 	if err := s.flushAndSync(); err != nil {

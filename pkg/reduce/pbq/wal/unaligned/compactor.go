@@ -61,6 +61,23 @@ func NewCompactor(partitionId *partition.ID, storeDataPath string, storeEventsPa
 		compWriteOffset:    0,
 	}
 
+	// Create wal dir if not exist
+	var err error
+	if _, err = os.Stat(c.storeDataPath); os.IsNotExist(err) {
+		err = os.Mkdir(c.storeDataPath, 0755)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Create event dir if not exist
+	if _, err = os.Stat(c.storeEventsPath); os.IsNotExist(err) {
+		err = os.Mkdir(c.storeEventsPath, 0755)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// open the first compaction file to write to
 	if err := c.openCompactionFile(); err != nil {
 		return nil, err
@@ -77,9 +94,29 @@ func NewCompactor(partitionId *partition.ID, storeDataPath string, storeEventsPa
 func (c *compactor) Start(ctx context.Context) error {
 	// in case of incomplete compaction we should compact the data files
 	// before starting the compactor
-	if err := c.compact(ctx); err != nil {
+	// get all the events files
+	eventFiles, err := filesInDir(c.storeEventsPath)
+	if err != nil {
 		return err
 	}
+
+	// there maybe some events which were not compacted
+	// could happen if the compactor was stopped abruptly
+	// so we should compact those before replaying persisted
+	// messages
+	if len(eventFiles) != 0 {
+		if err = c.compact(ctx, eventFiles); err != nil {
+			return err
+		}
+		// rotate the compaction file because we need to first replay the pending messages
+		// if we don't rotate the file, the file name will have "current" in it and it
+		// will not be considered for replay
+		err = c.rotateCompactionFile()
+		if err != nil {
+			return err
+		}
+	}
+
 	go c.keepCompacting(ctx)
 	return nil
 }
@@ -115,9 +152,13 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-compTimer.C:
-			err := c.compact(ctx)
+			// get all the events files
+			eventFiles, _ := filesInDir(c.storeEventsPath)
+			err := c.compact(ctx, eventFiles)
 			// TODO: retry
-			log.Println("compaction error - ", err.Error())
+			if err != nil {
+				log.Println("compaction error - ", err.Error())
+			}
 		}
 	}
 
@@ -125,26 +166,30 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 
 // compact reads all the events file and constructs the compaction key map
 // and then compacts the data files based on the compaction key map
-func (c *compactor) compact(ctx context.Context) error {
-	// get all the events files
-	eventFiles, _ := filesInDir(c.storeEventsPath)
+func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error {
+	startTime := time.Now()
 	// build the compaction key map
 	c.buildCompactionKeyMap(eventFiles)
 	// compact the data files based on the compaction key map
 
-	err := c.compactDataFiles(ctx)
+	// if there are no events to compact, return
+	if len(c.compactKeyMap) == 0 {
+		return nil
+	}
 
+	err := c.compactDataFiles(ctx)
 	if err != nil {
 		return err
 	}
 
 	// delete the events files
 	for _, eventFile := range eventFiles {
-		if err := os.Remove(filepath.Join(c.storeEventsPath, eventFile.Name())); err != nil {
+		if err = os.Remove(filepath.Join(c.storeEventsPath, eventFile.Name())); err != nil {
 			return err
 		}
 	}
 
+	log.Println("Time taken for compaction - ", time.Since(startTime).Milliseconds(), "ms")
 	return nil
 }
 
@@ -197,20 +242,22 @@ func filesInDir(dirPath string) ([]os.FileInfo, error) {
 		return nil, err
 	}
 
+	var cfs []os.FileInfo
 	// ignore the files which has "current" in their file name
 	// because it will in use by the writer
 	for i := 0; i < len(files); i++ {
 		if strings.Contains(files[i].Name(), "current") {
-			files = append(files[:i], files[i+1:]...)
-			break
+			continue
 		}
+		log.Println("files in dir - ", files[i].Name())
+		cfs = append(cfs, files[i])
 	}
 
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].ModTime().Before(files[j].ModTime())
+	sort.Slice(cfs, func(i, j int) bool {
+		return cfs[i].ModTime().Before(cfs[j].ModTime())
 	})
 
-	return files, nil
+	return cfs, nil
 }
 
 // compactDataFiles compacts the data files
@@ -224,6 +271,7 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 
 	// iterate over all the data files and compact them
 	for _, dataFile := range dataFiles {
+		log.Println("compacting file - ", dataFile.Name(), " and size - ", dataFile.Size())
 		if err := c.compactFile(dataFile.Name()); err != nil {
 			return err
 		}
@@ -236,7 +284,6 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 // it copies the messages from the data file to the compaction file if the message should not be deleted
 // and deletes the data file after compaction
 func (c *compactor) compactFile(fileName string) error {
-	log.Println("compacting file - ", fileName)
 	// open the data file (read only)
 	dp, err := os.Open(filepath.Join(c.storeDataPath, fileName))
 	if err != nil {
