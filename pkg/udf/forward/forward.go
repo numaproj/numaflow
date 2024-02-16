@@ -356,7 +356,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 					publisher.PublishWatermark(processorWM, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is no longer idling
-					isdf.idleManager.Reset(0, isdf.toBuffers[toVertexName][index].GetName())
+					isdf.idleManager.Reset(isdf.fromBufferPartition.GetPartitionIdx(), isdf.toBuffers[toVertexName][index].GetName())
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
 			}
