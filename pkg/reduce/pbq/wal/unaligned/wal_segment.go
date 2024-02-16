@@ -231,8 +231,11 @@ func (s *unalignedWAL) PartitionID() partition.ID {
 }
 
 func (s *unalignedWAL) openReadFile() error {
+	if len(s.files) == 0 {
+		return nil
+	}
 	// Open the first file in the list
-	currFile, err := os.OpenFile(s.files[0].Name(), os.O_RDONLY, 0644)
+	currFile, err := os.OpenFile(filepath.Join(s.storeDataPath, s.files[0].Name()), os.O_RDONLY, 0644)
 	if err != nil {
 		return err
 	}
