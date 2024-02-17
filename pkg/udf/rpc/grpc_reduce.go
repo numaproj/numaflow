@@ -37,11 +37,17 @@ import (
 
 // GRPCBasedReduce is a reduce applier that uses gRPC client to invoke the reduce UDF. It implements the applier.ReduceApplier interface.
 type GRPCBasedReduce struct {
-	client reducer.Client
+	client        reducer.Client
+	vertexName    string
+	vertexReplica int32
 }
 
-func NewUDSgRPCBasedReduce(client reducer.Client) *GRPCBasedReduce {
-	return &GRPCBasedReduce{client: client}
+func NewUDSgRPCBasedReduce(client reducer.Client, vertexName string, vertexReplica int32) *GRPCBasedReduce {
+	return &GRPCBasedReduce{
+		client:        client,
+		vertexName:    vertexName,
+		vertexReplica: vertexReplica,
+	}
 }
 
 // IsHealthy checks if the map udf is healthy.
@@ -136,6 +142,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 		}
 	}()
 
+	index := 0
 	// wait for the reduceFn to finish
 	for {
 		select {
@@ -146,6 +153,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 		case result = <-responseCh:
 			taggedMessages := make([]*isb.WriteMessage, 0)
 			for _, response := range result.GetResults() {
+				index++
 				keys := response.Keys
 				taggedMessage := &isb.WriteMessage{
 					Message: isb.Message{
@@ -155,6 +163,7 @@ func (u *GRPCBasedReduce) ApplyReduce(ctx context.Context, partitionID *partitio
 								IsLate:    false,
 							},
 							Keys: keys,
+							ID:   fmt.Sprintf("%s-%d-%s-%d", u.vertexName, u.vertexReplica, partitionID.String(), index),
 						},
 						Body: isb.Body{
 							Payload: response.Value,

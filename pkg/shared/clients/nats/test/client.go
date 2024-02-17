@@ -25,6 +25,6 @@ import (
 )
 
 // JetStreamClient is used to get a testing JetStream client instance
-func JetStreamClient(t *testing.T, s *server.Server) *nats.NATSClient {
+func JetStreamClient(t *testing.T, s *server.Server) *nats.Client {
 	return nats.NewTestClient(t, s.ClientURL())
 }

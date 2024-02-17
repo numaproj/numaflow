@@ -38,7 +38,7 @@ type jetStreamWriter struct {
 	partitionIdx int32
 	stream       string
 	subject      string
-	client       *jsclient.NATSClient
+	client       *jsclient.Client
 	js           nats.JetStreamContext
 	opts         *writeOptions
 	isFull       *atomic.Bool
@@ -46,7 +46,7 @@ type jetStreamWriter struct {
 }
 
 // NewJetStreamBufferWriter is used to provide a new instance of JetStreamBufferWriter
-func NewJetStreamBufferWriter(ctx context.Context, client *jsclient.NATSClient, name, stream, subject string, partitionIdx int32, opts ...WriteOption) (isb.BufferWriter, error) {
+func NewJetStreamBufferWriter(ctx context.Context, client *jsclient.Client, name, stream, subject string, partitionIdx int32, opts ...WriteOption) (isb.BufferWriter, error) {
 	o := defaultWriteOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -244,6 +244,9 @@ func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message,
 }
 
 func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, errs []error, metricsLabels map[string]string) ([]isb.Offset, []error) {
+	defer func(t time.Time) {
+		isbWriteTime.With(metricsLabels).Observe(float64(time.Since(t).Microseconds()))
+	}(time.Now())
 	var writeOffsets = make([]isb.Offset, len(messages))
 	wg := new(sync.WaitGroup)
 	for index, msg := range messages {
@@ -259,7 +262,13 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 				Subject: jw.subject,
 				Data:    payload,
 			}
-			if pubAck, err := jw.js.PublishMsg(m, nats.MsgId(message.Header.ID), nats.AckWait(2*time.Second)); err != nil { // nats.MsgId() is for exactly-once writing
+			pubOpts := []nats.PubOpt{nats.AckWait(2 * time.Second)}
+			// nats.MsgId() is for exactly-once writing
+			// we don't need to set MsgId for control message
+			if message.Header.Kind != isb.WMB {
+				pubOpts = append(pubOpts, nats.MsgId(message.Header.ID))
+			}
+			if pubAck, err := jw.js.PublishMsg(m, pubOpts...); err != nil {
 				errs[idx] = err
 				isbWriteErrors.With(metricsLabels).Inc()
 			} else {

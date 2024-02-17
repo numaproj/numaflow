@@ -34,8 +34,8 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
-// NATSClient is a client for NATS server which be shared by multiple connections (reader, writer, kv, buffer management, etc.)
-type NATSClient struct {
+// Client is a client for NATS server which be shared by multiple connections (reader, writer, kv, buffer management, etc.)
+type Client struct {
 	sync.Mutex
 	nc    *nats.Conn
 	jsCtx nats.JetStreamContext
@@ -43,7 +43,7 @@ type NATSClient struct {
 }
 
 // NewNATSClient Create a new NATS client
-func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient, error) {
+func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*Client, error) {
 	log := logging.FromContext(ctx)
 	var jsCtx nats.JetStreamContext
 	opts := []nats.Option{
@@ -52,7 +52,7 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		nats.MaxReconnects(-1),
 		// every one second we will try to ping the server, if we don't get a pong back
 		// after two attempts, we will consider the connection lost and try to reconnect
-		nats.PingInterval(1 * time.Second),
+		nats.PingInterval(3 * time.Second),
 		// error handler for the connection
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
 			log.Errorw("Nats default: error occurred for subscription", zap.Error(err))
@@ -61,7 +61,7 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		nats.ClosedHandler(func(nc *nats.Conn) {
 			log.Info("Nats default: connection closed")
 		}),
-		// retry on failed connect should be true, else it wont try to reconnect during initial connect
+		// retry on failed connect should be true, else it won't try to reconnect during initial connect
 		nats.RetryOnFailedConnect(true),
 		// disconnect handler to log when we lose connection
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
@@ -73,6 +73,14 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		}),
 		// Write (and flush) timeout
 		nats.FlusherTimeout(10 * time.Second),
+
+		// If the server doesn't respond to 2 pings we will reconnect
+		nats.MaxPingsOutstanding(2),
+
+		// log when the server enters lame duck mode
+		nats.LameDuckModeHandler(func(nc *nats.Conn) {
+			log.Info("Nats default: entering lame duck mode to avoid reconnect storm")
+		}),
 	}
 
 	url, existing := os.LookupEnv(dfv1.EnvISBSvcJetStreamURL)
@@ -103,12 +111,12 @@ func NewNATSClient(ctx context.Context, natsOptions ...nats.Option) (*NATSClient
 		if err != nil {
 			return nil, fmt.Errorf("failed to create to nats jetstream context: %w", err)
 		}
-		return &NATSClient{nc: nc, jsCtx: jsCtx, log: logging.FromContext(ctx)}, nil
+		return &Client{nc: nc, jsCtx: jsCtx, log: logging.FromContext(ctx)}, nil
 	}
 }
 
 // Subscribe returns a subscription for the given subject and stream
-func (c *NATSClient) Subscribe(subject string, stream string, opts ...nats.SubOpt) (*nats.Subscription, error) {
+func (c *Client) Subscribe(subject string, stream string, opts ...nats.SubOpt) (*nats.Subscription, error) {
 	var (
 		err       error
 		jsContext nats.JetStreamContext
@@ -123,7 +131,7 @@ func (c *NATSClient) Subscribe(subject string, stream string, opts ...nats.SubOp
 }
 
 // BindKVStore lookup and bind to an existing KeyValue store and return the KeyValue interface
-func (c *NATSClient) BindKVStore(kvName string) (nats.KeyValue, error) {
+func (c *Client) BindKVStore(kvName string) (nats.KeyValue, error) {
 	var (
 		err       error
 		jsContext nats.JetStreamContext
@@ -138,7 +146,7 @@ func (c *NATSClient) BindKVStore(kvName string) (nats.KeyValue, error) {
 }
 
 // PendingForStream returns the number of pending messages for the given consumer and stream
-func (c *NATSClient) PendingForStream(consumer string, stream string) (int64, error) {
+func (c *Client) PendingForStream(consumer string, stream string) (int64, error) {
 	var (
 		err   error
 		cInfo *nats.ConsumerInfo
@@ -155,21 +163,21 @@ func (c *NATSClient) PendingForStream(consumer string, stream string) (int64, er
 }
 
 // JetStreamContext returns a new JetStreamContext
-func (c *NATSClient) JetStreamContext(opts ...nats.JSOpt) (nats.JetStreamContext, error) {
+func (c *Client) JetStreamContext(opts ...nats.JSOpt) (nats.JetStreamContext, error) {
 	return c.nc.JetStream(opts...)
 }
 
 // Close closes the NATS client
-func (c *NATSClient) Close() {
+func (c *Client) Close() {
 	c.nc.Close()
 }
 
 // NewTestClient creates a new NATS client for testing
 // only use this for testing
-func NewTestClient(t *testing.T, url string) *NATSClient {
+func NewTestClient(t *testing.T, url string) *Client {
 	nc, err := nats.Connect(url)
 	if err != nil {
 		panic(err)
 	}
-	return &NATSClient{nc: nc}
+	return &Client{nc: nc}
 }

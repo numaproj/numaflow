@@ -34,9 +34,8 @@ import (
 
 type jetStreamSvc struct {
 	pipelineName string
-
-	jsClient *jsclient.NATSClient
-	js       nats.JetStreamContext
+	jsClient     *jsclient.Client
+	js           nats.JetStreamContext
 }
 
 func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBService, error) {
@@ -51,7 +50,7 @@ func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBServic
 
 type JSServiceOption func(*jetStreamSvc) error
 
-func WithJetStreamClient(jsClient *jsclient.NATSClient) JSServiceOption {
+func WithJetStreamClient(jsClient *jsclient.Client) JSServiceOption {
 	return func(j *jetStreamSvc) error {
 		j.jsClient = jsClient
 		return nil
