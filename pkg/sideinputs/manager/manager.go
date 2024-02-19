@@ -58,7 +58,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var natsClient *jsclient.NATSClient
+	var natsClient *jsclient.Client
 	var err error
 	var siStore kvs.KVStorer
 	switch sim.isbSvcType {

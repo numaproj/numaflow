@@ -23,18 +23,18 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 type memoryStores struct {
 	storeSize    int64
-	discoverFunc func(ctx context.Context) ([]partition.ID, error)
+	discoverFunc func(ctx context.Context) ([]store.Store, error)
 	partitions   map[partition.ID]*memoryStore
 	sync.RWMutex
 }
 
-func NewMemoryStores(opts ...Option) aligned.StoreProvider {
+func NewMemoryStores(opts ...Option) store.Manager {
 	s := &memoryStores{
 		storeSize:  100000,
 		partitions: make(map[partition.ID]*memoryStore),
@@ -46,7 +46,7 @@ func NewMemoryStores(opts ...Option) aligned.StoreProvider {
 	return s
 }
 
-func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (aligned.Store, error) {
+func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.ID) (store.Store, error) {
 	ms.Lock()
 	defer ms.Unlock()
 	if memStore, ok := ms.partitions[partitionID]; ok {
@@ -65,15 +65,15 @@ func (ms *memoryStores) CreateStore(ctx context.Context, partitionID partition.I
 	return memStore, nil
 }
 
-func (ms *memoryStores) DiscoverPartitions(ctx context.Context) ([]partition.ID, error) {
+func (ms *memoryStores) DiscoverStores(ctx context.Context) ([]store.Store, error) {
 	ms.RLock()
 	defer ms.RUnlock()
 	if ms.discoverFunc == nil {
-		partitionsIds := make([]partition.ID, 0)
-		for key := range ms.partitions {
-			partitionsIds = append(partitionsIds, key)
+		s := make([]store.Store, 0)
+		for _, val := range ms.partitions {
+			s = append(s, val)
 		}
-		return partitionsIds, nil
+		return s, nil
 	}
 	return ms.discoverFunc(ctx)
 }

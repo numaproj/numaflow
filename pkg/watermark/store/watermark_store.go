@@ -69,7 +69,7 @@ func BuildInmemWatermarkStore(ctx context.Context, bucket string) (WatermarkStor
 }
 
 // BuildJetStreamWatermarkStore returns a JetStream WatermarkStore instance
-func BuildJetStreamWatermarkStore(ctx context.Context, bucket string, client *jsclient.NATSClient) (WatermarkStore, error) {
+func BuildJetStreamWatermarkStore(ctx context.Context, bucket string, client *jsclient.Client) (WatermarkStore, error) {
 	// build heartBeat store
 	hbKVName := JetStreamProcessorKVName(bucket)
 	hbStore, err := jetstream.NewKVJetStreamKVStore(ctx, hbKVName, client)

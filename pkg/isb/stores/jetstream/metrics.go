@@ -83,3 +83,27 @@ var isbWriteTimeout = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name:      "write_timeout_total",
 	Help:      "Total number of jetstream write timeouts",
 }, []string{"buffer"})
+
+// isbWriteTime is a histogram to Observe isb write time for a buffer
+var isbWriteTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Subsystem: "isb_jetstream",
+	Name:      "write_time_total",
+	Help:      "Processing times of Writes for jetstream",
+	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*2, 10),
+}, []string{"buffer"})
+
+// isbReadTime is a histogram to Observe isb read time for a buffer
+var isbReadTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Subsystem: "isb_jetstream",
+	Name:      "read_time_total",
+	Help:      "Processing times of reads for jetstream",
+	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*2, 10),
+}, []string{"buffer"})
+
+// isbAckTime is a histogram to Observe isb ack time for a buffer
+var isbAckTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Subsystem: "isb_jetstream",
+	Name:      "ack_time_total",
+	Help:      "Processing times of acks for jetstream",
+	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*2, 10),
+}, []string{"buffer"})

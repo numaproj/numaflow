@@ -30,8 +30,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
-const ()
-
 // client contains the grpc connection and the grpc client.
 type client struct {
 	conn    *grpc.ClientConn

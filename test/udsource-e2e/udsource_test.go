@@ -75,11 +75,15 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string) {
 	// such a large amount of data that the redis sink is not able to handle it, it breaks with OOM error
 
 	// the user-defined simple source sends the read index of the message as the message content
-	// verify the sink get the first batch of data
-	w.Expect().VertexPodLogContains("out", "0")
-	w.Expect().VertexPodLogContains("out", "1")
-	// verify the sink get the second batch of data
-	w.Expect().VertexPodLogContains("out", "2")
+	// verify the sink gets the first batch of data(0-499) - checking for some random numbers
+	w.Expect().VertexPodLogContains("out", "147")
+	w.Expect().VertexPodLogContains("out", "258")
+	w.Expect().VertexPodLogContains("out", "369")
+	// verify the sink get the second batch of data(500-999)
+	w.Expect().VertexPodLogContains("out", "520")
+	w.Expect().VertexPodLogContains("out", "630")
+	w.Expect().VertexPodLogContains("out", "999")
+
 }
 
 func TestUserDefinedSourceSuite(t *testing.T) {
