@@ -72,3 +72,4 @@ spec:
       to: java-split
     - from: java-split
       to: java-udsink
+
