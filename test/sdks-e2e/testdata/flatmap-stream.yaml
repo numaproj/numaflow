@@ -19,7 +19,7 @@ spec:
       udf:
         container:
           # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapstreamer/examples/flatmap_stream
-          image: quay.io/numaio/numaflow-go/map-flatmap-stream:v0.6.0
+          image: quay.io/numaio/numaflow-go/map-flatmap-stream:v0.6.1
     - name: go-udsink
       scale:
         min: 1
@@ -27,7 +27,7 @@ spec:
         udsink:
           container:
             # https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/log
-            image: quay.io/numaio/numaflow-go/sink-log:v0.6.0
+            image: quay.io/numaio/numaflow-go/sink-log:v0.6.1
     - name: go-udsink-2
       scale:
         min: 1
@@ -35,7 +35,7 @@ spec:
         udsink:
           container:
             # https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/log
-            image: quay.io/numaio/numaflow-go/sink-log:v0.6.0
+            image: quay.io/numaio/numaflow-go/sink-log:v0.6.1
 
     - name: python-split
       partitions: 3
@@ -52,7 +52,7 @@ spec:
             - python
             - example.py
           # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream
-          image: quay.io/numaio/numaflow-python/map-flatmap-stream:v0.6.0
+          image: quay.io/numaio/numaflow-python/map-flatmap-stream:v0.6.2
     - name: python-udsink
       scale:
         min: 1
@@ -63,7 +63,7 @@ spec:
               - python
               - example.py
             # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
-            image: quay.io/numaio/numaflow-python/sink-log:v0.6.0
+            image: quay.io/numaio/numaflow-python/sink-log:v0.6.2
     - name: java-split
       partitions: 3
       metadata:
@@ -76,7 +76,7 @@ spec:
       udf:
         container:
           # Split input message into an array with comma, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream
-          image: quay.io/numaio/numaflow-java/flat-map-stream:v0.6.0
+          image: quay.io/numaio/numaflow-java/flat-map-stream:v0.6.1
     - name: java-udsink
       scale:
         min: 1
@@ -84,7 +84,7 @@ spec:
         udsink:
           container:
             # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
-            image: quay.io/numaio/numaflow-java/simple-sink:v0.6.0
+            image: quay.io/numaio/numaflow-java/simple-sink:v0.6.1
   edges:
     - from: in
       to: go-split
