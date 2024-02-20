@@ -23,6 +23,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
+const PARTITION_0 = 0
+
 // idleManager manages the idle watermark whether the control message is a duplicate and also keeps track of the idle WMB's offset.
 type idleManager struct {
 	// forwarderActivePartition is a map[toPartitionName]uint64 to record if a forwarder is sending to the toPartition.

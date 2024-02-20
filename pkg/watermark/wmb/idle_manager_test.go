@@ -35,13 +35,13 @@ func TestNewIdleManager(t *testing.T) {
 	im, _ := NewIdleManager(1, 10)
 	assert.NotNil(t, im)
 	assert.True(t, im.NeedToSendCtrlMsg(toBufferName))
-	im.Update(0, toBufferName, o)
+	im.Update(PARTITION_0, toBufferName, o)
 	getOffset := im.Get(toBufferName)
 	assert.Equal(t, o.String(), getOffset.String())
 	assert.False(t, im.NeedToSendCtrlMsg(toBufferName)) // already send one ctrlMsg, skip
-	im.MarkActive(0, toBufferName)
+	im.MarkActive(PARTITION_0, toBufferName)
 	assert.False(t, im.NeedToSendCtrlMsg(toBufferName)) // forwarder is active, skip
-	im.MarkIdle(0, toBufferName)
+	im.MarkIdle(PARTITION_0, toBufferName)
 	assert.True(t, im.NeedToSendCtrlMsg(toBufferName))
 
 	type args struct {

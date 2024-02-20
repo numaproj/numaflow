@@ -379,7 +379,7 @@ func (p *processAndForward) publishWM(ctx context.Context, endTime time.Time) {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is not idling
-					p.idleManager.MarkActive(0, p.toBuffers[toVertexName][index].GetName())
+					p.idleManager.MarkActive(wmb.PARTITION_0, p.toBuffers[toVertexName][index].GetName())
 				}
 			}
 		}
@@ -392,7 +392,7 @@ func (p *processAndForward) publishWM(ctx context.Context, endTime time.Time) {
 		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
 			if !activePartition {
 				if publisher, ok := p.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, 0, p.toBuffers[toVertexName][index], publisher, p.idleManager, p.log, p.vertexName, p.pipelineName, dfv1.VertexTypeReduceUDF, p.vertexReplica, wm)
+					idlehandler.PublishIdleWatermark(ctx, wmb.PARTITION_0, p.toBuffers[toVertexName][index], publisher, p.idleManager, p.log, p.vertexName, p.pipelineName, dfv1.VertexTypeReduceUDF, p.vertexReplica, wm)
 				}
 			}
 		}
