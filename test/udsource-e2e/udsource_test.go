@@ -76,7 +76,7 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string) {
 
 	// the user-defined simple source sends the read index of the message as the message content
 	// verify the sink gets the first batch of data(0-499) - checking for some random numbers
-	w.Expect().VertexPodLogContains("out", "147")
+	w.Expect().VertexPodLogContains("out", "150")
 	w.Expect().VertexPodLogContains("out", "258")
 	w.Expect().VertexPodLogContains("out", "369")
 	// verify the sink get the second batch of data(500-999)
