@@ -133,7 +133,7 @@ outerLoop:
 	for {
 		select {
 		case err := <-errCh:
-			if errors.Is(err, ctx.Err()) {
+			if errors.Is(err, context.Canceled) {
 				return
 			}
 			if err != nil {
@@ -170,7 +170,7 @@ outerLoop:
 	for {
 		select {
 		case err := <-errCh:
-			if errors.Is(err, ctx.Err()) {
+			if errors.Is(err, context.Canceled) {
 				return
 			}
 			if err != nil {
