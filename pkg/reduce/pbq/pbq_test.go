@@ -81,7 +81,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	}()
 
 	for _, msg := range writeRequests {
-		err := pq.Write(ctx, &msg)
+		err := pq.Write(ctx, &msg, true)
 		assert.NoError(t, err)
 	}
 	pq.CloseOfBook()
@@ -148,7 +148,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	}()
 
 	for _, msg := range windowRequests {
-		err := pq.Write(ctx, &msg)
+		err := pq.Write(ctx, &msg, true)
 		assert.NoError(t, err)
 	}
 
@@ -189,7 +189,7 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	assert.NoError(t, err)
 
 	for _, req := range windowRequests {
-		err = pq.Write(ctx, &req)
+		err = pq.Write(ctx, &req, true)
 	}
 	pq.CloseOfBook()
 

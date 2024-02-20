@@ -14,17 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package test
+package reconciler
 
 import (
+	"sync"
 	"testing"
-
-	"github.com/nats-io/nats-server/v2/server"
-
-	"github.com/numaproj/numaflow/pkg/shared/clients/nats"
 )
 
-// JetStreamClient is used to get a testing JetStream client instance
-func JetStreamClient(t *testing.T, s *server.Server) *nats.Client {
-	return nats.NewTestClient(t, s.ClientURL())
+func FakeGlobalConfig(t *testing.T, isbSvcConfig *ISBSvcConfig) *GlobalConfig {
+	t.Helper()
+	return &GlobalConfig{
+		conf: &config{
+			ISBSvc: isbSvcConfig,
+		},
+		lock: new(sync.RWMutex),
+	}
 }

@@ -30,7 +30,7 @@ import (
 )
 
 // BuildFromVertexWatermarkStores creates a map of WatermarkStores for all the incoming edges of the given Vertex.
-func BuildFromVertexWatermarkStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (map[string]store.WatermarkStore, error) {
+func BuildFromVertexWatermarkStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.Client) (map[string]store.WatermarkStore, error) {
 	var wmStores = make(map[string]store.WatermarkStore)
 	vertex := vertexInstance.Vertex
 
@@ -58,7 +58,7 @@ func BuildFromVertexWatermarkStores(ctx context.Context, vertexInstance *v1alpha
 }
 
 // BuildToVertexWatermarkStores creates a map of WatermarkStore for all the to buckets of the given vertex.
-func BuildToVertexWatermarkStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (map[string]store.WatermarkStore, error) {
+func BuildToVertexWatermarkStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.Client) (map[string]store.WatermarkStore, error) {
 	var wmStores = make(map[string]store.WatermarkStore)
 	vertex := vertexInstance.Vertex
 
@@ -111,7 +111,7 @@ func BuildPublishersFromStores(ctx context.Context, vertexInstance *v1alpha1.Ver
 }
 
 // BuildSourcePublisherStores builds the watermark stores for source publisher.
-func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.NATSClient) (store.WatermarkStore, error) {
+func BuildSourcePublisherStores(ctx context.Context, vertexInstance *v1alpha1.VertexInstance, client *jsclient.Client) (store.WatermarkStore, error) {
 	if !vertexInstance.Vertex.IsASource() {
 		return nil, fmt.Errorf("not a source vertex")
 	}

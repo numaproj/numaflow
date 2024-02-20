@@ -31,7 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
-	wal2 "github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/wal"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/fs"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
@@ -108,7 +108,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to create a new reducer gRPC client: %w", err)
 		}
 
-		reduceHandler := rpc.NewUDSgRPCAlignedReduce(client)
+		reduceHandler := rpc.NewUDSgRPCAlignedReduce(u.VertexInstance.Vertex.Name, u.VertexInstance.Replica, client)
 		// Readiness check
 		if err := reduceHandler.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on udf readiness check, %w", err)
@@ -185,10 +185,14 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			return err
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		// build watermark progressors
-		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
-			// use　default no op fetcher, publisher, idleManager
-		} else {
+		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
+		if err != nil {
+			return err
+		}
+
+		// created watermark related components only if watermark is enabled
+		// otherwise no op will used
+		if !u.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			// create from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
@@ -208,10 +212,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, toVertexWmStores)
 
-			readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
-			if err != nil {
-				return err
-			}
 			idleManager = wmb.NewIdleManager(len(writers))
 		}
 	default:
@@ -286,9 +286,9 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
-	storeProvider := wal2.NewWALStores(u.VertexInstance, wal2.WithStorePath(dfv1.DefaultStorePath), wal2.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), wal2.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
+	storeManager := fs.NewFSManager(u.VertexInstance, fs.WithStorePath(dfv1.DefaultStorePath), fs.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), fs.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
 
-	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeProvider, windower.Type())
+	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeManager, windower.Type())
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)
@@ -307,7 +307,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	op := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower)
 
 	// for reduce, we read only from one partition
-	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
+	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, storeManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}

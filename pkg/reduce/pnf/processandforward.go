@@ -133,7 +133,7 @@ outerLoop:
 	for {
 		select {
 		case err := <-errCh:
-			if errors.Is(err, ctx.Err()) {
+			if errors.Is(err, context.Canceled) {
 				return
 			}
 			if err != nil {
@@ -170,7 +170,7 @@ outerLoop:
 	for {
 		select {
 		case err := <-errCh:
-			if errors.Is(err, ctx.Err()) {
+			if errors.Is(err, context.Canceled) {
 				return
 			}
 			if err != nil {
@@ -392,7 +392,7 @@ func (p *processAndForward) publishWM(ctx context.Context, endTime time.Time) {
 		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
 			if !activePartition {
 				if publisher, ok := p.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
+					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, p.log, p.vertexName, p.pipelineName, dfv1.VertexTypeReduceUDF, p.vertexReplica, wm)
 				}
 			}
 		}

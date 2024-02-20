@@ -18,6 +18,7 @@ package reconciler
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
@@ -30,6 +31,11 @@ import (
 // supposed to be populated from the configmap attached to the
 // controller manager.
 type GlobalConfig struct {
+	conf *config
+	lock *sync.RWMutex
+}
+
+type config struct {
 	Defaults *DefaultConfig `json:"defaults"`
 	ISBSvc   *ISBSvcConfig  `json:"isbsvc"`
 }
@@ -77,7 +83,27 @@ type JetStreamVersion struct {
 	StartCommand         string `json:"startCommand"`
 }
 
-func (g *GlobalConfig) GetDefaultContainerResources() corev1.ResourceRequirements {
+// Get controller scope default config
+func (g *GlobalConfig) GetDefaults() DefaultConfig {
+	g.lock.RLock()
+	defer g.lock.RUnlock()
+	if g.conf.Defaults != nil {
+		return *g.conf.Defaults
+	}
+	return DefaultConfig{}
+}
+
+// Get controller scope ISB Service config
+func (g *GlobalConfig) GetISBSvcConfig() ISBSvcConfig {
+	g.lock.RLock()
+	defer g.lock.RUnlock()
+	if g.conf.ISBSvc != nil {
+		return *g.conf.ISBSvc
+	}
+	return ISBSvcConfig{}
+}
+
+func (dc DefaultConfig) GetDefaultContainerResources() corev1.ResourceRequirements {
 	// the standard resources used by the `init` and `main` containers.
 	defaultResources := corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{},
@@ -87,12 +113,12 @@ func (g *GlobalConfig) GetDefaultContainerResources() corev1.ResourceRequirement
 		},
 	}
 
-	if g.Defaults == nil || g.Defaults.ContainerResources == "" {
+	if dc.ContainerResources == "" {
 		return defaultResources
 	}
 
 	var resourceConfig corev1.ResourceRequirements
-	err := yaml.Unmarshal([]byte(g.Defaults.ContainerResources), &resourceConfig)
+	err := yaml.Unmarshal([]byte(dc.ContainerResources), &resourceConfig)
 	if err != nil {
 		panic(fmt.Errorf("failed to unmarshal default container resources, %w", err))
 	}
@@ -100,11 +126,11 @@ func (g *GlobalConfig) GetDefaultContainerResources() corev1.ResourceRequirement
 	return resourceConfig
 }
 
-func (g *GlobalConfig) GetRedisVersion(version string) (*RedisVersion, error) {
-	if g.ISBSvc == nil || g.ISBSvc.Redis == nil || len(g.ISBSvc.Redis.Versions) == 0 {
+func (isc ISBSvcConfig) GetRedisVersion(version string) (*RedisVersion, error) {
+	if isc.Redis == nil || len(isc.Redis.Versions) == 0 {
 		return nil, fmt.Errorf("no redis configuration found")
 	}
-	for _, r := range g.ISBSvc.Redis.Versions {
+	for _, r := range isc.Redis.Versions {
 		if r.Version == version {
 			return &r, nil
 		}
@@ -112,11 +138,11 @@ func (g *GlobalConfig) GetRedisVersion(version string) (*RedisVersion, error) {
 	return nil, fmt.Errorf("no redis configuration found for %q", version)
 }
 
-func (g *GlobalConfig) GetJetStreamVersion(version string) (*JetStreamVersion, error) {
-	if g.ISBSvc.JetStream == nil || len(g.ISBSvc.JetStream.Versions) == 0 {
+func (isc ISBSvcConfig) GetJetStreamVersion(version string) (*JetStreamVersion, error) {
+	if isc.JetStream == nil || len(isc.JetStream.Versions) == 0 {
 		return nil, fmt.Errorf("no jetstream configuration found")
 	}
-	for _, r := range g.ISBSvc.JetStream.Versions {
+	for _, r := range isc.JetStream.Versions {
 		if r.Version == version {
 			return &r, nil
 		}
@@ -133,17 +159,26 @@ func LoadConfig(onErrorReloading func(error)) (*GlobalConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load configuration file. %w", err)
 	}
-	r := &GlobalConfig{}
-	err = v.Unmarshal(r)
+	r := &GlobalConfig{
+		lock: new(sync.RWMutex),
+	}
+	conf := &config{}
+	err = v.Unmarshal(conf)
 	if err != nil {
 		return nil, fmt.Errorf("failed unmarshal configuration file. %w", err)
 	}
+	r.conf = conf
 	v.WatchConfig()
 	v.OnConfigChange(func(e fsnotify.Event) {
-		err = v.Unmarshal(r)
+		cf := &config{}
+		err = v.Unmarshal(cf)
 		if err != nil {
 			onErrorReloading(err)
+			return
 		}
+		r.lock.Lock()
+		defer r.lock.Unlock()
+		r.conf = cf
 	})
 	return r, nil
 }
