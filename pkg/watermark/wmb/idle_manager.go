@@ -23,6 +23,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
+// PARTITION_0 is used when it is the only partition of the buffer, and this is used only for those cases
+// where we cannot have more than one partition (e.g., Reduce vertex, Source, etc.)
 const PARTITION_0 = 0
 
 // idleManager manages the idle watermark whether the control message is a duplicate and also keeps track of the idle WMB's offset.
