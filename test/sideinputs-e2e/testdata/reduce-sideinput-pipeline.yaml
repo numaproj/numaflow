@@ -7,7 +7,7 @@ spec:
     - name: myticker
       container:
         # A reduce side input, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input
-        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:v0.0.3"
+        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:v0.0.4"
         imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
