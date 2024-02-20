@@ -47,8 +47,5 @@ func (e ApplyUDFErr) Error() string {
 
 // Is checks if the error is of the same type
 func (e ApplyUDFErr) Is(target error) bool {
-	if target.Error() == e.Error() {
-		return true
-	}
-	return false
+	return target.Error() == e.Error()
 }
