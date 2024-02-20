@@ -198,7 +198,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
-		idlehandler.PublishIdleWatermark(ctx, df.toBuffer, df.wmPublisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSink, df.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
+		idlehandler.PublishIdleWatermark(ctx, df.toBuffer.GetPartitionIdx(), df.toBuffer, df.wmPublisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSink, df.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 		return
 	}
 
@@ -284,7 +284,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	if len(writeOffsets) > 0 {
 		df.wmPublisher.PublishWatermark(processorWM, nil, int32(0))
 		// reset because the toBuffer is no longer idling
-		df.idleManager.Reset(df.toBuffer.GetName())
+		df.idleManager.MarkActive(df.fromBufferPartition.GetPartitionIdx(), df.toBuffer.GetName())
 	}
 
 	err = df.ackFromBuffer(ctx, readOffsets)
