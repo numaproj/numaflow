@@ -2,7 +2,9 @@ package unaligned
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -59,7 +61,7 @@ func TestCompactor(t *testing.T) {
 	assert.NotEmpty(t, files)
 
 	// create compactor with the data and event directories
-	c, err := NewCompactor(&pid, dataDir, eventDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	c, err := NewCompactor(ctx, &pid, eventDir, dataDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
 	assert.NoError(t, err)
 
 	err = c.Start(ctx)
@@ -90,7 +92,7 @@ func TestCompactor(t *testing.T) {
 	for {
 		msg, _, err := d.decodeMessage(file)
 		if err != nil {
-			if err.Error() == "EOF" {
+			if errors.Is(err, io.EOF) {
 				break
 			} else {
 				assert.NoError(t, err)
@@ -145,7 +147,7 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	assert.NotEmpty(t, files)
 
 	// create compactor with the data and event directories
-	c, err := NewCompactor(&pid, dataDir, eventDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	c, err := NewCompactor(ctx, &pid, eventDir, dataDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
 	assert.NoError(t, err)
 
 	err = c.Start(ctx)
@@ -251,4 +253,60 @@ func TestFilesInDir(t *testing.T) {
 	files, err = filesInDir(dir)
 	assert.NoError(t, err)
 	assert.Len(t, files, 0)
+}
+
+func TestCompactor_ContextClose(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	dataDir := t.TempDir()
+
+	pid := window.SharedUnalignedPartition
+	// write some data files
+	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(dataDir))
+	assert.NoError(t, err)
+
+	// create read messages
+	readMessages := testutils.BuildTestReadMessagesIntOffset(300, time.UnixMilli(60000))
+
+	// write the messages
+	for _, readMessage := range readMessages {
+		err = s.Write(&readMessage)
+		assert.NoError(t, err)
+	}
+
+	eventDir := t.TempDir()
+	/// write some delete events
+	tracker, err := NewGCEventsTracker(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	assert.NoError(t, err)
+
+	ts := time.UnixMilli(60000)
+	windows := buildTestWindows(ts, 10, time.Second*10)
+	for _, timedWindow := range windows {
+		err = tracker.TrackGCEvent(timedWindow)
+		assert.NoError(t, err)
+	}
+
+	err = s.Close()
+	assert.NoError(t, err)
+	err = tracker.Close()
+	assert.NoError(t, err)
+
+	// create compactor with the data and event directories
+	c, err := NewCompactor(ctx, &pid, eventDir, dataDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	assert.NoError(t, err)
+
+	err = c.Start(ctx)
+	assert.NoError(t, err)
+
+	cancel()
+	files, _ := filesInDir(dataDir)
+	for _, file := range files {
+		println(file.Name())
+	}
+	time.Sleep(3 * time.Second)
+	err = c.Stop()
+	if err != nil {
+		println(err.Error())
+	}
+	assert.NoError(t, err)
 }

@@ -70,7 +70,7 @@ func (d *decoder) decodeMessage(buf io.Reader) (*isb.ReadMessage, string, error)
 	}
 
 	// read the key
-	key := make([]rune, entryHeader.KeyLen)
+	key := make([]byte, entryHeader.KeyLen)
 	err = binary.Read(buf, binary.LittleEndian, &key)
 	if err != nil {
 		return nil, "", err
@@ -109,7 +109,7 @@ func (d *decoder) decodeDeletionMessage(buf io.Reader) (*deletionMessage, int64,
 	dms.Slot = string(slot)
 
 	// read the key
-	var key = make([]rune, dMessageHeader.KLen)
+	var key = make([]byte, dMessageHeader.KLen)
 	if err := binary.Read(buf, binary.LittleEndian, key); err != nil {
 		return nil, 0, err
 	}

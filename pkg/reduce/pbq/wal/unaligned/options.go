@@ -64,6 +64,13 @@ func WithGCTrackerSyncDuration(maxDuration time.Duration) GCTrackerOption {
 	}
 }
 
+// WithGCTrackerRotationEventsCount sets the rotation events count for the GC tracker
+func WithGCTrackerRotationEventsCount(count int) GCTrackerOption {
+	return func(tracker *gcEventsTracker) {
+		tracker.rotationEventsCount = count
+	}
+}
+
 type CompactorOption func(c *compactor)
 
 // WithCompactorMaxFileSize sets the max file size for the compactor

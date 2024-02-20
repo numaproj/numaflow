@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,8 +15,11 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 const (
@@ -41,10 +43,13 @@ type compactor struct {
 	ec                 *encoder
 	compactionDuration time.Duration
 	syncDuration       time.Duration
+	stopSignal         chan struct{}
+	doneCh             chan struct{}
+	log                *zap.SugaredLogger
 }
 
 // NewCompactor returns a new compactor instance
-func NewCompactor(partitionId *partition.ID, storeDataPath string, storeEventsPath string, opts ...CompactorOption) (Compactor, error) {
+func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPath string, storeDataPath string, opts ...CompactorOption) (Compactor, error) {
 
 	c := &compactor{
 		compactionDuration: dfv1.DefaultCompactionDuration,
@@ -59,6 +64,9 @@ func NewCompactor(partitionId *partition.ID, storeDataPath string, storeEventsPa
 		dc:                 newDecoder(),
 		ec:                 newEncoder(),
 		compWriteOffset:    0,
+		doneCh:             make(chan struct{}),
+		stopSignal:         make(chan struct{}),
+		log:                logging.FromContext(ctx),
 	}
 
 	// Create wal dir if not exist
@@ -79,7 +87,7 @@ func NewCompactor(partitionId *partition.ID, storeDataPath string, storeEventsPa
 	}
 
 	// open the first compaction file to write to
-	if err := c.openCompactionFile(); err != nil {
+	if err = c.openCompactionFile(); err != nil {
 		return nil, err
 	}
 
@@ -94,6 +102,7 @@ func NewCompactor(partitionId *partition.ID, storeDataPath string, storeEventsPa
 func (c *compactor) Start(ctx context.Context) error {
 	// in case of incomplete compaction we should compact the data files
 	// before starting the compactor
+
 	// get all the events files
 	eventFiles, err := filesInDir(c.storeEventsPath)
 	if err != nil {
@@ -122,21 +131,33 @@ func (c *compactor) Start(ctx context.Context) error {
 }
 
 func (c *compactor) Stop() error {
+	var err error
+
+	//send the stop signal
+	close(c.stopSignal)
+	//wait for the compactor to stop
+	<-c.doneCh
 	// flush the buffer and sync the file
-	if err := c.flushAndSync(); err != nil {
+	if err = c.flushAndSync(); err != nil {
 		return err
 	}
 
 	// Close the current data file
-	if err := c.currCompactedFile.Close(); err != nil {
+	if err = c.currCompactedFile.Close(); err != nil {
 		return err
 	}
 
+	// delete the file if it's empty
+	if c.compWriteOffset == 0 {
+		return os.Remove(c.currCompactedFile.Name())
+	}
+
 	// rename the current compaction file to the segment file
-	if err := os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.storeDataPath)); err != nil {
+	if err = os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.storeDataPath)); err != nil {
 		return err
 	}
-	return nil
+
+	return err
 }
 
 // getFilePath returns the file path for new file creation
@@ -150,14 +171,18 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			close(c.doneCh)
+			return
+		case <-c.stopSignal:
+			close(c.doneCh)
 			return
 		case <-compTimer.C:
 			// get all the events files
 			eventFiles, _ := filesInDir(c.storeEventsPath)
 			err := c.compact(ctx, eventFiles)
-			// TODO: retry
+			// TODO: retry, if its not ctx or stop signal error
 			if err != nil {
-				log.Println("compaction error - ", err.Error())
+				c.log.Errorw("Error while compacting", zap.Error(err))
 			}
 		}
 	}
@@ -167,17 +192,18 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 // compact reads all the events file and constructs the compaction key map
 // and then compacts the data files based on the compaction key map
 func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error {
-	startTime := time.Now()
-	// build the compaction key map
-	c.buildCompactionKeyMap(eventFiles)
-	// compact the data files based on the compaction key map
-
-	// if there are no events to compact, return
-	if len(c.compactKeyMap) == 0 {
+	if len(eventFiles) == 0 {
 		return nil
 	}
+	startTime := time.Now()
+	// build the compaction key map
+	err := c.buildCompactionKeyMap(eventFiles)
+	if err != nil {
+		return err
+	}
 
-	err := c.compactDataFiles(ctx)
+	// compact the data files based on the compaction key map
+	err = c.compactDataFiles(ctx)
 	if err != nil {
 		return err
 	}
@@ -189,28 +215,31 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 		}
 	}
 
-	log.Println("Time taken for compaction - ", time.Since(startTime).Milliseconds(), "ms")
+	c.log.Debugw("compaction completed", zap.Duration("duration", time.Since(startTime)))
 	return nil
 }
 
 // buildCompactionKeyMap builds the compaction key map from the event files
-func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) {
+func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 	c.compactKeyMap = make(map[string]int64)
 
 	for _, eventFile := range eventFiles {
 		// read the compact events file
 		opFile, err := os.Open(filepath.Join(c.storeEventsPath, eventFile.Name()))
 		if err != nil {
-			continue
+			return err
 		}
 
 		// iterate over all the delete events and delete the messages
 		for {
-			cEvent, _, err := c.dc.decodeDeletionMessage(opFile)
+			var cEvent *deletionMessage
+			cEvent, _, err = c.dc.decodeDeletionMessage(opFile)
 			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
-				continue
+				// close the file before returning
+				opFile.Close()
+				return err
 			}
 
 			// track the max end time for each key
@@ -222,7 +251,14 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) {
 				}
 			}
 		}
+
+		err = opFile.Close()
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // filesInDir lists all the files in the given directory except the current file
@@ -252,6 +288,10 @@ func filesInDir(dirPath string) ([]os.FileInfo, error) {
 		cfs = append(cfs, files[i])
 	}
 
+	// sort the files based on the mod time
+	// so that order of compaction is maintained
+	// when you have multiple segments to compact
+	// we should compact the oldest segment first
 	sort.Slice(cfs, func(i, j int) bool {
 		return cfs[i].ModTime().Before(cfs[j].ModTime())
 	})
@@ -262,6 +302,11 @@ func filesInDir(dirPath string) ([]os.FileInfo, error) {
 // compactDataFiles compacts the data files
 func (c *compactor) compactDataFiles(ctx context.Context) error {
 
+	// if there are no events to compact, return
+	if len(c.compactKeyMap) == 0 {
+		return nil
+	}
+
 	// get all the data files
 	dataFiles, err := filesInDir(c.storeDataPath)
 	if err != nil {
@@ -270,9 +315,18 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 
 	// iterate over all the data files and compact them
 	for _, dataFile := range dataFiles {
-		log.Println("compacting file - ", dataFile.Name(), " and size - ", dataFile.Size())
-		if err := c.compactFile(dataFile.Name()); err != nil {
-			return err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-c.stopSignal:
+			// send error, otherwise the compactor will delete
+			// the event files
+			return fmt.Errorf("compactor stopped")
+		default:
+			c.log.Debugw("compacting file", zap.String("file", dataFile.Name()))
+			if err = c.compactFile(dataFile.Name()); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -289,6 +343,11 @@ func (c *compactor) compactFile(fileName string) error {
 		return err
 	}
 
+	// close the file before returning
+	defer func(dp *os.File) {
+		_ = dp.Close()
+	}(dp)
+
 	// read and decode the unalignedWAL header
 	_, err = c.dc.decodeHeader(dp)
 	if err != nil {
@@ -299,18 +358,19 @@ func (c *compactor) compactFile(fileName string) error {
 
 	}
 
+readLoop:
 	for {
 		// read and decode the unalignedWAL message header
 		mp, err := decodeWALMessageHeader(dp)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				break // end of file reached, break the loop
+				break readLoop // end of file reached, break the loop
 			}
 			return err
 		}
 
 		// read the key
-		key := make([]rune, mp.KeyLen)
+		key := make([]byte, mp.KeyLen)
 		err = binary.Read(dp, binary.LittleEndian, &key)
 		if err != nil {
 			return err
@@ -336,14 +396,14 @@ func (c *compactor) compactFile(fileName string) error {
 		}
 
 		// write the message to the output file
-		if err := c.writeToFile(mp, string(key), payload); err != nil {
+		if err = c.writeToFile(mp, string(key), payload); err != nil {
 			return err
 		}
 
 	}
 
 	// delete the data file, since it's been compacted
-	if err := os.Remove(filepath.Join(c.storeDataPath, fileName)); err != nil {
+	if err = os.Remove(filepath.Join(c.storeDataPath, fileName)); err != nil {
 		return err
 	}
 	return nil
@@ -370,7 +430,7 @@ func (c *compactor) writeToFile(header *readMessageHeaderPreamble, key string, p
 	}
 
 	// write the key
-	if err := binary.Write(buf, binary.LittleEndian, []rune(key)); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, []byte(key)); err != nil {
 		return err
 	}
 
@@ -391,13 +451,15 @@ func (c *compactor) writeToFile(header *readMessageHeaderPreamble, key string, p
 
 	// sync the file if the sync duration is reached
 	if time.Since(c.prevSyncedTime) > c.syncDuration {
-		if err := c.flushAndSync(); err != nil {
+		if err = c.flushAndSync(); err != nil {
 			return err
 		}
 	}
 
 	if c.compWriteOffset >= c.maxFileSize {
-		_ = c.rotateCompactionFile()
+		if err = c.rotateCompactionFile(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -442,7 +504,7 @@ func (c *compactor) flushAndSync() error {
 // openCompactionFile opens a new compaction file
 func (c *compactor) openCompactionFile() error {
 	var err error
-	c.currCompactedFile, err = os.OpenFile(filepath.Join(c.storeDataPath, CurrCompacted), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	c.currCompactedFile, err = os.OpenFile(filepath.Join(c.storeDataPath, CurrCompacted), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
@@ -480,7 +542,5 @@ func (c *compactor) writeWALHeader() error {
 		return fmt.Errorf("expected to write %d, but wrote only %d, %w", len(header), wrote, err)
 	}
 
-	// Only increase the offset when we successfully write for atomicity.
-	c.compWriteOffset += int64(wrote)
 	return err
 }

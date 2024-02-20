@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
+	"log"
 	"strings"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -47,20 +48,16 @@ type deletionMessage struct {
 
 // encoder is an encoder for the unalignedWAL entries and header.
 type encoder struct {
-	buf *bytes.Buffer
 }
 
 // newEncoder returns a new encoder
 func newEncoder() *encoder {
-	return &encoder{
-		buf: &bytes.Buffer{},
-	}
+	return &encoder{}
 }
 
 // encodeHeader encodes the header of the unalignedWAL file.
 func (e *encoder) encodeHeader(id *partition.ID) ([]byte, error) {
-	e.buf.Reset()
-	buf := e.buf
+	buf := new(bytes.Buffer)
 	hp := walHeaderPreamble{
 		S:    id.Start.UnixMilli(),
 		E:    id.End.UnixMilli(),
@@ -81,7 +78,7 @@ func (e *encoder) encodeHeader(id *partition.ID) ([]byte, error) {
 
 // encodeMessage encodes the given isb.ReadMessage to a binary format.
 func (e *encoder) encodeMessage(message *isb.ReadMessage) ([]byte, error) {
-	e.buf.Reset()
+	buf := new(bytes.Buffer)
 
 	combinedKey := strings.Join(message.Keys, dfv1.KeysDelimitter)
 
@@ -95,26 +92,31 @@ func (e *encoder) encodeMessage(message *isb.ReadMessage) ([]byte, error) {
 	checksum := calculateChecksum(body)
 
 	// Prepare and encode the message header
-	if err := e.encodeWALMessageHeader(message, int64(len(body)), checksum, int32(len(combinedKey))); err != nil {
-		return nil, err // return if there is an error
+	headerBuf, err := e.encodeWALMessageHeader(message, int64(len(body)), checksum, int32(len(combinedKey)))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = e.writeToBuffer(buf, headerBuf.Bytes()); err != nil {
+		return nil, err
 	}
 
 	// Write the combinedKey to the buffer
-	if err := binary.Write(e.buf, binary.LittleEndian, []rune(combinedKey)); err != nil {
+	if err = binary.Write(buf, binary.LittleEndian, []byte(combinedKey)); err != nil {
 		return nil, err
 	}
 
 	// Write the body to the buffer
-	if err := e.writeToBuffer(e.buf, body); err != nil {
+	if err = e.writeToBuffer(buf, body); err != nil {
 		return nil, err
 	}
 
-	return e.buf.Bytes(), nil
+	return buf.Bytes(), nil
 }
 
 // encodeDeletionEvent encodes the given deletionMessage to a binary format.
 func (e *encoder) encodeDeletionEvent(message *deletionMessage) ([]byte, error) {
-	e.buf.Reset()
+	buf := new(bytes.Buffer)
 
 	cMessageHeader := deletionMessageHeaderPreamble{
 		St:   message.St,
@@ -124,21 +126,21 @@ func (e *encoder) encodeDeletionEvent(message *deletionMessage) ([]byte, error) 
 	}
 
 	// write the compact header
-	if err := binary.Write(e.buf, binary.LittleEndian, cMessageHeader); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, cMessageHeader); err != nil {
 		return nil, err
 	}
 
 	// write the slot
-	if err := binary.Write(e.buf, binary.LittleEndian, []rune(message.Slot)); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, []rune(message.Slot)); err != nil {
 		return nil, err
 	}
 
 	// write the key
-	if err := binary.Write(e.buf, binary.LittleEndian, []rune(message.Key)); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, []byte(message.Key)); err != nil {
 		return nil, err
 	}
 
-	return e.buf.Bytes(), nil
+	return buf.Bytes(), nil
 }
 
 func calculateChecksum(data []byte) uint32 {
@@ -147,11 +149,13 @@ func calculateChecksum(data []byte) uint32 {
 }
 
 // encodeWALMessageHeader encodes the WALMessage header.
-func (e *encoder) encodeWALMessageHeader(message *isb.ReadMessage, bodyLen int64, checksum uint32, keyLen int32) error {
+func (e *encoder) encodeWALMessageHeader(message *isb.ReadMessage, bodyLen int64, checksum uint32, keyLen int32) (*bytes.Buffer, error) {
+	buf := new(bytes.Buffer)
 
 	offset, err := message.ReadOffset.Sequence()
 	if err != nil {
-		return err
+		log.Println("error getting sequence from offset", err.Error())
+		return nil, err
 	}
 
 	// Prepare the header
@@ -165,8 +169,11 @@ func (e *encoder) encodeWALMessageHeader(message *isb.ReadMessage, bodyLen int64
 	}
 
 	// write the fixed values
-	return binary.Write(e.buf, binary.LittleEndian, hp)
+	if err = binary.Write(buf, binary.LittleEndian, hp); err != nil {
+		return nil, err
+	}
 
+	return buf, nil
 }
 
 // encodeWALMessageBody uses ReadMessage.Message field as the body of the unalignedWAL message, encodes the

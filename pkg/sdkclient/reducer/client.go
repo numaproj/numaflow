@@ -86,9 +86,9 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 	stream, err := c.grpcClt.ReduceFn(ctx)
 
 	if err != nil {
-		go func() {
-			errCh <- util.ToUDFErr("c.grpcClt.ReduceFn", err)
-		}()
+		go func(sErr error) {
+			errCh <- util.ToUDFErr("c.grpcClt.ReduceFn", sErr)
+		}(err)
 	}
 
 	// read from the datumStreamCh channel and send it to the server stream

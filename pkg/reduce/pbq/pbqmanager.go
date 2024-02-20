@@ -19,13 +19,11 @@ package pbq
 import (
 	"context"
 	"fmt"
-	"math"
+	"log"
 	"strconv"
 	"sync"
-	"time"
 
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
@@ -130,36 +128,41 @@ func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
 }
 
 // ShutDown for clean shut down, flushes pending messages to store and closes the store
-func (m *Manager) ShutDown(ctx context.Context) {
+func (m *Manager) ShutDown(context.Context) {
+	log.Println("Shutting down pbq manager")
 	// iterate through the map of pbq
 	// close all the pbq
 	var wg sync.WaitGroup
-	var PBQCloseBackOff = wait.Backoff{
-		Steps:    math.MaxInt,
-		Duration: 100 * time.Millisecond,
-		Factor:   1,
-		Jitter:   0.1,
-	}
+	//var PBQCloseBackOff = wait.Backoff{
+	//	Steps:    math.MaxInt,
+	//	Duration: 100 * time.Millisecond,
+	//	Factor:   1,
+	//	Jitter:   0.1,
+	//}
 
 	for _, v := range m.getPBQs() {
 		wg.Add(1)
 		go func(q *PBQ) {
 			defer wg.Done()
-			var ctxClosedErr error
-			var attempt int
-			ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, PBQCloseBackOff, func() (done bool, err error) {
-				closeErr := q.Close()
-				if closeErr != nil {
-					attempt += 1
-					m.log.Errorw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("ID", q.PartitionID), zap.Error(closeErr))
-					// exponential backoff will return if err is not nil
-					return false, nil
-				}
-				return true, nil
-			})
-			if ctxClosedErr != nil {
-				m.log.Errorw("Context closed while closing pbq", zap.Any("ID", q.PartitionID), zap.Error(ctxClosedErr))
+			closeErr := q.Close()
+			if closeErr != nil {
+				m.log.Errorw("Failed to close pbq", zap.Error(closeErr))
 			}
+			//var closedErr error
+			//var attempt int
+			//closedErr = wait.ExponentialBackoff(PBQCloseBackOff, func() (done bool, err error) {
+			//	closeErr := q.Close()
+			//	if closeErr != nil {
+			//		attempt += 1
+			//		m.log.Errorw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("ID", q.PartitionID), zap.Error(closeErr))
+			//		// exponential backoff will return if err is not nil
+			//		return false, nil
+			//	}
+			//	return true, nil
+			//})
+			//if closedErr != nil {
+			//	m.log.Errorw("Error while closing pbq", zap.Any("ID", q.PartitionID), zap.Error(closedErr))
+			//}
 		}(v)
 	}
 

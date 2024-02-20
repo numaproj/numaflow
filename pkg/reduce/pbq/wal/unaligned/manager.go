@@ -18,6 +18,7 @@ package unaligned
 
 import (
 	"context"
+	"log"
 	"os"
 	"time"
 
@@ -82,6 +83,11 @@ func (ws *fsWAL) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
 		return partitions, nil
 	} else if err != nil {
 		return nil, err
+	}
+
+	log.Println("replay files count: ", len(files))
+	for _, file := range files {
+		log.Println("replay file: ", file.Name(), " ", file.Size())
 	}
 
 	// there will only be one wal because we use shared partition

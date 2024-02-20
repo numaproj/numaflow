@@ -311,16 +311,29 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		opts = append(opts, reduce.WithAllowedLateness(allowedLateness.Duration))
 	}
 
-	gcEventsTracker, err := unaligned.NewGCEventsTracker(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create gc events tracker, %w", err)
-	}
-
-	op := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnf.WithGCEventsTracker(gcEventsTracker))
-
+	var pnfOption []pnf.Option
 	// create and start the compactor if the window type is unaligned
+	// the compactor will delete the persisted messages which belongs to the materialized window
+	// create a gc events tracker which tracks the gc events, will be used by the pnf
+	// to track the gc events and the compactor will delete the persisted messages based on the gc events
 	if windowType.Session != nil {
-		compactor, err := unaligned.NewCompactor(&window.SharedUnalignedPartition, dfv1.DefaultStorePath, dfv1.DefaultStoreEventsPath, unaligned.WithCompactionDuration(windowType.Session.Timeout.Duration))
+		gcEventsTracker, err := unaligned.NewGCEventsTracker(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create gc events tracker, %w", err)
+		}
+
+		// close the gc events tracker
+		defer func() {
+			err = gcEventsTracker.Close()
+			if err != nil {
+				log.Errorw("failed to close gc events tracker", zap.Error(err))
+			}
+			log.Info("Stopped gc events tracker")
+		}()
+
+		pnfOption = append(pnfOption, pnf.WithGCEventsTracker(gcEventsTracker), pnf.WithWindowType(window.Unaligned))
+
+		compactor, err := unaligned.NewCompactor(ctx, &window.SharedUnalignedPartition, dfv1.DefaultStoreEventsPath, dfv1.DefaultStorePath, unaligned.WithCompactionDuration(windowType.Session.Timeout.Duration))
 		if err != nil {
 			return fmt.Errorf("failed to create compactor, %w", err)
 		}
@@ -333,8 +346,12 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				log.Errorw("failed to stop compactor", zap.Error(err))
 			}
+			log.Info("Stopped compactor")
 		}(compactor)
 	}
+
+	// create the pnf manager
+	op := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfOption...)
 
 	// for reduce, we read only from one partition
 	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, walManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
@@ -345,6 +362,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	// read the persisted messages before reading the messages from ISB
 	err = dataForwarder.ReplayPersistedMessages(ctx)
 	if err != nil {
+		log.Errorw("Failed to read and process persisted messages", zap.Error(err))
 		return fmt.Errorf("failed to read and process persisted messages, %w", err)
 	}
 
@@ -358,7 +376,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}()
 
 	<-ctx.Done()
-
 	log.Info("SIGTERM, exiting...")
 	wg.Wait()
 

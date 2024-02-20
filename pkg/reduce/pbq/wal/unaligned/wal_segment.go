@@ -2,9 +2,9 @@ package unaligned
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -123,7 +123,6 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 	// encode the message
 	entry, err := s.encoder.encodeMessage(message)
 	if err != nil {
-		println("Error while encoding the message", err.Error())
 		return err
 	}
 
@@ -172,17 +171,18 @@ func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 
 		// Main loop to read messages
 		// It will break if we have read through all files
+	replayLoop:
 		for {
 			// If there's no current file being read
 			if s.currDataFp == nil {
 				// If there's no more files in the list, break
 				if len(s.files) == 0 {
-					break
+					break replayLoop
 				}
 
 				// Open the next file in the list
 				err := s.openReadFile()
-				if err != nil {
+				if err != nil && !errors.Is(err, io.EOF) {
 					errChan <- err
 					return
 				}
@@ -194,7 +194,7 @@ func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 			// If there's an error...
 			if err != nil {
 				// If end of file is reached, close file and reset file pointer
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					err = s.currDataFp.Close()
 					if err != nil {
 						errChan <- err
@@ -247,10 +247,8 @@ func (s *unalignedWAL) openReadFile() error {
 
 	pid, err := s.decoder.decodeHeader(s.currDataFp)
 	if err != nil {
-		log.Println("Error while decoding the header", err.Error())
 		return err
 	}
-	log.Println("Assigned partition ID - ", pid.String())
 	s.partitionID = pid
 
 	return err
@@ -259,9 +257,8 @@ func (s *unalignedWAL) openReadFile() error {
 // openFile opens a new data file
 func (s *unalignedWAL) openFile() error {
 	dataFilePath := filepath.Join(s.storeDataPath, CurrentSegmentName)
-
 	var err error
-	if s.currDataFp, err = os.OpenFile(dataFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644); err != nil {
+	if s.currDataFp, err = os.OpenFile(dataFilePath, os.O_WRONLY|os.O_CREATE, 0644); err != nil {
 		return err
 	}
 
@@ -285,16 +282,11 @@ func (s *unalignedWAL) rotateFile() error {
 	defer func() {
 		s.segmentCreateTime = time.Now()
 	}()
-	// check the size of the current data file before rotating
-	// if its zero we don't need to rotate
+	// check if there are any messages written to the file
+	// if not, we don't need to rotate the file
 	// can happen when there are no messages to write
 	// within the rotation duration
-	fileInfo, err := s.currDataFp.Stat()
-	if err != nil {
-		return err
-	}
-
-	if fileInfo.Size() == 0 {
+	if s.currWriteOffset == 0 {
 		return nil
 	}
 
@@ -370,7 +362,5 @@ func (s *unalignedWAL) writeWALHeader() error {
 		return fmt.Errorf("expected to write %d, but wrote only %d, %w", len(header), wrote, err)
 	}
 
-	// Only increase the offset when we successfully write for atomicity.
-	s.currWriteOffset += int64(wrote)
 	return err
 }

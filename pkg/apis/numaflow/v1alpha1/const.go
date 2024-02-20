@@ -161,9 +161,10 @@ const (
 	DefaultStoreSegmentSize        = 30 * 1024 * 1024       // Default segment size
 
 	// Default GC tracker options
-	DefaultGCTrackerRotationDuration = 20 * time.Second         // Default rotation duration for the GC tracker
-	DefaultStoreEventsPath           = PathPBQMount + "/events" // Default store path for operations
-	DefaultGCTrackerSyncDuration     = 2 * time.Second          // Default sync duration for the GC tracker
+	DefaultGCTrackerRotationDuration    = 20 * time.Second         // Default rotation duration for the GC tracker
+	DefaultStoreEventsPath              = PathPBQMount + "/events" // Default store path for operations
+	DefaultGCTrackerSyncDuration        = 2 * time.Second          // Default sync duration for the GC tracker
+	DefaultGCTrackerRotationEventsCount = 100                      // Default rotation events count for the GC tracker
 
 	// Default compactor options
 	DefaultCompactorSyncDuration = 2 * time.Second  // Default rotation duration for the compactor

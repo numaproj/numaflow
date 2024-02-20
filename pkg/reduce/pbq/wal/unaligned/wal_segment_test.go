@@ -53,7 +53,7 @@ func TestUnalignedWAL_Replay(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create read messages
-	readMessages := testutils.BuildTestReadMessagesIntOffset(100, time.UnixMilli(60000))
+	readMessages := testutils.BuildTestReadMessagesIntOffset(1000, time.UnixMilli(60000))
 
 	// write the messages
 	for _, readMessage := range readMessages {
@@ -99,6 +99,6 @@ func WithStoreOptions(path string) WALOption {
 		s.segmentSize = 1024
 		s.syncDuration = time.Second
 		s.maxBatchSize = 1024 * 50
-		s.segmentRotationDuration = 10 * time.Second
+		s.segmentRotationDuration = 3 * time.Second
 	}
 }

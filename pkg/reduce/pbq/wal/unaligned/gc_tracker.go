@@ -5,14 +5,10 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
-
-	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/window"
@@ -24,31 +20,31 @@ const (
 )
 
 type gcEventsTracker struct {
-	eventsPath       string        // dir path to the events file
-	currEventsFile   *os.File      // current events file to write to
-	eventsBufWriter  *bufio.Writer // buffer writer for the events file
-	prevSyncedTime   time.Time     // previous synced time
-	syncDuration     time.Duration // sync duration
-	encoder          *encoder      // encoder for the events file
-	rotationDuration time.Duration // rotation duration
-	stopSignal       chan struct{} // stopSignal channel
-	doneCh           chan struct{} // done channel
-	mu               sync.Mutex
+	eventsPath          string        // dir path to the events file
+	currEventsFile      *os.File      // current events file to write to
+	eventsBufWriter     *bufio.Writer // buffer writer for the events file
+	prevSyncedTime      time.Time     // previous synced time
+	syncDuration        time.Duration // sync duration
+	encoder             *encoder      // encoder for the events file
+	rotationDuration    time.Duration // rotation duration
+	rotationEventsCount int           // rotation events count
+	curEventsCount      int           // current events count
+	fileCreationTime    time.Time     // file creation time
 }
 
 // NewGCEventsTracker returns a new GC tracker instance
 func NewGCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (GCEventsTracker, error) {
 	tracker := &gcEventsTracker{
-		syncDuration:     dfv1.DefaultGCTrackerSyncDuration,
-		rotationDuration: dfv1.DefaultGCTrackerRotationDuration,
-		eventsPath:       dfv1.DefaultStoreEventsPath,
-		currEventsFile:   nil,
-		eventsBufWriter:  nil,
-		prevSyncedTime:   time.Now(),
-		encoder:          newEncoder(),
-		mu:               sync.Mutex{},
-		stopSignal:       make(chan struct{}),
-		doneCh:           make(chan struct{}),
+		syncDuration:        dfv1.DefaultGCTrackerSyncDuration,
+		rotationDuration:    dfv1.DefaultGCTrackerRotationDuration,
+		eventsPath:          dfv1.DefaultStoreEventsPath,
+		currEventsFile:      nil,
+		eventsBufWriter:     nil,
+		prevSyncedTime:      time.Now(),
+		encoder:             newEncoder(),
+		rotationEventsCount: dfv1.DefaultGCTrackerRotationEventsCount,
+		curEventsCount:      0,
+		fileCreationTime:    time.Now(),
 	}
 
 	for _, opt := range opts {
@@ -67,63 +63,30 @@ func NewGCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (GCEventsT
 	// open the events file
 	err = tracker.openEventsFile()
 
-	// keep rotating the file
-	go tracker.keepRotating(ctx)
-
 	return tracker, err
-}
-
-// keepRotating keeps rotating the events file
-func (g *gcEventsTracker) keepRotating(ctx context.Context) {
-	rotationTimer := time.NewTicker(g.rotationDuration)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-g.stopSignal:
-			close(g.doneCh)
-			return
-		case <-rotationTimer.C:
-			// rotate the file
-			if err := g.rotateEventsFile(); err != nil {
-				log.Println("Error while rotating the events file", zap.Error(err))
-			}
-		}
-	}
 }
 
 // rotateEventsFile rotates the events file and updates the current events file
 // with the new file
 func (g *gcEventsTracker) rotateEventsFile() error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+	defer func() {
+		g.curEventsCount = 0
+		g.fileCreationTime = time.Now()
+	}()
 
-	if err := g.flushAndSync(); err != nil {
+	var err error
+	if err = g.flushAndSync(); err != nil {
 		return err
-	}
-
-	// check the size of event file before rotating
-	// if its zero we don't need to rotate
-	// can happen when the watermark is not progressing
-	// and the file is not getting written
-	fileInfo, err := g.currEventsFile.Stat()
-	if err != nil {
-		return err
-	}
-
-	if fileInfo.Size() == 0 {
-		return nil
 	}
 
 	// close the current file
-	if err := g.currEventsFile.Close(); err != nil {
+	if err = g.currEventsFile.Close(); err != nil {
 		return err
 	}
 
 	// copy the events file and delete the current events file
-	if err := os.Rename(g.currEventsFile.Name(), g.getEventsFilePath()); err != nil {
-		log.Println("Error while renaming the events file", zap.Error(err))
+	if err = os.Rename(g.currEventsFile.Name(), g.getEventsFilePath()); err != nil {
+		return err
 	}
 	return g.openEventsFile()
 }
@@ -153,8 +116,10 @@ func (g *gcEventsTracker) openEventsFile() error {
 
 // TrackGCEvent tracks the GC event
 func (g *gcEventsTracker) TrackGCEvent(window window.TimedWindow) error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+
+	if g.currEventsFile == nil {
+		return fmt.Errorf("events file is not open")
+	}
 
 	dms := &deletionMessage{
 		St:   window.StartTime().UnixMilli(),
@@ -164,18 +129,27 @@ func (g *gcEventsTracker) TrackGCEvent(window window.TimedWindow) error {
 	}
 
 	// encode and write the deletion message
-	dbytes, err := g.encoder.encodeDeletionEvent(dms)
+	dBytes, err := g.encoder.encodeDeletionEvent(dms)
 	if err != nil {
 		return err
 	}
 
-	if err := binary.Write(g.eventsBufWriter, binary.LittleEndian, dbytes); err != nil {
+	if err = binary.Write(g.eventsBufWriter, binary.LittleEndian, dBytes); err != nil {
 		return err
 	}
 
 	// sync the file if the sync duration is elapsed
 	if time.Since(g.prevSyncedTime) >= g.syncDuration {
-		if err := g.flushAndSync(); err != nil {
+		if err = g.flushAndSync(); err != nil {
+			return err
+		}
+	}
+
+	// if rotation events count is reached, or rotation duration is elapsed
+	// rotate the events file
+	g.curEventsCount++
+	if g.curEventsCount >= g.rotationEventsCount || time.Since(g.fileCreationTime) >= g.rotationDuration {
+		if err = g.rotateEventsFile(); err != nil {
 			return err
 		}
 	}
@@ -194,19 +168,23 @@ func (g *gcEventsTracker) flushAndSync() error {
 
 // Close closes the tracker by flushing and syncing the current events file
 func (g *gcEventsTracker) Close() error {
-	// stop the rotation by closing the stopSignal channel
-	// and wait for the done channel to be closed
-	close(g.stopSignal)
-	<-g.doneCh
-
-	g.mu.Lock()
-	defer g.mu.Unlock()
 	if err := g.flushAndSync(); err != nil {
 		return err
 	}
 
 	if err := g.currEventsFile.Close(); err != nil {
 		return err
+	}
+
+	// if no events are written to the current events file, delete the file
+	// else rename the current events file so that it can be read by the compactor
+	// during bootup
+	if g.curEventsCount == 0 {
+		// delete the current events file if no events are written
+		if err := os.Remove(g.currEventsFile.Name()); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	// rename the current events file to the events file
