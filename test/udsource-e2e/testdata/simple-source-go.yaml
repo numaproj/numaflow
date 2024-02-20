@@ -10,7 +10,7 @@ spec:
           container:
             # A simple user-defined source for e2e testing
             # See https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcer/examples/simple_source
-            image: quay.io/numaio/numaflow-go/source-simple-source:v0.6.0
+            image: quay.io/numaio/numaflow-go/source-simple-source:v0.6.1
       limits:
         readBatchSize: 500
     - name: out
