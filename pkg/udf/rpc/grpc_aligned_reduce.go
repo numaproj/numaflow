@@ -227,6 +227,15 @@ func convertToUdfError(err error) ApplyUDFErr {
 				MainCarDown: false,
 			},
 		}
+	case sdkerr.Canceled:
+		return ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    context.Canceled.Error(),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		}
 	default:
 		return ApplyUDFErr{
 			UserUDFErr: false,

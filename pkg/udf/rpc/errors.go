@@ -44,3 +44,11 @@ func (e ApplyUDFErr) IsInternalErr() bool {
 func (e ApplyUDFErr) Error() string {
 	return fmt.Sprint(e.Message)
 }
+
+// Is checks if the error is of the same type
+func (e ApplyUDFErr) Is(target error) bool {
+	if target.Error() == e.Error() {
+		return true
+	}
+	return false
+}
