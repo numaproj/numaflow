@@ -26,6 +26,7 @@ type ErrKind int16
 const (
 	Retryable    ErrKind = iota // The error is retryable
 	NonRetryable                // The error is non-retryable
+	Canceled                    // Request canceled
 	Unknown                     // Unknown err kind
 )
 
@@ -35,6 +36,8 @@ func (ek ErrKind) String() string {
 		return "Retryable"
 	case NonRetryable:
 		return "NonRetryable"
+	case Canceled:
+		return "Canceled"
 	case Unknown:
 		return "Unknown"
 	default:
