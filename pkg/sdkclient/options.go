@@ -33,11 +33,10 @@ func (o *Options) MaxMessageSize() int {
 }
 
 // DefaultOptions returns the default options.
-func DefaultOptions(address string, serverInfoFile string) *Options {
+func DefaultOptions(address string) *Options {
 	return &Options{
-		maxMessageSize:     DefaultGRPCMaxMessageSize,
-		udsSockAddr:        address,
-		serverInfoFilePath: serverInfoFile,
+		maxMessageSize: DefaultGRPCMaxMessageSize,
+		udsSockAddr:    address,
 	}
 }
 

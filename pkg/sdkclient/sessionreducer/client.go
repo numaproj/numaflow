@@ -26,7 +26,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -38,7 +37,7 @@ type client struct {
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(sdkclient.SessionReduceAddr, sdkserverinfo.SessionReduceServerInfoFile)
+	var opts = sdkclient.DefaultOptions(sdkclient.SessionReduceAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

@@ -12,7 +12,6 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/info"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -24,7 +23,7 @@ type client struct {
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (*client, error) {
-	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr, sdkserverinfo.SideInputServerInfoFile)
+	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)

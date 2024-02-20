@@ -27,7 +27,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -38,7 +37,7 @@ type client struct {
 }
 
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(sdkclient.SourceAddr, sdkserverinfo.SourceServerInfoFile)
+	var opts = sdkclient.DefaultOptions(sdkclient.SourceAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
