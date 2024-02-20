@@ -32,7 +32,7 @@ spec:
             - python
             - example.py
           # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/map/flatmap
-          image: quay.io/numaio/numaflow-python/map-flatmap:v0.6.2
+          image: quay.io/numaio/numaflow-python/map-flatmap:v0.6.1
     - name: python-udsink
       scale:
         min: 1
@@ -43,7 +43,7 @@ spec:
             - python
             - example.py
             # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
-            image: quay.io/numaio/numaflow-python/sink-log:v0.6.2
+            image: quay.io/numaio/numaflow-python/sink-log:v0.6.1
     - name: java-split
       scale:
         min: 1
