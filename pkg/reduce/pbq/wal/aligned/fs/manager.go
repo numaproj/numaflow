@@ -45,9 +45,9 @@ type fsManager struct {
 // NewFSManager is a FileSystem WAL Manager.
 func NewFSManager(vertexInstance *dfv1.VertexInstance, opts ...Option) wal.Manager {
 	s := &fsManager{
-		storePath:    dfv1.DefaultStorePath,
-		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
-		syncDuration: dfv1.DefaultStoreSyncDuration,
+		storePath:    dfv1.DefaultWALPath,
+		maxBatchSize: dfv1.DefaultWALMaxSyncSize,
+		syncDuration: dfv1.DefaultWALSyncDuration,
 		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
 		vertexName:   vertexInstance.Vertex.Spec.AbstractVertex.Name,
 		replicaIndex: vertexInstance.Replica,

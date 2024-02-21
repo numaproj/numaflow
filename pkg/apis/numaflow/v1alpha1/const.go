@@ -153,23 +153,23 @@ const (
 	// PVC mount path for PBQ
 	PathPBQMount = "/var/numaflow/pbq"
 
-	// Default persistent store options
-	DefaultStoreSyncDuration       = 2 * time.Second        // Default sync duration for pbq
-	DefaultStoreMaxBufferSize      = 5 * 1024 * 1024        // Default buffer size for pbq in bytes
-	DefaultStorePath               = PathPBQMount + "/wals" // Default store path
-	DefaultSegmentRotationDuration = 20 * time.Second       // Default segment rotation duration
-	DefaultStoreSegmentSize        = 30 * 1024 * 1024       // Default segment size
+	// Default WAL options
+	DefaultWALSyncDuration            = 2 * time.Second        // Default sync duration for pbq
+	DefaultWALMaxSyncSize             = 5 * 1024 * 1024        // Default size to wait for an explicit sync
+	DefaultWALPath                    = PathPBQMount + "/wals" // Default store path
+	DefaultWALSegmentRotationDuration = 20 * time.Second       // Default segment rotation duration
+	DefaultWALSegmentSize             = 30 * 1024 * 1024       // Default segment size
 
-	// Default GC tracker options
-	DefaultGCTrackerRotationDuration    = 20 * time.Second         // Default rotation duration for the GC tracker
-	DefaultStoreEventsPath              = PathPBQMount + "/events" // Default store path for operations
-	DefaultGCTrackerSyncDuration        = 2 * time.Second          // Default sync duration for the GC tracker
-	DefaultGCTrackerRotationEventsCount = 100                      // Default rotation events count for the GC tracker
+	// Default GC-events WAL options
+	DefaultGCEventsWALRotationDuration    = 20 * time.Second         // Default rotation duration for the GC tracker
+	DefaultGCEventsWALEventsPath          = PathPBQMount + "/events" // Default store path for operations
+	DefaultGCEventsWALSyncDuration        = 2 * time.Second          // Default sync duration for the GC tracker
+	DefaultGCEventsWALRotationEventsCount = 100                      // Default rotation events count for the GC tracker
 
-	// Default compactor options
-	DefaultCompactorSyncDuration = 2 * time.Second  // Default rotation duration for the compactor
-	DefaultCompactorMaxFileSize  = 20 * 1024 * 1024 // Default max file size for the compactor
-	DefaultCompactionDuration    = 20 * time.Second // Default compaction duration
+	// Default WAL Compactor options
+	DefaultWALCompactorSyncDuration = 2 * time.Second  // Default sync duration for the compactor
+	DefaultWALCompactorMaxFileSize  = 30 * 1024 * 1024 // Default max file size for the compactor
+	DefaultWALCompactionDuration    = 20 * time.Second // Default compaction duration
 
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"

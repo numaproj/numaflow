@@ -64,7 +64,7 @@ func Test_writeReadHeader(t *testing.T) {
 	fmt.Println(fName)
 	assert.NoError(t, err)
 
-	openWAL, err := NewAlignedWriteOnlyWAL(&id, fName, dfv1.DefaultStoreMaxBufferSize, dfv1.DefaultStoreSyncDuration, "testPipeline", "testVertex", 0)
+	openWAL, err := NewAlignedWriteOnlyWAL(&id, fName, dfv1.DefaultWALMaxSyncSize, dfv1.DefaultWALSyncDuration, "testPipeline", "testVertex", 0)
 	assert.NoError(t, err)
 	// we have already read the header in OpenWAL
 	_, err = openWAL.(*alignedWAL).readWALHeader()
@@ -347,7 +347,7 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 	tmp := t.TempDir()
 	stores := &fsManager{
 		storePath:    tmp,
-		maxBatchSize: dfv1.DefaultStoreMaxBufferSize,
+		maxBatchSize: dfv1.DefaultWALMaxSyncSize,
 		syncDuration: 0,
 		pipelineName: vi.Vertex.Spec.PipelineName,
 		vertexName:   vi.Vertex.Spec.AbstractVertex.Name,

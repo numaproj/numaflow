@@ -292,7 +292,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if windower.Type() == window.Aligned {
 		walManager = fs.NewFSManager(u.VertexInstance)
 	} else {
-		walManager = unaligned.NewFSManager(dfv1.DefaultStorePath, u.VertexInstance)
+		walManager = unaligned.NewFSManager(dfv1.DefaultWALPath, u.VertexInstance)
 	}
 
 	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, walManager, windower.Type())
@@ -333,7 +333,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 		pnfOption = append(pnfOption, pnf.WithGCEventsTracker(gcEventsTracker), pnf.WithWindowType(window.Unaligned))
 
-		compactor, err := unaligned.NewCompactor(ctx, &window.SharedUnalignedPartition, dfv1.DefaultStoreEventsPath, dfv1.DefaultStorePath, unaligned.WithCompactionDuration(windowType.Session.Timeout.Duration))
+		compactor, err := unaligned.NewCompactor(ctx, &window.SharedUnalignedPartition, dfv1.DefaultGCEventsWALEventsPath, dfv1.DefaultWALPath, unaligned.WithCompactionDuration(windowType.Session.Timeout.Duration))
 		if err != nil {
 			return fmt.Errorf("failed to create compactor, %w", err)
 		}

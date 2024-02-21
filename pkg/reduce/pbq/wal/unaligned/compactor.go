@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package unaligned
 
 import (
@@ -52,9 +68,9 @@ type compactor struct {
 func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPath string, storeDataPath string, opts ...CompactorOption) (Compactor, error) {
 
 	c := &compactor{
-		compactionDuration: dfv1.DefaultCompactionDuration,
-		maxFileSize:        dfv1.DefaultCompactorMaxFileSize,
-		syncDuration:       dfv1.DefaultCompactorSyncDuration,
+		compactionDuration: dfv1.DefaultWALCompactionDuration,
+		maxFileSize:        dfv1.DefaultWALCompactorMaxFileSize,
+		syncDuration:       dfv1.DefaultWALCompactorSyncDuration, // FIXME(WAL): we need to sync only at the end
 		partitionID:        partitionId,
 		storeDataPath:      storeDataPath,
 		storeEventsPath:    storeEventsPath,
