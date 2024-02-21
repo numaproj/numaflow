@@ -21,6 +21,8 @@ type client struct {
 	grpcClt sideinputpb.SideInputClient
 }
 
+var _ Client = (*client)(nil)
+
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (*client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr)
