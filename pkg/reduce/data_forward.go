@@ -29,7 +29,6 @@ package reduce
 
 import (
 	"context"
-	"log"
 	"math"
 	"strconv"
 	"sync"
@@ -202,7 +201,6 @@ func (df *DataForward) replayForUnalignedWindows(ctx context.Context, discovered
 							return nil
 						}
 
-						log.Println("Replaying message - ", msg.EventTime.UnixMilli())
 						windowRequests := df.windower.AssignWindows(msg)
 						for _, winOp := range windowRequests {
 							// we don't want to persist the messages again

@@ -24,7 +24,7 @@ func TestUnalignedWAL_Write(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create read messages
-	readMessages := testutils.BuildTestReadMessagesIntOffset(100, time.UnixMilli(60000))
+	readMessages := testutils.BuildTestReadMessagesIntOffset(100, time.UnixMilli(60000), nil)
 
 	// write the messages
 	for _, readMessage := range readMessages {
@@ -53,7 +53,7 @@ func TestUnalignedWAL_Replay(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create read messages
-	readMessages := testutils.BuildTestReadMessagesIntOffset(1000, time.UnixMilli(60000))
+	readMessages := testutils.BuildTestReadMessagesIntOffset(1000, time.UnixMilli(60000), []string{"key-1", "key-2"})
 
 	// write the messages
 	for _, readMessage := range readMessages {

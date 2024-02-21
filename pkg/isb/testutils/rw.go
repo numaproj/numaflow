@@ -38,7 +38,7 @@ type PayloadForTest struct {
 }
 
 // BuildTestWriteMessages builds test isb.Message which can be used for testing.
-func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
+func BuildTestWriteMessages(count int64, startTime time.Time, keys []string) []isb.Message {
 	var messages = make([]isb.Message, 0, count)
 	for i := int64(0); i < count; i++ {
 		tmpTime := startTime.Add(time.Duration(i) * time.Second)
@@ -53,7 +53,7 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 						EventTime: tmpTime,
 					},
 					ID:   fmt.Sprintf("%d-testVertex-0-0", i), // TODO: hard coded ID suffix ATM, make configurable if needed
-					Keys: []string{"key-1", "key-2"},
+					Keys: keys,
 				},
 				Body: isb.Body{Payload: result},
 			},
@@ -65,7 +65,7 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 
 // BuildTestWindowRequests builds test window.TimedWindowRequest which can be used for testing.
 func BuildTestWindowRequests(count int64, startTime time.Time, windowOp window.Operation) []window.TimedWindowRequest {
-	var readMessages = BuildTestReadMessages(count, startTime)
+	var readMessages = BuildTestReadMessages(count, startTime, nil)
 	var windowRequests = make([]window.TimedWindowRequest, count)
 
 	for idx, readMessage := range readMessages {
@@ -78,8 +78,8 @@ func BuildTestWindowRequests(count int64, startTime time.Time, windowOp window.O
 }
 
 // BuildTestReadMessages builds test isb.ReadMessage which can be used for testing.
-func BuildTestReadMessages(count int64, startTime time.Time) []isb.ReadMessage {
-	writeMessages := BuildTestWriteMessages(count, startTime)
+func BuildTestReadMessages(count int64, startTime time.Time, keys []string) []isb.ReadMessage {
+	writeMessages := BuildTestWriteMessages(count, startTime, keys)
 	var readMessages = make([]isb.ReadMessage, count)
 
 	for idx, writeMessage := range writeMessages {
@@ -93,8 +93,8 @@ func BuildTestReadMessages(count int64, startTime time.Time) []isb.ReadMessage {
 }
 
 // BuildTestReadMessagesIntOffset builds test isb.ReadMessage which can be used for testing.
-func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.ReadMessage {
-	writeMessages := BuildTestWriteMessages(count, startTime)
+func BuildTestReadMessagesIntOffset(count int64, startTime time.Time, keys []string) []isb.ReadMessage {
+	writeMessages := BuildTestWriteMessages(count, startTime, keys)
 	var readMessages = make([]isb.ReadMessage, count)
 
 	for idx, writeMessage := range writeMessages {

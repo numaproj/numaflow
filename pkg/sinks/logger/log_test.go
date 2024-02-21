@@ -42,7 +42,7 @@ func TestToLog_Start(t *testing.T) {
 	defer cancel()
 
 	startTime := time.Unix(1636470000, 0)
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), startTime)
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), startTime, nil)
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		AbstractVertex: dfv1.AbstractVertex{
@@ -119,7 +119,7 @@ func TestToLog_Forward(t *testing.T) {
 				"sinks.logger1": {to1},
 			}
 
-			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime, nil)
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			f, err := sinkforward.NewDataForward(vertexInstance1, fromStep, to1, fetchWatermark, publishWatermark["sinks.logger1"], wmb.NewIdleManager(1), sinkforward.WithReadBatchSize(batchSize))

@@ -223,7 +223,7 @@ func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) 
 	var messages = make([]isb.Message, 0, count)
 	var internalHashKeysMap map[string]bool
 	var internalHashKeys = make([]string, 0)
-	messages = append(messages, testutils.BuildTestWriteMessages(count, startTime)...)
+	messages = append(messages, testutils.BuildTestWriteMessages(count, startTime, nil)...)
 	for i := int64(0); i < count; i++ {
 		tmpTime := startTime.Add(time.Duration(i) * time.Minute)
 		hashKeyName := rqw.GetHashKeyName(tmpTime)
@@ -486,7 +486,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime)
+	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
 	// Add 10 messages
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
@@ -551,7 +551,7 @@ func TestSetWriteInfo(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime)
+	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
 	// Add 10 messages
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{

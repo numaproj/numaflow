@@ -155,7 +155,7 @@ func TestNewDataForward(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
-		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 		fetchWatermark := &testForwardFetcher{}
@@ -348,7 +348,7 @@ func TestWriteToBuffer(t *testing.T) {
 
 			// try to write to buffer after it is full.
 			var messageToStep []isb.Message
-			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil)
 			messageToStep = append(messageToStep, writeMessages[0:value.batchSize+1]...)
 			_, err = f.writeToBuffer(ctx, buffer, messageToStep)
 

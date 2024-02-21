@@ -26,7 +26,6 @@ type unalignedWAL struct {
 	partitionID             *partition.ID // partitionID is the partition ID for the unalignedWAL
 	currDataFp              *os.File      // currDataFp is the current data file pointer to which the data is being written
 	currWriteOffset         int64         // currWriteOffset is the current write offset
-	currReadOffset          int64         // currReadOffset is the current read offset
 	prevSyncedWOffset       int64         // prevSyncedWOffset is the previous synced write offset
 	dataBufWriter           *bufio.Writer // dataBufWriter is the buffered writer for the data file
 	prevSyncedTime          time.Time     // prevSyncedTime is the previous synced time

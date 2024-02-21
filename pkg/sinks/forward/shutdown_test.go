@@ -57,7 +57,7 @@ func TestShutDown(t *testing.T) {
 			defer cancel()
 
 			startTime := time.Unix(1636470000, 0)
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -95,7 +95,7 @@ func TestShutDown(t *testing.T) {
 			defer cancel()
 
 			startTime := time.Unix(1636470000, 0)
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",

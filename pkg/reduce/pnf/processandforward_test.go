@@ -121,7 +121,7 @@ func TestWriteToBuffer(t *testing.T) {
 				"buffer": value.buffers,
 			}
 			pf, _ := createProcessAndForwardAndOTStore(ctx, value.name, pbqManager, toBuffer)
-			windowResponse := testutils.BuildTestWriteMessages(int64(15), testStartTime)
+			windowResponse := testutils.BuildTestWriteMessages(int64(15), testStartTime, nil)
 			pf.writeToBuffer(ctx, "buffer", 0, windowResponse)
 		})
 	}

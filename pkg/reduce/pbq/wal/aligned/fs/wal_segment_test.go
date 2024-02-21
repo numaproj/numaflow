@@ -137,7 +137,7 @@ func Test_writeReadEntry(t *testing.T) {
 
 	startTime := time.Unix(1665109020, 0).In(location)
 	msgCount := 2
-	writeMessages := testutils.BuildTestReadMessagesIntOffset(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessagesIntOffset(int64(msgCount), startTime, nil)
 	message := writeMessages[0]
 	err = wal.Write(&message)
 	assert.NoError(t, err)
@@ -197,7 +197,7 @@ outerLoop:
 func Test_encodeDecodeEntry(t *testing.T) {
 	// write 1 isb messages to persisted store
 	startTime := time.Unix(1665109020, 0).In(location)
-	writeMessages := testutils.BuildTestReadMessagesIntOffset(1, startTime)
+	writeMessages := testutils.BuildTestReadMessagesIntOffset(1, startTime, nil)
 	firstMessage := writeMessages[0]
 	tests := []struct {
 		name    string
@@ -270,7 +270,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 
 	startTime := time.Unix(1665109020, 0).In(location)
 	msgCount := 2
-	writeMessages := testutils.BuildTestReadMessagesIntOffset(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessagesIntOffset(int64(msgCount), startTime, nil)
 	message := writeMessages[0]
 	err = wal.Write(&message)
 	assert.NoError(t, err)
@@ -282,7 +282,7 @@ func Test_batchSyncWithMaxBatchSize(t *testing.T) {
 	assert.NoError(t, err)
 	err = wal.Write(&message)
 	assert.NoError(t, err)
-	assert.Equal(t, int64(252), tempWAL.prevSyncedWOffset)
+	assert.Equal(t, int64(280), tempWAL.prevSyncedWOffset)
 
 	err = wal.Close()
 	assert.NoError(t, err)
@@ -362,11 +362,11 @@ func Test_batchSyncWithSyncDuration(t *testing.T) {
 
 	startTime := time.Unix(1665109020, 0).In(location)
 	msgCount := 2
-	writeMessages := testutils.BuildTestReadMessagesIntOffset(int64(msgCount), startTime)
+	writeMessages := testutils.BuildTestReadMessagesIntOffset(int64(msgCount), startTime, nil)
 	message := writeMessages[0]
 	storePrevSyncedTime := tempWAL.prevSyncedTime
 	err = wal.Write(&message)
-	assert.Equal(t, int64(145), tempWAL.prevSyncedWOffset)
+	assert.Equal(t, int64(159), tempWAL.prevSyncedWOffset)
 	assert.NotEqual(t, storePrevSyncedTime, tempWAL.prevSyncedTime)
 	assert.NoError(t, err)
 

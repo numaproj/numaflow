@@ -20,7 +20,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
@@ -28,13 +27,12 @@ import (
 )
 
 type fsWAL struct {
-	storePath               string
-	pipelineName            string
-	vertexName              string
-	replicaIndex            int32
-	fsOpts                  []WALOption
-	segmentRotationDuration time.Duration
-	activeWals              map[string]wal.WAL
+	storePath    string
+	pipelineName string
+	vertexName   string
+	replicaIndex int32
+	fsOpts       []WALOption
+	activeWals   map[string]wal.WAL
 }
 
 // NewFSManager is a FileSystem Stores Manager.

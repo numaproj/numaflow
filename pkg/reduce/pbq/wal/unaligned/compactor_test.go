@@ -29,8 +29,9 @@ func TestCompactor(t *testing.T) {
 	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(dataDir))
 	assert.NoError(t, err)
 
+	keys := []string{"key-1", "key-2"}
 	// create read messages
-	readMessages := testutils.BuildTestReadMessagesIntOffset(300, time.UnixMilli(60000))
+	readMessages := testutils.BuildTestReadMessagesIntOffset(300, time.UnixMilli(60000), keys)
 
 	// write the messages
 	for _, readMessage := range readMessages {
@@ -44,7 +45,7 @@ func TestCompactor(t *testing.T) {
 	assert.NoError(t, err)
 
 	ts := time.UnixMilli(60000)
-	windows := buildTestWindows(ts, 10, time.Second*10)
+	windows := buildTestWindows(ts, 10, time.Second*10, keys)
 	for _, timedWindow := range windows {
 		err = tracker.TrackGCEvent(timedWindow)
 		assert.NoError(t, err)
@@ -115,8 +116,9 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(dataDir))
 	assert.NoError(t, err)
 
+	keys := []string{"key-1", "key-2"}
 	// create read messages
-	readMessages := testutils.BuildTestReadMessagesIntOffset(300, time.UnixMilli(60000))
+	readMessages := testutils.BuildTestReadMessagesIntOffset(300, time.UnixMilli(60000), keys)
 
 	// write the messages
 	for _, readMessage := range readMessages {
@@ -130,7 +132,7 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	assert.NoError(t, err)
 
 	ts := time.UnixMilli(60000)
-	windows := buildTestWindows(ts, 10, time.Second*10)
+	windows := buildTestWindows(ts, 10, time.Second*10, keys)
 	for _, timedWindow := range windows {
 		err = tracker.TrackGCEvent(timedWindow)
 		assert.NoError(t, err)
@@ -265,8 +267,9 @@ func TestCompactor_ContextClose(t *testing.T) {
 	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(dataDir))
 	assert.NoError(t, err)
 
+	keys := []string{"key-1", "key-2"}
 	// create read messages
-	readMessages := testutils.BuildTestReadMessagesIntOffset(300, time.UnixMilli(60000))
+	readMessages := testutils.BuildTestReadMessagesIntOffset(300, time.UnixMilli(60000), keys)
 
 	// write the messages
 	for _, readMessage := range readMessages {
@@ -280,7 +283,7 @@ func TestCompactor_ContextClose(t *testing.T) {
 	assert.NoError(t, err)
 
 	ts := time.UnixMilli(60000)
-	windows := buildTestWindows(ts, 10, time.Second*10)
+	windows := buildTestWindows(ts, 10, time.Second*10, keys)
 	for _, timedWindow := range windows {
 		err = tracker.TrackGCEvent(timedWindow)
 		assert.NoError(t, err)

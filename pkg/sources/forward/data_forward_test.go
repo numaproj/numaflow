@@ -157,7 +157,7 @@ func TestNewDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			noOpStores := buildNoOpToVertexStores(toSteps)
@@ -245,7 +245,7 @@ func TestNewDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -395,7 +395,7 @@ func TestNewDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -559,7 +559,7 @@ func TestNewDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -707,7 +707,7 @@ func TestNewDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexStores := buildNoOpToVertexStores(toSteps)
@@ -739,7 +739,7 @@ func TestNewDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -781,7 +781,7 @@ func TestNewDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -903,7 +903,7 @@ func TestDataForwardSinglePartition(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime, nil)
 	fetchWatermark := &testForwardFetcher{}
 	toVertexStores := buildNoOpToVertexStores(toSteps)
 
@@ -957,7 +957,7 @@ func TestDataForwardMultiplePartition(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime, nil)
 	fetchWatermark := &testForwardFetcher{}
 	toVertexStores := buildNoOpToVertexStores(toSteps)
 
@@ -1090,7 +1090,7 @@ func TestWriteToBuffer(t *testing.T) {
 			// try to write to buffer after it is full.
 			var messageToStep = make(map[string][][]isb.Message)
 			messageToStep["to1"] = make([][]isb.Message, 1)
-			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil)
 			messageToStep["to1"][0] = append(messageToStep["to1"][0], writeMessages[0:value.batchSize+1]...)
 			_, err = f.writeToBuffers(ctx, messageToStep)
 

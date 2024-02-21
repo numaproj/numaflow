@@ -23,7 +23,7 @@ func TestGcEventsTracker_TrackGCEvent(t *testing.T) {
 
 	// build test windows
 	ts := time.UnixMilli(60000)
-	windows := buildTestWindows(ts, 1000, time.Second)
+	windows := buildTestWindows(ts, 100, time.Second, []string{"key-1", "key-2"})
 	for _, timedWindow := range windows {
 		err = tracker.TrackGCEvent(timedWindow)
 		time.Sleep(time.Millisecond * 10)
@@ -39,10 +39,10 @@ func TestGcEventsTracker_TrackGCEvent(t *testing.T) {
 	assert.NotEmpty(t, files)
 }
 
-func buildTestWindows(ts time.Time, count int, windowSize time.Duration) []window.TimedWindow {
+func buildTestWindows(ts time.Time, count int, windowSize time.Duration, keys []string) []window.TimedWindow {
 	var windows = make([]window.TimedWindow, 0, count)
 	for i := 0; i < count; i++ {
-		windows = append(windows, window.NewUnalignedTimedWindow(ts, ts.Add(windowSize), "slot-0", []string{"key-1", "key-2"}))
+		windows = append(windows, window.NewUnalignedTimedWindow(ts, ts.Add(windowSize), "slot-0", keys))
 		ts = ts.Add(windowSize)
 	}
 
