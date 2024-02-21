@@ -101,7 +101,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr), sdkclient.WithServerInfoFilePath(sdkserverinfo.ReduceStreamServerInfoFile))
+			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
 		} else {
 			// Wait for server info to be ready
 			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceServerInfoFile))
