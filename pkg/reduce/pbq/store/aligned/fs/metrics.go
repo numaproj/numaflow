@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package wal
+package fs
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
@@ -44,19 +44,19 @@ var entriesBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 var filesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_files_total",
-	Help:      "Total number of wal files/partitions (including both active and closed)",
+	Help:      "Total number of fs files/partitions (including both active and closed)",
 }, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
 var activeFilesCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "pbq_wal",
 	Name:      "active_wal_files_total",
-	Help:      "Total number of active wal files/partitions",
+	Help:      "Total number of active fs files/partitions",
 }, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 
 var garbageCollectingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Subsystem: "pbq_wal",
 	Name:      "wal_garbage_collecting_time",
-	Help:      "Garbage Collecting time of a pbq wal (100 to 5000 microseconds)",
+	Help:      "Garbage Collecting time of a pbq fs (100 to 5000 microseconds)",
 	Buckets:   prometheus.ExponentialBucketsRange(100, 5000, 5),
 }, []string{metrics.LabelPipeline, metrics.LabelVertex, metrics.LabelVertexReplicaIndex})
 

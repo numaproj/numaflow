@@ -38,7 +38,7 @@ import (
 
 func NewMockUDSGRPCBasedReduce(mockClient *reducemock.MockReduceClient) *GRPCBasedAlignedReduce {
 	c, _ := reducer.NewFromClient(mockClient)
-	return &GRPCBasedAlignedReduce{c}
+	return &GRPCBasedAlignedReduce{"test", 0, c}
 }
 
 func TestGRPCBasedReduce_WaitUntilReadyWithMockClient(t *testing.T) {

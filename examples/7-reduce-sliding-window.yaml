@@ -24,13 +24,13 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.5.0
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
     - name: reduce-sliding
       partitions: 2
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.5.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             sliding:

@@ -58,7 +58,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var natsClient *jsclient.NATSClient
+	var natsClient *jsclient.Client
 	var err error
 	var siStore kvs.KVStorer
 	switch sim.isbSvcType {
@@ -83,7 +83,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	}
 
 	// Wait for server info to be ready
-	serverInfo, err := sdkserverinfo.SDKServerInfo()
+	serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SideInputServerInfoFile))
 	if err != nil {
 		return err
 	}

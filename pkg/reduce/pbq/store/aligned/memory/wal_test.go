@@ -73,9 +73,26 @@ func TestMemoryStore_ReadFromStore(t *testing.T) {
 		err := memStore.Write(&msg)
 		assert.NoError(t, err)
 	}
-	var readMessages []*isb.ReadMessage
-	readMessages, _, err = memStore.Read(int64(msgCount))
-	assert.NoError(t, err)
+	msgCh, errCh := memStore.Replay()
+	readMessages := make([]*isb.ReadMessage, 0)
+outerLoop:
+	for {
+		select {
+		case msg, ok := <-msgCh:
+			if msg != nil {
+				readMessages = append(readMessages, msg)
+			}
+			if !ok {
+				break outerLoop
+			}
+		case err, ok := <-errCh:
+			if !ok {
+				break outerLoop
+			}
+			assert.NoError(t, err)
+			break outerLoop
+		}
+	}
 	// number of read messages should be equal to msgCount
 	assert.Len(t, readMessages, msgCount)
 }
@@ -93,11 +110,28 @@ func TestEmptyStore_Read(t *testing.T) {
 
 	memStore, err := NewMemoryStores(WithStoreSize(storeSize)).CreateStore(ctx, partitionID)
 	assert.NoError(t, err)
-	var eof bool
-	_, eof, err = memStore.Read(storeSize)
-	assert.NoError(t, err)
-	// since store is empty, eof will be true
-	assert.Equal(t, eof, true)
+	msgCh, errCh := memStore.Replay()
+	readMessages := make([]*isb.ReadMessage, 0)
+outerLoop:
+	for {
+		select {
+		case msg, ok := <-msgCh:
+			if msg != nil {
+				readMessages = append(readMessages, msg)
+			}
+			if !ok {
+				break outerLoop
+			}
+		case err, ok := <-errCh:
+			if !ok {
+				break outerLoop
+			}
+			assert.NoError(t, err)
+			break outerLoop
+		}
+	}
+	// since store is empty, there should not be any messages to read
+	assert.Len(t, readMessages, 0)
 
 }
 

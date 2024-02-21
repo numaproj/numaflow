@@ -55,6 +55,9 @@ func ToUDFErr(name string, err error) error {
 		udfError = sdkerr.New(sdkerr.Retryable, statusCode.Message())
 		log.Printf("failed %s: %s", name, udfError.Error())
 		return udfError
+	case codes.Canceled:
+		udfError = sdkerr.New(sdkerr.Canceled, statusCode.Message())
+		return udfError
 	default:
 		log.Printf("failed %s: %s", name, udfError.Error())
 		return udfError

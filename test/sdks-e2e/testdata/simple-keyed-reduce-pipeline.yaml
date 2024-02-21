@@ -19,7 +19,7 @@ spec:
       udf:
         container:
           # compute the sum, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce/sum
-          image: quay.io/numaio/numaflow-java/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-java/reduce-sum:v0.6.0
         groupBy:
           window:
             fixed:
