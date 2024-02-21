@@ -167,7 +167,7 @@ outerLoop:
 				p.windower.DeleteClosedWindow(response.Window)
 
 				// FIXME: retry
-				err := p.opts.gcEventsTracker.TrackGCEvent(response.Window)
+				err := p.opts.gcEventsTracker.PersistGCEvent(response.Window)
 				if err != nil {
 					p.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.Any("partitionID", p.partitionId))
 				}

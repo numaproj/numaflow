@@ -231,7 +231,7 @@ func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 		}
 
 		// once replay is done, we have to open a new file to write
-		// since we use the same wal for reading and writing
+		// since we use the same WAL for reading and writing
 		err := s.openFile()
 		if err != nil {
 			errChan <- err
@@ -242,8 +242,8 @@ func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 }
 
 // PartitionID returns the partition ID of the store
-func (s *unalignedWAL) PartitionID() partition.ID {
-	return *s.partitionID
+func (s *unalignedWAL) PartitionID() *partition.ID {
+	return s.partitionID
 }
 
 func (s *unalignedWAL) openReadFile() error {
@@ -287,7 +287,7 @@ func (s *unalignedWAL) openFile() error {
 	// reset the offset
 	s.currWriteOffset = 0
 
-	// write the wal header to the new file
+	// write the WAL header to the new file
 	return s.writeWALHeader()
 }
 

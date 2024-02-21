@@ -31,8 +31,10 @@ type Compactor interface {
 	Stop() error
 }
 
-// GCEventsTracker tracks the GC events
-type GCEventsTracker interface {
-	TrackGCEvent(window window.TimedWindow) error
+// GCEventsWAL persists the GC events of unaligned windows.
+type GCEventsWAL interface {
+	// PersistGCEvent persists the GC event of the window
+	PersistGCEvent(window window.TimedWindow) error
+	// Close closes the GCEventsWAL
 	Close() error
 }

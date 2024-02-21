@@ -36,7 +36,7 @@ const (
 	currentEventsFile = "current" + "-" + eventsFilePrefix
 )
 
-type gcEventsTracker struct {
+type gcEventsWAL struct {
 	eventsPath          string        // dir path to the events file
 	currEventsFile      *os.File      // current events file to write to
 	eventsBufWriter     *bufio.Writer // buffer writer for the events file
@@ -49,9 +49,9 @@ type gcEventsTracker struct {
 	fileCreationTime    time.Time     // file creation time
 }
 
-// NewGCEventsTracker returns a new GC tracker instance
-func NewGCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (unaligned.GCEventsTracker, error) {
-	tracker := &gcEventsTracker{
+// NewGCEventsWAL returns a new GCEventsWAL
+func NewGCEventsWAL(ctx context.Context, opts ...GCEventsWALOption) (unaligned.GCEventsWAL, error) {
+	gw := &gcEventsWAL{
 		syncDuration:        dfv1.DefaultGCEventsWALSyncDuration,
 		rotationDuration:    dfv1.DefaultGCEventsWALRotationDuration,
 		eventsPath:          dfv1.DefaultGCEventsWALEventsPath,
@@ -65,27 +65,27 @@ func NewGCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (unaligned
 	}
 
 	for _, opt := range opts {
-		opt(tracker)
+		opt(gw)
 	}
 
 	var err error
 	// Create event dir if not exist
-	if _, err = os.Stat(tracker.eventsPath); os.IsNotExist(err) {
-		err = os.Mkdir(tracker.eventsPath, 0755)
+	if _, err = os.Stat(gw.eventsPath); os.IsNotExist(err) {
+		err = os.Mkdir(gw.eventsPath, 0755)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// open the events file
-	err = tracker.openEventsFile()
+	err = gw.openEventsFile()
 
-	return tracker, err
+	return gw, err
 }
 
 // rotateEventsFile rotates the events file and updates the current events file
 // with the new file
-func (g *gcEventsTracker) rotateEventsFile() error {
+func (g *gcEventsWAL) rotateEventsFile() error {
 	defer func() {
 		g.curEventsCount = 0
 		g.fileCreationTime = time.Now()
@@ -109,12 +109,12 @@ func (g *gcEventsTracker) rotateEventsFile() error {
 }
 
 // getEventsFilePath returns the events file path
-func (g *gcEventsTracker) getEventsFilePath() string {
+func (g *gcEventsWAL) getEventsFilePath() string {
 	return filepath.Join(g.eventsPath, eventsFilePrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
 }
 
 // openEventsFile opens a new events file to write to
-func (g *gcEventsTracker) openEventsFile() error {
+func (g *gcEventsWAL) openEventsFile() error {
 	eventFilePath := filepath.Join(g.eventsPath, currentEventsFile)
 
 	var err error
@@ -131,8 +131,8 @@ func (g *gcEventsTracker) openEventsFile() error {
 	return nil
 }
 
-// TrackGCEvent tracks the GC event
-func (g *gcEventsTracker) TrackGCEvent(window window.TimedWindow) error {
+// PersistGCEvent persists the GC event of the window
+func (g *gcEventsWAL) PersistGCEvent(window window.TimedWindow) error {
 
 	if g.currEventsFile == nil {
 		return fmt.Errorf("events file is not open")
@@ -174,7 +174,7 @@ func (g *gcEventsTracker) TrackGCEvent(window window.TimedWindow) error {
 	return nil
 }
 
-func (g *gcEventsTracker) flushAndSync() error {
+func (g *gcEventsWAL) flushAndSync() error {
 	if err := g.eventsBufWriter.Flush(); err != nil {
 		return err
 	}
@@ -183,8 +183,8 @@ func (g *gcEventsTracker) flushAndSync() error {
 	return g.currEventsFile.Sync()
 }
 
-// Close closes the tracker by flushing and syncing the current events file
-func (g *gcEventsTracker) Close() error {
+// Close closes the GCEventsWAL by flushing and syncing the current events file
+func (g *gcEventsWAL) Close() error {
 	if err := g.flushAndSync(); err != nil {
 		return err
 	}

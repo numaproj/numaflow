@@ -236,7 +236,7 @@ func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWa
 	eg := errgroup.Group{}
 	df.log.Info("Number of partitions to replay: ", len(discoveredWals))
 
-	// replay the messages from each wal in parallel
+	// replay the messages from each WALs in parallel
 	for _, sr := range discoveredWals {
 		df.log.Info("Replaying messages from partition: ", sr.PartitionID().String())
 		func(ctx context.Context, s wal.WAL) {

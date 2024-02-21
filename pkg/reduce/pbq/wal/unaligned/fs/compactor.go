@@ -86,7 +86,7 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPat
 		log:                logging.FromContext(ctx),
 	}
 
-	// Create wal dir if not exist
+	// Create WAL dir if not exist
 	var err error
 	if _, err = os.Stat(c.storeDataPath); os.IsNotExist(err) {
 		err = os.Mkdir(c.storeDataPath, 0755)

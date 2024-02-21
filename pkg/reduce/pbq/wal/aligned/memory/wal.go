@@ -72,6 +72,6 @@ func (m *memoryStore) Close() error {
 	return nil
 }
 
-func (m *memoryStore) PartitionID() partition.ID {
-	return m.partitionID
+func (m *memoryStore) PartitionID() *partition.ID {
+	return &m.partitionID
 }

@@ -31,7 +31,7 @@ type WAL interface {
 	// Write writes message to the WAL.
 	Write(msg *isb.ReadMessage) error
 	// PartitionID returns the partition ID of the WAL.
-	PartitionID() partition.ID
+	PartitionID() *partition.ID
 	// Close closes WAL.
 	Close() error
 }

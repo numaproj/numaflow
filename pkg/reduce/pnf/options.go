@@ -22,14 +22,14 @@ import (
 )
 
 type options struct {
-	gcEventsTracker unaligned.GCEventsTracker
+	gcEventsTracker unaligned.GCEventsWAL
 	windowType      window.Type
 }
 
 type Option func(options *options) error
 
-// WithGCEventsTracker sets the GCEventsTracker option
-func WithGCEventsTracker(gcTracker unaligned.GCEventsTracker) Option {
+// WithGCEventsTracker sets the GCEventsWAL option
+func WithGCEventsTracker(gcTracker unaligned.GCEventsWAL) Option {
 	return func(o *options) error {
 		o.gcEventsTracker = gcTracker
 		return nil

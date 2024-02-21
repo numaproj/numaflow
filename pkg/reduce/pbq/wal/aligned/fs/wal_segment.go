@@ -154,8 +154,8 @@ func NewAlignedReadWriteWAL(filePath string,
 }
 
 // PartitionID returns the partition ID from the WAL.
-func (w *alignedWAL) PartitionID() partition.ID {
-	return *w.partitionID
+func (w *alignedWAL) PartitionID() *partition.ID {
+	return w.partitionID
 }
 
 // writeWALHeader writes the alignedWAL header to the file.

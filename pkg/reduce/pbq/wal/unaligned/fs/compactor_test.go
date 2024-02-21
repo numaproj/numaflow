@@ -57,13 +57,13 @@ func TestCompactor(t *testing.T) {
 
 	eventDir := t.TempDir()
 	/// write some delete events
-	tracker, err := NewGCEventsTracker(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
 
 	ts := time.UnixMilli(60000)
 	windows := buildTestWindows(ts, 10, time.Second*10, keys)
 	for _, timedWindow := range windows {
-		err = tracker.TrackGCEvent(timedWindow)
+		err = tracker.PersistGCEvent(timedWindow)
 		assert.NoError(t, err)
 	}
 
@@ -144,13 +144,13 @@ func TestReplay_AfterCompaction(t *testing.T) {
 
 	eventDir := t.TempDir()
 	/// write some delete events
-	tracker, err := NewGCEventsTracker(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
 
 	ts := time.UnixMilli(60000)
 	windows := buildTestWindows(ts, 10, time.Second*10, keys)
 	for _, timedWindow := range windows {
-		err = tracker.TrackGCEvent(timedWindow)
+		err = tracker.PersistGCEvent(timedWindow)
 		assert.NoError(t, err)
 	}
 
@@ -295,13 +295,13 @@ func TestCompactor_ContextClose(t *testing.T) {
 
 	eventDir := t.TempDir()
 	/// write some delete events
-	tracker, err := NewGCEventsTracker(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
 
 	ts := time.UnixMilli(60000)
 	windows := buildTestWindows(ts, 10, time.Second*10, keys)
 	for _, timedWindow := range windows {
-		err = tracker.TrackGCEvent(timedWindow)
+		err = tracker.PersistGCEvent(timedWindow)
 		assert.NoError(t, err)
 	}
 

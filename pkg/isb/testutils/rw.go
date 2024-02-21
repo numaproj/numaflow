@@ -39,6 +39,9 @@ type PayloadForTest struct {
 
 // BuildTestWriteMessages builds test isb.Message which can be used for testing.
 func BuildTestWriteMessages(count int64, startTime time.Time, keys []string) []isb.Message {
+	if keys == nil {
+		keys = []string{}
+	}
 	var messages = make([]isb.Message, 0, count)
 	for i := int64(0); i < count; i++ {
 		tmpTime := startTime.Add(time.Duration(i) * time.Second)

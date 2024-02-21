@@ -57,32 +57,32 @@ func WithSegmentSize(size int64) WALOption {
 	}
 }
 
-type GCTrackerOption func(tracker *gcEventsTracker)
+type GCEventsWALOption func(tracker *gcEventsWAL)
 
-// WithGCTrackerRotationDuration sets the rotation duration for the GC tracker
-func WithGCTrackerRotationDuration(rotationDuration time.Duration) GCTrackerOption {
-	return func(tracker *gcEventsTracker) {
+// WithGCTrackerRotationDuration sets the rotation duration for the GC events WAL
+func WithGCTrackerRotationDuration(rotationDuration time.Duration) GCEventsWALOption {
+	return func(tracker *gcEventsWAL) {
 		tracker.rotationDuration = rotationDuration
 	}
 }
 
-// WithEventsPath sets the path for the GC events
-func WithEventsPath(path string) GCTrackerOption {
-	return func(tracker *gcEventsTracker) {
+// WithEventsPath sets the path for the GC events WAL
+func WithEventsPath(path string) GCEventsWALOption {
+	return func(tracker *gcEventsWAL) {
 		tracker.eventsPath = path
 	}
 }
 
-// WithGCTrackerSyncDuration sets the sync duration for the GC tracker
-func WithGCTrackerSyncDuration(maxDuration time.Duration) GCTrackerOption {
-	return func(tracker *gcEventsTracker) {
+// WithGCTrackerSyncDuration sets the sync duration for the GC events WAL
+func WithGCTrackerSyncDuration(maxDuration time.Duration) GCEventsWALOption {
+	return func(tracker *gcEventsWAL) {
 		tracker.syncDuration = maxDuration
 	}
 }
 
-// WithGCTrackerRotationEventsCount sets the rotation events count for the GC tracker
-func WithGCTrackerRotationEventsCount(count int) GCTrackerOption {
-	return func(tracker *gcEventsTracker) {
+// WithGCTrackerRotationEventsCount sets the rotation events count for the GC events WAL
+func WithGCTrackerRotationEventsCount(count int) GCEventsWALOption {
+	return func(tracker *gcEventsWAL) {
 		tracker.rotationEventsCount = count
 	}
 }

@@ -24,7 +24,7 @@ import (
 
 type Option func(stores *memManager)
 
-// WithDiscoverer sets the discover func of memory wal manager
+// WithDiscoverer sets the discover func of memory WAL manager
 func WithDiscoverer(f func(ctx context.Context) ([]wal.WAL, error)) Option {
 	return func(stores *memManager) {
 		stores.discoverFunc = f

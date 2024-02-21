@@ -34,14 +34,14 @@ func TestGcEventsTracker_TrackGCEvent(t *testing.T) {
 		_ = os.RemoveAll(path)
 	}(tempDir)
 
-	tracker, err := NewGCEventsTracker(ctx, WithEventsPath(tempDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(tempDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
 
 	// build test windows
 	ts := time.UnixMilli(60000)
 	windows := buildTestWindows(ts, 100, time.Second, []string{"key-1", "key-2"})
 	for _, timedWindow := range windows {
-		err = tracker.TrackGCEvent(timedWindow)
+		err = tracker.PersistGCEvent(timedWindow)
 		time.Sleep(time.Millisecond * 10)
 		assert.NoError(t, err)
 	}

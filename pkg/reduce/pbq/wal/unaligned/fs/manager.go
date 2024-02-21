@@ -50,8 +50,8 @@ func NewFSManager(storePath string, vertexInstance *dfv1.VertexInstance, opts ..
 
 // CreateWAL creates the FS unalignedWAL.
 func (ws *fsWAL) CreateWAL(_ context.Context, partitionID partition.ID) (wal.WAL, error) {
-	// check if the wal is already present
-	// during crash recovery, we might have already created the wal while replaying
+	// check if the WAL is already present
+	// during crash recovery, we might have already created the WAL while replaying
 	if store, ok := ws.activeWals[partitionID.String()]; ok {
 		return store, nil
 	}
@@ -72,7 +72,7 @@ func (ws *fsWAL) CreateWAL(_ context.Context, partitionID partition.ID) (wal.WAL
 	return w, nil
 }
 
-// DiscoverWALs returns all the wals present in the storePath
+// DiscoverWALs returns all the WALs present in the storePath
 func (ws *fsWAL) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
 	partitions := make([]wal.WAL, 0)
 	files, err := filesInDir(ws.storePath)
@@ -88,7 +88,7 @@ func (ws *fsWAL) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
 		log.Println("replay file: ", file.Name(), " ", file.Size())
 	}
 
-	// there will only be one wal because we use shared partition
+	// there will only be one WAL because we use shared partition
 	// for unaligned windows
 	wl, err := NewUnalignedReadWriteWAL(ws.fsOpts...)
 	return append(partitions, wl), err

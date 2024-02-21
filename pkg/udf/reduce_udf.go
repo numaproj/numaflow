@@ -318,7 +318,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	// create a gc events tracker which tracks the gc events, will be used by the pnf
 	// to track the gc events and the compactor will delete the persisted messages based on the gc events
 	if windowType.Session != nil {
-		gcEventsTracker, err := unalignedfs.NewGCEventsTracker(ctx)
+		gcEventsTracker, err := unalignedfs.NewGCEventsWAL(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create gc events tracker, %w", err)
 		}

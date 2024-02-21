@@ -22,13 +22,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 )
 
-// noopWAL is a no-op pbq store which does not do any operation but can be safely invoked.
+// noopWAL is a no-op pbq WAL which does not do any operation but can be safely invoked.
 type noopWAL struct {
 }
 
 var _ wal.WAL = (*noopWAL)(nil)
 
-func NewPBQNoOpStore() (wal.WAL, error) {
+func NewNoOpWAL() (wal.WAL, error) {
 	return &noopWAL{}, nil
 }
 
@@ -44,6 +44,6 @@ func (p *noopWAL) Close() error {
 	return nil
 }
 
-func (p *noopWAL) PartitionID() partition.ID {
-	return partition.ID{}
+func (p *noopWAL) PartitionID() *partition.ID {
+	return nil
 }

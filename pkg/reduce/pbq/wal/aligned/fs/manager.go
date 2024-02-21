@@ -91,7 +91,7 @@ func (ws *fsManager) CreateWAL(_ context.Context, partitionID partition.ID) (wal
 	return w, nil
 }
 
-// DiscoverWALs returns all the wals present in the storePath
+// DiscoverWALs returns all the WALs present in the storePath
 func (ws *fsManager) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
 	files, err := os.ReadDir(ws.storePath)
 	if os.IsNotExist(err) {
