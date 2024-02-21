@@ -74,7 +74,7 @@ func NewAlignedWriteOnlyWAL(id *partition.ID,
 	vertexName string,
 	replica int32) (wal.WAL, error) {
 
-	wal := &alignedWAL{
+	w := &alignedWAL{
 		pipelineName:      pipelineName,
 		vertexName:        vertexName,
 		replicaIndex:      replica,
@@ -96,13 +96,13 @@ func NewAlignedWriteOnlyWAL(id *partition.ID,
 	if err != nil {
 		return nil, err
 	}
-	wal.fp = fp
-	err = wal.writeWALHeader()
+	w.fp = fp
+	err = w.writeWALHeader()
 	if err != nil {
 		return nil, err
 	}
 
-	return wal, nil
+	return w, nil
 }
 
 // NewAlignedReadWriteWAL creates a new alignedWAL instance for read-write. This will be used during boot up where we will be replaying
@@ -113,7 +113,7 @@ func NewAlignedReadWriteWAL(filePath string,
 	pipelineName string,
 	vertexName string,
 	replica int32) (wal.WAL, error) {
-	wal := &alignedWAL{
+	w := &alignedWAL{
 		pipelineName:      pipelineName,
 		vertexName:        vertexName,
 		replicaIndex:      replica,
@@ -134,25 +134,26 @@ func NewAlignedReadWriteWAL(filePath string,
 	if err != nil {
 		return nil, err
 	}
-	wal.fp = fp
+	w.fp = fp
 
 	// read the partition ID from the alignedWAL header and set it in the alignedWAL.
-	readPartition, err := wal.readWALHeader()
+	readPartition, err := w.readWALHeader()
 	if err != nil {
 		return nil, err
 	}
-	wal.partitionID = readPartition
+	w.partitionID = readPartition
 
 	// set the read up to the end of the file.
 	stat, err := os.Stat(filePath)
 	if err != nil {
 		return nil, err
 	}
-	wal.readUpTo = stat.Size()
+	w.readUpTo = stat.Size()
 
-	return wal, nil
+	return w, nil
 }
 
+// PartitionID returns the partition ID from the WAL.
 func (w *alignedWAL) PartitionID() partition.ID {
 	return *w.partitionID
 }

@@ -23,26 +23,26 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
-// WAL provides methods to read, write and delete data from the persistence store.
+// WAL provides methods to read, write and delete data from the WAL.
 type WAL interface {
 	// Replay to replay persisted messages during startup
 	// returns a channel to read messages and a channel to read errors
 	Replay() (<-chan *isb.ReadMessage, <-chan error)
-	// Write writes message to persistence store
+	// Write writes message to the WAL.
 	Write(msg *isb.ReadMessage) error
-	// PartitionID returns the partition ID of the store
+	// PartitionID returns the partition ID of the WAL.
 	PartitionID() partition.ID
-	// Close closes store
+	// Close closes WAL.
 	Close() error
 }
 
-// Manager defines the interface to manage the stores.
+// Manager defines the interface to manage the WALs.
 type Manager interface {
-	// CreateWAL returns a new wal instance.
+	// CreateWAL returns a new WAL instance.
 	CreateWAL(context.Context, partition.ID) (WAL, error)
-	// DiscoverWALs discovers all the existing wals.
-	// This is used to recover from a crash and replay all the messages from the store.
+	// DiscoverWALs discovers all the existing WALs.
+	// This is used to recover from a restart and replay all the messages from the WAL.
 	DiscoverWALs(context.Context) ([]WAL, error)
-	// DeleteWAL deletes the wal.
+	// DeleteWAL deletes the WAL.
 	DeleteWAL(partition.ID) error
 }

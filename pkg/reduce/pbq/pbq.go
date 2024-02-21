@@ -19,7 +19,6 @@ package pbq
 import (
 	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"sync"
 
@@ -106,7 +105,6 @@ func (p *PBQ) CloseOfBook() {
 func (p *PBQ) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	log.Println("closing pbq ", p.PartitionID)
 	// we need a nil check because PBQ.GC could have been invoked before close
 	if p.store != nil {
 		return p.store.Close()
