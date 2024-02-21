@@ -36,6 +36,8 @@ type client struct {
 	grpcClt sourcepb.SourceClient
 }
 
+var _ Client = (*client)(nil)
+
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SourceAddr)
 

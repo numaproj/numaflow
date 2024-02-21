@@ -35,6 +35,8 @@ type client struct {
 	grpcClt sinkpb.SinkClient
 }
 
+var _ Client = (*client)(nil)
+
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SinkAddr)
 
