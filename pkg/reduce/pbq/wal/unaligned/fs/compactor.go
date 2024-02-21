@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unaligned
+package fs
 
 import (
 	"bufio"
@@ -35,6 +35,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -65,7 +66,7 @@ type compactor struct {
 }
 
 // NewCompactor returns a new compactor instance
-func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPath string, storeDataPath string, opts ...CompactorOption) (Compactor, error) {
+func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPath string, storeDataPath string, opts ...CompactorOption) (unaligned.Compactor, error) {
 
 	c := &compactor{
 		compactionDuration: dfv1.DefaultWALCompactionDuration,

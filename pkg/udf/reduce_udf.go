@@ -32,8 +32,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/fs"
+	alignedfs "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/fs"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
+	unalignedfs "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned/fs"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
@@ -290,9 +291,9 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	var walManager wal.Manager
 	if windower.Type() == window.Aligned {
-		walManager = fs.NewFSManager(u.VertexInstance)
+		walManager = alignedfs.NewFSManager(u.VertexInstance)
 	} else {
-		walManager = unaligned.NewFSManager(dfv1.DefaultWALPath, u.VertexInstance)
+		walManager = unalignedfs.NewFSManager(dfv1.DefaultWALPath, u.VertexInstance)
 	}
 
 	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, walManager, windower.Type())
@@ -317,7 +318,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	// create a gc events tracker which tracks the gc events, will be used by the pnf
 	// to track the gc events and the compactor will delete the persisted messages based on the gc events
 	if windowType.Session != nil {
-		gcEventsTracker, err := unaligned.NewGCEventsTracker(ctx)
+		gcEventsTracker, err := unalignedfs.NewGCEventsTracker(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create gc events tracker, %w", err)
 		}
@@ -333,7 +334,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 		pnfOption = append(pnfOption, pnf.WithGCEventsTracker(gcEventsTracker), pnf.WithWindowType(window.Unaligned))
 
-		compactor, err := unaligned.NewCompactor(ctx, &window.SharedUnalignedPartition, dfv1.DefaultGCEventsWALEventsPath, dfv1.DefaultWALPath, unaligned.WithCompactionDuration(windowType.Session.Timeout.Duration))
+		compactor, err := unalignedfs.NewCompactor(ctx, &window.SharedUnalignedPartition, dfv1.DefaultGCEventsWALEventsPath, dfv1.DefaultWALPath, unalignedfs.WithCompactionDuration(windowType.Session.Timeout.Duration))
 		if err != nil {
 			return fmt.Errorf("failed to create compactor, %w", err)
 		}

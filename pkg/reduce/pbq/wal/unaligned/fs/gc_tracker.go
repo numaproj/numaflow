@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unaligned
+package fs
 
 import (
 	"bufio"
@@ -27,6 +27,7 @@ import (
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -49,7 +50,7 @@ type gcEventsTracker struct {
 }
 
 // NewGCEventsTracker returns a new GC tracker instance
-func NewGCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (GCEventsTracker, error) {
+func NewGCEventsTracker(ctx context.Context, opts ...GCTrackerOption) (unaligned.GCEventsTracker, error) {
 	tracker := &gcEventsTracker{
 		syncDuration:        dfv1.DefaultGCEventsWALSyncDuration,
 		rotationDuration:    dfv1.DefaultGCEventsWALRotationDuration,
