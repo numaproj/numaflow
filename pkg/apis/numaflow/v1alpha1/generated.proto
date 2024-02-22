@@ -1037,25 +1037,14 @@ message SASL {
 
   // SASLSCRAMSHA256 contains the sasl plain config
   // +optional
-  optional SASLSCRAMSHA scramsha256 = 4;
+  optional SASLPlain scramsha256 = 4;
 
   // SASLSCRAMSHA512 contains the sasl plain config
   // +optional
-  optional SASLSCRAMSHA scramsha512 = 5;
+  optional SASLPlain scramsha512 = 5;
 }
 
 message SASLPlain {
-  // UserSecret refers to the secret that contains the user
-  optional k8s.io.api.core.v1.SecretKeySelector userSecret = 1;
-
-  // PasswordSecret refers to the secret that contains the password
-  // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector passwordSecret = 2;
-
-  optional bool handshake = 3;
-}
-
-message SASLSCRAMSHA {
   // UserSecret refers to the secret that contains the user
   optional k8s.io.api.core.v1.SecretKeySelector userSecret = 1;
 

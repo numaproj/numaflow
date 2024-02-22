@@ -19029,35 +19029,15 @@
         },
         "scramsha256": {
           "description": "SASLSCRAMSHA256 contains the sasl plain config",
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLSCRAMSHA"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
         },
         "scramsha512": {
           "description": "SASLSCRAMSHA512 contains the sasl plain config",
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLSCRAMSHA"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
         }
       }
     },
     "io.numaproj.numaflow.v1alpha1.SASLPlain": {
-      "type": "object",
-      "required": [
-        "userSecret",
-        "handshake"
-      ],
-      "properties": {
-        "handshake": {
-          "type": "boolean"
-        },
-        "passwordSecret": {
-          "description": "PasswordSecret refers to the secret that contains the password",
-          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
-        },
-        "userSecret": {
-          "description": "UserSecret refers to the secret that contains the user",
-          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
-        }
-      }
-    },
-    "io.numaproj.numaflow.v1alpha1.SASLSCRAMSHA": {
       "type": "object",
       "required": [
         "userSecret",

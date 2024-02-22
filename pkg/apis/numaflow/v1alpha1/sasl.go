@@ -29,10 +29,10 @@ type SASL struct {
 	Plain *SASLPlain `json:"plain" protobuf:"bytes,3,opt,name=plain"`
 	// SASLSCRAMSHA256 contains the sasl plain config
 	// +optional
-	SCRAMSHA256 *SASLSCRAMSHA `json:"scramsha256" protobuf:"bytes,4,opt,name=scramsha256"`
+	SCRAMSHA256 *SASLPlain `json:"scramsha256" protobuf:"bytes,4,opt,name=scramsha256"`
 	// SASLSCRAMSHA512 contains the sasl plain config
 	// +optional
-	SCRAMSHA512 *SASLSCRAMSHA `json:"scramsha512" protobuf:"bytes,5,opt,name=scramsha512"`
+	SCRAMSHA512 *SASLPlain `json:"scramsha512" protobuf:"bytes,5,opt,name=scramsha512"`
 }
 
 // SASLType describes the SASL type
@@ -89,14 +89,6 @@ const (
 )
 
 type SASLPlain struct {
-	// UserSecret refers to the secret that contains the user
-	UserSecret *corev1.SecretKeySelector `json:"userSecret" protobuf:"bytes,1,opt,name=userSecret"`
-	// PasswordSecret refers to the secret that contains the password
-	// +optional
-	PasswordSecret *corev1.SecretKeySelector `json:"passwordSecret" protobuf:"bytes,2,opt,name=passwordSecret"`
-	Handshake      bool                      `json:"handshake" protobuf:"bytes,3,opt,name=handshake"`
-}
-type SASLSCRAMSHA struct {
 	// UserSecret refers to the secret that contains the user
 	UserSecret *corev1.SecretKeySelector `json:"userSecret" protobuf:"bytes,1,opt,name=userSecret"`
 	// PasswordSecret refers to the secret that contains the password

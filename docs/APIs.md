@@ -3992,8 +3992,7 @@ SASLPlain contains the sasl plain config
 <tr>
 <td>
 <code>scramsha256</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.SASLSCRAMSHA"> SASLSCRAMSHA </a>
-</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -4005,8 +4004,7 @@ SASLSCRAMSHA256 contains the sasl plain config
 <tr>
 <td>
 <code>scramsha512</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.SASLSCRAMSHA"> SASLSCRAMSHA </a>
-</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -4019,61 +4017,6 @@ SASLSCRAMSHA512 contains the sasl plain config
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.SASLPlain">
 SASLPlain
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.SASL">SASL</a>)
-</p>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>
-Field
-</th>
-<th>
-Description
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>userSecret</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
-Kubernetes core/v1.SecretKeySelector </a> </em>
-</td>
-<td>
-<p>
-UserSecret refers to the secret that contains the user
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>passwordSecret</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
-Kubernetes core/v1.SecretKeySelector </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-PasswordSecret refers to the secret that contains the password
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>handshake</code></br> <em> bool </em>
-</td>
-<td>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="numaflow.numaproj.io/v1alpha1.SASLSCRAMSHA">
-SASLSCRAMSHA
 </h3>
 <p>
 (<em>Appears on:</em>
