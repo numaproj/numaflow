@@ -28,7 +28,7 @@ spec:
         udsink:
           container:
             # see https://github.com/numaproj/numaflow-sinks/tree/78693ec48a5b8bc7ca7be2898dd8dd722392b53a/redis-e2e-test-sink
-            image: "quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0"
+            image: "quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest"
       sideInputs:
         - myticker
   edges:

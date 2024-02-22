@@ -117,7 +117,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, toVertexWmStores)
 
-			idleManager = wmb.NewIdleManager(len(writers))
+			idleManager, _ = wmb.NewIdleManager(len(writers), len(writers))
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
@@ -131,7 +131,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if enableMapUdfStream {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.MapStreamServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	} else {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.MapServerInfoFile))
 		if err != nil {
 			return err
 		}
