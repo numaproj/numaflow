@@ -175,7 +175,7 @@ func (df *DataForward) replayForUnalignedWindows(ctx context.Context, discovered
 	for _, s := range discoveredWals {
 		p := s.PartitionID()
 		// associate the PBQ and PnF
-		df.associatePBQAndPnF(ctx, &p)
+		df.associatePBQAndPnF(ctx, p)
 	}
 	eg := errgroup.Group{}
 	df.log.Info("Number of partitions to replay: ", len(discoveredWals))
@@ -231,7 +231,7 @@ func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWa
 		df.windower.InsertWindow(window.NewAlignedTimedWindow(p.Start, p.End, p.Slot))
 
 		// associate the PBQ and PnF
-		df.associatePBQAndPnF(ctx, &p)
+		df.associatePBQAndPnF(ctx, p)
 	}
 	eg := errgroup.Group{}
 	df.log.Info("Number of partitions to replay: ", len(discoveredWals))
@@ -261,7 +261,7 @@ func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWa
 							ReadMessage: msg,
 							Operation:   window.Append,
 							Windows:     []window.TimedWindow{tw},
-							ID:          &pid,
+							ID:          pid,
 						}
 						// we don't want to persist the messages again
 						// because they are already persisted in the store
