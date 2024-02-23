@@ -94,18 +94,42 @@ type AbstractPodTemplate struct {
 
 // ApplyToPodSpec updates the PodSpec with the values in the AbstractPodTemplate
 func (apt *AbstractPodTemplate) ApplyToPodSpec(ps *corev1.PodSpec) {
-	ps.NodeSelector = apt.NodeSelector
-	ps.Tolerations = apt.Tolerations
-	ps.SecurityContext = apt.SecurityContext
-	ps.ImagePullSecrets = apt.ImagePullSecrets
-	ps.PriorityClassName = apt.PriorityClassName
-	ps.Priority = apt.Priority
-	ps.Affinity = apt.Affinity
-	ps.ServiceAccountName = apt.ServiceAccountName
-	ps.RuntimeClassName = apt.RuntimeClassName
-	ps.AutomountServiceAccountToken = apt.AutomountServiceAccountToken
-	ps.DNSPolicy = apt.DNSPolicy
-	ps.DNSConfig = apt.DNSConfig
+	if len(ps.NodeSelector) == 0 {
+		ps.NodeSelector = apt.NodeSelector
+	}
+	if len(ps.Tolerations) == 0 {
+		ps.Tolerations = apt.Tolerations
+	}
+	if ps.SecurityContext == nil {
+		ps.SecurityContext = apt.SecurityContext
+	}
+	if len(ps.ImagePullSecrets) == 0 {
+		ps.ImagePullSecrets = apt.ImagePullSecrets
+	}
+	if ps.PriorityClassName == "" {
+		ps.PriorityClassName = apt.PriorityClassName
+	}
+	if ps.Priority == nil {
+		ps.Priority = apt.Priority
+	}
+	if ps.Affinity == nil {
+		ps.Affinity = apt.Affinity
+	}
+	if ps.ServiceAccountName == "" {
+		ps.ServiceAccountName = apt.ServiceAccountName
+	}
+	if ps.RuntimeClassName == nil {
+		ps.RuntimeClassName = apt.RuntimeClassName
+	}
+	if ps.AutomountServiceAccountToken == nil {
+		ps.AutomountServiceAccountToken = apt.AutomountServiceAccountToken
+	}
+	if ps.DNSPolicy == "" {
+		ps.DNSPolicy = apt.DNSPolicy
+	}
+	if ps.DNSConfig == nil {
+		ps.DNSConfig = apt.DNSConfig
+	}
 }
 
 // ApplyToPodTemplateSpec updates the PodTemplateSpec with the values in the AbstractPodTemplate
