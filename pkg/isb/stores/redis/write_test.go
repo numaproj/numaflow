@@ -226,6 +226,7 @@ func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) 
 	messages = append(messages, testutils.BuildTestWriteMessages(count, startTime, nil)...)
 	for i := int64(0); i < count; i++ {
 		tmpTime := startTime.Add(time.Duration(i) * time.Minute)
+		messages[i].EventTime = tmpTime
 		hashKeyName := rqw.GetHashKeyName(tmpTime)
 		if ok := internalHashKeysMap[hashKeyName]; !ok {
 			internalHashKeys = append(internalHashKeys, hashKeyName)

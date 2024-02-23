@@ -200,6 +200,8 @@ readLoop:
 	for i := 0; i < 199; i++ {
 		assert.Equal(t, readMessages[i+101].EventTime.UnixMilli(), replayedMessages[i].EventTime.UnixMilli())
 	}
+	err = wl.Close()
+	assert.NoError(t, err)
 }
 
 func TestFilesInDir(t *testing.T) {
@@ -328,4 +330,52 @@ func TestCompactor_ContextClose(t *testing.T) {
 		println(err.Error())
 	}
 	assert.NoError(t, err)
+}
+
+func Test_buildCompactionKeyMap(t *testing.T) {
+	ctx := context.Background()
+
+	eventDir := t.TempDir()
+	/// write some delete events
+	ewl, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	assert.NoError(t, err)
+
+	testWindows := []window.TimedWindow{
+		window.NewUnalignedTimedWindow(time.UnixMilli(60000), time.UnixMilli(60010), "slot-0", []string{"key-1", "key-2"}),
+		window.NewUnalignedTimedWindow(time.UnixMilli(60010), time.UnixMilli(60020), "slot-0", []string{"key-3", "key-4"}),
+		window.NewUnalignedTimedWindow(time.UnixMilli(60020), time.UnixMilli(60030), "slot-0", []string{"key-5", "key-6"}),
+		window.NewUnalignedTimedWindow(time.UnixMilli(60030), time.UnixMilli(60040), "slot-0", []string{"", ""}),
+		window.NewUnalignedTimedWindow(time.UnixMilli(60040), time.UnixMilli(60050), "slot-0", []string{"key-7", "key-8"}),
+		window.NewUnalignedTimedWindow(time.UnixMilli(60050), time.UnixMilli(60060), "slot-0", []string{"key-5", "key-7"}),
+		window.NewUnalignedTimedWindow(time.UnixMilli(60060), time.UnixMilli(60070), "slot-0", []string{"key-1", "key-2"}),
+		window.NewUnalignedTimedWindow(time.UnixMilli(60070), time.UnixMilli(60080), "slot-0", []string{""}),
+		window.NewUnalignedTimedWindow(time.UnixMilli(60090), time.UnixMilli(60100), "slot-0", []string{"", "", ""}),
+	}
+
+	for _, timedWindow := range testWindows {
+		err = ewl.PersistGCEvent(timedWindow)
+		assert.NoError(t, err)
+	}
+
+	err = ewl.Close()
+	assert.NoError(t, err)
+
+	c := &compactor{
+		compactKeyMap:   make(map[string]int64),
+		storeEventsPath: eventDir,
+		dc:              newDecoder(),
+	}
+
+	eFiles, err := filesInDir(eventDir)
+	assert.NoError(t, err)
+
+	err = c.buildCompactionKeyMap(eFiles)
+
+	assert.Len(t, c.compactKeyMap, 8)
+	assert.Equal(t, int64(60030), c.compactKeyMap["key-5:key-6"])
+	assert.Equal(t, int64(60050), c.compactKeyMap["key-7:key-8"])
+	assert.Equal(t, int64(60060), c.compactKeyMap["key-5:key-7"])
+	assert.Equal(t, int64(60070), c.compactKeyMap["key-1:key-2"])
+	assert.Equal(t, int64(60040), c.compactKeyMap[":"])
+	assert.Equal(t, int64(60100), c.compactKeyMap["::"])
 }

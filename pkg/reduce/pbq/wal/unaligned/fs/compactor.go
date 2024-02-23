@@ -65,7 +65,7 @@ type compactor struct {
 	log                *zap.SugaredLogger
 }
 
-// NewCompactor returns a new compactor instance
+// NewCompactor returns a new WAL compactor instance
 func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPath string, storeDataPath string, opts ...CompactorOption) (unaligned.Compactor, error) {
 
 	c := &compactor{
