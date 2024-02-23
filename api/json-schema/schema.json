@@ -19332,16 +19332,16 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
           "description": "CACertSecret refers to the secret that contains the CA cert"
         },
-        "clientCertSecret": {
+        "certSecret": {
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
           "description": "CertSecret refers to the secret that contains the cert"
         },
-        "clientKeySecret": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
-          "description": "KeySecret refers to the secret that contains the key"
-        },
         "insecureSkipVerify": {
           "type": "boolean"
+        },
+        "keySecret": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "KeySecret refers to the secret that contains the key"
         }
       },
       "type": "object"

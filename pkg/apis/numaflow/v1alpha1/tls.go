@@ -26,8 +26,8 @@ type TLS struct {
 	CACertSecret *corev1.SecretKeySelector `json:"caCertSecret,omitempty" protobuf:"bytes,2,opt,name=caCertSecret"`
 	// CertSecret refers to the secret that contains the cert
 	// +optional
-	CertSecret *corev1.SecretKeySelector `json:"clientCertSecret,omitempty" protobuf:"bytes,3,opt,name=certSecret"`
+	CertSecret *corev1.SecretKeySelector `json:"certSecret,omitempty" protobuf:"bytes,3,opt,name=certSecret"`
 	// KeySecret refers to the secret that contains the key
 	// +optional
-	KeySecret *corev1.SecretKeySelector `json:"clientKeySecret,omitempty" protobuf:"bytes,4,opt,name=keySecret"`
+	KeySecret *corev1.SecretKeySelector `json:"keySecret,omitempty" protobuf:"bytes,4,opt,name=keySecret"`
 }
