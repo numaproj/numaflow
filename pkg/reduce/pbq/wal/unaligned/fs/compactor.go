@@ -26,8 +26,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -40,16 +38,16 @@ import (
 )
 
 const (
-	CompactedPrefix = "compacted"
-	CurrCompacted   = "current" + "-" + CompactedPrefix
+	compactedPrefix      = "compacted"
+	compactionInProgress = "current" + "-" + compactedPrefix
 )
 
 // compactor is a compactor for the data files
 type compactor struct {
 	partitionID        *partition.ID
 	compactKeyMap      map[string]int64
-	storeEventsPath    string
-	storeDataPath      string
+	gcEventsWALPath    string
+	dataSegmentWALPath string
 	currCompactedFile  *os.File
 	compWriteOffset    int64
 	compBufWriter      *bufio.Writer
@@ -73,31 +71,36 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPat
 		maxFileSize:        dfv1.DefaultWALCompactorMaxFileSize,
 		syncDuration:       dfv1.DefaultWALCompactorSyncDuration, // FIXME(WAL): we need to sync only at the end
 		partitionID:        partitionId,
-		storeDataPath:      storeDataPath,
-		storeEventsPath:    storeEventsPath,
+		dataSegmentWALPath: storeDataPath,
+		gcEventsWALPath:    storeEventsPath,
 		compactKeyMap:      make(map[string]int64),
 		prevSyncedTime:     time.Now(),
 		mu:                 sync.Mutex{},
 		dc:                 newDecoder(),
 		ec:                 newEncoder(),
 		compWriteOffset:    0,
+		compBufWriter:      bufio.NewWriter(nil),
 		doneCh:             make(chan struct{}),
 		stopSignal:         make(chan struct{}),
 		log:                logging.FromContext(ctx),
 	}
 
+	for _, opt := range opts {
+		opt(c)
+	}
+
 	// Create WAL dir if not exist
 	var err error
-	if _, err = os.Stat(c.storeDataPath); os.IsNotExist(err) {
-		err = os.Mkdir(c.storeDataPath, 0755)
+	if _, err = os.Stat(c.dataSegmentWALPath); os.IsNotExist(err) {
+		err = os.Mkdir(c.dataSegmentWALPath, 0755)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// Create event dir if not exist
-	if _, err = os.Stat(c.storeEventsPath); os.IsNotExist(err) {
-		err = os.Mkdir(c.storeEventsPath, 0755)
+	if _, err = os.Stat(c.gcEventsWALPath); os.IsNotExist(err) {
+		err = os.Mkdir(c.gcEventsWALPath, 0755)
 		if err != nil {
 			return nil, err
 		}
@@ -108,10 +111,6 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPat
 		return nil, err
 	}
 
-	for _, opt := range opts {
-		opt(c)
-	}
-
 	return c, nil
 }
 
@@ -120,16 +119,15 @@ func (c *compactor) Start(ctx context.Context) error {
 	// in case of incomplete compaction we should compact the data files
 	// before starting the compactor
 
-	// get all the events files
-	eventFiles, err := filesInDir(c.storeEventsPath)
+	// get all the GC events files
+	eventFiles, err := filesInDir(c.gcEventsWALPath)
 	if err != nil {
 		return err
 	}
 
-	// there maybe some events which were not compacted
-	// could happen if the compactor was stopped abruptly
-	// so we should compact those before replaying persisted
-	// messages
+	// There maybe some events which were not compacted. This could happen if the compactor was stopped (restart), so we
+	// should compact those before replaying persisted messages. We detect non-compacted files by looking at unprocessed
+	// gc-events in the GC WAL.
 	if len(eventFiles) != 0 {
 		if err = c.compact(ctx, eventFiles); err != nil {
 			return err
@@ -144,16 +142,20 @@ func (c *compactor) Start(ctx context.Context) error {
 	}
 
 	go c.keepCompacting(ctx)
+
 	return nil
 }
 
+// Stop stops the compactor.
 func (c *compactor) Stop() error {
 	var err error
 
-	//send the stop signal
+	// send the stop signal
 	close(c.stopSignal)
-	//wait for the compactor to stop
+	c.log.Info("Sent 'close' signal to stop the compactor, waiting for it to stop the 'done' channel")
+	// wait for the compactor to stop
 	<-c.doneCh
+
 	// flush the buffer and sync the file
 	if err = c.flushAndSync(); err != nil {
 		return err
@@ -164,13 +166,13 @@ func (c *compactor) Stop() error {
 		return err
 	}
 
-	// delete the file if it's empty
+	// delete the temp WIP file if it's empty
 	if c.compWriteOffset == 0 {
 		return os.Remove(c.currCompactedFile.Name())
 	}
 
 	// rename the current compaction file to the segment file
-	if err = os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.storeDataPath)); err != nil {
+	if err = os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.dataSegmentWALPath)); err != nil {
 		return err
 	}
 
@@ -179,7 +181,7 @@ func (c *compactor) Stop() error {
 
 // getFilePath returns the file path for new file creation
 func (c *compactor) getFilePath(storePath string) string {
-	return filepath.Join(storePath, CompactedPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
+	return filepath.Join(storePath, compactedPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
 }
 
 // keepCompacting keeps compacting the data files every compaction duration
@@ -195,7 +197,7 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 			return
 		case <-compTimer.C:
 			// get all the events files
-			eventFiles, _ := filesInDir(c.storeEventsPath)
+			eventFiles, _ := filesInDir(c.gcEventsWALPath)
 			err := c.compact(ctx, eventFiles)
 			// TODO: retry, if its not ctx or stop signal error
 			if err != nil {
@@ -227,7 +229,7 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 
 	// delete the events files
 	for _, eventFile := range eventFiles {
-		if err = os.Remove(filepath.Join(c.storeEventsPath, eventFile.Name())); err != nil {
+		if err = os.Remove(filepath.Join(c.gcEventsWALPath, eventFile.Name())); err != nil {
 			return err
 		}
 	}
@@ -242,7 +244,7 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 
 	for _, eventFile := range eventFiles {
 		// read the compact events file
-		opFile, err := os.Open(filepath.Join(c.storeEventsPath, eventFile.Name()))
+		opFile, err := os.Open(filepath.Join(c.gcEventsWALPath, eventFile.Name()))
 		if err != nil {
 			return err
 		}
@@ -278,44 +280,6 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 	return nil
 }
 
-// filesInDir lists all the files in the given directory except the current file
-func filesInDir(dirPath string) ([]os.FileInfo, error) {
-
-	dir, err := os.Open(dirPath)
-	if err != nil {
-		return nil, err
-	}
-	defer func(dir *os.File) {
-		_ = dir.Close()
-	}(dir)
-
-	// read all files from the dir
-	files, err := dir.Readdir(-1)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfs []os.FileInfo
-	// ignore the files which has "current" in their file name
-	// because it will in use by the writer
-	for i := 0; i < len(files); i++ {
-		if strings.Contains(files[i].Name(), "current") {
-			continue
-		}
-		cfs = append(cfs, files[i])
-	}
-
-	// sort the files based on the mod time
-	// so that order of compaction is maintained
-	// when you have multiple segments to compact
-	// we should compact the oldest segment first
-	sort.Slice(cfs, func(i, j int) bool {
-		return cfs[i].ModTime().Before(cfs[j].ModTime())
-	})
-
-	return cfs, nil
-}
-
 // compactDataFiles compacts the data files
 func (c *compactor) compactDataFiles(ctx context.Context) error {
 
@@ -325,7 +289,7 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	}
 
 	// get all the data files
-	dataFiles, err := filesInDir(c.storeDataPath)
+	dataFiles, err := filesInDir(c.dataSegmentWALPath)
 	if err != nil {
 		return err
 	}
@@ -355,7 +319,7 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 // and deletes the data file after compaction
 func (c *compactor) compactFile(fileName string) error {
 	// open the data file (read only)
-	dp, err := os.Open(filepath.Join(c.storeDataPath, fileName))
+	dp, err := os.Open(filepath.Join(c.dataSegmentWALPath, fileName))
 	if err != nil {
 		return err
 	}
@@ -378,7 +342,7 @@ func (c *compactor) compactFile(fileName string) error {
 readLoop:
 	for {
 		// read and decode the unalignedWAL message header
-		mp, err := decodeWALMessageHeader(dp)
+		mp, err := c.dc.decodeWALMessageHeader(dp)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break readLoop // end of file reached, break the loop
@@ -420,7 +384,7 @@ readLoop:
 	}
 
 	// delete the data file, since it's been compacted
-	if err = os.Remove(filepath.Join(c.storeDataPath, fileName)); err != nil {
+	if err = os.Remove(filepath.Join(c.dataSegmentWALPath, fileName)); err != nil {
 		return err
 	}
 	return nil
@@ -496,7 +460,7 @@ func (c *compactor) rotateCompactionFile() error {
 	}
 
 	// rename the current compaction file to the segment file
-	if err := os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.storeDataPath)); err != nil {
+	if err := os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.dataSegmentWALPath)); err != nil {
 		return err
 	}
 
@@ -521,7 +485,10 @@ func (c *compactor) flushAndSync() error {
 // openCompactionFile opens a new compaction file
 func (c *compactor) openCompactionFile() error {
 	var err error
-	c.currCompactedFile, err = os.OpenFile(filepath.Join(c.storeDataPath, CurrCompacted), os.O_WRONLY|os.O_CREATE, 0644)
+
+	// FIXME(WAL): if a file exists, if yes, check the integrity of the file and rename it.
+
+	c.currCompactedFile, err = os.OpenFile(filepath.Join(c.dataSegmentWALPath, compactionInProgress), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
@@ -529,23 +496,10 @@ func (c *compactor) openCompactionFile() error {
 	// reset the offset
 	c.compWriteOffset = 0
 
-	// reset the write buffer
-	if c.compBufWriter == nil {
-		c.compBufWriter = bufio.NewWriter(c.currCompactedFile)
-	} else {
-		c.compBufWriter.Reset(c.currCompactedFile)
-	}
-	return c.writeWALHeader()
-}
+	// reset the write buffer (we started off with a nil interface)
+	c.compBufWriter.Reset(c.currCompactedFile)
 
-// decodeWALMessageHeader decodes the WALMessage header which is encoded by encodeWALMessageHeader.
-func decodeWALMessageHeader(buf io.Reader) (*readMessageHeaderPreamble, error) {
-	var entryHeader = new(readMessageHeaderPreamble)
-	err := binary.Read(buf, binary.LittleEndian, entryHeader)
-	if err != nil {
-		return nil, err
-	}
-	return entryHeader, nil
+	return c.writeWALHeader()
 }
 
 // writeWALHeader writes the unalignedWAL header to the file.
