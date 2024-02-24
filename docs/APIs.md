@@ -4625,7 +4625,7 @@ CACertSecret refers to the secret that contains the CA cert
 </tr>
 <tr>
 <td>
-<code>clientCertSecret</code></br> <em>
+<code>certSecret</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -4638,7 +4638,7 @@ CertSecret refers to the secret that contains the cert
 </tr>
 <tr>
 <td>
-<code>clientKeySecret</code></br> <em>
+<code>keySecret</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
