@@ -24,7 +24,7 @@ spec:
               name: my-pk
               key: my-pk-key
           sasl: # Optional
-            mechanism: GSSAPI # PLAIN or GSSAPI, other mechanisms not supported
+            mechanism: GSSAPI # PLAIN, GSSAPI, SCRAM-SHA-256 or SCRAM-SHA-512, other mechanisms not supported
             gssapi: # Optional, for GSSAPI mechanism
               serviceName: my-service
               realm: my-realm
@@ -55,6 +55,26 @@ spec:
               # Send the Kafka SASL handshake first if enabled (defaults to true)
               # Set this to false if using a non-Kafka SASL proxy
               handshake: true
+            scramsha256: # Optional, for SCRAM-SHA-256 mechanism
+              userSecret: # Pointing to a secret reference which contains the user
+                name: scram-sha-256-user
+                key: scram-sha-256-user-key
+              passwordSecret: # Pointing to a secret reference which contains the password
+                name: scram-sha-256-password
+                key: scram-sha-256-password-key
+              # Send the Kafka SASL handshake first if enabled (defaults to true)
+              # Set this to false if using a non-Kafka SASL proxy
+              handshake: true 
+            scramsha512: # Optional, for SCRAM-SHA-512 mechanism
+              userSecret: # Pointing to a secret reference which contains the user
+                name: scram-sha-512-user
+                key: scram-sha-512-user-key
+              passwordSecret: # Pointing to a secret reference which contains the password
+                name: scram-sha-512-password
+                key: scram-sha-512-password-key
+              # Send the Kafka SASL handshake first if enabled (defaults to true)
+              # Set this to false if using a non-Kafka SASL proxy
+              handshake: true 
           # Optional, a yaml format string which could apply more configuration for the sink.
           # The configuration hierarchy follows the Struct of sarama.Config at https://github.com/IBM/sarama/blob/main/config.go.
           config: |
