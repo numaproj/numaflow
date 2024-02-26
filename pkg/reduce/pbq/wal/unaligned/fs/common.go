@@ -22,7 +22,8 @@ import (
 	"strings"
 )
 
-// filesInDir lists all files sorted chronologically in the given directory, except the WIP temp file.
+// filesInDir lists all files sorted chronologically after applying the filterStr in the given directory,
+// except the WIP temp file.
 func filesInDir(dirPath string, filterStr string) ([]os.FileInfo, error) {
 
 	dir, err := os.Open(dirPath)
@@ -49,6 +50,7 @@ func filesInDir(dirPath string, filterStr string) ([]os.FileInfo, error) {
 		cfs = append(cfs, files[i])
 	}
 
+	// FIXME(WAL): cannot rely on the ModTime()
 	// sort the files based on the mod time (only one writer) so that order of compaction is maintained
 	// when you have multiple segments to compact we should compact the oldest segment first
 	sort.Slice(cfs, func(i, j int) bool {

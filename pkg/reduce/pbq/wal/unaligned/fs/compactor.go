@@ -108,7 +108,8 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPat
 
 	// if the file with the compactionInProgress name exists, it means the compactor was stopped
 	// abruptly we should rotate the file, so that it gets considered for replay
-	if _, err = os.Stat(filepath.Join(c.dataSegmentWALPath, compactionInProgress)); err == nil {
+	if _, err = os.Stat(filepath.Join(c.dataSegmentWALPath, compactionInProgress)); !errors.Is(err, os.ErrNotExist) {
+		// FIXME(WAL): we cannot reuse this function
 		err = c.rotateCompactionFile()
 		if err != nil {
 			return nil, err
@@ -207,10 +208,12 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 		case <-compTimer.C:
 			// get all the events files
 			eventFiles, _ := filesInDir(c.gcEventsWALPath, currentEventsFile)
-			err := c.compact(ctx, eventFiles)
-			// TODO: retry, if its not ctx or stop signal error
-			if err != nil {
-				c.log.Errorw("Error while compacting", zap.Error(err))
+			if len(eventFiles) >= 0 {
+				err := c.compact(ctx, eventFiles)
+				// TODO: retry, if its not ctx or stop signal error
+				if err != nil {
+					c.log.Errorw("Error while compacting", zap.Error(err))
+				}
 			}
 		}
 	}
@@ -220,9 +223,6 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 // compact reads all the events file and constructs the compaction key map
 // and then compacts the data files based on the compaction key map
 func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error {
-	if len(eventFiles) == 0 {
-		return nil
-	}
 	startTime := time.Now()
 	// build the compaction key map
 	err := c.buildCompactionKeyMap(eventFiles)
@@ -231,9 +231,9 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 	}
 
 	// log compaction key map
-	c.log.Infow("Compaction key map")
+	c.log.Infow("REMOVE ME: Compaction key map")
 	for k, v := range c.compactKeyMap {
-		c.log.Infow("Map entry - ", zap.String("key", k), zap.Int64("value", v))
+		c.log.Infow("REMOVE ME: Map entry - ", zap.String("key", k), zap.Int64("value", v))
 	}
 
 	// compact the data files based on the compaction key map
@@ -253,18 +253,21 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 	return nil
 }
 
-// buildCompactionKeyMap builds the compaction key map from the event files
+// buildCompactionKeyMap builds the compaction key map from the GC event files. The map's key is the "keys" of the
+// window and value is the max end-time for which the data has been forwarded to next vertex. This means we can lookup
+// this map to see whether the message can be dropped and not carried to the compacted file because we have closed the
+// book and have already forwarded.
 func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 	c.compactKeyMap = make(map[string]int64)
 
 	for _, eventFile := range eventFiles {
-		// read the compact events file
+		// read the GC events file
 		opFile, err := os.Open(filepath.Join(c.gcEventsWALPath, eventFile.Name()))
 		if err != nil {
 			return err
 		}
 
-		// iterate over all the delete events and delete the messages
+		// iterate over all the GC events
 		for {
 			var cEvent *deletionMessage
 			cEvent, _, err = c.dc.decodeDeletionMessage(opFile)
@@ -272,7 +275,8 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 				break
 			} else if err != nil {
 				// close the file before returning
-				opFile.Close()
+				_ = opFile.Close()
+				// return the previous main error, not the close error
 				return err
 			}
 
@@ -506,8 +510,6 @@ func (c *compactor) flushAndSync() error {
 // openCompactionFile opens a new compaction file
 func (c *compactor) openCompactionFile() error {
 	var err error
-
-	// FIXME(WAL): if a file exists, if yes, check the integrity of the file and rename it.
 
 	c.currCompactedFile, err = os.OpenFile(filepath.Join(c.dataSegmentWALPath, compactionInProgress), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {

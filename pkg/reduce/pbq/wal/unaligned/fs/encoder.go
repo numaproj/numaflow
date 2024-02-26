@@ -46,7 +46,7 @@ type readMessageHeaderPreamble struct {
 	Checksum   uint32
 }
 
-// deletionMessageHeaderPreamble is the header for each deletion event
+// deletionMessageHeaderPreamble is the header for each deletion event.
 type deletionMessageHeaderPreamble struct {
 	St   int64
 	Et   int64
@@ -54,7 +54,7 @@ type deletionMessageHeaderPreamble struct {
 	KLen int32
 }
 
-// deletionMessage is the deletion event for a keyed window
+// deletionMessage is the deletion event for a keyed window built from GC events.
 type deletionMessage struct {
 	St   int64
 	Et   int64
