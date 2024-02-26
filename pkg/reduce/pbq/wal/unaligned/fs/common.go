@@ -23,8 +23,7 @@ import (
 )
 
 // filesInDir lists all files sorted chronologically in the given directory, except the WIP temp file.
-// FIXME(WAL): pass in a filter suffix. (e.g, segment-current, gc-current)
-func filesInDir(dirPath string) ([]os.FileInfo, error) {
+func filesInDir(dirPath string, filterStr string) ([]os.FileInfo, error) {
 
 	dir, err := os.Open(dirPath)
 	if err != nil {
@@ -44,7 +43,7 @@ func filesInDir(dirPath string) ([]os.FileInfo, error) {
 	// ignore the files which has "current" in their file name
 	// because it will in use by the writer
 	for i := 0; i < len(files); i++ {
-		if strings.Contains(files[i].Name(), "current") {
+		if strings.Contains(files[i].Name(), filterStr) {
 			continue
 		}
 		cfs = append(cfs, files[i])

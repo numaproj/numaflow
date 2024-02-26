@@ -75,7 +75,7 @@ func (ws *fsWAL) CreateWAL(_ context.Context, partitionID partition.ID) (wal.WAL
 // DiscoverWALs returns all the WALs present in the storePath
 func (ws *fsWAL) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
 	partitions := make([]wal.WAL, 0)
-	files, err := filesInDir(ws.storePath)
+	files, err := filesInDir(ws.storePath, currentWALPrefix)
 
 	if os.IsNotExist(err) || len(files) == 0 {
 		return partitions, nil

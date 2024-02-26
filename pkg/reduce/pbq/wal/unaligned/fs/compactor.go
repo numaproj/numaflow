@@ -129,7 +129,7 @@ func (c *compactor) Start(ctx context.Context) error {
 	// before starting the compactor
 
 	// get all the GC events files
-	eventFiles, err := filesInDir(c.gcEventsWALPath)
+	eventFiles, err := filesInDir(c.gcEventsWALPath, currentWALPrefix)
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 			return
 		case <-compTimer.C:
 			// get all the events files
-			eventFiles, _ := filesInDir(c.gcEventsWALPath)
+			eventFiles, _ := filesInDir(c.gcEventsWALPath, currentEventsFile)
 			err := c.compact(ctx, eventFiles)
 			// TODO: retry, if its not ctx or stop signal error
 			if err != nil {
@@ -228,6 +228,12 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 	err := c.buildCompactionKeyMap(eventFiles)
 	if err != nil {
 		return err
+	}
+
+	// log compaction key map
+	c.log.Infow("Compaction key map")
+	for k, v := range c.compactKeyMap {
+		c.log.Infow("Map entry - ", zap.String("key", k), zap.Int64("value", v))
 	}
 
 	// compact the data files based on the compaction key map
@@ -298,9 +304,14 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	}
 
 	// get all the data files
-	dataFiles, err := filesInDir(c.dataSegmentWALPath)
+	dataFiles, err := filesInDir(c.dataSegmentWALPath, currentWALPrefix)
 	if err != nil {
 		return err
+	}
+
+	c.log.Infow("Compacting data files", zap.Int("count", len(dataFiles)))
+	for _, dataFile := range dataFiles {
+		c.log.Infow("Data file - ", zap.String("file", dataFile.Name()))
 	}
 
 	// iterate over all the data files and compact them

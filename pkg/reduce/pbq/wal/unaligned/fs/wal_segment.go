@@ -32,9 +32,10 @@ import (
 )
 
 const (
+	currentWALPrefix   = "current"
 	IEEE               = 0xedb88320
-	SegmentPrefix      = "segment"
-	CurrentSegmentName = "current" + "-" + SegmentPrefix
+	segmentPrefix      = "segment"
+	currentSegmentName = currentWALPrefix + "-" + segmentPrefix
 )
 
 // unalignedWAL is an unaligned write-ahead log
@@ -112,7 +113,7 @@ func NewUnalignedReadWriteWAL(opts ...WALOption) (wal.WAL, error) {
 		opt(s)
 	}
 
-	s.files, err = filesInDir(s.storeDataPath)
+	s.files, err = filesInDir(s.storeDataPath, currentWALPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +272,7 @@ func (s *unalignedWAL) openReadFile() error {
 
 // openFile opens a new data file
 func (s *unalignedWAL) openFile() error {
-	dataFilePath := filepath.Join(s.storeDataPath, CurrentSegmentName)
+	dataFilePath := filepath.Join(s.storeDataPath, currentSegmentName)
 	var err error
 	if s.currDataFp, err = os.OpenFile(dataFilePath, os.O_WRONLY|os.O_CREATE, 0644); err != nil {
 		return err
@@ -316,7 +317,7 @@ func (s *unalignedWAL) rotateFile() error {
 	}
 
 	// rename the current data file to the segment file
-	if err := os.Rename(filepath.Join(s.storeDataPath, CurrentSegmentName), s.segmentFilePath(s.storeDataPath)); err != nil {
+	if err := os.Rename(filepath.Join(s.storeDataPath, currentSegmentName), s.segmentFilePath(s.storeDataPath)); err != nil {
 		return err
 	}
 
@@ -326,7 +327,7 @@ func (s *unalignedWAL) rotateFile() error {
 
 // segmentFilePath creates the file path for the segment file located in the storage path.
 func (s *unalignedWAL) segmentFilePath(storePath string) string {
-	return filepath.Join(storePath, SegmentPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
+	return filepath.Join(storePath, segmentPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
 }
 
 // flushAndSync flushes the buffered data to the writer and syncs the file to disk.
@@ -359,7 +360,7 @@ func (s *unalignedWAL) Close() error {
 	}
 
 	// rename the current data file to the segment file
-	if err = os.Rename(filepath.Join(s.storeDataPath, CurrentSegmentName), s.segmentFilePath(s.storeDataPath)); err != nil {
+	if err = os.Rename(filepath.Join(s.storeDataPath, currentSegmentName), s.segmentFilePath(s.storeDataPath)); err != nil {
 		return err
 	}
 

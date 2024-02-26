@@ -235,7 +235,7 @@ func TestFilesInDir(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	files, err := filesInDir(dir)
+	files, err := filesInDir(dir, currentWALPrefix)
 	assert.NoError(t, err)
 	assert.Len(t, files, 10)
 
@@ -245,7 +245,7 @@ func TestFilesInDir(t *testing.T) {
 	err = file.Close()
 	assert.NoError(t, err)
 
-	files, err = filesInDir(dir)
+	files, err = filesInDir(dir, currentWALPrefix)
 	assert.NoError(t, err)
 	assert.Len(t, files, 10)
 
@@ -255,7 +255,7 @@ func TestFilesInDir(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	files, err = filesInDir(dir)
+	files, err = filesInDir(dir, currentWALPrefix)
 	assert.NoError(t, err)
 	assert.Len(t, files, 0)
 
@@ -270,7 +270,7 @@ func TestFilesInDir(t *testing.T) {
 	err = file.Close()
 	assert.NoError(t, err)
 
-	files, err = filesInDir(dir)
+	files, err = filesInDir(dir, currentWALPrefix)
 	assert.NoError(t, err)
 	assert.Len(t, files, 2)
 
@@ -280,7 +280,7 @@ func TestFilesInDir(t *testing.T) {
 	err = file.Close()
 	assert.NoError(t, err)
 
-	files, err = filesInDir(dir)
+	files, err = filesInDir(dir, currentWALPrefix)
 	assert.NoError(t, err)
 	assert.Len(t, files, 2)
 
@@ -291,7 +291,7 @@ func TestFilesInDir(t *testing.T) {
 	err = os.Remove(filepath.Join(dir, "file-2"))
 	assert.NoError(t, err)
 
-	files, err = filesInDir(dir)
+	files, err = filesInDir(dir, currentWALPrefix)
 	assert.NoError(t, err)
 	assert.Len(t, files, 0)
 }
@@ -349,7 +349,7 @@ func TestCompactor_ContextClose(t *testing.T) {
 	assert.NoError(t, err)
 
 	cancel()
-	files, _ := filesInDir(dataDir)
+	files, _ := filesInDir(dataDir, currentWALPrefix)
 	for _, file := range files {
 		println(file.Name())
 	}
@@ -399,7 +399,7 @@ func Test_buildCompactionKeyMap(t *testing.T) {
 		dc:              newDecoder(),
 	}
 
-	eFiles, err := filesInDir(eventDir)
+	eFiles, err := filesInDir(eventDir, currentWALPrefix)
 	assert.NoError(t, err)
 
 	err = c.buildCompactionKeyMap(eFiles)
