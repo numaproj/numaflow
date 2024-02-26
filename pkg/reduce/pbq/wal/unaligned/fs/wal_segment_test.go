@@ -32,7 +32,7 @@ func TestUnalignedWAL_Write(t *testing.T) {
 
 	tempDir := t.TempDir()
 	defer func(path string) {
-		_ = os.RemoveAll(path)
+		cleanupDir(path)
 	}(tempDir)
 
 	partitionId := window.SharedUnalignedPartition
@@ -61,7 +61,7 @@ func TestUnalignedWAL_Write(t *testing.T) {
 func TestUnalignedWAL_Replay(t *testing.T) {
 	tempDir := t.TempDir()
 	defer func(path string) {
-		_ = os.RemoveAll(path)
+		cleanupDir(path)
 	}(tempDir)
 
 	partitionId := window.SharedUnalignedPartition

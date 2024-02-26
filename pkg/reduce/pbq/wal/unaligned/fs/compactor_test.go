@@ -39,6 +39,10 @@ func TestCompactor(t *testing.T) {
 	defer cancel()
 
 	dataDir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(dataDir)
+	}()
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
@@ -56,6 +60,10 @@ func TestCompactor(t *testing.T) {
 	}
 
 	eventDir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(eventDir)
+	}()
 	/// write some delete events
 	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
@@ -126,6 +134,10 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	defer cancel()
 
 	dataDir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(dataDir)
+	}()
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
@@ -143,6 +155,10 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	}
 
 	eventDir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(eventDir)
+	}()
 	/// write some delete events
 	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
@@ -206,6 +222,11 @@ readLoop:
 
 func TestFilesInDir(t *testing.T) {
 	dir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(dir)
+	}()
+
 	// create some files
 	for i := 0; i < 10; i++ {
 		file, err := os.Create(filepath.Join(dir, fmt.Sprintf("file-%d", i)))
@@ -279,6 +300,10 @@ func TestCompactor_ContextClose(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	dataDir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(dataDir)
+	}()
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
@@ -296,6 +321,10 @@ func TestCompactor_ContextClose(t *testing.T) {
 	}
 
 	eventDir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(eventDir)
+	}()
 	/// write some delete events
 	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
@@ -336,6 +365,10 @@ func Test_buildCompactionKeyMap(t *testing.T) {
 	ctx := context.Background()
 
 	eventDir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(eventDir)
+	}()
 	/// write some delete events
 	ewl, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
@@ -362,7 +395,7 @@ func Test_buildCompactionKeyMap(t *testing.T) {
 
 	c := &compactor{
 		compactKeyMap:   make(map[string]int64),
-		storeEventsPath: eventDir,
+		gcEventsWALPath: eventDir,
 		dc:              newDecoder(),
 	}
 
@@ -378,4 +411,9 @@ func Test_buildCompactionKeyMap(t *testing.T) {
 	assert.Equal(t, int64(60070), c.compactKeyMap["key-1:key-2"])
 	assert.Equal(t, int64(60040), c.compactKeyMap[":"])
 	assert.Equal(t, int64(60100), c.compactKeyMap["::"])
+}
+
+// cleanup_dir removes all the files in the directory
+func cleanupDir(dir string) {
+	_ = os.RemoveAll(dir)
 }

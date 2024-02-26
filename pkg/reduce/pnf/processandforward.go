@@ -369,7 +369,6 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 }
 
 // publishWM publishes the watermark to each edge.
-// TODO: support multi partitioned edges.
 func (p *processAndForward) publishWM(ctx context.Context, endTime time.Time) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,

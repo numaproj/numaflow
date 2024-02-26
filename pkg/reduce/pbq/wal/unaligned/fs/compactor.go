@@ -106,6 +106,15 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPat
 		}
 	}
 
+	// if the file with the compactionInProgress name exists, it means the compactor was stopped
+	// abruptly we should rotate the file, so that it gets considered for replay
+	if _, err = os.Stat(filepath.Join(c.dataSegmentWALPath, compactionInProgress)); err == nil {
+		err = c.rotateCompactionFile()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// open the first compaction file to write to
 	if err = c.openCompactionFile(); err != nil {
 		return nil, err
@@ -304,7 +313,7 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 			// the event files
 			return fmt.Errorf("compactor stopped")
 		default:
-			c.log.Debugw("compacting file", zap.String("file", dataFile.Name()))
+			c.log.Infow("compacting file", zap.String("file", dataFile.Name()))
 			if err = c.compactFile(dataFile.Name()); err != nil {
 				return err
 			}
@@ -373,6 +382,7 @@ readLoop:
 		// skip deleted messages
 		// we should copy the message only if the message should not be deleted
 		if !c.shouldDeleteMessage(mp.EventTime, string(key)) {
+			c.log.Infow("Deleting message", zap.String("key", string(key)), zap.Int64("eventTime", mp.EventTime))
 			continue
 		}
 
