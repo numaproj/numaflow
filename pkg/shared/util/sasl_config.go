@@ -25,10 +25,27 @@ import (
 	"github.com/IBM/sarama"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/xdg-go/scram"
+	corev1 "k8s.io/api/core/v1"
 )
 
-// GetSASLConfig A utility function to get sarama.Config.Net.SASL
 func GetSASL(saslConfig *dfv1.SASL) (*struct {
+	Enable                   bool
+	Mechanism                sarama.SASLMechanism
+	Version                  int16
+	Handshake                bool
+	AuthIdentity             string
+	User                     string
+	Password                 string
+	SCRAMAuthzID             string
+	SCRAMClientGeneratorFunc func() sarama.SCRAMClient
+	TokenProvider            sarama.AccessTokenProvider
+	GSSAPI                   sarama.GSSAPIConfig
+}, error) {
+	return GetSASLStrategy(saslConfig, OsFile{})
+}
+
+// GetSASLConfig A utility function to get sarama.Config.Net.SASL
+func GetSASLStrategy[GetSecretsStrategy GetSecrets](saslConfig *dfv1.SASL, strategy GetSecretsStrategy) (*struct {
 	Enable                   bool
 	Mechanism                sarama.SASLMechanism
 	Version                  int16
@@ -57,21 +74,9 @@ func GetSASL(saslConfig *dfv1.SASL) (*struct {
 		if plain := saslConfig.Plain; plain != nil {
 			config.Net.SASL.Enable = true
 			config.Net.SASL.Mechanism = sarama.SASLTypePlaintext
-			if plain.UserSecret != nil {
-				user, err := GetSecretFromVolume(plain.UserSecret)
-				if err != nil {
-					return nil, err
-				} else {
-					config.Net.SASL.User = user
-				}
-			}
-			if plain.PasswordSecret != nil {
-				password, err := GetSecretFromVolume(plain.PasswordSecret)
-				if err != nil {
-					return nil, err
-				} else {
-					config.Net.SASL.Password = password
-				}
+			err := SetUserPassword(config, plain.UserSecret, plain.PasswordSecret, strategy)
+			if err != nil {
+				return nil, err
 			}
 			config.Net.SASL.Handshake = plain.Handshake
 		}
@@ -80,21 +85,9 @@ func GetSASL(saslConfig *dfv1.SASL) (*struct {
 			config.Net.SASL.Enable = true
 			config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA256} }
-			if scram.UserSecret != nil {
-				user, err := GetSecretFromVolume(scram.UserSecret)
-				if err != nil {
-					return nil, err
-				} else {
-					config.Net.SASL.User = user
-				}
-			}
-			if scram.PasswordSecret != nil {
-				password, err := GetSecretFromVolume(scram.PasswordSecret)
-				if err != nil {
-					return nil, err
-				} else {
-					config.Net.SASL.Password = password
-				}
+			err := SetUserPassword(config, scram.UserSecret, scram.PasswordSecret, strategy)
+			if err != nil {
+				return nil, err
 			}
 			config.Net.SASL.Handshake = scram.Handshake
 		}
@@ -103,21 +96,9 @@ func GetSASL(saslConfig *dfv1.SASL) (*struct {
 			config.Net.SASL.Enable = true
 			config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
-			if scram.UserSecret != nil {
-				user, err := GetSecretFromVolume(scram.UserSecret)
-				if err != nil {
-					return nil, err
-				} else {
-					config.Net.SASL.User = user
-				}
-			}
-			if scram.PasswordSecret != nil {
-				password, err := GetSecretFromVolume(scram.PasswordSecret)
-				if err != nil {
-					return nil, err
-				} else {
-					config.Net.SASL.Password = password
-				}
+			err := SetUserPassword(config, scram.UserSecret, scram.PasswordSecret, strategy)
+			if err != nil {
+				return nil, err
 			}
 			config.Net.SASL.Handshake = scram.Handshake
 		}
@@ -125,6 +106,26 @@ func GetSASL(saslConfig *dfv1.SASL) (*struct {
 		return nil, fmt.Errorf("SASL mechanism not supported: %s", *saslConfig.Mechanism)
 	}
 	return &config.Net.SASL, nil
+}
+
+func SetUserPassword[GetSecretsStrategy GetSecrets](config *sarama.Config, userSecret *corev1.SecretKeySelector, passwordSecret *corev1.SecretKeySelector, strategy GetSecretsStrategy) error {
+	if userSecret != nil {
+		user, err := strategy.GetSecretFromVolume(userSecret)
+		if err != nil {
+			return err
+		} else {
+			config.Net.SASL.User = user
+		}
+	}
+	if passwordSecret != nil {
+		password, err := strategy.GetSecretFromVolume(passwordSecret)
+		if err != nil {
+			return err
+		} else {
+			config.Net.SASL.Password = password
+		}
+	}
+	return nil
 }
 
 // GetGSSAPIConfig A utility function to get sasl.gssapi.Config
