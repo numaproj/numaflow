@@ -39,9 +39,9 @@ func TestErrKind_String(t *testing.T) {
 			want: "NonRetryable",
 		},
 		{
-			name: "unknown_1",
+			name: "canceled",
 			ek:   2,
-			want: "Unknown",
+			want: "Canceled",
 		},
 		{
 			name: "unknown_2",
@@ -108,6 +108,17 @@ func TestFromError(t *testing.T) {
 			},
 			want:   &UDFError{Unknown, "not a standard error"},
 			wantOk: false,
+		},
+		{
+			name: "good_canceled",
+			args: args{
+				err: &UDFError{
+					errKind:    2,
+					errMessage: "context canceled",
+				},
+			},
+			want:   &UDFError{Canceled, "context canceled"},
+			wantOk: true,
 		},
 	}
 	for _, tt := range tests {

@@ -133,7 +133,7 @@ func (op *OrderedProcessor) reduceOp(ctx context.Context, t *ForwardTask) {
 	start := time.Now()
 	err := t.pf.Process(ctx)
 	if err != nil {
-		if errors.Is(err, ctx.Err()) {
+		if errors.Is(err, context.Canceled) {
 			metrics.UDFError.With(map[string]string{
 				metrics.LabelVertex:             op.vertexName,
 				metrics.LabelPipeline:           op.pipelineName,
