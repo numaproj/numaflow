@@ -3958,13 +3958,13 @@ func schema_pkg_apis_numaflow_v1alpha1_TLS(ref common.ReferenceCallback) common.
 							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
 						},
 					},
-					"clientCertSecret": {
+					"certSecret": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CertSecret refers to the secret that contains the cert",
 							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
 						},
 					},
-					"clientKeySecret": {
+					"keySecret": {
 						SchemaProps: spec.SchemaProps{
 							Description: "KeySecret refers to the secret that contains the key",
 							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),

@@ -9264,18 +9264,7 @@ spec:
                                   required:
                                   - key
                                   type: object
-                                clientCertSecret:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                clientKeySecret:
+                                certSecret:
                                   properties:
                                     key:
                                       type: string
@@ -9288,6 +9277,17 @@ spec:
                                   type: object
                                 insecureSkipVerify:
                                   type: boolean
+                                keySecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
                               type: object
                             topic:
                               type: string
@@ -9732,18 +9732,7 @@ spec:
                                   required:
                                   - key
                                   type: object
-                                clientCertSecret:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                clientKeySecret:
+                                certSecret:
                                   properties:
                                     key:
                                       type: string
@@ -9756,6 +9745,17 @@ spec:
                                   type: object
                                 insecureSkipVerify:
                                   type: boolean
+                                keySecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
                               type: object
                             topic:
                               type: string
@@ -9831,18 +9831,7 @@ spec:
                                   required:
                                   - key
                                   type: object
-                                clientCertSecret:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                clientKeySecret:
+                                certSecret:
                                   properties:
                                     key:
                                       type: string
@@ -9855,6 +9844,17 @@ spec:
                                   type: object
                                 insecureSkipVerify:
                                   type: boolean
+                                keySecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
                               type: object
                             url:
                               type: string
@@ -13986,18 +13986,7 @@ spec:
                             required:
                             - key
                             type: object
-                          clientCertSecret:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                              optional:
-                                type: boolean
-                            required:
-                            - key
-                            type: object
-                          clientKeySecret:
+                          certSecret:
                             properties:
                               key:
                                 type: string
@@ -14010,6 +13999,17 @@ spec:
                             type: object
                           insecureSkipVerify:
                             type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
                         type: object
                       topic:
                         type: string
@@ -14454,18 +14454,7 @@ spec:
                             required:
                             - key
                             type: object
-                          clientCertSecret:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                              optional:
-                                type: boolean
-                            required:
-                            - key
-                            type: object
-                          clientKeySecret:
+                          certSecret:
                             properties:
                               key:
                                 type: string
@@ -14478,6 +14467,17 @@ spec:
                             type: object
                           insecureSkipVerify:
                             type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
                         type: object
                       topic:
                         type: string
@@ -14553,18 +14553,7 @@ spec:
                             required:
                             - key
                             type: object
-                          clientCertSecret:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                              optional:
-                                type: boolean
-                            required:
-                            - key
-                            type: object
-                          clientKeySecret:
+                          certSecret:
                             properties:
                               key:
                                 type: string
@@ -14577,6 +14566,17 @@ spec:
                             type: object
                           insecureSkipVerify:
                             type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
                         type: object
                       url:
                         type: string
