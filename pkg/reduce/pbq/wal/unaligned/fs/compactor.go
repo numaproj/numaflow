@@ -385,6 +385,9 @@ func (c *compactor) compactFile(fp string) error {
 
 	}
 
+	dc := 0
+	cc := 0
+
 readLoop:
 	for {
 		// read and decode the unalignedWAL message header
@@ -395,6 +398,8 @@ readLoop:
 			}
 			return err
 		}
+
+		cc += 1
 
 		// read the key
 		key := make([]byte, mp.KeyLen)
@@ -416,9 +421,11 @@ readLoop:
 			return fmt.Errorf("expected to read length of %d, but read only %d", mp.MessageLen, read)
 		}
 
+		c.log.Infow("Compacting message", zap.String("key", string(key)), zap.Int64("eventTime", mp.EventTime))
 		// skip deleted messages
 		// we should copy the message only if the message should not be deleted
 		if !c.shouldDeleteMessage(mp.EventTime, string(key)) {
+			dc += 1
 			c.log.Infow("Deleting message", zap.String("key", string(key)), zap.Int64("eventTime", mp.EventTime))
 			continue
 		}
@@ -429,6 +436,8 @@ readLoop:
 		}
 
 	}
+
+	c.log.Infow("Compaction stats", zap.Int("deleted", dc), zap.Int("copied", cc-dc))
 
 	// delete the file, since it's been compacted
 	if err = os.Remove(fp); err != nil {

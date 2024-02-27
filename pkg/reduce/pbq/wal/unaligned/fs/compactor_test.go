@@ -431,6 +431,7 @@ func Test_buildCompactionKeyMap(t *testing.T) {
 	assert.NotEmpty(t, eFiles)
 
 	err = c.buildCompactionKeyMap(eFiles)
+	assert.NoError(t, err)
 
 	assert.Len(t, c.compactKeyMap, 8)
 	assert.Equal(t, int64(60030), c.compactKeyMap["key-5:key-6"])
