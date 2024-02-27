@@ -254,12 +254,12 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			if pipeline.Spec.Templates != nil && pipeline.Spec.Templates.VertexTemplate != nil {
 				apt := pipeline.Spec.Templates.VertexTemplate.AbstractPodTemplate
 				apt.ApplyToPodSpec(podSpec)
-				if len(apt.Metadata.Labels) > 0 {
+				if apt.Metadata != nil && len(apt.Metadata.Labels) > 0 {
 					for k, v := range apt.Metadata.Labels {
 						labels[k] = v
 					}
 				}
-				if len(apt.Metadata.Annotations) > 0 {
+				if apt.Metadata != nil && len(apt.Metadata.Annotations) > 0 {
 					for k, v := range apt.Metadata.Annotations {
 						annotations[k] = v
 					}
