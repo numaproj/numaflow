@@ -3957,6 +3957,30 @@ SASLPlain contains the sasl plain config
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>scramsha256</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASLSCRAMSHA256 contains the sasl plain config
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>scramsha512</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASLSCRAMSHA512 contains the sasl plain config
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.SASLPlain">

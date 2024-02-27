@@ -19017,6 +19017,14 @@
         "plain": {
           "description": "SASLPlain contains the sasl plain config",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
+        },
+        "scramsha256": {
+          "description": "SASLSCRAMSHA256 contains the sasl plain config",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
+        },
+        "scramsha512": {
+          "description": "SASLSCRAMSHA512 contains the sasl plain config",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
         }
       }
     },

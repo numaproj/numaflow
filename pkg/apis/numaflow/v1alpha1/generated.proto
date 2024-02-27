@@ -1020,6 +1020,14 @@ message SASL {
   // SASLPlain contains the sasl plain config
   // +optional
   optional SASLPlain plain = 3;
+
+  // SASLSCRAMSHA256 contains the sasl plain config
+  // +optional
+  optional SASLPlain scramsha256 = 4;
+
+  // SASLSCRAMSHA512 contains the sasl plain config
+  // +optional
+  optional SASLPlain scramsha512 = 5;
 }
 
 message SASLPlain {
