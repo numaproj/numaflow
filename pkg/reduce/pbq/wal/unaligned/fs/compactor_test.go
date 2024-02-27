@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -102,6 +103,7 @@ func TestCompactor(t *testing.T) {
 	// list all the files in the directory
 	files, err = os.ReadDir(segmentDir)
 	assert.NoError(t, err)
+	assert.Empty(t, files)
 
 	files, err = os.ReadDir(compactDir)
 	assert.NoError(t, err)
@@ -165,6 +167,8 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	for _, readMessage := range readMessages {
 		err = s.Write(&readMessage)
 		assert.NoError(t, err)
+		log.Println("wrote message - ", readMessage.EventTime.UnixMilli())
+
 	}
 
 	eventDir := t.TempDir()
@@ -424,6 +428,7 @@ func Test_buildCompactionKeyMap(t *testing.T) {
 
 	eFiles, err := filesInDir(eventDir, currentWALPrefix)
 	assert.NoError(t, err)
+	assert.NotEmpty(t, eFiles)
 
 	err = c.buildCompactionKeyMap(eFiles)
 

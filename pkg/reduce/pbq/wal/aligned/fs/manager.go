@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -40,6 +41,7 @@ type fsManager struct {
 	vertexName   string
 	replicaIndex int32
 	activeWals   map[string]wal.WAL
+	mu           sync.RWMutex
 }
 
 // NewFSManager is a FileSystem WAL Manager.
@@ -63,7 +65,10 @@ func NewFSManager(vertexInstance *dfv1.VertexInstance, opts ...Option) wal.Manag
 func (ws *fsManager) CreateWAL(_ context.Context, partitionID partition.ID) (wal.WAL, error) {
 	// check if the store is already present
 	// during crash recovery, we might have already created the store while replaying
-	if store, ok := ws.activeWals[partitionID.String()]; ok {
+	ws.mu.RLock()
+	store, ok := ws.activeWals[partitionID.String()]
+	ws.mu.RUnlock()
+	if ok {
 		return store, nil
 	}
 	// Create fs dir if not exist
@@ -87,7 +92,9 @@ func (ws *fsManager) CreateWAL(_ context.Context, partitionID partition.ID) (wal
 	if err != nil {
 		return nil, err
 	}
+	ws.mu.Lock()
 	ws.activeWals[w.PartitionID().String()] = w
+	ws.mu.Unlock()
 	return w, nil
 }
 
@@ -153,6 +160,8 @@ func (ws *fsManager) DeleteWAL(partitionID partition.ID) error {
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 		}).Dec()
 	}
+	ws.mu.Lock()
 	delete(ws.activeWals, partitionID.String())
+	ws.mu.Unlock()
 	return err
 }

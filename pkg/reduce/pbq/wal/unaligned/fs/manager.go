@@ -33,7 +33,9 @@ type fsWAL struct {
 	vertexName     string
 	replicaIndex   int32
 	fsOpts         []WALOption
-	activeWALs     map[string]wal.WAL
+	// we don't need a lock to access activeWALs, since we use only one partition
+	// when we start using slots, we will need a lock
+	activeWALs map[string]wal.WAL
 }
 
 // NewFSManager is a FileSystem Stores Manager.
