@@ -1646,6 +1646,16 @@ func (in *SASL) DeepCopyInto(out *SASL) {
 		*out = new(SASLPlain)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.SCRAMSHA256 != nil {
+		in, out := &in.SCRAMSHA256, &out.SCRAMSHA256
+		*out = new(SASLPlain)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.SCRAMSHA512 != nil {
+		in, out := &in.SCRAMSHA512, &out.SCRAMSHA512
+		*out = new(SASLPlain)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

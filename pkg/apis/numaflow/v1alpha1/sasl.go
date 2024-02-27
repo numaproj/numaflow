@@ -27,6 +27,12 @@ type SASL struct {
 	// SASLPlain contains the sasl plain config
 	// +optional
 	Plain *SASLPlain `json:"plain" protobuf:"bytes,3,opt,name=plain"`
+	// SASLSCRAMSHA256 contains the sasl plain config
+	// +optional
+	SCRAMSHA256 *SASLPlain `json:"scramsha256" protobuf:"bytes,4,opt,name=scramsha256"`
+	// SASLSCRAMSHA512 contains the sasl plain config
+	// +optional
+	SCRAMSHA512 *SASLPlain `json:"scramsha512" protobuf:"bytes,5,opt,name=scramsha512"`
 }
 
 // SASLType describes the SASL type

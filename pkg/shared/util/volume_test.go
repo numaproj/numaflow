@@ -23,6 +23,27 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+type mockedVolumes struct {
+	volumeSecrets map[struct {
+		objectName string
+		key        string
+	}]string
+}
+
+func (m mockedVolumes) getSecretFromVolume(selector *corev1.SecretKeySelector) (string, error) {
+	return m.volumeSecrets[struct {
+		objectName string
+		key        string
+	}{
+		objectName: selector.LocalObjectReference.Name,
+		key:        selector.Key,
+	}], nil
+}
+
+func (m mockedVolumes) getConfigMapFromVolume(selector *corev1.ConfigMapKeySelector) (string, error) {
+	return "", nil
+}
+
 var (
 	testSecretKeySelector = &corev1.SecretKeySelector{
 		LocalObjectReference: corev1.LocalObjectReference{

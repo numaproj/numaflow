@@ -3406,6 +3406,18 @@ func schema_pkg_apis_numaflow_v1alpha1_SASL(ref common.ReferenceCallback) common
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"),
 						},
 					},
+					"scramsha256": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASLSCRAMSHA256 contains the sasl plain config",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"),
+						},
+					},
+					"scramsha512": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASLSCRAMSHA512 contains the sasl plain config",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"),
+						},
+					},
 				},
 				Required: []string{"mechanism"},
 			},
