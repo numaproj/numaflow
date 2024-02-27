@@ -41,11 +41,11 @@ func GetSASL(saslConfig *dfv1.SASL) (*struct {
 	TokenProvider            sarama.AccessTokenProvider
 	GSSAPI                   sarama.GSSAPIConfig
 }, error) {
-	return GetSASLStrategy(saslConfig, OsFile{})
+	return getSASLStrategy(saslConfig, osFile{})
 }
 
 // GetSASLConfig A utility function to get sarama.Config.Net.SASL
-func GetSASLStrategy[GetSecretsStrategy GetSecrets](saslConfig *dfv1.SASL, strategy GetSecretsStrategy) (*struct {
+func getSASLStrategy(saslConfig *dfv1.SASL, strategy volumeReader) (*struct {
 	Enable                   bool
 	Mechanism                sarama.SASLMechanism
 	Version                  int16
@@ -74,7 +74,7 @@ func GetSASLStrategy[GetSecretsStrategy GetSecrets](saslConfig *dfv1.SASL, strat
 		if plain := saslConfig.Plain; plain != nil {
 			config.Net.SASL.Enable = true
 			config.Net.SASL.Mechanism = sarama.SASLTypePlaintext
-			err := SetUserPassword(config, plain.UserSecret, plain.PasswordSecret, strategy)
+			err := setUserPassword(config, plain.UserSecret, plain.PasswordSecret, strategy)
 			if err != nil {
 				return nil, err
 			}
@@ -85,7 +85,7 @@ func GetSASLStrategy[GetSecretsStrategy GetSecrets](saslConfig *dfv1.SASL, strat
 			config.Net.SASL.Enable = true
 			config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA256
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA256} }
-			err := SetUserPassword(config, scram.UserSecret, scram.PasswordSecret, strategy)
+			err := setUserPassword(config, scram.UserSecret, scram.PasswordSecret, strategy)
 			if err != nil {
 				return nil, err
 			}
@@ -96,7 +96,7 @@ func GetSASLStrategy[GetSecretsStrategy GetSecrets](saslConfig *dfv1.SASL, strat
 			config.Net.SASL.Enable = true
 			config.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
 			config.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
-			err := SetUserPassword(config, scram.UserSecret, scram.PasswordSecret, strategy)
+			err := setUserPassword(config, scram.UserSecret, scram.PasswordSecret, strategy)
 			if err != nil {
 				return nil, err
 			}
@@ -108,9 +108,9 @@ func GetSASLStrategy[GetSecretsStrategy GetSecrets](saslConfig *dfv1.SASL, strat
 	return &config.Net.SASL, nil
 }
 
-func SetUserPassword[GetSecretsStrategy GetSecrets](config *sarama.Config, userSecret *corev1.SecretKeySelector, passwordSecret *corev1.SecretKeySelector, strategy GetSecretsStrategy) error {
+func setUserPassword(config *sarama.Config, userSecret *corev1.SecretKeySelector, passwordSecret *corev1.SecretKeySelector, strategy volumeReader) error {
 	if userSecret != nil {
-		user, err := strategy.GetSecretFromVolume(userSecret)
+		user, err := strategy.getSecretFromVolume(userSecret)
 		if err != nil {
 			return err
 		} else {
@@ -118,7 +118,7 @@ func SetUserPassword[GetSecretsStrategy GetSecrets](config *sarama.Config, userS
 		}
 	}
 	if passwordSecret != nil {
-		password, err := strategy.GetSecretFromVolume(passwordSecret)
+		password, err := strategy.getSecretFromVolume(passwordSecret)
 		if err != nil {
 			return err
 		} else {

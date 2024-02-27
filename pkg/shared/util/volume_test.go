@@ -23,14 +23,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-type MockedVolumes struct {
+type mockedVolumes struct {
 	volumeSecrets map[struct {
 		objectName string
 		key        string
 	}]string
 }
 
-func (m MockedVolumes) GetSecretFromVolume(selector *corev1.SecretKeySelector) (string, error) {
+func (m mockedVolumes) getSecretFromVolume(selector *corev1.SecretKeySelector) (string, error) {
 	return m.volumeSecrets[struct {
 		objectName string
 		key        string
@@ -40,7 +40,7 @@ func (m MockedVolumes) GetSecretFromVolume(selector *corev1.SecretKeySelector) (
 	}], nil
 }
 
-func (m MockedVolumes) GetConfigMapFromVolume(selector *corev1.ConfigMapKeySelector) (string, error) {
+func (m mockedVolumes) getConfigMapFromVolume(selector *corev1.ConfigMapKeySelector) (string, error) {
 	return "", nil
 }
 

@@ -10,7 +10,7 @@ import (
 )
 
 func TestSaslConfiguration(t *testing.T) {
-	mockedVolumes := MockedVolumes{
+	mockedVolumes := mockedVolumes{
 		volumeSecrets: map[struct {
 			objectName string
 			key        string
@@ -44,7 +44,7 @@ func TestSaslConfiguration(t *testing.T) {
 
 	t.Run("Plain produces right values", func(t *testing.T) {
 		plain := dfv1.SASLTypePlaintext
-		config, err := GetSASLStrategy(&dfv1.SASL{
+		config, err := getSASLStrategy(&dfv1.SASL{
 			Mechanism: &plain,
 			Plain:     credentials,
 		}, mockedVolumes)
@@ -58,7 +58,7 @@ func TestSaslConfiguration(t *testing.T) {
 
 	t.Run("SCRAM SHA 256 produces right values", func(t *testing.T) {
 		sasl_256 := dfv1.SASLTypeSCRAMSHA256
-		config, err := GetSASLStrategy(&dfv1.SASL{
+		config, err := getSASLStrategy(&dfv1.SASL{
 			Mechanism:   &sasl_256,
 			SCRAMSHA256: credentials,
 		}, mockedVolumes)
@@ -72,7 +72,7 @@ func TestSaslConfiguration(t *testing.T) {
 
 	t.Run("SCRAM SHA 512 produces right values", func(t *testing.T) {
 		sasl_512 := dfv1.SASLTypeSCRAMSHA512
-		config, err := GetSASLStrategy(&dfv1.SASL{
+		config, err := getSASLStrategy(&dfv1.SASL{
 			Mechanism:   &sasl_512,
 			SCRAMSHA512: credentials,
 		}, mockedVolumes)
