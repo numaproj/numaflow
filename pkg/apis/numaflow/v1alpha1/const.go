@@ -156,9 +156,10 @@ const (
 	// Default WAL options
 	DefaultWALSyncDuration            = 2 * time.Second        // Default sync duration for pbq
 	DefaultWALMaxSyncSize             = 5 * 1024 * 1024        // Default size to wait for an explicit sync
-	DefaultWALPath                    = PathPBQMount + "/wals" // Default store path
-	DefaultWALSegmentRotationDuration = 20 * time.Second       // Default segment rotation duration
-	DefaultWALSegmentSize             = 30 * 1024 * 1024       // Default segment size
+	DefaultSegmentWALPath             = PathPBQMount + "/wals" // Default store path
+	DefaultCompactWALPath             = PathPBQMount + "/compact-wals"
+	DefaultWALSegmentRotationDuration = 20 * time.Second // Default segment rotation duration
+	DefaultWALSegmentSize             = 30 * 1024 * 1024 // Default segment size
 
 	// Default GC-events WAL options
 	DefaultGCEventsWALRotationDuration    = 20 * time.Second         // Default rotation duration for the GC tracker

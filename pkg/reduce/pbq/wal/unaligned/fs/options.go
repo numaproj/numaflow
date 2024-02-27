@@ -22,10 +22,17 @@ import (
 
 type WALOption func(stores *unalignedWAL)
 
-// WithStoreDataPath sets the store data path
-func WithStoreDataPath(path string) WALOption {
+// WithSegmentWALPath sets the segment WAL path
+func WithSegmentWALPath(path string) WALOption {
 	return func(stores *unalignedWAL) {
-		stores.storeDataPath = path
+		stores.segmentWALPath = path
+	}
+}
+
+// WithCompactWALPath sets the compact WAL path
+func WithCompactWALPath(path string) WALOption {
+	return func(stores *unalignedWAL) {
+		stores.compactWALPath = path
 	}
 }
 

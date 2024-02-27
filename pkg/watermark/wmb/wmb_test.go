@@ -18,12 +18,9 @@ package wmb
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/binary"
-	"math"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func TestDecodeToWMB(t *testing.T) {
@@ -209,109 +206,4 @@ func TestWMB_EncodeToBytes(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestDecodeToWMB2(t *testing.T) {
-	s := []string{
-		"AA2dwo3/FLAXEOcoao0BAAAAAAAA",
-		"AAT99gz7FLAXkA0tao0BAAAAAAAA",
-		"AATK/Qb1FLAXYLAoao0BAAAAAAAA",
-		"AAe8JsnmFLAXiGImao0BAAAAAAAA",
-		"AB6ClZ3wFLAXYDMoao0BAAAAAAAA",
-		"AB8QjTfkFLAXMEcmao0BAAAAAAAA",
-		"ABA1S9vzFLAXOBwmao0BAAAAAAAA",
-		"ABKiOrL1FLAX8Bsoao0BAAAAAAAA",
-		"ABl9Ew/aFLAXcOklao0BAAAAAAAA",
-		"ABspQkzyFLAXwKwmao0BAAAAAAAA",
-		"ACCEqj78FLAXiOUlao0BAAAAAAAA",
-		"ACCQDBT/FLAXQPElao0BAAAAAAAA",
-		"ACPF4Kv6FLAXqJ4pao0BAAAAAAAA",
-		"ACSKQRX/FLAXEO0nao0BAAAAAAAA",
-		"ACWDlMntFLAXqKonao0BAAAAAAAA",
-		"ACd1I57wFLAX8Bsoao0BAAAAAAAA",
-		"ACuW0fX0FLAX4H0mao0BAAAAAAAA",
-		"ACv8zYX8FLAXgAonao0BAAAAAAAA",
-		"ADB3YZvwFLAXiFwnao0BAAAAAAAA",
-		"ADL5QGX2FLAXuNcmao0BAAAAAAAA",
-		"ADnXCNvmFLAXwJopao0BAAAAAAAA",
-		"AE40noDiFLAXKPUlao0BAAAAAAAA",
-		"AEYiX1H0FLAXqLYlao0BAAAAAAAA",
-		"AExe68n9FLAXILUiao0BAAAAAAAA",
-		"AFJjQLf1FLAX8Kolao0BAAAAAAAA",
-		"AFN/QkDIFLAXCKEmao0BAAAAAAAA",
-		"AFm5HnnyFLAX2Iorao0BAAAAAAAA",
-		"AFog0Az1FLAX8Iwqao0BAAAAAAAA",
-		"AG2GTZ3vFLAXYDMoao0BAAAAAAAA",
-		"AGHT7yfpFLAXEHYmao0BAAAAAAAA",
-		"AGeAIZjnFLAXiMcqao0BAAAAAAAA",
-		"AGvTjVTaFLAXwEciao0BAAAAAAAA",
-		"AGwY0A77FLAXeB0rao0BAAAAAAAA",
-		"AGyZO6j6FLAXQGIoao0BAAAAAAAA",
-		"AH4dy4vxFLAX2Jwoao0BAAAAAAAA",
-		"AHFsmE/0FLAXIH8rao0BAAAAAAAA",
-		"AHUvjpvVFLAXIBQoao0BAAAAAAAA",
-		"AHnNKEnzFLAXEPMmao0BAAAAAAAA",
-		"AHxQr2/2FLAXkB8qao0BAAAAAAAA",
-		"AI6bTn7rFLAXyGkqao0BAAAAAAAA",
-		"AIaNtbTkFLAX4OIqao0BAAAAAAAA",
-		"AIs5p+nLFLAXGLAqao0BAAAAAAAA",
-		"AJC7qMv9FLAX2Kgmao0BAAAAAAAA",
-		"AJbVakbyFLAXUGstao0BAAAAAAAA",
-		"AJgLmbr8FLAXOJkmao0BAAAAAAAA",
-		"AJuhZb7tFLAXWHYkao0BAAAAAAAA",
-		"AK+YYJLvFLAXKGApao0BAAAAAAAA",
-		"AK6fOUnvFLAXILUiao0BAAAAAAAA",
-		"AKQp4wXwFLAXuGYkao0BAAAAAAAA",
-		"AKTTADLMFLAXiFApao0BAAAAAAAA",
-		"AKUZj+PyFLAXmO4qao0BAAAAAAAA",
-		"AKYi37rsFLAXEM8sao0BAAAAAAAA",
-		"AKk+JrztFLAXuDAtao0BAAAAAAAA",
-		"AKokH6n6FLAXsAInao0BAAAAAAAA",
-		"AKqosyX/FLAXWO0lao0BAAAAAAAA",
-		"AL0CVa38FLAX6EYoao0BAAAAAAAA",
-		"ALoZBa3vFLAXYJ4rao0BAAAAAAAA",
-		"ALqJYsj9FLAXGMgmao0BAAAAAAAA",
-		"AM8eb7P1FLAXAMYnao0BAAAAAAAA",
-		"AMsS9Ln6FLAXANIlao0BAAAAAAAA",
-		"AMsxF2roFLAXmGsrao0BAAAAAAAA",
-		"ANFfVULtFLAXgHspao0BAAAAAAAA",
-		"ANk5+pnnFLAXkMwiao0BAAAAAAAA",
-		"ANzgRGb2FLAXoEArao0BAAAAAAAA",
-		"AO5iQGjoFLAX2CUnao0BAAAAAAAA",
-		"AOAXFb7tFLAXkDEnao0BAAAAAAAA",
-		"AOTnsQr/FLAXIAIrao0BAAAAAAAA",
-		"AOVHAhL7FLAXKFoqao0BAAAAAAAA",
-		"AOj1MmP6FLAXUI8nao0BAAAAAAAA",
-		"AOu3+pD5FLAX2CUnao0BAAAAAAAA",
-		"APc1Jxz1FLAXyHUoao0BAAAAAAAA",
-		"APtIedrzFLAXEGooao0BAAAAAAAA",
-	}
-	var max int64 = 0
-	var min int64 = math.MaxInt64
-	for _, v := range s {
-		b, err := base64.StdEncoding.DecodeString(v)
-		if err != nil {
-			t.Errorf("DecodeToWMB() error = %v", err)
-			return
-		}
-
-		got, err := DecodeToWMB(b)
-		if err != nil {
-			t.Errorf("DecodeToWMB() error = %v", err)
-			return
-		}
-
-		if got.Watermark > max {
-			max = got.Watermark
-		}
-
-		if got.Watermark < min {
-			min = got.Watermark
-		}
-
-		println(int32(time.Since(time.UnixMilli(got.Watermark)).Minutes()))
-	}
-
-	println("max", int32(time.Since(time.UnixMilli(max)).Minutes()))
-	println("min", int32(time.Since(time.UnixMilli(min)).Minutes()))
 }

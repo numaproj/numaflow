@@ -38,15 +38,19 @@ func TestCompactor(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dataDir := t.TempDir()
-	// delete all the files in the directory at the end
+	segmentDir := t.TempDir()
 	defer func() {
-		cleanupDir(dataDir)
+		cleanupDir(segmentDir)
+	}()
+
+	compactDir := t.TempDir()
+	defer func() {
+		cleanupDir(compactDir)
 	}()
 
 	pid := window.SharedUnalignedPartition
-	// write some data files
-	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(dataDir))
+	// write some data filesToReplay
+	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	keys := []string{"key-1", "key-2"}
@@ -86,7 +90,7 @@ func TestCompactor(t *testing.T) {
 	assert.NotEmpty(t, files)
 
 	// create compactor with the data and event directories
-	c, err := NewCompactor(ctx, &pid, eventDir, dataDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	c, err := NewCompactor(ctx, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
 	assert.NoError(t, err)
 
 	err = c.Start(ctx)
@@ -96,15 +100,18 @@ func TestCompactor(t *testing.T) {
 	assert.NoError(t, err)
 
 	// list all the files in the directory
-	files, err = os.ReadDir(dataDir)
+	files, err = os.ReadDir(segmentDir)
 	assert.NoError(t, err)
-	//assert.Equal(t, 1, len(files))
+
+	files, err = os.ReadDir(compactDir)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, files)
 
 	// read from file and check if the data is correct
 	d := newDecoder()
 
 	// read the file
-	file, err := os.OpenFile(filepath.Join(dataDir, files[0].Name()), os.O_RDONLY, 0644)
+	file, err := os.OpenFile(filepath.Join(compactDir, files[0].Name()), os.O_RDONLY, 0644)
 	assert.NoError(t, err)
 
 	header, err := d.decodeHeader(file)
@@ -133,15 +140,21 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dataDir := t.TempDir()
+	segmentDir := t.TempDir()
 	// delete all the files in the directory at the end
 	defer func() {
-		cleanupDir(dataDir)
+		cleanupDir(segmentDir)
+	}()
+
+	compactDir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(compactDir)
 	}()
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
-	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(dataDir))
+	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	keys := []string{"key-1", "key-2"}
@@ -181,7 +194,7 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	assert.NotEmpty(t, files)
 
 	// create compactor with the data and event directories
-	c, err := NewCompactor(ctx, &pid, eventDir, dataDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	c, err := NewCompactor(ctx, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
 	assert.NoError(t, err)
 
 	err = c.Start(ctx)
@@ -190,8 +203,12 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	err = c.Stop()
 	assert.NoError(t, err)
 
-	wl, err := NewUnalignedReadWriteWAL(WithStoreOptions(dataDir))
+	sm := NewFSManager(segmentDir, compactDir, vertexInstance)
+	wls, err := sm.DiscoverWALs(ctx)
 	assert.NoError(t, err)
+	assert.Len(t, wls, 1)
+
+	wl := wls[0]
 
 	// replay the messages
 	readCh, errCh := wl.Replay()
@@ -235,7 +252,7 @@ func TestFilesInDir(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	files, err := filesInDir(dir, currentWALPrefix)
+	files, err := listFilesInDir(dir, currentWALPrefix, sortFunc)
 	assert.NoError(t, err)
 	assert.Len(t, files, 10)
 
@@ -245,7 +262,7 @@ func TestFilesInDir(t *testing.T) {
 	err = file.Close()
 	assert.NoError(t, err)
 
-	files, err = filesInDir(dir, currentWALPrefix)
+	files, err = listFilesInDir(dir, currentWALPrefix, sortFunc)
 	assert.NoError(t, err)
 	assert.Len(t, files, 10)
 
@@ -255,7 +272,7 @@ func TestFilesInDir(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	files, err = filesInDir(dir, currentWALPrefix)
+	files, err = listFilesInDir(dir, currentWALPrefix, sortFunc)
 	assert.NoError(t, err)
 	assert.Len(t, files, 0)
 
@@ -270,7 +287,7 @@ func TestFilesInDir(t *testing.T) {
 	err = file.Close()
 	assert.NoError(t, err)
 
-	files, err = filesInDir(dir, currentWALPrefix)
+	files, err = listFilesInDir(dir, currentWALPrefix, sortFunc)
 	assert.NoError(t, err)
 	assert.Len(t, files, 2)
 
@@ -280,7 +297,7 @@ func TestFilesInDir(t *testing.T) {
 	err = file.Close()
 	assert.NoError(t, err)
 
-	files, err = filesInDir(dir, currentWALPrefix)
+	files, err = listFilesInDir(dir, currentWALPrefix, sortFunc)
 	assert.NoError(t, err)
 	assert.Len(t, files, 2)
 
@@ -291,7 +308,7 @@ func TestFilesInDir(t *testing.T) {
 	err = os.Remove(filepath.Join(dir, "file-2"))
 	assert.NoError(t, err)
 
-	files, err = filesInDir(dir, currentWALPrefix)
+	files, err = listFilesInDir(dir, currentWALPrefix, sortFunc)
 	assert.NoError(t, err)
 	assert.Len(t, files, 0)
 }
@@ -299,15 +316,21 @@ func TestFilesInDir(t *testing.T) {
 func TestCompactor_ContextClose(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	dataDir := t.TempDir()
+	segmentDir := t.TempDir()
 	// delete all the files in the directory at the end
 	defer func() {
-		cleanupDir(dataDir)
+		cleanupDir(segmentDir)
+	}()
+
+	compactDir := t.TempDir()
+	// delete all the files in the directory at the end
+	defer func() {
+		cleanupDir(compactDir)
 	}()
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
-	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(dataDir))
+	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	keys := []string{"key-1", "key-2"}
@@ -342,14 +365,14 @@ func TestCompactor_ContextClose(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create compactor with the data and event directories
-	c, err := NewCompactor(ctx, &pid, eventDir, dataDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	c, err := NewCompactor(ctx, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
 	assert.NoError(t, err)
 
 	err = c.Start(ctx)
 	assert.NoError(t, err)
 
 	cancel()
-	files, _ := filesInDir(dataDir, currentWALPrefix)
+	files, _ := filesInDir(segmentDir, currentWALPrefix)
 	for _, file := range files {
 		println(file.Name())
 	}

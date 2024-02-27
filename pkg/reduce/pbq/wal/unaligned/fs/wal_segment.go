@@ -49,19 +49,20 @@ type unalignedWAL struct {
 	segmentCreateTime       time.Time     // segmentCreateTime is the time when the segment is created
 	encoder                 *encoder      // encoder is the encoder for the unalignedWAL entries and header
 	decoder                 *decoder      // decoder is the decoder for the unalignedWAL entries and header
-	storeDataPath           string        // storeDataPath is the path to the unalignedWAL data
+	segmentWALPath          string        // segmentWALPath is the path to the unalignedWAL data
+	compactWALPath          string        // compactWALPath is the path to the compacted unalignedWAL data
 	segmentSize             int64         // segmentSize is the max size of the segment
 	syncDuration            time.Duration // syncDuration is the duration after which the data is synced to the disk
 	maxBatchSize            int64         // maxBatchSize is the maximum batch size before the data is synced to the disk
 	segmentRotationDuration time.Duration // segmentRotationDuration is the duration after which the segment is rotated
-	files                   []os.FileInfo
+	filesToReplay           []string
 }
 
 // NewUnalignedWriteOnlyWAL returns a new store writer instance
 func NewUnalignedWriteOnlyWAL(partitionId *partition.ID, opts ...WALOption) (wal.WAL, error) {
 
 	s := &unalignedWAL{
-		storeDataPath:           dfv1.DefaultWALPath,
+		segmentWALPath:          dfv1.DefaultSegmentWALPath,
 		segmentSize:             dfv1.DefaultWALSegmentSize,
 		maxBatchSize:            dfv1.DefaultWALMaxSyncSize,
 		syncDuration:            dfv1.DefaultWALSyncDuration,
@@ -90,11 +91,11 @@ func NewUnalignedWriteOnlyWAL(partitionId *partition.ID, opts ...WALOption) (wal
 }
 
 // NewUnalignedReadWriteWAL returns a new WAL instance for reading and writing
-func NewUnalignedReadWriteWAL(opts ...WALOption) (wal.WAL, error) {
+func NewUnalignedReadWriteWAL(filesToReplay []string, opts ...WALOption) (wal.WAL, error) {
 	var err error
 
 	s := &unalignedWAL{
-		storeDataPath:           dfv1.DefaultWALPath,
+		segmentWALPath:          dfv1.DefaultSegmentWALPath,
 		segmentSize:             dfv1.DefaultWALSegmentSize,
 		maxBatchSize:            dfv1.DefaultWALMaxSyncSize,
 		syncDuration:            dfv1.DefaultWALSyncDuration,
@@ -107,15 +108,11 @@ func NewUnalignedReadWriteWAL(opts ...WALOption) (wal.WAL, error) {
 		segmentCreateTime:       time.Now(),
 		encoder:                 newEncoder(),
 		decoder:                 newDecoder(),
+		filesToReplay:           filesToReplay,
 	}
 
 	for _, opt := range opts {
 		opt(s)
-	}
-
-	s.files, err = filesInDir(s.storeDataPath, currentWALPrefix)
-	if err != nil {
-		return nil, err
 	}
 
 	// open the current data file
@@ -186,13 +183,13 @@ func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 		defer func() { errChan = nil }()
 
 		// Main loop to read messages
-		// It will break if we have read through all files
+		// It will break if we have read through all filesToReplay
 	replayLoop:
 		for {
 			// If there's no current file being read
 			if s.currDataFp == nil {
-				// If there's no more files in the list, break
-				if len(s.files) == 0 {
+				// If there's no more filesToReplay in the list, break
+				if len(s.filesToReplay) == 0 {
 					break replayLoop
 				}
 
@@ -248,18 +245,18 @@ func (s *unalignedWAL) PartitionID() *partition.ID {
 }
 
 func (s *unalignedWAL) openReadFile() error {
-	if len(s.files) == 0 {
+	if len(s.filesToReplay) == 0 {
 		return nil
 	}
 	// Open the first file in the list
-	currFile, err := os.OpenFile(filepath.Join(s.storeDataPath, s.files[0].Name()), os.O_RDONLY, 0644)
+	currFile, err := os.OpenFile(s.filesToReplay[0], os.O_RDONLY, 0644)
 	if err != nil {
 		return err
 	}
 	s.currDataFp = currFile
 
 	// Remove opened file from the list
-	s.files = s.files[1:]
+	s.filesToReplay = s.filesToReplay[1:]
 
 	pid, err := s.decoder.decodeHeader(s.currDataFp)
 	if err != nil {
@@ -272,7 +269,7 @@ func (s *unalignedWAL) openReadFile() error {
 
 // openFile opens a new data file
 func (s *unalignedWAL) openFile() error {
-	dataFilePath := filepath.Join(s.storeDataPath, currentSegmentName)
+	dataFilePath := filepath.Join(s.segmentWALPath, currentSegmentName)
 	var err error
 	if s.currDataFp, err = os.OpenFile(dataFilePath, os.O_WRONLY|os.O_CREATE, 0644); err != nil {
 		return err
@@ -317,7 +314,7 @@ func (s *unalignedWAL) rotateFile() error {
 	}
 
 	// rename the current data file to the segment file
-	if err := os.Rename(filepath.Join(s.storeDataPath, currentSegmentName), s.segmentFilePath(s.storeDataPath)); err != nil {
+	if err := os.Rename(filepath.Join(s.segmentWALPath, currentSegmentName), s.segmentFilePath(s.segmentWALPath)); err != nil {
 		return err
 	}
 
@@ -360,7 +357,7 @@ func (s *unalignedWAL) Close() error {
 	}
 
 	// rename the current data file to the segment file
-	if err = os.Rename(filepath.Join(s.storeDataPath, currentSegmentName), s.segmentFilePath(s.storeDataPath)); err != nil {
+	if err = os.Rename(filepath.Join(s.segmentWALPath, currentSegmentName), s.segmentFilePath(s.segmentWALPath)); err != nil {
 		return err
 	}
 

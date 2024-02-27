@@ -19,10 +19,11 @@ package fs
 import (
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 )
 
-// filesInDir lists all files sorted chronologically after applying the filterStr in the given directory,
+// filesInDir lists all filesToReplay after applying the filterStr in the given directory,
 // except the WIP temp file.
 func filesInDir(dirPath string, filterStr string) ([]os.FileInfo, error) {
 
@@ -34,14 +35,14 @@ func filesInDir(dirPath string, filterStr string) ([]os.FileInfo, error) {
 		_ = dir.Close()
 	}(dir)
 
-	// read all files from the dir
+	// read all filesToReplay from the dir
 	files, err := dir.Readdir(-1)
 	if err != nil {
 		return nil, err
 	}
 
 	var cfs []os.FileInfo
-	// ignore the files which has "current" in their file name
+	// ignore the filesToReplay which has "current" in their file name
 	// because it will in use by the writer
 	for i := 0; i < len(files); i++ {
 		if strings.Contains(files[i].Name(), filterStr) {
@@ -50,12 +51,47 @@ func filesInDir(dirPath string, filterStr string) ([]os.FileInfo, error) {
 		cfs = append(cfs, files[i])
 	}
 
-	// FIXME(WAL): cannot rely on the ModTime()
-	// sort the files based on the mod time (only one writer) so that order of compaction is maintained
-	// when you have multiple segments to compact we should compact the oldest segment first
-	sort.Slice(cfs, func(i, j int) bool {
-		return cfs[i].ModTime().Before(cfs[j].ModTime())
-	})
+	return cfs, nil
+}
+
+// listFilesInDir lists all filesToReplay after applying the filterStr in the given directory. If a sort function is provided,
+// the filesToReplay are sorted using it.
+func listFilesInDir(dirPath, filterStr string, sortFunc func([]os.FileInfo)) ([]os.FileInfo, error) {
+	dir, err := os.Open(dirPath)
+	if err != nil {
+		return nil, err
+	}
+	defer func(dir *os.File) {
+		_ = dir.Close()
+	}(dir)
+
+	files, err := dir.Readdir(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	// filter the filesToReplay based on the filterStr
+	var cfs []os.FileInfo
+	for _, file := range files {
+		if strings.Contains(file.Name(), filterStr) {
+			continue
+		}
+		cfs = append(cfs, file)
+	}
+
+	// sort the filesToReplay if a sort function is provided
+	if sortFunc != nil {
+		sortFunc(cfs)
+	}
 
 	return cfs, nil
+}
+
+// sortFunc is a function to sort the filesToReplay based on the timestamp in the file name
+var sortFunc = func(files []os.FileInfo) {
+	sort.Slice(files, func(i, j int) bool {
+		timeI, _ := strconv.ParseInt(strings.Split(files[i].Name(), "-")[1], 10, 64)
+		timeJ, _ := strconv.ParseInt(strings.Split(files[j].Name(), "-")[1], 10, 64)
+		return timeI < timeJ
+	})
 }

@@ -42,47 +42,49 @@ const (
 	compactionInProgress = "current" + "-" + compactedPrefix
 )
 
-// compactor is a compactor for the data files
+// compactor is a compactor for the data filesToReplay
 type compactor struct {
-	partitionID        *partition.ID
-	compactKeyMap      map[string]int64
-	gcEventsWALPath    string
-	dataSegmentWALPath string
-	currCompactedFile  *os.File
-	compWriteOffset    int64
-	compBufWriter      *bufio.Writer
-	prevSyncedTime     time.Time
-	maxFileSize        int64
-	mu                 sync.Mutex
-	dc                 *decoder
-	ec                 *encoder
-	compactionDuration time.Duration
-	syncDuration       time.Duration
-	stopSignal         chan struct{}
-	doneCh             chan struct{}
-	log                *zap.SugaredLogger
+	partitionID         *partition.ID
+	compactKeyMap       map[string]int64
+	gcEventsWALPath     string
+	dataSegmentWALPath  string
+	compactedSegWALPath string
+	currCompactedFile   *os.File
+	compWriteOffset     int64
+	compBufWriter       *bufio.Writer
+	prevSyncedTime      time.Time
+	maxFileSize         int64
+	mu                  sync.Mutex
+	dc                  *decoder
+	ec                  *encoder
+	compactionDuration  time.Duration
+	syncDuration        time.Duration
+	stopSignal          chan struct{}
+	doneCh              chan struct{}
+	log                 *zap.SugaredLogger
 }
 
 // NewCompactor returns a new WAL compactor instance
-func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPath string, storeDataPath string, opts ...CompactorOption) (unaligned.Compactor, error) {
+func NewCompactor(ctx context.Context, partitionId *partition.ID, gcEventsPath string, dataSegmentWALPath string, compactedSegWALPath string, opts ...CompactorOption) (unaligned.Compactor, error) {
 
 	c := &compactor{
-		compactionDuration: dfv1.DefaultWALCompactionDuration,
-		maxFileSize:        dfv1.DefaultWALCompactorMaxFileSize,
-		syncDuration:       dfv1.DefaultWALCompactorSyncDuration, // FIXME(WAL): we need to sync only at the end
-		partitionID:        partitionId,
-		dataSegmentWALPath: storeDataPath,
-		gcEventsWALPath:    storeEventsPath,
-		compactKeyMap:      make(map[string]int64),
-		prevSyncedTime:     time.Now(),
-		mu:                 sync.Mutex{},
-		dc:                 newDecoder(),
-		ec:                 newEncoder(),
-		compWriteOffset:    0,
-		compBufWriter:      bufio.NewWriter(nil),
-		doneCh:             make(chan struct{}),
-		stopSignal:         make(chan struct{}),
-		log:                logging.FromContext(ctx),
+		compactionDuration:  dfv1.DefaultWALCompactionDuration,
+		maxFileSize:         dfv1.DefaultWALCompactorMaxFileSize,
+		syncDuration:        dfv1.DefaultWALCompactorSyncDuration, // FIXME(WAL): we need to sync only at the end
+		partitionID:         partitionId,
+		dataSegmentWALPath:  dataSegmentWALPath,
+		compactedSegWALPath: compactedSegWALPath,
+		gcEventsWALPath:     gcEventsPath,
+		compactKeyMap:       make(map[string]int64),
+		prevSyncedTime:      time.Now(),
+		mu:                  sync.Mutex{},
+		dc:                  newDecoder(),
+		ec:                  newEncoder(),
+		compWriteOffset:     0,
+		compBufWriter:       bufio.NewWriter(nil),
+		doneCh:              make(chan struct{}),
+		stopSignal:          make(chan struct{}),
+		log:                 logging.FromContext(ctx),
 	}
 
 	for _, opt := range opts {
@@ -106,12 +108,18 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPat
 		}
 	}
 
-	// if the file with the compactionInProgress name exists, it means the compactor was stopped
-	// abruptly we should rotate the file, so that it gets considered for replay
-	if _, err = os.Stat(filepath.Join(c.dataSegmentWALPath, compactionInProgress)); !errors.Is(err, os.ErrNotExist) {
-		// FIXME(WAL): we cannot reuse this function
-		err = c.rotateCompactionFile()
+	// Create compacted dir if not exist
+	if _, err = os.Stat(c.compactedSegWALPath); os.IsNotExist(err) {
+		err = os.Mkdir(c.compactedSegWALPath, 0755)
 		if err != nil {
+			return nil, err
+		}
+	}
+
+	// if the file with the compactionInProgress name exists, it means the compactor was stopped
+	// abruptly we should rename the file, so that it gets considered for replay
+	if _, err = os.Stat(filepath.Join(c.compactedSegWALPath, compactionInProgress)); !errors.Is(err, os.ErrNotExist) {
+		if err = os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.compactedSegWALPath)); err != nil {
 			return nil, err
 		}
 	}
@@ -126,17 +134,17 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, storeEventsPat
 
 // Start starts the compactor
 func (c *compactor) Start(ctx context.Context) error {
-	// in case of incomplete compaction we should compact the data files
+	// in case of incomplete compaction we should compact the data filesToReplay
 	// before starting the compactor
 
-	// get all the GC events files
-	eventFiles, err := filesInDir(c.gcEventsWALPath, currentWALPrefix)
+	// get all the GC events filesToReplay
+	eventFiles, err := listFilesInDir(c.gcEventsWALPath, currentWALPrefix, nil)
 	if err != nil {
 		return err
 	}
 
 	// There maybe some events which were not compacted. This could happen if the compactor was stopped (restart), so we
-	// should compact those before replaying persisted messages. We detect non-compacted files by looking at unprocessed
+	// should compact those before replaying persisted messages. We detect non-compacted filesToReplay by looking at unprocessed
 	// gc-events in the GC WAL.
 	if len(eventFiles) != 0 {
 		if err = c.compact(ctx, eventFiles); err != nil {
@@ -182,7 +190,7 @@ func (c *compactor) Stop() error {
 	}
 
 	// rename the current compaction file to the segment file
-	if err = os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.dataSegmentWALPath)); err != nil {
+	if err = os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.compactedSegWALPath)); err != nil {
 		return err
 	}
 
@@ -194,7 +202,7 @@ func (c *compactor) getFilePath(storePath string) string {
 	return filepath.Join(storePath, compactedPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
 }
 
-// keepCompacting keeps compacting the data files every compaction duration
+// keepCompacting keeps compacting the data filesToReplay every compaction duration
 func (c *compactor) keepCompacting(ctx context.Context) {
 	compTimer := time.NewTicker(c.compactionDuration)
 	for {
@@ -206,8 +214,8 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 			close(c.doneCh)
 			return
 		case <-compTimer.C:
-			// get all the events files
-			eventFiles, _ := filesInDir(c.gcEventsWALPath, currentEventsFile)
+			// get all the events filesToReplay
+			eventFiles, _ := listFilesInDir(c.gcEventsWALPath, currentEventsFile, nil)
 			if len(eventFiles) >= 0 {
 				err := c.compact(ctx, eventFiles)
 				// TODO: retry, if its not ctx or stop signal error
@@ -221,7 +229,7 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 }
 
 // compact reads all the events file and constructs the compaction key map
-// and then compacts the data files based on the compaction key map
+// and then compacts the data filesToReplay based on the compaction key map
 func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error {
 	startTime := time.Now()
 	// build the compaction key map
@@ -236,13 +244,13 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 		c.log.Infow("REMOVE ME: Map entry - ", zap.String("key", k), zap.Int64("value", v))
 	}
 
-	// compact the data files based on the compaction key map
+	// compact the data filesToReplay based on the compaction key map
 	err = c.compactDataFiles(ctx)
 	if err != nil {
 		return err
 	}
 
-	// delete the events files
+	// delete the events filesToReplay
 	for _, eventFile := range eventFiles {
 		if err = os.Remove(filepath.Join(c.gcEventsWALPath, eventFile.Name())); err != nil {
 			return err
@@ -253,7 +261,7 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 	return nil
 }
 
-// buildCompactionKeyMap builds the compaction key map from the GC event files. The map's key is the "keys" of the
+// buildCompactionKeyMap builds the compaction key map from the GC event filesToReplay. The map's key is the "keys" of the
 // window and value is the max end-time for which the data has been forwarded to next vertex. This means we can lookup
 // this map to see whether the message can be dropped and not carried to the compacted file because we have closed the
 // book and have already forwarded.
@@ -299,7 +307,7 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 	return nil
 }
 
-// compactDataFiles compacts the data files
+// compactDataFiles compacts the data filesToReplay
 func (c *compactor) compactDataFiles(ctx context.Context) error {
 
 	// if there are no events to compact, return
@@ -307,29 +315,43 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 		return nil
 	}
 
-	// get all the data files
-	dataFiles, err := filesInDir(c.dataSegmentWALPath, currentWALPrefix)
+	// get all the compacted files
+	compactedFiles, err := listFilesInDir(c.compactedSegWALPath, compactedPrefix, sortFunc)
 	if err != nil {
 		return err
 	}
 
-	c.log.Infow("Compacting data files", zap.Int("count", len(dataFiles)))
-	for _, dataFile := range dataFiles {
-		c.log.Infow("Data file - ", zap.String("file", dataFile.Name()))
+	// get all the segment files
+	segmentFiles, err := listFilesInDir(c.dataSegmentWALPath, currentWALPrefix, sortFunc)
+	if err != nil {
+		return err
 	}
 
-	// iterate over all the data files and compact them
-	for _, dataFile := range dataFiles {
+	// we should consider the compacted files first, since the compacted files will have the oldest data
+	filesToReplay := make([]string, 0)
+	for _, compactedFile := range compactedFiles {
+		filesToReplay = append(filesToReplay, filepath.Join(c.compactedSegWALPath, compactedFile.Name()))
+	}
+	for _, dataFile := range segmentFiles {
+		filesToReplay = append(filesToReplay, filepath.Join(c.dataSegmentWALPath, dataFile.Name()))
+	}
+
+	if len(filesToReplay) == 0 {
+		return nil
+	}
+
+	// iterate over all the data filesToReplay and compact them
+	for _, filePath := range filesToReplay {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-c.stopSignal:
 			// send error, otherwise the compactor will delete
-			// the event files
+			// the event filesToReplay
 			return fmt.Errorf("compactor stopped")
 		default:
-			c.log.Infow("compacting file", zap.String("file", dataFile.Name()))
-			if err = c.compactFile(dataFile.Name()); err != nil {
+			c.log.Infow("compacting file", zap.String("file", filePath))
+			if err = c.compactFile(filePath); err != nil {
 				return err
 			}
 		}
@@ -341,9 +363,9 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 // compactFile compacts the given data file
 // it copies the messages from the data file to the compaction file if the message should not be deleted
 // and deletes the data file after compaction
-func (c *compactor) compactFile(fileName string) error {
+func (c *compactor) compactFile(fp string) error {
 	// open the data file (read only)
-	dp, err := os.Open(filepath.Join(c.dataSegmentWALPath, fileName))
+	dp, err := os.Open(fp)
 	if err != nil {
 		return err
 	}
@@ -408,8 +430,8 @@ readLoop:
 
 	}
 
-	// delete the data file, since it's been compacted
-	if err = os.Remove(filepath.Join(c.dataSegmentWALPath, fileName)); err != nil {
+	// delete the file, since it's been compacted
+	if err = os.Remove(fp); err != nil {
 		return err
 	}
 	return nil
@@ -485,7 +507,7 @@ func (c *compactor) rotateCompactionFile() error {
 	}
 
 	// rename the current compaction file to the segment file
-	if err := os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.dataSegmentWALPath)); err != nil {
+	if err := os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.compactedSegWALPath)); err != nil {
 		return err
 	}
 
@@ -511,7 +533,7 @@ func (c *compactor) flushAndSync() error {
 func (c *compactor) openCompactionFile() error {
 	var err error
 
-	c.currCompactedFile, err = os.OpenFile(filepath.Join(c.dataSegmentWALPath, compactionInProgress), os.O_WRONLY|os.O_CREATE, 0644)
+	c.currCompactedFile, err = os.OpenFile(filepath.Join(c.compactedSegWALPath, compactionInProgress), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}

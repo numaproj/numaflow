@@ -17,26 +17,46 @@ limitations under the License.
 package fs
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
+var vertexInstance = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "testPipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			Sink: &dfv1.Sink{
+				Kafka: &dfv1.KafkaSink{},
+			},
+		},
+	}},
+	Replica: 0,
+}
+
 func TestUnalignedWAL_Write(t *testing.T) {
 
-	tempDir := t.TempDir()
+	segmentDir := t.TempDir()
 	defer func(path string) {
 		cleanupDir(path)
-	}(tempDir)
+	}(segmentDir)
+
+	compactDir := t.TempDir()
+	defer func(path string) {
+		cleanupDir(path)
+	}(compactDir)
 
 	partitionId := window.SharedUnalignedPartition
-	s, err := NewUnalignedWriteOnlyWAL(&partitionId, WithStoreOptions(tempDir))
+	s, err := NewUnalignedWriteOnlyWAL(&partitionId, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	// create read messages
@@ -52,20 +72,26 @@ func TestUnalignedWAL_Write(t *testing.T) {
 	err = s.Close()
 	assert.NoError(t, err)
 
-	// list all the files in the directory
-	files, err := os.ReadDir(tempDir)
+	// list all the filesToReplay in the directory
+	files, err := os.ReadDir(segmentDir)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, files)
 }
 
 func TestUnalignedWAL_Replay(t *testing.T) {
+	ctx := context.Background()
 	tempDir := t.TempDir()
 	defer func(path string) {
 		cleanupDir(path)
 	}(tempDir)
 
+	compactDir := t.TempDir()
+	defer func(path string) {
+		cleanupDir(path)
+	}(compactDir)
+
 	partitionId := window.SharedUnalignedPartition
-	s, err := NewUnalignedWriteOnlyWAL(&partitionId, WithStoreOptions(tempDir))
+	s, err := NewUnalignedWriteOnlyWAL(&partitionId, WithStoreOptions(tempDir, compactDir))
 	assert.NoError(t, err)
 
 	// create read messages
@@ -81,12 +107,12 @@ func TestUnalignedWAL_Replay(t *testing.T) {
 	err = s.Close()
 	assert.NoError(t, err)
 
-	// create a new unalignedWAL
-	s, err = NewUnalignedReadWriteWAL(WithStoreOptions(tempDir))
+	wm := NewFSManager(tempDir, compactDir, vertexInstance)
+	wls, err := wm.DiscoverWALs(ctx)
 	assert.NoError(t, err)
 
 	// replay the messages
-	readCh, errCh := s.Replay()
+	readCh, errCh := wls[0].Replay()
 	replayedMessages := make([]*isb.ReadMessage, 0)
 readLoop:
 	for {
@@ -109,9 +135,10 @@ readLoop:
 	}
 }
 
-func WithStoreOptions(path string) WALOption {
+func WithStoreOptions(segmentPath string, compactPath string) WALOption {
 	return func(s *unalignedWAL) {
-		s.storeDataPath = path
+		s.segmentWALPath = segmentPath
+		s.compactWALPath = compactPath
 		s.segmentSize = 1024
 		s.syncDuration = time.Second
 		s.maxBatchSize = 1024 * 50

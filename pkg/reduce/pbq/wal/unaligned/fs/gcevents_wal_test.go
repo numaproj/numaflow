@@ -49,7 +49,7 @@ func TestGcEventsTracker_TrackGCEvent(t *testing.T) {
 	err = tracker.Close()
 	assert.NoError(t, err)
 
-	// list all the files in the directory
+	// list all the filesToReplay in the directory
 	files, err := os.ReadDir(tempDir)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, files)
