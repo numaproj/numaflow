@@ -133,7 +133,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, sinkWmStores)
 			// sink vertex has only one toBuffer, so the length is 1
-			idleManager = wmb.NewIdleManager(1)
+			idleManager, _ = wmb.NewIdleManager(len(readers), 1)
 		}
 
 	default:
@@ -142,7 +142,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SinkServerInfoFile))
 		if err != nil {
 			return err
 		}

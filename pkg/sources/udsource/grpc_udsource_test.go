@@ -36,7 +36,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
+	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
 	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 )
 

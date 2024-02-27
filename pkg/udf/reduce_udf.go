@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -94,17 +95,22 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	// create udf handler and wait until it is ready
 	if windowType.Fixed != nil || windowType.Sliding != nil {
-		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
-		if err != nil {
-			return err
-		}
-
+		var serverInfo *info.ServerInfo
 		var client reducer.Client
 		// if streaming is enabled, use the reduceStreaming address
 		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
+			// Wait for server info to be ready
+			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceStreamServerInfoFile))
+			if err != nil {
+				return err
+			}
 			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
 		} else {
+			// Wait for server info to be ready
+			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceServerInfoFile))
+			if err != nil {
+				return err
+			}
 			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		}
 		if err != nil {
@@ -127,7 +133,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		healthChecker = reduceHandler
 	} else if windowType.Session != nil {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SessionReduceServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -215,7 +221,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, toVertexWmStores)
 
-			idleManager = wmb.NewIdleManager(len(writers))
+			idleManager, _ = wmb.NewIdleManager(1, len(writers))
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)

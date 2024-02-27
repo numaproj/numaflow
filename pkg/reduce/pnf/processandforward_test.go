@@ -181,13 +181,15 @@ func TestPnFHandleAlignedWindowResponses(t *testing.T) {
 		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 
+	idleManager, _ := wmb.NewIdleManager(1, len(toBuffersMap))
+
 	pf := &processAndForward{
 		partitionId:        id,
 		whereToDecider:     whereto,
 		windower:           windower,
 		toBuffers:          toBuffersMap,
 		wmPublishers:       wmPublishers,
-		idleManager:        wmb.NewIdleManager(len(toBuffersMap)),
+		idleManager:        idleManager,
 		pbqReader:          &pbqReader{},
 		done:               make(chan struct{}),
 		latestWriteOffsets: latestWriteOffsets,
@@ -256,6 +258,8 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		buffers: buffers,
 	}
 
+	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
+
 	pf := processAndForward{
 		partitionId:    testPartition,
 		UDF:            nil,
@@ -264,7 +268,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		toBuffers:      toBuffers,
 		whereToDecider: whereto,
 		wmPublishers:   pw,
-		idleManager:    wmb.NewIdleManager(len(toBuffers)),
+		idleManager:    idleManager,
 	}
 
 	return pf, otStore

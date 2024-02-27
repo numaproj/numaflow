@@ -408,7 +408,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	// create new fixed windower of (windowTime)
 	windower := fixed.NewWindower(windowTime, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower)
 
 	var reduceDataForwarder *DataForward
@@ -504,7 +505,8 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 
 	// create a fixed windower of 5s
 	windower := fixed.NewWindower(5*time.Second, keyedVertex)
-	idleManager := wmb.NewIdleManager(len(toBuffers))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffers))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
@@ -713,7 +715,8 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create a fixed window of 60s
 	windower := fixed.NewWindower(60*time.Second, keyedVertex)
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
@@ -798,7 +801,8 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	// create a fixed windower of 10s
 	windower := fixed.NewWindower(5*time.Second, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
@@ -885,7 +889,8 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create a fixed window of 2 minutes
 	windower := fixed.NewWindower(2*time.Minute, keyedVertex)
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
@@ -970,7 +975,8 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create a fixed window of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
@@ -1056,7 +1062,8 @@ func TestReduceDataForward_FixedSumWithDifferentKeys(t *testing.T) {
 	// create a fixed windower of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
@@ -1162,7 +1169,8 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// create a session windower with 1 minute timeout
 	windower := session.NewWindower(1*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SessionSumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
@@ -1266,7 +1274,8 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	// create a fixed window of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
@@ -1356,7 +1365,8 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// create a fixed windower of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
@@ -1453,7 +1463,8 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 	// create a fixed windower of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward

@@ -7,7 +7,7 @@ spec:
     - name: myticker
       container:
         # A map side input example , see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/map-side-input
-        image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-example:v0.0.3"
+        image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-example:v0.6.1"
         imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
@@ -19,7 +19,7 @@ spec:
       udf:
         container:
           # A map side input udf , see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/map-side-input/udf
-          image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-udf:v0.0.2"
+          image: "quay.io/numaio/numaproj-contrib/e2e-map-sideinput-udf:v0.6.1"
           imagePullPolicy: Always
       sideInputs:
         - myticker
@@ -30,7 +30,7 @@ spec:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
             imagePullPolicy: Always
   edges:
     - from: in
