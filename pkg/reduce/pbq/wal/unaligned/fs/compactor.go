@@ -42,6 +42,9 @@ const (
 	compactionInProgress = "current" + "-" + compactedPrefix
 )
 
+var dcount = 0
+var ccount = 0
+
 // compactor is a compactor for the data filesToReplay
 type compactor struct {
 	partitionID         *partition.ID
@@ -357,6 +360,9 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 		}
 	}
 
+	c.log.Infow("Compaction stats", zap.Int("deleted", dcount), zap.Int("compacted", ccount))
+	dcount = 0
+	ccount = 0
 	return nil
 }
 
@@ -385,9 +391,6 @@ func (c *compactor) compactFile(fp string) error {
 
 	}
 
-	dc := 0
-	cc := 0
-
 readLoop:
 	for {
 		// read and decode the unalignedWAL message header
@@ -399,7 +402,7 @@ readLoop:
 			return err
 		}
 
-		cc += 1
+		ccount += 1
 
 		// read the key
 		key := make([]byte, mp.KeyLen)
@@ -425,7 +428,7 @@ readLoop:
 		// skip deleted messages
 		// we should copy the message only if the message should not be deleted
 		if !c.shouldDeleteMessage(mp.EventTime, string(key)) {
-			dc += 1
+			dcount += 1
 			c.log.Infow("Deleting message", zap.String("key", string(key)), zap.Int64("eventTime", mp.EventTime))
 			continue
 		}
@@ -436,8 +439,6 @@ readLoop:
 		}
 
 	}
-
-	c.log.Infow("Compaction stats", zap.Int("deleted", dc), zap.Int("copied", cc-dc))
 
 	// delete the file, since it's been compacted
 	if err = os.Remove(fp); err != nil {

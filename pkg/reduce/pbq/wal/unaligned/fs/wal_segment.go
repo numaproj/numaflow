@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -248,6 +249,8 @@ func (s *unalignedWAL) openReadFile() error {
 	if len(s.filesToReplay) == 0 {
 		return nil
 	}
+
+	log.Println("Opening file to replay: ", s.filesToReplay[0])
 	// Open the first file in the list
 	currFile, err := os.OpenFile(s.filesToReplay[0], os.O_RDONLY, 0644)
 	if err != nil {
