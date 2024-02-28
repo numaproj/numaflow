@@ -110,7 +110,7 @@ func (g *gcEventsWAL) rotateEventsFile() error {
 
 // getEventsFilePath returns the events file path
 func (g *gcEventsWAL) getEventsFilePath() string {
-	return filepath.Join(g.eventsPath, eventsFilePrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
+	return filepath.Join(g.eventsPath, eventsFilePrefix+"-"+fmt.Sprintf("%d", time.Now().UnixNano()))
 }
 
 // openEventsFile opens a new events file to write to
@@ -195,7 +195,7 @@ func (g *gcEventsWAL) Close() error {
 
 	// if no events are written to the current events file, delete the file
 	// else rename the current events file so that it can be read by the compactor
-	// during bootup
+	// during startup
 	if g.curEventsCount == 0 {
 		// delete the current events file if no events are written
 		if err := os.Remove(g.currEventsFile.Name()); err != nil {

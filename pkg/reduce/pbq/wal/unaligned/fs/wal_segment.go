@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -158,7 +157,7 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 		}
 	}
 
-	// Only increase the offset when we successfully write for atomicity.
+	// only increase the offset when we successfully write for atomicity.
 	s.currWriteOffset += int64(wrote)
 
 	// rotate the segment if the segment size is reached or segment duration is reached
@@ -168,7 +167,6 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 		}
 	}
 
-	log.Println("Wrote message to unalignedWAL: ", message.EventTime.UnixMilli())
 	return nil
 }
 
@@ -251,7 +249,6 @@ func (s *unalignedWAL) openReadFile() error {
 		return nil
 	}
 
-	log.Println("Opening file to replay: ", s.filesToReplay[0])
 	// Open the first file in the list
 	currFile, err := os.OpenFile(s.filesToReplay[0], os.O_RDONLY, 0644)
 	if err != nil {
@@ -370,7 +367,6 @@ func (s *unalignedWAL) Close() error {
 
 // writeWALHeader writes the unalignedWAL header to the file.
 func (s *unalignedWAL) writeWALHeader() error {
-	log.Println("Writing header to unalignedWAL")
 	header, err := s.encoder.encodeHeader(s.partitionID)
 	if err != nil {
 		return err

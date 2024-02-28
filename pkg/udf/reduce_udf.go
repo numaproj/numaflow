@@ -299,7 +299,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if windower.Type() == window.Aligned {
 		walManager = alignedfs.NewFSManager(u.VertexInstance)
 	} else {
-		walManager = unalignedfs.NewFSManager(dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath, u.VertexInstance)
+		walManager = unalignedfs.NewFSManager(ctx, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath, u.VertexInstance)
 	}
 
 	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, walManager, windower.Type())

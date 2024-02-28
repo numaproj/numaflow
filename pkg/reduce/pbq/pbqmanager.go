@@ -130,7 +130,7 @@ func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
 }
 
 // ShutDown for clean shut down, flushes pending messages to store and closes the store
-func (m *Manager) ShutDown(context.Context) {
+func (m *Manager) ShutDown(ctx context.Context) {
 	// iterate through the map of pbq
 	// close all the pbq
 	var wg sync.WaitGroup
@@ -145,13 +145,9 @@ func (m *Manager) ShutDown(context.Context) {
 		wg.Add(1)
 		go func(q *PBQ) {
 			defer wg.Done()
-			closeErr := q.Close()
-			if closeErr != nil {
-				m.log.Errorw("Failed to close pbq", zap.Error(closeErr))
-			}
-			var closedErr error
+			var ctxClosedErr error
 			var attempt int
-			closedErr = wait.ExponentialBackoff(PBQCloseBackOff, func() (done bool, err error) {
+			ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, PBQCloseBackOff, func() (done bool, err error) {
 				closeErr := q.Close()
 				if closeErr != nil {
 					attempt += 1
@@ -161,8 +157,8 @@ func (m *Manager) ShutDown(context.Context) {
 				}
 				return true, nil
 			})
-			if closedErr != nil {
-				m.log.Errorw("Error while closing pbq", zap.Any("ID", q.PartitionID), zap.Error(closedErr))
+			if ctxClosedErr != nil {
+				m.log.Errorw("Context closed while closing pbq", zap.Any("ID", q.PartitionID), zap.Error(ctxClosedErr))
 			}
 		}(v)
 	}

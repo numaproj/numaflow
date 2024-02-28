@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/window"
 )
@@ -189,84 +189,53 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	err = tracker.Close()
 	assert.NoError(t, err)
 
-	dc := newDecoder()
-
-	files, err := os.ReadDir(segmentDir)
+	// list all the files in the directory
+	files, err := os.ReadDir(eventDir)
 	assert.NoError(t, err)
-	rc := 0
-	for _, file := range files {
-		// open file
-		f, err := os.OpenFile(filepath.Join(segmentDir, file.Name()), os.O_RDONLY, 0644)
-		assert.NoError(t, err)
-		// decode header
-		header, err := dc.decodeHeader(f)
-		assert.NoError(t, err)
-		log.Println("file - ", file.Name())
-		log.Println("header - ", header.Start.UnixMilli(), header.End.UnixMilli(), header.Slot)
-		for {
-			msg, _, err := dc.decodeMessage(f)
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				assert.NoError(t, err)
+	assert.NotEmpty(t, files)
+
+	// create compactor with the data and event directories
+	c, err := NewCompactor(ctx, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	assert.NoError(t, err)
+
+	err = c.Start(ctx)
+	assert.NoError(t, err)
+
+	err = c.Stop()
+	assert.NoError(t, err)
+
+	sm := NewFSManager(ctx, segmentDir, compactDir, vertexInstance)
+	wls, err := sm.DiscoverWALs(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, wls, 1)
+
+	wl := wls[0]
+
+	// replay the messages
+	readCh, errCh := wl.Replay()
+	replayedMessages := make([]*isb.ReadMessage, 0)
+readLoop:
+	for {
+		select {
+		case msg, ok := <-readCh:
+			if !ok {
+				break readLoop
 			}
-			rc += 1
-			log.Println("read message - ", msg.EventTime.UnixMilli())
+			replayedMessages = append(replayedMessages, msg)
+		case err := <-errCh:
+			assert.NoError(t, err)
 		}
-		err = f.Close()
-		assert.NoError(t, err)
 	}
+	assert.NoError(t, err)
+	// first 101 messages will be compacted
+	assert.Len(t, replayedMessages, 199)
 
-	assert.Equal(t, 300, rc)
-
-	//	sm := NewFSManager(segmentDir, compactDir, vertexInstance)
-	//	wls, err := sm.DiscoverWALs(ctx)
-	//	assert.NoError(t, err)
-	//	assert.Len(t, wls, 1)
-	//
-	//	wl := wls[0]
-	//
-	//	// replay the messages
-	//	readCh, errCh := wl.Replay()
-	//	replayedMessages := make([]*isb.ReadMessage, 0)
-	//readLoop:
-	//	for {
-	//		select {
-	//		case msg, ok := <-readCh:
-	//			if !ok {
-	//				break readLoop
-	//			}
-	//			replayedMessages = append(replayedMessages, msg)
-	//		case err := <-errCh:
-	//			assert.NoError(t, err)
-	//		}
-	//	}
-	//	assert.NoError(t, err)
-	//	// first 101 messages will be compacted
-	//	assert.Len(t, replayedMessages, 300)
-	//
-	//	// order is important
-	//	for i := 0; i < 300; i++ {
-	//		assert.Equal(t, readMessages[i].EventTime.UnixMilli(), replayedMessages[i].EventTime.UnixMilli())
-	//	}
-	//	err = wl.Close()
-	//	assert.NoError(t, err)
-	//
-	//	// list all the files in the directory
-	//	files, err := os.ReadDir(eventDir)
-	//	assert.NoError(t, err)
-	//	assert.NotEmpty(t, files)
-	//
-	//	// create compactor with the data and event directories
-	//	c, err := NewCompactor(ctx, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
-	//	assert.NoError(t, err)
-	//
-	//	err = c.Start(ctx)
-	//	assert.NoError(t, err)
-	//
-	//	err = c.Stop()
-	//	assert.NoError(t, err)
+	// order is important
+	for i := 0; i < 199; i++ {
+		assert.Equal(t, readMessages[i+101].EventTime.UnixMilli(), replayedMessages[i].EventTime.UnixMilli())
+	}
+	err = wl.Close()
+	assert.NoError(t, err)
 }
 
 func TestFilesInDir(t *testing.T) {

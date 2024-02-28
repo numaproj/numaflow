@@ -21,9 +21,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 type fsWAL struct {
@@ -35,11 +38,12 @@ type fsWAL struct {
 	fsOpts         []WALOption
 	// we don't need a lock to access activeWALs, since we use only one partition
 	// when we start using slots, we will need a lock
+	log        *zap.SugaredLogger
 	activeWALs map[string]wal.WAL
 }
 
 // NewFSManager is a FileSystem Stores Manager.
-func NewFSManager(segmentWALPath string, compactWALPath string, vertexInstance *dfv1.VertexInstance, opts ...WALOption) wal.Manager {
+func NewFSManager(ctx context.Context, segmentWALPath string, compactWALPath string, vertexInstance *dfv1.VertexInstance, opts ...WALOption) wal.Manager {
 	opts = append(opts, WithSegmentWALPath(segmentWALPath), WithCompactWALPath(compactWALPath))
 
 	s := &fsWAL{
@@ -49,6 +53,7 @@ func NewFSManager(segmentWALPath string, compactWALPath string, vertexInstance *
 		vertexName:     vertexInstance.Vertex.Spec.AbstractVertex.Name,
 		replicaIndex:   vertexInstance.Replica,
 		activeWALs:     make(map[string]wal.WAL),
+		log:            logging.FromContext(ctx),
 		fsOpts:         opts,
 	}
 
@@ -107,26 +112,30 @@ func (ws *fsWAL) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
 
 	// consider the compacted files for replay first
 	// since the compacted files are the oldest
+	ws.log.Debugw("Number of files to replay", zap.Int("count", len(segmentFiles)+len(compactedFiles)))
 	filesToReplay := make([]string, 0)
 	for _, file := range compactedFiles {
+		ws.log.Debugw("compacted file to replay", zap.String("file", file.Name()))
 		filesToReplay = append(filesToReplay, filepath.Join(ws.compactWALPath, file.Name()))
 	}
 	for _, file := range segmentFiles {
+		ws.log.Debugw("segment file to replay", zap.String("file", file.Name()))
 		filesToReplay = append(filesToReplay, filepath.Join(ws.segmentWALPath, file.Name()))
 	}
 
 	// there will only be one WAL because we use shared partition
 	// for unaligned windows
 	wl, err := NewUnalignedReadWriteWAL(filesToReplay, ws.fsOpts...)
-	return append(wr, wl), err
+	if err != nil {
+		return nil, err
+	}
+
+	ws.activeWALs[wl.PartitionID().String()] = wl
+	return append(wr, wl), nil
 }
 
 // DeleteWAL deletes the store for the given partitionID
 func (ws *fsWAL) DeleteWAL(partitionID partition.ID) error {
-	w, ok := ws.activeWALs[partitionID.String()]
-	if !ok {
-		return nil
-	}
 	delete(ws.activeWALs, partitionID.String())
-	return w.Close()
+	return nil
 }

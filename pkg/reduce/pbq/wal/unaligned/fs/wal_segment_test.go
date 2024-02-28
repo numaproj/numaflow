@@ -107,7 +107,7 @@ func TestUnalignedWAL_Replay(t *testing.T) {
 	err = s.Close()
 	assert.NoError(t, err)
 
-	wm := NewFSManager(tempDir, compactDir, vertexInstance)
+	wm := NewFSManager(ctx, tempDir, compactDir, vertexInstance)
 	wls, err := wm.DiscoverWALs(ctx)
 	assert.NoError(t, err)
 

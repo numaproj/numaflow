@@ -42,9 +42,6 @@ const (
 	compactionInProgress = "current" + "-" + compactedPrefix
 )
 
-var dcount = 0
-var ccount = 0
-
 // compactor is a compactor for the data filesToReplay
 type compactor struct {
 	partitionID         *partition.ID
@@ -122,7 +119,7 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, gcEventsPath s
 	// if the file with the compactionInProgress name exists, it means the compactor was stopped
 	// abruptly we should rename the file, so that it gets considered for replay
 	currCompactionFileName := filepath.Join(c.compactedSegWALPath, compactionInProgress)
-	if _, err = os.Stat(currCompactionFileName); !errors.Is(err, os.ErrNotExist) {
+	if _, err = os.Stat(currCompactionFileName); err != nil && !os.IsNotExist(err) {
 		if err = os.Rename(currCompactionFileName, c.getFilePath(c.compactedSegWALPath)); err != nil {
 			return nil, err
 		}
@@ -203,7 +200,7 @@ func (c *compactor) Stop() error {
 
 // getFilePath returns the file path for new file creation
 func (c *compactor) getFilePath(storePath string) string {
-	return filepath.Join(storePath, compactedPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
+	return filepath.Join(storePath, compactedPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixNano()))
 }
 
 // keepCompacting keeps compacting the data filesToReplay every compaction duration
@@ -240,12 +237,6 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 	err := c.buildCompactionKeyMap(eventFiles)
 	if err != nil {
 		return err
-	}
-
-	// log compaction key map
-	c.log.Infow("REMOVE ME: Compaction key map")
-	for k, v := range c.compactKeyMap {
-		c.log.Infow("REMOVE ME: Map entry - ", zap.String("key", k), zap.Int64("value", v))
 	}
 
 	// compact the data filesToReplay based on the compaction key map
@@ -320,7 +311,7 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	}
 
 	// get all the compacted files
-	compactedFiles, err := listFilesInDir(c.compactedSegWALPath, compactedPrefix, sortFunc)
+	compactedFiles, err := listFilesInDir(c.compactedSegWALPath, currentWALPrefix, sortFunc)
 	if err != nil {
 		return err
 	}
@@ -354,16 +345,13 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 			// the event filesToReplay
 			return fmt.Errorf("compactor stopped")
 		default:
-			c.log.Infow("compacting file", zap.String("file", filePath))
+			c.log.Debugw("compacting file", zap.String("file", filePath))
 			if err = c.compactFile(filePath); err != nil {
 				return err
 			}
 		}
 	}
 
-	c.log.Infow("Compaction stats", zap.Int("deleted", dcount), zap.Int("compacted", ccount))
-	dcount = 0
-	ccount = 0
 	return nil
 }
 
@@ -403,8 +391,6 @@ readLoop:
 			return err
 		}
 
-		ccount += 1
-
 		// read the key
 		key := make([]byte, mp.KeyLen)
 		err = binary.Read(dp, binary.LittleEndian, &key)
@@ -425,12 +411,9 @@ readLoop:
 			return fmt.Errorf("expected to read length of %d, but read only %d", mp.MessageLen, read)
 		}
 
-		c.log.Infow("Compacting message", zap.String("key", string(key)), zap.Int64("eventTime", mp.EventTime))
 		// skip deleted messages
 		// we should copy the message only if the message should not be deleted
 		if !c.shouldKeepMessage(mp.EventTime, string(key)) {
-			dcount += 1
-			c.log.Infow("Deleting message", zap.String("key", string(key)), zap.Int64("eventTime", mp.EventTime))
 			continue
 		}
 

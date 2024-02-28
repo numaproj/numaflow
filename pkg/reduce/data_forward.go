@@ -152,39 +152,39 @@ func (df *DataForward) ReplayPersistedMessages(ctx context.Context) error {
 		df.log.Infow("ReplayPersistedMessages completed", "timeTaken", time.Since(startTime).String())
 	}()
 
-	existingWals, err := df.storeManager.DiscoverWALs(ctx)
+	existingWALs, err := df.storeManager.DiscoverWALs(ctx)
 	if err != nil {
 		return err
 	}
 
 	// nothing to replay
-	if len(existingWals) == 0 {
+	if len(existingWALs) == 0 {
 		return nil
 	}
 
 	if df.windower.Type() == window.Aligned {
-		return df.replayForAlignedWindows(ctx, existingWals)
+		return df.replayForAlignedWindows(ctx, existingWALs)
 	} else {
-		return df.replayForUnalignedWindows(ctx, existingWals)
+		return df.replayForUnalignedWindows(ctx, existingWALs)
 	}
 }
 
 // replayForUnalignedWindows replays the messages from WAL for unaligned windows.
-func (df *DataForward) replayForUnalignedWindows(ctx context.Context, discoveredWals []wal.WAL) error {
-	// ATM len(discoveredWals) == 1 since we have only 1 slot
-	for _, s := range discoveredWals {
+func (df *DataForward) replayForUnalignedWindows(ctx context.Context, discoveredWALs []wal.WAL) error {
+	// ATM len(discoveredWALs) == 1 since we have only 1 slot
+	for _, s := range discoveredWALs {
 		p := s.PartitionID()
 		// associate the PBQ and PnF
 		df.associatePBQAndPnF(ctx, p)
 	}
 	eg := errgroup.Group{}
-	df.log.Info("Number of partitions to replay: ", len(discoveredWals))
+	df.log.Info("Number of partitions to replay: ", len(discoveredWALs))
 
 	// replay the messages from each WAL in parallel
 	// currently we will have only one WAL because we use shared partition
 	// for unaligned windows if we start using slots then we will have multiple WALs
-	for _, sr := range discoveredWals {
-		df.log.Info("Replaying messages from partition: ", sr.PartitionID().String())
+	for _, sr := range discoveredWALs {
+		df.log.Infow("Replaying messages from partition: ", zap.String("partitionID", sr.PartitionID().String()))
 		func(ctx context.Context, s wal.WAL) {
 			eg.Go(func() error {
 				readCh, errCh := s.Replay()
@@ -200,7 +200,6 @@ func (df *DataForward) replayForUnalignedWindows(ctx context.Context, discovered
 						if !ok {
 							return nil
 						}
-
 						windowRequests := df.windower.AssignWindows(msg)
 						for _, winOp := range windowRequests {
 							// we don't want to persist the messages again
@@ -218,14 +217,14 @@ func (df *DataForward) replayForUnalignedWindows(ctx context.Context, discovered
 }
 
 // replayForAlignedWindows replays the messages from WAL for aligned windows
-func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWals []wal.WAL) error {
+func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWALs []wal.WAL) error {
 
 	// Since for aligned windows, we have a WAL for every partition, so there can be multiple WALs.
 	// We can replay the messages from each WAL in parallel; to do that we need to first
 	// create a window for each partition and insert it to the windower,
 	// so that the window can be closed when the watermark crosses the window.
 	// then we can replay the messages from each WAL in parallel.
-	for _, s := range discoveredWals {
+	for _, s := range discoveredWALs {
 		p := s.PartitionID()
 
 		df.windower.InsertWindow(window.NewAlignedTimedWindow(p.Start, p.End, p.Slot))
@@ -234,11 +233,11 @@ func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWa
 		df.associatePBQAndPnF(ctx, p)
 	}
 	eg := errgroup.Group{}
-	df.log.Info("Number of partitions to replay: ", len(discoveredWals))
+	df.log.Infow("Number of partitions to replay: ", zap.Int("count", len(discoveredWALs)))
 
 	// replay the messages from each WALs in parallel
-	for _, sr := range discoveredWals {
-		df.log.Info("Replaying messages from partition: ", sr.PartitionID().String())
+	for _, sr := range discoveredWALs {
+		df.log.Infow("Replaying messages from partition: ", zap.String("partitionID", sr.PartitionID().String()))
 		func(ctx context.Context, s wal.WAL) {
 			eg.Go(func() error {
 				pid := s.PartitionID()
