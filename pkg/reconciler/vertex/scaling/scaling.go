@@ -30,7 +30,7 @@ import (
 	"go.uber.org/zap"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -488,7 +488,7 @@ loop:
 func (s *Scaler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, desiredReplicas int32) error {
 	log := logging.FromContext(ctx)
 	origin := vertex.Spec.Replicas
-	vertex.Spec.Replicas = pointer.Int32(desiredReplicas)
+	vertex.Spec.Replicas = ptr.To[int32](desiredReplicas)
 	body, err := json.Marshal(vertex)
 	if err != nil {
 		return fmt.Errorf("failed to marshal vertex object to json, %w", err)

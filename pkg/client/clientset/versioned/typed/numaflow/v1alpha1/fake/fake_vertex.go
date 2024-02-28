@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeVertices struct {
 	ns   string
 }
 
-var verticesResource = schema.GroupVersionResource{Group: "numaflow.numaproj.io", Version: "v1alpha1", Resource: "vertices"}
+var verticesResource = v1alpha1.SchemeGroupVersion.WithResource("vertices")
 
-var verticesKind = schema.GroupVersionKind{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "Vertex"}
+var verticesKind = v1alpha1.SchemeGroupVersion.WithKind("Vertex")
 
 // Get takes name of the vertex, and returns the corresponding vertex object, and an error if there is any.
 func (c *FakeVertices) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Vertex, err error) {

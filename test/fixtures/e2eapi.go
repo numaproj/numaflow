@@ -55,7 +55,6 @@ func InvokeE2EAPI(format string, args ...interface{}) string {
 func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 	url := "http://127.0.0.1:8378" + fmt.Sprintf(format, args...)
 
-	var err error
 	var resp *http.Response
 	// Invoking POST can fail due to "500 Internal Server Error". It's because the server is still booting up and not ready to serve requests.
 	// To prevent such issue, we apply retry strategy.
@@ -75,9 +74,6 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 		return false, nil
 	})
 
-	if err != nil {
-		panic(err)
-	}
 	defer resp.Body.Close()
 	for s := bufio.NewScanner(resp.Body); s.Scan(); {
 		x := s.Text()

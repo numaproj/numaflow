@@ -24,7 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 type JetStreamBufferService struct {
@@ -146,8 +146,8 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 	}
 
 	podSpec := &corev1.PodSpec{
-		ShareProcessNamespace:         pointer.Bool(true),
-		TerminationGracePeriodSeconds: pointer.Int64(120),
+		ShareProcessNamespace:         ptr.To[bool](true),
+		TerminationGracePeriodSeconds: ptr.To[int64](120),
 		Volumes: []corev1.Volume{
 			{Name: "pid", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			{

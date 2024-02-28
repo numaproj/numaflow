@@ -25,11 +25,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -59,7 +61,9 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	opts := ctrl.Options{
-		MetricsBindAddress:     ":9090",
+		Metrics: metricsserver.Options{
+			BindAddress: ":9090",
+		},
 		HealthProbeBindAddress: ":8081",
 		LeaderElection:         true,
 		LeaderElectionID:       "numaflow-controller-lock",
@@ -70,7 +74,11 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	if namespaced {
-		opts.Namespace = managedNamespace
+		opts.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				managedNamespace: {},
+			},
+		}
 	}
 	restConfig := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(restConfig, opts)
@@ -100,7 +108,8 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalw("Unable to set up ISB controller", zap.Error(err))
 	}
 
-	if err := isbSvcController.Watch(&source.Kind{Type: &dfv1.InterStepBufferService{}}, &handler.EnqueueRequestForObject{},
+	// Watch ISB Services
+	if err := isbSvcController.Watch(source.Kind(mgr.GetCache(), &dfv1.InterStepBufferService{}), &handler.EnqueueRequestForObject{},
 		predicate.Or(
 			predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{},
 		)); err != nil {
@@ -108,17 +117,23 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	// Watch ConfigMaps with ResourceVersion changes, and enqueue owning InterStepBuffer key
-	if err := isbSvcController.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.InterStepBufferService{}, IsController: true}, predicate.ResourceVersionChangedPredicate{}); err != nil {
+	if err := isbSvcController.Watch(source.Kind(mgr.GetCache(), &corev1.ConfigMap{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.InterStepBufferService{}, handler.OnlyControllerOwner()),
+		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch ConfigMaps", zap.Error(err))
 	}
 
 	// Watch StatefulSets with Generation changes, and enqueue owning InterStepBuffer key
-	if err := isbSvcController.Watch(&source.Kind{Type: &appv1.StatefulSet{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.InterStepBufferService{}, IsController: true}, predicate.GenerationChangedPredicate{}); err != nil {
+	if err := isbSvcController.Watch(source.Kind(mgr.GetCache(), &appv1.StatefulSet{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.InterStepBufferService{}, handler.OnlyControllerOwner()),
+		predicate.GenerationChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch StatefulSets", zap.Error(err))
 	}
 
 	// Watch Services with ResourceVersion changes, and enqueue owning InterStepBuffer key
-	if err := isbSvcController.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.InterStepBufferService{}, IsController: true}, predicate.ResourceVersionChangedPredicate{}); err != nil {
+	if err := isbSvcController.Watch(source.Kind(mgr.GetCache(), &corev1.Service{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.InterStepBufferService{}, handler.OnlyControllerOwner()),
+		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 
@@ -131,7 +146,7 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	// Watch Pipelines
-	if err := pipelineController.Watch(&source.Kind{Type: &dfv1.Pipeline{}}, &handler.EnqueueRequestForObject{},
+	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &dfv1.Pipeline{}), &handler.EnqueueRequestForObject{},
 		predicate.Or(
 			predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{},
 		)); err != nil {
@@ -139,28 +154,34 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	// Watch Vertices with Generation changes (excluding scaling up/down)
-	if err := pipelineController.Watch(&source.Kind{Type: &dfv1.Vertex{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.Pipeline{}, IsController: true}, predicate.And(
-		predicate.GenerationChangedPredicate{},
-		predicate.Funcs{
-			UpdateFunc: func(e event.UpdateEvent) bool {
-				if e.ObjectOld == nil || e.ObjectNew == nil {
-					return true
-				}
-				old, _ := e.ObjectOld.(*dfv1.Vertex)
-				new, _ := e.ObjectNew.(*dfv1.Vertex)
-				return !reflect.DeepEqual(new.Spec.WithOutReplicas(), old.Spec.WithOutReplicas())
-			}},
-	)); err != nil {
+	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &dfv1.Vertex{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
+		predicate.And(
+			predicate.GenerationChangedPredicate{},
+			predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					if e.ObjectOld == nil || e.ObjectNew == nil {
+						return true
+					}
+					old, _ := e.ObjectOld.(*dfv1.Vertex)
+					new, _ := e.ObjectNew.(*dfv1.Vertex)
+					return !reflect.DeepEqual(new.Spec.WithOutReplicas(), old.Spec.WithOutReplicas())
+				}},
+		)); err != nil {
 		logger.Fatalw("Unable to watch Vertices", zap.Error(err))
 	}
 
 	// Watch Services with ResourceVersion changes
-	if err := pipelineController.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.Pipeline{}, IsController: true}, predicate.ResourceVersionChangedPredicate{}); err != nil {
+	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &corev1.Service{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
+		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 
 	// Watch Deployments with Generation changes
-	if err := pipelineController.Watch(&source.Kind{Type: &appv1.Deployment{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.Pipeline{}, IsController: true}, predicate.GenerationChangedPredicate{}); err != nil {
+	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &appv1.Deployment{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
+		predicate.GenerationChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch Deployments", zap.Error(err))
 	}
 
@@ -174,7 +195,7 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	// Watch Vertices
-	if err := vertexController.Watch(&source.Kind{Type: &dfv1.Vertex{}}, &handler.EnqueueRequestForObject{},
+	if err := vertexController.Watch(source.Kind(mgr.GetCache(), &dfv1.Vertex{}), &handler.EnqueueRequestForObject{},
 		predicate.Or(
 			predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{},
 		)); err != nil {
@@ -182,7 +203,8 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	// Watch Pods
-	if err := vertexController.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.Vertex{}, IsController: true},
+	if err := vertexController.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Vertex{}, handler.OnlyControllerOwner()),
 		predicate.Funcs{
 			CreateFunc: func(event.CreateEvent) bool { return false }, // Do not watch pod create events
 		}); err != nil {
@@ -190,7 +212,9 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	// Watch Services with ResourceVersion changes
-	if err := vertexController.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{OwnerType: &dfv1.Vertex{}, IsController: true}, predicate.ResourceVersionChangedPredicate{}); err != nil {
+	if err := vertexController.Watch(source.Kind(mgr.GetCache(), &corev1.Service{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Vertex{}, handler.OnlyControllerOwner()),
+		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 

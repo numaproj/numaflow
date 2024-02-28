@@ -34,7 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -661,11 +661,11 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 		combinedEdge := dfv1.CombinedEdge{
 			Edge:                     e,
 			FromVertexType:           vFrom.GetVertexType(),
-			FromVertexPartitionCount: pointer.Int32(int32(vFrom.GetPartitionCount())),
+			FromVertexPartitionCount: ptr.To[int32](int32(vFrom.GetPartitionCount())),
 			FromVertexLimits:         &fromVertexLimits,
 			ToVertexLimits:           &toVertexLimits,
 			ToVertexType:             vTo.GetVertexType(),
-			ToVertexPartitionCount:   pointer.Int32(int32(vTo.GetPartitionCount())),
+			ToVertexPartitionCount:   ptr.To[int32](int32(vTo.GetPartitionCount())),
 		}
 		result = append(result, combinedEdge)
 	}
@@ -694,8 +694,8 @@ func buildISBBatchJob(pl *dfv1.Pipeline, image string, isbSvcConfig dfv1.BufferS
 		dfv1.KeyPipelineName: pl.Name,
 	}
 	spec := batchv1.JobSpec{
-		TTLSecondsAfterFinished: pointer.Int32(30),
-		BackoffLimit:            pointer.Int32(20),
+		TTLSecondsAfterFinished: ptr.To[int32](30),
+		BackoffLimit:            ptr.To[int32](20),
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels:      l,
@@ -859,7 +859,7 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 					}
 				}
 			}
-			vertex.Spec.Replicas = pointer.Int32(scaleTo)
+			vertex.Spec.Replicas = ptr.To[int32](scaleTo)
 			body, err := json.Marshal(vertex)
 			if err != nil {
 				return false, err

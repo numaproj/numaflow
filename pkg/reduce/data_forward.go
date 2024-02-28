@@ -323,7 +323,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 			Factor:   1.5,
 			Jitter:   0.1,
 		}
-		pbqErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func() (done bool, err error) {
+		pbqErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func(_ context.Context) (done bool, err error) {
 			var attempt int
 			q, pbqErr = df.pbqManager.CreateNewPBQ(ctx, *partitionID)
 			if pbqErr != nil {

@@ -27,7 +27,7 @@ import (
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -113,7 +113,7 @@ func (ps *PipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 		BufferLength:     &bufferLength,
 		BufferUsageLimit: &bufferUsageLimit,
 		BufferUsage:      &usage,
-		IsFull:           pointer.Bool(usage >= bufferUsageLimit),
+		IsFull:           ptr.To[bool](usage >= bufferUsageLimit),
 	}
 	resp := new(daemon.GetBufferResponse)
 	resp.Buffer = b
@@ -218,9 +218,9 @@ func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 	status := ps.healthChecker.getCurrentHealth()
 	resp := new(daemon.GetPipelineStatusResponse)
 	resp.Status = &daemon.PipelineStatus{
-		Status:  pointer.String(status.Status),
-		Message: pointer.String(status.Message),
-		Code:    pointer.String(status.Code),
+		Status:  ptr.To[string](status.Status),
+		Message: ptr.To[string](status.Message),
+		Code:    ptr.To[string](status.Code),
 	}
 	return resp, nil
 }
@@ -264,14 +264,14 @@ func listBuffers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient 
 		}
 		b := &daemon.BufferInfo{
 			Pipeline:         &pipeline.Name,
-			BufferName:       pointer.String(fmt.Sprintf("%v", buffer)),
+			BufferName:       ptr.To[string](fmt.Sprintf("%v", buffer)),
 			PendingCount:     &bufferInfo.PendingCount,
 			AckPendingCount:  &bufferInfo.AckPendingCount,
 			TotalMessages:    &bufferInfo.TotalMessages,
 			BufferLength:     &bufferLength,
 			BufferUsageLimit: &bufferUsageLimit,
 			BufferUsage:      &usage,
-			IsFull:           pointer.Bool(usage >= bufferUsageLimit),
+			IsFull:           ptr.To[bool](usage >= bufferUsageLimit),
 		}
 		buffers = append(buffers, b)
 	}

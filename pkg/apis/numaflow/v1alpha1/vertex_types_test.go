@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -119,7 +120,7 @@ func TestGetToBuffersSink(t *testing.T) {
 
 func TestWithoutReplicas(t *testing.T) {
 	s := &VertexSpec{
-		Replicas: pointer.Int32(3),
+		Replicas: ptr.To[int32](3),
 	}
 	assert.Equal(t, int32(0), *s.WithOutReplicas().Replicas)
 }
@@ -133,9 +134,9 @@ func TestGetVertexReplicas(t *testing.T) {
 		},
 	}
 	assert.Equal(t, 1, v.GetReplicas())
-	v.Spec.Replicas = pointer.Int32(3)
+	v.Spec.Replicas = ptr.To[int32](3)
 	assert.Equal(t, 3, v.GetReplicas())
-	v.Spec.Replicas = pointer.Int32(0)
+	v.Spec.Replicas = ptr.To[int32](0)
 	assert.Equal(t, 0, v.GetReplicas())
 	v.Spec.UDF = &UDF{
 		GroupBy: &GroupBy{},
