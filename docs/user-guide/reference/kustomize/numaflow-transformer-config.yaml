@@ -6,6 +6,10 @@ images:
   kind: Pipeline
 - path: spec/vertices/source/transformer/container/image
   kind: Pipeline
+- path: spec/vertices/source/udsource/container/image
+  kind: Pipeline
+- path: spec/sideInputs/container/image
+  kind: Pipeline
 
 # https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/namereference.go
 nameReference:
