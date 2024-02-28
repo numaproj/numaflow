@@ -48,6 +48,14 @@ nameReference:
     kind: Pipeline
   - path: spec/vertices/source/transformer/container/envFrom/configMapRef/name
     kind: Pipeline
+  - path: spec/vertices/source/udsource/container/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/source/udsource/container/envFrom/configMapRef/name
+    kind: Pipeline
+  - path: spec/sideInputs/container/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/sideInputs/container/envFrom/configMapRef/name
+    kind: Pipeline
   - path: spec/templates/daemon/containerTemplate/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
   - path: spec/templates/daemon/containerTemplate/envFrom/configMapRef/name
@@ -106,6 +114,14 @@ nameReference:
   - path: spec/vertices/source/transformer/container/env/valueFrom/secretKeyRef/name
     kind: Pipeline
   - path: spec/vertices/source/transformer/container/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/vertices/source/udsource/container/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/source/udousrce/container/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/sideInputs/container/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/sideInputs/container/envFrom/secretRef/name
     kind: Pipeline
   - path: spec/templates/daemon/containerTemplate/env/valueFrom/secretKeyRef/name
     kind: Pipeline
@@ -216,6 +232,18 @@ varReference:
   kind: Pipeline
 - path: spec/vertices/source/transformer/container/env/value
   kind: Pipeline
+- path: spec/vertices/source/udsource/container/args
+  kind: Pipeline
+- path: spec/vertices/source/udsource/container/command
+  kind: Pipeline
+- path: spec/vertices/source/udsource/container/env/value
+  kind: Pipeline
+- path: spec/sideInputs/container/args
+  kind: Pipeline
+- path: spec/sideInputs/container/command
+  kind: Pipeline
+- path: spec/sideInputs/container/env/value
+  kind: Pipeline
 - path: spec/vertices/containerTemplate/env/value
   kind: Pipeline
 - path: spec/vertices/initContainerTemplate/env/value
@@ -235,6 +263,10 @@ varReference:
 - path: spec/vertices/sink/udsink/container/volumeMounts/mountPath
   kind: Pipeline
 - path: spec/vertices/source/transformer/container/volumeMounts/mountPath
+  kind: Pipeline
+- path: spec/vertices/source/udsource/container/volumeMounts/mountPath
+  kind: Pipeline
+- path: spec/sideInputs/container/volumeMounts/mountPath
   kind: Pipeline
 - path: spec/jetstream/containerTemplate/env/value
   kind: InterStepBufferService
