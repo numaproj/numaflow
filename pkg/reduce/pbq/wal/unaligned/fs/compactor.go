@@ -121,8 +121,9 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, gcEventsPath s
 
 	// if the file with the compactionInProgress name exists, it means the compactor was stopped
 	// abruptly we should rename the file, so that it gets considered for replay
-	if _, err = os.Stat(filepath.Join(c.compactedSegWALPath, compactionInProgress)); !errors.Is(err, os.ErrNotExist) {
-		if err = os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.compactedSegWALPath)); err != nil {
+	currCompactionFileName := filepath.Join(c.compactedSegWALPath, compactionInProgress)
+	if _, err = os.Stat(currCompactionFileName); !errors.Is(err, os.ErrNotExist) {
+		if err = os.Rename(currCompactionFileName, c.getFilePath(c.compactedSegWALPath)); err != nil {
 			return nil, err
 		}
 	}
@@ -427,7 +428,7 @@ readLoop:
 		c.log.Infow("Compacting message", zap.String("key", string(key)), zap.Int64("eventTime", mp.EventTime))
 		// skip deleted messages
 		// we should copy the message only if the message should not be deleted
-		if !c.shouldDeleteMessage(mp.EventTime, string(key)) {
+		if !c.shouldKeepMessage(mp.EventTime, string(key)) {
 			dcount += 1
 			c.log.Infow("Deleting message", zap.String("key", string(key)), zap.Int64("eventTime", mp.EventTime))
 			continue
@@ -447,8 +448,8 @@ readLoop:
 	return nil
 }
 
-// shouldDeleteMessage checks if the message should be deleted or not
-func (c *compactor) shouldDeleteMessage(eventTime int64, key string) bool {
+// shouldKeepMessage checks if the message should be discarded or not
+func (c *compactor) shouldKeepMessage(eventTime int64, key string) bool {
 	// check if the key is present in the compaction key map
 	ce, ok := c.compactKeyMap[key]
 

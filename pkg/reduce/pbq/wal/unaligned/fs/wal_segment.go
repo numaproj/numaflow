@@ -168,6 +168,7 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 		}
 	}
 
+	log.Println("Wrote message to unalignedWAL: ", message.EventTime.UnixMilli())
 	return nil
 }
 
@@ -327,7 +328,7 @@ func (s *unalignedWAL) rotateFile() error {
 
 // segmentFilePath creates the file path for the segment file located in the storage path.
 func (s *unalignedWAL) segmentFilePath(storePath string) string {
-	return filepath.Join(storePath, segmentPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixMilli()))
+	return filepath.Join(storePath, segmentPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixNano()))
 }
 
 // flushAndSync flushes the buffered data to the writer and syncs the file to disk.
@@ -369,6 +370,7 @@ func (s *unalignedWAL) Close() error {
 
 // writeWALHeader writes the unalignedWAL header to the file.
 func (s *unalignedWAL) writeWALHeader() error {
+	log.Println("Writing header to unalignedWAL")
 	header, err := s.encoder.encodeHeader(s.partitionID)
 	if err != nil {
 		return err
