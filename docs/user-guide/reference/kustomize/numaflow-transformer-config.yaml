@@ -30,6 +30,10 @@ nameReference:
     kind: Pipeline
   - path: spec/vertices/initContainerTemplate/envFrom/configMapRef/name
     kind: Pipeline
+  - path: spec/vertices/sideInputsContainerTemplate/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/sideInputsContainerTemplate/envFrom/configMapRef/name
+    kind: Pipeline
   - path: spec/vertices/initContainers/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
   - path: spec/vertices/initContainers/envFrom/configMapRef/name
@@ -66,6 +70,10 @@ nameReference:
     kind: Pipeline
   - path: spec/templates/daemon/initContainerTemplate/envFrom/configMapRef/name
     kind: Pipeline
+  - path: spec/templates/daemon/sideInputsContainerTemplate/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/daemon/sideInputsContainerTemplate/envFrom/configMapRef/name
+    kind: Pipeline
   - path: spec/templates/job/containerTemplate/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
   - path: spec/templates/job/containerTemplate/envFrom/configMapRef/name
@@ -96,6 +104,10 @@ nameReference:
   - path: spec/vertices/initContainerTemplate/env/valueFrom/secretKeyRef/name
     kind: Pipeline
   - path: spec/vertices/initContainerTemplate/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/vertices/sideInputsContainerTemplate/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/sideInputsContainerTemplate/envFrom/secretRef/name
     kind: Pipeline
   - path: spec/vertices/initContainers/env/valueFrom/secretKeyRef/name
     kind: Pipeline
@@ -132,6 +144,10 @@ nameReference:
   - path: spec/templates/daemon/initContainerTemplate/env/valueFrom/secretKeyRef/name
     kind: Pipeline
   - path: spec/templates/daemon/initContainerTemplate/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/templates/daemon/sideInputsContainerTemplate/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/daemon/sideInputsContainerTemplate/envFrom/secretRef/name
     kind: Pipeline
   - path: spec/templates/job/containerTemplate/env/valueFrom/secretKeyRef/name
     kind: Pipeline
@@ -255,6 +271,8 @@ varReference:
 - path: spec/vertices/containerTemplate/env/value
   kind: Pipeline
 - path: spec/vertices/initContainerTemplate/env/value
+  kind: Pipeline
+- path: spec/vertices/sideInputsContainerTemplate/env/value
   kind: Pipeline
 - path: spec/vertices/initContainers/env/value
   kind: Pipeline
