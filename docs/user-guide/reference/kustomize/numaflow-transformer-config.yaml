@@ -1,4 +1,4 @@
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/images.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/images.go
 images:
 - path: spec/vertices/sidecars/image
   kind: Pipeline
@@ -13,7 +13,7 @@ images:
 - path: spec/sideInputs/container/image
   kind: Pipeline
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/namereference.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/namereference.go
 nameReference:
 - kind: ConfigMap
   version: v1
@@ -236,7 +236,7 @@ nameReference:
   - path: spec/jetstream/priorityClassName
     kind: InterStepBufferService
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/commonlabels.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/commonlabels.go
 commonLabels:
 - path: spec/vertices/metadata/labels
   create: true
@@ -257,7 +257,7 @@ commonLabels:
   create: true
   kind: InterStepBufferService
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/commonannotations.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/commonannotations.go
 commonAnnotations:
 - path: spec/vertices/metadata/annotations
   create: true
@@ -278,7 +278,7 @@ commonAnnotations:
   create: true
   kind: InterStepBufferService
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/varreference.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/varreference.go
 varReference:
 - path: spec/vertices/sidecars/args
   kind: Pipeline
@@ -357,7 +357,7 @@ varReference:
 - path: spec/jetstream/metricsContainerTemplate/env/value
   kind: InterStepBufferService
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/replicas.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/replicas.go
 replicas:
 - path: spec/jetstream/replicas
   create: true
