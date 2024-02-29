@@ -70,10 +70,6 @@ nameReference:
     kind: Pipeline
   - path: spec/templates/daemon/initContainerTemplate/envFrom/configMapRef/name
     kind: Pipeline
-  - path: spec/templates/sideInputsContainerTemplate/env/valueFrom/configMapKeyRef/name
-    kind: Pipeline
-  - path: spec/templates/sideInputsContainerTemplate/envFrom/configMapRef/name
-    kind: Pipeline
   - path: spec/templates/job/containerTemplate/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
   - path: spec/templates/job/containerTemplate/envFrom/configMapRef/name
@@ -144,10 +140,6 @@ nameReference:
   - path: spec/templates/daemon/initContainerTemplate/env/valueFrom/secretKeyRef/name
     kind: Pipeline
   - path: spec/templates/daemon/initContainerTemplate/envFrom/secretRef/name
-    kind: Pipeline
-  - path: spec/templates/sideInputsContainerTemplate/env/valueFrom/secretKeyRef/name
-    kind: Pipeline
-  - path: spec/templates/sideInputsContainerTemplate/envFrom/secretRef/name
     kind: Pipeline
   - path: spec/templates/job/containerTemplate/env/valueFrom/secretKeyRef/name
     kind: Pipeline
