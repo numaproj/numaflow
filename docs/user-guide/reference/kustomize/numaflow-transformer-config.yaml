@@ -1,6 +1,6 @@
 # https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/images.go
 images:
-- path: spec/vertices/sidecars/container/image
+- path: spec/vertices/sidecars/image
   kind: Pipeline
 - path: spec/vertices/udf/container/image
   kind: Pipeline
