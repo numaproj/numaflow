@@ -224,7 +224,7 @@ func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 				continue
 			}
 
-			// If message is successfully decoded, append to the messages slice
+			// If message is successfully decoded, write the message to the channel
 			msgChan <- message
 		}
 

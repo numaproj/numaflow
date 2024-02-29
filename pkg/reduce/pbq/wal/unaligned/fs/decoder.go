@@ -106,7 +106,6 @@ func (d *decoder) decodeMessage(buf io.Reader) (*isb.ReadMessage, string, error)
 
 // decodeDeletionMessage decodes deletion message from the given io.Reader
 func (d *decoder) decodeDeletionMessage(buf io.Reader) (*deletionMessage, int64, error) {
-	// FIXME(WAL): write unit tests for decoder and encoder
 	dms := deletionMessage{}
 
 	dMessageHeader := deletionMessageHeaderPreamble{}

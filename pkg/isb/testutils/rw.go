@@ -88,7 +88,7 @@ func BuildTestReadMessages(count int64, startTime time.Time, keys []string) []is
 	for idx, writeMessage := range writeMessages {
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
-			ReadOffset: isb.NewSimpleStringPartitionOffset(fmt.Sprintf("read_%s", writeMessage.Header.ID), 0),
+			ReadOffset: isb.NewSimpleStringPartitionOffset(fmt.Sprintf("%d", idx), 0),
 		}
 	}
 

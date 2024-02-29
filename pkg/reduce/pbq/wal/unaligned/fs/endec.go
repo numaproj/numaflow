@@ -63,8 +63,7 @@ type deletionMessage struct {
 }
 
 // encoder is an encoder for the unalignedWAL entries and header.
-type encoder struct {
-}
+type encoder struct{}
 
 // newEncoder returns a new encoder
 func newEncoder() *encoder {
