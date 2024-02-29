@@ -74,6 +74,14 @@ nameReference:
     kind: Pipeline
   - path: spec/templates/job/containerTemplate/envFrom/configMapRef/name
     kind: Pipeline
+  - path: spec/templates/sideInputsManager/containerTemplate/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/containerTemplate/envFrom/configMapRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/initContainerTemplate/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/initContainerTemplate/envFrom/configMapRef/name
+    kind: Pipeline
   - path: spec/jetstream/containerTemplate/env/valueFrom/configMapKeyRef/name
     kind: InterStepBufferService
   - path: spec/jetstream/containerTemplate/envFrom/configMapRef/name
@@ -145,11 +153,21 @@ nameReference:
     kind: Pipeline
   - path: spec/templates/job/containerTemplate/envFrom/secretRef/name
     kind: Pipeline
+  - path: spec/templates/sideInputsManager/containerTemplate/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/containerTemplate/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/initContainerTemplate/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/initContainerTemplate/envFrom/secretRef/name
+    kind: Pipeline
   - path: spec/vertices/imagePullSecrets/name
     kind: Pipeline
   - path: spec/templates/daemon/imagePullSecrets/name
     kind: Pipeline
   - path: spec/templates/job/imagePullSecrets/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/imagePullSecrets/name
     kind: Pipeline
   - path: spec/jetstream/containerTemplate/env/valueFrom/secretKeyRef/name
     kind: InterStepBufferService
@@ -172,6 +190,8 @@ nameReference:
     kind: Pipeline
   - path: spec/templates/job/serviceAccountName
     kind: Pipeline
+  - path: spec/templates/sideInputsManager/serviceAccountName
+    kind: Pipeline
   - path: spec/jetstream/serviceAccountName
     kind: InterStepBufferService
 - kind: PersistentVolumeClaim
@@ -189,6 +209,8 @@ nameReference:
     kind: Pipeline
   - path: spec/templates/job/priorityClassName
     kind: Pipeline
+  - path: spec/templates/sideInputsManager/priorityClassName
+    kind: Pipeline
   - path: spec/jetstream/priorityClassName
     kind: InterStepBufferService
 
@@ -201,6 +223,9 @@ commonLabels:
   create: true
   kind: Pipeline
 - path: spec/templates/job/metadata/labels
+  create: true
+  kind: Pipeline
+- path: spec/templates/sideInputsManager/metadata/labels
   create: true
   kind: Pipeline
 - path: spec/jetstream/metadata/labels
@@ -216,6 +241,9 @@ commonAnnotations:
   create: true
   kind: Pipeline
 - path: spec/templates/job/metadata/annotations
+  create: true
+  kind: Pipeline
+- path: spec/templates/sideInputsManager/metadata/annotations
   create: true
   kind: Pipeline
 - path: spec/jetstream/metadata/annotations
@@ -273,6 +301,10 @@ varReference:
 - path: spec/templates/daemon/initContainerTemplate/env/value
   kind: Pipeline
 - path: spec/templates/job/containerTemplate/env/value
+  kind: Pipeline
+- path: spec/templates/sideInputsManager/containerTemplate/env/value
+  kind: Pipeline
+- path: spec/templates/sideInputsManager/initContainerTemplate/env/value
   kind: Pipeline
 - path: spec/vertices/sidecars/volumeMounts/mountPath
   kind: Pipeline
