@@ -216,6 +216,12 @@ commonAnnotations:
 
 # https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/varreference.go
 varReference:
+- path: spec/vertices/sidecars/args
+  kind: Pipeline
+- path: spec/vertices/sidecars/command
+  kind: Pipeline
+- path: spec/vertices/sidecars/env/value
+  kind: Pipeline
 - path: spec/vertices/udf/container/args
   kind: Pipeline
 - path: spec/vertices/udf/container/command
@@ -252,13 +258,13 @@ varReference:
   kind: Pipeline
 - path: spec/vertices/initContainers/env/value
   kind: Pipeline
-- path: spec/vertices/sidecars/env/value
-  kind: Pipeline
 - path: spec/templates/daemon/containerTemplate/env/value
   kind: Pipeline
 - path: spec/templates/daemon/initContainerTemplate/env/value
   kind: Pipeline
 - path: spec/templates/job/containerTemplate/env/value
+  kind: Pipeline
+- path: spec/vertices/sidecars/volumeMounts/mountPath
   kind: Pipeline
 - path: spec/vertices/udf/container/volumeMounts/mountPath
   kind: Pipeline
