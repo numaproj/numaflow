@@ -38,6 +38,7 @@ func TestEncodingAndDecoding(t *testing.T) {
 
 	// write the header
 	_, err = fp.Write(bytes)
+	assert.NoError(t, err)
 
 	// build test read messages
 	readMessages := testutils.BuildTestReadMessages(100, time.UnixMilli(60000), []string{"key1:key2"})

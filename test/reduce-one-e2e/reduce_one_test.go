@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reduce_e2e
+package reduce_one_e2e
 
 import (
 	"context"
@@ -247,49 +249,6 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 		SinkNotContains("sink", "210")
 	done <- struct{}{}
 }
-
-func (r *ReduceSuite) TestSimpleSessionPipeline() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	w := r.Given().Pipeline("@testdata/simple-session-reduce-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "simple-session-sum"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	count := 0
-	done := make(chan struct{})
-	go func() {
-		// publish messages to source vertex, with event time starting from 60000
-		startTime := 60000
-		for i := 0; true; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case <-done:
-				return
-			default:
-				if count == 50 {
-					startTime = startTime + (50 * 1000)
-					count = 0
-				} else {
-					startTime = startTime + 1000
-				}
-				eventTime := strconv.Itoa(startTime)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime))
-				count += 1
-			}
-		}
-	}()
-
-	w.Expect().SinkContains("sink", "50")
-	done <- struct{}{}
-}
-
-// FIXME(session): add test for keyed session window
 
 func TestReduceSuite(t *testing.T) {
 	suite.Run(t, new(ReduceSuite))

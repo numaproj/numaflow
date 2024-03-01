@@ -1,0 +1,47 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-session-counter
+spec:
+  vertices:
+    - name: in
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: even-odd
+      scale:
+        min: 1
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
+    - name: compute-count
+      partitions: 1
+      udf:
+        container:
+          # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
+          image: quay.io/numaio/numaflow-go/session-counter:v0.6.1
+        groupBy:
+          window:
+            session:
+              timeout: 10s
+          keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 2Gi
+              accessMode: ReadWriteOnce
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+  edges:
+    - from: in
+      to: even-odd
+    - from: even-odd
+      to: compute-count
+    - from: compute-count
+      to: sink

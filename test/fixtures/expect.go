@@ -52,7 +52,7 @@ func (t *Expect) SinkContains(sinkName string, targetStr string, opts ...SinkChe
 	return t
 }
 
-func (t *Expect) SinkNotContains(sinkName string, targetStr string) *Expect {
+func (t *Expect) SinkNotContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
 	notContains := RedisNotContains(ctx, t.pipeline.Name, sinkName, targetStr)
