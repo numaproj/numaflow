@@ -3174,6 +3174,18 @@ Auth information
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.None">
+None
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PBQStorage">PBQStorage</a>)
+</p>
+<p>
+<p>
+None is used to indicate no persistence storage is needed for a vertex.
+</p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
 PBQStorage
 </h3>
@@ -3216,6 +3228,18 @@ Kubernetes core/v1.EmptyDirVolumeSource </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>none</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.None"> None </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+add a none empty object
+</p>
 </td>
 </tr>
 </tbody>

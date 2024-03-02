@@ -168,7 +168,13 @@ type PBQStorage struct {
 	PersistentVolumeClaim *PersistenceStrategy `json:"persistentVolumeClaim,omitempty" protobuf:"bytes,1,opt,name=persistentVolumeClaim"`
 	// +optional
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty" protobuf:"bytes,2,opt,name=emptyDir"`
+	// +optional
+	// add a none empty object
+	None *None `json:"none,omitempty" protobuf:"bytes,3,opt,name=none"`
 }
+
+// None is used to indicate no persistence storage is needed for a vertex.
+type None struct{}
 
 // GeneratePBQStoragePVCName generates pvc name used by reduce vertex.
 func GeneratePBQStoragePVCName(pipelineName, vertex string, index int) string {

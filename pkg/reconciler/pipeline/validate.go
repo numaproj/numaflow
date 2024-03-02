@@ -308,11 +308,17 @@ func validateUDF(udf dfv1.UDF) error {
 		if storage == nil {
 			return fmt.Errorf(`invalid "groupBy", "storage" is missing`)
 		}
-		if storage.PersistentVolumeClaim == nil && storage.EmptyDir == nil {
+		if storage.PersistentVolumeClaim == nil && storage.EmptyDir == nil && storage.None == nil {
 			return fmt.Errorf(`invalid "groupBy.storage", type of storage to use is missing`)
 		}
-		if storage.PersistentVolumeClaim != nil && storage.EmptyDir != nil {
+		if storage.PersistentVolumeClaim != nil && storage.EmptyDir != nil && storage.None != nil {
 			return fmt.Errorf(`invalid "groupBy.storage", either emptyDir or persistentVolumeClaim is allowed, not both`)
+		}
+		if storage.PersistentVolumeClaim != nil && storage.None != nil {
+			return fmt.Errorf(`invalid "groupBy.storage", either none or persistentVolumeClaim is allowed, not both`)
+		}
+		if storage.EmptyDir != nil && storage.None != nil {
+			return fmt.Errorf(`invalid "groupBy.storage", either none or emptyDir is allowed, not both`)
 		}
 	}
 	return nil

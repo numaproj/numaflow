@@ -837,6 +837,10 @@ message NatsSource {
   optional NatsAuth auth = 5;
 }
 
+// None is used to indicate no persistence storage is needed for a vertex.
+message None {
+}
+
 // PBQStorage defines the persistence configuration for a vertex.
 message PBQStorage {
   // +optional
@@ -844,6 +848,10 @@ message PBQStorage {
 
   // +optional
   optional k8s.io.api.core.v1.EmptyDirVolumeSource emptyDir = 2;
+
+  // +optional
+  // add a none empty object
+  optional None none = 3;
 }
 
 // PersistenceStrategy defines the strategy of persistence

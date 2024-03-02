@@ -18757,12 +18757,20 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.None": {
+      "description": "None is used to indicate no persistence storage is needed for a vertex.",
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.PBQStorage": {
       "description": "PBQStorage defines the persistence configuration for a vertex.",
       "type": "object",
       "properties": {
         "emptyDir": {
           "$ref": "#/definitions/io.k8s.api.core.v1.EmptyDirVolumeSource"
+        },
+        "none": {
+          "description": "add a none empty object",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.None"
         },
         "persistentVolumeClaim": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PersistenceStrategy"

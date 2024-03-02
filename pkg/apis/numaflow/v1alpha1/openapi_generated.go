@@ -71,6 +71,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NativeRedis":                    schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth":                       schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource":                     schema_pkg_apis_numaflow_v1alpha1_NatsSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.None":                           schema_pkg_apis_numaflow_v1alpha1_None(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage":                     schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy":            schema_pkg_apis_numaflow_v1alpha1_PersistenceStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Pipeline":                       schema_pkg_apis_numaflow_v1alpha1_Pipeline(ref),
@@ -2896,6 +2897,17 @@ func schema_pkg_apis_numaflow_v1alpha1_NatsSource(ref common.ReferenceCallback) 
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_None(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "None is used to indicate no persistence storage is needed for a vertex.",
+				Type:        []string{"object"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2913,11 +2925,17 @@ func schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref common.ReferenceCallback) 
 							Ref: ref("k8s.io/api/core/v1.EmptyDirVolumeSource"),
 						},
 					},
+					"none": {
+						SchemaProps: spec.SchemaProps{
+							Description: "add a none empty object",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.None"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy", "k8s.io/api/core/v1.EmptyDirVolumeSource"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.None", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy", "k8s.io/api/core/v1.EmptyDirVolumeSource"},
 	}
 }
 
