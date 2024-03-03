@@ -173,7 +173,8 @@ type PBQStorage struct {
 	None *None `json:"none,omitempty" protobuf:"bytes,3,opt,name=none"`
 }
 
-// None is used to indicate no persistence storage is needed for a vertex.
+// None means there will be no persistence storage and there will be data loss during pod restarts.
+// Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).
 type None struct{}
 
 // GeneratePBQStoragePVCName generates pvc name used by reduce vertex.
