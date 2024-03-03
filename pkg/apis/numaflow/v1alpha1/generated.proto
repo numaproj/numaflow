@@ -837,9 +837,9 @@ message NatsSource {
   optional NatsAuth auth = 5;
 }
 
-// None means there will be no persistence storage and there will be data loss during pod restarts.
+// NoStore means there will be no persistence storage and there will be data loss during pod restarts.
 // Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).
-message None {
+message NoStore {
 }
 
 // PBQStorage defines the persistence configuration for a vertex.
@@ -851,7 +851,7 @@ message PBQStorage {
   optional k8s.io.api.core.v1.EmptyDirVolumeSource emptyDir = 2;
 
   // +optional
-  optional None none = 3;
+  optional NoStore no_store = 3;
 }
 
 // PersistenceStrategy defines the strategy of persistence

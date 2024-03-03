@@ -169,12 +169,12 @@ type PBQStorage struct {
 	// +optional
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty" protobuf:"bytes,2,opt,name=emptyDir"`
 	// +optional
-	None *None `json:"none,omitempty" protobuf:"bytes,3,opt,name=none"`
+	NoStore *NoStore `json:"no_store,omitempty" protobuf:"bytes,3,opt,name=no_store"`
 }
 
-// None means there will be no persistence storage and there will be data loss during pod restarts.
+// NoStore means there will be no persistence storage and there will be data loss during pod restarts.
 // Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).
-type None struct{}
+type NoStore struct{}
 
 // GeneratePBQStoragePVCName generates pvc name used by reduce vertex.
 func GeneratePBQStoragePVCName(pipelineName, vertex string, index int) string {

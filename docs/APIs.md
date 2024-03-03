@@ -3174,8 +3174,8 @@ Auth information
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.None">
-None
+<h3 id="numaflow.numaproj.io/v1alpha1.NoStore">
+NoStore
 </h3>
 <p>
 (<em>Appears on:</em>
@@ -3183,9 +3183,10 @@ None
 </p>
 <p>
 <p>
-None means there will be no persistence storage and there will be data
-loss during pod restarts. Use this option only if you do not care about
-correctness (e.g., approx statistics pipeline like sampling rate, etc.).
+NoStore means there will be no persistence storage and there will be
+data loss during pod restarts. Use this option only if you do not care
+about correctness (e.g., approx statistics pipeline like sampling rate,
+etc.).
 </p>
 </p>
 <h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
@@ -3234,8 +3235,8 @@ Kubernetes core/v1.EmptyDirVolumeSource </a> </em>
 </tr>
 <tr>
 <td>
-<code>none</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.None"> None </a> </em>
+<code>no_store</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.NoStore"> NoStore </a> </em>
 </td>
 <td>
 <em>(Optional)</em>

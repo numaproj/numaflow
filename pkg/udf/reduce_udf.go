@@ -296,7 +296,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 	// create store manager
 	var storeManager pbqstore.Manager
-	if u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.None != nil {
+	if u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.NoStore != nil {
 		storeManager = noopstore.NewNoopStores()
 	} else {
 		storeManager = fs.NewFSManager(u.VertexInstance, fs.WithStorePath(dfv1.DefaultStorePath), fs.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), fs.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
