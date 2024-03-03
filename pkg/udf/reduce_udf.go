@@ -25,6 +25,9 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/info"
 	"go.uber.org/zap"
 
+	alignedfs "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/fs"
+	noopwal "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/noop"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -32,8 +35,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
-	alignedfs "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/fs"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
 	unalignedfs "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned/fs"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
@@ -295,11 +296,16 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
-	var walManager wal.Manager
-	if windower.Type() == window.Aligned {
-		walManager = alignedfs.NewFSManager(u.VertexInstance)
-	} else {
-		walManager = unalignedfs.NewFSManager(ctx, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath, u.VertexInstance)
+	// create noop wal manager
+	walManager := noopwal.NewNoopStores()
+	// if the vertex has a persistent volume claim or empty dir, create a file system based wal manager
+	if u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.PersistentVolumeClaim != nil ||
+		u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.EmptyDir != nil {
+		if windower.Type() == window.Aligned {
+			walManager = alignedfs.NewFSManager(u.VertexInstance)
+		} else {
+			walManager = unalignedfs.NewFSManager(ctx, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath, u.VertexInstance)
+		}
 	}
 
 	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, walManager, windower.Type())

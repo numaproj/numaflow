@@ -18757,12 +18757,19 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.NoStore": {
+      "description": "NoStore means there will be no persistence storage and there will be data loss during pod restarts. Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).",
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.PBQStorage": {
       "description": "PBQStorage defines the persistence configuration for a vertex.",
       "type": "object",
       "properties": {
         "emptyDir": {
           "$ref": "#/definitions/io.k8s.api.core.v1.EmptyDirVolumeSource"
+        },
+        "no_store": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NoStore"
         },
         "persistentVolumeClaim": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PersistenceStrategy"
@@ -19025,6 +19032,14 @@
         },
         "plain": {
           "description": "SASLPlain contains the sasl plain config",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
+        },
+        "scramsha256": {
+          "description": "SASLSCRAMSHA256 contains the sasl plain config",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
+        },
+        "scramsha512": {
+          "description": "SASLSCRAMSHA512 contains the sasl plain config",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
         }
       }

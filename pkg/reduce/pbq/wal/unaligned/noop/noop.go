@@ -3,9 +3,6 @@ package noop
 import (
 	"context"
 
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
 	"github.com/numaproj/numaflow/pkg/window"
 )
@@ -41,30 +38,5 @@ func (n noopGCEventsWAL) PersistGCEvent(window window.TimedWindow) error {
 }
 
 func (n noopGCEventsWAL) Close() error {
-	return nil
-}
-
-// noopUnalignedWAL is a no-op unaligned WAL which does not do any operation but can be safely invoked.
-type noopUnalignedWAL struct {
-}
-
-// NewNoopUnalignedWAL returns a new no-op unaligned WAL
-func NewNoopUnalignedWAL() wal.WAL {
-	return &noopUnalignedWAL{}
-}
-
-func (n noopUnalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
-	return nil, nil
-}
-
-func (n noopUnalignedWAL) Write(msg *isb.ReadMessage) error {
-	return nil
-}
-
-func (n noopUnalignedWAL) PartitionID() *partition.ID {
-	return nil
-}
-
-func (n noopUnalignedWAL) Close() error {
 	return nil
 }
