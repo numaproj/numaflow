@@ -204,7 +204,7 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 						op:    kvs.KVPut,
 					}
 				case nats.KeyValueDelete:
-					jss.log.Debugw("Received a delete event", zap.String("key", value.Key()), zap.Binary("b64Value", value.Value()))
+					jss.log.Infow("Received a delete event", zap.String("key", value.Key()), zap.Binary("b64Value", value.Value()))
 					updates <- kvEntry{
 						key:   value.Key(),
 						value: value.Value(),
@@ -242,6 +242,7 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 	return updates, stopped
 }
 
+// newWatcher creates a new watcher for the key-value store.
 func (jss *jetStreamStore) newWatcher(ctx context.Context) nats.KeyWatcher {
 	kvWatcher, err := jss.kv.WatchAll(nats.Context(ctx))
 	// keep looping because the watermark won't work without a watcher
@@ -255,15 +256,16 @@ func (jss *jetStreamStore) newWatcher(ctx context.Context) nats.KeyWatcher {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+	jss.log.Infow("Successfully created watcher", zap.String("watcher", jss.GetKVName()))
 	return kvWatcher
 }
 
 // lastUpdateKVTime returns the last update time of the kv store. if the key is missing, it will return time.Zero.
 func (jss *jetStreamStore) lastUpdateKVTime() time.Time {
 	var (
-		keys       []string
 		err        error
 		lastUpdate time.Time
+		keyLister  nats.KeyLister
 		value      nats.KeyValueEntry
 	)
 
@@ -273,7 +275,7 @@ retryLoop:
 		case <-jss.ctx.Done():
 			return time.Time{}
 		default:
-			keys, err = jss.kv.Keys()
+			keyLister, err = jss.kv.ListKeys()
 			if err == nil {
 				break retryLoop
 			} else {
@@ -289,22 +291,28 @@ retryLoop:
 
 	}
 
-	for _, key := range keys {
+	for key := range keyLister.Keys() {
 		value, err = jss.kv.Get(key)
 		for err != nil {
+			// keys can be deleted when the previous vertex pod is deleted/restarted.
+			if errors.Is(err, nats.ErrKeyNotFound) {
+				break
+			}
 			select {
 			case <-jss.ctx.Done():
 				return time.Time{}
 			default:
 				jss.log.Errorw("Failed to get value", zap.String("watcher", jss.GetKVName()), zap.Error(err))
-				value, err = jss.kv.Get(key)
 				time.Sleep(100 * time.Millisecond)
+				value, err = jss.kv.Get(key)
 			}
 		}
 		if value.Created().After(lastUpdate) {
 			lastUpdate = value.Created()
 		}
 	}
+
+	_ = keyLister.Stop()
 	return lastUpdate
 }
 
