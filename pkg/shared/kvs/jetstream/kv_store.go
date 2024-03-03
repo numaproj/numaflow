@@ -223,8 +223,7 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 				} else {
 					// if the last update time is after the previous fetch time, it means that the store is getting updates but the watcher is not receiving any
 					// therefore, we have to recreate the watcher
-					jss.log.Warn("The watcher is not receiving any updates", zap.String("watcher", jss.GetKVName()), zap.Time("lastUpdateKVTime", kvLastUpdatedTime), zap.Time("previousFetchTime", jss.previousFetchTime))
-					jss.log.Warn("Recreating the watcher")
+					jss.log.Warn("The watcher is not receiving any updates, recreating the watcher", zap.String("watcher", jss.GetKVName()), zap.Time("lastUpdateKVTime", kvLastUpdatedTime), zap.Time("previousFetchTime", jss.previousFetchTime))
 					tempWatcher := kvWatcher
 					kvWatcher = jss.newWatcher(ctx)
 					err = tempWatcher.Stop()
@@ -302,7 +301,7 @@ retryLoop:
 			case <-jss.ctx.Done():
 				return time.Time{}
 			default:
-				jss.log.Errorw("Failed to get value", zap.String("watcher", jss.GetKVName()), zap.Error(err))
+				jss.log.Errorw("Failed to get value", zap.String("watcher", jss.GetKVName()), zap.String("key", key), zap.Error(err))
 				time.Sleep(100 * time.Millisecond)
 				value, err = jss.kv.Get(key)
 			}
