@@ -2901,7 +2901,7 @@ func schema_pkg_apis_numaflow_v1alpha1_None(ref common.ReferenceCallback) common
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "None is used to indicate no persistence storage is needed for a vertex.",
+				Description: "None means there will be no persistence storage and there will be data loss during pod restarts. Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).",
 				Type:        []string{"object"},
 			},
 		},
@@ -2927,8 +2927,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref common.ReferenceCallback) 
 					},
 					"none": {
 						SchemaProps: spec.SchemaProps{
-							Description: "add a none empty object",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.None"),
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.None"),
 						},
 					},
 				},

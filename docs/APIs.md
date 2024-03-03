@@ -3183,7 +3183,9 @@ None
 </p>
 <p>
 <p>
-None is used to indicate no persistence storage is needed for a vertex.
+None means there will be no persistence storage and there will be data
+loss during pod restarts. Use this option only if you do not care about
+correctness (e.g., approx statistics pipeline like sampling rate, etc.).
 </p>
 </p>
 <h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
@@ -3237,9 +3239,6 @@ Kubernetes core/v1.EmptyDirVolumeSource </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
-<p>
-add a none empty object
-</p>
 </td>
 </tr>
 </tbody>

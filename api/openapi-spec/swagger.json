@@ -18758,7 +18758,7 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.None": {
-      "description": "None is used to indicate no persistence storage is needed for a vertex.",
+      "description": "None means there will be no persistence storage and there will be data loss during pod restarts. Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).",
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.PBQStorage": {
@@ -18769,7 +18769,6 @@
           "$ref": "#/definitions/io.k8s.api.core.v1.EmptyDirVolumeSource"
         },
         "none": {
-          "description": "add a none empty object",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.None"
         },
         "persistentVolumeClaim": {

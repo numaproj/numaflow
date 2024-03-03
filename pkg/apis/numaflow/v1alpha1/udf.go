@@ -169,7 +169,6 @@ type PBQStorage struct {
 	// +optional
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty" protobuf:"bytes,2,opt,name=emptyDir"`
 	// +optional
-	// add a none empty object
 	None *None `json:"none,omitempty" protobuf:"bytes,3,opt,name=none"`
 }
 
