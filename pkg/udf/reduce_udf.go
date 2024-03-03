@@ -32,7 +32,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
+	pbqstore "github.com/numaproj/numaflow/pkg/reduce/pbq/store"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/fs"
+	noopstore "github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/noop"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
@@ -292,7 +294,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
-	storeManager := fs.NewFSManager(u.VertexInstance, fs.WithStorePath(dfv1.DefaultStorePath), fs.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), fs.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
+	// create store manager
+	var storeManager pbqstore.Manager
+	if u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.NoStore != nil {
+		storeManager = noopstore.NewNoopStores()
+	} else {
+		storeManager = fs.NewFSManager(u.VertexInstance, fs.WithStorePath(dfv1.DefaultStorePath), fs.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), fs.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
+	}
 
 	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeManager, windower.Type())
 	if err != nil {
