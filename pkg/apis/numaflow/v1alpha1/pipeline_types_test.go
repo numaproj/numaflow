@@ -301,18 +301,26 @@ func Test_GetDownstreamEdges(t *testing.T) {
 			Edges: []Edge{
 				{From: "input", To: "p1"},
 				{From: "p1", To: "p11"},
+				{From: "p1", To: "p1"},
 				{From: "p1", To: "p2"},
 				{From: "p2", To: "output"},
 			},
 		},
 	}
 	edges := pl.GetDownstreamEdges("input")
-	assert.Equal(t, 4, len(edges))
+	assert.Equal(t, 5, len(edges))
 	assert.Equal(t, edges, pl.ListAllEdges())
-	assert.Equal(t, edges[2], Edge{From: "p1", To: "p2"})
+	assert.Equal(t, edges[2], Edge{From: "p1", To: "p1"})
+	assert.Equal(t, edges[3], Edge{From: "p1", To: "p2"})
 
 	edges = pl.GetDownstreamEdges("p1")
-	assert.Equal(t, 3, len(edges))
+	assert.Equal(t, 4, len(edges))
+
+	edges = pl.GetDownstreamEdges("p2")
+	assert.Equal(t, 1, len(edges))
+
+	edges = pl.GetDownstreamEdges("p11")
+	assert.Equal(t, 0, len(edges))
 
 	edges = pl.GetDownstreamEdges("output")
 	assert.Equal(t, 0, len(edges))

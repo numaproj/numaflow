@@ -17,6 +17,9 @@ limitations under the License.
 package window
 
 import (
+	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -41,7 +44,7 @@ type TimedWindower interface {
 	// NextWindowToBeClosed returns the next window yet to be closed.
 	NextWindowToBeClosed() TimedWindow
 	// DeleteClosedWindow deletes the window from the closed windows list.
-	DeleteClosedWindow(response *TimedWindowResponse)
+	DeleteClosedWindow(tw TimedWindow)
 	// OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.
 	// If there are no windows, it returns -1.
 	OldestWindowEndTime() time.Time
@@ -57,12 +60,17 @@ type TimedWindow interface {
 	Slot() string
 	// Partition returns the partition id of the window, partition is
 	// combination of start time, end time and slot.
-	// for aligned windows, this will be used to map to the pbq instance
-	// for unaligned windows, we use a single pbq instance for all the windows
+	// This will be used to map to the pbq instance where the messages
+	// should be persisted.
 	Partition() *partition.ID
 	// Keys returns the keys of the window tracked for Unaligned windows.
 	// This will return empty for Aligned windows.
 	Keys() []string
+	// ID returns the id which is the unique identifier for the window.
+	// This is used to compare the windows. For Aligned windows, this is the
+	// combination of start time, end time and slot. For Unaligned windows,
+	// this is the combination of start time, end time, slot and keys.
+	ID() string
 	// Merge merges the window with the new window. It is used only for
 	// Unaligned window.
 	Merge(tw TimedWindow)
@@ -71,58 +79,124 @@ type TimedWindow interface {
 	Expand(endTime time.Time)
 }
 
+// SharedUnalignedPartition is a common partition for unaligned window.
+// unaligned windows share a common pbq, this partition is used to identify the pbq instance.
+var SharedUnalignedPartition = partition.ID{
+	Start: time.UnixMilli(0),
+	End:   time.UnixMilli(math.MaxInt64),
+	Slot:  "slot-0",
+}
+
+type alignedTimedWindow struct {
+	startTime time.Time
+	endTime   time.Time
+	slot      string
+	partition *partition.ID
+	id        string
+}
+
+// NewAlignedTimedWindow returns a new TimedWindow for the given start time, end time and slot.
+func NewAlignedTimedWindow(st time.Time, et time.Time, slot string) TimedWindow {
+	return &alignedTimedWindow{
+		startTime: st,
+		endTime:   et,
+		slot:      slot,
+		partition: &partition.ID{
+			Start: st,
+			End:   et,
+			Slot:  slot,
+		},
+		id: fmt.Sprintf("%d-%d-%s", st.UnixMilli(), et.UnixMilli(), slot),
+	}
+}
+
+func (at *alignedTimedWindow) StartTime() time.Time {
+	return at.startTime
+}
+
+func (at *alignedTimedWindow) EndTime() time.Time {
+	return at.endTime
+}
+
+func (at *alignedTimedWindow) Slot() string {
+	return at.slot
+}
+
+func (at *alignedTimedWindow) Partition() *partition.ID {
+	return at.partition
+}
+
+func (at *alignedTimedWindow) Keys() []string {
+	return nil
+}
+
+func (at *alignedTimedWindow) ID() string {
+	return at.id
+}
+
+func (at *alignedTimedWindow) Merge(tw TimedWindow) {
+	// never invoked for Aligned Window
+}
+
+func (at *alignedTimedWindow) Expand(endTime time.Time) {
+	// never invoked for Aligned Window
+}
+
 // timedWindow implements TimedWindow.
-type timedWindow struct {
+type unalignedTimedWindow struct {
 	startTime time.Time
 	endTime   time.Time
 	slot      string
 	keys      []string
+	partition *partition.ID
+	id        string
 }
 
-// NewWindowFromPartition returns a new TimedWindow for the given partition id.
-func NewWindowFromPartition(id *partition.ID) TimedWindow {
-	return &timedWindow{
-		startTime: id.Start,
-		endTime:   id.End,
-		slot:      id.Slot,
-	}
-}
-
-// NewWindowFromPartitionAndKeys returns a new TimedWindow for the given partition id and keys.
-func NewWindowFromPartitionAndKeys(id *partition.ID, keys []string) TimedWindow {
-	return &timedWindow{
-		startTime: id.Start,
-		endTime:   id.End,
-		slot:      id.Slot,
+// NewUnalignedTimedWindow returns a new TimedWindow for the given start time, end time, slot and keys.
+// We track the keys for Unaligned windows. Because for unaligned windows the start and end times for
+// each window are only dependent on the specific key.
+func NewUnalignedTimedWindow(st time.Time, et time.Time, slot string, keys []string) TimedWindow {
+	return &unalignedTimedWindow{
+		startTime: st,
+		endTime:   et,
+		slot:      slot,
 		keys:      keys,
+		partition: &SharedUnalignedPartition,
+		id:        fmt.Sprintf("%d-%d-%s-%s", st.UnixMilli(), et.UnixMilli(), slot, strings.Join(keys, "-")),
 	}
 }
 
-func (w *timedWindow) StartTime() time.Time {
+func (w *unalignedTimedWindow) StartTime() time.Time {
 	return w.startTime
 }
 
-func (w *timedWindow) EndTime() time.Time {
+func (w *unalignedTimedWindow) EndTime() time.Time {
 	return w.endTime
 }
 
-func (w *timedWindow) Slot() string {
+func (w *unalignedTimedWindow) Slot() string {
 	return w.slot
 }
 
-func (w *timedWindow) Keys() []string {
+func (w *unalignedTimedWindow) Keys() []string {
 	return w.keys
 }
 
-func (w *timedWindow) Partition() *partition.ID {
-	return &partition.ID{
-		Start: w.startTime,
-		End:   w.endTime,
-		Slot:  w.slot,
-	}
+func (w *unalignedTimedWindow) Partition() *partition.ID {
+	return w.partition
 }
 
-func (w *timedWindow) Merge(tw TimedWindow) {
+func (w *unalignedTimedWindow) ID() string {
+	return w.id
+}
+
+func (w *unalignedTimedWindow) Merge(tw TimedWindow) {
+
+	// if the window falls within the current window, no need to merge
+	if !tw.StartTime().Before(w.startTime) && !tw.EndTime().After(w.endTime) {
+		return
+	}
+
 	// expand the start and end to accommodate the new window
 	if tw.StartTime().Before(w.startTime) {
 		w.startTime = tw.StartTime()
@@ -131,11 +205,27 @@ func (w *timedWindow) Merge(tw TimedWindow) {
 	if tw.EndTime().After(w.endTime) {
 		w.endTime = tw.EndTime()
 	}
+
+	// update the id since the start and end time has changed
+	if len(w.keys) > 0 {
+		w.id = fmt.Sprintf("%d-%d-%s-%s", w.startTime.UnixMilli(), w.endTime.UnixMilli(), w.slot, strings.Join(w.keys, "-"))
+	} else {
+		w.id = fmt.Sprintf("%d-%d-%s", w.startTime.UnixMilli(), w.endTime.UnixMilli(), w.slot)
+	}
 }
 
-func (w *timedWindow) Expand(endTime time.Time) {
-	if endTime.After(w.endTime) {
-		w.endTime = endTime
+func (w *unalignedTimedWindow) Expand(endTime time.Time) {
+	// if the end time is before the current end time, no need to expand
+	if !endTime.After(w.endTime) {
+		return
+	}
+
+	w.endTime = endTime
+	// update the id since the end time has changed
+	if len(w.keys) > 0 {
+		w.id = fmt.Sprintf("%d-%d-%s-%s", w.startTime.UnixMilli(), w.endTime.UnixMilli(), w.slot, strings.Join(w.keys, "-"))
+	} else {
+		w.id = fmt.Sprintf("%d-%d-%s", w.startTime.UnixMilli(), w.endTime.UnixMilli(), w.slot)
 	}
 }
 

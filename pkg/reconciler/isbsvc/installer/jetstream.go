@@ -85,7 +85,7 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 	// merge
 	v := viper.New()
 	v.SetConfigType("yaml")
-	if err := v.ReadConfig(bytes.NewBufferString(r.config.ISBSvc.JetStream.BufferConfig)); err != nil {
+	if err := v.ReadConfig(bytes.NewBufferString(r.config.GetISBSvcConfig().JetStream.BufferConfig)); err != nil {
 		return nil, fmt.Errorf("invalid jetstream buffer config in global configuration, %w", err)
 	}
 	if x := r.isbSvc.Spec.JetStream.BufferConfig; x != nil {
@@ -203,10 +203,11 @@ func (r *jetStreamInstaller) createService(ctx context.Context) error {
 }
 
 func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
-	jsVersion, err := r.config.GetJetStreamVersion(r.isbSvc.Spec.JetStream.Version)
+	jsVersion, err := r.config.GetISBSvcConfig().GetJetStreamVersion(r.isbSvc.Spec.JetStream.Version)
 	if err != nil {
 		return fmt.Errorf("failed to get jetstream version, err: %w", err)
 	}
+
 	spec := r.isbSvc.Spec.JetStream.GetStatefulSetSpec(dfv1.GetJetStreamStatefulSetSpecReq{
 		ServiceName:                generateJetStreamServiceName(r.isbSvc),
 		Labels:                     r.labels,
@@ -222,6 +223,7 @@ func (r *jetStreamInstaller) createStatefulSet(ctx context.Context) error {
 		ConfigMapName:              generateJetStreamConfigMapName(r.isbSvc),
 		PvcNameIfNeeded:            generateJetStreamPVCName(r.isbSvc),
 		StartCommand:               jsVersion.StartCommand,
+		DefaultResources:           r.config.GetDefaults().GetDefaultContainerResources(),
 	})
 	hash := sharedutil.MustHash(spec)
 	obj := &appv1.StatefulSet{
@@ -428,7 +430,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	// Merge Nats settings
 	v := viper.New()
 	v.SetConfigType("yaml")
-	if err := v.ReadConfig(bytes.NewBufferString(r.config.ISBSvc.JetStream.Settings)); err != nil {
+	if err := v.ReadConfig(bytes.NewBufferString(r.config.GetISBSvcConfig().JetStream.Settings)); err != nil {
 		return fmt.Errorf("invalid jetstream settings in global configuration, %w", err)
 	}
 	if x := r.isbSvc.Spec.JetStream.Settings; x != nil {

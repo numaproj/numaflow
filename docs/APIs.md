@@ -1330,6 +1330,7 @@ Size of each generated message
 <code>keyCount</code></br> <em> int32 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>
 KeyCount is the number of unique keys in the payload
 </p>
@@ -1340,8 +1341,25 @@ KeyCount is the number of unique keys in the payload
 <code>value</code></br> <em> uint64 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>
 Value is an optional uint64 value to be written in to the payload
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>jitter</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Jitter is the jitter for the message generation, used to simulate out of
+order messages for example if the jitter is 10s, then the message’s
+event time will be delayed by a random time between 0 and 10s which will
+result in the message being out of order by 0 to 10s
 </p>
 </td>
 </tr>
@@ -1394,6 +1412,15 @@ Kubernetes core/v1.PullPolicy </a> </em>
 <code>Env</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
 <td>
 </td>
@@ -1569,6 +1596,15 @@ Description
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
+</td>
+<td>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetRedisServiceSpecReq">
@@ -1733,6 +1769,15 @@ Description
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
+</td>
+<td>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetSideInputDeploymentReq">
@@ -1782,6 +1827,15 @@ Kubernetes core/v1.PullPolicy </a> </em>
 <code>Env</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
 <td>
 </td>
@@ -1842,6 +1896,15 @@ Kubernetes core/v1.PullPolicy </a> </em>
 <tr>
 <td>
 <code>SideInputsStoreName</code></br> <em> string </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
 </td>
 <td>
 </td>
@@ -3111,6 +3174,21 @@ Auth information
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.NoStore">
+NoStore
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PBQStorage">PBQStorage</a>)
+</p>
+<p>
+<p>
+NoStore means there will be no persistence storage and there will be
+data loss during pod restarts. Use this option only if you do not care
+about correctness (e.g., approx statistics pipeline like sampling rate,
+etc.).
+</p>
+</p>
 <h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
 PBQStorage
 </h3>
@@ -3150,6 +3228,15 @@ PersistenceStrategy </a> </em>
 <code>emptyDir</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#emptydirvolumesource-v1-core">
 Kubernetes core/v1.EmptyDirVolumeSource </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>no_store</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.NoStore"> NoStore </a> </em>
 </td>
 <td>
 <em>(Optional)</em>
@@ -3926,6 +4013,30 @@ SASLPlain contains the sasl plain config
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>scramsha256</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASLSCRAMSHA256 contains the sasl plain config
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>scramsha512</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLPlain"> SASLPlain </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+SASLSCRAMSHA512 contains the sasl plain config
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.SASLPlain">
@@ -4651,7 +4762,7 @@ CACertSecret refers to the secret that contains the CA cert
 </tr>
 <tr>
 <td>
-<code>clientCertSecret</code></br> <em>
+<code>certSecret</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>
@@ -4664,7 +4775,7 @@ CertSecret refers to the secret that contains the cert
 </tr>
 <tr>
 <td>
-<code>clientKeySecret</code></br> <em>
+<code>keySecret</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
 Kubernetes core/v1.SecretKeySelector </a> </em>
 </td>

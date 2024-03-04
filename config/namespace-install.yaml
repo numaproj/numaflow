@@ -9188,6 +9188,66 @@ spec:
                                   - handshake
                                   - userSecret
                                   type: object
+                                scramsha256:
+                                  properties:
+                                    handshake:
+                                      type: boolean
+                                    passwordSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    userSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                  required:
+                                  - handshake
+                                  - userSecret
+                                  type: object
+                                scramsha512:
+                                  properties:
+                                    handshake:
+                                      type: boolean
+                                    passwordSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    userSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                  required:
+                                  - handshake
+                                  - userSecret
+                                  type: object
                               required:
                               - mechanism
                               type: object
@@ -9204,18 +9264,7 @@ spec:
                                   required:
                                   - key
                                   type: object
-                                clientCertSecret:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                clientKeySecret:
+                                certSecret:
                                   properties:
                                     key:
                                       type: string
@@ -9228,6 +9277,17 @@ spec:
                                   type: object
                                 insecureSkipVerify:
                                   type: boolean
+                                keySecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
                               type: object
                             topic:
                               type: string
@@ -9457,6 +9517,9 @@ spec:
                             duration:
                               default: 1s
                               type: string
+                            jitter:
+                              default: 0s
+                              type: string
                             keyCount:
                               format: int32
                               type: integer
@@ -9593,6 +9656,66 @@ spec:
                                   - handshake
                                   - userSecret
                                   type: object
+                                scramsha256:
+                                  properties:
+                                    handshake:
+                                      type: boolean
+                                    passwordSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    userSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                  required:
+                                  - handshake
+                                  - userSecret
+                                  type: object
+                                scramsha512:
+                                  properties:
+                                    handshake:
+                                      type: boolean
+                                    passwordSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    userSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                  required:
+                                  - handshake
+                                  - userSecret
+                                  type: object
                               required:
                               - mechanism
                               type: object
@@ -9609,18 +9732,7 @@ spec:
                                   required:
                                   - key
                                   type: object
-                                clientCertSecret:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                clientKeySecret:
+                                certSecret:
                                   properties:
                                     key:
                                       type: string
@@ -9633,6 +9745,17 @@ spec:
                                   type: object
                                 insecureSkipVerify:
                                   type: boolean
+                                keySecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
                               type: object
                             topic:
                               type: string
@@ -9708,18 +9831,7 @@ spec:
                                   required:
                                   - key
                                   type: object
-                                clientCertSecret:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                clientKeySecret:
+                                certSecret:
                                   properties:
                                     key:
                                       type: string
@@ -9732,6 +9844,17 @@ spec:
                                   type: object
                                 insecureSkipVerify:
                                   type: boolean
+                                keySecret:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
                               type: object
                             url:
                               type: string
@@ -10446,6 +10569,8 @@ spec:
                                       - type: string
                                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                       x-kubernetes-int-or-string: true
+                                  type: object
+                                no_store:
                                   type: object
                                 persistentVolumeClaim:
                                   properties:
@@ -13787,6 +13912,66 @@ spec:
                             - handshake
                             - userSecret
                             type: object
+                          scramsha256:
+                            properties:
+                              handshake:
+                                type: boolean
+                              passwordSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                              userSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                            required:
+                            - handshake
+                            - userSecret
+                            type: object
+                          scramsha512:
+                            properties:
+                              handshake:
+                                type: boolean
+                              passwordSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                              userSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                            required:
+                            - handshake
+                            - userSecret
+                            type: object
                         required:
                         - mechanism
                         type: object
@@ -13803,18 +13988,7 @@ spec:
                             required:
                             - key
                             type: object
-                          clientCertSecret:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                              optional:
-                                type: boolean
-                            required:
-                            - key
-                            type: object
-                          clientKeySecret:
+                          certSecret:
                             properties:
                               key:
                                 type: string
@@ -13827,6 +14001,17 @@ spec:
                             type: object
                           insecureSkipVerify:
                             type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
                         type: object
                       topic:
                         type: string
@@ -14056,6 +14241,9 @@ spec:
                       duration:
                         default: 1s
                         type: string
+                      jitter:
+                        default: 0s
+                        type: string
                       keyCount:
                         format: int32
                         type: integer
@@ -14192,6 +14380,66 @@ spec:
                             - handshake
                             - userSecret
                             type: object
+                          scramsha256:
+                            properties:
+                              handshake:
+                                type: boolean
+                              passwordSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                              userSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                            required:
+                            - handshake
+                            - userSecret
+                            type: object
+                          scramsha512:
+                            properties:
+                              handshake:
+                                type: boolean
+                              passwordSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                              userSecret:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                            required:
+                            - handshake
+                            - userSecret
+                            type: object
                         required:
                         - mechanism
                         type: object
@@ -14208,18 +14456,7 @@ spec:
                             required:
                             - key
                             type: object
-                          clientCertSecret:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                              optional:
-                                type: boolean
-                            required:
-                            - key
-                            type: object
-                          clientKeySecret:
+                          certSecret:
                             properties:
                               key:
                                 type: string
@@ -14232,6 +14469,17 @@ spec:
                             type: object
                           insecureSkipVerify:
                             type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
                         type: object
                       topic:
                         type: string
@@ -14307,18 +14555,7 @@ spec:
                             required:
                             - key
                             type: object
-                          clientCertSecret:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                              optional:
-                                type: boolean
-                            required:
-                            - key
-                            type: object
-                          clientKeySecret:
+                          certSecret:
                             properties:
                               key:
                                 type: string
@@ -14331,6 +14568,17 @@ spec:
                             type: object
                           insecureSkipVerify:
                             type: boolean
+                          keySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
                         type: object
                       url:
                         type: string
@@ -15122,6 +15370,8 @@ spec:
                                 - type: string
                                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                 x-kubernetes-int-or-string: true
+                            type: object
+                          no_store:
                             type: object
                           persistentVolumeClaim:
                             properties:
@@ -16222,6 +16472,11 @@ metadata:
 apiVersion: v1
 data:
   controller-config.yaml: |
+    defaults:
+      containerResources: |
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
     isbsvc:
       redis:
         # Default Redis settings, could be overridden by InterStepBufferService specs
@@ -16251,6 +16506,11 @@ data:
           redisImage: bitnami/redis:7.0.11-debian-11-r3
           sentinelImage: bitnami/redis-sentinel:7.0.11-debian-11-r3
           redisExporterImage: bitnami/redis-exporter:1.50.0-debian-11-r4
+          initContainerImage: debian:latest
+        - version: 7.0.15
+          redisImage: bitnami/redis:7.0.15-debian-11-r2
+          sentinelImage: bitnami/redis-sentinel:7.0.15-debian-11-r2
+          redisExporterImage: bitnami/redis-exporter:1.56.0-debian-11-r2
           initContainerImage: debian:latest
       jetstream:
         # Default JetStream settings, could be overridden by InterStepBufferService specs
@@ -16359,14 +16619,20 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: "issuer: <HOSTNAME>/dex\nstorage:\n  type: memory\nweb:\n  http: 0.0.0.0:5556\nstaticClients:\n
-    \ - id: numaflow-server-app\n    redirectURIs: \n      - <HOSTNAME>/<base_href>/login\n
-    \   name: 'Numaflow Server App'\n    public: true\nconnectors:\n- type: github\n
-    \ # https://dexidp.io/docs/connectors/github/\n  id: github\n  name: GitHub\n
-    \ config:\n    clientID: $GITHUB_CLIENT_ID\n    clientSecret: $GITHUB_CLIENT_SECRET\n
-    \   redirectURI: <HOSTNAME>/dex/callback\n    orgs:\n    - name: <ORG_NAME>\n
-    \     teams:\n      - admin\n      - readonly\noauth2:\n  skipApprovalScreen:
-    true\n"
+  config.yaml: |-
+    connectors:
+    - type: github
+      # https://dexidp.io/docs/connectors/github/
+      id: github
+      name: GitHub
+      config:
+        clientID: $GITHUB_CLIENT_ID
+        clientSecret: $GITHUB_CLIENT_SECRET
+        orgs:
+        - name: <ORG_NAME>
+          teams:
+          - admin
+          - readonly
 kind: ConfigMap
 metadata:
   name: numaflow-dex-server-config
@@ -16559,8 +16825,41 @@ spec:
         ports:
         - containerPort: 5556
         volumeMounts:
-        - mountPath: /etc/numaflow/dex/cfg
-          name: config
+        - mountPath: /etc/numaflow/dex/cfg/config.yaml
+          name: generated-dex-config
+          subPath: config.yaml
+        - mountPath: /etc/numaflow/dex/tls/tls.crt
+          name: tls
+          subPath: tls.crt
+        - mountPath: /etc/numaflow/dex/tls/tls.key
+          name: tls
+          subPath: tls.key
+      initContainers:
+      - args:
+        - dex-server-init
+        env:
+        - name: NUMAFLOW_SERVER_ADDRESS
+          valueFrom:
+            configMapKeyRef:
+              key: server.address
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_BASE_HREF
+          valueFrom:
+            configMapKeyRef:
+              key: server.base.href
+              name: numaflow-cmd-params-config
+              optional: true
+        image: quay.io/numaproj/numaflow:latest
+        imagePullPolicy: Always
+        name: dex-init
+        volumeMounts:
+        - mountPath: /cfg
+          name: connector-config
+        - mountPath: /tls
+          name: tls
+        - mountPath: /tmp
+          name: generated-dex-config
       serviceAccountName: numaflow-dex-server
       volumes:
       - configMap:
@@ -16568,7 +16867,11 @@ spec:
           - key: config.yaml
             path: config.yaml
           name: numaflow-dex-server-config
-        name: config
+        name: connector-config
+      - emptyDir: {}
+        name: tls
+      - emptyDir: {}
+        name: generated-dex-config
 ---
 apiVersion: apps/v1
 kind: Deployment

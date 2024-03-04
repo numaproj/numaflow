@@ -89,26 +89,24 @@ var (
 		},
 	}
 
-	fakeConfig = &reconciler.GlobalConfig{
-		ISBSvc: &reconciler.ISBSvcConfig{
-			Redis: &reconciler.RedisConfig{
-				Versions: []reconciler.RedisVersion{
-					{
-						Version:            testVersion,
-						RedisImage:         testImage,
-						SentinelImage:      testSImage,
-						RedisExporterImage: testRedisExporterImage,
-					},
+	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
+		Redis: &reconciler.RedisConfig{
+			Versions: []reconciler.RedisVersion{
+				{
+					Version:            testVersion,
+					RedisImage:         testImage,
+					SentinelImage:      testSImage,
+					RedisExporterImage: testRedisExporterImage,
 				},
 			},
-			JetStream: &reconciler.JetStreamConfig{
-				Versions: []reconciler.JetStreamVersion{
-					{
-						Version:              testVersion,
-						NatsImage:            testJSImage,
-						ConfigReloaderImage:  testJSReloaderImage,
-						MetricsExporterImage: testJSMetricsImage,
-					},
+		},
+		JetStream: &reconciler.JetStreamConfig{
+			Versions: []reconciler.JetStreamVersion{
+				{
+					Version:              testVersion,
+					NatsImage:            testJSImage,
+					ConfigReloaderImage:  testJSReloaderImage,
+					MetricsExporterImage: testJSMetricsImage,
 				},
 			},
 		},
@@ -122,6 +120,9 @@ func init() {
 }
 
 func TestGetInstaller(t *testing.T) {
+
+	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
+
 	t.Run("get native redis installer", func(t *testing.T) {
 		installer, err := getInstaller(testNativeRedisIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar(), nil)
 		assert.NoError(t, err)
@@ -157,6 +158,7 @@ func TestGetInstaller(t *testing.T) {
 func TestInstall(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	kubeClient := k8sfake.NewSimpleClientset()
+	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	ctx := context.TODO()
 	t.Run("test redis error", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
@@ -204,6 +206,7 @@ func TestInstall(t *testing.T) {
 func TestUnInstall(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	kubeClient := k8sfake.NewSimpleClientset()
+	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	ctx := context.TODO()
 	t.Run("test redis error", func(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()

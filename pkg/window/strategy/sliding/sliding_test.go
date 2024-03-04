@@ -16,19 +16,33 @@ limitations under the License.
 package sliding
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
+var keyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "test-pl",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
+
 func TestSliding_AssignWindowsLengthDivisibleBySlide(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
-	windower := NewWindower(time.Minute, 20*time.Second)
+	windower := NewWindower(time.Minute, 20*time.Second, keyedVertex)
 
 	readMsg := buildReadMessage(baseTime.Add(10 * time.Second))
 	windowRequests := windower.AssignWindows(readMsg)
@@ -75,7 +89,7 @@ func TestSliding_AssignWindowsLengthDivisibleBySlide(t *testing.T) {
 func TestSliding_AssignWindowsLengthNotDivisibleBySlide(t *testing.T) {
 	// length 60s, slide 40s
 	baseTime := time.Unix(600, 0)
-	windower := NewWindower(time.Minute, 40*time.Second)
+	windower := NewWindower(time.Minute, 40*time.Second, keyedVertex)
 
 	readMsg := buildReadMessage(baseTime.Add(10 * time.Second))
 	windowRequests := windower.AssignWindows(readMsg)
@@ -113,6 +127,7 @@ func TestSliding_InsertWindow(t *testing.T) {
 		startTime: time.UnixMilli(60000),
 		endTime:   time.UnixMilli(60000 + 60*1000),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", 60000, 60000+60*1000, "slot-0"),
 	}
 
 	windower := &Windower{
@@ -149,17 +164,22 @@ func TestSliding_CloseWindows(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-10*time.Second).UnixMilli(), baseTime.Add(50*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-20*time.Second).UnixMilli(), baseTime.Add(40*time.Second).UnixMilli(), "slot-0"),
 	}
 
-	windower := NewWindower(60*time.Second, 10*time.Second)
+	windower := NewWindower(60*time.Second, 10*time.Second, keyedVertex)
 
 	windower.InsertWindow(win1)
 	windower.InsertWindow(win2)
@@ -191,14 +211,19 @@ func TestSliding_DeleteWindows(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-10*time.Second).UnixMilli(), baseTime.Add(50*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-20*time.Second).UnixMilli(), baseTime.Add(40*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{
@@ -217,12 +242,16 @@ func TestSliding_DeleteWindows(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(120 * time.Second))
 
 	// delete one of the windows
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartition(&partition.ID{
+	windower.DeleteClosedWindow(&slidingWindow{
+		startTime: baseTime,
+		endTime:   baseTime.Add(60 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
+		partition: &partition.ID{
+			Slot:  "slot-0",
 			Start: baseTime,
 			End:   baseTime.Add(60 * time.Second),
-			Slot:  "slot-0",
-		}),
+		},
 	})
 
 	// since we deleted one of the windows, the closed windows should be 2
@@ -236,14 +265,19 @@ func TestSliding_OldestClosedWindowEndTime(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-10*time.Second).UnixMilli(), baseTime.Add(50*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-20*time.Second).UnixMilli(), baseTime.Add(40*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{
@@ -272,14 +306,19 @@ func TestSliding_NextWindowToBeClosed(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &slidingWindow{
 		startTime: baseTime.Add(-10 * time.Second),
 		endTime:   baseTime.Add(50 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-10*time.Second).UnixMilli(), baseTime.Add(50*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &slidingWindow{
 		startTime: baseTime.Add(-20 * time.Second),
 		endTime:   baseTime.Add(40 * time.Second),
+		slot:      "slot-0",
+		id:        fmt.Sprintf("%d-%d-%s", baseTime.Add(-20*time.Second).UnixMilli(), baseTime.Add(40*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{

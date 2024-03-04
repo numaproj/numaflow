@@ -31,8 +31,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source/client"
+	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -114,9 +115,34 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			writersMap[e.To] = bufferWriters
 		}
 	case dfv1.ISBSvcTypeJetStream:
-		if sp.VertexInstance.Vertex.Spec.Watermark.Disabled {
-			// use default no op sourcePublisherStores, toVertexWatermarkStores, fetcher, idleManager
-		} else {
+		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
+			writeOpts := []jetstreamisb.WriteOption{
+				jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
+			}
+			if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
+				writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
+			}
+			if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
+				writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
+			}
+			var bufferWriters []isb.BufferWriter
+			partitionedBuffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
+			// create a writer for each partition.
+			for partitionIdx, partition := range partitionedBuffers {
+				streamName := isbsvc.JetStreamName(partition)
+				jetStreamClient := natsClientPool.NextAvailableClient()
+				writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, partition, streamName, streamName, int32(partitionIdx), writeOpts...)
+				if err != nil {
+					return err
+				}
+				bufferWriters = append(bufferWriters, writer)
+			}
+			writersMap[e.To] = bufferWriters
+		}
+
+		// created watermark related components only if watermark is enabled
+		// otherwise no op will used
+		if !sp.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			// build watermark stores for from vertex
 			sourceWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
@@ -137,32 +163,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
-				writeOpts := []jetstreamisb.WriteOption{
-					jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
-				}
-				if x := e.ToVertexLimits; x != nil && x.BufferMaxLength != nil {
-					writeOpts = append(writeOpts, jetstreamisb.WithMaxLength(int64(*x.BufferMaxLength)))
-				}
-				if x := e.ToVertexLimits; x != nil && x.BufferUsageLimit != nil {
-					writeOpts = append(writeOpts, jetstreamisb.WithBufferUsageLimit(float64(*x.BufferUsageLimit)/100))
-				}
-				var bufferWriters []isb.BufferWriter
-				partitionedBuffers := dfv1.GenerateBufferNames(sp.VertexInstance.Vertex.Namespace, sp.VertexInstance.Vertex.Spec.PipelineName, e.To, e.GetToVertexPartitionCount())
-				// create a writer for each partition.
-				for partitionIdx, partition := range partitionedBuffers {
-					streamName := isbsvc.JetStreamName(partition)
-					jetStreamClient := natsClientPool.NextAvailableClient()
-					writer, err := jetstreamisb.NewJetStreamBufferWriter(ctx, jetStreamClient, partition, streamName, streamName, int32(partitionIdx), writeOpts...)
-					if err != nil {
-						return err
-					}
-					bufferWriters = append(bufferWriters, writer)
-				}
-
-				writersMap[e.To] = bufferWriters
-			}
-			idleManager = wmb.NewIdleManager(len(writersMap))
+			idleManager, _ = wmb.NewIdleManager(1, len(writersMap))
 		}
 	default:
 		return fmt.Errorf("unrecognized isb svc type %q", sp.ISBSvcType)
@@ -183,7 +184,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// if the source is a user-defined source, we create a gRPC client for it.
 	var udsGRPCClient *udsource.GRPCBasedUDSource
 	if sp.VertexInstance.Vertex.IsUDSource() {
-		srcClient, err := sourceclient.New()
+		// Wait for server info to be ready
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SourceServerInfoFile))
+		if err != nil {
+			return err
+		}
+
+		srcClient, err := sourceclient.New(serverInfo)
 		if err != nil {
 			return fmt.Errorf("failed to create a new gRPC client: %w", err)
 		}
@@ -206,7 +213,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	}
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
-		sdkClient, err = sourcetransformer.New(sdkclient.WithMaxMessageSize(maxMessageSize))
+		// Wait for server info to be ready
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SourceTransformerServerInfoFile))
+		if err != nil {
+			return err
+		}
+
+		sdkClient, err = sourcetransformer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}

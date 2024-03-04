@@ -88,7 +88,8 @@ func TestInterStepDataForward(t *testing.T) {
 
 			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexWmStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, idleManager, WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data but buffer is not full even though we are not reading
@@ -126,7 +127,9 @@ func TestInterStepDataForward(t *testing.T) {
 
 			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			toVertexWmStores := buildNoOpToVertexStores(toSteps)
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize))
+
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexWmStores, idleManager, WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data such that the reader can be empty, that is toBuffer gets full

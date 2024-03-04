@@ -33,7 +33,7 @@ var (
 // TestCreateAuthorizer is a test implementation of the NewCasbinObject function.
 // It checks that the authorizer is created correctly and the policies, configs are loaded correctly.
 func TestCreateAuthorizer(t *testing.T) {
-	authorizer, err := NewCasbinObject(RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
+	authorizer, err := NewCasbinObject(context.Background(), RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
 	assert.NoError(t, err)
 
 	// Test that the authorizer is not nil
@@ -56,7 +56,7 @@ func TestCreateAuthorizer(t *testing.T) {
 // TestAuthorize is a test implementation of the Authorize functionality.
 // It tests that the user is authorized correctly for the given request.
 func TestAuthorize(t *testing.T) {
-	authorizer, err := NewCasbinObject(RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
+	authorizer, err := NewCasbinObject(context.Background(), RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
 	assert.NoError(t, err)
 
 	// Test that the authorizer is not nil
@@ -92,7 +92,7 @@ func TestAuthorize(t *testing.T) {
 // Additionally, it tests that the default policy is applied correctly when a user is not found in the policy map.
 // The default policy is set to "role:readonly" in the test data.
 func TestDefaultPolicy(t *testing.T) {
-	authorizer, err := NewCasbinObject(RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
+	authorizer, err := NewCasbinObject(context.Background(), RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
 	assert.NoError(t, err)
 
 	// Test that the authorizer is not nil
@@ -119,7 +119,7 @@ func TestDefaultPolicy(t *testing.T) {
 // It tests that the scopes are set correctly when the authorizer is created.
 // Additionally, it tests that the required scopes are tested for the user.
 func TestScopes(t *testing.T) {
-	authorizer, err := NewCasbinObject(RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
+	authorizer, err := NewCasbinObject(context.Background(), RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
 	assert.NoError(t, err)
 
 	// Test that the authorizer is not nil
@@ -161,7 +161,7 @@ func TestScopes(t *testing.T) {
 // TestNamespaces is a test implementation of the Namespaces based access.
 // It tests that a user can access a namespace that is in the policy map.
 func TestNamespaces(t *testing.T) {
-	authorizer, err := NewCasbinObject(RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
+	authorizer, err := NewCasbinObject(context.Background(), RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyFilePath))
 	assert.NoError(t, err)
 
 	// Test that the authorizer is not nil
@@ -186,7 +186,7 @@ func TestNamespaces(t *testing.T) {
 func TestConfigFileReload(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	authorizer, err := NewCasbinObject(RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyReloadFilePath))
+	authorizer, err := NewCasbinObject(context.Background(), RouteMap{}, WithPolicyMap(testPolicyMapPath), WithPropertyFile(testPropertyReloadFilePath))
 	assert.NoError(t, err)
 
 	// Test that the authorizer is not nil

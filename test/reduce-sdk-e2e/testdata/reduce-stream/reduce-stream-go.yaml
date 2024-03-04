@@ -1,0 +1,46 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: reduce-stream-go
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: atoi
+      scale:
+        min: 1
+      udf:
+        container:
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
+    - name: compute-sum
+      partitions: 2
+      udf:
+        container:
+          # compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducestreamer/examples/sum
+          image: quay.io/numaio/numaflow-go/reduce-stream-sum:v0.6.1
+        groupBy:
+          window:
+            fixed:
+              # set window size to a high number as 10 minutes so that we verify early return by reduce streamer.
+              length: 600s
+              streaming: true
+          keyed: true
+          storage:
+            emptyDir: {}
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+  edges:
+    - from: in
+      to: atoi
+    - from: atoi
+      to: compute-sum
+    - from: compute-sum
+      to: sink

@@ -1,5 +1,64 @@
 # Changelog
 
+## v1.1.6 (2024-02-27)
+
+ * [9613573e](https://github.com/numaproj/numaflow/commit/9613573e63309b19acdd7ca8c257507ca89e7699) Update manifests to v1.1.6
+ * [b8bb2336](https://github.com/numaproj/numaflow/commit/b8bb23363cd1b1596ce5c3c8374d3420f22dff25) fix(controller): vertex template metadata nil check (#1527)
+ * [c0b3bdac](https://github.com/numaproj/numaflow/commit/c0b3bdaca49e0aa26e7af3cc49200e7e3941dab4) feat: add support for SASL SCRAM 256 and 512 for Kafka (#1518)
+ * [fe26f91a](https://github.com/numaproj/numaflow/commit/fe26f91a3a6f8ae68759e10908ff028834420ffc) fix panic inside reduce after getting sigterm
+ * [bdac5a75](https://github.com/numaproj/numaflow/commit/bdac5a75dd0f46dc9dce24e0b82a2e6c425792b4) fix: incorrect json schema for tls config (#1520)
+ * [53cfae97](https://github.com/numaproj/numaflow/commit/53cfae9726f77cef8250c5f649196b6f7f883ec7) fix: podSpec incorrectly configured in case template exist (#1516)
+ * [915c09aa](https://github.com/numaproj/numaflow/commit/915c09aa89dc82a1414df15fa2e9381c4bf98923) fix: unknown for ISB details in pipeline card (#1497)
+ * [c71b2aba](https://github.com/numaproj/numaflow/commit/c71b2aba159e90e773f1b6f3db2d1171424b8140) feat: configure standardResources via controller configmap (#1490)
+ * [ce0a3155](https://github.com/numaproj/numaflow/commit/ce0a31558479ed0d69f0b9e182d28828a598fd8e) fix: add idle handler offset nil check (#1489)
+ * [8d16d499](https://github.com/numaproj/numaflow/commit/8d16d4994c91f1ecaaeee9b816eb616f49000111) feat: terminate reduce vertex pods when pausing pipeline (#1481)
+
+### Contributors
+
+ * Damien RAYMOND
+ * Derek Wang
+ * Dillen Padhiar
+ * Juanlu Yu
+ * Nishchith Shetty
+ * Vedant Gupta
+ * Yashash H L
+
+## v1.1.5 (2024-01-23)
+
+ * [e5bcf32e](https://github.com/numaproj/numaflow/commit/e5bcf32e345454c577ecdd8a17e48e44d546730b) Update manifests to v1.1.5
+ * [266cb227](https://github.com/numaproj/numaflow/commit/266cb2276d29c3ddbfd5cdb5ce16f9a50da62042) fix(controller): incorrect cpu/mem resources calculation (#1477)
+
+### Contributors
+
+ * Derek Wang
+
+## v1.1.4 (2024-01-20)
+
+ * [7ffb521b](https://github.com/numaproj/numaflow/commit/7ffb521bcc15612d04fe66de33d199e8c8391a7a) Update manifests to v1.1.4
+ * [de780b95](https://github.com/numaproj/numaflow/commit/de780b95da57437ceb4fc5d7bc77619c7e9deb2d) fix: bug in late message handling for sliding window (#1472)
+
+### Contributors
+
+ * Derek Wang
+ * Yashash H L
+
+## v1.1.3 (2024-01-14)
+
+ * [0b96acf9](https://github.com/numaproj/numaflow/commit/0b96acf9ba9b478e7284e6b5724822ac26a09ba8) Update manifests to v1.1.3
+ * [907949be](https://github.com/numaproj/numaflow/commit/907949be3da2295403d2367806c317be13452e68) fix: GetDownstreamEdges is not cycle safe (#1447)
+ * [1d83b51e](https://github.com/numaproj/numaflow/commit/1d83b51e8a9845a3b23e5ade83df2df599b0b9e4) chore(deps): bump follow-redirects from 1.15.3 to 1.15.4 in /ui (#1448)
+ * [855672dd](https://github.com/numaproj/numaflow/commit/855672ddb483931650bfc46e3075fe6d3a5c7998) fix: UI Filter by status for pipelines doesn't work as expected (#1444)
+ * [c06de95e](https://github.com/numaproj/numaflow/commit/c06de95eb56ce7c656496bfed5930a6c19db7555) fix: Kafka source reads duplicated messages (#1438)
+ * [17c9c0e2](https://github.com/numaproj/numaflow/commit/17c9c0e2e5dc4803bb2d1d977a441500bb5b771d) feat: enhance autoscaling peeking logic (#1432)
+
+### Contributors
+
+ * Derek Wang
+ * Juanlu Yu
+ * Nishchith Shetty
+ * akash khamkar
+ * dependabot[bot]
+
 ## v1.1.2 (2024-01-01)
 
  * [ac716ec4](https://github.com/numaproj/numaflow/commit/ac716ec4ab4b49f4f013f067c33d1d89936e132a) Update manifests to v1.1.2

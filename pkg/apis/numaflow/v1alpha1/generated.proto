@@ -380,10 +380,19 @@ message GeneratorSource {
   optional int32 msgSize = 3;
 
   // KeyCount is the number of unique keys in the payload
+  // +optional
   optional int32 keyCount = 4;
 
   // Value is an optional uint64 value to be written in to the payload
+  // +optional
   optional uint64 value = 5;
+
+  // Jitter is the jitter for the message generation, used to simulate out of order messages
+  // for example if the jitter is 10s, then the message's event time will be delayed by a random
+  // time between 0 and 10s which will result in the message being out of order by 0 to 10s
+  // +kubebuilder:default="0s"
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration jitter = 6;
 }
 
 message GetDaemonDeploymentReq {
@@ -394,6 +403,8 @@ message GetDaemonDeploymentReq {
   optional string pullPolicy = 3;
 
   repeated k8s.io.api.core.v1.EnvVar env = 4;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
 }
 
 message GetJetStreamServiceSpecReq {
@@ -436,6 +447,8 @@ message GetJetStreamStatefulSetSpecReq {
   optional string pvcNameIfNeeded = 13;
 
   optional string startCommand = 14;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 15;
 }
 
 message GetRedisServiceSpecReq {
@@ -476,6 +489,8 @@ message GetRedisStatefulSetSpecReq {
   optional string scriptsConfigMapName = 14;
 
   optional string healthConfigMapName = 15;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 16;
 }
 
 message GetSideInputDeploymentReq {
@@ -486,6 +501,8 @@ message GetSideInputDeploymentReq {
   optional string pullPolicy = 3;
 
   repeated k8s.io.api.core.v1.EnvVar env = 4;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
 }
 
 message GetVertexPodSpecReq {
@@ -498,6 +515,8 @@ message GetVertexPodSpecReq {
   repeated k8s.io.api.core.v1.EnvVar env = 4;
 
   optional string sideInputsStoreName = 5;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 6;
 }
 
 // GroupBy indicates it is a reducer UDF
@@ -818,6 +837,11 @@ message NatsSource {
   optional NatsAuth auth = 5;
 }
 
+// NoStore means there will be no persistence storage and there will be data loss during pod restarts.
+// Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).
+message NoStore {
+}
+
 // PBQStorage defines the persistence configuration for a vertex.
 message PBQStorage {
   // +optional
@@ -825,6 +849,9 @@ message PBQStorage {
 
   // +optional
   optional k8s.io.api.core.v1.EmptyDirVolumeSource emptyDir = 2;
+
+  // +optional
+  optional NoStore no_store = 3;
 }
 
 // PersistenceStrategy defines the strategy of persistence
@@ -1015,6 +1042,14 @@ message SASL {
   // SASLPlain contains the sasl plain config
   // +optional
   optional SASLPlain plain = 3;
+
+  // SASLSCRAMSHA256 contains the sasl plain config
+  // +optional
+  optional SASLPlain scramsha256 = 4;
+
+  // SASLSCRAMSHA512 contains the sasl plain config
+  // +optional
+  optional SASLPlain scramsha512 = 5;
 }
 
 message SASLPlain {

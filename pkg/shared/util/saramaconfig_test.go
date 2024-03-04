@@ -19,6 +19,7 @@ package util
 import (
 	"testing"
 
+	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,6 +34,8 @@ producer:
 consumer:
   fetch: 
     min: 1
+  offsets:
+    initial: -2
 net:
   MaxOpenRequests: 5
 `)
@@ -41,6 +44,7 @@ net:
 		assert.Equal(t, 600, conf.Producer.MaxMessageBytes)
 		assert.Equal(t, 103, conf.Admin.Retry.Max)
 		assert.Equal(t, int32(1), conf.Consumer.Fetch.Min)
+		assert.Equal(t, sarama.OffsetOldest, conf.Consumer.Offsets.Initial)
 		assert.Equal(t, 5, conf.Net.MaxOpenRequests)
 	})
 	t.Run("Empty config", func(t *testing.T) {

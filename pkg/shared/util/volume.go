@@ -30,9 +30,21 @@ var (
 	configMapKeySelectorType = reflect.TypeOf(&corev1.ConfigMapKeySelector{})
 )
 
+// Introduced for mocking in tests
+type volumeReader interface {
+	getSecretFromVolume(selector *corev1.SecretKeySelector) (string, error)
+	getConfigMapFromVolume(selector *corev1.ConfigMapKeySelector) (string, error)
+}
+
+type osFile struct{}
+
+func GetSecretFromVolume(selector *corev1.SecretKeySelector) (string, error) {
+	return osFile{}.getSecretFromVolume(selector)
+}
+
 // GetSecretFromVolume retrieves the value of mounted secret volume
 // "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
-func GetSecretFromVolume(selector *corev1.SecretKeySelector) (string, error) {
+func (osFile) getSecretFromVolume(selector *corev1.SecretKeySelector) (string, error) {
 	filePath, err := GetSecretVolumePath(selector)
 	if err != nil {
 		return "", err
@@ -54,9 +66,13 @@ func GetSecretVolumePath(selector *corev1.SecretKeySelector) (string, error) {
 	return fmt.Sprintf("/var/numaflow/secrets/%s/%s", selector.Name, selector.Key), nil
 }
 
+func GetConfigMapFromVolume(selector *corev1.ConfigMapKeySelector) (string, error) {
+	return osFile{}.getConfigMapFromVolume(selector)
+}
+
 // GetConfigMapFromVolume retrieves the value of mounted config map volume
 // "/var/numaflow/config/${configMapRef.name}/${configMapRef.key}" is expected to be the file path
-func GetConfigMapFromVolume(selector *corev1.ConfigMapKeySelector) (string, error) {
+func (osFile) getConfigMapFromVolume(selector *corev1.ConfigMapKeySelector) (string, error) {
 	filePath, err := GetConfigMapVolumePath(selector)
 	if err != nil {
 		return "", err

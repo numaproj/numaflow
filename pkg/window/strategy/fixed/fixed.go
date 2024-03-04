@@ -23,9 +23,13 @@ limitations under the License.
 package fixed
 
 import (
+	"fmt"
+	"strconv"
 	"time"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
 )
@@ -34,7 +38,9 @@ import (
 type fixedWindow struct {
 	startTime time.Time
 	endTime   time.Time
+	partition *partition.ID
 	slot      string
+	id        string
 }
 
 // NewFixedWindow returns a new window for the given message.
@@ -49,6 +55,12 @@ func NewFixedWindow(length time.Duration, message *isb.ReadMessage) window.Timed
 		startTime: start,
 		endTime:   end,
 		slot:      slot,
+		partition: &partition.ID{
+			Start: start,
+			End:   end,
+			Slot:  slot,
+		},
+		id: fmt.Sprintf("%d-%d-%s", start.UnixMilli(), end.UnixMilli(), slot),
 	}
 }
 
@@ -71,11 +83,11 @@ func (w *fixedWindow) Keys() []string {
 }
 
 func (w *fixedWindow) Partition() *partition.ID {
-	return &partition.ID{
-		Start: w.startTime,
-		End:   w.endTime,
-		Slot:  w.slot,
-	}
+	return w.partition
+}
+
+func (w *fixedWindow) ID() string {
+	return w.id
 }
 
 func (w *fixedWindow) Merge(_ window.TimedWindow) {
@@ -89,6 +101,9 @@ func (w *fixedWindow) Expand(_ time.Time) {
 // Windower is an implementation of TimedWindower of fixed window, windower is responsible for assigning
 // windows to the incoming messages and closing the windows that are past the watermark.
 type Windower struct {
+	vertexName    string
+	pipelineName  string
+	vertexReplica int32
 	// Length is the temporal length of the window.
 	length time.Duration
 	// we track all the active windows, we store the windows sorted by end time
@@ -100,8 +115,11 @@ type Windower struct {
 	closedWindows *window.SortedWindowListByEndTime
 }
 
-func NewWindower(length time.Duration) window.TimedWindower {
+func NewWindower(length time.Duration, vertexInstance *dfv1.VertexInstance) window.TimedWindower {
 	return &Windower{
+		vertexName:    vertexInstance.Vertex.Name,
+		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica: vertexInstance.Replica,
 		activeWindows: window.NewSortedWindowListByEndTime(),
 		closedWindows: window.NewSortedWindowListByEndTime(),
 		length:        length,
@@ -164,6 +182,19 @@ func (w *Windower) CloseWindows(time time.Time) []*window.TimedWindowRequest {
 		winOperations = append(winOperations, winOp)
 		w.closedWindows.InsertBack(win)
 	}
+
+	metrics.ActiveWindowsCount.With(map[string]string{
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.vertexReplica)),
+	}).Set(float64(w.activeWindows.Len()))
+
+	metrics.ClosedWindowsCount.With(map[string]string{
+		metrics.LabelVertex:             w.vertexName,
+		metrics.LabelPipeline:           w.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(w.vertexReplica)),
+	}).Set(float64(w.closedWindows.Len()))
+
 	return winOperations
 }
 
@@ -173,8 +204,8 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 }
 
 // DeleteClosedWindow deletes the window from the closed windows list.
-func (w *Windower) DeleteClosedWindow(response *window.TimedWindowResponse) {
-	w.closedWindows.Delete(response.Window)
+func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
+	w.closedWindows.Delete(window)
 }
 
 // OldestWindowEndTime returns the end time of the oldest window among both active and closed windows.

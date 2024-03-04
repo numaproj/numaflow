@@ -24,14 +24,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/memory"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
@@ -76,6 +76,18 @@ func (f *forwardTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer,
 	return steps, nil
 }
 
+var keyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "test-pipeline",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
+
 // TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
 func TestWriteToBuffer(t *testing.T) {
 	tests := []struct {
@@ -85,15 +97,15 @@ func TestWriteToBuffer(t *testing.T) {
 	}{
 		{
 			name: "test-discard-latest",
-			buffers: []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.DiscardLatest)),
-				simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.DiscardLatest))},
+			buffers: []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("buffer1-1", 10, 0, simplebuffer.WithBufferFullWritingStrategy(dfv1.DiscardLatest)),
+				simplebuffer.NewInMemoryBuffer("buffer1-2", 10, 1, simplebuffer.WithBufferFullWritingStrategy(dfv1.DiscardLatest))},
 			// should not throw any error as we drop messages and finish writing before context is cancelled
 			throwError: false,
 		},
 		{
 			name: "test-retry-until-success",
-			buffers: []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess)),
-				simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 0, simplebuffer.WithBufferFullWritingStrategy(v1alpha1.RetryUntilSuccess))},
+			buffers: []isb.BufferWriter{simplebuffer.NewInMemoryBuffer("buffer2-1", 10, 0, simplebuffer.WithBufferFullWritingStrategy(dfv1.RetryUntilSuccess)),
+				simplebuffer.NewInMemoryBuffer("buffer2-2", 10, 0, simplebuffer.WithBufferFullWritingStrategy(dfv1.RetryUntilSuccess))},
 			// should throw context closed error as we keep retrying writing until context is cancelled
 			throwError: true,
 		},
@@ -160,8 +172,8 @@ func TestPnFHandleAlignedWindowResponses(t *testing.T) {
 		close(responseCh)
 	}()
 
-	windower := fixed.NewWindower(60 * time.Second)
-	windower.InsertWindow(window.NewWindowFromPartition(id))
+	windower := fixed.NewWindower(60*time.Second, keyedVertex)
+	windower.InsertWindow(window.NewAlignedTimedWindow(id.Start, id.End, id.Slot))
 
 	wmPublishers, _ := buildPublisherMapAndOTStore(toBuffersMap)
 	latestWriteOffsets := make(map[string][][]isb.Offset)
@@ -169,13 +181,15 @@ func TestPnFHandleAlignedWindowResponses(t *testing.T) {
 		latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 
+	idleManager, _ := wmb.NewIdleManager(1, len(toBuffersMap))
+
 	pf := &processAndForward{
 		partitionId:        id,
 		whereToDecider:     whereto,
 		windower:           windower,
 		toBuffers:          toBuffersMap,
 		wmPublishers:       wmPublishers,
-		idleManager:        wmb.NewIdleManager(len(toBuffersMap)),
+		idleManager:        idleManager,
 		pbqReader:          &pbqReader{},
 		done:               make(chan struct{}),
 		latestWriteOffsets: latestWriteOffsets,
@@ -203,7 +217,7 @@ func generateAlignedWindowResponses(count int, id *partition.ID) []*window.Timed
 	for i := 0; i <= count; i++ {
 		if i == count {
 			windowResponses = append(windowResponses, &window.TimedWindowResponse{
-				Window: window.NewWindowFromPartition(id),
+				Window: window.NewAlignedTimedWindow(id.Start, id.End, id.Slot),
 				EOF:    true,
 			})
 			continue
@@ -221,7 +235,7 @@ func generateAlignedWindowResponses(count int, id *partition.ID) []*window.Timed
 					Body: isb.Body{Payload: []byte("test")},
 				},
 			},
-			Window: window.NewWindowFromPartition(id),
+			Window: window.NewAlignedTimedWindow(id.Start, id.End, id.Slot),
 			EOF:    false,
 		})
 	}
@@ -249,6 +263,8 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		buffers: buffers,
 	}
 
+	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
+
 	pf := processAndForward{
 		partitionId:    testPartition,
 		UDF:            nil,
@@ -257,7 +273,7 @@ func createProcessAndForwardAndOTStore(ctx context.Context, key string, pbqManag
 		toBuffers:      toBuffers,
 		whereToDecider: whereto,
 		wmPublishers:   pw,
-		idleManager:    wmb.NewIdleManager(len(toBuffers)),
+		idleManager:    idleManager,
 	}
 
 	return pf, otStore

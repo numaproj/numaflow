@@ -161,17 +161,22 @@ func (p Pipeline) GetAllBuckets() []string {
 
 // GetDownstreamEdges returns all the downstream edges of a vertex
 func (p Pipeline) GetDownstreamEdges(vertexName string) []Edge {
-	var f func(vertexName string, edges *[]Edge)
-	f = func(vertexName string, edges *[]Edge) {
+	var f func(vertexName string, edges *[]Edge, visited map[string]bool)
+	f = func(vertexName string, edges *[]Edge, visited map[string]bool) {
+		if visited[vertexName] {
+			return
+		}
+		visited[vertexName] = true
 		for _, b := range p.ListAllEdges() {
 			if b.From == vertexName {
 				*edges = append(*edges, b)
-				f(b.To, edges)
+				f(b.To, edges, visited)
 			}
 		}
 	}
 	result := []Edge{}
-	f(vertexName, &result)
+	visited := make(map[string]bool)
+	f(vertexName, &result, visited)
 	return result
 }
 
@@ -247,7 +252,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		Name:            CtrMain,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       standardResources,
+		Resources:       req.DefaultResources,
 		Env:             envVars,
 		Args:            []string{"daemon-server", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
@@ -330,7 +335,7 @@ func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.C
 		Env:             envVars,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       standardResources,
+		Resources:       req.DefaultResources,
 		Args:            []string{"isbsvc-validate", "--isbsvc-type=" + string(req.ISBSvcType)},
 	}
 	c.Args = append(c.Args, "--buffers="+strings.Join(p.GetAllBuffers(), ","))

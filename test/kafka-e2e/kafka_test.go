@@ -19,13 +19,15 @@ limitations under the License.
 package kafka_e2e
 
 import (
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/test/fixtures"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
-	"testing"
-	"time"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/test/fixtures"
 )
 
 //go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true

@@ -133,7 +133,7 @@ outerLoop:
 	for {
 		select {
 		case err := <-errCh:
-			if errors.Is(err, ctx.Err()) {
+			if errors.Is(err, context.Canceled) {
 				return
 			}
 			if err != nil {
@@ -151,10 +151,10 @@ outerLoop:
 				// FIXME(session): we need to compact the pbq for unAligned when we have received the EOF response from the UDF.
 				// we should not use p.partitionId here, we should use the partition id from the response.
 				// because for unaligned p.partitionId indicates the shared partition id for the key.
-				p.publishWM(ctx, response.Window.Partition())
+				p.publishWM(ctx, response.Window.EndTime())
 
 				// delete the closed windows which are tracked by the windower
-				p.windower.DeleteClosedWindow(response)
+				p.windower.DeleteClosedWindow(response.Window)
 				continue
 			}
 
@@ -170,7 +170,7 @@ outerLoop:
 	for {
 		select {
 		case err := <-errCh:
-			if errors.Is(err, ctx.Err()) {
+			if errors.Is(err, context.Canceled) {
 				return
 			}
 			if err != nil {
@@ -190,9 +190,9 @@ outerLoop:
 
 	// for aligned we don't track the windows for every key, we need to delete the window
 	// once we have received all the responses from the UDF.
-	p.publishWM(ctx, p.partitionId)
+	p.publishWM(ctx, p.partitionId.End)
 	// delete the closed windows which are tracked by the windower
-	p.windower.DeleteClosedWindow(&window.TimedWindowResponse{Window: window.NewWindowFromPartition(p.partitionId)})
+	p.windower.DeleteClosedWindow(window.NewAlignedTimedWindow(p.partitionId.Start, p.partitionId.End, p.partitionId.Slot))
 
 	// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
 	err := p.pbqReader.GC()
@@ -354,7 +354,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 
 // publishWM publishes the watermark to each edge.
 // TODO: support multi partitioned edges.
-func (p *processAndForward) publishWM(ctx context.Context, id *partition.ID) {
+func (p *processAndForward) publishWM(ctx context.Context, endTime time.Time) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,
 	// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
@@ -363,7 +363,7 @@ func (p *processAndForward) publishWM(ctx context.Context, id *partition.ID) {
 	if oldestClosedWindowEndTime != time.UnixMilli(-1) && oldestClosedWindowEndTime.Before(p.partitionId.End) {
 		wm = wmb.Watermark(oldestClosedWindowEndTime.Add(-1 * time.Millisecond))
 	} else {
-		wm = wmb.Watermark(id.End.Add(-1 * time.Millisecond))
+		wm = wmb.Watermark(endTime.Add(-1 * time.Millisecond))
 	}
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
@@ -379,7 +379,7 @@ func (p *processAndForward) publishWM(ctx context.Context, id *partition.ID) {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is not idling
-					p.idleManager.Reset(p.toBuffers[toVertexName][index].GetName())
+					p.idleManager.MarkActive(wmb.PARTITION_0, p.toBuffers[toVertexName][index].GetName())
 				}
 			}
 		}
@@ -392,7 +392,7 @@ func (p *processAndForward) publishWM(ctx context.Context, id *partition.ID) {
 		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
 			if !activePartition {
 				if publisher, ok := p.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
+					idlehandler.PublishIdleWatermark(ctx, wmb.PARTITION_0, p.toBuffers[toVertexName][index], publisher, p.idleManager, p.log, p.vertexName, p.pipelineName, dfv1.VertexTypeReduceUDF, p.vertexReplica, wm)
 				}
 			}
 		}

@@ -71,6 +71,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NativeRedis":                    schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth":                       schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource":                     schema_pkg_apis_numaflow_v1alpha1_NatsSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NoStore":                        schema_pkg_apis_numaflow_v1alpha1_NoStore(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage":                     schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy":            schema_pkg_apis_numaflow_v1alpha1_PersistenceStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Pipeline":                       schema_pkg_apis_numaflow_v1alpha1_Pipeline(ref),
@@ -1213,6 +1214,12 @@ func schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref common.ReferenceCallb
 							Format:      "int64",
 						},
 					},
+					"jitter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Jitter is the jitter for the message generation, used to simulate out of order messages for example if the jitter is 10s, then the message's event time will be delayed by a random time between 0 and 10s which will result in the message being out of order by 0 to 10s",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 				},
 			},
 		},
@@ -1261,12 +1268,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetDaemonDeploymentReq(ref common.Referen
 							},
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env"},
+				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "DefaultResources"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar"},
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -1438,10 +1451,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetJetStreamStatefulSetSpecReq(ref common
 							Format:  "",
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ServiceName", "Labels", "NatsImage", "MetricsExporterImage", "ConfigReloaderImage", "ClusterPort", "ClientPort", "MonitorPort", "MetricsPort", "ServerAuthSecretName", "ServerEncryptionSecretName", "ConfigMapName", "PvcNameIfNeeded", "StartCommand"},
+				Required: []string{"ServiceName", "Labels", "NatsImage", "MetricsExporterImage", "ConfigReloaderImage", "ClusterPort", "ClientPort", "MonitorPort", "MetricsPort", "ServerAuthSecretName", "ServerEncryptionSecretName", "ConfigMapName", "PvcNameIfNeeded", "StartCommand", "DefaultResources"},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -1606,10 +1627,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetRedisStatefulSetSpecReq(ref common.Ref
 							Format:  "",
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ServiceName", "Labels", "RedisImage", "SentinelImage", "MetricsExporterImage", "InitContainerImage", "RedisContainerPort", "SentinelContainerPort", "RedisMetricsContainerPort", "CredentialSecretName", "TLSEnabled", "PvcNameIfNeeded", "ConfConfigMapName", "ScriptsConfigMapName", "HealthConfigMapName"},
+				Required: []string{"ServiceName", "Labels", "RedisImage", "SentinelImage", "MetricsExporterImage", "InitContainerImage", "RedisContainerPort", "SentinelContainerPort", "RedisMetricsContainerPort", "CredentialSecretName", "TLSEnabled", "PvcNameIfNeeded", "ConfConfigMapName", "ScriptsConfigMapName", "HealthConfigMapName", "DefaultResources"},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -1653,12 +1682,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetSideInputDeploymentReq(ref common.Refe
 							},
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env"},
+				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "DefaultResources"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar"},
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -1709,12 +1744,18 @@ func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceC
 							Format:  "",
 						},
 					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
 				},
-				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "SideInputsStoreName"},
+				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "SideInputsStoreName", "DefaultResources"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar"},
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -2856,6 +2897,17 @@ func schema_pkg_apis_numaflow_v1alpha1_NatsSource(ref common.ReferenceCallback) 
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_NoStore(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NoStore means there will be no persistence storage and there will be data loss during pod restarts. Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).",
+				Type:        []string{"object"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2873,11 +2925,16 @@ func schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref common.ReferenceCallback) 
 							Ref: ref("k8s.io/api/core/v1.EmptyDirVolumeSource"),
 						},
 					},
+					"no_store": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NoStore"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy", "k8s.io/api/core/v1.EmptyDirVolumeSource"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NoStore", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy", "k8s.io/api/core/v1.EmptyDirVolumeSource"},
 	}
 }
 
@@ -3363,6 +3420,18 @@ func schema_pkg_apis_numaflow_v1alpha1_SASL(ref common.ReferenceCallback) common
 					"plain": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SASLPlain contains the sasl plain config",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"),
+						},
+					},
+					"scramsha256": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASLSCRAMSHA256 contains the sasl plain config",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"),
+						},
+					},
+					"scramsha512": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SASLSCRAMSHA512 contains the sasl plain config",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"),
 						},
 					},
@@ -3906,13 +3975,13 @@ func schema_pkg_apis_numaflow_v1alpha1_TLS(ref common.ReferenceCallback) common.
 							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
 						},
 					},
-					"clientCertSecret": {
+					"certSecret": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CertSecret refers to the secret that contains the cert",
 							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
 						},
 					},
-					"clientKeySecret": {
+					"keySecret": {
 						SchemaProps: spec.SchemaProps{
 							Description: "KeySecret refers to the secret that contains the key",
 							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),

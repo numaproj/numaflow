@@ -57,7 +57,8 @@ func TestToLog_Start(t *testing.T) {
 		Replica: 0,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	s, err := NewToLog(vertexInstance, fromStep, fetchWatermark, publishWatermark[vertex.Spec.Name], wmb.NewIdleManager(1))
+	idleManager, _ := wmb.NewIdleManager(1, 1)
+	s, err := NewToLog(vertexInstance, fromStep, fetchWatermark, publishWatermark[vertex.Spec.Name], idleManager)
 	assert.NoError(t, err)
 
 	stopped := s.Start()
@@ -112,7 +113,8 @@ func TestToLog_Forward(t *testing.T) {
 			}
 
 			fetchWatermark1, publishWatermark1 := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex1.Spec.Name})
-			logger1, _ := NewToLog(vertexInstance1, to1, fetchWatermark1, publishWatermark1[vertex1.Spec.Name], wmb.NewIdleManager(1))
+			idleManager0, _ := wmb.NewIdleManager(1, 1)
+			logger1, _ := NewToLog(vertexInstance1, to1, fetchWatermark1, publishWatermark1[vertex1.Spec.Name], idleManager0)
 			logger1Stopped := logger1.Start()
 
 			toSteps := map[string][]isb.BufferWriter{
@@ -122,7 +124,8 @@ func TestToLog_Forward(t *testing.T) {
 			writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := sinkforward.NewDataForward(vertexInstance1, fromStep, to1, fetchWatermark, publishWatermark["sinks.logger1"], wmb.NewIdleManager(1), sinkforward.WithReadBatchSize(batchSize))
+			idleManager1, _ := wmb.NewIdleManager(1, 1)
+			f, err := sinkforward.NewDataForward(vertexInstance1, fromStep, to1, fetchWatermark, publishWatermark["sinks.logger1"], idleManager1, sinkforward.WithReadBatchSize(batchSize))
 			assert.NoError(t, err)
 
 			stopped := f.Start()

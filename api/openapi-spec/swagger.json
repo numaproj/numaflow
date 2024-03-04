@@ -17824,6 +17824,10 @@
         "duration": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
+        "jitter": {
+          "description": "Jitter is the jitter for the message generation, used to simulate out of order messages for example if the jitter is 10s, then the message's event time will be delayed by a random time between 0 and 10s which will result in the message being out of order by 0 to 10s",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
         "keyCount": {
           "description": "KeyCount is the number of unique keys in the payload",
           "type": "integer",
@@ -17851,9 +17855,13 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "DefaultResources"
       ],
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "type": "array",
           "items": {
@@ -17921,7 +17929,8 @@
         "ServerEncryptionSecretName",
         "ConfigMapName",
         "PvcNameIfNeeded",
-        "StartCommand"
+        "StartCommand",
+        "DefaultResources"
       ],
       "properties": {
         "ClientPort": {
@@ -17937,6 +17946,9 @@
         },
         "ConfigReloaderImage": {
           "type": "string"
+        },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
         "Labels": {
           "type": "object",
@@ -18016,7 +18028,8 @@
         "PvcNameIfNeeded",
         "ConfConfigMapName",
         "ScriptsConfigMapName",
-        "HealthConfigMapName"
+        "HealthConfigMapName",
+        "DefaultResources"
       ],
       "properties": {
         "ConfConfigMapName": {
@@ -18024,6 +18037,9 @@
         },
         "CredentialSecretName": {
           "type": "string"
+        },
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
         "HealthConfigMapName": {
           "type": "string"
@@ -18078,9 +18094,13 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
-        "Env"
+        "Env",
+        "DefaultResources"
       ],
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "type": "array",
           "items": {
@@ -18105,9 +18125,13 @@
         "Image",
         "PullPolicy",
         "Env",
-        "SideInputsStoreName"
+        "SideInputsStoreName",
+        "DefaultResources"
       ],
       "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
         "Env": {
           "type": "array",
           "items": {
@@ -18733,12 +18757,19 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.NoStore": {
+      "description": "NoStore means there will be no persistence storage and there will be data loss during pod restarts. Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).",
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.PBQStorage": {
       "description": "PBQStorage defines the persistence configuration for a vertex.",
       "type": "object",
       "properties": {
         "emptyDir": {
           "$ref": "#/definitions/io.k8s.api.core.v1.EmptyDirVolumeSource"
+        },
+        "no_store": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NoStore"
         },
         "persistentVolumeClaim": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PersistenceStrategy"
@@ -19001,6 +19032,14 @@
         },
         "plain": {
           "description": "SASLPlain contains the sasl plain config",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
+        },
+        "scramsha256": {
+          "description": "SASLSCRAMSHA256 contains the sasl plain config",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
+        },
+        "scramsha512": {
+          "description": "SASLSCRAMSHA512 contains the sasl plain config",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
         }
       }
@@ -19295,16 +19334,16 @@
           "description": "CACertSecret refers to the secret that contains the CA cert",
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
         },
-        "clientCertSecret": {
+        "certSecret": {
           "description": "CertSecret refers to the secret that contains the cert",
-          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
-        },
-        "clientKeySecret": {
-          "description": "KeySecret refers to the secret that contains the key",
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
         },
         "insecureSkipVerify": {
           "type": "boolean"
+        },
+        "keySecret": {
+          "description": "KeySecret refers to the secret that contains the key",
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
         }
       }
     },

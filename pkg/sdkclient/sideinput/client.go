@@ -7,10 +7,12 @@ import (
 
 	sideinputpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/numaproj/numaflow-go/pkg/info"
+
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -22,21 +24,20 @@ type client struct {
 var _ Client = (*client)(nil)
 
 // New creates a new client object.
-func New(inputOptions ...sdkclient.Option) (*client, error) {
+func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (*client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SideInputAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}
-	_, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-	c := new(client)
-	sockAddr := fmt.Sprintf("%s:%s", sdkclient.UDS, opts.UdsSockAddr())
-	conn, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.MaxMessageSize()), grpc.MaxCallSendMsgSize(opts.MaxMessageSize())))
+
+	// Connect to the server
+	conn, err := util.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
+		return nil, err
 	}
+
+	c := new(client)
 	c.conn = conn
 	c.grpcClt = sideinputpb.NewSideInputClient(conn)
 	return c, nil

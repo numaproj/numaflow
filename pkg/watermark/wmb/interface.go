@@ -26,7 +26,9 @@ type IdleManager interface {
 	Get(toBufferPartitionName string) isb.Offset
 	// Update updates the isb.Offset for the given partition using the new offset if the partition exists, otherwise
 	// create a new entry.
-	Update(toBufferPartitionName string, newOffset isb.Offset)
-	// Reset resets the idle status for the given partition.
-	Reset(toBufferPartitionName string)
+	Update(fromBufferPartitionIndex int32, toBufferPartitionName string, newOffset isb.Offset)
+	// MarkActive marks the active status for the given partition.
+	MarkActive(fromBufferPartitionIndex int32, toBufferPartitionName string)
+	// MarkIdle marks idle for the given toBuffer partition name if it's not idle.
+	MarkIdle(fromBufferPartitionIndex int32, toBufferPartitionName string)
 }

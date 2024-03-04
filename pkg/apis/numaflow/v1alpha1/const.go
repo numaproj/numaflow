@@ -19,9 +19,6 @@ package v1alpha1
 import (
 	"fmt"
 	"time"
-
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -164,19 +161,23 @@ const (
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 
+	// KeysDelimitter is the delimitter used to join keys
+	KeysDelimitter = ":"
+
 	// UDF map streaming
 	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
+
+	// Pipeline health status
+	PipelineStatusHealthy   = "healthy"
+	PipelineStatusUnknown   = "unknown"
+	PipelineStatusCritical  = "critical"
+	PipelineStatusWarning   = "warning"
+	PipelineStatusInactive  = "inactive"
+	PipelineStatusDeleting  = "deleting"
+	PipelineStatusUnhealthy = "unhealthy"
 )
 
 var (
 	MessageTagDrop = fmt.Sprintf("%U__DROP__", '\\') // U+005C__DROP__
 	MessageTagAll  = fmt.Sprintf("%U__ALL__", '\\')  // U+005C__ALL__
-
-	// the standard resources used by the `init` and `main`containers.
-	standardResources = corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{
-			"cpu":    resource.MustParse("100m"),
-			"memory": resource.MustParse("128Mi"),
-		},
-	}
 )

@@ -35,4 +35,5 @@ const (
 	AccountPasswordSuffix       = "password"
 	JWTCookieName               = "jwt"
 	JWTCookieMaxAge             = 60 * 60 * 8 // 8 hours
+	NumaflowDexServerAddr       = "https://numaflow-dex-server:5556/dex"
 )

@@ -16,19 +16,33 @@ limitations under the License.
 package fixed
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
+var keyedVertex = &dfv1.VertexInstance{
+	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
+		PipelineName: "test-pl",
+		AbstractVertex: dfv1.AbstractVertex{
+			Name: "testVertex",
+			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
+		},
+	}},
+	Hostname: "test-host",
+	Replica:  0,
+}
+
 func TestFixed_AssignWindow(t *testing.T) {
 	baseTime := time.UnixMilli(60000)
-	windower := NewWindower(60 * time.Second)
+	windower := NewWindower(60*time.Second, keyedVertex)
 
 	readMsg := buildReadMessage(baseTime)
 	windowRequests := windower.AssignWindows(readMsg)
@@ -112,7 +126,7 @@ func TestFixed_CloseWindows(t *testing.T) {
 		endTime:   baseTime.Add(180 * time.Second),
 	}
 
-	windower := NewWindower(60 * time.Second)
+	windower := NewWindower(60*time.Second, keyedVertex)
 
 	windower.InsertWindow(win1)
 	windower.InsertWindow(win2)
@@ -140,14 +154,34 @@ func TestFixed_DeleteWindows(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime,
+			End:   baseTime.Add(60 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &fixedWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(60 * time.Second),
+			End:   baseTime.Add(120 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &fixedWindow{
 		startTime: baseTime.Add(120 * time.Second),
 		endTime:   baseTime.Add(180 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(120 * time.Second),
+			End:   baseTime.Add(180 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(120*time.Second).UnixMilli(), baseTime.Add(180*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{
@@ -165,12 +199,16 @@ func TestFixed_DeleteWindows(t *testing.T) {
 	windower.CloseWindows(baseTime.Add(180 * time.Second))
 
 	// delete one of the windows
-	windower.DeleteClosedWindow(&window.TimedWindowResponse{
-		Window: window.NewWindowFromPartition(&partition.ID{
-			Start: baseTime,
-			End:   baseTime.Add(60 * time.Second),
+	windower.DeleteClosedWindow(&fixedWindow{
+		startTime: baseTime.Add(60 * time.Second),
+		endTime:   baseTime.Add(120 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(60 * time.Second),
+			End:   baseTime.Add(120 * time.Second),
 			Slot:  "slot-0",
-		}),
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0"),
 	})
 
 	// since we deleted one of the windows, the closed windows should be 2
@@ -184,14 +222,34 @@ func TestFixed_OldestClosedWindowEndTime(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime,
+			End:   baseTime.Add(60 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &fixedWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(60 * time.Second),
+			End:   baseTime.Add(120 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &fixedWindow{
 		startTime: baseTime.Add(120 * time.Second),
 		endTime:   baseTime.Add(180 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(120 * time.Second),
+			End:   baseTime.Add(180 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(120*time.Second).UnixMilli(), baseTime.Add(180*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{
@@ -219,14 +277,34 @@ func TestWindower_NextWindowToBeClosed(t *testing.T) {
 		startTime: baseTime,
 		endTime:   baseTime.Add(60 * time.Second),
 		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime,
+			End:   baseTime.Add(60 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.UnixMilli(), baseTime.Add(60*time.Second).UnixMilli(), "slot-0"),
 	}
 	win2 := &fixedWindow{
 		startTime: baseTime.Add(60 * time.Second),
 		endTime:   baseTime.Add(120 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(60 * time.Second),
+			End:   baseTime.Add(120 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(60*time.Second).UnixMilli(), baseTime.Add(120*time.Second).UnixMilli(), "slot-0"),
 	}
 	win3 := &fixedWindow{
 		startTime: baseTime.Add(120 * time.Second),
 		endTime:   baseTime.Add(180 * time.Second),
+		slot:      "slot-0",
+		partition: &partition.ID{
+			Start: baseTime.Add(120 * time.Second),
+			End:   baseTime.Add(180 * time.Second),
+			Slot:  "slot-0",
+		},
+		id: fmt.Sprintf("%d-%d-%s", baseTime.Add(120*time.Second).UnixMilli(), baseTime.Add(180*time.Second).UnixMilli(), "slot-0"),
 	}
 
 	windower := &Windower{

@@ -69,7 +69,7 @@ type handler struct {
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -94,7 +94,7 @@ func NewHandler(dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (
 		daemonClientsCache:   daemonClientsCache,
 		dexObj:               dexObj,
 		localUsersAuthObject: localUsersAuthObject,
-		healthChecker:        NewHealthChecker(),
+		healthChecker:        NewHealthChecker(ctx),
 	}, nil
 }
 
@@ -224,7 +224,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
 			return
 		}
-		if status == PipelineStatusInactive {
+		if status == dfv1.PipelineStatusInactive {
 			summary.pipelineSummary.Inactive++
 		} else {
 			summary.pipelineSummary.Active.increment(status)
@@ -981,14 +981,14 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 // TODO(API): Change the Daemon service to return the consolidated status of the pipeline
 // to save on multiple calls to the daemon service
 func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
-	retStatus := PipelineStatusHealthy
+	retStatus := dfv1.PipelineStatusHealthy
 	// Check if the pipeline is paused, if so, return inactive status
 	if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
-		retStatus = PipelineStatusInactive
+		retStatus = dfv1.PipelineStatusInactive
 	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
-		retStatus = PipelineStatusHealthy
+		retStatus = dfv1.PipelineStatusHealthy
 	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
-		retStatus = PipelineStatusCritical
+		retStatus = dfv1.PipelineStatusCritical
 	}
 	return retStatus, nil
 }

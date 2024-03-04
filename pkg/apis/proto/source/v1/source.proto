@@ -40,6 +40,9 @@ service Source {
   // PendingFn returns the number of pending records at the user defined source.
   rpc PendingFn(google.protobuf.Empty) returns (PendingResponse);
 
+  // PartitionsFn returns the list of partitions for the user defined source.
+  rpc PartitionsFn(google.protobuf.Empty) returns (PartitionsResponse);
+
   // IsReady is the heartbeat endpoint for user defined source gRPC.
   rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
 }
@@ -138,6 +141,18 @@ message PendingResponse {
 }
 
 /*
+ * PartitionsResponse is the response for the partitions request.
+ */
+message PartitionsResponse {
+  message Result {
+    // Required field holding the list of partitions.
+    repeated int32 partitions = 1;
+  }
+  // Required field holding the result.
+  Result result = 1;
+}
+
+/*
  * Offset is the offset of the datum.
  */
 message Offset {
@@ -149,5 +164,5 @@ message Offset {
   // Optional partition_id indicates which partition of the source the datum belongs to.
   // It is useful for sources that have multiple partitions. e.g. Kafka.
   // If the partition_id is not specified, it is assumed that the source has a single partition.
-  string partition_id = 2;
+  int32 partition_id = 2;
 }

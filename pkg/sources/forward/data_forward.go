@@ -236,7 +236,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
-						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, fetchedWm)
+						idlehandler.PublishIdleWatermark(ctx, wmb.PARTITION_0, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSource, df.vertexReplica, fetchedWm)
 					}
 				}
 			}
@@ -311,6 +311,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// publish source watermark and assign IsLate attribute based on new event time.
 	var writeMessages []*isb.WriteMessage
 	var transformedReadMessages []*isb.ReadMessage
+	latestEtMap := make(map[int32]int64)
+
 	for _, m := range transformerResults {
 		writeMessages = append(writeMessages, m.writeMessages...)
 		for _, message := range m.writeMessages {
@@ -318,9 +320,13 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// since we use message event time instead of the watermark to determine and publish source watermarks,
 			// time.UnixMilli(-1) is assigned to the message watermark. transformedReadMessages are immediately
 			// used below for publishing source watermarks.
+			if latestEt, ok := latestEtMap[m.readMessage.ReadOffset.PartitionIdx()]; !ok || message.EventTime.UnixNano() < latestEt {
+				latestEtMap[m.readMessage.ReadOffset.PartitionIdx()] = message.EventTime.UnixNano()
+			}
 			transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
 		}
 	}
+
 	// publish source watermark
 	df.srcWMPublisher.PublishSourceWatermarks(transformedReadMessages)
 	// update the watermark configs for lastTimestampSrcWMUpdated, lastFetchedSrcWatermark and lastTimestampIdleWMFound.
@@ -389,7 +395,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 						activeWatermarkBuffers[toVertexName][index] = true
 						// update the watermark configs for lastTimestampSrcWMUpdated, lastFetchedSrcWatermark and lastTimestampIdleWMFound.
 						// reset because the toBuffer partition is no longer idling
-						df.idleManager.Reset(df.toBuffers[toVertexName][index].GetName())
+						df.idleManager.MarkActive(wmb.PARTITION_0, df.toBuffers[toVertexName][index].GetName())
 					}
 				}
 				// This (len(offsets) == 0) happens at conditional forwarding, there's no data written to the buffer
@@ -410,7 +416,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 							publisher = df.createToVertexWatermarkPublisher(toVertexName, sp)
 							vertexPublishers[sp] = publisher
 						}
-						idlehandler.PublishIdleWatermark(ctx, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, dfv1.VertexTypeSource, processorWM)
+						idlehandler.PublishIdleWatermark(ctx, wmb.PARTITION_0, df.toBuffers[toVertexName][index], publisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSource, df.vertexReplica, processorWM)
 					}
 				}
 			}

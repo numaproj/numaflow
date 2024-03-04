@@ -1,10 +1,11 @@
 package idlehandler
 
 import (
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
 	"time"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestSourceIdleHandler_IsSourceIdling(t *testing.T) {

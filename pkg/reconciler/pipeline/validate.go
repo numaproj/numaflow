@@ -242,6 +242,9 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if min > max {
 		return fmt.Errorf("vertex %q: max number of replicas should be greater than or equal to min", v.Name)
 	}
+	if max == 0 {
+		return fmt.Errorf("vertex %q: max number of replicas can not be 0", v.Name)
+	}
 	if v.Partitions != nil {
 		if *v.Partitions < 0 {
 			return fmt.Errorf("vertex %q: number of partitions should not be smaller than 0", v.Name)
@@ -305,11 +308,17 @@ func validateUDF(udf dfv1.UDF) error {
 		if storage == nil {
 			return fmt.Errorf(`invalid "groupBy", "storage" is missing`)
 		}
-		if storage.PersistentVolumeClaim == nil && storage.EmptyDir == nil {
+		if storage.PersistentVolumeClaim == nil && storage.EmptyDir == nil && storage.NoStore == nil {
 			return fmt.Errorf(`invalid "groupBy.storage", type of storage to use is missing`)
 		}
 		if storage.PersistentVolumeClaim != nil && storage.EmptyDir != nil {
 			return fmt.Errorf(`invalid "groupBy.storage", either emptyDir or persistentVolumeClaim is allowed, not both`)
+		}
+		if storage.PersistentVolumeClaim != nil && storage.NoStore != nil {
+			return fmt.Errorf(`invalid "groupBy.storage", either none or persistentVolumeClaim is allowed, not both`)
+		}
+		if storage.EmptyDir != nil && storage.NoStore != nil {
+			return fmt.Errorf(`invalid "groupBy.storage", either none or emptyDir is allowed, not both`)
 		}
 	}
 	return nil

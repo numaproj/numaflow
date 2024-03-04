@@ -19,12 +19,13 @@ package authn
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"golang.org/x/crypto/bcrypt"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"strconv"
-	"strings"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
@@ -45,9 +46,6 @@ type Account struct {
 	PasswordHash        string
 	Enabled             bool
 }
-
-// TODO: refactor to use a logger from server
-var logger = logging.NewLogger().Named("accounts")
 
 // GetAccount return an account info by the specified name.
 func GetAccount(ctx context.Context, name string, kubeClient kubernetes.Interface) (*Account, error) {
@@ -73,7 +71,7 @@ func GetAccounts(ctx context.Context, kubeClient kubernetes.Interface) (map[stri
 	if err != nil {
 		return nil, err
 	}
-	return parseAccounts(secret, cm)
+	return parseAccounts(ctx, secret, cm)
 }
 
 // parseAdminAccount parses the admin account from the secret and configMap
@@ -100,7 +98,8 @@ func parseAdminAccount(secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (*Account, err
 }
 
 // parseAccounts parses all the accounts from the secret and configMap
-func parseAccounts(secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (map[string]Account, error) {
+func parseAccounts(ctx context.Context, secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (map[string]Account, error) {
+	log := logging.FromContext(ctx)
 	adminAccount, err := parseAdminAccount(secret, cm)
 	if err != nil {
 		return nil, err
@@ -122,7 +121,7 @@ func parseAccounts(secret *k8sv1.Secret, cm *k8sv1.ConfigMap) (map[string]Accoun
 		if len(parts) == 2 {
 			accountName = parts[0]
 		} else {
-			logger.Warnf("Unexpected key %s in ConfigMap '%s'", key, cm.Name)
+			log.Warnf("Unexpected key %s in ConfigMap '%s'", key, cm.Name)
 			continue
 		}
 

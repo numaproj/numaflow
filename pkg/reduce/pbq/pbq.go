@@ -52,7 +52,7 @@ var _ ReadWriteCloser = (*PBQ)(nil)
 // Write accepts a window request and writes it to the PBQ, only the isb message is written to the store.
 // The other metadata like operation etc are recomputed from WAL.
 // request can never be nil.
-func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) error {
+func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, persist bool) error {
 	// if cob we should return
 	if p.cob {
 		p.log.Errorw("Failed to write request to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("request", request))
@@ -72,7 +72,13 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest) err
 		switch request.Operation {
 		case window.Open, window.Append, window.Expand:
 			// this is a blocking call, ctx.Done() will be ignored.
-			writeErr = p.store.Write(request.ReadMessage)
+			if p.windowType == window.Unaligned {
+				return nil
+			}
+			// during replay we do not have to persist
+			if persist {
+				writeErr = p.store.Write(request.ReadMessage)
+			}
 		case window.Close, window.Merge:
 		// these do not have request.ReadMessage, only metadata fields are used
 		default:
@@ -125,42 +131,4 @@ func (p *PBQ) GC() error {
 	defer p.mu.Unlock()
 	p.store = nil
 	return p.manager.deregister(p.PartitionID)
-}
-
-// replayRecordsFromStore replays store messages when replay flag is set during start up time. It replays by reading from
-// the store and writing to the PBQ channel.
-// FIXME: works only for fixed and sliding window
-func (p *PBQ) replayRecordsFromStore(ctx context.Context) {
-	size := p.options.readBatchSize
-readLoop:
-	for {
-		readMessages, eof, err := p.store.Read(size)
-		if err != nil {
-			p.log.Errorw("Error while replaying records from store", zap.Any("ID", p.PartitionID), zap.Error(err))
-		}
-		for _, msg := range readMessages {
-			// FIXME: support for session window
-			var w window.TimedWindow
-			if p.windowType == window.Aligned {
-				w = window.NewWindowFromPartition(&p.PartitionID)
-			} else {
-				p.log.Errorw("unAligned window strategy not supported", zap.Any("ID", p.PartitionID), zap.Any("strategy", p.windowType))
-			}
-			// select to avoid infinite blocking while writing to output channel
-			select {
-			case p.output <- &window.TimedWindowRequest{
-				ReadMessage: msg,
-				Operation:   window.Append,
-				Windows:     []window.TimedWindow{w},
-				ID:          &p.PartitionID,
-			}:
-			case <-ctx.Done():
-				break readLoop
-			}
-		}
-		// after replaying all the messages from store, unset replay flag
-		if eof {
-			break
-		}
-	}
 }
