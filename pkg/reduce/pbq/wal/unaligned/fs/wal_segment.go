@@ -123,7 +123,7 @@ func NewUnalignedReadWriteWAL(filesToReplay []string, opts ...WALOption) (wal.WA
 	s.partitionID = pid
 
 	// close the file
-	err = fp.Close()
+	_ = fp.Close()
 
 	return s, nil
 }
