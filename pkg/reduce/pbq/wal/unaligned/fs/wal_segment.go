@@ -18,7 +18,6 @@ package fs
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -92,7 +91,6 @@ func NewUnalignedWriteOnlyWAL(partitionId *partition.ID, opts ...WALOption) (wal
 
 // NewUnalignedReadWriteWAL returns a new WAL instance for reading and writing
 func NewUnalignedReadWriteWAL(filesToReplay []string, opts ...WALOption) (wal.WAL, error) {
-	var err error
 
 	s := &unalignedWAL{
 		segmentWALPath:          dfv1.DefaultSegmentWALPath,
@@ -115,11 +113,17 @@ func NewUnalignedReadWriteWAL(filesToReplay []string, opts ...WALOption) (wal.WA
 		opt(s)
 	}
 
-	// open the current data file
-	err = s.openReadFile()
+	// open a file to get the partition ID
+	fp, pid, err := s.openReadFile(filesToReplay[0])
 	if err != nil {
 		return nil, err
 	}
+
+	// set the partition ID to the WAL
+	s.partitionID = pid
+
+	// close the file
+	err = fp.Close()
 
 	return s, nil
 }
@@ -171,71 +175,62 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 }
 
 // Replay replays persisted messages during startup
-// returns a channel to read messages and a channel to read errors
+// It returns a channel to read messages from replay files and a channel to read errors
 func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
-
 	// Initialize channels
 	msgChan := make(chan *isb.ReadMessage)
 	errChan := make(chan error)
 
 	go func() {
+		// Clean up resources when the function returns
 		defer close(msgChan)
 		defer func() { errChan = nil }()
 
-		// Main loop to read messages
-		// It will break if we have read through all filesToReplay
-	replayLoop:
-		for {
-			// If there's no current file being read
-			if s.currDataFp == nil {
-				// If there's no more filesToReplay in the list, break
-				if len(s.filesToReplay) == 0 {
-					break replayLoop
-				}
-
-				// Open the next file in the list
-				err := s.openReadFile()
-				if err != nil && !errors.Is(err, io.EOF) {
-					errChan <- err
-					return
-				}
-			}
-
-			// Try to decode a message from the file
-			message, _, err := s.decoder.decodeMessage(s.currDataFp)
-
-			// If there's an error...
+		// Iterate over all replay files
+		for _, filePath := range s.filesToReplay {
+			// Open the file in read mode
+			fp, _, err := s.openReadFile(filePath)
 			if err != nil {
-				// If end of file is reached, close file and reset file pointer
-				if errors.Is(err, io.EOF) {
-					err = s.currDataFp.Close()
-					if err != nil {
-						errChan <- err
-						return
-					}
-					s.currDataFp = nil
-				} else {
-					// If other error, return error
+				errChan <- err
+				return
+			}
+
+			// Iterate over the messages in the file
+			for {
+				// Try to decode a message from the file
+				msg, _, err := s.decoder.decodeMessage(fp)
+				if err == io.EOF {
+					// End of file reached, break the inner loop to proceed to the next file
+					break
+				} else if err != nil {
+					// Error occurred, send it on error channel and return
 					errChan <- err
 					return
 				}
 
-				// Continue to next iteration
-				continue
+				// Successful decode, send the message on the message channel
+				msgChan <- msg
 			}
 
-			// If message is successfully decoded, write the message to the channel
-			msgChan <- message
+			// Close the file
+			err = fp.Close()
+			if err != nil {
+				errChan <- err
+				return
+			}
 		}
 
-		// once replay is done, we have to open a new file to write
-		// since we use the same WAL for reading and writing
+		// Open a new write file once replay is done since we use the same WAL for reading and writing
 		err := s.openFile()
 		if err != nil {
 			errChan <- err
 			return
 		}
+
+		s.filesToReplay = nil
 	}()
+
+	// Return the message and error channels
 	return msgChan, errChan
 }
 
@@ -244,28 +239,20 @@ func (s *unalignedWAL) PartitionID() *partition.ID {
 	return s.partitionID
 }
 
-func (s *unalignedWAL) openReadFile() error {
-	if len(s.filesToReplay) == 0 {
-		return nil
-	}
+func (s *unalignedWAL) openReadFile(filePath string) (*os.File, *partition.ID, error) {
 
 	// Open the first file in the list
-	currFile, err := os.OpenFile(s.filesToReplay[0], os.O_RDONLY, 0644)
+	currFile, err := os.OpenFile(filePath, os.O_RDONLY, 0644)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	s.currDataFp = currFile
 
-	// Remove opened file from the list
-	s.filesToReplay = s.filesToReplay[1:]
-
-	pid, err := s.decoder.decodeHeader(s.currDataFp)
+	pid, err := s.decoder.decodeHeader(currFile)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	s.partitionID = pid
 
-	return err
+	return currFile, pid, nil
 }
 
 // openFile opens a new data file

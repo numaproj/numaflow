@@ -132,6 +132,12 @@ func (d *decoder) decodeDeletionMessage(buf io.Reader) (*deletionMessage, int64,
 
 	dms.Key = string(key)
 
+	// compare the checksum
+	checksum := calculateChecksum([]byte(fmt.Sprintf("%d:%d:%s:%s", dms.St, dms.Et, dms.Slot, dms.Key)))
+	if checksum != dMessageHeader.Checksum {
+		return nil, 0, errChecksumMismatch
+	}
+
 	size := dMessageHeaderSize + int64(dMessageHeader.SLen) + int64(dMessageHeader.KLen)
 	return &dms, size, nil
 }

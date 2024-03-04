@@ -48,10 +48,11 @@ type readMessageHeaderPreamble struct {
 
 // deletionMessageHeaderPreamble is the header for each deletion event.
 type deletionMessageHeaderPreamble struct {
-	St   int64
-	Et   int64
-	SLen int16
-	KLen int32
+	St       int64
+	Et       int64
+	SLen     int16
+	KLen     int32
+	Checksum uint32
 }
 
 // deletionMessage is the deletion event for a keyed window built from GC events.
@@ -133,11 +134,15 @@ func (e *encoder) encodeMessage(message *isb.ReadMessage) ([]byte, error) {
 func (e *encoder) encodeDeletionEvent(message *deletionMessage) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
+	// calculate the checksum of the deletion message
+	checksum := calculateChecksum([]byte(fmt.Sprintf("%d:%d:%s:%s", message.St, message.Et, message.Slot, message.Key)))
+
 	cMessageHeader := deletionMessageHeaderPreamble{
-		St:   message.St,
-		Et:   message.Et,
-		SLen: int16(len(message.Slot)),
-		KLen: int32(len(message.Key)),
+		St:       message.St,
+		Et:       message.Et,
+		SLen:     int16(len(message.Slot)),
+		KLen:     int32(len(message.Key)),
+		Checksum: checksum,
 	}
 
 	// write the compact header
