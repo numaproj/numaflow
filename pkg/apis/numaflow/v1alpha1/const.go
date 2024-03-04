@@ -154,23 +154,23 @@ const (
 	PathPBQMount = "/var/numaflow/pbq"
 
 	// Default WAL options
-	DefaultWALSyncDuration            = 2 * time.Second        // Default sync duration for pbq
+	DefaultWALSyncDuration            = 30 * time.Second       // Default sync duration for pbq
 	DefaultWALMaxSyncSize             = 5 * 1024 * 1024        // Default size to wait for an explicit sync
 	DefaultSegmentWALPath             = PathPBQMount + "/wals" // Default store path
 	DefaultCompactWALPath             = PathPBQMount + "/compact-wals"
-	DefaultWALSegmentRotationDuration = 20 * time.Second // Default segment rotation duration
+	DefaultWALSegmentRotationDuration = 60 * time.Second // Default segment rotation duration
 	DefaultWALSegmentSize             = 30 * 1024 * 1024 // Default segment size
 
 	// Default GC-events WAL options
-	DefaultGCEventsWALRotationDuration    = 20 * time.Second         // Default rotation duration for the GC tracker
+	DefaultGCEventsWALRotationDuration    = 60 * time.Second         // Default rotation duration for the GC tracker
 	DefaultGCEventsWALEventsPath          = PathPBQMount + "/events" // Default store path for operations
-	DefaultGCEventsWALSyncDuration        = 2 * time.Second          // Default sync duration for the GC tracker
+	DefaultGCEventsWALSyncDuration        = 30 * time.Second         // Default sync duration for the GC tracker
 	DefaultGCEventsWALRotationEventsCount = 100                      // Default rotation events count for the GC tracker
 
 	// Default WAL Compactor options
-	DefaultWALCompactorSyncDuration = 2 * time.Second  // Default sync duration for the compactor
+	DefaultWALCompactorSyncDuration = 30 * time.Second // Default sync duration for the compactor
 	DefaultWALCompactorMaxFileSize  = 30 * 1024 * 1024 // Default max file size for the compactor
-	DefaultWALCompactionDuration    = 20 * time.Second // Default compaction duration
+	DefaultWALCompactionDuration    = 15 * time.Second // Default compaction duration
 
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"

@@ -373,7 +373,7 @@ func TestCompactor_ContextClose(t *testing.T) {
 	assert.NoError(t, err)
 
 	cancel()
-	files, _ := filesInDir(segmentDir, currentWALPrefix)
+	files, _ := listFilesInDir(segmentDir, currentWALPrefix, nil)
 	for _, file := range files {
 		println(file.Name())
 	}
@@ -423,7 +423,7 @@ func Test_buildCompactionKeyMap(t *testing.T) {
 		dc:              newDecoder(),
 	}
 
-	eFiles, err := filesInDir(eventDir, currentWALPrefix)
+	eFiles, err := listFilesInDir(eventDir, currentWALPrefix, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, eFiles)
 

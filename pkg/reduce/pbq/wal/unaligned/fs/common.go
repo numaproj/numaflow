@@ -23,37 +23,6 @@ import (
 	"strings"
 )
 
-// filesInDir lists all filesToReplay after applying the filterStr in the given directory,
-// except the WIP temp file.
-func filesInDir(dirPath string, filterStr string) ([]os.FileInfo, error) {
-
-	dir, err := os.Open(dirPath)
-	if err != nil {
-		return nil, err
-	}
-	defer func(dir *os.File) {
-		_ = dir.Close()
-	}(dir)
-
-	// read all filesToReplay from the dir
-	files, err := dir.Readdir(-1)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfs []os.FileInfo
-	// ignore the filesToReplay which has "current" in their file name
-	// because it will in use by the writer
-	for i := 0; i < len(files); i++ {
-		if strings.Contains(files[i].Name(), filterStr) {
-			continue
-		}
-		cfs = append(cfs, files[i])
-	}
-
-	return cfs, nil
-}
-
 // listFilesInDir lists all filesToReplay after applying the filterStr in the given directory. If a sort function is provided,
 // the filesToReplay are sorted using it.
 func listFilesInDir(dirPath, filterStr string, sortFunc func([]os.FileInfo)) ([]os.FileInfo, error) {
