@@ -101,9 +101,17 @@ func (k kvEntry) Operation() kvs.KVWatchOp {
 
 // GetAllKeys returns all the keys in the key-value store.
 func (jss *jetStreamStore) GetAllKeys(_ context.Context) ([]string, error) {
-	keys, err := jss.kv.Keys()
+	keyLister, err := jss.kv.ListKeys()
 	if err != nil {
 		return nil, err
+	}
+	defer func() {
+		_ = keyLister.Stop()
+	}()
+
+	var keys []string
+	for key := range keyLister.Keys() {
+		keys = append(keys, key)
 	}
 	return keys, nil
 }
@@ -141,8 +149,8 @@ func (jss *jetStreamStore) GetKVName() string {
 	return jss.kvName
 }
 
-// Watch watches the key-value store (aka bucket) and returns the updates channel and done channel.
-func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan struct{}) {
+// Watch watches the key-value store (aka bucket) and returns the updates channel to read the updates on the KV store.
+func (jss *jetStreamStore) Watch(ctx context.Context) <-chan kvs.KVEntry {
 	var err error
 	// create a new watcher, it will keep retrying until the context is done
 	// returns nil if the context is done
@@ -150,7 +158,6 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 	kvwTimer := time.NewTimer(jss.opts.watcherCreationThreshold)
 
 	var updates = make(chan kvs.KVEntry)
-	var stopped = make(chan struct{})
 	go func() {
 		// if kvWatcher is nil, it means the context is done
 		for kvWatcher != nil {
@@ -165,7 +172,6 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 					jss.log.Infow("WatchAll successfully stopped", zap.String("watcher", jss.GetKVName()))
 				}
 				close(updates)
-				close(stopped)
 				return
 			case value, ok := <-kvWatcher.Updates():
 				// we are getting updates from the watcher, reset the timer
@@ -234,11 +240,11 @@ func (jss *jetStreamStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-cha
 			case <-jss.doneCh:
 				jss.log.Infow("Stopping WatchAll", zap.String("watcher", jss.GetKVName()))
 				close(updates)
-				close(stopped)
+				return
 			}
 		}
 	}()
-	return updates, stopped
+	return updates
 }
 
 // newWatcher creates a new watcher for the key-value store.
@@ -264,7 +270,7 @@ func (jss *jetStreamStore) lastUpdateKVTime() time.Time {
 	var (
 		err        error
 		lastUpdate time.Time
-		keyLister  nats.KeyLister
+		keys       []string
 		value      nats.KeyValueEntry
 	)
 
@@ -274,7 +280,7 @@ retryLoop:
 		case <-jss.ctx.Done():
 			return time.Time{}
 		default:
-			keyLister, err = jss.kv.ListKeys()
+			keys, err = jss.GetAllKeys(jss.ctx)
 			if err == nil {
 				break retryLoop
 			} else {
@@ -290,7 +296,7 @@ retryLoop:
 
 	}
 
-	for key := range keyLister.Keys() {
+	for _, key := range keys {
 		value, err = jss.kv.Get(key)
 		for err != nil {
 			// keys can be deleted when the previous vertex pod is deleted/restarted.
@@ -311,7 +317,6 @@ retryLoop:
 		}
 	}
 
-	_ = keyLister.Stop()
 	return lastUpdate
 }
 
