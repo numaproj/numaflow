@@ -81,7 +81,7 @@ func NewUnalignedWriteOnlyWAL(partitionId *partition.ID, opts ...WALOption) (wal
 	}
 
 	// open the current data file
-	err := s.openFile()
+	err := s.openFileAndSetCurrent()
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 		}
 
 		// Open a new write file once replay is done since we use the same WAL for reading and writing
-		err := s.openFile()
+		err := s.openFileAndSetCurrent()
 		if err != nil {
 			errChan <- err
 			return
@@ -254,8 +254,8 @@ func (s *unalignedWAL) openReadFile(filePath string) (*os.File, *partition.ID, e
 	return currFile, pid, nil
 }
 
-// openFile opens a new data file
-func (s *unalignedWAL) openFile() error {
+// openFileAndSetCurrent opens a new data file and sets the current pointer to the opened file.
+func (s *unalignedWAL) openFileAndSetCurrent() error {
 	dataFilePath := filepath.Join(s.segmentWALPath, currentSegmentName)
 	var err error
 	if s.currDataFp, err = os.OpenFile(dataFilePath, os.O_WRONLY|os.O_CREATE, 0644); err != nil {
@@ -306,7 +306,7 @@ func (s *unalignedWAL) rotateFile() error {
 	}
 
 	// Open the next data file
-	return s.openFile()
+	return s.openFileAndSetCurrent()
 }
 
 // segmentFilePath creates the file path for the segment file located in the storage path.
