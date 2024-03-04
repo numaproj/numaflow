@@ -26,8 +26,11 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -47,6 +50,7 @@ type gcEventsWAL struct {
 	rotationEventsCount int           // rotation events count
 	curEventsCount      int           // current events count
 	fileCreationTime    time.Time     // file creation time
+	log                 *zap.SugaredLogger
 }
 
 // NewGCEventsWAL returns a new GCEventsWAL
@@ -62,6 +66,7 @@ func NewGCEventsWAL(ctx context.Context, opts ...GCEventsWALOption) (unaligned.G
 		rotationEventsCount: dfv1.DefaultGCEventsWALRotationEventsCount,
 		curEventsCount:      0,
 		fileCreationTime:    time.Now(),
+		log:                 logging.FromContext(ctx),
 	}
 
 	for _, opt := range opts {

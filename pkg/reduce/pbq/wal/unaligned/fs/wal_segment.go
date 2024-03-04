@@ -33,7 +33,6 @@ import (
 
 const (
 	currentWALPrefix   = "current"
-	IEEE               = 0xedb88320
 	segmentPrefix      = "segment"
 	currentSegmentName = currentWALPrefix + "-" + segmentPrefix
 )

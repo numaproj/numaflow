@@ -133,11 +133,7 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, gcEventsPath s
 	return c, nil
 }
 
-// Start starts the compactor
-func (c *compactor) Start(ctx context.Context) error {
-	// in case of incomplete compaction we should compact the data filesToReplay
-	// before starting the compactor
-
+func (c *compactor) compactOnBootup(ctx context.Context) error {
 	// get all the GC events filesToReplay
 	eventFiles, err := listFilesInDir(c.gcEventsWALPath, currentWALPrefix, nil)
 	if err != nil {
@@ -160,6 +156,18 @@ func (c *compactor) Start(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+// Start starts the compactor.
+func (c *compactor) Start(ctx context.Context) error {
+	// in case of incomplete compaction we should compact the data filesToReplay
+	// before starting the compactor
+	if err := c.compactOnBootup(ctx); err != nil {
+		return err
+	}
+
+	// NOTE: this go routine will run while replay is running, but shouldn't have any side-effects.
 	go c.keepCompacting(ctx)
 
 	return nil
@@ -293,10 +301,7 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 			}
 		}
 
-		err = opFile.Close()
-		if err != nil {
-			return err
-		}
+		_ = opFile.Close()
 	}
 
 	return nil
@@ -306,6 +311,7 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 func (c *compactor) compactDataFiles(ctx context.Context) error {
 
 	// if there are no events to compact, return
+	// during replay this list should be == 0, hence it was okay to start the go routine early on
 	if len(c.compactKeyMap) == 0 {
 		return nil
 	}
@@ -509,7 +515,7 @@ func (c *compactor) rotateCompactionFile() error {
 	return c.openCompactionFile()
 }
 
-// flushAndSync flushes and syncs the compaction file
+// flushAndSync flushes the buffer and calls fs.sync on the compaction file
 func (c *compactor) flushAndSync() error {
 	if err := c.compBufWriter.Flush(); err != nil {
 		return err

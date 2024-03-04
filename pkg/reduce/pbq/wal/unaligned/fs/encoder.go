@@ -29,6 +29,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 )
 
+const _IEEE = 0xedb88320
+
 // walHeaderPreamble is the header preamble (excludes variadic key)
 type walHeaderPreamble struct {
 	S    int64
@@ -159,7 +161,7 @@ func (e *encoder) encodeDeletionEvent(message *deletionMessage) ([]byte, error) 
 }
 
 func calculateChecksum(data []byte) uint32 {
-	crc32q := crc32.MakeTable(IEEE)
+	crc32q := crc32.MakeTable(_IEEE)
 	return crc32.Checksum(data, crc32q)
 }
 
