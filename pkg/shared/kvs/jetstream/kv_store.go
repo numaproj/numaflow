@@ -301,6 +301,7 @@ retryLoop:
 		for err != nil {
 			// keys can be deleted when the previous vertex pod is deleted/restarted.
 			if errors.Is(err, nats.ErrKeyNotFound) {
+				jss.log.Infow("Nats key not found", zap.String("watcher", jss.GetKVName()), zap.String("key", key))
 				break
 			}
 			select {
