@@ -186,7 +186,7 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	done := make(chan struct{})
 	count := 0
 	go func() {
-		startTime := int(time.Unix(1000, 0).UnixMilli())
+		startTime := 0
 		for i := 1; true; i++ {
 			select {
 			case <-ctx.Done():

@@ -341,7 +341,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				log.Errorw("failed to close gc events tracker", zap.Error(err))
 			}
-			log.Info("Stopped gc events tracker")
+			log.Info("GC Events WAL Closed")
 		}()
 
 		pnfOption = append(pnfOption, pnf.WithGCEventsTracker(gcEventsTracker), pnf.WithWindowType(window.Unaligned))
@@ -359,7 +359,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				log.Errorw("failed to stop compactor", zap.Error(err))
 			}
-			log.Info("Stopped compactor")
+			log.Info("Compactor Stopped")
 		}(compactor)
 	}
 

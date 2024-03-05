@@ -106,10 +106,13 @@ func (g *gcEventsWAL) rotateEventsFile() error {
 		return err
 	}
 
-	// copy the events file and delete the current events file
-	if err = os.Rename(g.currEventsFile.Name(), g.getEventsFilePath()); err != nil {
+	newFilePath := g.getEventsFilePath()
+	// rename the current event file to the new file path
+	if err = os.Rename(filepath.Join(g.eventsPath, currentEventsFile), newFilePath); err != nil {
 		return err
 	}
+
+	g.log.Debugw("Rotated the gc events segment", zap.String("new-events-file", newFilePath))
 	return g.openEventsFile()
 }
 
@@ -120,6 +123,7 @@ func (g *gcEventsWAL) getEventsFilePath() string {
 
 // openEventsFile opens a new events file to write to
 func (g *gcEventsWAL) openEventsFile() error {
+	g.log.Debugw("Opening a new gc events segment")
 	eventFilePath := filepath.Join(g.eventsPath, currentEventsFile)
 
 	var err error
@@ -190,6 +194,8 @@ func (g *gcEventsWAL) flushAndSync() error {
 
 // Close closes the GCEventsWAL by flushing and syncing the current events file
 func (g *gcEventsWAL) Close() error {
+	g.log.Info("Closing the GC events WAL")
+
 	if err := g.flushAndSync(); err != nil {
 		return err
 	}
