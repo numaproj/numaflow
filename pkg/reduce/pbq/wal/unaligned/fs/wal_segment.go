@@ -18,16 +18,20 @@ package fs
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
 
+	"go.uber.org/zap"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 const (
@@ -54,10 +58,11 @@ type unalignedWAL struct {
 	maxBatchSize            int64         // maxBatchSize is the maximum batch size before the data is synced to the disk
 	segmentRotationDuration time.Duration // segmentRotationDuration is the duration after which the segment is rotated
 	filesToReplay           []string
+	log                     *zap.SugaredLogger
 }
 
 // NewUnalignedWriteOnlyWAL returns a new store writer instance
-func NewUnalignedWriteOnlyWAL(partitionId *partition.ID, opts ...WALOption) (wal.WAL, error) {
+func NewUnalignedWriteOnlyWAL(ctx context.Context, partitionId *partition.ID, opts ...WALOption) (wal.WAL, error) {
 
 	s := &unalignedWAL{
 		segmentWALPath:          dfv1.DefaultSegmentWALPath,
@@ -74,6 +79,7 @@ func NewUnalignedWriteOnlyWAL(partitionId *partition.ID, opts ...WALOption) (wal
 		encoder:                 newEncoder(),
 		decoder:                 newDecoder(),
 		partitionID:             partitionId,
+		log:                     logging.FromContext(ctx),
 	}
 
 	for _, opt := range opts {
@@ -89,7 +95,7 @@ func NewUnalignedWriteOnlyWAL(partitionId *partition.ID, opts ...WALOption) (wal
 }
 
 // NewUnalignedReadWriteWAL returns a new WAL instance for reading and writing
-func NewUnalignedReadWriteWAL(filesToReplay []string, opts ...WALOption) (wal.WAL, error) {
+func NewUnalignedReadWriteWAL(ctx context.Context, filesToReplay []string, opts ...WALOption) (wal.WAL, error) {
 
 	s := &unalignedWAL{
 		segmentWALPath:          dfv1.DefaultSegmentWALPath,
@@ -106,6 +112,7 @@ func NewUnalignedReadWriteWAL(filesToReplay []string, opts ...WALOption) (wal.WA
 		encoder:                 newEncoder(),
 		decoder:                 newDecoder(),
 		filesToReplay:           filesToReplay,
+		log:                     logging.FromContext(ctx),
 	}
 
 	for _, opt := range opts {
@@ -256,6 +263,8 @@ func (s *unalignedWAL) openReadFile(filePath string) (*os.File, *partition.ID, e
 
 // openFileAndSetCurrent opens a new data file and sets the current pointer to the opened file.
 func (s *unalignedWAL) openFileAndSetCurrent() error {
+	s.log.Debugw("Opening new segment file")
+
 	dataFilePath := filepath.Join(s.segmentWALPath, currentSegmentName)
 	var err error
 	if s.currDataFp, err = os.OpenFile(dataFilePath, os.O_WRONLY|os.O_CREATE, 0644); err != nil {
@@ -300,10 +309,14 @@ func (s *unalignedWAL) rotateFile() error {
 		return err
 	}
 
+	newFileName := s.segmentFilePath(s.segmentWALPath)
+
 	// rename the current data file to the segment file
-	if err := os.Rename(filepath.Join(s.segmentWALPath, currentSegmentName), s.segmentFilePath(s.segmentWALPath)); err != nil {
+	if err := os.Rename(filepath.Join(s.segmentWALPath, currentSegmentName), newFileName); err != nil {
 		return err
 	}
+
+	s.log.Debugw("Rotated segment file to - ", zap.String("fileName", newFileName))
 
 	// Open the next data file
 	return s.openFileAndSetCurrent()

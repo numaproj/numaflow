@@ -45,6 +45,7 @@ var vertexInstance = &dfv1.VertexInstance{
 
 func TestUnalignedWAL_Write(t *testing.T) {
 
+	ctx := context.Background()
 	segmentDir := t.TempDir()
 	defer func(path string) {
 		cleanupDir(path)
@@ -56,7 +57,7 @@ func TestUnalignedWAL_Write(t *testing.T) {
 	}(compactDir)
 
 	partitionId := window.SharedUnalignedPartition
-	s, err := NewUnalignedWriteOnlyWAL(&partitionId, WithStoreOptions(segmentDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, &partitionId, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	// create read messages
@@ -91,7 +92,7 @@ func TestUnalignedWAL_Replay(t *testing.T) {
 	}(compactDir)
 
 	partitionId := window.SharedUnalignedPartition
-	s, err := NewUnalignedWriteOnlyWAL(&partitionId, WithStoreOptions(tempDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, &partitionId, WithStoreOptions(tempDir, compactDir))
 	assert.NoError(t, err)
 
 	// create read messages
@@ -139,9 +140,9 @@ func WithStoreOptions(segmentPath string, compactPath string) WALOption {
 	return func(s *unalignedWAL) {
 		s.segmentWALPath = segmentPath
 		s.compactWALPath = compactPath
-		s.segmentSize = 1024
-		s.syncDuration = time.Second
+		s.segmentSize = 1024 * 1024 * 10
+		s.syncDuration = 10 * time.Second
 		s.maxBatchSize = 1024 * 50
-		s.segmentRotationDuration = 3 * time.Second
+		s.segmentRotationDuration = 120 * time.Second
 	}
 }

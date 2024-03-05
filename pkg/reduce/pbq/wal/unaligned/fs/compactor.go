@@ -134,6 +134,7 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, gcEventsPath s
 }
 
 func (c *compactor) compactOnBootup(ctx context.Context) error {
+	c.log.Infow("Compacting on bootup")
 	// get all the GC events filesToReplay
 	eventFiles, err := listFilesInDir(c.gcEventsWALPath, currentWALPrefix, nil)
 	if err != nil {
@@ -144,6 +145,7 @@ func (c *compactor) compactOnBootup(ctx context.Context) error {
 	// should compact those before replaying persisted messages. We detect non-compacted filesToReplay by looking at unprocessed
 	// gc-events in the GC WAL.
 	if len(eventFiles) != 0 {
+		c.log.Infow("Compacting unprocessed GC event files", zap.Int("count", len(eventFiles)))
 		if err = c.compact(ctx, eventFiles); err != nil {
 			return err
 		}
@@ -260,7 +262,7 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 		}
 	}
 
-	c.log.Debugw("compaction completed", zap.Duration("duration", time.Since(startTime)))
+	c.log.Infow("Compaction completed", zap.Duration("duration", time.Since(startTime)))
 	return nil
 }
 
@@ -351,7 +353,7 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 			// the event filesToReplay
 			return fmt.Errorf("compactor stopped")
 		default:
-			c.log.Debugw("compacting file", zap.String("file", filePath))
+			c.log.Debugw("Compacting file", zap.String("file", filePath))
 			if err = c.compactFile(filePath); err != nil {
 				return err
 			}
@@ -442,10 +444,11 @@ func (c *compactor) shouldKeepMessage(eventTime int64, key string) bool {
 	// check if the key is present in the compaction key map
 	ce, ok := c.compactKeyMap[key]
 
-	// we should only delete the messages which are older than the max end time
-	if ok && ce < eventTime {
+	// we should not discard the messages which are not older than the max end time
+	if ok && eventTime >= ce {
 		return true
 	}
+
 	return false
 }
 
@@ -506,10 +509,13 @@ func (c *compactor) rotateCompactionFile() error {
 		return err
 	}
 
+	newFileName := c.getFilePath(c.compactedSegWALPath)
 	// rename the current compaction file to the segment file
-	if err := os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.compactedSegWALPath)); err != nil {
+	if err := os.Rename(c.currCompactedFile.Name(), newFileName); err != nil {
 		return err
 	}
+
+	c.log.Debugw("Rotated compaction file", zap.String("file", newFileName))
 
 	// Open the next data file
 	return c.openCompactionFile()
@@ -531,6 +537,7 @@ func (c *compactor) flushAndSync() error {
 
 // openCompactionFile opens a new compaction file
 func (c *compactor) openCompactionFile() error {
+	c.log.Debugw("Opening new compaction file")
 	var err error
 
 	c.currCompactedFile, err = os.OpenFile(filepath.Join(c.compactedSegWALPath, compactionInProgress), os.O_WRONLY|os.O_CREATE, 0644)

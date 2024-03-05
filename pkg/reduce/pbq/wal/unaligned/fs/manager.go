@@ -75,24 +75,25 @@ func NewFSManager(ctx context.Context, segmentWALPath string, compactWALPath str
 }
 
 // CreateWAL creates the FS unalignedWAL.
-func (ws *fsWAL) CreateWAL(_ context.Context, partitionID partition.ID) (wal.WAL, error) {
+func (ws *fsWAL) CreateWAL(ctx context.Context, partitionID partition.ID) (wal.WAL, error) {
 	// check if the WAL is already present during crash recovery,
 	// we might have already created the WAL while replaying
 	if store, ok := ws.activeWALs[partitionID.String()]; ok {
 		return store, nil
 	}
 
-	w, err := NewUnalignedWriteOnlyWAL(&partitionID, ws.fsOpts...)
+	w, err := NewUnalignedWriteOnlyWAL(ctx, &partitionID, ws.fsOpts...)
 	if err != nil {
 		return nil, err
 	}
 
 	ws.activeWALs[w.PartitionID().String()] = w
+	ws.log.Infow("Created Unaligned WAL", zap.String("partitionID", w.PartitionID().String()))
 	return w, nil
 }
 
 // DiscoverWALs returns all the WALs present in the segmentWALPath
-func (ws *fsWAL) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
+func (ws *fsWAL) DiscoverWALs(ctx context.Context) ([]wal.WAL, error) {
 	wr := make([]wal.WAL, 0)
 
 	// check if there are any compacted or segment segmentFiles to replay
@@ -112,20 +113,20 @@ func (ws *fsWAL) DiscoverWALs(_ context.Context) ([]wal.WAL, error) {
 
 	// consider the compacted files for replay first
 	// since the compacted files are the oldest
-	ws.log.Debugw("Number of files to replay", zap.Int("count", len(segmentFiles)+len(compactedFiles)))
+	ws.log.Infow("Number of files to replay", zap.Int("count", len(segmentFiles)+len(compactedFiles)))
 	filesToReplay := make([]string, 0)
 	for _, file := range compactedFiles {
-		ws.log.Debugw("compacted file to replay", zap.String("file", file.Name()))
+		ws.log.Infow("compacted file to replay", zap.String("file", file.Name()))
 		filesToReplay = append(filesToReplay, filepath.Join(ws.compactWALPath, file.Name()))
 	}
 	for _, file := range segmentFiles {
-		ws.log.Debugw("segment file to replay", zap.String("file", file.Name()))
+		ws.log.Infow("segment file to replay", zap.String("file", file.Name()))
 		filesToReplay = append(filesToReplay, filepath.Join(ws.segmentWALPath, file.Name()))
 	}
 
 	// there will only be one WAL because we use shared partition
 	// for unaligned windows
-	wl, err := NewUnalignedReadWriteWAL(filesToReplay, ws.fsOpts...)
+	wl, err := NewUnalignedReadWriteWAL(ctx, filesToReplay, ws.fsOpts...)
 	if err != nil {
 		return nil, err
 	}

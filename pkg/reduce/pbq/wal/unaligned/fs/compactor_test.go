@@ -50,7 +50,7 @@ func TestCompactor(t *testing.T) {
 
 	pid := window.SharedUnalignedPartition
 	// write some data filesToReplay
-	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(segmentDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, &pid, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	keys := []string{"key-1", "key-2"}
@@ -155,7 +155,7 @@ func TestReplay_AfterCompaction(t *testing.T) {
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
-	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(segmentDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, &pid, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	keys := []string{"key-1", "key-2"}
@@ -227,12 +227,12 @@ readLoop:
 		}
 	}
 	assert.NoError(t, err)
-	// first 101 messages will be compacted
-	assert.Len(t, replayedMessages, 199)
+	// first 100 messages will be compacted
+	assert.Len(t, replayedMessages, 200)
 
 	// order is important
-	for i := 0; i < 199; i++ {
-		assert.Equal(t, readMessages[i+101].EventTime.UnixMilli(), replayedMessages[i].EventTime.UnixMilli())
+	for i := 0; i < 200; i++ {
+		assert.Equal(t, readMessages[i+100].EventTime.UnixMilli(), replayedMessages[i].EventTime.UnixMilli())
 	}
 	err = wl.Close()
 	assert.NoError(t, err)
@@ -331,7 +331,7 @@ func TestCompactor_ContextClose(t *testing.T) {
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
-	s, err := NewUnalignedWriteOnlyWAL(&pid, WithStoreOptions(segmentDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, &pid, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	keys := []string{"key-1", "key-2"}
