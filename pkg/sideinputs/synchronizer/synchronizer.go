@@ -95,13 +95,14 @@ func (sis *sideInputsSynchronizer) Start(ctx context.Context) error {
 // and writes the updated value to the mount volume.
 func startSideInputSynchronizer(ctx context.Context, watch kvs.KVStorer, sideInputs []string, mountPath string) {
 	log := logging.FromContext(ctx)
-	watchCh, stopped := watch.Watch(ctx)
+	watchCh := watch.Watch(ctx)
 	for {
 		select {
-		case <-stopped:
-			log.Info("Side Input Synchronizer stopped")
-			return
-		case value := <-watchCh:
+		case value, ok := <-watchCh:
+			if !ok {
+				log.Info("Side Input Synchronizer watcher channel closed, watcher stopped")
+				return
+			}
 			if value == nil {
 				log.Warnw("nil value received from Side Input watcher")
 				continue

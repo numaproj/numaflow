@@ -285,9 +285,15 @@ func (p *publish) publishHeartbeat() {
 func (p *publish) Close() error {
 	p.log.Info("Closing watermark publisher")
 
-	// clean up heartbeat bucket, upstream will take care of closing the stores
+	// delete the entry from the heartbeat bucket
 	if err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetName()); err != nil {
 		p.log.Errorw("Failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetName()), zap.Error(err))
+		return err
+	}
+
+	// delete the entry from the offset bucket
+	if err := p.otStore.DeleteKey(p.ctx, p.entity.GetName()); err != nil {
+		p.log.Errorw("Failed to delete the key in the offset bucket", zap.String("bucket", p.otStore.GetStoreName()), zap.String("key", p.entity.GetName()), zap.Error(err))
 		return err
 	}
 	return nil
