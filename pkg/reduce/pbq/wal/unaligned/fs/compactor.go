@@ -342,10 +342,12 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	filesToReplay := make([]string, 0)
 	for _, compactedFile := range compactedFiles {
 		filesToReplay = append(filesToReplay, filepath.Join(c.compactedSegWALPath, compactedFile.Name()))
+		// FIXME(wal): move this right after removing the file
 		c.updateLatestWm(compactedFile.Name())
 	}
 	for _, dataFile := range segmentFiles {
 		filesToReplay = append(filesToReplay, filepath.Join(c.dataSegmentWALPath, dataFile.Name()))
+		// FIXME(wal): move this right after removing the file
 		c.updateLatestWm(dataFile.Name())
 	}
 

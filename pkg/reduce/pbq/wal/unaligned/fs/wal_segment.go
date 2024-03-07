@@ -173,6 +173,10 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 	s.currWriteOffset += int64(wrote)
 
 	// update the watermark if its not -1
+	// we could have done a comparison check but this is more efficient as we are not comparing complex
+	// time values.
+	// this watermark is monotonically increasing but -1 is an accepted value.
+	// the below condition becoming true is the likely path (i.e., we will always update s.latestWm)
 	if message.Watermark.UnixMilli() != -1 {
 		s.latestWm = message.Watermark
 	}

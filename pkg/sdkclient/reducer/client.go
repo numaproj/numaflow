@@ -104,6 +104,7 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 				if !ok {
 					break outerLoop
 				}
+				// TODO: figure out why send is getting EOF (could be because the client has already handled SIGTERM)
 				if sendErr = stream.Send(datum); sendErr != nil && !errors.Is(sendErr, io.EOF) {
 					errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
 					return
