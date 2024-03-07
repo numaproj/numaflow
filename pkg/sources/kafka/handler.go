@@ -57,14 +57,17 @@ func (consumer *consumerHandler) Setup(sess sarama.ConsumerGroupSession) error {
 	consumer.readyCloser.Do(func() {
 		close(consumer.ready)
 	})
+	consumer.logger.Info("Kafka Consumer Setup complete")
 	return nil
 }
 
 // Cleanup is run at the end of a session, once all ConsumeClaim goroutines have exited
 func (consumer *consumerHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
+	consumer.logger.Info("Kafka Consumer Starting Cleanup routine, waiting for in-flight-acks to complete")
 	// wait for inflight acks to be completed.
 	<-consumer.inflightAcks
 	sess.Commit()
+	consumer.logger.Info("Kafka Consumer Cleanup complete")
 	return nil
 }
 
@@ -73,6 +76,7 @@ func (consumer *consumerHandler) ConsumeClaim(session sarama.ConsumerGroupSessio
 	// The `ConsumeClaim` itself is called within a goroutine, see:
 	// https://github.com/IBM/sarama/blob/main/consumer_group.go#L27-L29
 	for {
+		consumer.logger.Info("Kafka Consumer about to claim Messages from the Kafka broker")
 		select {
 		case msg, ok := <-claim.Messages():
 			if !ok {
