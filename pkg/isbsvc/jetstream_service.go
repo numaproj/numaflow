@@ -137,8 +137,6 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}
 			log.Infow("Succeeded to create a consumer for a stream", zap.String("stream", streamName), zap.String("consumer", streamName))
 		}
-		// TODO: remove sleep and use a better way to wait for the stream to be ready
-		time.Sleep(3 * time.Second)
 	}
 
 	for _, bucket := range buckets {

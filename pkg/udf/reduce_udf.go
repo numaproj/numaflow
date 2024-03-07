@@ -346,7 +346,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 		pnfOption = append(pnfOption, pnf.WithGCEventsTracker(gcEventsTracker), pnf.WithWindowType(window.Unaligned))
 
-		compactor, err := unalignedfs.NewCompactor(ctx, &window.SharedUnalignedPartition, dfv1.DefaultGCEventsWALEventsPath, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath, unalignedfs.WithCompactionDuration(windowType.Session.Timeout.Duration))
+		compactor, err := unalignedfs.NewCompactor(ctx, &window.SharedUnalignedPartition, dfv1.DefaultGCEventsWALEventsPath, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath)
 		if err != nil {
 			return fmt.Errorf("failed to create compactor, %w", err)
 		}

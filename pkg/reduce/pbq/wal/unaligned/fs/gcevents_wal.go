@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	eventsFilePrefix  = "events-file"
+	eventsFilePrefix  = "events"
 	currentEventsFile = "current" + "-" + eventsFilePrefix
 )
 
@@ -50,6 +50,7 @@ type gcEventsWAL struct {
 	rotationEventsCount int           // rotation events count
 	curEventsCount      int           // current events count
 	fileCreationTime    time.Time     // file creation time
+	latestEndTime       time.Time     // latest end time of the window
 	log                 *zap.SugaredLogger
 }
 
@@ -66,6 +67,7 @@ func NewGCEventsWAL(ctx context.Context, opts ...GCEventsWALOption) (unaligned.G
 		rotationEventsCount: dfv1.DefaultGCEventsWALRotationEventsCount,
 		curEventsCount:      0,
 		fileCreationTime:    time.Now(),
+		latestEndTime:       time.UnixMilli(-1),
 		log:                 logging.FromContext(ctx),
 	}
 
@@ -118,7 +120,7 @@ func (g *gcEventsWAL) rotateEventsFile() error {
 
 // getEventsFilePath returns the events file path
 func (g *gcEventsWAL) getEventsFilePath() string {
-	return filepath.Join(g.eventsPath, eventsFilePrefix+"-"+fmt.Sprintf("%d", time.Now().UnixNano()))
+	return filepath.Join(g.eventsPath, eventsFilePrefix+"-"+fmt.Sprintf("%d-%d", time.Now().UnixNano(), g.latestEndTime.UnixMilli()))
 }
 
 // openEventsFile opens a new events file to write to
@@ -155,7 +157,7 @@ func (g *gcEventsWAL) PersistGCEvent(window window.TimedWindow) error {
 	}
 
 	// encode and write the deletion message
-	dBytes, err := g.encoder.encodeDeletionEvent(dms)
+	dBytes, err := g.encoder.encodeDeletionMessage(dms)
 	if err != nil {
 		return err
 	}
@@ -169,6 +171,11 @@ func (g *gcEventsWAL) PersistGCEvent(window window.TimedWindow) error {
 		if err = g.flushAndSync(); err != nil {
 			return err
 		}
+	}
+
+	// update the latest end time of the window
+	if window.EndTime().After(g.latestEndTime) {
+		g.latestEndTime = window.EndTime()
 	}
 
 	// if rotation events count is reached, or rotation duration is elapsed

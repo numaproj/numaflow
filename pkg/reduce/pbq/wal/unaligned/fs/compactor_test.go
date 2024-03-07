@@ -31,6 +31,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -421,6 +422,7 @@ func Test_buildCompactionKeyMap(t *testing.T) {
 		compactKeyMap:   make(map[string]int64),
 		gcEventsWALPath: eventDir,
 		dc:              newDecoder(),
+		log:             logging.FromContext(ctx),
 	}
 
 	eFiles, err := listFilesInDir(eventDir, currentWALPrefix, nil)

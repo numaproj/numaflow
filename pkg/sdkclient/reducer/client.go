@@ -18,6 +18,7 @@ package reducer
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
@@ -103,14 +104,15 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 				if !ok {
 					break outerLoop
 				}
-				if sendErr = stream.Send(datum); sendErr != nil {
+				if sendErr = stream.Send(datum); sendErr != nil && !errors.Is(sendErr, io.EOF) {
 					errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
+					return
 				}
 			}
 		}
+
 		// close the stream after sending all the messages
-		sendErr = stream.CloseSend()
-		if sendErr != nil {
+		if sendErr = stream.CloseSend(); sendErr != nil && !errors.Is(sendErr, io.EOF) {
 			errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
 		}
 	}()
@@ -128,7 +130,7 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 			default:
 				resp, recvErr = stream.Recv()
 				// if the stream is closed, close the responseCh return
-				if recvErr == io.EOF {
+				if errors.Is(recvErr, io.EOF) {
 					// nil channel will never be selected
 					errCh = nil
 					close(responseCh)

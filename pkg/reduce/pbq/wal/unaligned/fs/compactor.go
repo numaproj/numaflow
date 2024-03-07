@@ -26,6 +26,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,6 +63,7 @@ type compactor struct {
 	syncDuration        time.Duration
 	stopSignal          chan struct{}
 	doneCh              chan struct{}
+	latestWatermark     int64
 	log                 *zap.SugaredLogger
 }
 
@@ -84,6 +87,7 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, gcEventsPath s
 		compBufWriter:       bufio.NewWriter(nil),
 		doneCh:              make(chan struct{}),
 		stopSignal:          make(chan struct{}),
+		latestWatermark:     -1,
 		log:                 logging.FromContext(ctx),
 	}
 
@@ -136,7 +140,7 @@ func NewCompactor(ctx context.Context, partitionId *partition.ID, gcEventsPath s
 func (c *compactor) compactOnBootup(ctx context.Context) error {
 	c.log.Infow("Compacting on bootup")
 	// get all the GC events filesToReplay
-	eventFiles, err := listFilesInDir(c.gcEventsWALPath, currentWALPrefix, nil)
+	eventFiles, err := listFilesInDir(c.gcEventsWALPath, currentEventsFile, nil)
 	if err != nil {
 		return err
 	}
@@ -210,7 +214,7 @@ func (c *compactor) Stop() error {
 
 // getFilePath returns the file path for new file creation
 func (c *compactor) getFilePath(storePath string) string {
-	return filepath.Join(storePath, compactedPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixNano()))
+	return filepath.Join(storePath, compactedPrefix+"-"+fmt.Sprintf("%d-%d", time.Now().UnixNano(), c.latestWatermark))
 }
 
 // keepCompacting keeps compacting the data filesToReplay every compaction duration
@@ -257,12 +261,16 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 
 	// delete the events filesToReplay
 	for _, eventFile := range eventFiles {
-		if err = os.Remove(filepath.Join(c.gcEventsWALPath, eventFile.Name())); err != nil {
-			return err
+		// only delete the event files which has watermark less than the latest watermark of the compactor
+		// this is to ensure that we don't delete the events which are not compacted
+		if extractWmFromFileName(eventFile.Name()) < c.latestWatermark {
+			if err = os.Remove(filepath.Join(c.gcEventsWALPath, eventFile.Name())); err != nil {
+				return err
+			}
 		}
 	}
 
-	c.log.Infow("Compaction completed", zap.Duration("duration", time.Since(startTime)))
+	c.log.Infow("Compaction completed", zap.String("duration", time.Since(startTime).String()))
 	return nil
 }
 
@@ -334,9 +342,11 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	filesToReplay := make([]string, 0)
 	for _, compactedFile := range compactedFiles {
 		filesToReplay = append(filesToReplay, filepath.Join(c.compactedSegWALPath, compactedFile.Name()))
+		c.updateLatestWm(compactedFile.Name())
 	}
 	for _, dataFile := range segmentFiles {
 		filesToReplay = append(filesToReplay, filepath.Join(c.dataSegmentWALPath, dataFile.Name()))
+		c.updateLatestWm(dataFile.Name())
 	}
 
 	if len(filesToReplay) == 0 {
@@ -361,6 +371,23 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// updateLatestWm updates the latest watermark value
+func (c *compactor) updateLatestWm(fileName string) {
+	wm := extractWmFromFileName(fileName)
+	if c.latestWatermark < wm {
+		c.latestWatermark = wm
+	}
+}
+
+// extractWmFromFileName extracts the watermark from the file name
+func extractWmFromFileName(fileName string) int64 {
+	// fileName will be of format segment-<creation-time>-<watermark> or compacted-<creation-time>-<watermark> or events-<creation-time>-<watermark>
+	// we need to extract the watermark from the file name and update the latest watermark value.
+	var wm int64
+	wm, _ = strconv.ParseInt(strings.Split(fileName, "-")[2], 10, 64)
+	return wm
 }
 
 // compactFile compacts the given data file
@@ -400,7 +427,7 @@ readLoop:
 		}
 
 		// read the key
-		key := make([]byte, mp.KeyLen)
+		key := make([]rune, mp.KeyLen)
 		err = binary.Read(dp, binary.LittleEndian, &key)
 		if err != nil {
 			return err
@@ -461,7 +488,7 @@ func (c *compactor) writeToFile(header *readMessageHeaderPreamble, key string, p
 	}
 
 	// write the key
-	if err := binary.Write(buf, binary.LittleEndian, []byte(key)); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, []rune(key)); err != nil {
 		return err
 	}
 

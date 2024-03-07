@@ -37,11 +37,14 @@ type consumerHandler struct {
 
 // new handler initializes the channel for passing messages
 func newConsumerHandler(readChanSize int) *consumerHandler {
-	return &consumerHandler{
-		ready:    make(chan bool),
-		messages: make(chan *sarama.ConsumerMessage, readChanSize),
-		logger:   logging.NewLogger(),
+	c := &consumerHandler{
+		ready:        make(chan bool),
+		messages:     make(chan *sarama.ConsumerMessage, readChanSize),
+		logger:       logging.NewLogger(),
+		inflightAcks: make(chan bool),
 	}
+	close(c.inflightAcks)
+	return c
 }
 
 // Setup is run at the beginning of a new session, before ConsumeClaim

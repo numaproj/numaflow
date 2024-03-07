@@ -120,7 +120,7 @@ func (e *encoder) encodeMessage(message *isb.ReadMessage) ([]byte, error) {
 	}
 
 	// Write the combinedKey to the buffer
-	if err = binary.Write(buf, binary.LittleEndian, []byte(combinedKey)); err != nil {
+	if err = binary.Write(buf, binary.LittleEndian, []rune(combinedKey)); err != nil {
 		return nil, err
 	}
 
@@ -132,13 +132,12 @@ func (e *encoder) encodeMessage(message *isb.ReadMessage) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// encodeDeletionEvent encodes the given deletionMessage to a binary format.
-func (e *encoder) encodeDeletionEvent(message *deletionMessage) ([]byte, error) {
+// encodeDeletionMessage encodes the given deletionMessage to a binary format.
+func (e *encoder) encodeDeletionMessage(message *deletionMessage) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// calculate the checksum of the deletion message
 	checksum := calculateChecksum([]byte(fmt.Sprintf("%d:%d:%s:%s", message.St, message.Et, message.Slot, message.Key)))
-
 	cMessageHeader := deletionMessageHeaderPreamble{
 		St:       message.St,
 		Et:       message.Et,
@@ -158,7 +157,7 @@ func (e *encoder) encodeDeletionEvent(message *deletionMessage) ([]byte, error) 
 	}
 
 	// write the key
-	if err := binary.Write(buf, binary.LittleEndian, []byte(message.Key)); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, []rune(message.Key)); err != nil {
 		return nil, err
 	}
 

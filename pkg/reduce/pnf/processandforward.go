@@ -145,6 +145,7 @@ outerLoop:
 		select {
 		case err := <-errCh:
 			if errors.Is(err, context.Canceled) {
+				p.log.Infow("Context is canceled, stopping the processAndForward", zap.Error(err), zap.Any("partitionID", p.partitionId))
 				return
 			}
 			if err != nil {

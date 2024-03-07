@@ -28,7 +28,6 @@ import (
 
 const (
 	dMessageHeaderSize = 22
-	EntryHeaderSize    = 28
 )
 
 var (
@@ -86,7 +85,7 @@ func (d *decoder) decodeMessage(buf io.Reader) (*isb.ReadMessage, string, error)
 	}
 
 	// read the key
-	key := make([]byte, entryHeader.KeyLen)
+	key := make([]rune, entryHeader.KeyLen)
 	err = binary.Read(buf, binary.LittleEndian, &key)
 	if err != nil {
 		return nil, "", err
@@ -108,8 +107,8 @@ func (d *decoder) decodeMessage(buf io.Reader) (*isb.ReadMessage, string, error)
 func (d *decoder) decodeDeletionMessage(buf io.Reader) (*deletionMessage, int64, error) {
 	dms := deletionMessage{}
 
-	dMessageHeader := deletionMessageHeaderPreamble{}
-	if err := binary.Read(buf, binary.LittleEndian, &dMessageHeader); err != nil {
+	dMessageHeader := new(deletionMessageHeaderPreamble)
+	if err := binary.Read(buf, binary.LittleEndian, dMessageHeader); err != nil {
 		return nil, 0, err
 	}
 
@@ -125,7 +124,7 @@ func (d *decoder) decodeDeletionMessage(buf io.Reader) (*deletionMessage, int64,
 	dms.Slot = string(slot)
 
 	// read the key
-	var key = make([]byte, dMessageHeader.KLen)
+	var key = make([]rune, dMessageHeader.KLen)
 	if err := binary.Read(buf, binary.LittleEndian, key); err != nil {
 		return nil, 0, err
 	}
@@ -134,6 +133,7 @@ func (d *decoder) decodeDeletionMessage(buf io.Reader) (*deletionMessage, int64,
 
 	// compare the checksum
 	checksum := calculateChecksum([]byte(fmt.Sprintf("%d:%d:%s:%s", dms.St, dms.Et, dms.Slot, dms.Key)))
+
 	if checksum != dMessageHeader.Checksum {
 		return nil, 0, errChecksumMismatch
 	}

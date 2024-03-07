@@ -58,6 +58,7 @@ type unalignedWAL struct {
 	maxBatchSize            int64         // maxBatchSize is the maximum batch size before the data is synced to the disk
 	segmentRotationDuration time.Duration // segmentRotationDuration is the duration after which the segment is rotated
 	filesToReplay           []string
+	latestWm                time.Time
 	log                     *zap.SugaredLogger
 }
 
@@ -112,6 +113,7 @@ func NewUnalignedReadWriteWAL(ctx context.Context, filesToReplay []string, opts 
 		encoder:                 newEncoder(),
 		decoder:                 newDecoder(),
 		filesToReplay:           filesToReplay,
+		latestWm:                time.UnixMilli(-1),
 		log:                     logging.FromContext(ctx),
 	}
 
@@ -169,6 +171,11 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 
 	// only increase the offset when we successfully write for atomicity.
 	s.currWriteOffset += int64(wrote)
+
+	// update the watermark if its not -1
+	if message.Watermark.UnixMilli() != -1 {
+		s.latestWm = message.Watermark
+	}
 
 	// rotate the segment if the segment size is reached or segment duration is reached
 	if currTime.Sub(s.segmentCreateTime) >= s.segmentRotationDuration || s.currWriteOffset >= s.segmentSize {
@@ -263,7 +270,7 @@ func (s *unalignedWAL) openReadFile(filePath string) (*os.File, *partition.ID, e
 
 // openFileAndSetCurrent opens a new data file and sets the current pointer to the opened file.
 func (s *unalignedWAL) openFileAndSetCurrent() error {
-	s.log.Debugw("Opening new segment file")
+	s.log.Infow("Opening new segment file")
 
 	dataFilePath := filepath.Join(s.segmentWALPath, currentSegmentName)
 	var err error
@@ -324,7 +331,7 @@ func (s *unalignedWAL) rotateFile() error {
 
 // segmentFilePath creates the file path for the segment file located in the storage path.
 func (s *unalignedWAL) segmentFilePath(storePath string) string {
-	return filepath.Join(storePath, segmentPrefix+"-"+fmt.Sprintf("%d", time.Now().UnixNano()))
+	return filepath.Join(storePath, segmentPrefix+"-"+fmt.Sprintf("%d-%d", time.Now().UnixNano(), s.latestWm.UnixMilli()))
 }
 
 // flushAndSync flushes the buffered data to the writer and syncs the file to disk.

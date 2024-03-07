@@ -56,7 +56,7 @@ func TestEncodingAndDecoding(t *testing.T) {
 		Key:  "key1:key2",
 	}
 
-	bytes, err = ec.encodeDeletionEvent(dMsg)
+	bytes, err = ec.encodeDeletionMessage(dMsg)
 	assert.NoError(t, err)
 	_, err = fp.Write(bytes)
 	assert.NoError(t, err)
