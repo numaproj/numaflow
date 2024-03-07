@@ -37,10 +37,17 @@ type consumerHandler struct {
 
 // new handler initializes the channel for passing messages
 func newConsumerHandler(readChanSize int) *consumerHandler {
+	// Initializing the inflightAcks channel to closed channel instead of nil will ensure that
+	// the Cleanup func below will not hang on the inflight acks to be completed in the case
+	// the Ack func was not called due to no messages being consumed.
+	var inflightAcks = make(chan bool)
+	close(inflightAcks)
+
 	return &consumerHandler{
-		ready:    make(chan bool),
-		messages: make(chan *sarama.ConsumerMessage, readChanSize),
-		logger:   logging.NewLogger(),
+		inflightAcks: inflightAcks,
+		ready:        make(chan bool),
+		messages:     make(chan *sarama.ConsumerMessage, readChanSize),
+		logger:       logging.NewLogger(),
 	}
 }
 
