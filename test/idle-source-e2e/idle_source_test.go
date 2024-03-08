@@ -59,8 +59,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 
 	done := make(chan struct{})
 	go func() {
-		// publish messages to source vertex, with event time starting from 1000
-		startTime := 1000
+		// publish messages to source vertex, with event time starting from 0
+		startTime := 0
 		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():
@@ -68,8 +68,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 			case <-done:
 				return
 			default:
-				eventTime := strconv.Itoa(startTime + i*1000)
-				// SendMessageTo will publish the message to only one replica in case of multiple replicas.
+				startTime = startTime + 1000
+				eventTime := strconv.Itoa(startTime)
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
@@ -81,8 +81,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	w.Expect().
-		SinkContains("sink", "20", WithTimeout(120*time.Second)).
-		SinkContains("sink", "40", WithTimeout(120*time.Second))
+		SinkContains("sink", "20").
+		SinkContains("sink", "40")
 	done <- struct{}{}
 }
 

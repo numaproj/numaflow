@@ -1584,11 +1584,11 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb
 	index := int32(0)
 	for key, partitionedBuffers := range toBuffers {
 		publishEntity := entity.NewProcessorEntity(key)
-		store, _ := wmstore.BuildInmemWatermarkStore(ctx, key)
-		hbWatcherCh, _ := store.HeartbeatStore().Watch(ctx)
-		otWatcherCh, _ := store.OffsetTimelineStore().Watch(ctx)
-		otStores[key] = store.OffsetTimelineStore()
-		p := publish.NewPublish(ctx, publishEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		wmStore, _ := wmstore.BuildInmemWatermarkStore(ctx, key)
+		hbWatcherCh := wmStore.HeartbeatStore().Watch(ctx)
+		otWatcherCh := wmStore.OffsetTimelineStore().Watch(ctx)
+		otStores[key] = wmStore.OffsetTimelineStore()
+		p := publish.NewPublish(ctx, publishEntity, wmStore, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 
 		go func() {
