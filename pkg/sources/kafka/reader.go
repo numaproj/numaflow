@@ -18,6 +18,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -416,9 +417,14 @@ func (r *kafkaSource) startConsumer() {
 			// server-side re-balance happens, the consumer session will need to be
 			// recreated to get the new claims
 			if conErr := client.Consume(r.lifecycleCtx, []string{r.topic}, r.handler); conErr != nil {
+				if errors.Is(err, sarama.ErrClosedConsumerGroup) {
+					return
+				}
+
 				// Panic on errors to let it crash and restart the process
 				r.logger.Panicw("Kafka consumer failed with error: ", zap.Error(conErr))
 			}
+
 			// check if context was cancelled, signaling that the consumer should stop
 			if r.lifecycleCtx.Err() != nil {
 				return
