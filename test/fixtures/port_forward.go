@@ -68,7 +68,7 @@ func PodPortForward(config *rest.Config, namespace, podName string, localPort, r
 			Duration: time.Second * 1,
 		}
 
-		_ = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
+		err = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
 			err = fw.ForwardPorts()
 			if err == nil {
 				return true, nil

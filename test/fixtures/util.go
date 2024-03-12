@@ -423,7 +423,7 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 		Duration: time.Second * 1,
 	}
 
-	_ = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
+	err = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
 		stream, err = client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
 		if err == nil {
 			return true, nil

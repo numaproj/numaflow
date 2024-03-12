@@ -215,7 +215,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), daemonClient)
 	}
 
-	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := getBufferInfos(ctx, key, daemonClient, pl, vertex)
+	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := getBufferInfos(ctx, daemonClient, pl, vertex)
 	if err != nil {
 		err := fmt.Errorf("error while fetching buffer info, %w", err)
 		return err
@@ -351,7 +351,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	return nil
 }
 
-func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, partitionProcessingRate []float64, partitionPending []int64, partitionBufferLengths []int64, partitionAvailableBufferLengths []int64) int32 {
+func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partitionProcessingRate []float64, partitionPending []int64, partitionBufferLengths []int64, partitionAvailableBufferLengths []int64) int32 {
 	maxDesired := int32(1)
 	// We calculate the max desired replicas based on the pending messages and processing rate for each partition.
 	for i := 0; i < len(partitionPending); i++ {
@@ -507,7 +507,6 @@ func KeyOfVertex(vertex dfv1.Vertex) string {
 
 func getBufferInfos(
 	ctx context.Context,
-	key string,
 	d *daemonclient.DaemonClient,
 	pl *dfv1.Pipeline,
 	vertex *dfv1.Vertex,

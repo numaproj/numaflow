@@ -60,7 +60,6 @@ func NewPipelineMetadataQuery(
 	pipeline *v1alpha1.Pipeline,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
 	rater rater.Ratable) (*PipelineMetadataQuery, error) {
-	var err error
 	ps := PipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
@@ -73,9 +72,6 @@ func NewPipelineMetadataQuery(
 		watermarkFetchers: wmFetchers,
 		rater:             rater,
 		healthChecker:     NewHealthChecker(pipeline, isbSvcClient),
-	}
-	if err != nil {
-		return nil, err
 	}
 	return &ps, nil
 }
