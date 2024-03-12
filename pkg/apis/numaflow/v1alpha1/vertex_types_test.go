@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 )
 
@@ -144,9 +143,9 @@ func TestGetVertexReplicas(t *testing.T) {
 	v.Spec.FromEdges = []CombinedEdge{
 		{Edge: Edge{From: "a", To: "b"}},
 	}
-	v.Spec.Replicas = pointer.Int32(5)
+	v.Spec.Replicas = ptr.To[int32](5)
 	assert.Equal(t, 1, v.GetReplicas())
-	v.Spec.Replicas = pointer.Int32(1000)
+	v.Spec.Replicas = ptr.To[int32](1000)
 	assert.Equal(t, 1, v.GetReplicas())
 	v.Spec.UDF.GroupBy = nil
 	assert.Equal(t, 1000, v.GetReplicas())
@@ -209,10 +208,10 @@ func TestGetPodSpec(t *testing.T) {
 			SecurityContext:              &corev1.PodSecurityContext{},
 			ImagePullSecrets:             []corev1.LocalObjectReference{{Name: "name"}},
 			PriorityClassName:            "pname",
-			Priority:                     pointer.Int32(111),
+			Priority:                     ptr.To[int32](111),
 			ServiceAccountName:           "sa",
-			RuntimeClassName:             pointer.String("run"),
-			AutomountServiceAccountToken: pointer.Bool(true),
+			RuntimeClassName:             ptr.To[string]("run"),
+			AutomountServiceAccountToken: ptr.To[bool](true),
 			DNSPolicy:                    corev1.DNSClusterFirstWithHostNet,
 			DNSConfig:                    &corev1.PodDNSConfig{Nameservers: []string{"aaa.aaa"}},
 		}
@@ -566,8 +565,8 @@ func Test_Scale_Parameters(t *testing.T) {
 	tbu := uint32(33)
 	zrss := uint32(44)
 	s = Scale{
-		Min:                      pointer.Int32(2),
-		Max:                      pointer.Int32(4),
+		Min:                      ptr.To[int32](2),
+		Max:                      ptr.To[int32](4),
 		ScaleUpCooldownSeconds:   &upcds,
 		ScaleDownCooldownSeconds: &downcds,
 		LookbackSeconds:          &lbs,
@@ -585,6 +584,6 @@ func Test_Scale_Parameters(t *testing.T) {
 	assert.Equal(t, int(tbu), s.GetTargetBufferAvailability())
 	assert.Equal(t, int(tps), s.GetTargetProcessingSeconds())
 	assert.Equal(t, int(zrss), s.GetZeroReplicaSleepSeconds())
-	s.Max = pointer.Int32(500)
+	s.Max = ptr.To[int32](500)
 	assert.Equal(t, int32(500), s.GetMaxReplicas())
 }
