@@ -302,7 +302,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 
 	// write to isb with infinite exponential backoff (until shutdown is triggered)
 	var offsets []isb.Offset
-	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
+	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func(_ context.Context) (done bool, err error) {
 		var writeErrs []error
 		var failedMessages []isb.Message
 		offsets, writeErrs = p.toBuffers[edgeName][partition].Write(ctx, writeMessages)

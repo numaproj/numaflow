@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
@@ -150,7 +150,7 @@ func TestIsVertexHealthy(t *testing.T) {
 		// Create a fake vertex in failed state
 		vertex := fakeVertex(vertexName, dfv1.VertexPhaseFailed)
 		// Update the replica count to 2
-		vertex.Spec.Replicas = pointer.Int32(2)
+		vertex.Spec.Replicas = ptr.To[int32](2)
 
 		// Create fake handler
 		h := &handler{

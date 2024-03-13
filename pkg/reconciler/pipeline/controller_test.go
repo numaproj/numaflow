@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -213,7 +213,7 @@ func Test_buildVertices(t *testing.T) {
 func Test_buildReducesVertices(t *testing.T) {
 	pl := testReducePipeline.DeepCopy()
 	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
-	pl.Spec.Vertices[1].Partitions = pointer.Int32(2)
+	pl.Spec.Vertices[1].Partitions = ptr.To[int32](2)
 	r := buildVertices(pl)
 	assert.Equal(t, 6, len(r))
 	_, existing := r[pl.Name+"-"+pl.Spec.Vertices[1].Name]
@@ -240,7 +240,7 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 			recorder: record.NewFakeRecorder(64),
 		}
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[0].Scale.Min = pointer.Int32(3)
+		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](3)
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
 		_, err = r.pausePipeline(ctx, testObj)
@@ -426,7 +426,7 @@ func Test_buildISBBatchJob(t *testing.T) {
 					Resources: resources,
 					Env:       []corev1.EnvVar{env},
 					SecurityContext: &corev1.SecurityContext{
-						Privileged: pointer.Bool(false),
+						Privileged: ptr.To[bool](false),
 					},
 				},
 				AbstractPodTemplate: dfv1.AbstractPodTemplate{

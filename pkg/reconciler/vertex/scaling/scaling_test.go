@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -44,7 +44,7 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 	one := uint32(1)
 	src := &dfv1.Vertex{
 		Spec: dfv1.VertexSpec{
-			Replicas: pointer.Int32(2),
+			Replicas: ptr.To[int32](2),
 			AbstractVertex: dfv1.AbstractVertex{
 				Source: &dfv1.Source{
 					Kafka: &dfv1.KafkaSource{},
@@ -69,7 +69,7 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 
 	udf := &dfv1.Vertex{
 		Spec: dfv1.VertexSpec{
-			Replicas: pointer.Int32(2),
+			Replicas: ptr.To[int32](2),
 			AbstractVertex: dfv1.AbstractVertex{
 				UDF: &dfv1.UDF{},
 			},
@@ -93,7 +93,7 @@ func Test_desiredReplicasMultiplePartitions(t *testing.T) {
 	s := NewScaler(cl)
 	udf := &dfv1.Vertex{
 		Spec: dfv1.VertexSpec{
-			Replicas: pointer.Int32(2),
+			Replicas: ptr.To[int32](2),
 			AbstractVertex: dfv1.AbstractVertex{
 				UDF: &dfv1.UDF{},
 			},

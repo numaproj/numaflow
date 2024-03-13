@@ -66,7 +66,7 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 		Steps:    6,
 		Duration: time.Second * 5,
 	}
-	_ = wait.ExponentialBackoff(retryBackOff, func() (done bool, err error) {
+	err = wait.ExponentialBackoff(retryBackOff, func() (done bool, err error) {
 		resp, err = http.Post(url, "application/json", strings.NewReader(body))
 		if err == nil && resp.StatusCode < 300 {
 			return true, nil

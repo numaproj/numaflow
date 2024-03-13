@@ -6,7 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1/fake"
@@ -145,7 +145,7 @@ func fakeVertex(name string, phase dfv1.VertexPhase) *dfv1.Vertex {
 			Replicas: 1,
 		},
 		Spec: dfv1.VertexSpec{
-			Replicas: pointer.Int32(1),
+			Replicas: ptr.To[int32](1),
 		},
 	}
 	return v

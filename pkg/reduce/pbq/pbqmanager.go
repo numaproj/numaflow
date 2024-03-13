@@ -147,7 +147,7 @@ func (m *Manager) ShutDown(ctx context.Context) {
 			defer wg.Done()
 			var ctxClosedErr error
 			var attempt int
-			ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, PBQCloseBackOff, func() (done bool, err error) {
+			ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, PBQCloseBackOff, func(_ context.Context) (done bool, err error) {
 				closeErr := q.Close()
 				if closeErr != nil {
 					attempt += 1
