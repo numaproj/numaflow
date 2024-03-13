@@ -153,10 +153,24 @@ const (
 	// PVC mount path for PBQ
 	PathPBQMount = "/var/numaflow/pbq"
 
-	// Default persistent store options
-	DefaultStoreSyncDuration  = 2 * time.Second        // Default sync duration for pbq
-	DefaultStoreMaxBufferSize = 100000                 // Default buffer size for pbq in bytes
-	DefaultStorePath          = PathPBQMount + "/wals" // Default store path
+	// Default WAL options
+	DefaultWALSyncDuration            = 30 * time.Second       // Default sync duration for pbq
+	DefaultWALMaxSyncSize             = 5 * 1024 * 1024        // Default size to wait for an explicit sync
+	DefaultSegmentWALPath             = PathPBQMount + "/wals" // Default segment wal path
+	DefaultWALSegmentRotationDuration = 60 * time.Second       // Default segment rotation duration
+	DefaultWALSegmentSize             = 30 * 1024 * 1024       // Default segment size
+
+	// Default GC-events WAL options
+	DefaultGCEventsWALRotationDuration    = 60 * time.Second         // Default rotation duration for the GC tracker
+	DefaultGCEventsWALEventsPath          = PathPBQMount + "/events" // Default store path for operations
+	DefaultGCEventsWALSyncDuration        = 30 * time.Second         // Default sync duration for the GC tracker
+	DefaultGCEventsWALRotationEventsCount = 3000                     // Default rotation events count for the GC tracker
+
+	// Default WAL Compactor options
+	DefaultWALCompactorSyncDuration = 30 * time.Second               // Default sync duration for the compactor
+	DefaultWALCompactorMaxFileSize  = 30 * 1024 * 1024               // Default max file size for the compactor
+	DefaultWALCompactionDuration    = 60 * time.Second               // Default compaction duration
+	DefaultCompactWALPath           = PathPBQMount + "/compact-wals" // Default compaction wal path
 
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"

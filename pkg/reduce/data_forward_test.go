@@ -34,8 +34,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/memory"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
@@ -388,7 +388,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(100))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(100))
 	// create pbqManager
 	pbqManager, err := pbq.NewManager(child, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
@@ -478,7 +478,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -694,7 +694,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -779,7 +779,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -868,7 +868,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -954,7 +954,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1040,7 +1040,7 @@ func TestReduceDataForward_FixedSumWithDifferentKeys(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1147,7 +1147,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1252,7 +1252,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1343,7 +1343,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(100))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(100))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
@@ -1394,9 +1394,9 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		}
 	}
 
-	var discoveredStores []store.Store
+	var discoveredStores []wal.WAL
 	for {
-		discoveredStores, _ = storeManager.DiscoverStores(ctx)
+		discoveredStores, _ = storeManager.DiscoverWALs(ctx)
 
 		if len(discoveredStores) == 1 {
 			break
@@ -1441,7 +1441,7 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 	}
 
 	// create store manager
-	storeManager := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager

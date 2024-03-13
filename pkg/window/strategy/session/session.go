@@ -122,6 +122,8 @@ func cloneWindow(win window.TimedWindow) *sessionWindow {
 		endTime:   win.EndTime(),
 		slot:      win.Slot(),
 		keys:      win.Keys(),
+		partition: win.Partition(),
+		id:        win.ID(),
 	}
 }
 

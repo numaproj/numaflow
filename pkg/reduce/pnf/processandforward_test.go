@@ -31,7 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/memory"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
@@ -116,12 +116,12 @@ func TestWriteToBuffer(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			var pbqManager *pbq.Manager
-			pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(), window.Aligned)
+			pbqManager, _ = pbq.NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemManager(), window.Aligned)
 			toBuffer := map[string][]isb.BufferWriter{
 				"buffer": value.buffers,
 			}
 			pf, _ := createProcessAndForwardAndOTStore(ctx, value.name, pbqManager, toBuffer)
-			windowResponse := testutils.BuildTestWriteMessages(int64(15), testStartTime)
+			windowResponse := testutils.BuildTestWriteMessages(int64(15), testStartTime, nil)
 			pf.writeToBuffer(ctx, "buffer", 0, windowResponse)
 		})
 	}
@@ -200,11 +200,6 @@ func TestPnFHandleAlignedWindowResponses(t *testing.T) {
 
 	wg.Wait()
 
-	for _, writeOffsets := range latestWriteOffsets {
-		for _, offsets := range writeOffsets {
-			println(offsets[0].Sequence())
-		}
-	}
 	assert.Equal(t, true, test1Buffer11.IsFull())
 	assert.Equal(t, true, test1Buffer12.IsFull())
 	assert.Equal(t, true, test1Buffer21.IsFull())
