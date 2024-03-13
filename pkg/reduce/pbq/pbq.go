@@ -26,7 +26,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -36,7 +36,7 @@ type PBQ struct {
 	vertexName    string
 	pipelineName  string
 	vertexReplica int32
-	store         store.Store
+	store         wal.WAL
 	output        chan *window.TimedWindowRequest
 	cob           bool // cob to avoid panic in case writes happen after close of book
 	PartitionID   partition.ID
@@ -71,10 +71,6 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, per
 	case p.output <- request:
 		switch request.Operation {
 		case window.Open, window.Append, window.Expand:
-			// this is a blocking call, ctx.Done() will be ignored.
-			if p.windowType == window.Unaligned {
-				return nil
-			}
 			// during replay we do not have to persist
 			if persist {
 				writeErr = p.store.Write(request.ReadMessage)

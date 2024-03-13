@@ -38,7 +38,7 @@ func TestNewSimpleBuffer(t *testing.T) {
 	assert.Equal(t, sb.IsEmpty(), true)
 
 	startTime := time.Unix(1636470000, 0)
-	writeMessages := testutils.BuildTestWriteMessages(count, startTime)
+	writeMessages := testutils.BuildTestWriteMessages(count, startTime, nil)
 	sb.Write(ctx, writeMessages[0:5])
 	assert.Equal(t, int64(5), sb.writeIdx)
 	assert.Equal(t, int64(0), sb.readIdx)
@@ -88,7 +88,7 @@ func TestNewSimpleBuffer_BufferFullWritingStrategyIsDiscard(t *testing.T) {
 	assert.Equal(t, sb.IsEmpty(), true)
 
 	startTime := time.Unix(1636470000, 0)
-	writeMessages := testutils.BuildTestWriteMessages(count, startTime)
+	writeMessages := testutils.BuildTestWriteMessages(count, startTime, nil)
 
 	// try to write 3 messages, it should fail (we have only space for 2)
 	// the first 2 messages should be written, the last one should be discarded and returns us a NoRetryableError.

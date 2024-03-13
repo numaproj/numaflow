@@ -29,7 +29,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 	"github.com/numaproj/numaflow/pkg/window"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -40,7 +40,7 @@ type Manager struct {
 	vertexName    string
 	pipelineName  string
 	vertexReplica int32
-	storeProvider store.Manager
+	storeProvider wal.Manager
 	pbqOptions    *options
 	pbqMap        map[string]*PBQ
 	log           *zap.SugaredLogger
@@ -53,7 +53,7 @@ type Manager struct {
 
 // NewManager returns new instance of manager
 // We don't intend this to be called by multiple routines.
-func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider store.Manager, windowType window.Type, opts ...PBQOption) (*Manager, error) {
+func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider wal.Manager, windowType window.Type, opts ...PBQOption) (*Manager, error) {
 	pbqOpts := DefaultOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -79,7 +79,7 @@ func NewManager(ctx context.Context, vertexName string, pipelineName string, vr 
 
 // CreateNewPBQ creates new pbq for a partition
 func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
-	persistentStore, err := m.storeProvider.CreateStore(ctx, partitionID)
+	persistentStore, err := m.storeProvider.CreateWAL(ctx, partitionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a PBQ store, %w", err)
 	}
@@ -196,7 +196,7 @@ func (m *Manager) deregister(partitionID partition.ID) error {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(m.vertexReplica)),
 	}).Dec()
 
-	return m.storeProvider.DeleteStore(partitionID)
+	return m.storeProvider.DeleteWAL(partitionID)
 }
 
 func (m *Manager) getPBQs() []*PBQ {

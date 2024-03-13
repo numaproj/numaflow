@@ -95,7 +95,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			defer jw.Close()
 			// Add some data
 			startTime := time.Unix(1636470000, 0)
-			messages := testutils.BuildTestWriteMessages(int64(10), startTime)
+			messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
 			// Verify if buffer is not full.
 			for jw.isFull.Load() {
 				select {
@@ -223,7 +223,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	}
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(2), startTime)
+	messages := testutils.BuildTestWriteMessages(int64(2), startTime, nil)
 	// Add some data to buffer using write and verify no writes are performed when buffer is full
 	_, errs := jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
@@ -239,7 +239,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
-	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0))
+	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0), nil)
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
@@ -280,7 +280,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	}
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(2), startTime)
+	messages := testutils.BuildTestWriteMessages(int64(2), startTime, nil)
 	// Add some data to buffer using write and verify no writes are performed when buffer is full
 	_, errs := jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
@@ -296,7 +296,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
-	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0))
+	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0), nil)
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
