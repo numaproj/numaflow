@@ -120,14 +120,22 @@ func (r *ReduceSuite) TestSimpleSessionPipeline() {
 	done <- struct{}{}
 }
 
-func (r *ReduceSuite) TestSimpleSessionKeyedPipeline() {
+func (r *ReduceSuite) TestSimpleSessionKeyedPipelineGo() {
+	r.testSimpleSessionKeyedPipeline("go")
+}
+
+func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
+	r.testSimpleSessionKeyedPipeline("java")
+}
+
+func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-keyed-counter-pipeline.yaml").
+	w := r.Given().Pipeline(fmt.Sprintf("@testdata/session-reduce/simple-session-keyed-counter-pipeline-%s.yaml", lang)).
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "simple-session-counter"
+	fmt.Sprintf("simple-session-counter-%s", lang)
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
