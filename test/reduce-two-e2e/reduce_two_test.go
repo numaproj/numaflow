@@ -187,7 +187,7 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	w.Expect().VertexPodsRunning()
 
 	args := "kubectl delete po -n numaflow-system -l " +
-		"numaflow.numaproj.io/pipeline-name=simple-session-counter,numaflow.numaproj.io/vertex-name=compute-count"
+		"numaflow.numaproj.io/pipeline-name=simple-session-counter-go,numaflow.numaproj.io/vertex-name=compute-count"
 
 	// Kill the reducer pods before processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
