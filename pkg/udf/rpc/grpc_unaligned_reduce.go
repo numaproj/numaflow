@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	sessionreducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/sessionreduce/v1"
@@ -37,11 +38,15 @@ import (
 
 // GRPCBasedUnalignedReduce is a reduce applier that uses gRPC client to invoke the session reduce UDF. It implements the applier.ReduceApplier interface.
 type GRPCBasedUnalignedReduce struct {
-	client sessionreducer.Client
+	client     sessionreducer.Client
+	resultsMap map[string]int
 }
 
 func NewGRPCBasedUnalignedReduce(client sessionreducer.Client) *GRPCBasedUnalignedReduce {
-	return &GRPCBasedUnalignedReduce{client: client}
+	return &GRPCBasedUnalignedReduce{
+		client:     client,
+		resultsMap: make(map[string]int),
+	}
 }
 
 // IsHealthy checks if the map udf is healthy.
@@ -101,7 +106,7 @@ func (u *GRPCBasedUnalignedReduce) ApplyReduce(ctx context.Context, partitionID 
 					close(responseCh)
 					return
 				}
-				responseCh <- parseSessionReduceResponse(result)
+				responseCh <- u.parseSessionReduceResponse(result)
 			case err := <-reduceErrCh:
 				// ctx.Done() event will be handled by the AsyncReduceFn method
 				// so we don't need a separate case for ctx.Done() here
@@ -197,13 +202,37 @@ func createUnalignedReduceRequest(windowRequest *window.TimedWindowRequest) *ses
 	return d
 }
 
-func parseSessionReduceResponse(response *sessionreducepb.SessionReduceResponse) *window.TimedWindowResponse {
+// parseSessionReduceResponse receives a SessionReduceResponse and parses it into a TimedWindowResponse
+func (u *GRPCBasedUnalignedReduce) parseSessionReduceResponse(response *sessionreducepb.SessionReduceResponse) *window.TimedWindowResponse {
+
+	rw := response.GetKeyedWindow()
 	result := response.GetResult()
+
+	start := rw.GetStart().AsTime()
+	end := rw.GetEnd().AsTime()
+
+	// generate the unique Id for the window to keep track of the response count for the window using the resultsMap
+	uniqueId := fmt.Sprintf("%d:%d:%s:%s", start.UnixMilli(), end.UnixMilli(), rw.GetSlot(), strings.Join(rw.GetKeys(), ":"))
+
+	// update the message count in resultsMap and get the message ID
+	msgId := u.updateAndGetMsgId(uniqueId)
+
+	// If EOF is received, delete the related entry in resultsMap and return a final response
+	if response.GetEOF() {
+		delete(u.resultsMap, uniqueId)
+		return &window.TimedWindowResponse{
+			Window: window.NewUnalignedTimedWindow(start, end, rw.GetSlot(), rw.GetKeys()),
+			EOF:    true,
+		}
+	}
+
+	// Construct the write message from the response
 	taggedMessage := &isb.WriteMessage{
 		Message: isb.Message{
 			Header: isb.Header{
+				ID: msgId,
 				MessageInfo: isb.MessageInfo{
-					EventTime: response.GetKeyedWindow().GetEnd().AsTime().Add(-1 * time.Millisecond),
+					EventTime: end.Add(-1 * time.Millisecond),
 					IsLate:    false,
 				},
 				Keys: result.GetKeys(),
@@ -211,19 +240,28 @@ func parseSessionReduceResponse(response *sessionreducepb.SessionReduceResponse)
 			Body: isb.Body{
 				Payload: result.GetValue(),
 			},
-			// FIXME: dedup for unaligned windows
 		},
 		Tags: result.GetTags(),
 	}
 
+	// Return the final TimedWindowResponse
 	return &window.TimedWindowResponse{
 		WriteMessage: taggedMessage,
-		Window: window.NewUnalignedTimedWindow(
-			response.GetKeyedWindow().GetStart().AsTime(),
-			response.GetKeyedWindow().GetEnd().AsTime(),
-			response.GetKeyedWindow().GetSlot(),
-			response.GetKeyedWindow().GetKeys(),
-		),
-		EOF: response.GetEOF(),
+		Window:       window.NewUnalignedTimedWindow(start, end, rw.GetSlot(), rw.GetKeys()),
+		EOF:          response.GetEOF(),
 	}
+}
+
+// updateMessageIDCount generates a unique message ID with count and increments the count in resultsMap.
+func (u *GRPCBasedUnalignedReduce) updateAndGetMsgId(baseMsgId string) string {
+	val, ok := u.resultsMap[baseMsgId]
+
+	if ok {
+		val++
+	} else {
+		val = 1
+	}
+
+	u.resultsMap[baseMsgId] = val
+	return fmt.Sprintf("%s:%d", baseMsgId, val)
 }
