@@ -77,6 +77,9 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		opts               []reduce.Option
 		udfApplier         applier.ReduceApplier
 		healthChecker      metrics.HealthChecker
+		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
+		vertexName         = u.VertexInstance.Vertex.Spec.AbstractVertex.Name
+		vertexReplica      = u.VertexInstance.Replica
 	)
 
 	log := logging.FromContext(ctx)
@@ -308,7 +311,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, walManager, windower.Type())
+	pbqManager, err := pbq.NewManager(ctx, vertexName, pipelineName, vertexReplica, walManager, windower.Type())
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)
@@ -330,7 +333,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	// create a gc events tracker which tracks the gc events, will be used by the pnf
 	// to track the gc events and the compactor will delete the persisted messages based on the gc events
 	if windowType.Session != nil {
-		gcEventsTracker, err := unalignedfs.NewGCEventsWAL(ctx)
+		gcEventsTracker, err := unalignedfs.NewGCEventsWAL(ctx, pipelineName, vertexName, vertexReplica)
 		if err != nil {
 			return fmt.Errorf("failed to create gc events tracker, %w", err)
 		}
@@ -346,7 +349,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 		pnfOption = append(pnfOption, pnf.WithGCEventsTracker(gcEventsTracker), pnf.WithWindowType(window.Unaligned))
 
-		compactor, err := unalignedfs.NewCompactor(ctx, &window.SharedUnalignedPartition, dfv1.DefaultGCEventsWALEventsPath, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath)
+		compactor, err := unalignedfs.NewCompactor(ctx, pipelineName, vertexName, vertexReplica, &window.SharedUnalignedPartition, dfv1.DefaultGCEventsWALEventsPath, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath)
 		if err != nil {
 			return fmt.Errorf("failed to create compactor, %w", err)
 		}

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +41,9 @@ const (
 )
 
 type gcEventsWAL struct {
+	pipelineName        string        // pipeline name
+	vertexName          string        // vertex name
+	replicaIndex        int32         // replica index
 	eventsPath          string        // dir path to the events file
 	currEventsFile      *os.File      // current events file to write to
 	eventsBufWriter     *bufio.Writer // buffer writer for the events file
@@ -55,8 +59,11 @@ type gcEventsWAL struct {
 }
 
 // NewGCEventsWAL returns a new GCEventsWAL
-func NewGCEventsWAL(ctx context.Context, opts ...GCEventsWALOption) (unaligned.GCEventsWAL, error) {
+func NewGCEventsWAL(ctx context.Context, pipelineName string, vertexName string, replicaIndex int32, opts ...GCEventsWALOption) (unaligned.GCEventsWAL, error) {
 	gw := &gcEventsWAL{
+		pipelineName:        pipelineName,
+		vertexName:          vertexName,
+		replicaIndex:        replicaIndex,
 		syncDuration:        dfv1.DefaultGCEventsWALSyncDuration,
 		rotationDuration:    dfv1.DefaultGCEventsWALRotationDuration,
 		eventsPath:          dfv1.DefaultGCEventsWALEventsPath,
@@ -80,6 +87,7 @@ func NewGCEventsWAL(ctx context.Context, opts ...GCEventsWALOption) (unaligned.G
 	if _, err = os.Stat(gw.eventsPath); os.IsNotExist(err) {
 		err = os.Mkdir(gw.eventsPath, 0755)
 		if err != nil {
+			gcWALErrors.WithLabelValues(gw.pipelineName, gw.vertexName, strconv.Itoa(int(gw.replicaIndex)), "createDir").Inc()
 			return nil, err
 		}
 	}
@@ -113,7 +121,7 @@ func (g *gcEventsWAL) rotateEventsFile() error {
 	if err = os.Rename(filepath.Join(g.eventsPath, currentEventsFile), newFilePath); err != nil {
 		return err
 	}
-
+	gcWALFileEventsCount.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex))).Observe(float64(g.curEventsCount))
 	g.log.Debugw("Rotated the gc events segment", zap.String("new-events-file", newFilePath))
 	return g.openEventsFile()
 }
@@ -139,6 +147,8 @@ func (g *gcEventsWAL) openEventsFile() error {
 	} else {
 		g.eventsBufWriter.Reset(g.currEventsFile)
 	}
+
+	gcWALFilesCount.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex))).Inc()
 	return nil
 }
 
@@ -146,6 +156,7 @@ func (g *gcEventsWAL) openEventsFile() error {
 func (g *gcEventsWAL) PersistGCEvent(window window.TimedWindow) error {
 
 	if g.currEventsFile == nil {
+		gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "fileNotOpen").Inc()
 		return fmt.Errorf("events file is not open")
 	}
 
@@ -159,16 +170,19 @@ func (g *gcEventsWAL) PersistGCEvent(window window.TimedWindow) error {
 	// encode and write the deletion message
 	dBytes, err := g.encoder.encodeDeletionMessage(dms)
 	if err != nil {
+		gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "encode").Inc()
 		return err
 	}
 
 	if err = binary.Write(g.eventsBufWriter, binary.LittleEndian, dBytes); err != nil {
+		gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "write").Inc()
 		return err
 	}
 
 	// sync the file if the sync duration is elapsed
 	if time.Since(g.prevSyncedTime) >= g.syncDuration {
 		if err = g.flushAndSync(); err != nil {
+			gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "sync").Inc()
 			return err
 		}
 	}
@@ -183,9 +197,13 @@ func (g *gcEventsWAL) PersistGCEvent(window window.TimedWindow) error {
 	g.curEventsCount++
 	if g.curEventsCount >= g.rotationEventsCount || time.Since(g.fileCreationTime) >= g.rotationDuration {
 		if err = g.rotateEventsFile(); err != nil {
+			gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "rotate").Inc()
 			return err
 		}
 	}
+
+	gcWALEntriesCount.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex))).Inc()
+	gcWALBytesCount.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex))).Add(float64(len(dBytes)))
 
 	return nil
 }
@@ -204,10 +222,12 @@ func (g *gcEventsWAL) Close() error {
 	g.log.Info("Closing the GC events WAL")
 
 	if err := g.flushAndSync(); err != nil {
+		gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "flush").Inc()
 		return err
 	}
 
 	if err := g.currEventsFile.Close(); err != nil {
+		gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "close").Inc()
 		return err
 	}
 
@@ -217,13 +237,16 @@ func (g *gcEventsWAL) Close() error {
 	if g.curEventsCount == 0 {
 		// delete the current events file if no events are written
 		if err := os.Remove(g.currEventsFile.Name()); err != nil {
+			gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "delete").Inc()
 			return err
 		}
+		gcWALFilesCount.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex))).Dec()
 		return nil
 	}
 
 	// rename the current events file to the events file
 	if err := os.Rename(filepath.Join(g.eventsPath, currentEventsFile), g.getEventsFilePath()); err != nil {
+		gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "rename").Inc()
 		return err
 	}
 

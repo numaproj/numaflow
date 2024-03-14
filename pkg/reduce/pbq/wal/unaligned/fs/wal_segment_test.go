@@ -57,7 +57,7 @@ func TestUnalignedWAL_Write(t *testing.T) {
 	}(compactDir)
 
 	partitionId := window.SharedUnalignedPartition
-	s, err := NewUnalignedWriteOnlyWAL(ctx, &partitionId, WithStoreOptions(segmentDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, "test-pl", "test-vtx", 0, &partitionId, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	// create read messages
@@ -92,7 +92,7 @@ func TestUnalignedWAL_Replay(t *testing.T) {
 	}(compactDir)
 
 	partitionId := window.SharedUnalignedPartition
-	s, err := NewUnalignedWriteOnlyWAL(ctx, &partitionId, WithStoreOptions(tempDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, "test-pl", "test-vtx", 0, &partitionId, WithStoreOptions(tempDir, compactDir))
 	assert.NoError(t, err)
 
 	// create read messages

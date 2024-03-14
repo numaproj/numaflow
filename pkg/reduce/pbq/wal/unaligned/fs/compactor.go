@@ -46,6 +46,9 @@ const (
 
 // compactor is a compactor for the data filesToReplay
 type compactor struct {
+	pipelineName        string
+	vertexName          string
+	vertexReplica       int32
 	partitionID         *partition.ID
 	compactKeyMap       map[string]int64
 	gcEventsWALPath     string
@@ -68,9 +71,12 @@ type compactor struct {
 }
 
 // NewCompactor returns a new WAL compactor instance
-func NewCompactor(ctx context.Context, partitionId *partition.ID, gcEventsPath string, dataSegmentWALPath string, compactedSegWALPath string, opts ...CompactorOption) (unaligned.Compactor, error) {
+func NewCompactor(ctx context.Context, pipelineName string, vertexName string, vertexReplica int32, partitionId *partition.ID, gcEventsPath string, dataSegmentWALPath string, compactedSegWALPath string, opts ...CompactorOption) (unaligned.Compactor, error) {
 
 	c := &compactor{
+		pipelineName:        pipelineName,
+		vertexName:          vertexName,
+		vertexReplica:       vertexReplica,
 		compactionDuration:  dfv1.DefaultWALCompactionDuration,
 		maxFileSize:         dfv1.DefaultWALCompactorMaxFileSize,
 		syncDuration:        dfv1.DefaultWALCompactorSyncDuration, // FIXME(WAL): we need to sync only at the end
@@ -142,6 +148,7 @@ func (c *compactor) compactOnBootup(ctx context.Context) error {
 	// get all the GC events filesToReplay
 	eventFiles, err := listFilesInDir(c.gcEventsWALPath, currentEventsFile, nil)
 	if err != nil {
+		compactorErrors.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica)), "listFiles").Inc()
 		return err
 	}
 
@@ -151,6 +158,7 @@ func (c *compactor) compactOnBootup(ctx context.Context) error {
 	if len(eventFiles) != 0 {
 		c.log.Infow("Compacting unprocessed GC event files", zap.Int("count", len(eventFiles)))
 		if err = c.compact(ctx, eventFiles); err != nil {
+			compactorErrors.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica)), "compact").Inc()
 			return err
 		}
 		// rotate the compaction file because we need to first replay the pending messages
@@ -158,6 +166,7 @@ func (c *compactor) compactOnBootup(ctx context.Context) error {
 		// will not be considered for replay
 		err = c.rotateCompactionFile()
 		if err != nil {
+			compactorErrors.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica)), "rotateCompactionFile").Inc()
 			return err
 		}
 	}
@@ -191,11 +200,13 @@ func (c *compactor) Stop() error {
 
 	// flush the buffer and sync the file
 	if err = c.flushAndSync(); err != nil {
+		compactorErrors.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica)), "flushAndSync").Inc()
 		return err
 	}
 
 	// Close the current data file
 	if err = c.currCompactedFile.Close(); err != nil {
+		compactorErrors.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica)), "close").Inc()
 		return err
 	}
 
@@ -206,6 +217,7 @@ func (c *compactor) Stop() error {
 
 	// rename the current compaction file to the segment file
 	if err = os.Rename(c.currCompactedFile.Name(), c.getFilePath(c.compactedSegWALPath)); err != nil {
+		compactorErrors.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica)), "rename").Inc()
 		return err
 	}
 
@@ -233,6 +245,7 @@ func (c *compactor) keepCompacting(ctx context.Context) {
 			eventFiles, _ := listFilesInDir(c.gcEventsWALPath, currentEventsFile, nil)
 			if len(eventFiles) >= 0 {
 				err := c.compact(ctx, eventFiles)
+				compactorErrors.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica)), "compact").Inc()
 				// TODO: retry, if its not ctx or stop signal error
 				if err != nil {
 					c.log.Errorw("Error while compacting", zap.Error(err))
@@ -267,10 +280,12 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 			if err = os.Remove(filepath.Join(c.gcEventsWALPath, eventFile.Name())); err != nil {
 				return err
 			}
+			gcWALFilesCount.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica))).Dec()
 		}
 	}
 
 	c.log.Infow("Compaction completed", zap.String("duration", time.Since(startTime).String()))
+	compactionDuration.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica))).Observe(float64(time.Since(startTime).Milliseconds()))
 	return nil
 }
 
@@ -281,6 +296,7 @@ func (c *compactor) compact(ctx context.Context, eventFiles []os.FileInfo) error
 func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 	c.compactKeyMap = make(map[string]int64)
 
+	eventsCount := 0
 	for _, eventFile := range eventFiles {
 		// read the GC events file
 		opFile, err := os.Open(filepath.Join(c.gcEventsWALPath, eventFile.Name()))
@@ -301,6 +317,7 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 				return err
 			}
 
+			eventsCount++
 			// track the max end time for each key
 			if _, ok := c.compactKeyMap[cEvent.Key]; !ok {
 				c.compactKeyMap[cEvent.Key] = cEvent.Et
@@ -314,6 +331,7 @@ func (c *compactor) buildCompactionKeyMap(eventFiles []os.FileInfo) error {
 		_ = opFile.Close()
 	}
 
+	compactorEventsToCompact.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica))).Set(float64(eventsCount))
 	return nil
 }
 
@@ -350,6 +368,8 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	if len(filesToReplay) == 0 {
 		return nil
 	}
+
+	compactorFilesToCompact.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica))).Set(float64(len(filesToReplay)))
 
 	// iterate over all the data filesToReplay and compact them
 	for _, filePath := range filesToReplay {
@@ -461,6 +481,7 @@ readLoop:
 	if err = os.Remove(fp); err != nil {
 		return err
 	}
+	activeDataFilesCount.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica))).Dec()
 	// update the latest watermark
 	c.updateLatestWm(fp)
 	return nil
@@ -542,6 +563,8 @@ func (c *compactor) rotateCompactionFile() error {
 		return err
 	}
 
+	compactedFileSize.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica))).Observe(float64(c.compWriteOffset))
+
 	c.log.Debugw("Rotated compaction file", zap.String("file", newFileName))
 
 	// Open the next data file
@@ -578,6 +601,7 @@ func (c *compactor) openCompactionFile() error {
 	// reset the write buffer (we started off with a nil interface)
 	c.compBufWriter.Reset(c.currCompactedFile)
 
+	activeDataFilesCount.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica))).Inc()
 	return c.writeWALHeader()
 }
 
