@@ -2331,6 +2331,14 @@ kubectl<span class="w"> </span>patch<span class="w"> </span>-n<span class="w"> <
   Run unit tests.</p>
 </li>
 <li>
+<p><code>make test-*</code>
+  Run one e2e test suite. e.g. <code>make test-kafka-e2e</code> to run the kafka e2e suite.</p>
+</li>
+<li>
+<p><code>make Test*</code>
+  Run one e2e test case. e.g. <code>make TestKafkaSourceSink</code> to run the <code>TestKafkaSourceSink</code> case in the kafka e2e suite.</p>
+</li>
+<li>
 <p><code>make image</code>
   Build container image, and import it to <code>k3d</code>, <code>kind</code>, or <code>minikube</code> cluster if corresponding <code>KUBECONFIG</code> is sourced.</p>
 </li>
