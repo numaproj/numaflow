@@ -256,11 +256,7 @@ func (u *GRPCBasedUnalignedReduce) parseSessionReduceResponse(response *sessionr
 func (u *GRPCBasedUnalignedReduce) updateAndGetMsgId(baseMsgId string) string {
 	val, ok := u.resultsMap[baseMsgId]
 
-	if ok {
-		val++
-	} else {
-		val = 1
-	}
+	val++
 
 	u.resultsMap[baseMsgId] = val
 	return fmt.Sprintf("%s:%d", baseMsgId, val)
