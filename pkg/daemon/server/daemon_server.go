@@ -69,17 +69,16 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		natsClientPool *jsclient.ClientPool
 	)
 
-	natsClientPool, err = jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(1))
-	defer natsClientPool.CloseAll()
-
-	if err != nil {
-		log.Errorw("Failed to get a NATS client pool.", zap.Error(err))
-		return err
-	}
 	switch ds.isbSvcType {
 	case v1alpha1.ISBSvcTypeRedis:
 		isbSvcClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
 	case v1alpha1.ISBSvcTypeJetStream:
+		natsClientPool, err = jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(1))
+		if err != nil {
+			log.Errorw("Failed to get a NATS client pool.", zap.Error(err))
+			return err
+		}
+		defer natsClientPool.CloseAll()
 		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithJetStreamClient(natsClientPool.NextAvailableClient()))
 		if err != nil {
 			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
