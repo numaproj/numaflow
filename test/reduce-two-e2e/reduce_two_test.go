@@ -135,7 +135,7 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	fmt.Sprintf("simple-session-counter-%s", lang)
+	pipelineName := fmt.Sprintf("simple-session-counter-%s", lang)
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
