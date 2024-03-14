@@ -2975,7 +2975,7 @@ spec:
                         type: string
                       consumerGroup:
                         type: string
-                      includeHeader:
+                      includeHeaders:
                         type: boolean
                       sasl:
                         properties:

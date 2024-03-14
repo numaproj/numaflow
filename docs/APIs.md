@@ -2786,7 +2786,7 @@ default for SASL.
 </tr>
 <tr>
 <td>
-<code>includeHeader</code></br> <em> bool </em>
+<code>includeHeaders</code></br> <em> bool </em>
 </td>
 <td>
 <em>(Optional)</em>

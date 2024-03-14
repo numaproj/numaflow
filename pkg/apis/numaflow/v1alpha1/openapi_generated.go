@@ -2542,7 +2542,7 @@ func schema_pkg_apis_numaflow_v1alpha1_KafkaSource(ref common.ReferenceCallback)
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL"),
 						},
 					},
-					"includeHeader": {
+					"includeHeaders": {
 						SchemaProps: spec.SchemaProps{
 							Description: "include Kafka headers (this will change the payload struct into a JSON format with _body and _headers)",
 							Default:     false,

@@ -744,7 +744,7 @@ message KafkaSource {
 
   // include Kafka headers (this will change the payload struct into a JSON format with _body and _headers)
   // +optional
-  optional bool includeHeader = 7;
+  optional bool includeHeaders = 7;
 }
 
 message Lifecycle {
