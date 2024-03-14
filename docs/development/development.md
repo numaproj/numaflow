@@ -62,3 +62,43 @@ kubectl patch -n kube-system deployment metrics-server --type=json -p '[{"op":"a
 
 - `make docs-serve`
   Start [an HTTP server](http://127.0.0.1:8000/) on your local to host the docs generated Github pages.
+
+### Running end-to-end tests
+
+The following end-to-end tests are available:
+```bash
+make test-e2e
+make test-kafka-e2e
+make test-http-e2e
+make test-nats-e2e
+make test-sdks-e2e
+make test-reduce-one-e2e
+make test-reduce-two-e2e
+make test-api-e2e
+make test-udsource-e2e
+make test-transformer-e2e
+make test-diamond-e2e
+make test-sideinputs-e2e
+```
+
+In order to run them, you will need to configure your registry in this section near the beginning of the Makefile:
+```Makefile
+DOCKER_PUSH?=true
+DOCKER_BUILD_ARGS?=
+IMAGE_NAMESPACE?=my.registry.com/repository
+VERSION?=latest
+BASE_VERSION:=latest
+```
+
+To make it possible for the kubelet to authenticate to your image registry, you will need to create
+a secret and to set it as the default one for the default service account of the `numaflow-system` namespace.
+This can be done the following way (as per [the Kubernetes official doc](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#add-imagepullsecrets-to-a-service-account)):
+```bash
+kubectl -n numaflow-system create secret docker-registry numaflow-regcreds --docker-server=my.registry.com/repository \
+        --docker-username=DUMMY_USERNAME --docker-password=DUMMY_DOCKER_PASSWORD \
+        --docker-email=DUMMY_DOCKER_EMAIL
+kubectl -n numaflow-system patch serviceaccount default -p '{"imagePullSecrets": [{"name": "numaflow-regcreds"}]}'
+```
+
+While the tests defaults to using *Jetstream* as ISBSVC, you can use a *Resis* one by setting the environnement variable
+`ISBSVC` as `redis` (case insensitive).
