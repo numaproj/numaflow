@@ -22,7 +22,8 @@ import (
 
 func NewMockUDSGRPCBasedSessionReduce(mockClient *sessionreducemock.MockSessionReduceClient) *GRPCBasedUnalignedReduce {
 	c, _ := sessionreducer.NewFromClient(mockClient)
-	return &GRPCBasedUnalignedReduce{c}
+	rMap := make(map[string]int)
+	return &GRPCBasedUnalignedReduce{c, rMap}
 }
 
 func TestGRPCBasedSessionReduce_WaitUntilReady(t *testing.T) {
