@@ -18850,7 +18850,7 @@
           "type": "string"
         },
         "includeHeaders": {
-          "description": "include Kafka headers (this will change the payload struct into a JSON format with _body and _headers)",
+          "description": "include Kafka headers (this will change the payload struct into a JSON format with _body and _headers) EXPERIMENTAL: We might remove this option later on (https://github.com/numaproj/numaflow/issues/1568)",
           "type": "boolean"
         },
         "sasl": {
