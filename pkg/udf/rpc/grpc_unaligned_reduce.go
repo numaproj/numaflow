@@ -254,7 +254,7 @@ func (u *GRPCBasedUnalignedReduce) parseSessionReduceResponse(response *sessionr
 
 // updateMessageIDCount updates the message count in resultsMap and returns the updated message ID
 func (u *GRPCBasedUnalignedReduce) updateAndGetMsgId(baseMsgId string) string {
-	val, _ := u.resultsMap[baseMsgId]
+	val := u.resultsMap[baseMsgId]
 	val++
 	u.resultsMap[baseMsgId] = val
 	return fmt.Sprintf("%s:%d", baseMsgId, val)
