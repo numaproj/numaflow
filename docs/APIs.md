@@ -2752,6 +2752,18 @@ default for SASL.
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>includeHeaders</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+include Kafka headers (this will change the payload struct into a JSON
+format with \_body and \_headers)
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Lifecycle">
