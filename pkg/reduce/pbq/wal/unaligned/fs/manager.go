@@ -82,7 +82,7 @@ func (ws *fsWAL) CreateWAL(ctx context.Context, partitionID partition.ID) (wal.W
 		return store, nil
 	}
 
-	w, err := NewUnalignedWriteOnlyWAL(ctx, &partitionID, ws.fsOpts...)
+	w, err := NewUnalignedWriteOnlyWAL(ctx, ws.pipelineName, ws.vertexName, ws.replicaIndex, &partitionID, ws.fsOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (ws *fsWAL) DiscoverWALs(ctx context.Context) ([]wal.WAL, error) {
 
 	// there will only be one WAL because we use shared partition
 	// for unaligned windows
-	wl, err := NewUnalignedReadWriteWAL(ctx, filesToReplay, ws.fsOpts...)
+	wl, err := NewUnalignedReadWriteWAL(ctx, ws.pipelineName, ws.vertexName, ws.replicaIndex, filesToReplay, ws.fsOpts...)
 	if err != nil {
 		return nil, err
 	}

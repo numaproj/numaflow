@@ -87,6 +87,11 @@ func (ws *fsManager) CreateWAL(_ context.Context, partitionID partition.ID) (wal
 		metrics.LabelVertex:             ws.vertexName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
 	}).Inc()
+	activeFilesCount.With(map[string]string{
+		metrics.LabelPipeline:           ws.pipelineName,
+		metrics.LabelVertex:             ws.vertexName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(ws.replicaIndex)),
+	}).Inc()
 
 	w, err := NewAlignedWriteOnlyWAL(&partitionID, filePath, ws.maxBatchSize, ws.syncDuration, ws.pipelineName, ws.vertexName, ws.replicaIndex)
 	if err != nil {
