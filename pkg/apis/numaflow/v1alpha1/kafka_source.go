@@ -31,6 +31,7 @@ type KafkaSource struct {
 	// +optional
 	SASL *SASL `json:"sasl" protobuf:"bytes,6,opt,name=sasl"`
 	// include Kafka headers (this will change the payload struct into a JSON format with _body and _headers)
+	// EXPERIMENTAL: We might remove this option later on (https://github.com/numaproj/numaflow/issues/1568)
 	// +optional
 	IncludeHeaders bool `json:"includeHeaders" protobuf:"bytes,7,opt,name=includeHeaders"`
 }
