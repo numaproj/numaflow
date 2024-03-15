@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"go.uber.org/zap"
@@ -42,6 +43,9 @@ const (
 
 // unalignedWAL is an unaligned write-ahead log
 type unalignedWAL struct {
+	pipelineName            string        // pipelineName is the name of the pipeline
+	vertexName              string        // vertexName is the name of the vertex
+	replicaIndex            int32         // replicaIndex is the index of the replica
 	partitionID             *partition.ID // partitionID is the partition ID for the unalignedWAL
 	currDataFp              *os.File      // currDataFp is the current data file pointer to which the data is being written
 	currWriteOffset         int64         // currWriteOffset is the current write offset
@@ -63,9 +67,12 @@ type unalignedWAL struct {
 }
 
 // NewUnalignedWriteOnlyWAL returns a new store writer instance
-func NewUnalignedWriteOnlyWAL(ctx context.Context, partitionId *partition.ID, opts ...WALOption) (wal.WAL, error) {
+func NewUnalignedWriteOnlyWAL(ctx context.Context, pipelineName string, vertexName string, vertexReplica int32, partitionId *partition.ID, opts ...WALOption) (wal.WAL, error) {
 
 	s := &unalignedWAL{
+		pipelineName:            pipelineName,
+		vertexName:              vertexName,
+		replicaIndex:            vertexReplica,
 		segmentWALPath:          dfv1.DefaultSegmentWALPath,
 		segmentSize:             dfv1.DefaultWALSegmentSize,
 		maxBatchSize:            dfv1.DefaultWALMaxSyncSize,
@@ -90,15 +97,19 @@ func NewUnalignedWriteOnlyWAL(ctx context.Context, partitionId *partition.ID, op
 	// open the current data file
 	err := s.openFileAndSetCurrent()
 	if err != nil {
+		segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "openFileAndSetCurrent").Inc()
 		return nil, err
 	}
 	return s, nil
 }
 
 // NewUnalignedReadWriteWAL returns a new WAL instance for reading and writing
-func NewUnalignedReadWriteWAL(ctx context.Context, filesToReplay []string, opts ...WALOption) (wal.WAL, error) {
+func NewUnalignedReadWriteWAL(ctx context.Context, pipelineName string, vertexName string, vertexReplica int32, filesToReplay []string, opts ...WALOption) (wal.WAL, error) {
 
 	s := &unalignedWAL{
+		pipelineName:            pipelineName,
+		vertexName:              vertexName,
+		replicaIndex:            vertexReplica,
 		segmentWALPath:          dfv1.DefaultSegmentWALPath,
 		segmentSize:             dfv1.DefaultWALSegmentSize,
 		maxBatchSize:            dfv1.DefaultWALMaxSyncSize,
@@ -148,12 +159,14 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 	// encode the message
 	entry, err := s.encoder.encodeMessage(message)
 	if err != nil {
+		segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "encode").Inc()
 		return err
 	}
 
 	// write the message to the data file
 	wrote, err := s.dataBufWriter.Write(entry)
 	if wrote != len(entry) {
+		segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "write").Inc()
 		return fmt.Errorf("expected to write %d, but wrote only %d, %w", len(entry), wrote, err)
 	}
 	if err != nil {
@@ -165,6 +178,7 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 	// sync file if the batch size is reached or sync duration is reached
 	if s.currWriteOffset-s.prevSyncedWOffset >= s.maxBatchSize || currTime.Sub(s.prevSyncedTime) >= s.syncDuration {
 		if err = s.flushAndSync(); err != nil {
+			segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "flushAndSync").Inc()
 			return err
 		}
 	}
@@ -184,9 +198,13 @@ func (s *unalignedWAL) Write(message *isb.ReadMessage) error {
 	// rotate the segment if the segment size is reached or segment duration is reached
 	if currTime.Sub(s.segmentCreateTime) >= s.segmentRotationDuration || s.currWriteOffset >= s.segmentSize {
 		if err = s.rotateFile(); err != nil {
+			segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "rotateFile").Inc()
 			return err
 		}
 	}
+
+	segmentWALEntriesCount.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex))).Inc()
+	segmentWALBytes.WithLabelValues(s.vertexName, s.pipelineName, strconv.Itoa(int(s.replicaIndex))).Add(float64(wrote))
 
 	return nil
 }
@@ -208,6 +226,7 @@ func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 			// Open the file in read mode
 			fp, _, err := s.openReadFile(filePath)
 			if err != nil {
+				segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "openReadFile").Inc()
 				errChan <- err
 				return
 			}
@@ -221,6 +240,7 @@ func (s *unalignedWAL) Replay() (<-chan *isb.ReadMessage, <-chan error) {
 					break
 				} else if err != nil {
 					// Error occurred, send it on error channel and return
+					segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "decodeMessage").Inc()
 					errChan <- err
 					return
 				}
@@ -274,7 +294,7 @@ func (s *unalignedWAL) openReadFile(filePath string) (*os.File, *partition.ID, e
 
 // openFileAndSetCurrent opens a new data file and sets the current pointer to the opened file.
 func (s *unalignedWAL) openFileAndSetCurrent() error {
-	s.log.Infow("Opening new segment file")
+	s.log.Debugw("Opening new segment file")
 
 	dataFilePath := filepath.Join(s.segmentWALPath, currentSegmentName)
 	var err error
@@ -291,6 +311,8 @@ func (s *unalignedWAL) openFileAndSetCurrent() error {
 
 	// reset the offset
 	s.currWriteOffset = 0
+
+	activeDataFilesCount.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex))).Inc()
 
 	// write the WAL header to the new file
 	return s.writeWALHeader()
@@ -327,6 +349,8 @@ func (s *unalignedWAL) rotateFile() error {
 		return err
 	}
 
+	segmentWALFileSize.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex))).Observe(float64(s.currWriteOffset))
+
 	s.log.Debugw("Rotated segment file to - ", zap.String("fileName", newFileName))
 
 	// Open the next data file
@@ -359,16 +383,19 @@ func (s *unalignedWAL) Close() error {
 	// sync data before closing
 	err := s.flushAndSync()
 	if err != nil {
+		segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "flushAndSync").Inc()
 		return err
 	}
 
 	// close the current data segment
 	if err = s.currDataFp.Close(); err != nil {
+		segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "close").Inc()
 		return err
 	}
 
 	// rename the current data file to the segment file
 	if err = os.Rename(filepath.Join(s.segmentWALPath, currentSegmentName), s.segmentFilePath(s.segmentWALPath)); err != nil {
+		segmentWALErrors.WithLabelValues(s.pipelineName, s.vertexName, strconv.Itoa(int(s.replicaIndex)), "rename").Inc()
 		return err
 	}
 

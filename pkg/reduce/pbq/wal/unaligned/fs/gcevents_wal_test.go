@@ -34,7 +34,7 @@ func TestGcEventsTracker_TrackGCEvent(t *testing.T) {
 		_ = os.RemoveAll(path)
 	}(tempDir)
 
-	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(tempDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	tracker, err := NewGCEventsWAL(ctx, "test-pl", "test-vtx", 0, WithEventsPath(tempDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
 
 	// build test windows
