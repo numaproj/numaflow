@@ -17,8 +17,8 @@ GIT_TREE_STATE=$(shell if [[ -z "`git status --porcelain`" ]]; then echo "clean"
 DOCKER_PUSH?=false
 DOCKER_BUILD_ARGS?=
 IMAGE_NAMESPACE?=quay.io/numaproj
-VERSION?=v1.1.6
-BASE_VERSION:=v1.1.6
+VERSION?=v1.1.7
+BASE_VERSION:=v1.1.7
 
 override LDFLAGS += \
   -X ${PACKAGE}.version=${VERSION} \
