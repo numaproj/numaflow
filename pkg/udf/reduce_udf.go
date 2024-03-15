@@ -78,7 +78,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		udfApplier         applier.ReduceApplier
 		healthChecker      metrics.HealthChecker
 		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
-		vertexName         = u.VertexInstance.Vertex.Spec.AbstractVertex.Name
+		vertexName         = u.VertexInstance.Vertex.Name
 		vertexReplica      = u.VertexInstance.Replica
 	)
 
