@@ -38,7 +38,7 @@ func (s *SideInputSuite) TestSimpleMapSideInputPipeline() {
 
 	// the side inputs feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		return
+		s.T().SkipNow()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -80,7 +80,7 @@ func (s *SideInputSuite) TestSimpleReduceSideInputPipeline() {
 
 	// the side inputs feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		return
+		s.T().SkipNow()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

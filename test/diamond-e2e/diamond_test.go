@@ -40,7 +40,7 @@ func (s *DiamondSuite) TestJoinOnReducePipeline() {
 
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		return
+		s.T().SkipNow()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
