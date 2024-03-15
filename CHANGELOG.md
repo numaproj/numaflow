@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.1.7 (2024-03-15)
+
+ * [d4e0bd28](https://github.com/numaproj/numaflow/commit/d4e0bd2854faf17705b575fb3e4afd97b3cf5094) Update manifests to v1.1.7
+ * [e53f8584](https://github.com/numaproj/numaflow/commit/e53f85840c6b7c9e915b7b97986b8d74cdf3067b) fix: initialize inflightAcks channel to not nil channel (#1548)
+ * [ae1ddaac](https://github.com/numaproj/numaflow/commit/ae1ddaacdc1b3f3298ccadfee8cbf8e041a764db) chore(deps): bump github.com/go-jose/go-jose/v3 from 3.0.1 to 3.0.3 (#1549)
+
+### Contributors
+
+ * Antonino Fugazzotto
+ * Derek Wang
+ * dependabot[bot]
+
 ## v1.1.6 (2024-02-27)
 
  * [9613573e](https://github.com/numaproj/numaflow/commit/9613573e63309b19acdd7ca8c257507ca89e7699) Update manifests to v1.1.6
