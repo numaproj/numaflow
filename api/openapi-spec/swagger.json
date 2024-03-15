@@ -18848,6 +18848,10 @@
         "consumerGroup": {
           "type": "string"
         },
+        "includeHeaders": {
+          "description": "include Kafka headers (this will change the payload struct into a JSON format with _body and _headers)",
+          "type": "boolean"
+        },
         "sasl": {
           "description": "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASL"

@@ -741,6 +741,10 @@ message KafkaSource {
   // SASL.enable=true default for SASL.
   // +optional
   optional SASL sasl = 6;
+
+  // include Kafka headers (this will change the payload struct into a JSON format with _body and _headers)
+  // +optional
+  optional bool includeHeaders = 7;
 }
 
 message Lifecycle {
