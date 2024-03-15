@@ -47,7 +47,7 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
+		r.T().SkipNow()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -91,7 +91,7 @@ func (r *ReduceSuite) TestSimpleSessionPipeline() {
 
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
+		r.T().SkipNow()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -138,7 +138,7 @@ func (r *ReduceSuite) TestSimpleSessionKeyedPipeline() {
 
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
+		r.T().SkipNow()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -190,7 +190,7 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
+		r.T().SkipNow()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -249,10 +249,5 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 }
 
 func TestSessionSuite(t *testing.T) {
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
-
 	suite.Run(t, new(ReduceSuite))
 }
