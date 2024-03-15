@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: simple-session-counter-go
 spec:
+  limits:
+    readBatchSize: 50
   vertices:
     - name: in
       scale:
