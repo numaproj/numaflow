@@ -2760,7 +2760,9 @@ default for SASL.
 <em>(Optional)</em>
 <p>
 include Kafka headers (this will change the payload struct into a JSON
-format with \_body and \_headers)
+format with \_body and \_headers) EXPERIMENTAL: We might remove this
+option later on
+(<a href="https://github.com/numaproj/numaflow/issues/1568">https://github.com/numaproj/numaflow/issues/1568</a>)
 </p>
 </td>
 </tr>

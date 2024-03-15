@@ -729,6 +729,7 @@ message KafkaSource {
   optional SASL sasl = 6;
 
   // include Kafka headers (this will change the payload struct into a JSON format with _body and _headers)
+  // EXPERIMENTAL: We might remove this option later on (https://github.com/numaproj/numaflow/issues/1568)
   // +optional
   optional bool includeHeaders = 7;
 }

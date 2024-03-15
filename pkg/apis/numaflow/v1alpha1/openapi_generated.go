@@ -2527,7 +2527,7 @@ func schema_pkg_apis_numaflow_v1alpha1_KafkaSource(ref common.ReferenceCallback)
 					},
 					"includeHeaders": {
 						SchemaProps: spec.SchemaProps{
-							Description: "include Kafka headers (this will change the payload struct into a JSON format with _body and _headers)",
+							Description: "include Kafka headers (this will change the payload struct into a JSON format with _body and _headers) EXPERIMENTAL: We might remove this option later on (https://github.com/numaproj/numaflow/issues/1568)",
 							Default:     false,
 							Type:        []string{"boolean"},
 							Format:      "",
