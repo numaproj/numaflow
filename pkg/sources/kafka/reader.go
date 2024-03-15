@@ -18,6 +18,7 @@ package kafka
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -43,22 +44,23 @@ import (
 )
 
 type kafkaSource struct {
-	vertexName    string                     // name of the source vertex
-	pipelineName  string                     // name of the pipeline
-	groupName     string                     // group name for the source vertex
-	topic         string                     // topic to consume messages from
-	brokers       []string                   // kafka brokers
-	forwarder     *sourceforward.DataForward // forwarder that writes the consumed data to destination
-	cancelFn      context.CancelFunc         // context cancel function
-	lifecycleCtx  context.Context            // lifecycle context
-	handler       *consumerHandler           // handler for a kafka consumer group
-	config        *sarama.Config             // sarama config for kafka consumer group
-	logger        *zap.SugaredLogger         // logger
-	stopCh        chan struct{}              // channel to indicate that we are done
-	handlerBuffer int                        // size of the buffer that holds consumed but yet to be forwarded messages
-	readTimeout   time.Duration              // read timeout for the from buffer
-	adminClient   sarama.ClusterAdmin        // client used to calculate pending messages
-	saramaClient  sarama.Client              // sarama client
+	vertexName     string                     // name of the source vertex
+	pipelineName   string                     // name of the pipeline
+	groupName      string                     // group name for the source vertex
+	topic          string                     // topic to consume messages from
+	brokers        []string                   // kafka brokers
+	forwarder      *sourceforward.DataForward // forwarder that writes the consumed data to destination
+	cancelFn       context.CancelFunc         // context cancel function
+	lifecycleCtx   context.Context            // lifecycle context
+	handler        *consumerHandler           // handler for a kafka consumer group
+	config         *sarama.Config             // sarama config for kafka consumer group
+	logger         *zap.SugaredLogger         // logger
+	stopCh         chan struct{}              // channel to indicate that we are done
+	handlerBuffer  int                        // size of the buffer that holds consumed but yet to be forwarded messages
+	includeHeaders bool                       // include header in the payload, this will change the data format
+	readTimeout    time.Duration              // read timeout for the from buffer
+	adminClient    sarama.ClusterAdmin        // client used to calculate pending messages
+	saramaClient   sarama.Client              // sarama client
 }
 
 // kafkaOffset implements isb.Offset
@@ -105,6 +107,15 @@ func WithLogger(l *zap.SugaredLogger) Option {
 	}
 }
 
+// WithHeaders is used to return whether to include kafka headers in the payload.
+// This will change the data format.
+func WithHeaders() Option {
+	return func(o *kafkaSource) error {
+		o.includeHeaders = true
+		return nil
+	}
+}
+
 // WithBufferSize is used to return size of message channel information
 func WithBufferSize(s int) Option {
 	return func(o *kafkaSource) error {
@@ -129,36 +140,36 @@ func WithGroupName(gn string) Option {
 	}
 }
 
-func (r *kafkaSource) GetName() string {
-	return r.vertexName
+func (ks *kafkaSource) GetName() string {
+	return ks.vertexName
 }
 
 // Partitions returns the partitions from which the source is reading.
-func (r *kafkaSource) Partitions(context.Context) []int32 {
-	for topic, partitions := range r.handler.sess.Claims() {
-		if topic == r.topic {
+func (ks *kafkaSource) Partitions(context.Context) []int32 {
+	for topic, partitions := range ks.handler.sess.Claims() {
+		if topic == ks.topic {
 			return partitions
 		}
 	}
 	return []int32{}
 }
 
-func (r *kafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
+func (ks *kafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	msgs := make([]*isb.ReadMessage, 0, count)
-	timeout := time.After(r.readTimeout)
+	timeout := time.After(ks.readTimeout)
 loop:
 	for i := int64(0); i < count; i++ {
 		select {
-		case m := <-r.handler.messages:
+		case m := <-ks.handler.messages:
 			kafkaSourceReadCount.With(map[string]string{
-				metrics.LabelVertex:        r.vertexName,
-				metrics.LabelPipeline:      r.pipelineName,
+				metrics.LabelVertex:        ks.vertexName,
+				metrics.LabelPipeline:      ks.pipelineName,
 				metrics.LabelPartitionName: strconv.Itoa(int(m.Partition)),
 			}).Inc()
-			msgs = append(msgs, toReadMessage(m))
+			msgs = append(msgs, ks.toReadMessage(m))
 		case <-timeout:
 			// log that timeout has happened and don't return an error
-			r.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", r.readTimeout))
+			ks.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", ks.readTimeout))
 			break loop
 		}
 	}
@@ -167,35 +178,35 @@ loop:
 }
 
 // Ack acknowledges an array of offset.
-func (r *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
+func (ks *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	// we want to block the handler from exiting if there are any inflight acks.
-	r.handler.inflightAcks = make(chan bool)
-	defer close(r.handler.inflightAcks)
+	ks.handler.inflightAcks = make(chan bool)
+	defer close(ks.handler.inflightAcks)
 
 	for _, offset := range offsets {
 		topic := offset.(*kafkaOffset).Topic()
 
 		pOffset, err := offset.Sequence()
 		if err != nil {
-			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: r.vertexName, metrics.LabelPipeline: r.pipelineName}).Inc()
-			r.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("supplied-offset", offset.String()), zap.Error(err))
+			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Inc()
+			ks.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("supplied-offset", offset.String()), zap.Error(err))
 			continue
 		}
 		// we need to mark the offset of the next message to read
-		r.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset+1, "")
-		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: r.vertexName, metrics.LabelPipeline: r.pipelineName}).Inc()
+		ks.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset+1, "")
+		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Inc()
 
 	}
 	// How come it does not return errors at all?
 	return make([]error, len(offsets))
 }
 
-func (r *kafkaSource) Start() <-chan struct{} {
-	client, err := sarama.NewClient(r.brokers, r.config)
+func (ks *kafkaSource) Start() <-chan struct{} {
+	client, err := sarama.NewClient(ks.brokers, ks.config)
 	if err != nil {
-		r.logger.Panicw("Failed to create sarama client", zap.Error(err))
+		ks.logger.Panicw("Failed to create sarama client", zap.Error(err))
 	} else {
-		r.saramaClient = client
+		ks.saramaClient = client
 	}
 	// Does it require any special privileges to create a cluster admin client?
 	adminClient, err := sarama.NewClusterAdminFromClient(client)
@@ -203,79 +214,79 @@ func (r *kafkaSource) Start() <-chan struct{} {
 		if !client.Closed() {
 			_ = client.Close()
 		}
-		r.logger.Panicw("Failed to create sarama cluster admin client", zap.Error(err))
+		ks.logger.Panicw("Failed to create sarama cluster admin client", zap.Error(err))
 	} else {
-		r.adminClient = adminClient
+		ks.adminClient = adminClient
 	}
 
-	go r.startConsumer()
+	go ks.startConsumer()
 	// wait for the consumer to setup.
-	<-r.handler.ready
-	r.logger.Info("Consumer ready. Starting kafka reader...")
+	<-ks.handler.ready
+	ks.logger.Info("Consumer ready. Starting kafka reader...")
 
-	return r.forwarder.Start()
+	return ks.forwarder.Start()
 }
 
-func (r *kafkaSource) Stop() {
-	r.logger.Info("Stopping kafka reader...")
+func (ks *kafkaSource) Stop() {
+	ks.logger.Info("Stopping kafka reader...")
 	// stop the forwarder
-	r.forwarder.Stop()
+	ks.forwarder.Stop()
 }
 
-func (r *kafkaSource) ForceStop() {
+func (ks *kafkaSource) ForceStop() {
 	// ForceStop means everything has to stop.
 	// don't wait for anything.
-	r.forwarder.ForceStop()
-	r.Stop()
+	ks.forwarder.ForceStop()
+	ks.Stop()
 }
 
-func (r *kafkaSource) Close() error {
-	r.logger.Info("Closing kafka reader...")
+func (ks *kafkaSource) Close() error {
+	ks.logger.Info("Closing kafka reader...")
 	// finally, shut down the client
-	r.cancelFn()
-	if r.adminClient != nil {
+	ks.cancelFn()
+	if ks.adminClient != nil {
 		// closes the underlying sarama client as well.
-		if err := r.adminClient.Close(); err != nil {
-			r.logger.Errorw("Error in closing kafka admin client", zap.Error(err))
+		if err := ks.adminClient.Close(); err != nil {
+			ks.logger.Errorw("Error in closing kafka admin client", zap.Error(err))
 		}
 	}
-	<-r.stopCh
-	r.logger.Info("Kafka reader closed")
+	<-ks.stopCh
+	ks.logger.Info("Kafka reader closed")
 	return nil
 }
 
-func (r *kafkaSource) Pending(_ context.Context) (int64, error) {
-	if r.adminClient == nil || r.saramaClient == nil {
+func (ks *kafkaSource) Pending(_ context.Context) (int64, error) {
+	if ks.adminClient == nil || ks.saramaClient == nil {
 		return isb.PendingNotAvailable, nil
 	}
-	partitions, err := r.saramaClient.Partitions(r.topic)
+	partitions, err := ks.saramaClient.Partitions(ks.topic)
 	if err != nil {
 		return isb.PendingNotAvailable, fmt.Errorf("failed to get partitions, %w", err)
 	}
 	totalPending := int64(0)
-	rep, err := r.adminClient.ListConsumerGroupOffsets(r.groupName, map[string][]int32{r.topic: partitions})
+	rep, err := ks.adminClient.ListConsumerGroupOffsets(ks.groupName, map[string][]int32{ks.topic: partitions})
 	if err != nil {
-		err := r.refreshAdminClient()
+		err := ks.refreshAdminClient()
 		if err != nil {
 			return isb.PendingNotAvailable, fmt.Errorf("failed to update the admin client, %w", err)
 		}
 		return isb.PendingNotAvailable, fmt.Errorf("failed to list consumer group offsets, %w", err)
 	}
 	for _, partition := range partitions {
-		block := rep.GetBlock(r.topic, partition)
+		block := rep.GetBlock(ks.topic, partition)
 		if block.Offset == -1 {
 			// Note: if there is no offset associated with the partition under the consumer group, offset fetch sets the offset field to -1.
 			// This is not an error and usually means that there has been no data published to this particular partition yet.
 			// In this case, we can safely skip this partition from the pending calculation.
 			continue
 		}
-		partitionOffset, err := r.saramaClient.GetOffset(r.topic, partition, sarama.OffsetNewest)
+		partitionOffset, err := ks.saramaClient.GetOffset(ks.topic, partition, sarama.OffsetNewest)
 		if err != nil {
-			return isb.PendingNotAvailable, fmt.Errorf("failed to get offset of topic %q, partition %v, %w", r.topic, partition, err)
+			return isb.PendingNotAvailable, fmt.Errorf("failed to get offset of topic %q, partition %v, %w", ks.topic, partition, err)
 		}
 		totalPending += partitionOffset - block.Offset
 	}
-	kafkaPending.WithLabelValues(r.vertexName, r.pipelineName, r.topic, r.groupName).Set(float64(totalPending))
+	kafkaPending.WithLabelValues(ks.vertexName, ks.pipelineName, ks.topic, ks.groupName).Set(float64(totalPending))
 	return totalPending, nil
 }
 
@@ -364,18 +375,18 @@ func NewKafkaSource(
 }
 
 // refreshAdminClient refreshes the admin client
-func (r *kafkaSource) refreshAdminClient() error {
-	if _, err := r.saramaClient.RefreshController(); err != nil {
+func (ks *kafkaSource) refreshAdminClient() error {
+	if _, err := ks.saramaClient.RefreshController(); err != nil {
 		return fmt.Errorf("failed to refresh controller, %w", err)
 	}
 	// we are not closing the old admin client because it will close the underlying sarama client as well
 	// it is safe to not close the admin client,
 	// since we are using the same sarama client, we will not leak any resources(tcp connections)
-	admin, err := sarama.NewClusterAdminFromClient(r.saramaClient)
+	admin, err := sarama.NewClusterAdminFromClient(ks.saramaClient)
 	if err != nil {
 		return fmt.Errorf("failed to create new admin client, %w", err)
 	}
-	r.adminClient = admin
+	ks.adminClient = admin
 	return nil
 }
 
@@ -388,11 +399,11 @@ func configFromOpts(yamlConfig string) (*sarama.Config, error) {
 	return config, nil
 }
 
-func (r *kafkaSource) startConsumer() {
-	client, err := sarama.NewConsumerGroup(r.brokers, r.groupName, r.config)
-	r.logger.Infow("creating NewConsumerGroup", zap.String("topic", r.topic), zap.String("consumerGroupName", r.groupName), zap.Strings("brokers", r.brokers))
+func (ks *kafkaSource) startConsumer() {
+	client, err := sarama.NewConsumerGroup(ks.brokers, ks.groupName, ks.config)
+	ks.logger.Infow("creating NewConsumerGroup", zap.String("topic", ks.topic), zap.String("consumerGroupName", ks.groupName), zap.Strings("brokers", ks.brokers))
 	if err != nil {
-		r.logger.Panicw("Problem initializing sarama client", zap.Error(err))
+		ks.logger.Panicw("Problem initializing sarama client", zap.Error(err))
 	}
 	wg := new(sync.WaitGroup)
 
@@ -401,10 +412,10 @@ func (r *kafkaSource) startConsumer() {
 		defer wg.Done()
 		for {
 			select {
-			case <-r.lifecycleCtx.Done():
+			case <-ks.lifecycleCtx.Done():
 				return
 			case cErr := <-client.Errors():
-				r.logger.Errorw("Kafka consumer error", zap.Error(cErr))
+				ks.logger.Errorw("Kafka consumer error", zap.Error(cErr))
 			}
 		}
 	}()
@@ -416,39 +427,73 @@ func (r *kafkaSource) startConsumer() {
 			// `Consume` should be called inside an infinite loop; when a
 			// server-side re-balance happens, the consumer session will need to be
 			// recreated to get the new claims
-			if conErr := client.Consume(r.lifecycleCtx, []string{r.topic}, r.handler); conErr != nil {
+			if conErr := client.Consume(ks.lifecycleCtx, []string{ks.topic}, ks.handler); conErr != nil {
 				if errors.Is(err, sarama.ErrClosedConsumerGroup) {
 					return
 				}
 
 				// Panic on errors to let it crash and restart the process
-				r.logger.Panicw("Kafka consumer failed with error: ", zap.Error(conErr))
+				ks.logger.Panicw("Kafka consumer failed with error: ", zap.Error(conErr))
 			}
 
 			// check if context was cancelled, signaling that the consumer should stop
-			if r.lifecycleCtx.Err() != nil {
+			if ks.lifecycleCtx.Err() != nil {
 				return
 			}
 		}
 	}()
 	wg.Wait()
 	_ = client.Close()
-	close(r.stopCh)
+	close(ks.stopCh)
 }
 
-func toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
+func (ks *kafkaSource) toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage {
 	readOffset := &kafkaOffset{
 		offset:       m.Offset,
 		partitionIdx: m.Partition,
 		topic:        m.Topic,
 	}
+
+	var body isb.Body
+
+	if ks.includeHeaders {
+		// include kafka headers so the payload will be encoded in JSON and will look like
+		// {
+		//  "body": "... original payload ...",
+		//  "headers": {
+		//    "k1": "v1",
+		//    "k2": "v2"
+		//  }
+		// }
+		var headers = make(map[string]string, len(m.Headers))
+		for _, header := range m.Headers {
+			headers[string(header.Key)] = string(header.Value)
+		}
+
+		var s = struct {
+			Headers map[string]string `json:"_headers"`
+			Body    []byte            `json:"_body"`
+		}{Headers: headers, Body: m.Value}
+
+		var marshalled, err = json.Marshal(s)
+		if err != nil {
+			ks.logger.Warn("json.Marshall failed for payload", zap.Error(err), zap.String("payload", string(s.Body)))
+		}
+
+		// even if there is an error, we will continue with what we have marshalled
+		body = isb.Body{Payload: marshalled}
+	} else {
+		// without headers, the payload will only have the body
+		body = isb.Body{Payload: m.Value}
+	}
+
 	msg := isb.Message{
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{EventTime: m.Timestamp},
 			ID:          readOffset.String(),
 			Keys:        []string{string(m.Key)},
 		},
-		Body: isb.Body{Payload: m.Value},
+		Body: body,
 	}
 
 	return &isb.ReadMessage{
