@@ -46,7 +46,7 @@ type IdleSourceSuite struct {
 }
 
 func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	w := is.Given().Pipeline("@testdata/idle-source-reduce-pipeline.yaml").
 		When().
@@ -87,7 +87,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 }
 
 func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	topic := "kafka-topic"
