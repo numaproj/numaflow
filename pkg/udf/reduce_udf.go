@@ -86,12 +86,6 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	natsClientPool, err = jsclient.NewClientPool(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
-	}
-	defer natsClientPool.CloseAll()
-
 	windowType := u.VertexInstance.Vertex.Spec.UDF.GroupBy.Window
 
 	// based on the window type create the windower, udfApplier and health checker
@@ -198,6 +192,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			return err
 		}
 	case dfv1.ISBSvcTypeJetStream:
+
+		natsClientPool, err = jsclient.NewClientPool(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+		}
+		defer natsClientPool.CloseAll()
+
 		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
 		if err != nil {
 			return err

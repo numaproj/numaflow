@@ -75,13 +75,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// create a new NATS client pool
-	natsClientPool, err := jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(2))
-	if err != nil {
-		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
-	}
-	defer natsClientPool.CloseAll()
-
 	// watermark variables no-op initialization
 	// create a no op fetcher
 	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressors(sp.VertexInstance.Vertex.GetToBuffers())
@@ -115,6 +108,14 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			writersMap[e.To] = bufferWriters
 		}
 	case dfv1.ISBSvcTypeJetStream:
+
+		// create a new NATS client pool
+		natsClientPool, err := jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(2))
+		if err != nil {
+			return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+		}
+		defer natsClientPool.CloseAll()
+
 		for _, e := range sp.VertexInstance.Vertex.Spec.ToEdges {
 			writeOpts := []jetstreamisb.WriteOption{
 				jetstreamisb.WithBufferFullWritingStrategy(e.BufferFullWritingStrategy()),
@@ -212,6 +213,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		readyCheckers = append(readyCheckers, udsGRPCClient)
 	}
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
+	var err error
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		// Wait for server info to be ready
 		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SourceTransformerServerInfoFile))

@@ -69,11 +69,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	natsClientPool, err = jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(2))
-	if err != nil {
-		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
-	}
-	defer natsClientPool.CloseAll()
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	// For sinks, the buffer name is the vertex name
@@ -96,6 +91,13 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			readers = append(readers, reader)
 		}
 	case dfv1.ISBSvcTypeJetStream:
+
+		natsClientPool, err = jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(2))
+		if err != nil {
+			return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+		}
+		defer natsClientPool.CloseAll()
+
 		var readOptions []jetstreamisb.ReadOption
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, jetstreamisb.WithReadTimeOut(x.ReadTimeout.Duration))
