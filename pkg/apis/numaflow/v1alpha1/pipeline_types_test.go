@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -168,7 +168,7 @@ func TestGetDaemonDeploy(t *testing.T) {
 					Resources: testResources,
 					Env:       []corev1.EnvVar{env},
 					SecurityContext: &corev1.SecurityContext{
-						Privileged: pointer.Bool(false),
+						Privileged: ptr.To[bool](false),
 					},
 				},
 				InitContainerTemplate: &ContainerTemplate{
@@ -339,7 +339,7 @@ func Test_GetWatermarkMaxDelay(t *testing.T) {
 func Test_GetDeleteGracePeriodSeconds(t *testing.T) {
 	lc := Lifecycle{}
 	assert.Equal(t, int32(30), lc.GetDeleteGracePeriodSeconds())
-	lc.DeleteGracePeriodSeconds = pointer.Int32(50)
+	lc.DeleteGracePeriodSeconds = ptr.To[int32](50)
 	assert.Equal(t, int32(50), lc.GetDeleteGracePeriodSeconds())
 }
 

@@ -436,7 +436,7 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
 	u := NewMockGRPCBasedTransformer(mockClient)
 
 	var count = int64(10)
-	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
+	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0), nil)
 
 	var results = make([][]byte, len(readMessages))
 	var resultKeys = make([][]string, len(readMessages))
@@ -498,7 +498,7 @@ func TestGRPCBasedTransformer_ApplyWithMockClient_ChangeEventTime(t *testing.T) 
 	u := NewMockGRPCBasedTransformer(mockClient)
 
 	var count = int64(2)
-	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0))
+	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0), nil)
 	for _, readMessage := range readMessages {
 		apply, err := u.ApplyTransform(ctx, &readMessage)
 		assert.NoError(t, err)

@@ -1144,9 +1144,10 @@ func schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref common.ReferenceCallback) comm
 					},
 					"authType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH",
+							Description: "valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH\n\nPossible enum values:\n - `\"KRB5_KEYTAB_AUTH\"` represents the password method KRB5KeytabAuth = \"KRB5_KEYTAB_AUTH\" = 2\n - `\"KRB5_USER_AUTH\"` represents the password method KRB5UserAuth = \"KRB5_USER_AUTH\" = 1",
 							Type:        []string{"string"},
 							Format:      "",
+							Enum:        []interface{}{"KRB5_KEYTAB_AUTH", "KRB5_USER_AUTH"},
 						},
 					},
 					"passwordSecret": {
@@ -2541,6 +2542,14 @@ func schema_pkg_apis_numaflow_v1alpha1_KafkaSource(ref common.ReferenceCallback)
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL"),
 						},
 					},
+					"includeHeaders": {
+						SchemaProps: spec.SchemaProps{
+							Description: "include Kafka headers (this will change the payload struct into a JSON format with _body and _headers) EXPERIMENTAL: We might remove this option later on (https://github.com/numaproj/numaflow/issues/1568)",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"topic"},
 			},
@@ -3242,8 +3251,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref common.ReferenceCallba
 					},
 					"lastUpdated": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 					"vertexCount": {
@@ -4725,8 +4733,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexStatus(ref common.ReferenceCallback
 					},
 					"lastScaledAt": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 				},
@@ -5067,6 +5074,32 @@ func schema_pkg_apis_numaflow_v1alpha1_containerBuilder(ref common.ReferenceCall
 							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
+					"resizePolicy": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Resources resize policy for the container.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.ContainerResizePolicy"),
+									},
+								},
+							},
+						},
+					},
+					"restartPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RestartPolicy defines the restart behavior of individual containers in a pod. This field may only be set for init containers, and the only allowed value is \"Always\". For non-init containers or when this field is not specified, the restart behavior is defined by the Pod's restart policy and the container type. Setting the RestartPolicy as \"Always\" for the init container will have the following effect: this init container will be continually restarted on exit until all regular containers have terminated. Once all regular containers have completed, all init containers with restartPolicy \"Always\" will be shut down. This lifecycle differs from normal init containers and is often referred to as a \"sidecar\" container. Although this init container still starts in the init container sequence, it does not wait for the container to complete before proceeding to the next init container. Instead, the next init container starts immediately after this init container is started, or after any startupProbe has successfully completed.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"volumeMounts": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
@@ -5184,7 +5217,7 @@ func schema_pkg_apis_numaflow_v1alpha1_containerBuilder(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ContainerPort", "k8s.io/api/core/v1.EnvFromSource", "k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.Lifecycle", "k8s.io/api/core/v1.Probe", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.SecurityContext", "k8s.io/api/core/v1.VolumeDevice", "k8s.io/api/core/v1.VolumeMount"},
+			"k8s.io/api/core/v1.ContainerPort", "k8s.io/api/core/v1.ContainerResizePolicy", "k8s.io/api/core/v1.EnvFromSource", "k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.Lifecycle", "k8s.io/api/core/v1.Probe", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.SecurityContext", "k8s.io/api/core/v1.VolumeDevice", "k8s.io/api/core/v1.VolumeMount"},
 	}
 }
 

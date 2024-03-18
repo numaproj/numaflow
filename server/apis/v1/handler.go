@@ -39,7 +39,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	metricsversiond "k8s.io/metrics/pkg/client/clientset/versioned"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -822,7 +822,7 @@ func (h *handler) parseTailLines(query string) *int64 {
 	}
 
 	x, _ := strconv.ParseInt(query, 10, 64)
-	return pointer.Int64(x)
+	return ptr.To[int64](x)
 }
 
 func (h *handler) streamLogs(c *gin.Context, stream io.ReadCloser) {

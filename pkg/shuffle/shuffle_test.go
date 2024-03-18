@@ -120,7 +120,7 @@ func isSameShuffleDistribution(a, b map[int32][]*isb.Message) bool {
 
 func buildTestMessagesWithDistinctKeys(size int64) []*isb.Message {
 	// build test messages
-	messages := testutils.BuildTestWriteMessages(size, time.Now())
+	messages := testutils.BuildTestWriteMessages(size, time.Now(), nil)
 	// set keys for test messages
 	var res []*isb.Message
 	for index := 0; index < len(messages); index++ {

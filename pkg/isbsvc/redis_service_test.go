@@ -23,9 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/numaproj/numaflow/pkg/isb/stores/redis"
 
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
@@ -50,7 +51,7 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	// Verify
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime)
+	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
 	// Add 10 messages
 	for _, msg := range messages {
 		err := redisClient.Client.XAdd(ctx, &goredis.XAddArgs{

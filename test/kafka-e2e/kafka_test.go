@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/test/fixtures"
@@ -52,7 +52,7 @@ func (ks *KafkaSuite) TestKafkaSink() {
 					Name: "input",
 					Source: &dfv1.Source{
 						Generator: &dfv1.GeneratorSource{
-							RPU:      pointer.Int64Ptr(5),
+							RPU:      ptr.To[int64](5),
 							Duration: &metav1.Duration{Duration: 2 * time.Second},
 						},
 					},

@@ -25,6 +25,9 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/info"
 	"go.uber.org/zap"
 
+	alignedfs "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/fs"
+	noopwal "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/noop"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -32,9 +35,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce"
 	"github.com/numaproj/numaflow/pkg/reduce/applier"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
-	pbqstore "github.com/numaproj/numaflow/pkg/reduce/pbq/store"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/fs"
-	noopstore "github.com/numaproj/numaflow/pkg/reduce/pbq/store/aligned/noop"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
+	unalignedfs "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned/fs"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
@@ -75,6 +77,9 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		opts               []reduce.Option
 		udfApplier         applier.ReduceApplier
 		healthChecker      metrics.HealthChecker
+		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
+		vertexName         = u.VertexInstance.Vertex.Name
+		vertexReplica      = u.VertexInstance.Replica
 	)
 
 	log := logging.FromContext(ctx)
@@ -199,7 +204,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// created watermark related components only if watermark is enabled
-		// otherwise no op will used
+		// otherwise no pnFManager will used
 		if !u.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			// create from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
@@ -294,15 +299,19 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
-	// create store manager
-	var storeManager pbqstore.Manager
-	if u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.NoStore != nil {
-		storeManager = noopstore.NewNoopStores()
-	} else {
-		storeManager = fs.NewFSManager(u.VertexInstance, fs.WithStorePath(dfv1.DefaultStorePath), fs.WithMaxBufferSize(dfv1.DefaultStoreMaxBufferSize), fs.WithSyncDuration(dfv1.DefaultStoreSyncDuration))
+	// create noop wal manager
+	walManager := noopwal.NewNoopStores()
+	// if the vertex has a persistent volume claim or empty dir, create a file system based wal manager
+	if u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.PersistentVolumeClaim != nil ||
+		u.VertexInstance.Vertex.Spec.UDF.GroupBy.Storage.EmptyDir != nil {
+		if windower.Type() == window.Aligned {
+			walManager = alignedfs.NewFSManager(u.VertexInstance)
+		} else {
+			walManager = unalignedfs.NewFSManager(ctx, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath, u.VertexInstance)
+		}
 	}
 
-	pbqManager, err := pbq.NewManager(ctx, u.VertexInstance.Vertex.Spec.Name, u.VertexInstance.Vertex.Spec.PipelineName, u.VertexInstance.Replica, storeManager, windower.Type())
+	pbqManager, err := pbq.NewManager(ctx, vertexName, pipelineName, vertexReplica, walManager, windower.Type())
 	if err != nil {
 		log.Errorw("Failed to create pbq manager", zap.Error(err))
 		return fmt.Errorf("failed to create pbq manager, %w", err)
@@ -318,10 +327,50 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		opts = append(opts, reduce.WithAllowedLateness(allowedLateness.Duration))
 	}
 
-	op := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower)
+	var pnfOption []pnf.Option
+	// create and start the compactor if the window type is unaligned
+	// the compactor will delete the persisted messages which belongs to the materialized window
+	// create a gc events tracker which tracks the gc events, will be used by the pnf
+	// to track the gc events and the compactor will delete the persisted messages based on the gc events
+	if windowType.Session != nil {
+		gcEventsTracker, err := unalignedfs.NewGCEventsWAL(ctx, pipelineName, vertexName, vertexReplica)
+		if err != nil {
+			return fmt.Errorf("failed to create gc events tracker, %w", err)
+		}
+
+		// close the gc events tracker
+		defer func() {
+			err = gcEventsTracker.Close()
+			if err != nil {
+				log.Errorw("failed to close gc events tracker", zap.Error(err))
+			}
+			log.Info("GC Events WAL Closed")
+		}()
+
+		pnfOption = append(pnfOption, pnf.WithGCEventsTracker(gcEventsTracker), pnf.WithWindowType(window.Unaligned))
+
+		compactor, err := unalignedfs.NewCompactor(ctx, pipelineName, vertexName, vertexReplica, &window.SharedUnalignedPartition, dfv1.DefaultGCEventsWALEventsPath, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath)
+		if err != nil {
+			return fmt.Errorf("failed to create compactor, %w", err)
+		}
+		err = compactor.Start(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to start compactor, %w", err)
+		}
+		defer func(compactor unaligned.Compactor) {
+			err = compactor.Stop()
+			if err != nil {
+				log.Errorw("failed to stop compactor", zap.Error(err))
+			}
+			log.Info("Compactor Stopped")
+		}(compactor)
+	}
+
+	// create the pnf manager
+	pnFManager := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfOption...)
 
 	// for reduce, we read only from one partition
-	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, storeManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, op, opts...)
+	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, walManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, pnFManager, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}
@@ -329,6 +378,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	// read the persisted messages before reading the messages from ISB
 	err = dataForwarder.ReplayPersistedMessages(ctx)
 	if err != nil {
+		log.Errorw("Failed to read and process persisted messages", zap.Error(err))
 		return fmt.Errorf("failed to read and process persisted messages, %w", err)
 	}
 
@@ -339,10 +389,12 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		defer wg.Done()
 		dataForwarder.Start()
 		log.Info("Forwarder stopped, exiting reduce udf data processor...")
+
+		// after exiting from pbq write loop, we need to gracefully shut down the pnf manager
+		pnFManager.Shutdown()
 	}()
 
 	<-ctx.Done()
-
 	log.Info("SIGTERM, exiting...")
 	wg.Wait()
 

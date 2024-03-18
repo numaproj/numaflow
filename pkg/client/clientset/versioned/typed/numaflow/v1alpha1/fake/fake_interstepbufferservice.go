@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeInterStepBufferServices struct {
 	ns   string
 }
 
-var interstepbufferservicesResource = schema.GroupVersionResource{Group: "numaflow.numaproj.io", Version: "v1alpha1", Resource: "interstepbufferservices"}
+var interstepbufferservicesResource = v1alpha1.SchemeGroupVersion.WithResource("interstepbufferservices")
 
-var interstepbufferservicesKind = schema.GroupVersionKind{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "InterStepBufferService"}
+var interstepbufferservicesKind = v1alpha1.SchemeGroupVersion.WithKind("InterStepBufferService")
 
 // Get takes name of the interStepBufferService, and returns the corresponding interStepBufferService object, and an error if there is any.
 func (c *FakeInterStepBufferServices) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.InterStepBufferService, err error) {

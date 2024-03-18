@@ -125,7 +125,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "rate(pbq_wal_wal_files_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])",
+          "expr": "rate(pbq_aligned_wal_files_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -219,7 +219,7 @@
           },
           "editorMode": "builder",
           "exemplar": false,
-          "expr": "rate(pbq_wal_wal_entries_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])",
+          "expr": "rate(pbq_aligned_wal_entries_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])",
           "format": "time_series",
           "instant": false,
           "legendFormat": "__auto",
@@ -363,7 +363,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(pbq_wal_wal_file_sync_wait_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(pbq_aligned_wal_file_sync_wait_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
           "format": "time_series",
           "legendFormat": "{{le}}",
           "range": true,
@@ -375,7 +375,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(pbq_wal_wal_file_sync_wait_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(pbq_aligned_wal_file_sync_wait_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
           "format": "time_series",
           "hide": false,
           "legendFormat": "{{le}}",
@@ -388,7 +388,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.9, sum by(le) (rate(pbq_wal_wal_file_sync_wait_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.9, sum by(le) (rate(pbq_aligned_wal_file_sync_wait_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
           "format": "time_series",
           "hide": false,
           "legendFormat": "{{le}}",
@@ -521,7 +521,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(pbq_wal_wal_entry_write_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(pbq_aligned_wal_entry_write_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
           "format": "time_series",
           "legendFormat": "{{le}}",
           "range": true,
@@ -533,7 +533,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(pbq_wal_wal_entry_write_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(pbq_aligned_wal_entry_write_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
           "format": "time_series",
           "hide": false,
           "legendFormat": "{{le}}",
@@ -546,7 +546,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.9, sum by(le) (rate(pbq_wal_wal_entry_write_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.9, sum by(le) (rate(pbq_aligned_wal_entry_write_time_bucket{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\", replica=~\"$replica\"}[$__rate_interval])))",
           "format": "time_series",
           "hide": false,
           "legendFormat": "{{le}}",
@@ -653,7 +653,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "rate(pbq_wal_wal_errors{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
+          "expr": "rate(pbq_aligned_wal_errors{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}[$__rate_interval])",
           "format": "time_series",
           "legendFormat": "{{error}}",
           "range": true,
@@ -758,7 +758,7 @@
             "uid": "Ub43gsvVk"
           },
           "editorMode": "builder",
-          "expr": "pbq_wal_active_wal_files_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}",
+          "expr": "pbq_aligned_active_wal_files_total{namespace=\"$namespace\", pipeline=\"$pipeline\", vertex=\"$vertex\"}",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"

@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakePipelines struct {
 	ns   string
 }
 
-var pipelinesResource = schema.GroupVersionResource{Group: "numaflow.numaproj.io", Version: "v1alpha1", Resource: "pipelines"}
+var pipelinesResource = v1alpha1.SchemeGroupVersion.WithResource("pipelines")
 
-var pipelinesKind = schema.GroupVersionKind{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "Pipeline"}
+var pipelinesKind = v1alpha1.SchemeGroupVersion.WithKind("Pipeline")
 
 // Get takes name of the pipeline, and returns the corresponding pipeline object, and an error if there is any.
 func (c *FakePipelines) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Pipeline, err error) {
