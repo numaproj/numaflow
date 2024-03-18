@@ -3,8 +3,6 @@ kind: Pipeline
 metadata:
   name: simple-session-counter-java
 spec:
-  limits:
-    readBatchSize: 50
   vertices:
     - name: in
       scale:
