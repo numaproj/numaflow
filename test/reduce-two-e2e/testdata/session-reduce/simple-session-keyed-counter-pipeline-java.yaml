@@ -1,10 +1,8 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: simple-session-counter
+  name: simple-session-counter-java
 spec:
-  watermark:
-    maxDelay: 60s
   vertices:
     - name: in
       scale:
@@ -21,8 +19,8 @@ spec:
       partitions: 1
       udf:
         container:
-          # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
-          image: quay.io/numaio/numaflow-go/session-counter:v0.6.1
+          # see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducesession/counter
+          image: quay.io/numaio/numaflow-java/session-reduce-count:stable
         groupBy:
           window:
             session:
