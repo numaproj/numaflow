@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useEffect,
   useRef,
+  useContext,
 } from "react";
 import Box from "@mui/material/Box";
 import {
@@ -14,6 +15,8 @@ import {
   SummaryStatuses,
   SummaryStatusesProps,
 } from "./partials/SummaryStatuses";
+import { AppContext } from "../../../App";
+import { AppContextProps } from "../../../types/declarations/app";
 import chevronLeft from "../../../images/chevron-m-left.png";
 import chevronRight from "../../../images/chevron-m-right.png";
 
@@ -233,6 +236,8 @@ export function SummaryPageLayout({
     setCollapsed((prev) => !prev);
   }, [collapsable]);
 
+  const { isPlugin } = useContext<AppContextProps>(AppContext);
+
   const summary = useMemo(() => {
     if (collapsed) {
       return (
@@ -245,8 +250,8 @@ export function SummaryPageLayout({
             background: "#F8F8FB",
             boxShadow: "0 0.25rem 0.375rem rgba(39, 76, 119, 0.16)",
             zIndex: (theme) => theme.zIndex.drawer - 1,
-            position: "fixed",
-            top: "6.25rem",
+            position: isPlugin ? undefined : "fixed",
+            top: isPlugin ? "2.05rem" : "6.25rem",
             padding: "0 1.25rem",
             alignItems: "center",
             borderBottomLeftRadius: "1.25rem",
@@ -276,8 +281,8 @@ export function SummaryPageLayout({
           background: "#F8F8FB",
           boxShadow: "0 0.1875rem 0.6875rem rgba(39, 76, 119, 0.16)",
           zIndex: (theme) => theme.zIndex.drawer - 1,
-          position: "fixed",
-          top: "5.75rem",
+          position: isPlugin ? undefined : "fixed",
+          top: isPlugin ? "2rem" : "5.75rem",
         }}
       >
         <Box

@@ -20,6 +20,7 @@ export interface AppContextProps {
   systemInfoError: any | undefined;
   host: string;
   namespace: string;
+  isPlugin: boolean;
   sidebarProps?: SlidingSideBarProps;
   setSidebarProps: (props: SlidingSideBarProps | undefined) => void;
   errors: AppError[];

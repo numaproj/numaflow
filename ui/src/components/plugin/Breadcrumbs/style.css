@@ -1,0 +1,41 @@
+.Breadcrumbs {
+  margin: 0.5rem 1.25rem !important;
+  overflow: hidden !important;
+}
+
+.Breadcrumbs-typ {
+  color: var(--badge-pending, #6B6C72);
+  font-size: 0.75rem !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  line-height: 1rem !important;
+}
+
+.Breadcrumbs-link {
+  text-decoration: none;
+  font-size: 0.75rem !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  line-height: 1rem !important;
+  color: #0077C5;
+}
+
+.Breadcrumbs-link:hover {
+  text-decoration: underline;
+}
+
+.MuiBreadcrumbs-li {
+  display: flex !important;
+}
+
+.MuiBreadcrumbs-separator {
+  margin: 0 0.3125rem !important;
+  font-size: 1rem !important;
+}
+
+.crumb-separator {
+  width: 1.875rem;
+  height: 1.8125rem;
+  margin: -0.3125rem;
+  margin-top: -0.25rem;
+}
