@@ -316,6 +316,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	for _, m := range transformerResults {
 		writeMessages = append(writeMessages, m.writeMessages...)
 		for _, message := range m.writeMessages {
+			message.Headers = m.readMessage.Headers
 			// we convert each writeMessage to isb.ReadMessage by providing its parent ReadMessage's ReadOffset.
 			// since we use message event time instead of the watermark to determine and publish source watermarks,
 			// time.UnixMilli(-1) is assigned to the message watermark. transformedReadMessages are immediately

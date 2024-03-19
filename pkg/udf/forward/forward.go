@@ -641,7 +641,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 		metrics.UDFWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(writeMessages)))
 		// set the headers for the write messages
 		for _, m := range writeMessages {
-			m.Header = message.readMessage.Header
+			m.Headers = message.readMessage.Headers
 		}
 		message.writeMessages = append(message.writeMessages, writeMessages...)
 		message.udfError = err
