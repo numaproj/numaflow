@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httputil"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ func InvokeE2EAPI(format string, args ...interface{}) string {
 	log.Printf("GET %s\n", url)
 	resp, err := http.Get(url)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("Error for HTTP GET %s: %s", url, err))
 	}
 	log.Printf("> %s\n", resp.Status)
 	body := ""
@@ -71,13 +72,22 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 		if err == nil && resp.StatusCode < 300 {
 			return true, nil
 		}
-		fmt.Printf("Got error %v, response %v, retrying.\n", err, *resp)
+
+		respDump, drErr := httputil.DumpResponse(resp, true)
+		if drErr != nil {
+			log.Printf("Error getting HTTP response dump: %s", drErr)
+		}
+
+		log.Printf("Got error %v, url %s, response %+v, retrying.\n", err, url, *resp)
+		log.Printf("HTTP response dump: %s", string(respDump))
+
 		return false, nil
 	})
 
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("Error for HTTP POST %s: %s", url, err))
 	}
+
 	defer resp.Body.Close()
 	for s := bufio.NewScanner(resp.Body); s.Scan(); {
 		x := s.Text()

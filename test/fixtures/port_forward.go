@@ -79,7 +79,7 @@ func PodPortForward(config *rest.Config, namespace, podName string, localPort, r
 		})
 
 		if err != nil {
-			panic(err)
+			panic(fmt.Errorf("Pod port forward error: %s", err))
 		}
 	}()
 

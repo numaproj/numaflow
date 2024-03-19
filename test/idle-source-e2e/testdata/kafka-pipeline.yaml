@@ -47,8 +47,13 @@ spec:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
             image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+    - name: sink-log
+      sink:
+        log: {}
   edges:
     - from: kafka-in
       to: count-event
     - from: count-event
       to: sink
+    - from: count-event
+      to: sink-log
