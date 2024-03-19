@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -160,9 +161,12 @@ func New(
 			eventTime = time.UnixMilli(i)
 		}
 
+		// we don't need to consider event time in the header
+		r.Header.Del(dfv1.KeyMetaEventTime)
 		headers := make(map[string]string, len(r.Header))
 		for k, v := range r.Header {
-			headers[k] = v[0]
+			// multi-value headers are joined with ","
+			headers[k] = strings.Join(v, ",")
 		}
 
 		m := &isb.ReadMessage{

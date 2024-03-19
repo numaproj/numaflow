@@ -455,11 +455,8 @@ func (ks *kafkaSource) toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage
 
 	var body = isb.Body{Payload: m.Value}
 	var headers = make(map[string]string, len(m.Headers))
-
-	if ks.includeHeaders {
-		for _, header := range m.Headers {
-			headers[string(header.Key)] = string(header.Value)
-		}
+	for _, header := range m.Headers {
+		headers[string(header.Key)] = string(header.Value)
 	}
 
 	msg := isb.Message{
