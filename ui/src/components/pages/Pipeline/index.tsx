@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useMemo, createContext } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
 import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
@@ -32,7 +32,10 @@ export const GeneratorColorContext = createContext<Map<string, string>>(
 );
 
 export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
-  const { namespaceId: nsIdParam, pipelineId } = useParams();
+  const location = useLocation();
+  const query = new URLSearchParams(location.search);
+  const pipelineId = query.get("pipeline") || "";
+  const nsIdParam = query.get("namespace") || "";
   const namespaceId = nsIdProp || nsIdParam;
   const { addError, setSidebarProps } = useContext<AppContextProps>(AppContext);
   const {
@@ -90,12 +93,15 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
 
   const getHealth = useCallback(
     (pipelineStatus: string) => {
-      const { resourceHealthStatus, dataHealthStatus } = healthData;
-      return GetConsolidatedHealthStatus(
-        pipelineStatus,
-        resourceHealthStatus,
-        dataHealthStatus
-      );
+      if (healthData) {
+        const { resourceHealthStatus, dataHealthStatus } = healthData;
+        return GetConsolidatedHealthStatus(
+          pipelineStatus,
+          resourceHealthStatus,
+          dataHealthStatus
+        );
+      }
+      return UNKNOWN;
     },
     [healthData]
   );

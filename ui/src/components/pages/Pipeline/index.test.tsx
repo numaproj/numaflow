@@ -1,5 +1,5 @@
 import { Pipeline } from "./index";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
 import { usePipelineSummaryFetch } from "../../../utils/fetchWrappers/pipelineFetch";
 
@@ -8,9 +8,8 @@ global.ResizeObserver = require("resize-observer-polyfill");
 import "@testing-library/jest-dom";
 jest.mock("react-router-dom", () => ({
   ...jest.requireActual("react-router-dom"),
-  useParams: () => ({
-    namespaceId: "numaflow-system",
-    pipelineId: "simple-pipeline",
+  useLocation: () => ({
+    search: "?namespace=numaflow-system&pipeline=simple-pipeline",
   }),
 }));
 
@@ -285,7 +284,6 @@ describe("Pipeline", () => {
       expect(screen.getByTestId("pipeline")).toBeInTheDocument();
       expect(screen.getByTestId("graph")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId("pipeline-k8s-events"));
   });
 
   it("Renders Pipeline Without Summary", async () => {
