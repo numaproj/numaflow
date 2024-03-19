@@ -91,8 +91,8 @@ func GetKafkaCount(topic string, count int) int {
 	return count
 }
 
-func SendMessage(topic string, key string, message string) {
-	InvokeE2EAPIPOST("/kafka/produce-topic?topic=%s&key=%s", message, topic, key)
+func SendMessage(topic string, key string, message string, partition int) {
+	InvokeE2EAPIPOST("/kafka/produce-topic?topic=%s&key=%s&partition=%d", message, topic, key, partition)
 
 }
 

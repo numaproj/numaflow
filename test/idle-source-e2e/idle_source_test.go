@@ -15,10 +15,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/* Test the functionality of progressing watermark in case of idling.
+for example: publishing the data to only one replica instead of multiples.
+Once "threshold" reached to 5s(configurable) and if source is found as idle, then it will increment the watermark by
+3s(configurable) after waiting for stepInterval of 2s(configurable).
+*/
+
+//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
+//go:generate kubectl apply -k ../../config/apps/kafka -n numaflow-system
+// Wait for zookeeper to come up
+//go:generate sleep 60
+
 package idle_source_e2e
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 	"strconv"
 	"testing"
 	"time"
@@ -32,14 +45,14 @@ type IdleSourceSuite struct {
 	E2ESuite
 }
 
-func (is *IdleSourceSuite) TestIdleKeyedReducePipeline() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	w := is.Given().Pipeline("@testdata/idle-source-reduce-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "idle-source"
+	pipelineName := "http-idle-source"
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
@@ -60,6 +73,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipeline() {
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				time.Sleep(10 * time.Millisecond)
 			}
 		}
 	}()
@@ -70,6 +84,63 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipeline() {
 		SinkContains("sink", "20").
 		SinkContains("sink", "40")
 	done <- struct{}{}
+}
+
+func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	topic := "kafka-topic"
+
+	w := is.Given().Pipeline("@testdata/kafka-pipeline.yaml").When().CreatePipelineAndWait()
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	defer w.DeletePipelineAndWait()
+	defer DeleteKafkaTopic(topic)
+
+	done := make(chan struct{})
+	go func() {
+		startTime := time.Now().Add(-10000 * time.Hour)
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				// send message to both partition for first 1000 messages for overcome the kafka source lazy loading wm publisher.
+				// after that send message to only one partition. so that idle source will be detected and wm will be progressed.
+				SendMessage(topic, "data", generateMsg("1", startTime), 0)
+				if i < 2000 {
+					SendMessage(topic, "data", generateMsg("2", startTime), 1)
+				}
+				time.Sleep(10 * time.Millisecond)
+				startTime = startTime.Add(1 * time.Second)
+			}
+		}
+	}()
+
+	// since the window duration is 10 second, so the count of event will be 20, when sending data to only both partition.
+	w.Expect().SinkContains("sink", "20", WithTimeout(300*time.Second))
+	// since the window duration is 10 second, so the count of event will be 10, when sending data to only one partition.
+	w.Expect().SinkContains("sink", "10", WithTimeout(300*time.Second))
+
+	done <- struct{}{}
+}
+
+type data struct {
+	Value string    `json:"value"`
+	Time  time.Time `json:"time"`
+}
+
+func generateMsg(msg string, t time.Time) string {
+	testMsg := data{Value: msg, Time: t}
+	jsonBytes, err := json.Marshal(testMsg)
+	if err != nil {
+		log.Fatalf("failed to marshal test message: %v", err)
+	}
+	return string(jsonBytes)
 }
 
 func TestReduceSuite(t *testing.T) {
