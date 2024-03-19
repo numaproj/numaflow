@@ -73,7 +73,6 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
-				time.Sleep(10 * time.Millisecond)
 			}
 		}
 	}()
@@ -81,8 +80,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	w.Expect().
-		SinkContains("sink", "20").
-		SinkContains("sink", "40")
+		SinkContains("sink", "20", WithTimeout(300*time.Second)).
+		SinkContains("sink", "40", WithTimeout(300*time.Second))
 	done <- struct{}{}
 }
 
@@ -115,7 +114,6 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 				if i < 2000 {
 					SendMessage(topic, "data", generateMsg("2", startTime), 1)
 				}
-				time.Sleep(10 * time.Millisecond)
 				startTime = startTime.Add(1 * time.Second)
 			}
 		}

@@ -122,7 +122,7 @@ func (jr *jetStreamReader) Read(ctx context.Context, count int64) ([]*isb.ReadMe
 	rctx, cancel := context.WithTimeout(ctx, jr.opts.readTimeOut)
 	defer cancel()
 	msgs, err := jr.sub.Fetch(int(count), nats.Context(rctx))
-	if err != nil && !errors.Is(err, nats.ErrTimeout) {
+	if err != nil && !errors.Is(err, nats.ErrTimeout) && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 		isbReadErrors.With(map[string]string{"buffer": jr.GetName()}).Inc()
 		return nil, fmt.Errorf("failed to fetch messages from jet stream subject %q, %w", jr.subject, err)
 	}
