@@ -6,6 +6,7 @@ spec:
   limits:
     readBatchSize: 50
   watermark:
+    maxDelay: 10s
     idleSource:
       threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
       incrementBy: 2s # If source is found to be idle then increment the watermark by given incrementBy value.
