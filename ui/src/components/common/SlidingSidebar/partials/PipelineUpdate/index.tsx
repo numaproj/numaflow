@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import YAML from "yaml";
 import Box from "@mui/material/Box";
 import {
@@ -8,6 +8,8 @@ import {
   ValidationMessage,
 } from "../../../SpecEditor";
 import { SpecEditorSidebarProps } from "../..";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { AppContext } from "../../../../../App";
 import { getAPIResponseError, getBaseHref } from "../../../../../utils";
 import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
 
@@ -32,6 +34,7 @@ export function PipelineUpdate({
   const [updatedPipelineId, setUpdatedPipelineId] = useState<
     string | undefined
   >();
+  const { host } = useContext<AppContextProps>(AppContext);
 
   const { pipelineAvailable } = usePipelineUpdateFetch({
     namespaceId,
@@ -53,7 +56,7 @@ export function PipelineUpdate({
     if (!updatedPipelineId) {
       return;
     }
-    let timer: number;
+    let timer: any;
     if (pipelineAvailable) {
       setStatus((prev) => {
         const existing = prev ? { ...prev } : {};
@@ -97,7 +100,7 @@ export function PipelineUpdate({
       });
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?dry-run=false`,
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?dry-run=false`,
           {
             method: "PUT",
             headers: {
@@ -136,7 +139,7 @@ export function PipelineUpdate({
     if (submitPayload) {
       postData();
     }
-  }, [namespaceId, pipelineId, submitPayload, setModalOnClose]);
+  }, [namespaceId, pipelineId, submitPayload, setModalOnClose, host]);
 
   // Validation API call
   useEffect(() => {
@@ -144,7 +147,7 @@ export function PipelineUpdate({
       setLoading(true);
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?dry-run=true`,
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}?dry-run=true`,
           {
             method: "PUT",
             headers: {
@@ -179,13 +182,13 @@ export function PipelineUpdate({
     if (validationPayload) {
       postData();
     }
-  }, [namespaceId, pipelineId, validationPayload]);
+  }, [namespaceId, pipelineId, validationPayload, host]);
 
   const handleValidate = useCallback((value: string) => {
     let parsed: any;
     try {
       parsed = YAML.parse(value);
-    } catch (e) {
+    } catch (e: any) {
       setValidationMessage({
         type: "error",
         message: `Invalid YAML: ${e.message}`,
@@ -207,7 +210,7 @@ export function PipelineUpdate({
     let parsed: any;
     try {
       parsed = YAML.parse(value);
-    } catch (e) {
+    } catch (e: any) {
       setValidationMessage({
         type: "error",
         message: `Invalid YAML: ${e.message}`,

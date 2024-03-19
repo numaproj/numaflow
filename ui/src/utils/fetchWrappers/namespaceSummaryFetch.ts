@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useContext } from "react";
 import { useFetch, Options } from "./fetch";
 import { getBaseHref } from "../index";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 import {
   NamespacePipelineSummary,
   NamespaceSummaryData,
@@ -120,12 +122,14 @@ export const useNamespaceSummaryFetch = ({
     refresh,
   });
 
+  const { host } = useContext<AppContextProps>(AppContext);
+
   const {
     data: pipelineData,
     loading: pipelineLoading,
     error: pipelineError,
   } = useFetch(
-    `${getBaseHref()}/api/v1/namespaces/${namespace}/pipelines`,
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespace}/pipelines`,
     undefined,
     options
   );
@@ -134,7 +138,7 @@ export const useNamespaceSummaryFetch = ({
     loading: isbLoading,
     error: isbError,
   } = useFetch(
-    `${getBaseHref()}/api/v1/namespaces/${namespace}/isb-services`,
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespace}/isb-services`,
     undefined,
     options
   );

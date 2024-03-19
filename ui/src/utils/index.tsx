@@ -238,7 +238,7 @@ export function a11yProps(index: number) {
 }
 
 // icon maps for each status
-export const IconsStatusMap = {
+export const IconsStatusMap: any = {
   [RUNNING]: circleCheck,
   [SUCCEEDED]: circleCheck,
   [FAILED]: critical,
@@ -246,7 +246,6 @@ export const IconsStatusMap = {
   [DELETING]: circleDash,
   [PENDING]: circleDash,
   [PAUSED]: circleDash,
-  [ACTIVE]: circleCheck,
   [INACTIVE]: circleDash,
   [INACTIVE_STATUS]: circleDash,
   [UNHEALTHY]: critical,
@@ -274,7 +273,6 @@ export const StatusString: StatusStringType = {
   [DELETING]: "Deleting",
   [PAUSED]: "Paused",
   [STOPPED]: "Stopped",
-  [ACTIVE]: "Running",
   [INACTIVE]: "Inactive",
   [INACTIVE_STATUS]: "Inactive",
   [UNHEALTHY]: "Unhealthy",

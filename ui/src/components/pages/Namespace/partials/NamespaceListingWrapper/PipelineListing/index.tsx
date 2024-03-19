@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 import { Box, Grid, Pagination } from "@mui/material";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { MAX_PAGE_SIZE } from "../index";

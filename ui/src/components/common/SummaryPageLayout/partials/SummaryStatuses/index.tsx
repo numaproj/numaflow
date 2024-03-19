@@ -17,7 +17,7 @@ export interface SummaryStatusesProps {
   critical: number;
   activeText?: string;
   inAcitveText?: string;
-  tooltip?: string;
+  tooltip?: any;
   linkComponent?: React.ReactNode;
 }
 

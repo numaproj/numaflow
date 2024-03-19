@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useContext } from "react";
 import Box from "@mui/material/Box";
 import YAML from "yaml";
 import { getAPIResponseError, getBaseHref } from "../../../../../../../utils";
@@ -10,6 +10,8 @@ import {
   ValidationMessage,
 } from "../../../../../SpecEditor";
 import { SpecEditorModalProps } from "../../../..";
+import { AppContextProps } from "../../../../../../../types/declarations/app";
+import { AppContext } from "../../../../../../../App";
 
 import "./style.css";
 
@@ -39,6 +41,7 @@ export function VertexUpdate({
   const [status, setStatus] = useState<StatusIndicator | undefined>();
   const [mutationKey, setMutationKey] = useState<string>("");
   const [currentSpec, setCurrentSpec] = useState<any>(vertexSpec);
+  const { host } = useContext<AppContextProps>(AppContext);
 
   // Submit API call
   useEffect(() => {
@@ -52,7 +55,7 @@ export function VertexUpdate({
       });
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=false`,
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=false`,
           {
             method: "PUT",
             headers: {
@@ -101,7 +104,7 @@ export function VertexUpdate({
     if (submitPayload) {
       postData();
     }
-  }, [namespaceId, pipelineId, vertexId, submitPayload]);
+  }, [namespaceId, pipelineId, vertexId, submitPayload, host]);
 
   // Validation API call
   useEffect(() => {
@@ -109,7 +112,7 @@ export function VertexUpdate({
       setLoading(true);
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=true`,
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}?dry-run=true`,
           {
             method: "PUT",
             headers: {
@@ -144,13 +147,13 @@ export function VertexUpdate({
     if (validationPayload) {
       postData();
     }
-  }, [namespaceId, pipelineId, vertexId, validationPayload]);
+  }, [namespaceId, pipelineId, vertexId, validationPayload, host]);
 
   const handleValidate = useCallback((value: string) => {
     let parsed: any;
     try {
       parsed = YAML.parse(value);
-    } catch (e) {
+    } catch (e: any) {
       setValidationMessage({
         type: "error",
         message: `Invalid YAML: ${e.message}`,
@@ -172,7 +175,7 @@ export function VertexUpdate({
     let parsed: any;
     try {
       parsed = YAML.parse(value);
-    } catch (e) {
+    } catch (e: any) {
       setValidationMessage({
         type: "error",
         message: `Invalid YAML: ${e.message}`,

@@ -16,7 +16,7 @@ export function DebouncedSearchInput({
   placeHolder,
   onChange,
 }: DebouncedSearchInputProps) {
-  const [timerId, setTimerId] = useState<number | undefined>();
+  const [timerId, setTimerId] = useState<any | undefined>();
 
   const debounceValue = useCallback(
     (updatedValue: string) => {

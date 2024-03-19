@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useFetch, Options } from "./fetch";
 import { getBaseHref } from "../index";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 import {
   ClusterNamespaceSummary,
   ClusterSummaryData,
@@ -113,11 +115,17 @@ export const useClusterSummaryFetch = ({
     skip: false,
     requestKey: "",
   });
+  const { host } = useContext<AppContextProps>(AppContext);
+
   const {
     data: fetchData,
     loading: fetchLoading,
     error: fetchError,
-  } = useFetch(`${getBaseHref()}/api/v1/cluster-summary`, undefined, options);
+  } = useFetch(
+    `${host}${getBaseHref()}/api/v1/cluster-summary`,
+    undefined,
+    options
+  );
 
   useEffect(() => {
     setInterval(() => {

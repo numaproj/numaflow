@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Options, useFetch } from "./fetch";
 import { getBaseHref } from "../index";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 import { PipelineUpdateFetchResult } from "../../types/declarations/pipeline";
 
 const DATA_REFRESH_INTERVAL = 1000; // ms
@@ -23,8 +25,10 @@ export const usePipelineUpdateFetch = ({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [intervalId, setIntervalId] = useState<any>();
 
+  const { host } = useContext<AppContextProps>(AppContext);
+
   const { data, loading, error } = useFetch(
-    `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
     undefined,
     options
   );

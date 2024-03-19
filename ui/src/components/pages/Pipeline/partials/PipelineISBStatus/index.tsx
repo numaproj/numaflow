@@ -1,14 +1,10 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import {
-  IconsStatusMap,
-  ISBStatusString,
-  UNKNOWN,
-} from "../../../../../utils";
+import { IconsStatusMap, ISBStatusString, UNKNOWN } from "../../../../../utils";
 
 import "./style.css";
 
-export function PipelineISBStatus({ isbData }) {
+export function PipelineISBStatus({ isbData }: any) {
   const isbStatus = isbData?.isbService?.status?.phase || UNKNOWN;
   return (
     <Box
@@ -17,7 +13,7 @@ export function PipelineISBStatus({ isbData }) {
         flexDirection: "column",
         marginTop: "0.375rem",
         flexGrow: 1,
-        paddingLeft: "1rem"
+        paddingLeft: "1rem",
       }}
     >
       <Box sx={{ display: "flex", flexDirection: "row" }}>

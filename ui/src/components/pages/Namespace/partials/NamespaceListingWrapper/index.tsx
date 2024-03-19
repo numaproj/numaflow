@@ -140,14 +140,14 @@ export function NamespaceListingWrapper({
   );
 
   const handleHealthFilterChange = useCallback(
-    (e) => {
+    (e: any) => {
       setHealth(e.target.value);
     },
     [health]
   );
 
   const handleStatusFilterChange = useCallback(
-    (e) => {
+    (e: any) => {
       setStatus(e.target.value);
     },
     [status]
@@ -205,7 +205,7 @@ export function NamespaceListingWrapper({
     });
   }, [setSidebarProps, handleCreateISBComplete, namespace]);
 
-  const handleTabsChange = useCallback((_, newValue) => {
+  const handleTabsChange = useCallback((_: any, newValue: any) => {
     setTabValue(newValue);
   }, []);
 

@@ -1,5 +1,13 @@
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import {
+  Dispatch,
+  SetStateAction,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { getBaseHref, quantityToScalar } from "../index";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 import {
   Pod,
   PodContainerSpec,
@@ -24,13 +32,14 @@ export const usePodsViewFetch = (
   );
   const [requestKey, setRequestKey] = useState(`${Date.now()}`);
   const [loading, setLoading] = useState(true);
+  const { host } = useContext<AppContextProps>(AppContext);
 
   // call to get pods for a given vertex
   useEffect(() => {
     const fetchPods = async () => {
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods?refreshKey=${requestKey}`
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods?refreshKey=${requestKey}`
         );
         if (response.ok) {
           const json = await response.json();
@@ -104,7 +113,7 @@ export const usePodsViewFetch = (
     };
 
     fetchPods();
-  }, [vertexId, requestKey]);
+  }, [vertexId, requestKey, host]);
 
   useEffect(() => {
     if (pods?.length) {
@@ -124,7 +133,7 @@ export const usePodsViewFetch = (
     const fetchPods = async () => {
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
+          `${host}${getBaseHref()}/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
         );
         if (response.ok) {
           const json = await response.json();
@@ -198,7 +207,7 @@ export const usePodsViewFetch = (
     };
 
     fetchPods();
-  }, [requestKey]);
+  }, [requestKey, host]);
 
   useEffect(() => {
     // Refresh pod details every 30 sec
