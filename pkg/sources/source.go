@@ -323,9 +323,6 @@ func (sp *SourceProcessor) getSourcer(
 			kafka.WithGroupName(x.ConsumerGroupName),
 			kafka.WithLogger(logger),
 		}
-		if x.IncludeHeaders {
-			readOptions = append(readOptions, kafka.WithHeaders())
-		}
 		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
 			readOptions = append(readOptions, kafka.WithReadTimeOut(l.ReadTimeout.Duration))
 		}

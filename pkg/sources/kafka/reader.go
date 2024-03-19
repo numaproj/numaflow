@@ -43,23 +43,22 @@ import (
 )
 
 type kafkaSource struct {
-	vertexName     string                     // name of the source vertex
-	pipelineName   string                     // name of the pipeline
-	groupName      string                     // group name for the source vertex
-	topic          string                     // topic to consume messages from
-	brokers        []string                   // kafka brokers
-	forwarder      *sourceforward.DataForward // forwarder that writes the consumed data to destination
-	cancelFn       context.CancelFunc         // context cancel function
-	lifecycleCtx   context.Context            // lifecycle context
-	handler        *consumerHandler           // handler for a kafka consumer group
-	config         *sarama.Config             // sarama config for kafka consumer group
-	logger         *zap.SugaredLogger         // logger
-	stopCh         chan struct{}              // channel to indicate that we are done
-	handlerBuffer  int                        // size of the buffer that holds consumed but yet to be forwarded messages
-	includeHeaders bool                       // include header in the payload, this will change the data format
-	readTimeout    time.Duration              // read timeout for the from buffer
-	adminClient    sarama.ClusterAdmin        // client used to calculate pending messages
-	saramaClient   sarama.Client              // sarama client
+	vertexName    string                     // name of the source vertex
+	pipelineName  string                     // name of the pipeline
+	groupName     string                     // group name for the source vertex
+	topic         string                     // topic to consume messages from
+	brokers       []string                   // kafka brokers
+	forwarder     *sourceforward.DataForward // forwarder that writes the consumed data to destination
+	cancelFn      context.CancelFunc         // context cancel function
+	lifecycleCtx  context.Context            // lifecycle context
+	handler       *consumerHandler           // handler for a kafka consumer group
+	config        *sarama.Config             // sarama config for kafka consumer group
+	logger        *zap.SugaredLogger         // logger
+	stopCh        chan struct{}              // channel to indicate that we are done
+	handlerBuffer int                        // size of the buffer that holds consumed but yet to be forwarded messages
+	readTimeout   time.Duration              // read timeout for the from buffer
+	adminClient   sarama.ClusterAdmin        // client used to calculate pending messages
+	saramaClient  sarama.Client              // sarama client
 }
 
 // kafkaOffset implements isb.Offset
@@ -102,15 +101,6 @@ type Option func(*kafkaSource) error
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *kafkaSource) error {
 		o.logger = l
-		return nil
-	}
-}
-
-// WithHeaders is used to return whether to include kafka headers in the payload.
-// This will change the data format.
-func WithHeaders() Option {
-	return func(o *kafkaSource) error {
-		o.includeHeaders = true
 		return nil
 	}
 }
