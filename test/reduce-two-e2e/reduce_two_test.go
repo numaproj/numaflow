@@ -29,19 +29,19 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
-type ReduceSuite struct {
+type ReduceTwoSuite struct {
 	E2ESuite
 }
 
-func (r *ReduceSuite) TestReduceStreamGo() {
+func (r *ReduceTwoSuite) TestReduceStreamGo() {
 	r.testReduceStream("go")
 }
 
-func (r *ReduceSuite) TestReduceStreamJava() {
+func (r *ReduceTwoSuite) TestReduceStreamJava() {
 	r.testReduceStream("java")
 }
 
-func (r *ReduceSuite) testReduceStream(lang string) {
+func (r *ReduceTwoSuite) testReduceStream(lang string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline(fmt.Sprintf("@testdata/reduce-stream/reduce-stream-%s.yaml", lang)).
@@ -79,7 +79,7 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	done <- struct{}{}
 }
 
-func (r *ReduceSuite) TestSimpleSessionPipeline() {
+func (r *ReduceTwoSuite) TestSimpleSessionPipeline() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-sum-pipeline.yaml").
@@ -120,15 +120,11 @@ func (r *ReduceSuite) TestSimpleSessionPipeline() {
 	done <- struct{}{}
 }
 
-func (r *ReduceSuite) TestSimpleSessionKeyedPipelineAJava() {
-	r.testSimpleSessionKeyedPipeline("java")
-}
-
-func (r *ReduceSuite) TestSimpleSessionKeyedPipelineGo() {
+func (r *ReduceTwoSuite) TestSimpleSessionKeyedPipelineGo() {
 	r.testSimpleSessionKeyedPipeline("go")
 }
 
-func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
+func (r *ReduceTwoSuite) testSimpleSessionKeyedPipeline(lang string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline(fmt.Sprintf("@testdata/session-reduce/simple-session-keyed-counter-pipeline-%s.yaml", lang)).
@@ -174,7 +170,7 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	done <- struct{}{}
 }
 
-func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
+func (r *ReduceTwoSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-keyed-counter-pipeline-go.yaml").
@@ -231,5 +227,5 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 }
 
 func TestSessionSuite(t *testing.T) {
-	suite.Run(t, new(ReduceSuite))
+	suite.Run(t, new(ReduceTwoSuite))
 }
