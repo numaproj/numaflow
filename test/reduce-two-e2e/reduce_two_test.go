@@ -120,12 +120,12 @@ func (r *ReduceSuite) TestSimpleSessionPipeline() {
 	done <- struct{}{}
 }
 
-func (r *ReduceSuite) TestSimpleSessionKeyedPipelineGo() {
-	r.testSimpleSessionKeyedPipeline("go")
-}
-
 func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
 	r.testSimpleSessionKeyedPipeline("java")
+}
+
+func (r *ReduceSuite) TestSimpleSessionKeyedPipelineGo() {
+	r.testSimpleSessionKeyedPipeline("go")
 }
 
 func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {

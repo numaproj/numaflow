@@ -4,7 +4,7 @@ metadata:
   name: simple-session-counter-go
 spec:
   watermark:
-    maxDelay: 60s
+    maxDelay: 30s
   vertices:
     - name: in
       scale:
