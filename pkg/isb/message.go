@@ -68,6 +68,8 @@ type Header struct {
 	// Keys is (key,value) in the map-reduce paradigm will be used for reduce operation, last key in the list
 	// will be used for conditional forwarding
 	Keys []string
+	// Headers is the headers of the message which can be used to store kafka headers, http headers or tracing headers etc.
+	Headers map[string]string
 }
 
 // Body is the body of the message

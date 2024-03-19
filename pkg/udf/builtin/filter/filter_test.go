@@ -35,6 +35,7 @@ type testDatum struct {
 	eventTime time.Time
 	watermark time.Time
 	metadata  testDatumMetadata
+	headers   map[string]string
 }
 
 func (h *testDatum) Value() []byte {
@@ -47,6 +48,10 @@ func (h *testDatum) EventTime() time.Time {
 
 func (h *testDatum) Watermark() time.Time {
 	return h.watermark
+}
+
+func (h *testDatum) Headers() map[string]string {
+	return h.headers
 }
 
 type testDatumMetadata struct {

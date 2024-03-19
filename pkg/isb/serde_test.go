@@ -276,9 +276,6 @@ func TestMessage(t *testing.T) {
 				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
 				return
 			}
-			if tt.name == "good_empty" {
-				tt.wantData.Keys = make([]string, 0)
-			}
 			if !reflect.DeepEqual(*newM, tt.wantData) {
 				t.Errorf("MarshalBinary() gotData = %v, want %v", newM, &tt.wantData)
 			}

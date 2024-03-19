@@ -159,11 +159,18 @@ func New(
 			}
 			eventTime = time.UnixMilli(i)
 		}
+
+		headers := make(map[string]string, len(r.Header))
+		for k, v := range r.Header {
+			headers[k] = v[0]
+		}
+
 		m := &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{EventTime: eventTime},
 					ID:          id,
+					Headers:     headers,
 				},
 				Body: isb.Body{
 					Payload: msg,

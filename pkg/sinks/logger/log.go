@@ -110,6 +110,10 @@ func (t *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, 
 	for _, message := range messages {
 		logSinkWriteCount.With(map[string]string{metrics.LabelVertex: t.name, metrics.LabelPipeline: t.pipelineName}).Inc()
 		log.Println(prefix, " Payload - ", string(message.Payload), " Keys - ", message.Keys, " EventTime - ", message.EventTime.UnixMilli())
+		log.Println("Headers - ")
+		for k, v := range message.Headers {
+			log.Println(" ", k, ":", v)
+		}
 	}
 	return nil, make([]error, len(messages))
 }

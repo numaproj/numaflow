@@ -134,6 +134,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 						MessageInfo: isb.MessageInfo{EventTime: r.GetEventTime().AsTime()},
 						ID:          constructMessageID(r),
 						Keys:        r.GetKeys(),
+						Headers:     r.GetHeaders(),
 					},
 					Body: isb.Body{
 						Payload: r.GetPayload(),

@@ -18,7 +18,6 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -454,37 +453,13 @@ func (ks *kafkaSource) toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage
 		topic:        m.Topic,
 	}
 
-	var body isb.Body
+	var body = isb.Body{Payload: m.Value}
+	var headers = make(map[string]string, len(m.Headers))
 
 	if ks.includeHeaders {
-		// include kafka headers so the payload will be encoded in JSON and will look like
-		// {
-		//  "body": "... original payload ...",
-		//  "headers": {
-		//    "k1": "v1",
-		//    "k2": "v2"
-		//  }
-		// }
-		var headers = make(map[string]string, len(m.Headers))
 		for _, header := range m.Headers {
 			headers[string(header.Key)] = string(header.Value)
 		}
-
-		var s = struct {
-			Headers map[string]string `json:"_headers"`
-			Body    []byte            `json:"_body"`
-		}{Headers: headers, Body: m.Value}
-
-		var marshalled, err = json.Marshal(s)
-		if err != nil {
-			ks.logger.Warn("json.Marshall failed for payload", zap.Error(err), zap.String("payload", string(s.Body)))
-		}
-
-		// even if there is an error, we will continue with what we have marshalled
-		body = isb.Body{Payload: marshalled}
-	} else {
-		// without headers, the payload will only have the body
-		body = isb.Body{Payload: m.Value}
 	}
 
 	msg := isb.Message{
@@ -492,6 +467,7 @@ func (ks *kafkaSource) toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage
 			MessageInfo: isb.MessageInfo{EventTime: m.Timestamp},
 			ID:          readOffset.String(),
 			Keys:        []string{string(m.Key)},
+			Headers:     headers,
 		},
 		Body: body,
 	}

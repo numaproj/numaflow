@@ -215,10 +215,8 @@ func Test_encodeDecodeEntry(t *testing.T) {
 			wantErr: assert.NoError,
 			message: &isb.ReadMessage{
 				Message: isb.Message{
-					Header: isb.Header{
-						Keys: []string{},
-					},
-					Body: isb.Body{},
+					Header: isb.Header{},
+					Body:   isb.Body{},
 				},
 				ReadOffset: isb.SimpleIntOffset(func() int64 { return int64(2) }),
 			},
