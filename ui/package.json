@@ -1,7 +1,26 @@
 {
-  "name": "ui",
-  "version": "0.1.0",
-  "private": true,
+  "name": "numaflow-ui-test",
+  "version": "0.2.2",
+  "description": "Numaflow UI",
+  "main": "./dist/cjs/src/index.js",
+  "module": "./dist/esm/src/index.js",
+  "types": "./dist/esm/src/index.d.ts",
+  "license": "Apache-2.0",
+  "author": "Vedant Gupta",
+  "keywords": [
+    "react",
+    "typescript",
+    "numaflow-ui-test"
+  ],
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/numaproj/numaflow.git"
+  },
   "homepage": ".",
   "dependencies": {
     "@emotion/react": "^11.9.0",
@@ -21,6 +40,7 @@
     "@types/node": "^16.7.13",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
+    "@types/react-router-dom": "^5.3.3",
     "@types/react-test-renderer": "^18.0.0",
     "@visx/event": "^2.6.0",
     "@visx/group": "^2.1.0",
@@ -37,7 +57,7 @@
     "react-dom": "^18.0.0",
     "react-highlight-words": "^0.18.0",
     "react-json-view": "^1.21.3",
-    "react-router-dom": "6",
+    "react-router-dom": "5.3.4",
     "react-test-renderer": "^18.0.0",
     "react-toastify": "^9.1.1",
     "reactflow": "^11.5.5",
@@ -49,6 +69,9 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "build:all": "yarn build:tsc && yarn build:cjs",
+    "build:tsc": "tsc",
+    "build:cjs": "tsc --module commonjs --outDir dist/cjs/src",
     "test": "react-scripts test  --ci --coverage --no-cache --reporters=default --reporters=jest-junit --watchAll=false",
     "eject": "react-scripts eject",
     "lint": "eslint . --ext .tsx"
