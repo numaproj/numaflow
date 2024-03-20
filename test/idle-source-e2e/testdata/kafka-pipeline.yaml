@@ -1,35 +1,35 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: http-idle-source
+  name: kafka-idle-source
 spec:
   limits:
     readBatchSize: 50
   watermark:
-    maxDelay: 10s
     idleSource:
       threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
-      incrementBy: 2s # If source is found to be idle then increment the watermark by given incrementBy value.
+      incrementBy: 3s # If source is found to be idle then increment the watermark by given incrementBy value.
       stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
   vertices:
-    - name: in
+    - name: kafka-in
+      source:
+        kafka:
+          brokers:
+            - kafka-broker:9092
+          topic: kafka-topic
+          consumerGroup: test-group
+        transformer:
+          builtin:
+            name: eventTimeExtractor
+            kwargs:
+              expression: json(payload).time
+              format: 2006-01-02T15:04:05Z07:00
       scale:
         min: 2
-      source:
-        http: {}
-    - name: atoi
-      scale:
-        min: 1
+    - name: count-event
       udf:
         container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
-    - name: compute-sum
-      partitions: 2
-      udf:
-        container:
-          # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/reduce-counter:v0.6.1
         groupBy:
           window:
             fixed:
@@ -37,7 +37,7 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 2Gi
+              volumeSize: 10Gi
               accessMode: ReadWriteOnce
     - name: sink
       scale:
@@ -48,9 +48,7 @@ spec:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
             image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
-    - from: in
-      to: atoi
-    - from: atoi
-      to: compute-sum
-    - from: compute-sum
+    - from: kafka-in
+      to: count-event
+    - from: count-event
       to: sink

@@ -441,10 +441,6 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 		df.ackMessages(ctx, ctrlMessages)
 	}
 
-	if len(successfullyWrittenMessages) == 0 {
-		return
-	}
-
 	// ack successful messages
 	df.ackMessages(ctx, successfullyWrittenMessages)
 
@@ -454,6 +450,11 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 	// When a message is retried, the offset remains the same, so an old message might jump out of the offset-timeline and cause the watermark to be -1.
 	// The correctness is violated because the queue offset and message order are no longer monotonically increasing for those failed messages.
 	df.noAckMessages(ctx, failedMessages)
+
+	// if there are no successfully written messages, we can return early.
+	if len(successfullyWrittenMessages) == 0 {
+		return
+	}
 
 	// close any windows that need to be closed.
 	// since the watermark will be same for all the messages in the batch
@@ -691,6 +692,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 func (df *DataForward) noAckMessages(ctx context.Context, failedMessages []*isb.ReadMessage) {
 	var readOffsets []isb.Offset
 	for _, m := range failedMessages {
+		df.log.Debugw("No-ack message", zap.String("msgOffSet", m.ReadOffset.String()))
 		readOffsets = append(readOffsets, m.ReadOffset)
 	}
 	df.fromBufferPartition.NoAck(ctx, readOffsets)

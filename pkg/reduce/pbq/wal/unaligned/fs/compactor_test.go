@@ -36,6 +36,10 @@ import (
 )
 
 func TestCompactor(t *testing.T) {
+	plName := "test-pl"
+	vtxName := "test-vertex"
+	replicaIndex := int32(0)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -51,7 +55,7 @@ func TestCompactor(t *testing.T) {
 
 	pid := window.SharedUnalignedPartition
 	// write some data filesToReplay
-	s, err := NewUnalignedWriteOnlyWAL(ctx, &pid, WithStoreOptions(segmentDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, plName, vtxName, replicaIndex, &pid, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	keys := []string{"key-1", "key-2"}
@@ -70,7 +74,7 @@ func TestCompactor(t *testing.T) {
 		cleanupDir(eventDir)
 	}()
 	/// write some delete events
-	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	tracker, err := NewGCEventsWAL(ctx, plName, vtxName, replicaIndex, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
 
 	ts := time.UnixMilli(60000)
@@ -91,7 +95,7 @@ func TestCompactor(t *testing.T) {
 	assert.NotEmpty(t, files)
 
 	// create compactor with the data and event directories
-	c, err := NewCompactor(ctx, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	c, err := NewCompactor(ctx, plName, vtxName, replicaIndex, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
 	assert.NoError(t, err)
 
 	err = c.Start(ctx)
@@ -139,6 +143,10 @@ func TestCompactor(t *testing.T) {
 }
 
 func TestReplay_AfterCompaction(t *testing.T) {
+	plName := "test-pl"
+	vtxName := "test-vertex"
+	replicaIndex := int32(0)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -156,7 +164,7 @@ func TestReplay_AfterCompaction(t *testing.T) {
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
-	s, err := NewUnalignedWriteOnlyWAL(ctx, &pid, WithStoreOptions(segmentDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, plName, vtxName, replicaIndex, &pid, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	keys := []string{"key-1", "key-2"}
@@ -175,7 +183,7 @@ func TestReplay_AfterCompaction(t *testing.T) {
 		cleanupDir(eventDir)
 	}()
 	/// write some delete events
-	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	tracker, err := NewGCEventsWAL(ctx, plName, vtxName, replicaIndex, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
 
 	ts := time.UnixMilli(60000)
@@ -196,7 +204,7 @@ func TestReplay_AfterCompaction(t *testing.T) {
 	assert.NotEmpty(t, files)
 
 	// create compactor with the data and event directories
-	c, err := NewCompactor(ctx, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	c, err := NewCompactor(ctx, plName, vtxName, replicaIndex, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
 	assert.NoError(t, err)
 
 	err = c.Start(ctx)
@@ -316,6 +324,10 @@ func TestFilesInDir(t *testing.T) {
 }
 
 func TestCompactor_ContextClose(t *testing.T) {
+	plName := "test-pl"
+	vtxName := "test-vertex"
+	replicaIndex := int32(0)
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	segmentDir := t.TempDir()
@@ -332,7 +344,7 @@ func TestCompactor_ContextClose(t *testing.T) {
 
 	pid := window.SharedUnalignedPartition
 	// write some data files
-	s, err := NewUnalignedWriteOnlyWAL(ctx, &pid, WithStoreOptions(segmentDir, compactDir))
+	s, err := NewUnalignedWriteOnlyWAL(ctx, plName, vtxName, replicaIndex, &pid, WithStoreOptions(segmentDir, compactDir))
 	assert.NoError(t, err)
 
 	keys := []string{"key-1", "key-2"}
@@ -351,7 +363,7 @@ func TestCompactor_ContextClose(t *testing.T) {
 		cleanupDir(eventDir)
 	}()
 	/// write some delete events
-	tracker, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	tracker, err := NewGCEventsWAL(ctx, plName, vtxName, replicaIndex, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
 
 	ts := time.UnixMilli(60000)
@@ -367,7 +379,7 @@ func TestCompactor_ContextClose(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create compactor with the data and event directories
-	c, err := NewCompactor(ctx, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
+	c, err := NewCompactor(ctx, plName, vtxName, replicaIndex, &pid, eventDir, segmentDir, compactDir, WithCompactionDuration(time.Second*5), WithCompactorMaxFileSize(1024*1024*5))
 	assert.NoError(t, err)
 
 	err = c.Start(ctx)
@@ -395,7 +407,7 @@ func Test_buildCompactionKeyMap(t *testing.T) {
 		cleanupDir(eventDir)
 	}()
 	/// write some delete events
-	ewl, err := NewGCEventsWAL(ctx, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
+	ewl, err := NewGCEventsWAL(ctx, "test-pl", "test-vtx", 0, WithEventsPath(eventDir), WithGCTrackerSyncDuration(100*time.Millisecond), WithGCTrackerRotationDuration(time.Second))
 	assert.NoError(t, err)
 
 	testWindows := []window.TimedWindow{
