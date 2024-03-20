@@ -1,3 +1,7 @@
 .spec-editor-validation-message-icon {
   width: 3.125rem;
 }
+
+.spec-editor-status-message-wrapper {
+  text-overflow: ellipsis;
+}

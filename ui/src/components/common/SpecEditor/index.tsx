@@ -380,13 +380,13 @@ export function SpecEditor({
             </Box>
           )}
           {statusIndicator.processing && (
-            <Box sx={containerStyle}>
+            <Box sx={containerStyle} >
               {statusIndicator.processing.status === Status.ERROR && errorIcon}
               {statusIndicator.processing.status === Status.SUCCESS &&
                 successIcon}
               {statusIndicator.processing.status === Status.LOADING &&
                 loadingIcon}
-              <Box sx={messageContainerStyle}>
+              <Box sx={messageContainerStyle} className="spec-editor-status-message-wrapper">
                 <span className="spec-editor-status-message">
                   {statusIndicator.processing.message}
                 </span>
