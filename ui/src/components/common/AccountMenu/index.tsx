@@ -3,21 +3,21 @@ import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
-import { useNavigate } from "react-router-dom";
+import { useHistory } from "react-router-dom";
 import { getBaseHref } from "../../../utils";
 import Chip from "@mui/material/Chip";
 
 export default function AccountMenu() {
-  const navigate = useNavigate();
-  const { userInfo } = useContext<AppContextProps>(AppContext);
+  const history = useHistory();
+  const { userInfo, host } = useContext<AppContextProps>(AppContext);
 
-  const url = `${getBaseHref()}/auth/v1/logout`;
+  const url = `${host}${getBaseHref()}/auth/v1/logout`;
 
   const handleLogout = useCallback(async () => {
     try {
       const response = await fetch(url);
       if (response.ok) {
-        navigate("/login");
+        history.push("/login");
       }
       // TODO on failure?
     } catch (e: any) {
@@ -27,7 +27,7 @@ export default function AccountMenu() {
 
   if (!userInfo) {
     // Non-auth, hide account menu
-    return undefined;
+    return <></>;
   }
 
   return (

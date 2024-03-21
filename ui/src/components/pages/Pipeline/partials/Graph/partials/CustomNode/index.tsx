@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 import { FC, memo, useCallback, useContext, useMemo } from "react";
 import { Tooltip } from "@mui/material";
 import { Handle, NodeProps, Position } from "reactflow";
@@ -87,8 +89,8 @@ const CustomNode: FC<NodeProps> = ({
   );
 
   const handleClick = useCallback(
-    (e) => {
-      const updatedNodeHighlightValues = {};
+    (e: any) => {
+      const updatedNodeHighlightValues: any = {};
       updatedNodeHighlightValues[data?.name] = true;
       if (data?.type === "sideInput")
         updatedNodeHighlightValues[e?.target?.innerText] = true;
@@ -98,7 +100,7 @@ const CustomNode: FC<NodeProps> = ({
   );
 
   const commonStyle = useMemo(() => {
-    const style = {};
+    const style: any = {};
     if (
       !sideInputNodes.has(data?.name) &&
       sideInputNodes.has(Object.keys(highlightValues)[0]) &&
@@ -110,7 +112,7 @@ const CustomNode: FC<NodeProps> = ({
   }, [highlightValues, sideInputNodes, data]);
 
   const blurHandle = (id: string) => {
-    const style = {};
+    const style: any = {};
     if (!highlightValues["---"]) return style;
     const sourceVertex = Object.keys(highlightValues)[0];
     if (sideInputNodes.has(sourceVertex)) {
@@ -218,7 +220,7 @@ const CustomNode: FC<NodeProps> = ({
   }
 
   const handleInputClick = useCallback(
-    (e) => {
+    (e: any) => {
       e.stopPropagation();
       const targetId = e.target.id;
       let source: string;
@@ -231,7 +233,7 @@ const CustomNode: FC<NodeProps> = ({
           source = node;
         }
       });
-      const updatedHighlightedState = {};
+      const updatedHighlightedState: any = {};
       updatedHighlightedState[source] = true;
       updatedHighlightedState[""] = true;
       setHighlightValues(updatedHighlightedState);
@@ -241,7 +243,7 @@ const CustomNode: FC<NodeProps> = ({
   );
 
   const handleMouseOver = useCallback(
-    (e) => {
+    (e: any) => {
       const targetId = e.target.id;
       let source: string;
 
@@ -255,14 +257,14 @@ const CustomNode: FC<NodeProps> = ({
         }
       });
       setHidden((prevState) => {
-        const updatedState = {};
+        const updatedState: any = {};
         Object.keys(prevState).forEach((key) => {
           updatedState[key] = true;
         });
         updatedState[source] = false;
         return updatedState;
       });
-      const updatedHighlightedState = {};
+      const updatedHighlightedState: any = {};
       updatedHighlightedState[source] = true;
       updatedHighlightedState["---"] = true;
       setHighlightValues(updatedHighlightedState);
@@ -272,7 +274,7 @@ const CustomNode: FC<NodeProps> = ({
 
   const handleMouseOut = useCallback(() => {
     setHidden((prevState) => {
-      const updatedState = {};
+      const updatedState: any = {};
       Object.keys(prevState).forEach((key) => {
         updatedState[key] = true;
       });
@@ -391,7 +393,7 @@ const CustomNode: FC<NodeProps> = ({
             />
           </>
         )}
-        {data?.nodeInfo?.sideInputs?.map((_, idx) => {
+        {data?.nodeInfo?.sideInputs?.map((_: any, idx: number) => {
           return (
             <Handle
               key={idx}
@@ -405,7 +407,7 @@ const CustomNode: FC<NodeProps> = ({
           );
         })}
       </div>
-      {data?.nodeInfo?.sideInputs?.map((input, idx) => {
+      {data?.nodeInfo?.sideInputs?.map((input: any, idx: number) => {
         return (
           <img
             key={idx}

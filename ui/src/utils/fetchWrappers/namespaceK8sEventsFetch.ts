@@ -1,6 +1,8 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useContext } from "react";
 import { useFetch, Options } from "./fetch";
 import { getBaseHref } from "../index";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 import {
   K8sEvent,
   K8sEventSummary,
@@ -60,8 +62,9 @@ export const useNamespaceK8sEventsFetch = ({
     skip: false,
     requestKey: "",
   });
+  const { host } = useContext<AppContextProps>(AppContext);
 
-  const BASE_URL = `${getBaseHref()}/api/v1/namespaces/${namespace}/events`;
+  const BASE_URL = `${host}${getBaseHref()}/api/v1/namespaces/${namespace}/events`;
 
   const urlPath = useMemo(() => {
     if (vertex) {

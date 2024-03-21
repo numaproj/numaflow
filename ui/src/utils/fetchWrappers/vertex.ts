@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useFetch, Options } from "./fetch";
+import { getBaseHref } from "../index";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 import {
   K8sEvent,
   K8sEventSummary,
@@ -57,11 +60,16 @@ export const useNamespaceK8sEventsFetch = ({
     skip: false,
     requestKey: "",
   });
+  const { host } = useContext<AppContextProps>(AppContext);
   const {
     data: fetchData,
     loading: fetchLoading,
     error: fetchError,
-  } = useFetch(`/api/v1/namespaces/${namespace}/events`, undefined, options);
+  } = useFetch(
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespace}/events`,
+    undefined,
+    options
+  );
 
   useEffect(() => {
     if (fetchLoading) {

@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 import { useState, useEffect, useMemo, useCallback, ChangeEvent } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";

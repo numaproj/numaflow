@@ -182,28 +182,30 @@ export default function NodeInfo(props: NodeInfoProps) {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {node.data.vertexMetrics.podMetrics.map((podMetric, idx) => {
-                    return (
-                      <TableRow key={`vertex-processingRate-${idx}`}>
-                        <TableCell>{idx}</TableCell>
-                        <TableCell>
-                          {"processingRates" in podMetric &&
-                            podMetric["processingRates"]["1m"].toFixed(2)}
-                          {!("processingRates" in podMetric) && -1}
-                        </TableCell>
-                        <TableCell>
-                          {"processingRates" in podMetric &&
-                            podMetric["processingRates"]["5m"].toFixed(2)}
-                          {!("processingRates" in podMetric) && -1}
-                        </TableCell>
-                        <TableCell>
-                          {"processingRates" in podMetric &&
-                            podMetric["processingRates"]["15m"].toFixed(2)}
-                          {!("processingRates" in podMetric) && -1}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {node.data.vertexMetrics.podMetrics.map(
+                    (podMetric: any, idx: number) => {
+                      return (
+                        <TableRow key={`vertex-processingRate-${idx}`}>
+                          <TableCell>{idx}</TableCell>
+                          <TableCell>
+                            {"processingRates" in podMetric &&
+                              podMetric["processingRates"]["1m"].toFixed(2)}
+                            {!("processingRates" in podMetric) && -1}
+                          </TableCell>
+                          <TableCell>
+                            {"processingRates" in podMetric &&
+                              podMetric["processingRates"]["5m"].toFixed(2)}
+                            {!("processingRates" in podMetric) && -1}
+                          </TableCell>
+                          <TableCell>
+                            {"processingRates" in podMetric &&
+                              podMetric["processingRates"]["15m"].toFixed(2)}
+                            {!("processingRates" in podMetric) && -1}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -233,7 +235,7 @@ export default function NodeInfo(props: NodeInfoProps) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {node.data.buffers.map((buffer, idx) => {
+                {node.data.buffers.map((buffer: any, idx: number) => {
                   let isFull;
                   if (buffer?.isFull) {
                     isFull = "yes";

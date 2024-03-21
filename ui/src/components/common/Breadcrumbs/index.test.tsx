@@ -1,6 +1,6 @@
 import React from "react";
 import { render } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Switch } from "react-router-dom";
 import { AppContext } from "../../../App";
 import { Breadcrumbs } from "./index";
 
@@ -28,13 +28,13 @@ describe("Breadcrumbs", () => {
       <MemoryRouter initialEntries={["/"]}>
         <AppContext.Provider value={mockContext}>
           <Breadcrumbs />
-          <Routes>
+          <Switch>
             <Route
               exact
               path="/"
               render={() => <div>Namespace summary view</div>}
             />
-          </Routes>
+          </Switch>
         </AppContext.Provider>
       </MemoryRouter>
     );
@@ -43,21 +43,18 @@ describe("Breadcrumbs", () => {
     expect(getByText("Namespace")).toBeInTheDocument();
   });
 
-  it("displays the correct breadcrumbs for a pipeline summary view", () => {
+  it("displays the correct breadcrumbs for a unknown view", () => {
     const { getByTestId, getByText } = render(
-      <MemoryRouter
-        initialEntries={["/namespaces/test/pipelines/test-pipeline"]}
-      >
+      <MemoryRouter initialEntries={["/xyz"]}>
         <AppContext.Provider value={mockContext}>
           <Breadcrumbs />
-          <Routes>
-            {" "}
+          <Switch>
             <Route
               exact
-              path="/namespaces/:namespace/pipelines/:pipeline"
+              path="/"
               render={() => <div>Pipeline summary view</div>}
             />
-          </Routes>
+          </Switch>
         </AppContext.Provider>
       </MemoryRouter>
     );

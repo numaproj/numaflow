@@ -8,59 +8,24 @@ import React, {
 import ScopedCssBaseline from "@mui/material/ScopedCssBaseline";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
-import AppBar from "@mui/material/AppBar";
-import Toolbar from "@mui/material/Toolbar";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Switch, Route, useLocation } from "react-router-dom";
-import { Breadcrumbs } from "./components/common/Breadcrumbs";
-import { Routes } from "./components/common/Routes";
-import { Login } from "./components/pages/Login";
-import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
-import { notifyError } from "./utils/error";
+import { Route, useLocation, Switch, useHistory } from "react-router-dom";
+import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
+import { Routes } from "../Routes/Routes";
+import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
+import { notifyError } from "../../../utils/error";
 import {
   SlidingSidebar,
   SlidingSidebarProps,
-} from "./components/common/SlidingSidebar";
-import { ErrorDisplay } from "./components/common/ErrorDisplay";
-import {
-  AppContextProps,
-  AppError,
-  AppProps,
-  UserInfo,
-} from "./types/declarations/app";
-import AccountMenu from "./components/common/AccountMenu";
-import { getBaseHref } from "./utils";
-import logo from "./images/icon.png";
-import textLogo from "./images/text-icon.png";
+} from "../../common/SlidingSidebar";
+import { ErrorDisplay } from "../../common/ErrorDisplay";
+import { AppError, AppProps, UserInfo } from "../../../types/declarations/app";
+import { AppContext } from "../../../App";
 
 import "./App.css";
 import "react-toastify/dist/ReactToastify.css";
 
-export const AppContext = React.createContext<AppContextProps>({
-  systemInfo: undefined,
-  systemInfoError: undefined,
-  host: "",
-  namespace: "",
-  isPlugin: false,
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  setSidebarProps: () => {},
-  errors: [],
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  addError: () => {},
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  clearErrors: () => {},
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  setUserInfo: () => {},
-});
-
 const MAX_ERRORS = 6;
-
-const EXCLUDE_CRUMBS: { [key: string]: boolean } = {
-  "/login": true,
-};
-const EXCLUDE_APP_BARS: { [key: string]: boolean } = {
-  "/login": true,
-};
 
 function App(props: AppProps) {
   // TODO remove, used for testing ns only installation
@@ -89,31 +54,16 @@ function App(props: AppProps) {
   } = useSystemInfoFetch({ host: hostUrl });
 
   const location = useLocation();
-
-  useEffect(() => {
-    // Attempt to load user info on app load
-    const fetchData = async () => {
-      try {
-        const response = await fetch(`${getBaseHref()}/api/v1/authinfo`);
-        if (response.ok) {
-          const data = await response.json();
-          const claims = data?.data?.id_token_claims;
-          if (claims) {
-            setUserInfo({
-              email: claims.email,
-              name: claims.name,
-              username: claims.preferred_username,
-              groups: claims.groups,
-            });
-          }
-        }
-      } catch (e: any) {
-        // Do nothing, failure to load user info is not fatal
-      }
-    };
-
-    fetchData();
-  }, []);
+  // const history = useHistory();
+  //
+  // useEffect(() => {
+  //   const query = new URLSearchParams(location.search);
+  //   const ns = query.get("namespace") || "";
+  //
+  //   if (location.pathname === "/" && ns !== namespace) {
+  //     history.push(`?namespace=${namespace}`);
+  //   }
+  // }, [location, history, namespace]);
 
   useEffect(() => {
     // Route changed
@@ -202,15 +152,12 @@ function App(props: AppProps) {
         </Box>
       );
     }
-    if (systemInfo && systemInfo?.namespaced) {
+    if (hostUrl && namespace) {
       // Namespaced installation routing
       return (
         <Switch>
-          <Route exact path="/login">
-            <Login />
-          </Route>
           <Route exact path="/">
-            <Routes managedNamespace={systemInfo.managedNamespace} />
+            <Routes namespace={namespace} />
           </Route>
           <Route path="*">
             <main style={{ padding: "1rem" }}>
@@ -220,23 +167,8 @@ function App(props: AppProps) {
         </Switch>
       );
     }
-    // Cluster installation routing
-    return (
-      <Switch>
-        <Route exact path="/login">
-          <Login />
-        </Route>
-        <Route exact path="/">
-          <Routes />
-        </Route>
-        <Route path="*">
-          <main style={{ padding: "1rem" }}>
-            <p>There's nothing here!</p>
-          </main>
-        </Route>
-      </Switch>
-    );
-  }, [systemInfo, systemInfoError, loading]);
+    return <Box>Missing host or namespace</Box>;
+  }, [systemInfo, systemInfoError, loading, hostUrl, namespace]);
 
   return (
     <div ref={pageRef} className="app-container">
@@ -246,7 +178,7 @@ function App(props: AppProps) {
           systemInfoError,
           host: hostUrl,
           namespace,
-          isPlugin: false,
+          isPlugin: true,
           sidebarProps,
           setSidebarProps,
           errors,
@@ -265,48 +197,22 @@ function App(props: AppProps) {
               height: "100%",
             }}
           >
-            {!EXCLUDE_APP_BARS[location.pathname] && (
-              <Box
-                sx={{
-                  height: "4rem",
-                }}
-              >
-                <AppBar
-                  position="fixed"
-                  sx={{
-                    zIndex: (theme) => theme.zIndex.drawer + 1,
-                  }}
-                >
-                  <Toolbar>
-                    <img src={logo} alt="logo" className={"logo"} />
-                    <img
-                      src={textLogo}
-                      alt="text-logo"
-                      className={"text-logo"}
-                    />
-                    <Box sx={{ flexGrow: 1 }} />
-                    <AccountMenu />
-                  </Toolbar>
-                </AppBar>
-              </Box>
-            )}
-            {!EXCLUDE_CRUMBS[location.pathname] && (
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  width: "100%",
-                  overflow: "auto",
-                  height: "2.0625rem",
-                  background: "#F8F8FB",
-                  zIndex: (theme) => theme.zIndex.drawer - 1,
-                  position: "fixed",
-                  top: "3.75rem",
-                }}
-              >
-                <Breadcrumbs />
-              </Box>
-            )}
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+                overflow: "auto",
+                height: "2.0625rem",
+                background: "#F8F8FB",
+                zIndex: (theme) => theme.zIndex.drawer - 1,
+                // position: "fixed",
+                top: "3.75rem",
+              }}
+            >
+              <Breadcrumbs namespace={namespace} />
+            </Box>
+
             <Box
               sx={{
                 display: "flex",
@@ -314,7 +220,7 @@ function App(props: AppProps) {
                 width: "100%",
                 height: "100%",
                 overflow: "auto",
-                marginTop: EXCLUDE_CRUMBS[location.pathname] ? 0 : "2.5rem",
+                marginTop: 0,
               }}
             >
               {routes}

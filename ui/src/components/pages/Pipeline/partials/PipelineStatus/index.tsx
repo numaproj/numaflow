@@ -8,7 +8,17 @@ import {
 
 import "./style.css";
 
-export function PipelineStatus({ status, healthStatus, healthData }) {
+export interface PipelineStatusProps {
+  status: any;
+  healthStatus: string;
+  healthData: any;
+}
+
+export function PipelineStatus({
+  status,
+  healthStatus,
+  healthData,
+}: PipelineStatusProps) {
   return (
     <Box
       sx={{

@@ -1,11 +1,8 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import {
-  GetISBType,
-  UNKNOWN,
-} from "../../../../../utils";
+import { GetISBType, UNKNOWN } from "../../../../../utils";
 
-export function PipelineISBSummaryStatus({ isbData }) {
+export function PipelineISBSummaryStatus({ isbData }: any) {
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
   return (
     <Box
@@ -14,7 +11,7 @@ export function PipelineISBSummaryStatus({ isbData }) {
         flexDirection: "column",
         marginTop: "0.375rem",
         flexGrow: 1,
-        paddingLeft: "1rem"
+        paddingLeft: "1rem",
       }}
     >
       <Box sx={{ display: "flex", flexDirection: "row" }}>

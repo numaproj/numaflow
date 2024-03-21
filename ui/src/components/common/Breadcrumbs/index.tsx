@@ -10,6 +10,10 @@ import "./style.css";
 
 export function Breadcrumbs() {
   const location = useLocation();
+  const query = new URLSearchParams(location.search);
+  const ns = query.get("namespace") || "";
+  const pl = query.get("pipeline") || "";
+
   const { systemInfo } = useContext<AppContextProps>(AppContext);
 
   const crumbs = useMemo(() => {
@@ -22,19 +26,29 @@ export function Breadcrumbs() {
     const pathParts = pathname.split("/");
     // safety check for trailing slash
     if (pathname.charAt(pathname.length - 1) === "/") pathParts.pop();
-    if (isNamespaced) {
-      // Namespace installation
-      switch (pathParts.length) {
-        case 1: // Namespace summary view
-          return (
+    if (pathParts.length === 1) {
+      if (isNamespaced) {
+        // Namespace installation
+        if (pl === "") {
+          // Namespace summary view
+          return [
             <Typography
+              key={"namespace-view"}
               data-testid="namespace-breadcrumb"
               className="Breadcrumbs-typ"
             >
               Namespace
-            </Typography>
-          );
-        case 3: // Pipeline summary view
+            </Typography>,
+            <Typography
+              key={"namespace-typ"}
+              data-testid="ns-breadcrumb"
+              className="Breadcrumbs-typ"
+            >
+              {systemInfo?.managedNamespace}
+            </Typography>,
+          ];
+        } else if (pl !== "") {
+          // Pipeline summary view
           return [
             <Link key={"namespace-view"} to="/" className="Breadcrumbs-link">
               Namespace
@@ -44,16 +58,21 @@ export function Breadcrumbs() {
               data-testid="namespace-breadcrumb"
               className="Breadcrumbs-typ"
             >
-              {pathParts[2]}
+              {systemInfo.managedNamespace}
+            </Typography>,
+            <Typography
+              key={"pipeline-typ"}
+              data-testid="pipeline-breadcrumb"
+              className="Breadcrumbs-typ"
+            >
+              {pl}
             </Typography>,
           ];
-        default:
-          break;
-      }
-    } else {
-      // Cluster installation
-      switch (pathParts.length) {
-        case 1: // Cluster summary view
+        }
+      } else {
+        // Cluster installation
+        if (ns === "" && pl === "") {
+          // Cluster summary view
           return (
             <Typography
               data-testid="namespace-breadcrumb"
@@ -62,7 +81,8 @@ export function Breadcrumbs() {
               Namespaces
             </Typography>
           );
-        case 3: // Namespace summary view
+        } else if (ns !== "" && pl === "") {
+          // Namespace summary view
           return [
             <Link key={"namespace-view"} to="/" className="Breadcrumbs-link">
               Namespaces
@@ -72,31 +92,31 @@ export function Breadcrumbs() {
               data-testid="namespace-breadcrumb"
               className="Breadcrumbs-typ"
             >
-              {pathParts[2]}
+              {ns}
             </Typography>,
           ];
-        case 5: // Pipeline summary view
+        } else if (ns !== "" && pl !== "") {
+          // Pipeline summary view
           return [
-            <Link key={"pipeline-view"} to="/" className="Breadcrumbs-link">
+            <Link key={"namespace-view"} to="/" className="Breadcrumbs-link">
               Namespaces
             </Link>,
             <Link
               key={"pipeline-view"}
-              to={`/namespaces/${pathParts[2]}`}
+              to={`?namespace=${ns}`}
               className="Breadcrumbs-link"
             >
-              {pathParts[2]}
+              {ns}
             </Link>,
             <Typography
               key={"pipeline-typ"}
               data-testid="pipeline-breadcrumb"
               className="Breadcrumbs-typ"
             >
-              {pathParts[4]}
+              {pl}
             </Typography>,
           ];
-        default:
-          break;
+        }
       }
     }
     // Unsupported path

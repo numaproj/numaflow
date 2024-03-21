@@ -107,7 +107,7 @@ const CustomEdge: FC<EdgeProps> = ({
   }, [data, getColor]);
 
   const commonStyle = useMemo(() => {
-    const style = {};
+    const style: any = {};
     if (
       !sideInputEdges.has(id) &&
       sideInputNodes.has(Object.keys(highlightValues)[0]) &&
@@ -187,7 +187,7 @@ const CustomEdge: FC<EdgeProps> = ({
   }, [data, getMinWM]);
 
   const handleClick = useCallback(() => {
-    const updatedEdgeHighlightValues = {};
+    const updatedEdgeHighlightValues: any = {};
     updatedEdgeHighlightValues[id] = true;
     setHighlightValues(updatedEdgeHighlightValues);
   }, [setHighlightValues]);
