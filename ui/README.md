@@ -20,3 +20,19 @@ make start
 # Port-forward, and access https://localhost:8443
 kubectl -n numaflow-system port-forward svc/numaflow-server 8443
 ```
+
+Import the App component the run the package as follows:
+* CJS
+```javascript
+import App from 'numaflow-ui-test/dist/cjs/src/components/plugin/NumaflowMonitorApp/App';
+```
+
+* ESM
+```javascript
+import App from 'numaflow-ui-test/dist/esm/src/components/plugin/NumaflowMonitorApp/App';
+```
+
+* Pass the cluster hostname and namespace to get the UI running
+```javascript
+<App hostUrl={hostUrl} namespace={namespace} />
+```

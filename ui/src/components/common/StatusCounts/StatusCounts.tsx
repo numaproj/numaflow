@@ -8,6 +8,7 @@ export interface StatusCountsProps {
     healthy: number;
     warning: number;
     critical: number;
+    [key: string]: number;
   };
 }
 

@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useContext } from "react";
 import { Options, useFetch } from "./fetch";
 import { PipelineSummaryFetchResult } from "../../types/declarations/pipeline";
 import { DEFAULT_ISB, getBaseHref } from "../index";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
@@ -31,12 +33,14 @@ export const usePipelineSummaryFetch = ({
     refresh,
   });
 
+  const { host } = useContext<AppContextProps>(AppContext);
+
   const {
     data: pipelineData,
     loading: pipelineLoading,
     error: pipelineError,
   } = useFetch(
-    `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}`,
     undefined,
     options
   );
@@ -46,7 +50,7 @@ export const usePipelineSummaryFetch = ({
     loading: isbLoading,
     error: isbError,
   } = useFetch(
-    `${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services/${isb}`,
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services/${isb}`,
     undefined,
     isb ? options : { ...options, skip: true }
   );

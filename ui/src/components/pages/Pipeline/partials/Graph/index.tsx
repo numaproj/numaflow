@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 import React, {
   createContext,
   MouseEvent,
@@ -145,6 +147,7 @@ const Flow = (props: FlowProps) => {
   const [isReduce, setIsReduce] = useState(false);
   const [isSideInput, setIsSideInput] = useState(false);
   const isCollapsed = useContext(CollapseContext);
+  const { host } = useContext<AppContextProps>(AppContext);
   const {
     nodes,
     edges,
@@ -176,7 +179,7 @@ const Flow = (props: FlowProps) => {
   );
   const [statusPayload, setStatusPayload] = useState<any>(undefined);
   const [timerDateStamp, setTimerDateStamp] = useState<any>(undefined);
-  const [timer, setTimer] = useState<number | undefined>(undefined);
+  const [timer, setTimer] = useState<any | undefined>(undefined);
 
   const handleTimer = useCallback(() => {
     if (timer) {
@@ -218,7 +221,7 @@ const Flow = (props: FlowProps) => {
     const patchStatus = async () => {
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${
             data?.pipeline?.metadata?.name
           }`,
           {
@@ -236,14 +239,14 @@ const Flow = (props: FlowProps) => {
           refresh();
           setSuccessMessage("Status updated successfully");
         }
-      } catch (e) {
+      } catch (e: any) {
         setError(e);
       }
     };
     if (statusPayload) {
       patchStatus();
     }
-  }, [statusPayload]);
+  }, [statusPayload, host]);
 
   useEffect(() => {
     if (
@@ -516,7 +519,7 @@ const hide = (hidden: { [x: string]: any }) => (edge: Edge) => {
 };
 
 const getHiddenValue = (edges: Edge[]) => {
-  const hiddenEdges = {};
+  const hiddenEdges: { [key: string]: boolean } = {};
   edges?.forEach((edge) => {
     if (edge?.data?.sideInputEdge) {
       hiddenEdges[edge?.data?.source] = true;
@@ -527,7 +530,7 @@ const getHiddenValue = (edges: Edge[]) => {
 
 export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId, refresh } = props;
-  const { sidebarProps, setSidebarProps } =
+  const { sidebarProps, setSidebarProps, isPlugin } =
     useContext<AppContextProps>(AppContext);
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
@@ -701,7 +704,7 @@ export default function Graph(props: GraphProps) {
       setEdgeOpen(false);
       const target = event?.target as HTMLElement;
       setHidden((prevState) => {
-        const updatedState = {};
+        const updatedState: any = {};
         Object.keys(prevState).forEach((key) => {
           updatedState[key] =
             node?.data?.type === "sideInput" && target?.innerText === "---"
@@ -746,7 +749,7 @@ export default function Graph(props: GraphProps) {
     setNodeOpen(false);
     setHighlightValues({});
     setHidden((prevState) => {
-      const updatedState = {};
+      const updatedState: any = {};
       Object.keys(prevState).forEach((key) => {
         updatedState[key] = true;
       });
@@ -759,7 +762,13 @@ export default function Graph(props: GraphProps) {
 
   return (
     <div style={{ height: "100%" }}>
-      <div className="Graph" data-testid="graph">
+      <div
+        className="Graph"
+        data-testid="graph"
+        style={
+          isPlugin ? { height: "90vh", width: "100%", position: undefined } : {}
+        }
+      >
         <HighlightContext.Provider
           value={{
             highlightValues,

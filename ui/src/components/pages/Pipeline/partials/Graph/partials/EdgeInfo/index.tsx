@@ -81,16 +81,18 @@ export default function EdgeInfo(props: EdgeInfoProps) {
               </TableHead>
               <TableBody>
                 {edge.data.edgeWatermark?.watermarks &&
-                  edge.data.edgeWatermark.watermarks.map((wmVal, idx) => {
-                    return (
-                      <TableRow key={`edge-watermark-${idx}`}>
-                        <TableCell>{idx}</TableCell>
-                        <TableCell>
-                          {wmVal} ({new Date(wmVal).toISOString()})
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  edge.data.edgeWatermark.watermarks.map(
+                    (wmVal: any, idx: number) => {
+                      return (
+                        <TableRow key={`edge-watermark-${idx}`}>
+                          <TableCell>{idx}</TableCell>
+                          <TableCell>
+                            {wmVal} ({new Date(wmVal).toISOString()})
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                  )}
               </TableBody>
             </Table>
           </TableContainer>

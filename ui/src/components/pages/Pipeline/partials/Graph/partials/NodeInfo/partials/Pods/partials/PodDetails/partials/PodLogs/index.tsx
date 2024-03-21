@@ -1,4 +1,12 @@
-import { ChangeEvent, useCallback, useEffect, useState } from "react";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
+import {
+  ChangeEvent,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import InputBase from "@mui/material/InputBase";
@@ -18,6 +26,8 @@ import "@stardazed/streams-polyfill";
 import { ReadableStreamDefaultReadResult } from "stream/web";
 import { getBaseHref } from "../../../../../../../../../../../../../utils";
 import { PodLogsProps } from "../../../../../../../../../../../../../types/declarations/pods";
+import { AppContextProps } from "../../../../../../../../../../../../../types/declarations/app";
+import { AppContext } from "../../../../../../../../../../../../../App";
 
 import "./style.css";
 
@@ -81,6 +91,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
   const [paused, setPaused] = useState<boolean>(false);
   const [colorMode, setColorMode] = useState<string>("light");
   const [logsOrder, setLogsOrder] = useState<string>("desc");
+  const { host } = useContext<AppContextProps>(AppContext);
 
   useEffect(() => {
     // reset logs in memory on any log source change
@@ -106,7 +117,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
     setLogRequestKey(requestKey);
     setLogs(["Loading logs..."]);
     fetch(
-      `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pods/${podName}/logs?container=${containerName}&follow=true&tailLines=${MAX_LOGS}`
+      `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pods/${podName}/logs?container=${containerName}&follow=true&tailLines=${MAX_LOGS}`
     )
       .then((response) => {
         if (response && response.body) {
@@ -136,7 +147,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
         }
       })
       .catch(console.error);
-  }, [namespaceId, podName, containerName, reader, paused]);
+  }, [namespaceId, podName, containerName, reader, paused, host]);
 
   useEffect(() => {
     if (!search) {

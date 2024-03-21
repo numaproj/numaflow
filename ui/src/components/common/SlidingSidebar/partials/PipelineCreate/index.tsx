@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import YAML from "yaml";
 import Box from "@mui/material/Box";
 import {
@@ -8,6 +8,8 @@ import {
   ValidationMessage,
 } from "../../../SpecEditor";
 import { SpecEditorSidebarProps } from "../..";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { AppContext } from "../../../../../App";
 import { getAPIResponseError, getBaseHref } from "../../../../../utils";
 import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
 
@@ -55,6 +57,7 @@ export function PipelineCreate({
   const [createdPipelineId, setCreatedPipelineId] = useState<
     string | undefined
   >();
+  const { host } = useContext<AppContextProps>(AppContext);
 
   const { pipelineAvailable } = usePipelineUpdateFetch({
     namespaceId,
@@ -76,7 +79,7 @@ export function PipelineCreate({
     if (!createdPipelineId) {
       return;
     }
-    let timer: number;
+    let timer: any;
     if (pipelineAvailable) {
       setStatus((prev) => {
         const existing = prev ? { ...prev } : {};
@@ -120,7 +123,7 @@ export function PipelineCreate({
       });
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines?dry-run=false`,
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines?dry-run=false`,
           {
             method: "POST",
             headers: {
@@ -159,7 +162,7 @@ export function PipelineCreate({
     if (submitPayload) {
       postData();
     }
-  }, [namespaceId, submitPayload, setModalOnClose]);
+  }, [namespaceId, submitPayload, setModalOnClose, host]);
 
   // Validation API call
   useEffect(() => {
@@ -167,7 +170,7 @@ export function PipelineCreate({
       setLoading(true);
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines?dry-run=true`,
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines?dry-run=true`,
           {
             method: "POST",
             headers: {
@@ -202,13 +205,13 @@ export function PipelineCreate({
     if (validationPayload) {
       postData();
     }
-  }, [namespaceId, validationPayload]);
+  }, [namespaceId, validationPayload, host]);
 
   const handleValidate = useCallback((value: string) => {
     let parsed: any;
     try {
       parsed = YAML.parse(value);
-    } catch (e) {
+    } catch (e: any) {
       setValidationMessage({
         type: "error",
         message: `Invalid YAML: ${e.message}`,
@@ -230,7 +233,7 @@ export function PipelineCreate({
     let parsed: any;
     try {
       parsed = YAML.parse(value);
-    } catch (e) {
+    } catch (e: any) {
       setValidationMessage({
         type: "error",
         message: `Invalid YAML: ${e.message}`,

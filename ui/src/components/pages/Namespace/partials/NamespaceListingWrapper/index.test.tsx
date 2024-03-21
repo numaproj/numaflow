@@ -238,7 +238,7 @@ describe("NamespaceListingWrapper", () => {
       );
     });
     expect(
-      screen.getByTestId("namespace-pipeline-listing")
+      screen.getAllByTestId("namespace-pipeline-listing")[0]
     ).toBeInTheDocument();
   });
 
@@ -259,19 +259,21 @@ describe("NamespaceListingWrapper", () => {
       );
     });
     const searchBar = screen
-      .getByTestId("namespace-pipeline-listing")
+      .getAllByTestId("namespace-pipeline-listing")[0]
       .querySelector("input");
     searchBar &&
       fireEvent.change(searchBar, { target: { value: "simple-pipeline-1" } });
     expect(
-      screen.getByTestId("namespace-pipeline-listing").querySelector("input")
-        ?.value
+      screen
+        .getAllByTestId("namespace-pipeline-listing")[0]
+        .querySelector("input")?.value
     ).toBe("simple-pipeline-1");
     expect(screen.getByText("simple-pipeline-1")).toBeInTheDocument();
     searchBar && fireEvent.change(searchBar, { target: { value: "zzz" } });
     expect(
-      screen.getByTestId("namespace-pipeline-listing").querySelector("input")
-        ?.value
+      screen
+        .getAllByTestId("namespace-pipeline-listing")[0]
+        .querySelector("input")?.value
     ).toBe("zzz");
   });
 
@@ -292,7 +294,7 @@ describe("NamespaceListingWrapper", () => {
       );
     });
     const tabs = screen
-      .getByTestId("namespace-pipeline-listing")
+      .getAllByTestId("namespace-pipeline-listing")[0]
       .querySelectorAll("button");
     tabs.forEach((tab) => {
       fireEvent.click(tab);

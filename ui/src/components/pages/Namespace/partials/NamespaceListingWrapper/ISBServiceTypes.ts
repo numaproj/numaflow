@@ -57,6 +57,7 @@ interface Condition {
 
 interface Spec {
   jetstream: Jetstream;
+  [key: string]: any;
 }
 
 interface Jetstream {

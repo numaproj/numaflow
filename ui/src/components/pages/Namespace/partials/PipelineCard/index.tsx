@@ -51,7 +51,7 @@ export function PipelineCard({
   isbData,
   refresh,
 }: PipelineCardProps) {
-  const { addError, setSidebarProps, systemInfo } =
+  const { addError, setSidebarProps, systemInfo, host } =
     useContext<AppContextProps>(AppContext);
   const [editOption] = useState("edit");
   const [deleteOption] = useState("delete");
@@ -221,7 +221,7 @@ export function PipelineCard({
     const patchStatus = async () => {
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespace}/pipelines/${
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespace}/pipelines/${
             data?.name
           }`,
           {
@@ -239,14 +239,14 @@ export function PipelineCard({
           refresh();
           setSuccessMessage("Status updated successfully");
         }
-      } catch (e) {
+      } catch (e: any) {
         setError(e);
       }
     };
     if (statusPayload) {
       patchStatus();
     }
-  }, [statusPayload]);
+  }, [statusPayload, host]);
 
   useEffect(() => {
     if (
@@ -304,8 +304,8 @@ export function PipelineCard({
             <Link
               to={
                 systemInfo?.namespaced
-                  ? `/pipelines/${data.name}`
-                  : `/namespaces/${namespace}/pipelines/${data.name}`
+                  ? `?pipeline=${data.name}`
+                  : `?namespace=${namespace}&pipeline=${data.name}`
               }
               style={
                 pipelineStatus === DELETING || !pipelineAbleToLoad
@@ -412,8 +412,8 @@ export function PipelineCard({
           <Link
             to={
               systemInfo?.namespaced
-                ? `/pipelines/${data.name}`
-                : `/namespaces/${namespace}/pipelines/${data.name}`
+                ? `?pipeline=${data.name}`
+                : `?namespace=${namespace}&pipeline=${data.name}`
             }
             style={
               pipelineStatus === DELETING || !pipelineAbleToLoad

@@ -36,7 +36,7 @@ describe("systemInfoFetch test", () => {
       loading: false,
     }));
 
-    const { result } = renderHook(() => useSystemInfoFetch());
+    const { result } = renderHook(() => useSystemInfoFetch({ host: "" }));
     const vertexName =
       result?.current?.systemInfo &&
       Object.keys(result?.current?.systemInfo)[0];
@@ -49,7 +49,7 @@ describe("systemInfoFetch test", () => {
       loading: true,
     }));
 
-    const { result } = renderHook(() => useSystemInfoFetch());
+    const { result } = renderHook(() => useSystemInfoFetch({ host: "" }));
     expect(result?.current?.loading).toEqual(true);
   });
 
@@ -60,7 +60,7 @@ describe("systemInfoFetch test", () => {
       loading: false,
     }));
 
-    const { result } = renderHook(() => useSystemInfoFetch());
+    const { result } = renderHook(() => useSystemInfoFetch({ host: "" }));
     expect(result?.current?.error).toEqual("Failed to fetch the system info");
   });
 });
