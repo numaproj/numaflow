@@ -78,6 +78,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 		Value:     payload,
 		EventTime: timestamppb.New(parentMessageInfo.EventTime),
 		Watermark: timestamppb.New(readMessage.Watermark),
+		Headers:   readMessage.Headers,
 	}
 
 	response, err := u.client.MapFn(ctx, req)

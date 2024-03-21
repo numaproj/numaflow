@@ -18,7 +18,6 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -44,23 +43,22 @@ import (
 )
 
 type kafkaSource struct {
-	vertexName     string                     // name of the source vertex
-	pipelineName   string                     // name of the pipeline
-	groupName      string                     // group name for the source vertex
-	topic          string                     // topic to consume messages from
-	brokers        []string                   // kafka brokers
-	forwarder      *sourceforward.DataForward // forwarder that writes the consumed data to destination
-	cancelFn       context.CancelFunc         // context cancel function
-	lifecycleCtx   context.Context            // lifecycle context
-	handler        *consumerHandler           // handler for a kafka consumer group
-	config         *sarama.Config             // sarama config for kafka consumer group
-	logger         *zap.SugaredLogger         // logger
-	stopCh         chan struct{}              // channel to indicate that we are done
-	handlerBuffer  int                        // size of the buffer that holds consumed but yet to be forwarded messages
-	includeHeaders bool                       // include header in the payload, this will change the data format
-	readTimeout    time.Duration              // read timeout for the from buffer
-	adminClient    sarama.ClusterAdmin        // client used to calculate pending messages
-	saramaClient   sarama.Client              // sarama client
+	vertexName    string                     // name of the source vertex
+	pipelineName  string                     // name of the pipeline
+	groupName     string                     // group name for the source vertex
+	topic         string                     // topic to consume messages from
+	brokers       []string                   // kafka brokers
+	forwarder     *sourceforward.DataForward // forwarder that writes the consumed data to destination
+	cancelFn      context.CancelFunc         // context cancel function
+	lifecycleCtx  context.Context            // lifecycle context
+	handler       *consumerHandler           // handler for a kafka consumer group
+	config        *sarama.Config             // sarama config for kafka consumer group
+	logger        *zap.SugaredLogger         // logger
+	stopCh        chan struct{}              // channel to indicate that we are done
+	handlerBuffer int                        // size of the buffer that holds consumed but yet to be forwarded messages
+	readTimeout   time.Duration              // read timeout for the from buffer
+	adminClient   sarama.ClusterAdmin        // client used to calculate pending messages
+	saramaClient  sarama.Client              // sarama client
 }
 
 // kafkaOffset implements isb.Offset
@@ -103,15 +101,6 @@ type Option func(*kafkaSource) error
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *kafkaSource) error {
 		o.logger = l
-		return nil
-	}
-}
-
-// WithHeaders is used to return whether to include kafka headers in the payload.
-// This will change the data format.
-func WithHeaders() Option {
-	return func(o *kafkaSource) error {
-		o.includeHeaders = true
 		return nil
 	}
 }
@@ -454,37 +443,10 @@ func (ks *kafkaSource) toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage
 		topic:        m.Topic,
 	}
 
-	var body isb.Body
-
-	if ks.includeHeaders {
-		// include kafka headers so the payload will be encoded in JSON and will look like
-		// {
-		//  "body": "... original payload ...",
-		//  "headers": {
-		//    "k1": "v1",
-		//    "k2": "v2"
-		//  }
-		// }
-		var headers = make(map[string]string, len(m.Headers))
-		for _, header := range m.Headers {
-			headers[string(header.Key)] = string(header.Value)
-		}
-
-		var s = struct {
-			Headers map[string]string `json:"_headers"`
-			Body    []byte            `json:"_body"`
-		}{Headers: headers, Body: m.Value}
-
-		var marshalled, err = json.Marshal(s)
-		if err != nil {
-			ks.logger.Warn("json.Marshall failed for payload", zap.Error(err), zap.String("payload", string(s.Body)))
-		}
-
-		// even if there is an error, we will continue with what we have marshalled
-		body = isb.Body{Payload: marshalled}
-	} else {
-		// without headers, the payload will only have the body
-		body = isb.Body{Payload: m.Value}
+	var body = isb.Body{Payload: m.Value}
+	var headers = make(map[string]string, len(m.Headers))
+	for _, header := range m.Headers {
+		headers[string(header.Key)] = string(header.Value)
 	}
 
 	msg := isb.Message{
@@ -492,6 +454,7 @@ func (ks *kafkaSource) toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage
 			MessageInfo: isb.MessageInfo{EventTime: m.Timestamp},
 			ID:          readOffset.String(),
 			Keys:        []string{string(m.Key)},
+			Headers:     headers,
 		},
 		Body: body,
 	}

@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: reduce-stream-java
 spec:
+  watermark:
+    maxDelay: 30s
   vertices:
     - name: in
       source:

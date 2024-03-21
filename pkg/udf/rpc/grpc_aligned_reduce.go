@@ -189,6 +189,7 @@ func createAlignedReduceRequest(windowRequest *window.TimedWindowRequest) *reduc
 			Value:     windowRequest.ReadMessage.Payload,
 			EventTime: timestamppb.New(windowRequest.ReadMessage.MessageInfo.EventTime),
 			Watermark: timestamppb.New(windowRequest.ReadMessage.Watermark),
+			Headers:   windowRequest.ReadMessage.Headers,
 		}
 	}
 

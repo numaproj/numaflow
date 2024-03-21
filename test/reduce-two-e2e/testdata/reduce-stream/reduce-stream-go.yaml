@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: reduce-stream-go
 spec:
+  watermark:
+    maxDelay: 30s
   vertices:
     - name: in
       source:

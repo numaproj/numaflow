@@ -534,10 +534,10 @@ func (df *DataForward) shouldDropMessage(message *isb.ReadMessage) bool {
 		nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
 		// if there is no window open, drop the message
 		if nextWinAsSeenByWriter == nil || df.windower.Type() == window.Unaligned {
-			df.log.Debugw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+			df.log.Infow("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
 			return true
 		} else if message.EventTime.Before(nextWinAsSeenByWriter.StartTime()) { // if the message doesn't fall in the next window that is about to be closed drop it.
-			df.log.Debugw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
+			df.log.Infow("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
 			metrics.ReduceDroppedMessagesCount.With(map[string]string{
 				metrics.LabelVertex:             df.vertexName,
 				metrics.LabelPipeline:           df.pipelineName,

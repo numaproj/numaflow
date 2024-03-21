@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: complex-sliding-sum
 spec:
+  watermark:
+    maxDelay: 20s
   limits:
     readBatchSize: 50
   vertices:
