@@ -55,10 +55,14 @@ func (p *MessageInfo) UnmarshalBinary(data []byte) (err error) {
 }
 
 type headerPreamble struct {
-	MLen       int32
-	MsgKind    MessageKind
-	IDLen      int16
-	KeyLen     int16
+	// message length
+	MLen    int32
+	MsgKind MessageKind
+	// message ID len
+	IDLen int16
+	// message keys length
+	KeysLen int16
+	// header length
 	HeadersLen int16
 }
 
@@ -73,7 +77,7 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 		MLen:       int32(len(msgInfo)),
 		MsgKind:    h.Kind,
 		IDLen:      int16(len(h.ID)),
-		KeyLen:     int16(len(h.Keys)),
+		KeysLen:    int16(len(h.Keys)),
 		HeadersLen: int16(len(h.Headers)),
 	}
 	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
@@ -96,6 +100,7 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 			return nil, err
 		}
 	}
+
 	for k, v := range h.Headers {
 		if err = binary.Write(buf, binary.LittleEndian, int16(len(k))); err != nil {
 			return nil, err
@@ -136,7 +141,7 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 		return err
 	}
 	keys := make([]string, 0)
-	for i := int16(0); i < preamble.KeyLen; i++ {
+	for i := int16(0); i < preamble.KeysLen; i++ {
 		var kl int16
 		if err = binary.Read(r, binary.LittleEndian, &kl); err != nil {
 			return err
@@ -170,12 +175,15 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 		}
 		headers[string(k)] = string(v)
 	}
+
+	// deserialization will create empty map (nil map is different from empty map)
 	if len(headers) != 0 {
 		h.Headers = headers
 	}
 	h.MessageInfo = *msgInfo
 	h.Kind = preamble.MsgKind
 	h.ID = string(id)
+
 	return err
 }
 

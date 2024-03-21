@@ -163,6 +163,8 @@ func New(
 
 		// we don't need to consider event time in the header
 		r.Header.Del(dfv1.KeyMetaEventTime)
+		// TODO(security): Auth headers will be passed
+		// https://github.com/numaproj/numaflow/issues/1583
 		headers := make(map[string]string, len(r.Header))
 		for k, v := range r.Header {
 			// multi-value headers are joined with ","

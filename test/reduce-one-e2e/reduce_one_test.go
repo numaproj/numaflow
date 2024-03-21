@@ -241,8 +241,8 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	// It goes on like this, and at the 6th 10s, the output is {value: 180}
 	// At the 7th 10s, the output remains 180 as the window slides forward.
 
-	// we only have to extend the timeout for the first output to be produced
-	// we don't need to wait for the rest of the outputs since its synchronous
+	// we only have to extend the timeout for the first output to be produced. for the rest,
+	// we just need to wait for the default timeout for the rest of the outputs since its synchronous
 	w.Expect().
 		SinkContains("sink", "30", WithTimeout(300*time.Second)).
 		SinkContains("sink", "60").
