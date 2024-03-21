@@ -18,7 +18,9 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"strings"
 
 	"go.uber.org/zap"
 
@@ -108,12 +110,12 @@ func (t *ToLog) IsFull() bool {
 func (t *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	prefix := "(" + t.GetName() + ")"
 	for _, message := range messages {
-		logSinkWriteCount.With(map[string]string{metrics.LabelVertex: t.name, metrics.LabelPipeline: t.pipelineName}).Inc()
-		log.Println(prefix, " Payload - ", string(message.Payload), " Keys - ", message.Keys, " EventTime - ", message.EventTime.UnixMilli())
-		log.Println("Headers - ")
+		var hStr strings.Builder
 		for k, v := range message.Headers {
-			log.Println(" ", k, ":", v)
+			hStr.WriteString(fmt.Sprintf("%s: %s, ", k, v))
 		}
+		logSinkWriteCount.With(map[string]string{metrics.LabelVertex: t.name, metrics.LabelPipeline: t.pipelineName}).Inc()
+		log.Println(prefix, " Payload - ", string(message.Payload), " Keys - ", message.Keys, " EventTime - ", message.EventTime.UnixMilli(), " Headers - ", hStr.String())
 	}
 	return nil, make([]error, len(messages))
 }
