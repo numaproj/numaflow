@@ -53,6 +53,8 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	//
+
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
