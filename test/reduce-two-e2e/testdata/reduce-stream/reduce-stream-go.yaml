@@ -15,13 +15,13 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: compute-sum
       partitions: 2
       udf:
         container:
           # compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducestreamer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-stream-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/reduce-stream-sum:stable
         groupBy:
           window:
             fixed:

@@ -16,7 +16,7 @@ spec:
         min: 1
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: compute-count
       partitions: 1
       udf:

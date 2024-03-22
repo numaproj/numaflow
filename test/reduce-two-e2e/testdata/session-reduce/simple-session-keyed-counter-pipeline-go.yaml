@@ -16,13 +16,13 @@ spec:
         min: 1
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: compute-count
       partitions: 1
       udf:
         container:
           # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
-          image: quay.io/numaio/numaflow-go/session-counter:v0.6.1
+          image: quay.io/numaio/numaflow-go/session-counter:stable
         groupBy:
           window:
             session:
