@@ -194,6 +194,7 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 		SinkContains("sink", "76").
 		SinkContains("sink", "120").
 		SinkContains("sink", "240")
+
 	done <- struct{}{}
 }
 
@@ -209,6 +210,10 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+
+	go func() {
+		w.Expect().VertexPodLogContains("log-sink", "30", PodLogCheckOptionWithTimeout(10*time.Minute))
+	}()
 
 	done := make(chan struct{})
 	go func() {

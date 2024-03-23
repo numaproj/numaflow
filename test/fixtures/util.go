@@ -24,7 +24,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -419,9 +418,13 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 	var retryBackOff = wait.Backoff{
 		Factor:   1,
 		Jitter:   0,
-		Steps:    3,
+		Steps:    10,
 		Duration: time.Second * 1,
 	}
+
+	defer func() {
+		fmt.Printf("POD %s: EOF\n", podName)
+	}()
 
 	err = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
 		stream, err = client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
@@ -438,11 +441,6 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 	}
 	defer func() { _ = stream.Close() }()
 
-	exp, err := regexp.Compile(regex)
-	if err != nil {
-		return err
-	}
-
 	s := bufio.NewScanner(stream)
 	for {
 		select {
@@ -453,9 +451,7 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 				return s.Err()
 			}
 			data := s.Bytes()
-			if exp.Match(data) {
-				result <- true
-			}
+			fmt.Printf("POD %s: %s\n", podName, string(data))
 		}
 	}
 }

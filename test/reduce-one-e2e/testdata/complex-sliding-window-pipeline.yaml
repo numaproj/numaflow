@@ -3,8 +3,6 @@ kind: Pipeline
 metadata:
   name: complex-sliding-sum
 spec:
-  watermark:
-    maxDelay: 20s
   limits:
     readBatchSize: 50
   vertices:
@@ -21,6 +19,10 @@ spec:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
     - name: keyed-fixed-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
       partitions: 2
       udf:
         container:
@@ -34,6 +36,10 @@ spec:
           storage:
             emptyDir: {}
     - name: non-keyed-fixed-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
@@ -46,6 +52,10 @@ spec:
           storage:
             emptyDir: {}
     - name: non-keyed-sliding-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "true" # DO NOT forget the double quotes!!!
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
@@ -66,6 +76,11 @@ spec:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
             image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+    - name: log-sink
+      scale:
+        min: 1
+      sink:
+        log: {}
   edges:
     - from: in
       to: atoi
@@ -77,3 +92,5 @@ spec:
       to: non-keyed-sliding-sum
     - from: non-keyed-sliding-sum
       to: sink
+    - from: non-keyed-sliding-sum
+      to: log-sink
