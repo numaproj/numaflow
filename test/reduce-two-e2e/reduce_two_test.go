@@ -142,7 +142,7 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	if long == "java" {
+	if lang == "java" {
 		go func() {
 			w.Expect().VertexPodLogContains("log-sink", "5", PodLogCheckOptionWithTimeout(10*time.Minute))
 		}()
