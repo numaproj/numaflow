@@ -15,7 +15,7 @@ spec:
       partitions: 1
       udf:
         container:
-          # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
+          # TODO: Once the session-sum example is merged, add link to source code and change tag to stable
           image: quay.io/numaio/numaflow-go/session-sum:v0.6.1
           imagePullPolicy: Always
         groupBy:
