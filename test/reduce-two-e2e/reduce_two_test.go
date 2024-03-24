@@ -144,7 +144,7 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 
 	if lang == "java" {
 		go func() {
-			w.Expect().PrintVertexPodLogs(ctx, "log-sink")
+			w.Expect().PrintVertexPodLogs(ctx, "sink", "udsink")
 		}()
 	}
 

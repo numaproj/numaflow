@@ -212,7 +212,7 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	w.Expect().VertexPodsRunning()
 
 	go func() {
-		w.Expect().PrintVertexPodLogs(ctx, "log-sink")
+		w.Expect().PrintVertexPodLogs(ctx, "log-sink", "numa")
 	}()
 
 	done := make(chan struct{})

@@ -145,7 +145,7 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 	return t
 }
 
-func (t *Expect) PrintVertexPodLogs(ctx context.Context, vertexName string) *Expect {
+func (t *Expect) PrintVertexPodLogs(ctx context.Context, vertexName string, containerName string) *Expect {
 	t.t.Helper()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, t.pipeline.Name, dfv1.KeyVertexName, vertexName)
 	podList, err := t.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
@@ -170,7 +170,7 @@ func (t *Expect) PrintVertexPodLogs(ctx context.Context, vertexName string) *Exp
 	}()
 
 	err = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
-		stream, err = t.kubeClient.CoreV1().Pods(Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Follow: true, Container: "numa"}).Stream(ctx)
+		stream, err = t.kubeClient.CoreV1().Pods(Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
 		if err == nil {
 			return true, nil
 		}
@@ -197,8 +197,6 @@ func (t *Expect) PrintVertexPodLogs(ctx context.Context, vertexName string) *Exp
 			fmt.Printf("POD %s: %s\n", pod.Name, string(data))
 		}
 	}
-
-	return t
 }
 
 func (t *Expect) VertexPodLogNotContains(vertexName, regex string, opts ...PodLogCheckOption) *Expect {
