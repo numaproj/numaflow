@@ -28,25 +28,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/window"
 )
 
 const (
-	testPipelineName    = "testPipeline"
-	testProcessorEntity = "publisherTestPod"
-	publisherKeyspace   = testPipelineName + "_" + testProcessorEntity + "_%s"
+	testPipelineName = "testPipeline"
 )
-
-type pbqReader struct {
-}
-
-func (p *pbqReader) ReadCh() <-chan *window.TimedWindowRequest {
-	return nil
-}
-
-func (p *pbqReader) GC() error {
-	return nil
-}
 
 type forwardTest struct {
 	count   int
@@ -63,18 +49,6 @@ func (f *forwardTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer,
 	}
 	f.count++
 	return steps, nil
-}
-
-var keyedVertex = &dfv1.VertexInstance{
-	Vertex: &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "test-pipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-			UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{Keyed: true}},
-		},
-	}},
-	Hostname: "test-host",
-	Replica:  0,
 }
 
 // TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.

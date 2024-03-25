@@ -164,44 +164,39 @@ outerLoop:
 func (pm *ProcessAndForward) forwardResponses(ctx context.Context) {
 	defer close(pm.forwardDoneCh)
 
-	for {
-		select {
-		case response, ok := <-pm.responseCh:
-			if !ok {
-				return
-			}
-			if response.EOF {
-				// publish watermark
-				pm.publishWM(ctx)
+	for response := range pm.responseCh {
+		if response.EOF {
+			// publish watermark
+			pm.publishWM(ctx)
 
-				// delete the closed windows which are tracked by the windower
-				pm.windower.DeleteClosedWindow(response.Window)
+			// delete the closed windows which are tracked by the windower
+			pm.windower.DeleteClosedWindow(response.Window)
 
-				// persist the GC event for unaligned window type (compactor will compact it) and invoke GC for aligned window type
-				if pm.windower.Type() == window.Unaligned {
-					err := pm.opts.gcEventsTracker.PersistGCEvent(response.Window)
+			// persist the GC event for unaligned window type (compactor will compact it) and invoke GC for aligned window type
+			if pm.windower.Type() == window.Unaligned {
+				err := pm.opts.gcEventsTracker.PersistGCEvent(response.Window)
+				if err != nil {
+					pm.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", response.Window.ID()))
+				}
+			} else {
+				pid := *response.Window.Partition()
+
+				if pbqReader := pm.pbqManager.GetPBQ(pid); pbqReader != nil {
+					err := pbqReader.GC()
+					// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
 					if err != nil {
-						pm.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", response.Window.ID()))
+						pm.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.String("partitionID", pid.String()))
+						return
 					}
-				} else {
-					pid := *response.Window.Partition()
-
-					if pbqReader := pm.pbqManager.GetPBQ(pid); pbqReader != nil {
-						err := pbqReader.GC()
-						// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
-						if err != nil {
-							pm.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.String("partitionID", pid.String()))
-							return
-						}
-						pm.log.Infow("Finished GC", zap.String("partitionID", pid.String()))
-
-					}
+					pm.log.Infow("Finished GC", zap.String("partitionID", pid.String()))
 
 				}
-				continue
+
 			}
-			pm.forwardToBuffers(ctx, response)
+			continue
 		}
+
+		pm.forwardToBuffers(ctx, response)
 	}
 }
 
