@@ -75,7 +75,7 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// The reduce stream application summarizes the input messages and returns the sum when the sum is greater than 100.
 	// Since we are sending 3s, the first returned message should be 102.
 	// There should be no other values.
-	w.Expect().SinkContains("sink", "102")
+	w.Expect().SinkContains("sink", "102", SinkCheckPrintLogs())
 	w.Expect().SinkNotContains("sink", "99")
 	w.Expect().SinkNotContains("sink", "105")
 	done <- struct{}{}
