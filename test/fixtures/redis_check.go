@@ -62,32 +62,41 @@ func redisContains(pipelineName, sinkName, targetStr string, expectedCount int) 
 }
 
 type redisCheckOptions struct {
-	count   int
-	timeout time.Duration
+	count     int
+	timeout   time.Duration
+	printLogs bool
 }
 
 func defaultRedisCheckOptions() *redisCheckOptions {
 	return &redisCheckOptions{
-		count:   1,
-		timeout: defaultTimeout,
+		count:     1,
+		timeout:   defaultTimeout,
+		printLogs: false,
 	}
 }
 
 type SinkCheckOption func(*redisCheckOptions)
 
-// WithContainCount updates the redisCheckOptions to specify count.
+// SinkCheckWithContainCount updates the redisCheckOptions to specify count.
 // The count is the expected number of matches for the check.
-func WithContainCount(c int) SinkCheckOption {
+func SinkCheckWithContainCount(c int) SinkCheckOption {
 	return func(o *redisCheckOptions) {
 		o.count = c
 	}
 }
 
-// WithTimeout updates the redisCheckOptions to specify timeout.
+// SinkCheckWithTimeout updates the redisCheckOptions to specify timeout.
 // The timeout specifies how long the redis check will wait for expected data to be ready in redis.
-func WithTimeout(t time.Duration) SinkCheckOption {
+func SinkCheckWithTimeout(t time.Duration) SinkCheckOption {
 	return func(o *redisCheckOptions) {
 		o.timeout = t
+	}
+}
+
+// SinkCheckPrintLogs set the option to print logs.
+func SinkCheckPrintLogs() SinkCheckOption {
+	return func(o *redisCheckOptions) {
+		o.printLogs = true
 	}
 }
 
