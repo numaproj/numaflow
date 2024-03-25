@@ -198,65 +198,61 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	done <- struct{}{}
 }
 
-//// two reduce vertices (keyed and non-keyed) followed by a sliding window vertex
-//func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
-//	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-//	defer cancel()
-//	w := r.Given().Pipeline("@testdata/complex-sliding-window-pipeline.yaml").
-//		When().
-//		CreatePipelineAndWait()
-//	defer w.DeletePipelineAndWait()
-//	pipelineName := "complex-sliding-sum"
-//
-//	// wait for all the pods to come up
-//	w.Expect().VertexPodsRunning()
-//
-//	go func() {
-//		w.Expect().PrintVertexPodLogs(ctx, "log-sink", "numa")
-//	}()
-//
-//	done := make(chan struct{})
-//	go func() {
-//		// publish messages to source vertex, with event time starting from 60000
-//		startTime := 60000
-//
-//		for i := 0; true; i++ {
-//			select {
-//			case <-ctx.Done():
-//				return
-//			case <-done:
-//				return
-//			default:
-//				// send the number "1" and "2" to the pipeline every second
-//				eventTime := strconv.Itoa(startTime + i*1000)
-//				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-//					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))
-//			}
-//		}
-//	}()
-//
-//	// At the keyed reduce vertex, the 5-second fixed window produces output every 5 seconds as
-//	// {key: "even", value: 10(2*5s=10)} and {key: "odd", value: 5(1*5s=5)}.
-//	// At the non-keyed reduce vertex, the 10-second fixed window produces output every 10 seconds as
-//	// {value: 30} ((10+5)*(10s/5s) = 30)
-//	// At the non-keyed sliding window vertex,
-//	// the sliding window is configured with length 60s.
-//	// At the first 10s, the window output is {value: 30}
-//	// At the second 10s, the output is {value: 60} (30+30 = 60)
-//	// It goes on like this, and at the 6th 10s, the output is {value: 180}
-//	// At the 7th 10s, the output remains 180 as the window slides forward.
-//
-//	// we only have to extend the timeout for the first output to be produced. for the rest,
-//	// we just need to wait for the default timeout for the rest of the outputs since its synchronous
-//	w.Expect().
-//		SinkContains("sink", "30", WithTimeout(300*time.Second)).
-//		SinkContains("sink", "60").
-//		SinkNotContains("sink", "80").
-//		SinkContains("sink", "90").
-//		SinkContains("sink", "180").
-//		SinkNotContains("sink", "210")
-//	done <- struct{}{}
-//}
+// two reduce vertices (keyed and non-keyed) followed by a sliding window vertex
+func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	w := r.Given().Pipeline("@testdata/complex-sliding-window-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "complex-sliding-sum"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	done := make(chan struct{})
+	go func() {
+		// publish messages to source vertex, with event time starting from 60000
+		startTime := 60000
+
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				// send the number "1" and "2" to the pipeline every second
+				eventTime := strconv.Itoa(startTime + i*1000)
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))
+			}
+		}
+	}()
+
+	// At the keyed reduce vertex, the 5-second fixed window produces output every 5 seconds as
+	// {key: "even", value: 10(2*5s=10)} and {key: "odd", value: 5(1*5s=5)}.
+	// At the non-keyed reduce vertex, the 10-second fixed window produces output every 10 seconds as
+	// {value: 30} ((10+5)*(10s/5s) = 30)
+	// At the non-keyed sliding window vertex,
+	// the sliding window is configured with length 60s.
+	// At the first 10s, the window output is {value: 30}
+	// At the second 10s, the output is {value: 60} (30+30 = 60)
+	// It goes on like this, and at the 6th 10s, the output is {value: 180}
+	// At the 7th 10s, the output remains 180 as the window slides forward.
+
+	// we only have to extend the timeout for the first output to be produced. for the rest,
+	// we just need to wait for the default timeout for the rest of the outputs since its synchronous
+	w.Expect().
+		SinkContains("sink", "30", SinkCheckWithTimeout(300*time.Second), SinkCheckPrintLogs()).
+		SinkContains("sink", "60").
+		SinkNotContains("sink", "80").
+		SinkContains("sink", "90").
+		SinkContains("sink", "180").
+		SinkNotContains("sink", "210")
+	done <- struct{}{}
+}
 
 func TestReduceSuite(t *testing.T) {
 	suite.Run(t, new(ReduceSuite))
