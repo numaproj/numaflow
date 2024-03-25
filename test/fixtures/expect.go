@@ -45,7 +45,7 @@ type Expect struct {
 func (t *Expect) SinkContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	targetLogStr := fmt.Sprintf("Incremented by 1 the no. of occurrences of %s under hash key %s\n", targetStr, t.pipeline.Name+":"+sinkName)
-	podLogCheckOpts := []PodLogCheckOption{}
+	podLogCheckOpts := []PodLogCheckOption{PodLogCheckOptionWithContainer("udsink")}
 	sinkCheckOpts := defaultRedisCheckOptions() // Any better ways?
 	for _, opt := range opts {
 		if opt != nil {
