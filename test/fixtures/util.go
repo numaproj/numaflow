@@ -454,7 +454,11 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 			}
 			data := s.Bytes()
 			if printLogs {
-				fmt.Printf("%s: %s\n", podName, string(data))
+				if containerName != "" {
+					fmt.Printf("%s[%s]: %s\n", podName, containerName, string(data))
+				} else {
+					fmt.Printf("%s: %s\n", podName, string(data))
+				}
 			}
 			if exp.Match(data) {
 				result <- true
