@@ -71,7 +71,7 @@ type DataForward struct {
 	pbqManager          *pbq.Manager
 	whereToDecider      forwarder.ToWhichStepDecider
 	storeManager        wal.Manager
-	of                  *pnf.Manager
+	of                  *pnf.ProcessAndForward
 	opts                *Options
 	log                 *zap.SugaredLogger
 }
@@ -88,7 +88,7 @@ func NewDataForward(ctx context.Context,
 	watermarkPublishers map[string]publish.Publisher,
 	windowingStrategy window.TimedWindower,
 	idleManager wmb.IdleManager,
-	of *pnf.Manager,
+	of *pnf.ProcessAndForward,
 	opts ...Option) (*DataForward, error) {
 
 	options := DefaultOptions()

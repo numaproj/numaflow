@@ -4,7 +4,7 @@ metadata:
   name: complex-sliding-sum
 spec:
   watermark:
-    maxDelay: 20s
+    maxDelay: 30s
   limits:
     readBatchSize: 50
   vertices:
