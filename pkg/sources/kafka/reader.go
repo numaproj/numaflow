@@ -360,6 +360,7 @@ func NewKafkaSource(
 		return nil, err
 	}
 	ks.forwarder = sourceForwarder
+
 	return ks, nil
 }
 

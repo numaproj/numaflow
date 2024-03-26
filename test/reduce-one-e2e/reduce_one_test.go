@@ -194,6 +194,7 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 		SinkContains("sink", "76").
 		SinkContains("sink", "120").
 		SinkContains("sink", "240")
+
 	done <- struct{}{}
 }
 
@@ -209,6 +210,8 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
@@ -244,7 +247,7 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	// we only have to extend the timeout for the first output to be produced. for the rest,
 	// we just need to wait for the default timeout for the rest of the outputs since its synchronous
 	w.Expect().
-		SinkContains("sink", "30", WithTimeout(300*time.Second)).
+		SinkContains("sink", "30", SinkCheckWithTimeout(300*time.Second)).
 		SinkContains("sink", "60").
 		SinkNotContains("sink", "80").
 		SinkContains("sink", "90").

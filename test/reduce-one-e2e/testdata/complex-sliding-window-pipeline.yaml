@@ -4,7 +4,7 @@ metadata:
   name: complex-sliding-sum
 spec:
   watermark:
-    maxDelay: 20s
+    maxDelay: "20s"
   limits:
     readBatchSize: 50
   vertices:
@@ -21,6 +21,10 @@ spec:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: keyed-fixed-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "false" # DO NOT forget the double quotes!!!
       partitions: 2
       udf:
         container:
@@ -34,6 +38,10 @@ spec:
           storage:
             emptyDir: {}
     - name: non-keyed-fixed-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "false" # DO NOT forget the double quotes!!!
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
@@ -46,6 +54,10 @@ spec:
           storage:
             emptyDir: {}
     - name: non-keyed-sliding-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "false" # DO NOT forget the double quotes!!!
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
