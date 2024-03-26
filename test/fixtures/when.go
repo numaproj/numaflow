@@ -42,33 +42,12 @@ type When struct {
 
 	portForwarderStopChannels map[string]chan struct{}
 	streamLogsStopChannels    map[string]chan struct{}
-	// Key: vertex label selector
-	// Value: the ip of, one of the pods matching the label selector
-	vertexToPodIpMapping map[string]string
 }
 
 // SendMessageTo sends msg to one of the pods in http source vertex.
 func (w *When) SendMessageTo(pipelineName string, vertexName string, req HttpPostRequest) *When {
 	w.t.Helper()
-	if w.vertexToPodIpMapping == nil {
-		w.vertexToPodIpMapping = make(map[string]string)
-	}
-	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
-	if w.vertexToPodIpMapping[labelSelector] == "" {
-		ctx := context.Background()
-		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
-		if err != nil {
-			w.t.Fatalf("Error getting vertex pod list: %v", err)
-		}
-		if len(podList.Items) == 0 {
-			w.t.Fatalf("No running pod found in pipeline %s, vertex: %s", pipelineName, vertexName)
-		}
-		w.vertexToPodIpMapping[labelSelector] = podList.Items[0].Status.PodIP
-	}
-
-	// There could be a rare corner case when a previous added pod gets replaced by a new one, making the mapping entry no longer valid.
-	// Considering current e2e tests are all lightweight, we assume no such case for now.
-	SendMessageTo(w.vertexToPodIpMapping[labelSelector], vertexName, req)
+	SendMessageTo(fmt.Sprintf("%s-%s-headless", pipelineName, vertexName), vertexName, req)
 	return w
 }
 
