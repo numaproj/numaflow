@@ -330,7 +330,7 @@ func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, na
 	for _, p := range podList.Items {
 		go func(podName string) {
 			fmt.Printf("Watching POD: %s\n", podName)
-			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan, o.printLogs); err != nil {
+			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan); err != nil {
 				errChan <- err
 				return
 			}
@@ -382,7 +382,7 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	for _, p := range podList.Items {
 		go func(podName string) {
 			fmt.Printf("Watching POD: %s\n", podName)
-			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan, o.printLogs); err != nil {
+			if err := podLogContains(cctx, kubeClient, namespace, podName, o.container, regex, resultChan); err != nil {
 				errChan <- err
 				return
 			}
@@ -411,7 +411,7 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	}
 }
 
-func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan bool, printLogs bool) error {
+func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan bool) error {
 	var stream io.ReadCloser
 	var err error
 	// Streaming logs from file could be rotated by container log manager and as consequence, we receive EOF and need to re-initialize the stream.
@@ -454,13 +454,6 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 				return s.Err()
 			}
 			data := s.Bytes()
-			if printLogs {
-				if containerName != "" {
-					fmt.Printf("%s[%s]: %s\n", podName, containerName, string(data))
-				} else {
-					fmt.Printf("%s: %s\n", podName, string(data))
-				}
-			}
 			if exp.Match(data) {
 				result <- true
 			}
@@ -472,7 +465,6 @@ type podLogCheckOptions struct {
 	container string
 	timeout   time.Duration
 	count     int
-	printLogs bool
 }
 
 func defaultPodLogCheckOptions() *podLogCheckOptions {
@@ -480,7 +472,6 @@ func defaultPodLogCheckOptions() *podLogCheckOptions {
 		container: "",
 		timeout:   defaultTimeout,
 		count:     -1,
-		printLogs: false,
 	}
 }
 
@@ -501,12 +492,6 @@ func PodLogCheckOptionWithCount(c int) PodLogCheckOption {
 func PodLogCheckOptionWithContainer(c string) PodLogCheckOption {
 	return func(o *podLogCheckOptions) {
 		o.container = c
-	}
-}
-
-func PodLogCheckOptionPrintLogs() PodLogCheckOption {
-	return func(o *podLogCheckOptions) {
-		o.printLogs = true
 	}
 }
 
