@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: even-odd-sum
 spec:
+  watermark:
+    maxDelay: 30s
   vertices:
     - name: in
       source:
