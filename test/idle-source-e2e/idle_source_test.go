@@ -57,6 +57,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
+
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 0
@@ -80,8 +82,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	w.Expect().
-		SinkContains("sink", "20", WithTimeout(300*time.Second)).
-		SinkContains("sink", "40", WithTimeout(300*time.Second))
+		SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second)).
+		SinkContains("sink", "40", SinkCheckWithTimeout(300*time.Second))
 	done <- struct{}{}
 }
 
@@ -92,10 +94,12 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 	topic := "kafka-topic"
 
 	w := is.Given().Pipeline("@testdata/kafka-pipeline.yaml").When().CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
-	defer w.DeletePipelineAndWait()
 	defer DeleteKafkaTopic(topic)
 
 	done := make(chan struct{})
@@ -120,9 +124,9 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 	}()
 
 	// since the window duration is 10 second, so the count of event will be 20, when sending data to only both partition.
-	w.Expect().SinkContains("sink", "20", WithTimeout(300*time.Second))
+	w.Expect().SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second))
 	// since the window duration is 10 second, so the count of event will be 10, when sending data to only one partition.
-	w.Expect().SinkContains("sink", "10", WithTimeout(300*time.Second))
+	w.Expect().SinkContains("sink", "10", SinkCheckWithTimeout(300*time.Second))
 
 	done <- struct{}{}
 }

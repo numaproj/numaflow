@@ -28,7 +28,7 @@ metadata:
     app: redis
 data:
   redis-config:  |
-    maxmemory 10mb
+    maxmemory 100mb
     maxmemory-policy allkeys-lru
     protected-mode no
 ---
