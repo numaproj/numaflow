@@ -62,16 +62,14 @@ func redisContains(pipelineName, sinkName, targetStr string, expectedCount int) 
 }
 
 type redisCheckOptions struct {
-	count     int
-	timeout   time.Duration
-	printLogs bool
+	count   int
+	timeout time.Duration
 }
 
 func defaultRedisCheckOptions() *redisCheckOptions {
 	return &redisCheckOptions{
-		count:     1,
-		timeout:   defaultTimeout,
-		printLogs: false,
+		count:   1,
+		timeout: defaultTimeout,
 	}
 }
 
