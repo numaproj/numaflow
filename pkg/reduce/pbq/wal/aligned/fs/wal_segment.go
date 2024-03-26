@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -435,7 +436,7 @@ func (w *alignedWAL) Close() (err error) {
 	if err != nil {
 		return err
 	}
-
+	log.Println("alignedWAL closed successfully - ", w.partitionID.String())
 	return nil
 }
 
