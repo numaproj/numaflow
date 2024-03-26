@@ -93,13 +93,6 @@ func SinkCheckWithTimeout(t time.Duration) SinkCheckOption {
 	}
 }
 
-// SinkCheckPrintLogs set the option to print logs.
-func SinkCheckPrintLogs() SinkCheckOption {
-	return func(o *redisCheckOptions) {
-		o.printLogs = true
-	}
-}
-
 type CheckFunc func() bool
 
 // runChecks executes a performChecks function with retry strategy (retryInterval with timeout).

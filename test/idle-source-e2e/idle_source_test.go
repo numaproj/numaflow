@@ -80,8 +80,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	w.Expect().
-		SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second), SinkCheckPrintLogs()).
-		SinkContains("sink", "40", SinkCheckWithTimeout(300*time.Second), SinkCheckPrintLogs())
+		SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second)).
+		SinkContains("sink", "40", SinkCheckWithTimeout(300*time.Second))
 	done <- struct{}{}
 }
 

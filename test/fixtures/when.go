@@ -41,6 +41,7 @@ type When struct {
 	kubeClient     kubernetes.Interface
 
 	portForwarderStopChannels map[string]chan struct{}
+	streamLogsStopChannels    map[string]chan struct{}
 	// Key: vertex label selector
 	// Value: the ip of, one of the pods matching the label selector
 	vertexToPodIpMapping map[string]string
@@ -236,6 +237,38 @@ func (w *When) TerminateAllPodPortForwards() *When {
 	if len(w.portForwarderStopChannels) > 0 {
 		for k, v := range w.portForwarderStopChannels {
 			w.t.Logf("Terminating port-forward for POD %s", k)
+			close(v)
+		}
+	}
+	return w
+}
+
+func (w *When) StreamVertexPodlogs(vertexName, containerName string) *When {
+	w.t.Helper()
+	ctx := context.Background()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, w.pipeline.Name, dfv1.KeyVertexName, vertexName)
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting vertex pods: %v", err)
+	}
+	for _, pod := range podList.Items {
+		stopCh := make(chan struct{}, 1)
+		if err := streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, containerName, stopCh); err != nil {
+			w.t.Fatalf("Error streaming pod %q logs: %v", pod.Name, err)
+		}
+		if w.streamLogsStopChannels == nil {
+			w.streamLogsStopChannels = make(map[string]chan struct{})
+		}
+		w.streamLogsStopChannels[pod.Name] = stopCh
+	}
+	return w
+}
+
+func (w *When) TerminateAllPodLogs() *When {
+	w.t.Helper()
+	if len(w.streamLogsStopChannels) > 0 {
+		for k, v := range w.streamLogsStopChannels {
+			w.t.Logf("Terminating log streaming for POD %s", k)
 			close(v)
 		}
 	}

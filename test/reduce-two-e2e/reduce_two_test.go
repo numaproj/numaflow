@@ -53,7 +53,7 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	//
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
@@ -75,7 +75,7 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// The reduce stream application summarizes the input messages and returns the sum when the sum is greater than 100.
 	// Since we are sending 3s, the first returned message should be 102.
 	// There should be no other values.
-	w.Expect().SinkContains("sink", "102", SinkCheckPrintLogs())
+	w.Expect().SinkContains("sink", "102")
 	w.Expect().SinkNotContains("sink", "99")
 	w.Expect().SinkNotContains("sink", "105")
 	done <- struct{}{}
@@ -142,6 +142,8 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
+
 	count := 0
 	done := make(chan struct{})
 	go func() {
@@ -168,7 +170,7 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 		}
 	}()
 
-	w.Expect().SinkContains("sink", "5", SinkCheckPrintLogs())
+	w.Expect().SinkContains("sink", "5")
 	w.Expect().SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second))
 	w.Expect().SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second))
 	w.Expect().SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second))
