@@ -112,9 +112,14 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 			}
 		}
 
-		// close the stream after sending all the messages
-		if sendErr = stream.CloseSend(); sendErr != nil && !errors.Is(sendErr, io.EOF) {
-			errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			sendErr = stream.CloseSend()
+			if sendErr != nil && !errors.Is(sendErr, io.EOF) {
+				errCh <- util.ToUDFErr("ReduceFn stream.CloseSend()", sendErr)
+			}
 		}
 	}()
 

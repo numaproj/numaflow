@@ -4,7 +4,7 @@ metadata:
   name: complex-sliding-sum
 spec:
   watermark:
-    maxDelay: 20s
+    maxDelay: 30s
   limits:
     readBatchSize: 50
   vertices:
@@ -32,7 +32,9 @@ spec:
               length: 5s
           keyed: true
           storage:
-            emptyDir: {}
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+              accessMode: ReadWriteOnce
     - name: non-keyed-fixed-sum
       udf:
         container:
@@ -44,7 +46,9 @@ spec:
               length: 10s
           keyed: false
           storage:
-            emptyDir: {}
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+              accessMode: ReadWriteOnce
     - name: non-keyed-sliding-sum
       udf:
         container:
@@ -57,7 +61,9 @@ spec:
               slide: 10s
           keyed: false
           storage:
-            emptyDir: {}
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+              accessMode: ReadWriteOnce
     - name: sink
       scale:
         min: 1

@@ -159,6 +159,7 @@ func (m *Manager) ShutDown(ctx context.Context) {
 					// exponential backoff will return if err is not nil
 					return false, nil
 				}
+				m.log.Infow("Successfully closed pbq", zap.String("ID", q.PartitionID.String()))
 				return true, nil
 			})
 			if ctxClosedErr != nil {
