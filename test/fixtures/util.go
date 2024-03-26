@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -509,12 +510,7 @@ func PodLogCheckOptionPrintLogs() PodLogCheckOption {
 	}
 }
 
-func streamPodLogs(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName string, stopCh <-chan struct{}) error {
-	var stream io.ReadCloser
-	var err error
-	// Streaming logs from file could be rotated by container log manager and as consequence, we receive EOF and need to re-initialize the stream.
-	// To prevent such issue, we apply retry on stream initialization.
-	// 3 attempts with 1 second fixed wait time are tested sufficient for it.
+func streamPodLogs(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName string, stopCh <-chan struct{}) {
 	var retryBackOff = wait.Backoff{
 		Factor:   1,
 		Jitter:   0,
@@ -522,38 +518,43 @@ func streamPodLogs(ctx context.Context, client kubernetes.Interface, namespace, 
 		Duration: time.Second * 1,
 	}
 
-	err = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
-		stream, err = client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
-		if err == nil {
-			return true, nil
-		}
+	go func() {
+		var stream io.ReadCloser
+		var err error
 
-		fmt.Printf("Got error %v, retrying.\n", err)
-		return false, nil
-	})
-
-	if err != nil {
-		return err
-	}
-	defer func() { _ = stream.Close() }()
-
-	s := bufio.NewScanner(stream)
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-stopCh:
-			return nil
-		default:
-			if !s.Scan() {
-				return s.Err()
+		err = wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
+			stream, err = client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream(ctx)
+			if err == nil {
+				return true, nil
 			}
-			data := s.Bytes()
-			if containerName != "" {
-				fmt.Printf("%s[%s]: %s\n", podName, containerName, string(data))
-			} else {
-				fmt.Printf("%s: %s\n", podName, string(data))
+
+			fmt.Printf("Got error %v, retrying.\n", err)
+			return false, nil
+		})
+
+		if err != nil {
+			log.Fatalf("Failed to stream pod %q logs: %v", podName, err)
+		}
+		defer func() { _ = stream.Close() }()
+
+		s := bufio.NewScanner(stream)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-stopCh:
+				return
+			default:
+				if !s.Scan() {
+					log.Fatalf("Error streaming pod %q logs: %v", podName, s.Err())
+				}
+				data := s.Bytes()
+				if containerName != "" {
+					fmt.Printf("%s[%s]: %s\n", podName, containerName, string(data))
+				} else {
+					fmt.Printf("%s: %s\n", podName, string(data))
+				}
 			}
 		}
-	}
+	}()
 }

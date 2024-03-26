@@ -253,9 +253,7 @@ func (w *When) StreamVertexPodlogs(vertexName, containerName string) *When {
 	}
 	for _, pod := range podList.Items {
 		stopCh := make(chan struct{}, 1)
-		if err := streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, containerName, stopCh); err != nil {
-			w.t.Fatalf("Error streaming pod %q logs: %v", pod.Name, err)
-		}
+		streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, containerName, stopCh)
 		if w.streamLogsStopChannels == nil {
 			w.streamLogsStopChannels = make(map[string]chan struct{})
 		}
