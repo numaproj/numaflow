@@ -109,7 +109,7 @@ func TestWriteToBuffer(t *testing.T) {
 				vertexReplica:  0,
 			}
 
-			writeOffsets := mngr.writeToBuffer(ctx, "buffer", 0, value.responses)
+			writeOffsets, _ := mngr.writeToBuffer(ctx, "buffer", 0, value.responses)
 			assert.Equal(t, value.expectedCount, len(writeOffsets))
 		})
 	}

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -199,36 +200,46 @@ func (pm *ProcessAndForward) forwardResponses(ctx context.Context) {
 			continue
 		}
 
-		pm.forwardToBuffers(ctx, response)
+		err := pm.forwardToBuffers(ctx, response)
+		// error will not be nil only when the context is closed, so we can safely return
+		if err != nil {
+			pm.log.Errorw("Context was closed while forwarding messages to ISB", zap.Error(err))
+			return
+		}
 	}
 }
 
 // forwardToBuffers writes the messages to the ISBs concurrently for each partition.
-func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context, response *window.TimedWindowResponse) {
+func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context, response *window.TimedWindowResponse) error {
 	messagesToStep := pm.whereToStep([]*isb.WriteMessage{response.WriteMessage})
 	// parallel writes to each ISB
-	var wg sync.WaitGroup
 	var mu sync.Mutex
-
+	// use error group
+	var eg errgroup.Group
 	for key, values := range messagesToStep {
 		for index, messages := range values {
 			if len(messages) == 0 {
 				continue
 			}
-			wg.Add(1)
-			go func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
-				defer wg.Done()
-				offsets := pm.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
-				mu.Lock()
-				// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-				pm.latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
-				mu.Unlock()
+
+			func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
+				eg.Go(func() error {
+					offsets, err := pm.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
+					if err != nil {
+						return err
+					}
+					mu.Lock()
+					// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
+					pm.latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
+					mu.Unlock()
+					return nil
+				})
 			}(key, int32(index), messages)
 		}
 	}
 
 	// wait until all the writer go routines return
-	wg.Wait()
+	return eg.Wait()
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.
@@ -267,7 +278,7 @@ func (pm *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[
 }
 
 // writeToBuffer writes to the ISBs.
-func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) []isb.Offset {
+func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var (
 		writeCount int
 		writeBytes float64
@@ -285,7 +296,7 @@ func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 
 	// write to isb with infinite exponential backoff (until shutdown is triggered)
 	var offsets []isb.Offset
-	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func(_ context.Context) (done bool, err error) {
+	ctxClosedErr := wait.ExponentialBackoff(ISBWriteBackoff, func() (done bool, err error) {
 		var writeErrs []error
 		var failedMessages []isb.Message
 		offsets, writeErrs = pm.toBuffers[edgeName][partition].Write(ctx, writeMessages)
@@ -312,6 +323,12 @@ func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pm.vertexReplica)),
 				metrics.LabelPartitionName:      pm.toBuffers[edgeName][partition].GetName()}).Add(float64(len(failedMessages)))
+
+			if ctx.Err() != nil {
+				// no need to retry if the context is closed
+				return false, ctx.Err()
+			}
+			// keep retrying...
 			return false, nil
 		}
 		return true, nil
@@ -319,7 +336,7 @@ func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 
 	if ctxClosedErr != nil {
 		pm.log.Errorw("Ctx closed while writing messages to ISB", zap.Error(ctxClosedErr))
-		return nil
+		return nil, ctxClosedErr
 	}
 
 	metrics.DropMessagesCount.With(map[string]string{
@@ -349,7 +366,7 @@ func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pm.vertexReplica)),
 		metrics.LabelPartitionName:      pm.toBuffers[edgeName][partition].GetName()}).Add(writeBytes)
-	return offsets
+	return offsets, nil
 }
 
 // publishWM publishes the watermark to each edge.
@@ -404,13 +421,18 @@ func (pm *ProcessAndForward) publishWM(ctx context.Context, pid *partition.ID) {
 
 // Shutdown closes all the partitions of the buffer.
 func (pm *ProcessAndForward) Shutdown() {
+	pm.log.Infow("Shutting down ProcessAndForward")
+
 	pm.mu.RLock()
-	// wait for all the pnf routines to finish
+	doneChs := make([]chan struct{}, 0, len(pm.pnfRoutines))
 	for _, doneCh := range pm.pnfRoutines {
-		<-doneCh
+		doneChs = append(doneChs, doneCh)
 	}
 	pm.mu.RUnlock()
 
+	for _, doneCh := range doneChs {
+		<-doneCh
+	}
 	// close the response channel
 	close(pm.responseCh)
 
@@ -427,4 +449,6 @@ func (pm *ProcessAndForward) Shutdown() {
 			}
 		}
 	}
+
+	pm.log.Infow("Successfully shutdown ProcessAndForward")
 }
