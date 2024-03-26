@@ -37,6 +37,7 @@ func NewServerCommand() *cobra.Command {
 		baseHref         string
 		disableAuth      bool
 		serverAddr       string
+		allowedHost      []string
 	)
 
 	command := &cobra.Command{
@@ -58,6 +59,7 @@ func NewServerCommand() *cobra.Command {
 				DisableAuth:      disableAuth,
 				DexServerAddr:    common.NumaflowDexServerAddr,
 				ServerAddr:       serverAddr,
+				allowedHost:      allowedHost,
 			}
 			server := svrcmd.NewServer(opts)
 			log := logging.NewLogger().Named("server")
@@ -70,6 +72,7 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_MANAGED_NAMESPACE", sharedutil.LookupEnvStringOr("NAMESPACE", "numaflow-system")), "The namespace that the server watches when \"--namespaced\" is \"true\".")
 	command.Flags().StringVar(&baseHref, "base-href", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/"), "Base href for Numaflow server, defaults to '/'.")
 	command.Flags().BoolVar(&disableAuth, "disable-auth", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_AUTH", false), "Whether to disable authentication and authorization, defaults to false.")
+	command.Flags().BoolVar(&allowedHost, "allowed-host", sharedutil.LookUpEnvListOr("NUMAFLOW_SERVER_ALLOWED_HOST", true), "List of allowed host for enabled CORS, defaults to true.")
 	command.Flags().StringVar(&serverAddr, "server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
 	return command
 }

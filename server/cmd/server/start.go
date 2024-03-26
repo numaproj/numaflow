@@ -51,6 +51,7 @@ type ServerOptions struct {
 	DisableAuth      bool
 	DexServerAddr    string
 	ServerAddr       string
+	allowedHost      []string
 }
 
 type server struct {
@@ -67,6 +68,12 @@ func (s *server) Start(ctx context.Context) {
 	log := logging.FromContext(ctx)
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
+	router.use(cors.New(cors.Config{
+		AllowOrigins: []string{s.options.allowedHost},
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
+		AllowHeaders: []string{"Origin", "Content-Length", "Content-Type"},
+		AllowCredentials: true,
+	}))
 	router.RedirectTrailingSlash = true
 	// sets the route map for authorization with the base href
 	authRouteMap := CreateAuthRouteMap(s.options.BaseHref)

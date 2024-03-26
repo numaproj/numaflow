@@ -102,6 +102,12 @@ spec:
                 name: numaflow-cmd-params-config
                 key: server.base.href
                 optional: true
+          - name: NUMAFLOW_SERVER_ALLOWED_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: numaflow-cmd-params-config
+                key: server.allowed.host
+                optional: true
           - name: NUMAFLOW_SERVER_DISABLE_AUTH
             valueFrom:
               configMapKeyRef:

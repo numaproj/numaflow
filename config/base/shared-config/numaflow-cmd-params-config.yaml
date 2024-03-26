@@ -26,3 +26,5 @@ data:
   #
   ### The external address of the Numaflow server. This is needed when using Dex for authentication.
   # server.address: https://localhost:8443
+  #
+  server.allowed.host: "https://example.com/", "https://examples.com" # Will switch later to actual urls

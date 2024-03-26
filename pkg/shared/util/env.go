@@ -53,3 +53,18 @@ func LookupEnvBoolOr(key string, defaultValue bool) bool {
 		return defaultValue
 	}
 }
+
+func LookUpEnvListOr(keys []string, defaultValues []string]) bool {
+	if len(keys) != len(defaultValues) {
+		panic("Keys and defaultValues must have the same length")
+	}
+
+	values := make([]string, len(keys))
+	for i, key := range keys {
+		value := LookupEnvStringOr(key, defaultValues[i])
+		values[i] = value
+	}
+
+	return values
+}
+
