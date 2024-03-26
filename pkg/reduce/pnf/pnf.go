@@ -19,6 +19,7 @@ package pnf
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"strconv"
 	"sync"
@@ -122,7 +123,9 @@ func (pm *ProcessAndForward) AsyncSchedulePnF(ctx context.Context,
 	pbq pbq.Reader,
 ) {
 	doneCh := make(chan struct{})
+	pm.mu.Lock()
 	pm.pnfRoutines[partitionID.String()] = doneCh
+	pm.mu.Unlock()
 	go pm.invokeUDF(ctx, doneCh, partitionID, pbq)
 }
 
@@ -142,7 +145,7 @@ outerLoop:
 	for {
 		select {
 		case err := <-errCh:
-			if errors.Is(err, context.Canceled) {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 				pm.log.Infow("Context is canceled, stopping the processAndForward", zap.Error(err))
 				return
 			}
@@ -167,7 +170,7 @@ func (pm *ProcessAndForward) forwardResponses(ctx context.Context) {
 	for response := range pm.responseCh {
 		if response.EOF {
 			// publish watermark
-			pm.publishWM(ctx)
+			pm.publishWM(ctx, response.Window.Partition())
 
 			// delete the closed windows which are tracked by the windower
 			pm.windower.DeleteClosedWindow(response.Window)
@@ -350,7 +353,7 @@ func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 }
 
 // publishWM publishes the watermark to each edge.
-func (pm *ProcessAndForward) publishWM(ctx context.Context) {
+func (pm *ProcessAndForward) publishWM(ctx context.Context, pid *partition.ID) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,
 	// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
@@ -369,6 +372,7 @@ func (pm *ProcessAndForward) publishWM(ctx context.Context) {
 		if publisher, ok := pm.watermarkPublishers[toVertexName]; ok {
 			for index, offsets := range bufferOffsets {
 				if len(offsets) > 0 {
+					log.Println("Publishing watermark ", wm.UnixMilli(), " partition - ", pid.String(), " with offset ", offsets[len(offsets)-1].String())
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is not idling

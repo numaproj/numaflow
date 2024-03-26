@@ -18,7 +18,7 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/reduce-sum:stable
         groupBy:
           window:
             fixed:

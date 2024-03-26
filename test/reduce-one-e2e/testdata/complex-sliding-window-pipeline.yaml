@@ -32,7 +32,9 @@ spec:
               length: 5s
           keyed: true
           storage:
-            emptyDir: {}
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+              accessMode: ReadWriteOnce
     - name: non-keyed-fixed-sum
       udf:
         container:
@@ -44,7 +46,9 @@ spec:
               length: 10s
           keyed: false
           storage:
-            emptyDir: {}
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+              accessMode: ReadWriteOnce
     - name: non-keyed-sliding-sum
       udf:
         container:
@@ -57,15 +61,22 @@ spec:
               slide: 10s
           keyed: false
           storage:
-            emptyDir: {}
-    - name: sink
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+              accessMode: ReadWriteOnce
+#    - name: sink
+#      scale:
+#        min: 1
+#      sink:
+#        udsink:
+#          container:
+#            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+#            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+    - name: log-sink
       scale:
-        min: 1
+          min: 1
       sink:
-        udsink:
-          container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+          log: {}
   edges:
     - from: in
       to: atoi
@@ -76,4 +87,4 @@ spec:
     - from: non-keyed-fixed-sum
       to: non-keyed-sliding-sum
     - from: non-keyed-sliding-sum
-      to: sink
+      to: log-sink
