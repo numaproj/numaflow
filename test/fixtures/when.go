@@ -257,7 +257,7 @@ func (w *When) StreamVertexPodlogs(vertexName, containerName string) *When {
 		if w.streamLogsStopChannels == nil {
 			w.streamLogsStopChannels = make(map[string]chan struct{})
 		}
-		w.streamLogsStopChannels[pod.Name] = stopCh
+		w.streamLogsStopChannels[pod.Name+":"+containerName] = stopCh
 	}
 	return w
 }
