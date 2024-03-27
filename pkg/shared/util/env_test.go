@@ -47,3 +47,8 @@ func TestLookupEnvBoolOr(t *testing.T) {
 	os.Setenv("fake_bool_env", "5")
 	assert.Panics(t, func() { LookupEnvBoolOr("fake_bool_env", false) })
 }
+
+func TestLookUpEnvListOr(t *testing.T) {
+	assert.Equal(t, LookUpEnvListOr([]string{"key1"}, []string{"key1"}), false)
+	os.Setenv("fake_bool_env", "1")
+}
