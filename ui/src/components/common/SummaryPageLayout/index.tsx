@@ -51,8 +51,8 @@ export interface SummaryPageLayoutProps {
 
 export const CollapseContext = React.createContext(false);
 
-const SUMMARY_HEIGHT = "6.5625rem";
-const COLLAPSED_HEIGHT = "2.25rem";
+const SUMMARY_HEIGHT = "10.5rem";
+const COLLAPSED_HEIGHT = "3.6rem";
 
 const getSectionComponentAndKey = (
   section: SummarySection,
@@ -248,14 +248,14 @@ export function SummaryPageLayout({
             flexDirection: "row",
             height: COLLAPSED_HEIGHT,
             background: "#F8F8FB",
-            boxShadow: "0 0.25rem 0.375rem rgba(39, 76, 119, 0.16)",
+            boxShadow: "0 0.4rem 0.6rem rgba(39, 76, 119, 0.16)",
             zIndex: (theme) => theme.zIndex.drawer - 1,
             position: isPlugin ? undefined : "fixed",
-            top: isPlugin ? "2.05rem" : "6.25rem",
-            padding: "0 1.25rem",
+            top: isPlugin ? "3.28rem" : "10rem",
+            padding: "0 2rem",
             alignItems: "center",
-            borderBottomLeftRadius: "1.25rem",
-            borderBottomRightRadius: "1.25rem",
+            borderBottomLeftRadius: "2rem",
+            borderBottomRightRadius: "2rem",
           }}
         >
           <span className={"summary-page-layout-collapsed-text"}>
@@ -279,10 +279,10 @@ export function SummaryPageLayout({
           width: "100%",
           minHeight: SUMMARY_HEIGHT,
           background: "#F8F8FB",
-          boxShadow: "0 0.1875rem 0.6875rem rgba(39, 76, 119, 0.16)",
+          boxShadow: "0 0.3rem 1.1rem rgba(39, 76, 119, 0.16)",
           zIndex: (theme) => theme.zIndex.drawer - 1,
           position: isPlugin ? undefined : "fixed",
-          top: isPlugin ? "2rem" : "5.75rem",
+          top: isPlugin ? "3.2rem" : "9.2rem",
         }}
       >
         <Box
@@ -334,7 +334,7 @@ export function SummaryPageLayout({
       <Box
         sx={{
           marginTop: contentMargin,
-          paddingTop: contentPadding ? "1.25rem" : "0",
+          paddingTop: contentPadding ? "2rem" : "0",
           height: "100%",
         }}
       >

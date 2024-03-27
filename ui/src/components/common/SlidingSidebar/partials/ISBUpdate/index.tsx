@@ -211,7 +211,7 @@ export function ISBUpdate({
         sx={{
           display: "flex",
           flexDirection: "row",
-          marginBottom: "2rem",
+          marginBottom: "3.2rem",
         }}
       >
         <span className="isb-spec-header-text">{`Edit ISB Service: ${isbId}`}</span>

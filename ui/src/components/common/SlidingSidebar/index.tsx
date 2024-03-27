@@ -264,6 +264,7 @@ export function SlidingSidebar({
         width: width,
         minWidth: minWidth,
         height: "100%",
+        fontSize: "1.6rem",
       }}
     >
       {slide && (
@@ -289,12 +290,12 @@ export function SlidingSidebar({
         sx={{
           display: "flex",
           flexDirection: "column",
-          paddingTop: "5.25rem",
-          paddingRight: "1.5rem",
-          paddingBottom: "1.5rem",
-          paddingLeft: "1rem",
+          paddingTop: "8.4rem",
+          paddingRight: "2.4rem",
+          paddingBottom: "2.4rem",
+          paddingLeft: "1.6rem",
           width: "100%",
-          height: "calc(100% - 6.75rem)",
+          height: "calc(100% - 10.8rem)",
           overflowX: "scroll",
         }}
       >
@@ -303,11 +304,11 @@ export function SlidingSidebar({
             display: "flex",
             flexDirection: "row",
             justifyContent: "flex-end",
-            marginBottom: "-2rem",
+            marginBottom: "-3.2rem",
           }}
         >
           <IconButton data-testid="close-button" onClick={handleClose}>
-            <CloseIcon />
+            <CloseIcon sx={{ height: "2.4rem", width: "2.4rem" }} />
           </IconButton>
         </Box>
         {content}

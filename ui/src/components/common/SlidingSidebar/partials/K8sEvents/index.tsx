@@ -195,10 +195,7 @@ export function K8sEvents({
             alignItems: "center",
           }}
         >
-          <ErrorDisplay
-            title="Error loading events"
-            message={error}
-          />
+          <ErrorDisplay title="Error loading events" message={error} />
         </Box>
       );
     }
@@ -208,11 +205,16 @@ export function K8sEvents({
           display: "flex",
           flexDirection: "column",
           borderTop: "1px solid #DCDCDC",
-          marginTop: "1rem",
+          marginTop: "1.6rem",
           height: "100%",
         }}
       >
-        <TableContainer sx={{ maxHeight: "37.5rem", backgroundColor: "#FFF" }}>
+        <TableContainer
+          sx={{
+            maxHeight: "60rem",
+            backgroundColor: "#FFF",
+          }}
+        >
           <Table stickyHeader>
             <TableHead>
               <TableRow>
@@ -249,7 +251,7 @@ export function K8sEvents({
             display: "flex",
             flexDirection: "row",
             justifyContent: "center",
-            marginTop: "1rem",
+            marginTop: "1.6rem",
           }}
         >
           <Pagination
@@ -275,12 +277,14 @@ export function K8sEvents({
     const selectContainerStyle = {
       display: "flex",
       flexDirection: "column",
-      marginRight: "0.5rem",
+      marginRight: "0.8rem",
+      fontSize: "1.6rem",
     };
     const selectStyle = {
       background: "#fff",
       border: "1px solid #6B6C72",
-      height: "2.125rem",
+      height: "3.4rem",
+      fontSize: "1.6rem",
     };
     if (vertexId) {
       // Given vertex, no filters
@@ -449,8 +453,8 @@ export function K8sEvents({
         sx={{
           display: "flex",
           flexDirection: "column",
-          padding: "1rem",
-          marginTop: excludeHeader ? "0" : "2rem",
+          padding: "1.6rem",
+          marginTop: excludeHeader ? "0" : "3.2rem",
           height: "100%",
         }}
         square={square}

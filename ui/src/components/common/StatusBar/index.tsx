@@ -32,7 +32,7 @@ export function StatusBar({ healthy, warning, critical }: StatusBarProps) {
           sx={{
             display: "flex",
             flexDirection: "column",
-            marginLeft: "9.4375rem",
+            marginLeft: "15.1rem",
           }}
         >
           <span className="status-bar-status-value">{warning}</span>
@@ -42,7 +42,7 @@ export function StatusBar({ healthy, warning, critical }: StatusBarProps) {
           sx={{
             display: "flex",
             flexDirection: "column",
-            marginLeft: "0.5rem",
+            marginLeft: "0.8rem",
           }}
         >
           <span className="status-bar-status-value">{critical}</span>

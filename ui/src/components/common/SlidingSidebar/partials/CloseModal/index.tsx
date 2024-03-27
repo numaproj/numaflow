@@ -55,9 +55,9 @@ export function CloseModal({
           left: "50%",
           transform: "translate(-50%, -50%)",
           bgcolor: "background.paper",
-          borderRadius: "0.3125rem",
+          borderRadius: "0.5rem",
           boxShadow: 24,
-          padding: "2rem",
+          padding: "3.2rem",
         }}
       >
         <Box
@@ -66,7 +66,7 @@ export function CloseModal({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-around",
-            marginBottom: "1rem",
+            marginBottom: "1.6rem",
           }}
         >
           {icon}
@@ -80,10 +80,26 @@ export function CloseModal({
             justifyContent: "space-evenly",
           }}
         >
-          <Button data-testid="close-modal-confirm" onClick={onConfirm} variant="contained" color="primary">
+          <Button
+            data-testid="close-modal-confirm"
+            onClick={onConfirm}
+            variant="contained"
+            color="primary"
+            sx={{
+              fontSize: "1.4rem",
+            }}
+          >
             Confirm
           </Button>
-          <Button data-testid="close-modal-cancel" onClick={onCancel} variant="outlined" color="primary">
+          <Button
+            data-testid="close-modal-cancel"
+            onClick={onCancel}
+            variant="outlined"
+            color="primary"
+            sx={{
+              fontSize: "1.4rem",
+            }}
+          >
             Cancel
           </Button>
         </Box>
