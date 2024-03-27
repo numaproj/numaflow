@@ -138,7 +138,7 @@ export function ClusterNamespaceListing({
             display: "flex",
             flexDirection: "row",
             justifyContent: "center",
-            margin: "0.5rem 0 1.5rem 0",
+            margin: "0.8rem 0 2.4rem 0",
           }}
         >
           <span className="cluster-ns-listing-table-title">
@@ -154,7 +154,7 @@ export function ClusterNamespaceListing({
         columnSpacing={1}
         wrap="wrap"
         sx={{
-          margin: "0.5rem 0 1.5rem 0",
+          margin: "0.8rem 0 2.4rem 0",
         }}
       >
         {filteredNamespaces.map((ns: ClusterNamespaceSummary) => {
@@ -177,9 +177,7 @@ export function ClusterNamespaceListing({
   }, [filteredNamespaces]);
 
   return (
-    <Box
-      sx={{ display: "flex", flexDirection: "column", padding: "0 2.625rem" }}
-    >
+    <Box sx={{ display: "flex", flexDirection: "column", padding: "0 4.2rem" }}>
       <Box
         sx={{
           display: "flex",
@@ -196,7 +194,7 @@ export function ClusterNamespaceListing({
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
-            marginLeft: "2rem",
+            marginLeft: "3.2rem",
           }}
         >
           <Box
@@ -213,11 +211,11 @@ export function ClusterNamespaceListing({
               label=""
               onChange={handleNamespaceFilterChange}
               style={{
-                width: "14rem",
+                width: "22.4rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "2.125rem",
-                marginRight: "0.5rem",
+                height: "3.4rem",
+                marginRight: "0.8rem",
               }}
             >
               <MenuItem value={ALL}>{ALL}</MenuItem>
@@ -241,11 +239,11 @@ export function ClusterNamespaceListing({
                 id: "health",
               }}
               style={{
-                width: "14rem",
+                width: "22.4rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "2.125rem",
-                marginRight: "0.5rem",
+                height: "3.4rem",
+                marginRight: "0.8rem",
                 textTransform: "capitalize",
               }}
               onChange={handleHealthFilterChange}
@@ -266,7 +264,7 @@ export function ClusterNamespaceListing({
               display: "flex",
               flexDirection: "column",
               flexGrow: 0.15,
-              marginRight: "20rem",
+              marginRight: "32rem",
               textTransform: "capitalize",
             }}
           >
@@ -279,10 +277,10 @@ export function ClusterNamespaceListing({
                 id: "health",
               }}
               style={{
-                width: "14rem",
+                width: "22.4rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "2.125rem",
+                height: "3.4rem",
                 textTransform: "capitalize",
               }}
               onChange={handleStatusFilterChange}
@@ -301,7 +299,7 @@ export function ClusterNamespaceListing({
           <ErrorIndicator />
         </Box>
       </Box>
-      <Box sx={{ display: "flex", flexDirection: "row", marginTop: "2rem" }}>
+      <Box sx={{ display: "flex", flexDirection: "row", marginTop: "3.2rem" }}>
         <span className="cluster-ns-listing-table-title">Namespaces</span>
       </Box>
       {listing}
@@ -310,7 +308,7 @@ export function ClusterNamespaceListing({
           display: "flex",
           flexDirection: "row",
           justifyContent: "center",
-          marginBottom: "1.5rem",
+          marginBottom: "2.4rem",
         }}
       >
         <Pagination
