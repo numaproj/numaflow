@@ -68,6 +68,7 @@ func (p *PBQ) Write(_ context.Context, request *window.TimedWindowRequest, persi
 	}
 
 	// write the request to the output channel
+	// NOTE: this is a blocking call! it should only block if UDF is blocking.
 	p.output <- request
 
 	switch request.Operation {

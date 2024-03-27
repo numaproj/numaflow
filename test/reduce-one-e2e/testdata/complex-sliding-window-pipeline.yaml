@@ -23,8 +23,8 @@ spec:
     - name: keyed-fixed-sum
       containerTemplate:
         env:
-          - name: NUMAFLOW_PPROF
-            value: "true" # DO NOT forget the double quotes!!!
+          - name: NUMAFLOW_DEBUG
+            value: "false" # DO NOT forget the double quotes!!!
       partitions: 2
       udf:
         container:
@@ -42,8 +42,8 @@ spec:
     - name: non-keyed-fixed-sum
       containerTemplate:
         env:
-          - name: NUMAFLOW_PPROF
-            value: "true" # DO NOT forget the double quotes!!!
+          - name: NUMAFLOW_DEBUG
+            value: "false" # DO NOT forget the double quotes!!!
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
@@ -60,8 +60,8 @@ spec:
     - name: non-keyed-sliding-sum
       containerTemplate:
         env:
-          - name: NUMAFLOW_PPROF
-            value: "true" # DO NOT forget the double quotes!!!
+          - name: NUMAFLOW_DEBUG
+            value: "false" # DO NOT forget the double quotes!!!
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
@@ -76,15 +76,7 @@ spec:
             persistentVolumeClaim:
               volumeSize: 1Gi
               accessMode: ReadWriteOnce
-#    - name: sink
-#      scale:
-#        min: 1
-#      sink:
-#        udsink:
-#          container:
-#            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-#            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
-    - name: log-sink
+    - name: sink
       scale:
           min: 1
       sink:
@@ -99,4 +91,4 @@ spec:
     - from: non-keyed-fixed-sum
       to: non-keyed-sliding-sum
     - from: non-keyed-sliding-sum
-      to: log-sink
+      to: sink

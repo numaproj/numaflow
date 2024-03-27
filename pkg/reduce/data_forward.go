@@ -73,7 +73,7 @@ type DataForward struct {
 	storeManager        wal.Manager
 	of                  *pnf.ProcessAndForward
 	opts                *Options
-	currentWatermark    time.Time
+	currentWatermark    time.Time // if watermark is -1, then make sure event-time is < watermark
 	log                 *zap.SugaredLogger
 }
 
@@ -329,6 +329,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); oldestWindowEndTime.Before(watermark) {
 				windowOperations := df.windower.CloseWindows(watermark)
 				for _, op := range windowOperations {
+					// we do not have to persist close operations
 					err = df.writeToPBQ(ctx, op, false)
 					if err != nil {
 						df.log.Errorw("Failed to write to PBQ", zap.Error(err))
@@ -394,12 +395,13 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 			Factor:   1.5,
 			Jitter:   0.1,
 		}
+		// we manage ctx ourselves
 		pbqErr = wait.ExponentialBackoff(infiniteBackoff, func() (done bool, err error) {
 			var attempt int
 			q, pbqErr = df.pbqManager.CreateNewPBQ(ctx, *partitionID)
 			if pbqErr != nil {
 				attempt += 1
-				df.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.String("partitionID", partitionID.String()), zap.Error(pbqErr))
+				df.log.Warnw("Failed to create pbq, retrying", zap.Any("attempt", attempt), zap.String("partitionID", partitionID.String()), zap.Error(pbqErr))
 				// no point retrying if ctx.Done has been invoked
 				select {
 				case <-ctx.Done():
@@ -585,6 +587,7 @@ func (df *DataForward) shouldDropMessage(message *isb.ReadMessage) bool {
 	// This could be due to a couple of problem, eg. ack was not registered, etc.
 	// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
 	// to be violated.
+	// df.currentWatermark cannot be -1 except for the first time till it gets a valid watermark (wm > -1)
 	if !message.IsLate && message.EventTime.Before(df.currentWatermark.Add(-1*df.opts.allowedLateness)) {
 		// TODO: track as a counter metric
 		df.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))

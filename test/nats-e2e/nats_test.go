@@ -24,14 +24,14 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/numaproj/numaflow/test/fixtures"
+	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
 //go:generate kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
 //go:generate kubectl apply -k ../../config/apps/nats -n numaflow-system
 //go:generate kubectl apply -f testdata/nats-auth-fake-token.yaml -n numaflow-system
 type NatsSuite struct {
-	fixtures.E2ESuite
+	E2ESuite
 }
 
 func (ns *NatsSuite) TestNatsSource() {
@@ -44,8 +44,8 @@ func (ns *NatsSuite) TestNatsSource() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	fixtures.PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "test-message")
-	w.Expect().SinkContains("out", "test-message", fixtures.WithContainCount(100))
+	PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "test-message")
+	w.Expect().SinkContains("out", "test-message", SinkCheckWithContainCount(100))
 }
 
 func TestNatsSuite(t *testing.T) {

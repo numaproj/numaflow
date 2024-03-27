@@ -32,6 +32,11 @@ spec:
             persistentVolumeClaim:
               volumeSize: 2Gi
               accessMode: ReadWriteOnce
+    - name: log-sink
+      scale:
+        min: 1
+      sink:
+        log: {}
     - name: sink
       scale:
         min: 1
@@ -47,3 +52,5 @@ spec:
       to: compute-count
     - from: compute-count
       to: sink
+    - from: compute-count
+      to: log-sink

@@ -53,6 +53,8 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
+
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
@@ -140,6 +142,8 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
+
 	count := 0
 	done := make(chan struct{})
 	go func() {
@@ -167,10 +171,10 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	}()
 
 	w.Expect().SinkContains("sink", "5")
-	w.Expect().SinkNotContains("sink", "4", WithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "3", WithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "2", WithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "1", WithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 
@@ -223,10 +227,10 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 
 	w.Expect().
 		SinkContains("sink", "5").
-		SinkNotContains("sink", "4", WithTimeout(20*time.Second)).
-		SinkNotContains("sink", "3", WithTimeout(20*time.Second)).
-		SinkNotContains("sink", "2", WithTimeout(20*time.Second)).
-		SinkNotContains("sink", "1", WithTimeout(20*time.Second))
+		SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second)).
+		SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second)).
+		SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second)).
+		SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 
