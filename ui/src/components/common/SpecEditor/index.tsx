@@ -242,7 +242,11 @@ export function SpecEditor({
               <SuccessIcon
                 fontSize="large"
                 color="success"
-                sx={{ marginRight: "0.8rem" }}
+                sx={{
+                  marginRight: "0.8rem",
+                  height: "3.5rem",
+                  width: "3.5rem",
+                }}
               />
             )}
             <span className="spec-editor-validation-message">
@@ -337,7 +341,7 @@ export function SpecEditor({
       <SuccessIcon
         fontSize="large"
         color="success"
-        sx={{ marginRight: "0.8rem" }}
+        sx={{ marginRight: "0.8rem", height: "3.5rem", width: "3.5rem" }}
       />
     );
     const loadingIcon = (

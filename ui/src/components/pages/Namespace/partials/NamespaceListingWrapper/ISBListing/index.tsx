@@ -56,7 +56,7 @@ export function ISBListing({
             display: "flex",
             flexDirection: "row",
             justifyContent: "center",
-            margin: "0.5rem 0 1.5rem 0",
+            margin: "0.8rem 0 2.4rem 0",
           }}
         >
           <span className="ns-pipeline-listing-table-title">
@@ -72,7 +72,7 @@ export function ISBListing({
         columnSpacing={1}
         wrap="wrap"
         sx={{
-          margin: "0.5rem 0 1.5rem 0",
+          margin: "0.8rem 0 2.4rem 0",
         }}
       >
         {filteredISBServices.map((p: ISBServicesListing) => {
@@ -214,7 +214,7 @@ export function ISBListing({
           display: "flex",
           flexDirection: "row",
           justifyContent: "center",
-          marginBottom: "1.5rem",
+          marginBottom: "2.4rem",
         }}
       >
         <Pagination
@@ -222,6 +222,15 @@ export function ISBListing({
           page={page}
           onChange={handlePageChange}
           shape="rounded"
+          sx={{
+            "& .MuiPaginationItem-root": {
+              fontSize: "1.4rem",
+            },
+            "& .MuiPaginationItem-icon": {
+              height: "2rem",
+              width: "2rem",
+            },
+          }}
         />
       </Box>
     </>
