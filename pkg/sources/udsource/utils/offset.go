@@ -17,6 +17,8 @@ limitations under the License.
 package utils
 
 import (
+	"fmt"
+
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -36,7 +38,7 @@ func NewSimpleSourceOffset(o string, p int32) isb.Offset {
 }
 
 func (s *simpleSourceOffset) String() string {
-	return s.offset
+	return fmt.Sprintf("%s-%d", s.offset, s.partitionIdx)
 }
 
 func (s *simpleSourceOffset) PartitionIdx() int32 {
@@ -62,6 +64,6 @@ func ConvertToSourceOffset(offset isb.Offset) *sourcepb.Offset {
 	}
 }
 
-func ConvertToIsbOffset(offset *sourcepb.Offset) isb.Offset {
-	return NewSimpleSourceOffset(string(offset.Offset), offset.GetPartitionId())
+func ConvertToIsbOffset(offset string, partitionIdx int32) isb.Offset {
+	return NewSimpleSourceOffset(offset, partitionIdx)
 }
