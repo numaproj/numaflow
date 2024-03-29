@@ -66,6 +66,11 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
+
+	defer w.StreamVertexPodlogs("go-udsink", "udsink").StreamVertexPodlogs("go-udsink-2", "udsink").
+		StreamVertexPodlogs("python-udsink", "udsink").StreamVertexPodlogs("java-udsink", "udsink").
+		TerminateAllPodLogs()
+
 	pipelineName := "flatmap-stream"
 
 	w.Expect().
