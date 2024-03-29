@@ -19,10 +19,10 @@ jobs:
     name: Build binaries
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v4.0.0
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
 
@@ -47,13 +47,13 @@ jobs:
       matrix:
         target: [ numaflow ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: "16"
+          node-version: "20"
       - name: Setup Node-Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
@@ -99,10 +99,10 @@ jobs:
           else
             echo "VERSION=${GITHUB_REF##*/}" >> $GITHUB_ENV
           fi
-      - uses: actions/setup-go@v4.0.0
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.21'
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: go install sigs.k8s.io/bom/cmd/bom@v0.2.0
       - run: go install github.com/spdx/spdx-sbom-generator/cmd/generator@v0.0.13
       - run: mkdir -p dist
@@ -121,7 +121,7 @@ jobs:
     needs: [ build-push-linux-multi, bom ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set Version
         run: |
           if [ ${GITHUB_REF##*/} = main ]; then

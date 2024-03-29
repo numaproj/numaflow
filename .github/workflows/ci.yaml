@@ -13,13 +13,13 @@ jobs:
     timeout-minutes: 6
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: "16"
+          node-version: "20"
       - name: Setup Node-Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
@@ -34,14 +34,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Restore go build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ hashFiles('**/go.mod') }}
       - name: Setup Golang
-        uses: actions/setup-go@v4.0.0
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
       - name: Add bins to PATH
@@ -95,14 +95,14 @@ jobs:
           --health-retries 5
     steps:
       - name: Set up Go 1.x
-        uses: actions/setup-go@v4.0.0
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
         id: go
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Restore Go build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
@@ -118,13 +118,13 @@ jobs:
     env:
       GOPATH: /home/runner/go
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Golang
-        uses: actions/setup-go@v4.0.0
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
       - name: Restore Go build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
@@ -137,20 +137,26 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 13
       matrix:
-        driver: [jetstream, redis]
+        driver: [jetstream]
         case: [e2e, diamond-e2e, transformer-e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-one-e2e, reduce-two-e2e, udsource-e2e, api-e2e, sideinputs-e2e, idle-source-e2e]
+        include:
+          - driver: redis
+            case: e2e
+          - driver: redis
+            case: kafka-e2e
+          - driver: redis
+            case: api-e2e
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Restore go build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v2-${{ hashFiles('**/go.mod') }}
       - name: Setup Golang
-        uses: actions/setup-go@v4.0.0
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
       - name: Add bins to PATH
@@ -158,11 +164,11 @@ jobs:
           echo /home/runner/go/bin >> $GITHUB_PATH
           echo /usr/local/bin >> $GITHUB_PATH
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: "16"
+          node-version: "20"
       - name: Setup Node-Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}

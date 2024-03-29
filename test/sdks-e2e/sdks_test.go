@@ -66,6 +66,7 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
+
 	pipelineName := "flatmap-stream"
 
 	w.Expect().
