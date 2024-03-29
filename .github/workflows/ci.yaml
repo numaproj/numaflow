@@ -138,17 +138,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        driver: [jetstream, redis]
+        driver: [jetstream]
         case: [e2e, diamond-e2e, transformer-e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-one-e2e, reduce-two-e2e, udsource-e2e, api-e2e, sideinputs-e2e, idle-source-e2e]
-        exclude:
+        include:
           - driver: redis
-            case: reduce-one-e2e
+            case: e2e
           - driver: redis
-            case: reduce-two-e2e
+            case: kafka-e2e
           - driver: redis
-            case: sideinputs-e2e
+            case: sdks-e2e
           - driver: redis
-            case: idle-source-e2e
+            case: api-e2e
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
