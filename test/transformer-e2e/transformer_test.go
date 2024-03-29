@@ -22,6 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +88,12 @@ func (s *TransformerSuite) TestTimeExtractionFilter() {
 }
 
 func (s *TransformerSuite) TestBuiltinEventTimeExtractor() {
+
+	// this test is skipped for redis as watermark is not supported with this ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		s.T().SkipNow()
+	}
+
 	w := s.Given().Pipeline("@testdata/extract-event-time-from-payload.yaml").
 		When().
 		CreatePipelineAndWait()

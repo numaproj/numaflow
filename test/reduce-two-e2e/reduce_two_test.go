@@ -20,7 +20,9 @@ package reduce_two_e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,6 +44,12 @@ func (r *ReduceSuite) TestReduceStreamJava() {
 }
 
 func (r *ReduceSuite) testReduceStream(lang string) {
+
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline(fmt.Sprintf("@testdata/reduce-stream/reduce-stream-%s.yaml", lang)).
@@ -82,6 +90,12 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 }
 
 func (r *ReduceSuite) TestSimpleSessionPipeline() {
+
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-sum-pipeline.yaml").
@@ -131,6 +145,12 @@ func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
 }
 
 func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
+
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline(fmt.Sprintf("@testdata/session-reduce/simple-session-keyed-counter-pipeline-%s.yaml", lang)).
@@ -179,6 +199,12 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 }
 
 func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
+
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-keyed-counter-pipeline-go.yaml").
