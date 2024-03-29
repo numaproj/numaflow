@@ -21,7 +21,9 @@ package sdks_e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -88,6 +90,12 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 }
 
 func (s *SDKsSuite) TestReduceSDK() {
+
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		s.T().SkipNow()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := s.Given().Pipeline("@testdata/simple-keyed-reduce-pipeline.yaml").
@@ -125,6 +133,12 @@ func (s *SDKsSuite) TestReduceSDK() {
 }
 
 func (s *SDKsSuite) TestSourceTransformer() {
+
+	// the transformer feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		s.T().SkipNow()
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
