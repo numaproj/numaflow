@@ -37,7 +37,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
-	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 )
 
 func TestMain(m *testing.M) {
@@ -218,7 +217,7 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 		assert.Equal(t, 1, len(readMessages))
 		assert.Equal(t, []byte(`test_payload`), readMessages[0].Body.Payload)
 		assert.Equal(t, []string{"test_key"}, readMessages[0].Keys)
-		assert.Equal(t, utils.NewSimpleSourceOffset(offset), readMessages[0].ReadOffset)
+		assert.Equal(t, NewUserDefinedSourceOffset(offset), readMessages[0].ReadOffset)
 		assert.Equal(t, TestEventTime, readMessages[0].EventTime)
 	})
 
@@ -296,8 +295,8 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 
 		u := NewMockUDSgRPCBasedUDSource(mockClient)
 		err := u.ApplyAckFn(ctx, []isb.Offset{
-			utils.NewSimpleSourceOffset(offset1),
-			utils.NewSimpleSourceOffset(offset2),
+			NewUserDefinedSourceOffset(offset1),
+			NewUserDefinedSourceOffset(offset2),
 		})
 		assert.NoError(t, err)
 	})
@@ -331,8 +330,8 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 
 		u := NewMockUDSgRPCBasedUDSource(mockClient)
 		err := u.ApplyAckFn(ctx, []isb.Offset{
-			utils.NewSimpleSourceOffset(offset1),
-			utils.NewSimpleSourceOffset(offset2),
+			NewUserDefinedSourceOffset(offset1),
+			NewUserDefinedSourceOffset(offset2),
 		})
 		assert.ErrorIs(t, err, status.New(codes.DeadlineExceeded, "mock test err").Err())
 	})

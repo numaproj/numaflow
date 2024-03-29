@@ -28,7 +28,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 )
 
 // GRPCBasedUDSource applies a user-defined source over gRPC
@@ -129,7 +128,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 			// Convert the datum to ReadMessage and append to the list
 			r := datum.GetResult()
 
-			offset := utils.NewSimpleSourceOffset(r.GetOffset())
+			offset := NewUserDefinedSourceOffset(r.GetOffset())
 			readMessage := &isb.ReadMessage{
 				Message: isb.Message{
 					Header: isb.Header{
@@ -153,7 +152,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset) error {
 	rOffsets := make([]*sourcepb.Offset, len(offsets))
 	for i, offset := range offsets {
-		rOffsets[i] = utils.ConvertToSourceOffset(offset)
+		rOffsets[i] = ConvertToUserDefinedSourceOffset(offset)
 	}
 	var r = &sourcepb.AckRequest{
 		Request: &sourcepb.AckRequest_Request{

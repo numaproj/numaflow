@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package utils
+package udsource
 
 import (
 	"encoding/base64"
@@ -25,43 +25,43 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// simpleSourceOffset is a simple implementation of isb.Offset from the source side.
-type simpleSourceOffset struct {
+// userDefinedSourceOffset is a implementation of isb.Offset from the user-defined source side.
+type userDefinedSourceOffset struct {
 	// NOTE: offset is base64 encoded string because we use offset to construct message ID
 	// and message ID is a string.
 	offset       string
 	partitionIdx int32
 }
 
-func NewSimpleSourceOffset(offset *sourcepb.Offset) isb.Offset {
-	return &simpleSourceOffset{
+func NewUserDefinedSourceOffset(offset *sourcepb.Offset) isb.Offset {
+	return &userDefinedSourceOffset{
 		offset:       base64.StdEncoding.EncodeToString(offset.GetOffset()),
 		partitionIdx: offset.GetPartitionId(),
 	}
 }
 
-func (s *simpleSourceOffset) String() string {
+func (s *userDefinedSourceOffset) String() string {
 	return fmt.Sprintf("%s-%d", s.offset, s.partitionIdx)
 }
 
-func (s *simpleSourceOffset) PartitionIdx() int32 {
+func (s *userDefinedSourceOffset) PartitionIdx() int32 {
 	return s.partitionIdx
 }
 
-func (s *simpleSourceOffset) Sequence() (int64, error) {
-	panic("Sequence is not supported by simpleSourceOffset")
+func (s *userDefinedSourceOffset) Sequence() (int64, error) {
+	panic("Sequence is not supported by userDefinedSourceOffset")
 }
 
-func (s *simpleSourceOffset) AckIt() error {
-	panic("AckIt is not supported by simpleSourceOffset")
+func (s *userDefinedSourceOffset) AckIt() error {
+	panic("AckIt is not supported by userDefinedSourceOffset")
 }
 
-func (s *simpleSourceOffset) NoAck() error {
-	panic("NoAck is not supported by simpleSourceOffset")
+func (s *userDefinedSourceOffset) NoAck() error {
+	panic("NoAck is not supported by userDefinedSourceOffset")
 }
 
-func ConvertToSourceOffset(offset isb.Offset) *sourcepb.Offset {
-	decoded, _ := base64.StdEncoding.DecodeString(offset.(*simpleSourceOffset).offset)
+func ConvertToUserDefinedSourceOffset(offset isb.Offset) *sourcepb.Offset {
+	decoded, _ := base64.StdEncoding.DecodeString(offset.(*userDefinedSourceOffset).offset)
 	return &sourcepb.Offset{
 		PartitionId: offset.PartitionIdx(),
 		Offset:      decoded,
