@@ -67,10 +67,6 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
 
-	defer w.StreamVertexPodlogs("go-udsink", "udsink").StreamVertexPodlogs("go-udsink-2", "udsink").
-		StreamVertexPodlogs("python-udsink", "udsink").StreamVertexPodlogs("java-udsink", "udsink").
-		TerminateAllPodLogs()
-
 	pipelineName := "flatmap-stream"
 
 	w.Expect().
@@ -80,6 +76,10 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+
+	defer w.StreamVertexPodlogs("go-udsink", "udsink").StreamVertexPodlogs("go-udsink-2", "udsink").
+		StreamVertexPodlogs("python-udsink", "udsink").StreamVertexPodlogs("java-udsink", "udsink").
+		TerminateAllPodLogs()
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello,hello"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
