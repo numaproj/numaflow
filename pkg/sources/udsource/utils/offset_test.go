@@ -24,16 +24,17 @@ import (
 )
 
 func TestOffsetConversion(t *testing.T) {
-	testIsbOffset := NewSimpleSourceOffset("test", 0)
-	convertedSrcOffset := ConvertToSourceOffset(testIsbOffset)
-	convertedBackIsbOffset := ConvertToIsbOffset(convertedSrcOffset)
+	offset := &sourcepb.Offset{Offset: []byte("test"), PartitionId: 0}
+	testIsbOffset := NewSimpleSourceOffset(offset)
+	ConvertToSourceOffset(testIsbOffset)
+	convertedBackIsbOffset := NewSimpleSourceOffset(offset)
 	assert.Equal(t, testIsbOffset.PartitionIdx(), convertedBackIsbOffset.PartitionIdx())
 	assert.Equal(t, testIsbOffset.String(), convertedBackIsbOffset.String())
 	testSrcOffset := &sourcepb.Offset{
 		PartitionId: 0,
 		Offset:      []byte("test"),
 	}
-	convertedIsbOffset := ConvertToIsbOffset(testSrcOffset)
+	convertedIsbOffset := NewSimpleSourceOffset(offset)
 	convertedBackSrcOffset := ConvertToSourceOffset(convertedIsbOffset)
 	assert.Equal(t, testSrcOffset.GetPartitionId(), convertedBackSrcOffset.GetPartitionId())
 	assert.Equal(t, testSrcOffset.GetOffset(), convertedBackSrcOffset.GetOffset())

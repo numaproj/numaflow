@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
@@ -26,19 +27,21 @@ import (
 
 // simpleSourceOffset is a simple implementation of isb.Offset from the source side.
 type simpleSourceOffset struct {
+	// NOTE: offset is base64 encoded string because we use offset to construct message ID
+	// and message ID is a string.
 	offset       string
 	partitionIdx int32
 }
 
-func NewSimpleSourceOffset(o string, p int32) isb.Offset {
+func NewSimpleSourceOffset(offset *sourcepb.Offset) isb.Offset {
 	return &simpleSourceOffset{
-		offset:       o,
-		partitionIdx: p,
+		offset:       base64.StdEncoding.EncodeToString(offset.GetOffset()),
+		partitionIdx: offset.GetPartitionId(),
 	}
 }
 
 func (s *simpleSourceOffset) String() string {
-	return fmt.Sprintf("%s-%d", s.offset, s.partitionIdx)
+	return fmt.Sprintf("%s", s.offset)
 }
 
 func (s *simpleSourceOffset) PartitionIdx() int32 {
@@ -58,12 +61,9 @@ func (s *simpleSourceOffset) NoAck() error {
 }
 
 func ConvertToSourceOffset(offset isb.Offset) *sourcepb.Offset {
+	decoded, _ := base64.StdEncoding.DecodeString(offset.String())
 	return &sourcepb.Offset{
 		PartitionId: offset.PartitionIdx(),
-		Offset:      []byte(offset.String()),
+		Offset:      decoded,
 	}
-}
-
-func ConvertToIsbOffset(offset string, partitionIdx int32) isb.Offset {
-	return NewSimpleSourceOffset(offset, partitionIdx)
 }

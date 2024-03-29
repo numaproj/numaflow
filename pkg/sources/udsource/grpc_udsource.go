@@ -18,7 +18,6 @@ package udsource
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"sync"
 	"time"
@@ -129,14 +128,13 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 			}
 			// Convert the datum to ReadMessage and append to the list
 			r := datum.GetResult()
-			// we encode the offset bytes to base64, because user defined source sends offset in raw bytes
-			// which will result in messages getting dropped since we use offset to construct message ID
-			encodedOffset := base64.StdEncoding.EncodeToString(r.GetOffset().GetOffset())
+
+			offset := utils.NewSimpleSourceOffset(r.GetOffset())
 			readMessage := &isb.ReadMessage{
 				Message: isb.Message{
 					Header: isb.Header{
 						MessageInfo: isb.MessageInfo{EventTime: r.GetEventTime().AsTime()},
-						ID:          constructMessageID(encodedOffset, r.GetOffset().GetPartitionId()),
+						ID:          constructMessageID(offset.String(), r.GetOffset().GetPartitionId()),
 						Keys:        r.GetKeys(),
 						Headers:     r.GetHeaders(),
 					},
@@ -144,7 +142,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 						Payload: r.GetPayload(),
 					},
 				},
-				ReadOffset: utils.ConvertToIsbOffset(encodedOffset, r.GetOffset().GetPartitionId()),
+				ReadOffset: offset,
 			}
 			readMessages = append(readMessages, readMessage)
 		}
