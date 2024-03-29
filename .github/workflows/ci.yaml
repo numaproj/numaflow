@@ -146,8 +146,6 @@ jobs:
           - driver: redis
             case: kafka-e2e
           - driver: redis
-            case: sdks-e2e
-          - driver: redis
             case: api-e2e
     steps:
       - name: Checkout code

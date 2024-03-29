@@ -77,10 +77,6 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
 
-	defer w.StreamVertexPodlogs("go-udsink", "udsink").StreamVertexPodlogs("go-udsink-2", "udsink").
-		StreamVertexPodlogs("python-udsink", "udsink").StreamVertexPodlogs("java-udsink", "udsink").
-		TerminateAllPodLogs()
-
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello,hello"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
 
