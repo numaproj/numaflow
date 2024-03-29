@@ -36,7 +36,7 @@ type ReduceSuite struct {
 
 // one reduce vertex (keyed)
 func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
-  
+
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -171,14 +171,14 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 }
 
 func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
-  
+
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-  
+
 	defer cancel()
 	w := r.Given().Pipeline("@testdata/simple-reduce-pipeline-wal.yaml").
 		When().
@@ -236,7 +236,7 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-  
+
 	defer cancel()
 	w := r.Given().Pipeline("@testdata/complex-sliding-window-pipeline.yaml").
 		When().

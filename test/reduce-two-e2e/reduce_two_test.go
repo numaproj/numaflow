@@ -146,11 +146,11 @@ func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
 
 func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 
-  // the reduce feature is not supported with redis ISBSVC
+	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
 	}
-  
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline(fmt.Sprintf("@testdata/session-reduce/simple-session-keyed-counter-pipeline-%s.yaml", lang)).
