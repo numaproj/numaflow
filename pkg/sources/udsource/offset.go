@@ -27,21 +27,23 @@ import (
 
 // userDefinedSourceOffset is a implementation of isb.Offset from the user-defined source side.
 type userDefinedSourceOffset struct {
-	// NOTE: offset is base64 encoded string because we use offset to construct message ID
+	// NOTE: encodedOffsetStr is base64 encoded string because we use encodedOffsetStr to construct message ID
 	// and message ID is a string.
-	offset       string
-	partitionIdx int32
+	encodedOffsetStr string
+	offset           []byte
+	partitionIdx     int32
 }
 
 func NewUserDefinedSourceOffset(offset *sourcepb.Offset) isb.Offset {
 	return &userDefinedSourceOffset{
-		offset:       base64.StdEncoding.EncodeToString(offset.GetOffset()),
-		partitionIdx: offset.GetPartitionId(),
+		offset:           offset.GetOffset(),
+		encodedOffsetStr: base64.StdEncoding.EncodeToString(offset.GetOffset()),
+		partitionIdx:     offset.GetPartitionId(),
 	}
 }
 
 func (s *userDefinedSourceOffset) String() string {
-	return fmt.Sprintf("%s-%d", s.offset, s.partitionIdx)
+	return fmt.Sprintf("%s-%d", s.encodedOffsetStr, s.partitionIdx)
 }
 
 func (s *userDefinedSourceOffset) PartitionIdx() int32 {
@@ -61,9 +63,8 @@ func (s *userDefinedSourceOffset) NoAck() error {
 }
 
 func ConvertToUserDefinedSourceOffset(offset isb.Offset) *sourcepb.Offset {
-	decoded, _ := base64.StdEncoding.DecodeString(offset.(*userDefinedSourceOffset).offset)
 	return &sourcepb.Offset{
 		PartitionId: offset.PartitionIdx(),
-		Offset:      decoded,
+		Offset:      offset.(*userDefinedSourceOffset).offset,
 	}
 }
