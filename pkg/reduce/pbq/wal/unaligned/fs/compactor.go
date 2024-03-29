@@ -70,6 +70,16 @@ type compactor struct {
 	log                 *zap.SugaredLogger
 }
 
+// fStat is to store the file name and dir path
+type fStat struct {
+	name    string
+	dirPath string
+}
+
+func (fs *fStat) Path() string {
+	return filepath.Join(fs.dirPath, fs.name)
+}
+
 // NewCompactor returns a new WAL compactor instance
 func NewCompactor(ctx context.Context, pipelineName string, vertexName string, vertexReplica int32, partitionId *partition.ID, gcEventsPath string, dataSegmentWALPath string, compactedSegWALPath string, opts ...CompactorOption) (unaligned.Compactor, error) {
 
@@ -220,7 +230,6 @@ func (c *compactor) Stop() error {
 		compactorErrors.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica)), "rename").Inc()
 		return err
 	}
-
 	return err
 }
 
@@ -357,12 +366,12 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	}
 
 	// we should consider the compacted files first, since the compacted files will have the oldest data
-	filesToReplay := make([]string, 0)
+	filesToReplay := make([]fStat, 0)
 	for _, compactedFile := range compactedFiles {
-		filesToReplay = append(filesToReplay, filepath.Join(c.compactedSegWALPath, compactedFile.Name()))
+		filesToReplay = append(filesToReplay, fStat{name: compactedFile.Name(), dirPath: c.compactedSegWALPath})
 	}
 	for _, dataFile := range segmentFiles {
-		filesToReplay = append(filesToReplay, filepath.Join(c.dataSegmentWALPath, dataFile.Name()))
+		filesToReplay = append(filesToReplay, fStat{name: dataFile.Name(), dirPath: c.dataSegmentWALPath})
 	}
 
 	if len(filesToReplay) == 0 {
@@ -372,7 +381,7 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 	compactorFilesToCompact.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica))).Set(float64(len(filesToReplay)))
 
 	// iterate over all the data filesToReplay and compact them
-	for _, filePath := range filesToReplay {
+	for _, file := range filesToReplay {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -381,8 +390,8 @@ func (c *compactor) compactDataFiles(ctx context.Context) error {
 			// the event filesToReplay
 			return fmt.Errorf("compactor stopped")
 		default:
-			c.log.Debugw("Compacting file", zap.String("file", filePath))
-			if err = c.compactFile(filePath); err != nil {
+			c.log.Debugw("Compacting file", zap.String("file", file.Path()))
+			if err = c.compactFile(file); err != nil {
 				return err
 			}
 		}
@@ -411,9 +420,9 @@ func extractWmFromFileName(fileName string) int64 {
 // compactFile compacts the given data file
 // it copies the messages from the data file to the compaction file if the message should not be deleted
 // and deletes the data file after compaction
-func (c *compactor) compactFile(fp string) error {
+func (c *compactor) compactFile(fs fStat) error {
 	// open the data file (read only)
-	dp, err := os.Open(fp)
+	dp, err := os.Open(fs.Path())
 	if err != nil {
 		return err
 	}
@@ -430,7 +439,6 @@ func (c *compactor) compactFile(fp string) error {
 			return nil
 		}
 		return err
-
 	}
 
 readLoop:
@@ -478,12 +486,12 @@ readLoop:
 	}
 
 	// delete the file, since it's been compacted
-	if err = os.Remove(fp); err != nil {
+	if err = os.Remove(fs.Path()); err != nil {
 		return err
 	}
 	activeDataFilesCount.WithLabelValues(c.pipelineName, c.vertexName, strconv.Itoa(int(c.vertexReplica))).Dec()
 	// update the latest watermark
-	c.updateLatestWm(fp)
+	c.updateLatestWm(fs.name)
 	return nil
 }
 

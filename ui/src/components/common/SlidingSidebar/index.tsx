@@ -130,10 +130,10 @@ export function SlidingSidebar({
   }, [width, pageWidth]);
 
   const dragHandler = useCallback(
-    (mouseDownEvent) => {
+    (mouseDownEvent: any) => {
       const startWidth = width;
       const startPosition = mouseDownEvent.pageX;
-      const onMouseMove = (mouseMoveEvent) => {
+      const onMouseMove = (mouseMoveEvent: any) => {
         const result = startWidth + startPosition - mouseMoveEvent.pageX;
         if (!minWidth || result >= minWidth) {
           setWidth(result);

@@ -115,17 +115,34 @@ func init() {
 	})
 
 	http.HandleFunc("/kafka/produce-topic", func(w http.ResponseWriter, r *http.Request) {
+		var (
+			partition int
+			err       error
+		)
 		topic := r.URL.Query().Get("topic")
 		key := r.URL.Query().Get("key")
+		queryPartition := r.URL.Query().Get("partition")
+
+		config := sarama.NewConfig()
+		config.Producer.Return.Successes = true
+		if queryPartition == "" {
+			partition = 0
+		} else {
+			partition, err = strconv.Atoi(queryPartition)
+			if err != nil {
+				log.Println(err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// if partition is specified, use manual partitioner
+			config.Producer.Partitioner = sarama.NewManualPartitioner
+		}
 		buf, err := io.ReadAll(r.Body)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		config := sarama.NewConfig()
-		config.Producer.Return.Successes = true
 
 		syncProducer, err := sarama.NewSyncProducer(brokers, config)
 
@@ -135,9 +152,10 @@ func init() {
 		}
 		defer syncProducer.Close()
 		message := &sarama.ProducerMessage{
-			Topic: topic,
-			Value: sarama.ByteEncoder(buf),
-			Key:   sarama.ByteEncoder([]byte(key)),
+			Topic:     topic,
+			Value:     sarama.ByteEncoder(buf),
+			Key:       sarama.ByteEncoder([]byte(key)),
+			Partition: int32(partition),
 		}
 		if _, _, err := syncProducer.SendMessage(message); err != nil {
 			_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)

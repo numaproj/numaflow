@@ -9932,8 +9932,6 @@ spec:
                               type: string
                             consumerGroup:
                               type: string
-                            includeHeaders:
-                              type: boolean
                             sasl:
                               properties:
                                 gssapi:
@@ -14786,8 +14784,6 @@ spec:
                         type: string
                       consumerGroup:
                         type: string
-                      includeHeaders:
-                        type: boolean
                       sasl:
                         properties:
                           gssapi:

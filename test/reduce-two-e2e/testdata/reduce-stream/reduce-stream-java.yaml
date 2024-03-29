@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: reduce-stream-java
 spec:
+  watermark:
+    maxDelay: 30s
   vertices:
     - name: in
       source:
@@ -13,13 +15,13 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: compute-sum
       partitions: 2
       udf:
         container:
           # compute the sum, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducestreamer/sum
-          image: quay.io/numaio/numaflow-java/reduce-stream-sum:v0.6.0
+          image: quay.io/numaio/numaflow-java/reduce-stream-sum:stable
         groupBy:
           window:
             fixed:

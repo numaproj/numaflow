@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { BrowserRouter, useSearchParams } from "react-router-dom";
+import { BrowserRouter, useLocation } from "react-router-dom";
 import fetchMock from "jest-fetch-mock";
 import { act } from "react-dom/test-utils";
 
@@ -35,16 +35,16 @@ fetchMock.enableMocks();
 // Mock the useSearchParams hook
 jest.mock("react-router-dom", () => ({
   ...jest.requireActual("react-router-dom"),
-  useSearchParams: jest.fn(),
+  useLocation: jest.fn(),
 }));
 
 const mockFnParam = jest.fn();
 
 describe("Login", () => {
-  (useSearchParams as jest.Mock).mockReturnValue([
-    new URLSearchParams(""),
+  (useLocation as jest.Mock).mockReturnValue({
+    search: new URLSearchParams(""),
     mockFnParam,
-  ]);
+  });
   it("renders the login page", async () => {
     render(
       <AppContext.Provider value={{ isAuthenticated: false }}>
@@ -59,10 +59,10 @@ describe("Login", () => {
   });
 
   it("Tests clicking the login button", async () => {
-    (useSearchParams as jest.Mock).mockReturnValue([
-      new URLSearchParams(""),
+    (useLocation as jest.Mock).mockReturnValue({
+      search: new URLSearchParams(""),
       mockFnParam,
-    ]);
+    });
     render(
       <AppContext.Provider value={{ isAuthenticated: false }}>
         <BrowserRouter>
@@ -82,17 +82,18 @@ describe("Login", () => {
       expect(loginButton).toBeInTheDocument();
     });
   });
+
   it("should make API call on callback", async () => {
     fetchMock.mockResponseOnce(JSON.stringify(mockData));
 
     // Mock the search params to simulate the conditions for handleCallback
-    (useSearchParams as jest.Mock).mockReturnValue([
-      new URLSearchParams("code=123&state=abc"),
+    (useLocation as jest.Mock).mockReturnValue({
+      search: new URLSearchParams("code=123&state=abc"),
       mockFnParam,
-    ]);
+    });
 
     render(
-      <AppContext.Provider value={{ isAuthenticated: false }}>
+      <AppContext.Provider value={{ isAuthenticated: false, host: "" }}>
         <BrowserRouter>
           <Login />
         </BrowserRouter>
@@ -105,6 +106,6 @@ describe("Login", () => {
   });
   afterEach(() => {
     fetchMock.resetMocks();
-    (useSearchParams as jest.Mock).mockReset();
+    (useLocation as jest.Mock).mockReset();
   });
 });

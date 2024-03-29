@@ -147,14 +147,19 @@ func (m *Manager) ShutDown(ctx context.Context) {
 			defer wg.Done()
 			var ctxClosedErr error
 			var attempt int
-			ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, PBQCloseBackOff, func(_ context.Context) (done bool, err error) {
+			ctxClosedErr = wait.ExponentialBackoff(PBQCloseBackOff, func() (done bool, err error) {
 				closeErr := q.Close()
 				if closeErr != nil {
 					attempt += 1
 					m.log.Errorw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("ID", q.PartitionID), zap.Error(closeErr))
+					// if ctx is closed, we should return true
+					if ctx.Err() != nil {
+						return false, ctx.Err()
+					}
 					// exponential backoff will return if err is not nil
 					return false, nil
 				}
+				m.log.Infow("Successfully closed pbq", zap.String("ID", q.PartitionID.String()))
 				return true, nil
 			})
 			if ctxClosedErr != nil {

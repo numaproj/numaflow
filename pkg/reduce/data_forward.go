@@ -73,6 +73,7 @@ type DataForward struct {
 	storeManager        wal.Manager
 	of                  *pnf.Manager
 	opts                *Options
+	currentWatermark    time.Time // if watermark is -1, then make sure event-time is < watermark
 	log                 *zap.SugaredLogger
 }
 
@@ -116,6 +117,7 @@ func NewDataForward(ctx context.Context,
 		whereToDecider:      whereToDecider,
 		of:                  of,
 		wmbChecker:          wmb.NewWMBChecker(2), // TODO: make configurable
+		currentWatermark:    time.UnixMilli(-1),
 		log:                 logging.FromContext(ctx),
 		opts:                options}
 
@@ -170,7 +172,10 @@ func (df *DataForward) replayForUnalignedWindows(ctx context.Context, discovered
 	for _, s := range discoveredWALs {
 		p := s.PartitionID()
 		// associate the PBQ and PnF
-		df.associatePBQAndPnF(ctx, p)
+		_, err := df.associatePBQAndPnF(ctx, p)
+		if err != nil {
+			return err
+		}
 	}
 	eg := errgroup.Group{}
 	df.log.Info("Number of partitions to replay: ", len(discoveredWALs))
@@ -225,7 +230,10 @@ func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWA
 		df.windower.InsertWindow(window.NewAlignedTimedWindow(p.Start, p.End, p.Slot))
 
 		// associate the PBQ and PnF
-		df.associatePBQAndPnF(ctx, p)
+		_, err := df.associatePBQAndPnF(ctx, p)
+		if err != nil {
+			return err
+		}
 	}
 	eg := errgroup.Group{}
 	df.log.Infow("Number of partitions to replay: ", zap.Int("count", len(discoveredWALs)))
@@ -321,7 +329,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			if watermark := time.UnixMilli(processorWMB.Watermark).Add(-1 * time.Millisecond); oldestWindowEndTime.Before(watermark) {
 				windowOperations := df.windower.CloseWindows(watermark)
 				for _, op := range windowOperations {
-					err = df.writeToPBQ(ctx, op, true)
+					// we do not have to persist close operations
+					err = df.writeToPBQ(ctx, op, false)
 					if err != nil {
 						df.log.Errorw("Failed to write to PBQ", zap.Error(err))
 					}
@@ -347,6 +356,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// get the watermark for the partition from which we read the messages
 	processorWM := df.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
 
+	if processorWM.After(df.currentWatermark) {
+		df.currentWatermark = time.Time(processorWM)
+	}
+
 	for _, m := range readMessages {
 		if !df.keyed {
 			m.Keys = []string{dfv1.DefaultKeyForNonKeyedData}
@@ -369,7 +382,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
 // it to the partition.
-func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *partition.ID) pbq.ReadWriteCloser {
+func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *partition.ID) (pbq.ReadWriteCloser, error) {
 	// look for existing pbq
 	q := df.pbqManager.GetPBQ(*partitionID)
 
@@ -382,16 +395,30 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 			Factor:   1.5,
 			Jitter:   0.1,
 		}
-		pbqErr = wait.ExponentialBackoffWithContext(ctx, infiniteBackoff, func(_ context.Context) (done bool, err error) {
+		// we manage ctx ourselves
+		pbqErr = wait.ExponentialBackoff(infiniteBackoff, func() (done bool, err error) {
 			var attempt int
 			q, pbqErr = df.pbqManager.CreateNewPBQ(ctx, *partitionID)
 			if pbqErr != nil {
 				attempt += 1
-				df.log.Warnw("Failed to create pbq during startup, retrying", zap.Any("attempt", attempt), zap.String("partitionID", partitionID.String()), zap.Error(pbqErr))
-				return false, nil
+				df.log.Warnw("Failed to create pbq, retrying", zap.Any("attempt", attempt), zap.String("partitionID", partitionID.String()), zap.Error(pbqErr))
+				// no point retrying if ctx.Done has been invoked
+				select {
+				case <-ctx.Done():
+					// no point in retrying after we have been asked to stop.
+					return false, ctx.Err()
+				default:
+					// keep retrying
+					return false, nil
+				}
 			}
 			return true, nil
 		})
+
+		if pbqErr != nil {
+			df.log.Errorw("Failed to create pbq context cancelled", zap.String("partitionID", partitionID.String()), zap.Error(pbqErr))
+			return nil, pbqErr
+		}
 		// since we created a brand new PBQ it means there is no PnF listening on this PBQ.
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
@@ -399,7 +426,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 		df.log.Infow("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
 
-	return q
+	return q, nil
 }
 
 // process is one iteration of the read loop which create/merges/closes windows and writes window requests to the PBQs followed by acking the messages, and
@@ -441,19 +468,20 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 		df.ackMessages(ctx, ctrlMessages)
 	}
 
-	if len(successfullyWrittenMessages) == 0 {
-		return
-	}
-
-	// ack successful messages
-	df.ackMessages(ctx, successfullyWrittenMessages)
-
 	// no-ack the failed messages, so that they will be retried in the next iteration
 	// if we don't do this, the failed messages will be retried after the ackWait time
 	// which will cause correctness issues. We want these messages to be immediately retried.
 	// When a message is retried, the offset remains the same, so an old message might jump out of the offset-timeline and cause the watermark to be -1.
 	// The correctness is violated because the queue offset and message order are no longer monotonically increasing for those failed messages.
 	df.noAckMessages(ctx, failedMessages)
+
+	// if there are no successfully written messages, we can return early.
+	if len(successfullyWrittenMessages) == 0 {
+		return
+	}
+
+	// ack successful messages
+	df.ackMessages(ctx, successfullyWrittenMessages)
 
 	// close any windows that need to be closed.
 	// since the watermark will be same for all the messages in the batch
@@ -466,7 +494,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 
 	// write the close window operations to PBQ
 	for _, winOp := range closedWindowOps {
-		err = df.writeToPBQ(ctx, winOp, true)
+		err = df.writeToPBQ(ctx, winOp, false)
 		if err != nil {
 			df.log.Errorw("Failed to write close signal to PBQ", zap.Error(err))
 		}
@@ -498,13 +526,13 @@ func (df *DataForward) writeMessagesToWindows(ctx context.Context, messages []*i
 	var writtenMessages = make([]*isb.ReadMessage, 0, len(messages))
 	var failedMessages = make([]*isb.ReadMessage, 0)
 
-messagesLoop:
-	for i, message := range messages {
+	for _, message := range messages {
 		if df.shouldDropMessage(message) {
 			writtenMessages = append(writtenMessages, message)
 			continue
 		}
 
+		var failed bool
 		// identify and add window for the message
 		windowOperations := df.windower.AssignWindows(message)
 
@@ -512,16 +540,18 @@ messagesLoop:
 		// We need to write the messages to these PBQs
 		for _, winOp := range windowOperations {
 
-			err := df.writeToPBQ(ctx, winOp, true)
+			err = df.writeToPBQ(ctx, winOp, true)
 			// there is no point continuing because we are seeing an error.
 			// this error will ONLY BE set if we are in an error loop and ctx.Done() has been invoked.
 			if err != nil {
 				df.log.Errorw("Failed to write message, asked to stop trying", zap.Any("msgOffSet", message.ReadOffset.String()), zap.String("partitionID", winOp.ID.String()), zap.Error(err))
-				failedMessages = append(failedMessages, messages[i:]...)
-				break messagesLoop
+				failed = true
 			}
 		}
-
+		if failed {
+			failedMessages = append(failedMessages, message)
+			continue
+		}
 		writtenMessages = append(writtenMessages, message)
 	}
 	return writtenMessages, failedMessages, err
@@ -533,10 +563,10 @@ func (df *DataForward) shouldDropMessage(message *isb.ReadMessage) bool {
 		nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
 		// if there is no window open, drop the message
 		if nextWinAsSeenByWriter == nil || df.windower.Type() == window.Unaligned {
-			df.log.Debugw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+			df.log.Infow("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
 			return true
 		} else if message.EventTime.Before(nextWinAsSeenByWriter.StartTime()) { // if the message doesn't fall in the next window that is about to be closed drop it.
-			df.log.Debugw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
+			df.log.Infow("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
 			metrics.ReduceDroppedMessagesCount.With(map[string]string{
 				metrics.LabelVertex:             df.vertexName,
 				metrics.LabelPipeline:           df.pipelineName,
@@ -557,7 +587,8 @@ func (df *DataForward) shouldDropMessage(message *isb.ReadMessage) bool {
 	// This could be due to a couple of problem, eg. ack was not registered, etc.
 	// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
 	// to be violated.
-	if !message.IsLate && message.EventTime.Before(message.Watermark.Add(-1*df.opts.allowedLateness)) {
+	// df.currentWatermark cannot be -1 except for the first time till it gets a valid watermark (wm > -1)
+	if !message.IsLate && message.EventTime.Before(df.currentWatermark.Add(-1*df.opts.allowedLateness)) {
 		// TODO: track as a counter metric
 		df.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
 		// mark it as a successfully written message as the message will be acked to avoid subsequent retries
@@ -592,9 +623,12 @@ func (df *DataForward) writeToPBQ(ctx context.Context, winOp *window.TimedWindow
 		Jitter:   0.1,
 	}
 
-	q := df.associatePBQAndPnF(ctx, winOp.ID)
+	q, err := df.associatePBQAndPnF(ctx, winOp.ID)
+	if err != nil {
+		return err
+	}
 
-	err := wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
+	err = wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
 		rErr := q.Write(ctx, winOp, persist)
 		if rErr != nil {
 			df.log.Errorw("Failed to write message", zap.String("msgOffSet", winOp.ReadMessage.ReadOffset.String()), zap.String("partitionID", winOp.ID.String()), zap.Error(rErr))
@@ -691,6 +725,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 func (df *DataForward) noAckMessages(ctx context.Context, failedMessages []*isb.ReadMessage) {
 	var readOffsets []isb.Offset
 	for _, m := range failedMessages {
+		df.log.Infow("No-ack message", zap.String("msgOffSet", m.ReadOffset.String()))
 		readOffsets = append(readOffsets, m.ReadOffset)
 	}
 	df.fromBufferPartition.NoAck(ctx, readOffsets)

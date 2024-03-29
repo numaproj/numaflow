@@ -5,7 +5,7 @@ import React, {
   useContext,
   useEffect,
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useHistory } from "react-router-dom";
 import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -20,15 +20,16 @@ import glowBackground from "../../../images/background_glow.png";
 import "./style.css";
 
 export function Login() {
-  const { setUserInfo } = useContext<AppContextProps>(AppContext);
+  const { setUserInfo, host } = useContext<AppContextProps>(AppContext);
 
   const [loginError, setLoginError] = useState<string | undefined>();
   const [callbackError, setCallbackError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
 
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const history = useHistory();
+  const searchParams = new URLSearchParams(location.search);
   const returnURL = searchParams.get("returnUrl");
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -44,7 +45,7 @@ export function Login() {
     setCallbackError(undefined);
     try {
       const response = await fetch(
-        `${getBaseHref()}/auth/v1/login?returnUrl=${returnURL}`
+        `${host}${getBaseHref()}/auth/v1/login?returnUrl=${returnURL}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -65,14 +66,14 @@ export function Login() {
       setLoading(false);
       setLoadingMessage("");
     }
-  }, [returnURL]);
+  }, [returnURL, host]);
 
   const handleCallback = useCallback(async () => {
     setLoading(true);
     setLoadingMessage("Logging in...");
     try {
       const response = await fetch(
-        `${getBaseHref()}/auth/v1/callback?code=${code}&state=${state}`
+        `${host}${getBaseHref()}/auth/v1/callback?code=${code}&state=${state}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -88,10 +89,13 @@ export function Login() {
           username: claims.preferred_username,
           groups: claims.groups,
         });
-        navigate("/");
+        history.push("/");
         return;
       }
-      setSearchParams({}); // Clear code and state, go back to normal login state
+      history.replace({
+        pathname: history.location.pathname,
+        search: "",
+      }); // Clear code and state, go back to normal login state
       setCallbackError(await getAPIResponseError(response));
       setLoading(false);
       setLoadingMessage("");
@@ -99,14 +103,17 @@ export function Login() {
       setCallbackError(e.message); // Set callback error for context on login
       setLoading(false);
       setLoadingMessage("");
-      setSearchParams({}); // Clear code and state, go back to normal login state
+      history.replace({
+        pathname: history.location.pathname,
+        search: "",
+      }); // Clear code and state, go back to normal login state
     }
-  }, [code, state, setUserInfo, navigate]);
+  }, [code, state, setUserInfo, history, host]);
 
   // update user info after logging in
   const updateUserInfo = useCallback(async () => {
     try {
-      const response = await fetch(`${getBaseHref()}/api/v1/authinfo`);
+      const response = await fetch(`${host}${getBaseHref()}/api/v1/authinfo`);
       if (response.ok) {
         const data = await response.json();
         const claims = data?.data?.id_token_claims;
@@ -117,7 +124,7 @@ export function Login() {
             username: claims.preferred_username,
             groups: claims.groups,
           });
-          navigate("/");
+          history.push("/");
           return;
         }
       }
@@ -126,7 +133,7 @@ export function Login() {
       setFormLoading(false);
       setFormLoadingMessage("");
     }
-  }, [navigate]);
+  }, [history, host]);
 
   const handleSubmitClick = useCallback(async () => {
     setFormLoading(true);
@@ -144,7 +151,7 @@ export function Login() {
     };
 
     try {
-      const response = await fetch(`${getBaseHref()}/auth/v1/login`, {
+      const response = await fetch(`${host}${getBaseHref()}/auth/v1/login`, {
         method: "POST",
         body: JSON.stringify(data),
       });
@@ -167,7 +174,7 @@ export function Login() {
       setFormLoading(false);
       setFormLoadingMessage("");
     }
-  }, [updateUserInfo]);
+  }, [updateUserInfo, host]);
 
   // Call callback API to set user token and info
   useEffect(() => {

@@ -52,11 +52,13 @@ var _ ReadWriteCloser = (*PBQ)(nil)
 // Write accepts a window request and writes it to the PBQ, only the isb message is written to the store.
 // The other metadata like operation etc are recomputed from WAL.
 // request can never be nil.
-func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, persist bool) error {
+func (p *PBQ) Write(_ context.Context, request *window.TimedWindowRequest, persist bool) error {
+	var writeErr error
+
 	// if cob we should return
 	if p.cob {
 		p.log.Errorw("Failed to write request to pbq, pbq is closed", zap.Any("ID", p.PartitionID), zap.Any("request", request))
-		return nil
+		return fmt.Errorf("pbq is closed")
 	}
 
 	// if the window operation is delete, we should close the output channel and return
@@ -65,32 +67,28 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, per
 		return nil
 	}
 
-	var writeErr error
-	// we need context to get out of blocking write
-	select {
-	case p.output <- request:
-		switch request.Operation {
-		case window.Open, window.Append, window.Expand:
-			// during replay we do not have to persist
-			if persist {
-				writeErr = p.store.Write(request.ReadMessage)
-			}
-		case window.Close, window.Merge:
-		// these do not have request.ReadMessage, only metadata fields are used
-		default:
-			return fmt.Errorf("unknown request.Operation, %v", request.Operation)
+	// write the request to the output channel
+	// NOTE: this is a blocking call! it should only block if UDF is blocking.
+	p.output <- request
+
+	switch request.Operation {
+	case window.Open, window.Append, window.Expand:
+		// during replay we do not have to persist
+		if persist {
+			writeErr = p.store.Write(request.ReadMessage)
 		}
-	case <-ctx.Done():
-		// closing the output channel will not cause panic, since its inside select case
-		// ctx.Done implicitly means write hasn't succeeded.
-		close(p.output)
-		writeErr = ctx.Err()
+	case window.Close, window.Merge:
+	// these do not have request.ReadMessage, only metadata fields are used
+	default:
+		return fmt.Errorf("unknown request.Operation, %v", request.Operation)
 	}
+
 	pbqChannelSize.With(map[string]string{
 		metrics.LabelVertex:             p.vertexName,
 		metrics.LabelPipeline:           p.pipelineName,
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(p.vertexReplica)),
 	}).Set(float64(len(p.output)))
+
 	return writeErr
 }
 

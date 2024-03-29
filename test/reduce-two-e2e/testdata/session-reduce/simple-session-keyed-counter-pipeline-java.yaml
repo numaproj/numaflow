@@ -1,8 +1,10 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: simple-session-counter
+  name: simple-session-counter-java
 spec:
+  watermark:
+    maxDelay: 30s
   vertices:
     - name: in
       scale:
@@ -14,13 +16,13 @@ spec:
         min: 1
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: compute-count
       partitions: 1
       udf:
         container:
-          # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
-          image: quay.io/numaio/numaflow-go/session-counter:v0.6.1
+          # see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducesession/counter
+          image: quay.io/numaio/numaflow-java/session-reduce-count:stable
         groupBy:
           window:
             session:
@@ -30,6 +32,11 @@ spec:
             persistentVolumeClaim:
               volumeSize: 2Gi
               accessMode: ReadWriteOnce
+    - name: log-sink
+      scale:
+        min: 1
+      sink:
+        log: {}
     - name: sink
       scale:
         min: 1
@@ -45,3 +52,5 @@ spec:
       to: compute-count
     - from: compute-count
       to: sink
+    - from: compute-count
+      to: log-sink

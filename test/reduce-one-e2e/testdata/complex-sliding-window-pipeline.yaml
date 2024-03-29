@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: complex-sliding-sum
 spec:
+  watermark:
+    maxDelay: 30s
   limits:
     readBatchSize: 50
   vertices:
@@ -17,37 +19,53 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.1
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: keyed-fixed-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "false" # DO NOT forget the double quotes!!!
       partitions: 2
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/reduce-sum:stable
         groupBy:
           window:
             fixed:
               length: 5s
           keyed: true
           storage:
-            emptyDir: {}
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+              accessMode: ReadWriteOnce
     - name: non-keyed-fixed-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "false" # DO NOT forget the double quotes!!!
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/reduce-sum:stable
         groupBy:
           window:
             fixed:
               length: 10s
           keyed: false
           storage:
-            emptyDir: {}
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+              accessMode: ReadWriteOnce
     - name: non-keyed-sliding-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: "false" # DO NOT forget the double quotes!!!
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.1
+          image: quay.io/numaio/numaflow-go/reduce-sum:stable
         groupBy:
           window:
             sliding:
@@ -55,7 +73,9 @@ spec:
               slide: 10s
           keyed: false
           storage:
-            emptyDir: {}
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+              accessMode: ReadWriteOnce
     - name: sink
       scale:
         min: 1

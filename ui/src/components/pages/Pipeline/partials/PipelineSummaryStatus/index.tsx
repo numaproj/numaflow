@@ -13,8 +13,20 @@ import { ViewType } from "../../../../common/SpecEditor";
 
 import "./style.css";
 
-export function PipelineSummaryStatus({ pipelineId, pipeline, lag, refresh }) {
-  const { namespaceId } = useParams();
+export interface PipelineSummaryProps {
+  pipelineId: any;
+  pipeline: any;
+  lag: any;
+  refresh: () => void;
+}
+
+export function PipelineSummaryStatus({
+  pipelineId,
+  pipeline,
+  lag,
+  refresh,
+}: PipelineSummaryProps) {
+  const { namespaceId } = useParams<{ namespaceId: string }>();
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
 
   const handleUpdateComplete = useCallback(() => {

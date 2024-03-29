@@ -1373,6 +1373,7 @@ func TestInterStepDataForwardSinglePartition(t *testing.T) {
 	assert.Len(t, readMessages, int(count))
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
 	assert.Equal(t, []interface{}{"0-0-receivingVertex-0", "1-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.Headers, writeMessages[1].Header.Headers}, []interface{}{readMessages[0].Header.Headers, readMessages[1].Header.Headers})
 
 	f.Stop()
 	time.Sleep(1 * time.Millisecond)
@@ -1430,6 +1431,7 @@ func TestInterStepDataForwardMultiplePartition(t *testing.T) {
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[2].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
 	assert.Equal(t, []interface{}{"0-0-receivingVertex-0", "2-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.Headers, writeMessages[2].Header.Headers}, []interface{}{readMessages[0].Header.Headers, readMessages[1].Header.Headers})
 
 	time.Sleep(time.Second)
 
@@ -1438,6 +1440,7 @@ func TestInterStepDataForwardMultiplePartition(t *testing.T) {
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[1].Header.Keys, writeMessages[3].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
 	assert.Equal(t, []interface{}{"1-0-receivingVertex-0", "3-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{writeMessages[1].Header.Headers, writeMessages[3].Header.Headers}, []interface{}{readMessages[0].Header.Headers, readMessages[1].Header.Headers})
 
 	f.Stop()
 	time.Sleep(1 * time.Millisecond)

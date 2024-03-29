@@ -81,6 +81,7 @@ func (u *GRPCBasedMapStream) ApplyMapStream(ctx context.Context, message *isb.Re
 		Value:     payload,
 		EventTime: timestamppb.New(parentMessageInfo.EventTime),
 		Watermark: timestamppb.New(message.Watermark),
+		Headers:   message.Headers,
 	}
 
 	responseCh := make(chan *mapstreampb.MapStreamResponse)

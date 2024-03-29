@@ -1,0 +1,54 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: kafka-idle-source
+spec:
+  limits:
+    readBatchSize: 50
+  watermark:
+    idleSource:
+      threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
+      incrementBy: 3s # If source is found to be idle then increment the watermark by given incrementBy value.
+      stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
+  vertices:
+    - name: kafka-in
+      source:
+        kafka:
+          brokers:
+            - kafka-broker:9092
+          topic: kafka-topic
+          consumerGroup: test-group
+        transformer:
+          builtin:
+            name: eventTimeExtractor
+            kwargs:
+              expression: json(payload).time
+              format: 2006-01-02T15:04:05Z07:00
+      scale:
+        min: 2
+    - name: count-event
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-go/reduce-counter:stable
+        groupBy:
+          window:
+            fixed:
+              length: 10s
+          keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 10Gi
+              accessMode: ReadWriteOnce
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+  edges:
+    - from: kafka-in
+      to: count-event
+    - from: count-event
+      to: sink

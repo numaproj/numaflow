@@ -93,6 +93,7 @@ func TestHeader(t *testing.T) {
 		Kind        MessageKind
 		ID          string
 		Key         []string
+		Headers     map[string]string
 	}
 	tests := []struct {
 		name               string
@@ -124,6 +125,37 @@ func TestHeader(t *testing.T) {
 			wantMarshalError:   false,
 			wantUnmarshalError: false,
 		},
+		{
+			name: "good_with_headers",
+			fields: fields{
+				MessageInfo: MessageInfo{
+					EventTime: time.UnixMilli(1676617200000),
+					IsLate:    true,
+				},
+				Kind: Data,
+				ID:   "TestID",
+				Key:  []string{"TestKey", "TestKey2"},
+				Headers: map[string]string{
+					"key1": "value1",
+					"key2": "value2",
+				},
+			},
+			wantData: Header{
+				MessageInfo: MessageInfo{
+					EventTime: time.UnixMilli(1676617200000).UTC(),
+					IsLate:    true,
+				},
+				Kind: Data,
+				ID:   "TestID",
+				Keys: []string{"TestKey", "TestKey2"},
+				Headers: map[string]string{
+					"key1": "value1",
+					"key2": "value2",
+				},
+			},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -132,6 +164,7 @@ func TestHeader(t *testing.T) {
 				Kind:        tt.fields.Kind,
 				ID:          tt.fields.ID,
 				Keys:        tt.fields.Key,
+				Headers:     tt.fields.Headers,
 			}
 			gotData, err := h.MarshalBinary()
 			if (err != nil) != tt.wantMarshalError {
@@ -258,6 +291,47 @@ func TestMessage(t *testing.T) {
 			wantMarshalError:   false,
 			wantUnmarshalError: false,
 		},
+		{
+			name: "good_with_headers",
+			fields: fields{
+				Header: Header{
+					MessageInfo: MessageInfo{
+						EventTime: time.UnixMilli(1676617200000),
+						IsLate:    true,
+					},
+					Kind: Data,
+					ID:   "TestID",
+					Keys: []string{"TestKey"},
+					Headers: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+				Body: Body{
+					Payload: []byte("TestBODY"),
+				},
+			},
+			wantData: Message{
+				Header: Header{
+					MessageInfo: MessageInfo{
+						EventTime: time.UnixMilli(1676617200000).UTC(),
+						IsLate:    true,
+					},
+					Kind: Data,
+					ID:   "TestID",
+					Keys: []string{"TestKey"},
+					Headers: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
+				},
+				Body: Body{
+					Payload: []byte("TestBODY"),
+				},
+			},
+			wantMarshalError:   false,
+			wantUnmarshalError: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -275,9 +349,6 @@ func TestMessage(t *testing.T) {
 			if (err != nil) != tt.wantUnmarshalError {
 				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
 				return
-			}
-			if tt.name == "good_empty" {
-				tt.wantData.Keys = make([]string, 0)
 			}
 			if !reflect.DeepEqual(*newM, tt.wantData) {
 				t.Errorf("MarshalBinary() gotData = %v, want %v", newM, &tt.wantData)
@@ -312,6 +383,10 @@ func TestReadMessage(t *testing.T) {
 						Kind: Data,
 						ID:   "TestID",
 						Keys: []string{"TestKey"},
+						Headers: map[string]string{
+							"key1": "value1",
+							"key2": "value2",
+						},
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),
@@ -335,6 +410,10 @@ func TestReadMessage(t *testing.T) {
 						Kind: Data,
 						ID:   "TestID",
 						Keys: []string{"TestKey"},
+						Headers: map[string]string{
+							"key1": "value1",
+							"key2": "value2",
+						},
 					},
 					Body: Body{
 						Payload: []byte("TestBODY"),

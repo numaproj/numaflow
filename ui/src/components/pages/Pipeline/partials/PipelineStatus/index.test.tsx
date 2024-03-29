@@ -10,7 +10,16 @@ describe("PipelineStatus", () => {
     render(
       <AppContext.Provider value="healthy">
         <BrowserRouter>
-          <PipelineStatus status="Running" healthStatus="healthy" />
+          <PipelineStatus
+            status="Running"
+            healthStatus="healthy"
+            healthData={{
+              resourceHealthStatus: "healthy",
+              resourceHealthMessage: "Pipeline simple-pipeline is healthy",
+              dataHealthStatus: "healthy",
+              dataHealthMessage: "Pipeline data flow is healthy",
+            }}
+          />
         </BrowserRouter>
       </AppContext.Provider>
     );

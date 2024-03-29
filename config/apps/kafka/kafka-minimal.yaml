@@ -81,7 +81,7 @@ spec:
             - name: KAFKA_BROKER_ID
               value: "0"
             - name: KAFKA_CREATE_TOPICS
-              value: "input-topic:1:1,middle-topic:1:1,output-topic:1:1"
+              value: "kafka-topic:2:1,input-topic:1:1,middle-topic:1:1,output-topic:1:1"
           readinessProbe:
             tcpSocket:
               port: 9092

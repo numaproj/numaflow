@@ -61,6 +61,8 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
+
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
@@ -134,23 +136,33 @@ func (r *ReduceSuite) TestSimpleSessionPipeline() {
 	done <- struct{}{}
 }
 
-func (r *ReduceSuite) TestSimpleSessionKeyedPipeline() {
+func (r *ReduceSuite) TestSimpleSessionKeyedPipelineGo() {
+	r.testSimpleSessionKeyedPipeline("go")
+}
 
-	// the reduce feature is not supported with redis ISBSVC
+func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
+	r.testSimpleSessionKeyedPipeline("java")
+}
+
+func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
+
+  // the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
 	}
-
+  
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-keyed-counter-pipeline.yaml").
+	w := r.Given().Pipeline(fmt.Sprintf("@testdata/session-reduce/simple-session-keyed-counter-pipeline-%s.yaml", lang)).
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "simple-session-counter"
+	pipelineName := fmt.Sprintf("simple-session-counter-%s", lang)
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	count := 0
 	done := make(chan struct{})
@@ -179,10 +191,10 @@ func (r *ReduceSuite) TestSimpleSessionKeyedPipeline() {
 	}()
 
 	w.Expect().SinkContains("sink", "5")
-	w.Expect().SinkNotContains("sink", "4", WithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "3", WithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "2", WithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "1", WithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 
@@ -195,17 +207,17 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-keyed-counter-pipeline.yaml").
+	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-keyed-counter-pipeline-go.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "simple-session-counter"
+	pipelineName := "simple-session-counter-go"
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
 	args := "kubectl delete po -n numaflow-system -l " +
-		"numaflow.numaproj.io/pipeline-name=simple-session-counter,numaflow.numaproj.io/vertex-name=compute-count"
+		"numaflow.numaproj.io/pipeline-name=simple-session-counter-go,numaflow.numaproj.io/vertex-name=compute-count"
 
 	// Kill the reducer pods before processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
@@ -241,10 +253,10 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 
 	w.Expect().
 		SinkContains("sink", "5").
-		SinkNotContains("sink", "4", WithTimeout(20*time.Second)).
-		SinkNotContains("sink", "3", WithTimeout(20*time.Second)).
-		SinkNotContains("sink", "2", WithTimeout(20*time.Second)).
-		SinkNotContains("sink", "1", WithTimeout(20*time.Second))
+		SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second)).
+		SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second)).
+		SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second)).
+		SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 

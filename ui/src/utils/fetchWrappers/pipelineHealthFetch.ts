@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useContext } from "react";
 import { Options, useFetch } from "./fetch";
 import { getBaseHref } from "../index";
 import { PipelineHealthFetchResult } from "../../types/declarations/pipeline";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
@@ -31,12 +33,14 @@ export const usePipelineHealthFetch = ({
     refresh,
   });
 
+  const { host } = useContext<AppContextProps>(AppContext);
+
   const {
     data: pipelineHealthData,
     loading: pipelineHealthLoading,
     error: pipelineHealthError,
   } = useFetch(
-    `${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/health`,
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/health`,
     undefined,
     options
   );

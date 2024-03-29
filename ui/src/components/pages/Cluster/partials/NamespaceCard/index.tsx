@@ -11,7 +11,7 @@ import "./style.css";
 
 export function NamespaceCard({ data }: NamespaceCardProps) {
   return (
-    <Link to={`/namespaces/${data.name}`} style={{ textDecoration: "none" }}>
+    <Link to={`?namespace=${data.name}`} style={{ textDecoration: "none" }}>
       <Paper
         sx={{
           display: "flex",

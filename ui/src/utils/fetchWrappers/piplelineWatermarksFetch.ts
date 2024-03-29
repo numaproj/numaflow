@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useFetch, Options } from "./fetch";
+import { getBaseHref } from "../index";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 import {
   PipelineWatermarks,
   PipelineWatermarksFetchResult,
@@ -20,7 +23,7 @@ const rawDataToWatermarks = (
           partition: index,
           watermark,
           formattedWatermark: new Date(watermark).toISOString(),
-        }
+        };
       }),
     };
   });
@@ -40,8 +43,10 @@ export const usePiplelineWatermarksFetch = ({
     skip: false,
     requestKey: "",
   });
+  const { host } = useContext<AppContextProps>(AppContext);
+
   const { data, loading, error } = useFetch(
-    `/api/v1/namespaces/${namespace}/pipelines/${pipeline}/watermarks`,
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespace}/pipelines/${pipeline}/watermarks`,
     undefined,
     options
   );
