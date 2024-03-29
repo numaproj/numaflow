@@ -18,6 +18,7 @@ package utils
 
 import (
 	"encoding/base64"
+	"fmt"
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 
@@ -40,7 +41,7 @@ func NewSimpleSourceOffset(offset *sourcepb.Offset) isb.Offset {
 }
 
 func (s *simpleSourceOffset) String() string {
-	return s.offset
+	return fmt.Sprintf("%s-%d", s.offset, s.partitionIdx)
 }
 
 func (s *simpleSourceOffset) PartitionIdx() int32 {
@@ -60,7 +61,7 @@ func (s *simpleSourceOffset) NoAck() error {
 }
 
 func ConvertToSourceOffset(offset isb.Offset) *sourcepb.Offset {
-	decoded, _ := base64.StdEncoding.DecodeString(offset.String())
+	decoded, _ := base64.StdEncoding.DecodeString(offset.(*simpleSourceOffset).offset)
 	return &sourcepb.Offset{
 		PartitionId: offset.PartitionIdx(),
 		Offset:      decoded,
