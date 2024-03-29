@@ -57,12 +57,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	natsClientPool, err := jsclient.NewClientPool(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
-	}
-	defer natsClientPool.CloseAll()
-
 	fromBuffer := u.VertexInstance.Vertex.OwnedBuffers()
 	log = log.With("protocol", "uds-grpc-map-udf")
 
@@ -80,6 +74,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
 	idleManager = wmb.NewNoOpIdleManager()
 
+	var err error
+
 	// create readers and writers
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -88,6 +84,13 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			return err
 		}
 	case dfv1.ISBSvcTypeJetStream:
+
+		natsClientPool, err := jsclient.NewClientPool(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+		}
+		defer natsClientPool.CloseAll()
+
 		// multiple go routines can share the same set of writers since nats conn is thread safe
 		// https://github.com/nats-io/nats.go/issues/241
 		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
