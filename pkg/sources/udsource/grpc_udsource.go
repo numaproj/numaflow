@@ -28,7 +28,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/udsource/utils"
 )
 
 // GRPCBasedUDSource applies a user-defined source over gRPC
@@ -128,11 +127,13 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 			}
 			// Convert the datum to ReadMessage and append to the list
 			r := datum.GetResult()
+
+			offset := NewUserDefinedSourceOffset(r.GetOffset())
 			readMessage := &isb.ReadMessage{
 				Message: isb.Message{
 					Header: isb.Header{
 						MessageInfo: isb.MessageInfo{EventTime: r.GetEventTime().AsTime()},
-						ID:          constructMessageID(r),
+						ID:          constructMessageID(offset.String(), r.GetOffset().GetPartitionId()),
 						Keys:        r.GetKeys(),
 						Headers:     r.GetHeaders(),
 					},
@@ -140,7 +141,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 						Payload: r.GetPayload(),
 					},
 				},
-				ReadOffset: utils.ConvertToIsbOffset(r.GetOffset()),
+				ReadOffset: offset,
 			}
 			readMessages = append(readMessages, readMessage)
 		}
@@ -151,7 +152,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset) error {
 	rOffsets := make([]*sourcepb.Offset, len(offsets))
 	for i, offset := range offsets {
-		rOffsets[i] = utils.ConvertToSourceOffset(offset)
+		rOffsets[i] = ConvertToUserDefinedSourceOffset(offset)
 	}
 	var r = &sourcepb.AckRequest{
 		Request: &sourcepb.AckRequest_Request{
@@ -172,7 +173,7 @@ func (u *GRPCBasedUDSource) ApplyPartitionFn(ctx context.Context) ([]int32, erro
 	return resp.GetResult().GetPartitions(), nil
 }
 
-func constructMessageID(r *sourcepb.ReadResponse_Result) string {
+func constructMessageID(offset string, partitionIdx int32) string {
 	// For a user-defined source, the partition ID plus the offset should be able to uniquely identify a message
-	return fmt.Sprintf("%d-%s", r.GetOffset().GetPartitionId(), string(r.GetOffset().GetOffset()))
+	return fmt.Sprintf("%d-%s", partitionIdx, offset)
 }
