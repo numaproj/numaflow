@@ -85,8 +85,8 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 	var epoch int64 = math.MaxInt64
 	var allProcessors = e.processorManager.getAllProcessors()
 
-	// Avoid computing the watermark if the vertex type is 'reduce' until all pods are up and running.
-	// The reason is each pod reads from a unique ISB buffer and 'reduce' has a persistent state.
+	// Avoid computing the watermark if the vertex type is reduce until all pods are up and running.
+	// The reason is each pod reads from a unique ISB buffer and reduce has a persistent state.
 	// Not considering all the processors might result in incorrect computation of the watermark.
 	if e.opts.isFromVtxReduce && e.opts.fromVtxPartitions != len(allProcessors) {
 		return wmb.InitialWatermark

@@ -53,9 +53,7 @@ func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance,
 			opts = append(opts, WithIsFromVtxReduce(true))
 		}
 
-		wmStore, _ := wmStores[e.From]
-		edgeFetchers[e.From] = NewEdgeFetcher(ctx, wmStore, fromBufferPartitionCount, opts...)
-
+		edgeFetchers[e.From] = NewEdgeFetcher(ctx, wmStores[e.From], fromBufferPartitionCount, opts...)
 	}
 	return &edgeFetcherSet{
 		edgeFetchers,
