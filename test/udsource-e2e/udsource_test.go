@@ -26,6 +26,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/appengine/log"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
@@ -126,6 +127,7 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 				if !ratesMatch(rates) {
 					time.Sleep(waitInterval)
 				} else {
+					log.Infof(context.Background(), "processing rates match across vertices: %v", rates)
 					succeedChan <- struct{}{}
 					break
 				}
@@ -133,7 +135,6 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 		}()
 		select {
 		case <-succeedChan:
-			time.Sleep(waitInterval)
 			break
 		case <-timer.C:
 			assert.Fail(s.T(), "timed out waiting for processing rate to match across vertices.")
