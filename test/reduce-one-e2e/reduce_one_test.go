@@ -247,6 +247,7 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodlogs("non-keyed-fixed-sum", "numa").TerminateAllPodLogs()
 	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	done := make(chan struct{})
