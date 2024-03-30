@@ -14,11 +14,16 @@ spec:
       limits:
         readBatchSize: 500
       scale:
+        # set it as two pods to be different from the sink such that we can use this pipeline
+        # to test processing rate is consistent across vertices when we are not dropping messages.
         min: 2
         max: 2
     - name: out
       sink:
         log: {}
+      scale:
+        min: 1
+        max: 1
   edges:
     - from: in
       to: out

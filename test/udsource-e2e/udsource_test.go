@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -26,7 +28,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/appengine/log"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
@@ -127,7 +128,6 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 				if !ratesMatch(rates) {
 					time.Sleep(waitInterval)
 				} else {
-					log.Infof(context.Background(), "processing rates match across vertices: %v", rates)
 					succeedChan <- struct{}{}
 					break
 				}
@@ -148,13 +148,15 @@ func ratesMatch(rates []float64) bool {
 		return true
 	}
 	firstVal := rates[0]
-	// the simple source can reach 8k TPS, we don't compare until the pipeline is stable.
-	// using 5000 as a threshold
+	// the simple source with 2 pods can reach 8k TPS.
+	// we don't compare until the pipeline is stable.
+	// using 5k as a threshold
 	if firstVal < 5000 {
 		return false
 	}
 	for i := 1; i < len(rates); i++ {
 		diff := math.Abs(firstVal - rates[i])
+		// 0.1 - the processing rate compared with source vertex should not be off by more than 10%.
 		if diff > (firstVal * 0.1) {
 			return false
 		}
