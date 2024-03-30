@@ -119,7 +119,7 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 
 		// If fromVertex type is reduce, don't delete the processor, reduce needs all processors for correct watermark calculation
 		// since each pod reads from different buffer had has persistent state. Deleting a processor might give wrong watermark values.
-		// Although we have check to return -1, if we no of processors doesn't match fromVertex partitions, it's better not to delete.
+		// Although we have check to return -1, if the number of processors doesn't match fromVertex partitions, it's better not to delete.
 		if p.IsDeleted() && (offset > headOffset) && !e.opts.isFromVtxReduce {
 			e.log.Infow("Deleting processor because it's stale", zap.String("processor", p.GetEntity().GetName()))
 			e.processorManager.deleteProcessor(p.GetEntity().GetName())
