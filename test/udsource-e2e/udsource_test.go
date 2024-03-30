@@ -74,18 +74,8 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
 
-	pipelineName := fmt.Sprintf("simple-source-%s", lang)
-
-	if verifyRate {
-		// wait for all the pods and daemon server to come up
-		w.Expect().VertexPodsRunning().DaemonPodsRunning().DaemonPodLogContains(pipelineName, LogDaemonStarted)
-		// port-forward daemon server
-		defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
-			TerminateAllPodPortForwards()
-	} else {
-		// wait for all the pods to come up
-		w.Expect().VertexPodsRunning()
-	}
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
 
 	// we use the log sink instead of redis to verify the output because the simple user-defined source generates
 	// such a large amount of data that the redis sink is not able to handle it, it breaks with OOM error
@@ -101,13 +91,19 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 	w.Expect().VertexPodLogContains("out", "999")
 
 	if verifyRate {
+		pipelineName := fmt.Sprintf("simple-source-%s", lang)
+		// wait for the daemon server to come up
+		w.Expect().DaemonPodsRunning().DaemonPodLogContains(pipelineName, LogDaemonStarted)
+		// port-forward daemon server
+		defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
+			TerminateAllPodPortForwards()
+
 		// verify the processing rate match between source and sink
 		client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
 		assert.NoError(s.T(), err)
 		defer func() {
 			_ = client.Close()
 		}()
-
 		// timeout the test if rates don't match within 2 minutes.
 		timer := time.NewTimer(120 * time.Second)
 		// we use 10-second windows for rate calculation
