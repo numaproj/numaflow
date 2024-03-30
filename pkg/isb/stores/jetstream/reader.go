@@ -112,16 +112,14 @@ func (jr *jetStreamReader) Pending(_ context.Context) (int64, error) {
 	return jr.client.PendingForStream(jr.stream, jr.stream)
 }
 
-func (jr *jetStreamReader) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
+func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
 	labels := map[string]string{"buffer": jr.GetName()}
 	defer func(t time.Time) {
 		isbReadTime.With(labels).Observe(float64(time.Since(t).Microseconds()))
 	}(time.Now())
 	var err error
 	var result []*isb.ReadMessage
-	rctx, cancel := context.WithTimeout(ctx, jr.opts.readTimeOut)
-	defer cancel()
-	msgs, err := jr.sub.Fetch(int(count), nats.Context(rctx))
+	msgs, err := jr.sub.Fetch(int(count), nats.MaxWait(jr.opts.readTimeOut))
 	if err != nil && !errors.Is(err, nats.ErrTimeout) && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 		isbReadErrors.With(map[string]string{"buffer": jr.GetName()}).Inc()
 		return nil, fmt.Errorf("failed to fetch messages from jet stream subject %q, %w", jr.subject, err)

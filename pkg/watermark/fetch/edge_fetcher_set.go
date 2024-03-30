@@ -40,18 +40,22 @@ type edgeFetcherSet struct {
 // NewEdgeFetcherSet creates a new edgeFetcherSet object which implements the Fetcher interface.
 func NewEdgeFetcherSet(ctx context.Context, vertexInstance *dfv1.VertexInstance, wmStores map[string]store.WatermarkStore, opts ...Option) Fetcher {
 	var edgeFetchers = make(map[string]*edgeFetcher)
-	for key, wmStore := range wmStores {
-		var fetchWatermark *edgeFetcher
-		// create a fetcher that fetches watermark.
-		if vertexInstance.Vertex.IsASource() {
-			// panic: source vertex is handled using new source fetcher
-			panic("NewEdgeFetcherSet can't create a new edge fetcher set for a source vertex.")
-		} else if vertexInstance.Vertex.IsReduceUDF() {
-			fetchWatermark = NewEdgeFetcher(ctx, wmStore, 1, opts...)
+	for _, e := range vertexInstance.Vertex.Spec.FromEdges {
+		var fromBufferPartitionCount int
+		if vertexInstance.Vertex.IsReduceUDF() {
+			fromBufferPartitionCount = 1
 		} else {
-			fetchWatermark = NewEdgeFetcher(ctx, wmStore, vertexInstance.Vertex.Spec.GetPartitionCount(), opts...)
+			fromBufferPartitionCount = vertexInstance.Vertex.Spec.GetPartitionCount()
 		}
-		edgeFetchers[key] = fetchWatermark
+
+		opts = append(opts, WithFromVtxPartitions(e.GetFromVertexPartitions()))
+		if e.FromVertexType == dfv1.VertexTypeReduceUDF {
+			opts = append(opts, WithIsFromVtxReduce(true))
+		}
+
+		wmStore, _ := wmStores[e.From]
+		edgeFetchers[e.From] = NewEdgeFetcher(ctx, wmStore, fromBufferPartitionCount, opts...)
+
 	}
 	return &edgeFetcherSet{
 		edgeFetchers,

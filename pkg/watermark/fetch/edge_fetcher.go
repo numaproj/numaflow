@@ -42,11 +42,17 @@ type edgeFetcher struct {
 	processorManager *processorManager
 	lastProcessedWm  []int64
 	log              *zap.SugaredLogger
+	opts             *options
 	sync.RWMutex
 }
 
 // NewEdgeFetcher returns a new edge fetcher. This could have been private, except that UI uses it.
 func NewEdgeFetcher(ctx context.Context, wmStore store.WatermarkStore, fromBufferPartitionCount int, opts ...Option) *edgeFetcher {
+	dOpts := defaultOptions()
+	for _, opt := range opts {
+		opt(dOpts)
+	}
+
 	log := logging.FromContext(ctx)
 	log.Info("Creating a new edge watermark fetcher")
 	var lastProcessedWm []int64
@@ -77,6 +83,11 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 	var debugString strings.Builder
 	var epoch int64 = math.MaxInt64
 	var allProcessors = e.processorManager.getAllProcessors()
+
+	if e.opts.isFromVtxReduce && e.opts.fromVtxPartitions != len(allProcessors) {
+		return wmb.InitialWatermark
+	}
+
 	for _, p := range allProcessors {
 		// headOffset is used to check whether this pod can be deleted.
 		headOffset := int64(-1)
@@ -101,7 +112,7 @@ func (e *edgeFetcher) updateWatermark(inputOffset isb.Offset, fromPartitionIdx i
 
 		// if the pod is not active and the head offset of all the timelines is less than the input offset, delete the processor
 		// (this means we are processing data later than what the stale processor has processed)
-		if p.IsDeleted() && (offset > headOffset) {
+		if p.IsDeleted() && (offset > headOffset) && !e.opts.isFromVtxReduce {
 			e.log.Infow("Deleting processor because it's stale", zap.String("processor", p.GetEntity().GetName()))
 			e.processorManager.deleteProcessor(p.GetEntity().GetName())
 		}
