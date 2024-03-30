@@ -14,6 +14,9 @@ spec:
             imagePullPolicy: Always
       limits:
         readBatchSize: 500
+      scale:
+        min: 2
+        max: 2
     - name: out
       sink:
         log: {}

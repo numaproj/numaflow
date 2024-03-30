@@ -13,6 +13,9 @@ spec:
             image: quay.io/numaio/numaflow-go/source-simple-source:stable
       limits:
         readBatchSize: 500
+      scale:
+        min: 2
+        max: 2
     - name: out
       sink:
         log: {}
