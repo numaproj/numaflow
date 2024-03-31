@@ -60,13 +60,7 @@ type processorManager struct {
 
 // newProcessorManager returns a new processorManager instance
 func newProcessorManager(ctx context.Context, wmStore store.WatermarkStore, fromBufferPartitionCount int32, inputOpts ...Option) *processorManager {
-	opts := &options{
-		podHeartbeatRate:         5,
-		refreshingProcessorsRate: 5,
-		isReduce:                 false,
-		isSource:                 false,
-		vertexReplica:            0,
-	}
+	opts := defaultOptions()
 
 	for _, opt := range inputOpts {
 		opt(opts)
