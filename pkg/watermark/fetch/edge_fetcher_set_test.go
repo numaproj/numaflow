@@ -173,6 +173,7 @@ func Test_EdgeFetcherSet_ComputeWatermark(t *testing.T) {
 					processorManager: processorManagers[vertex],
 					log:              zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel)).Sugar(),
 					lastProcessedWm:  tt.lastProcessedWm[vertex],
+					opts:             defaultOptions(),
 				}
 			}
 			if got := efs.ComputeWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.offset, 10) }), tt.partitionIdx); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
@@ -404,6 +405,7 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 					processorManager: edge1ProcessorManagerNonIdle,
 					lastProcessedWm:  []int64{16, 18},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 			},
 			wmb.WMB{},
@@ -415,6 +417,7 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 					processorManager: edge1ProcessorManagerIdle,
 					lastProcessedWm:  []int64{16, 18},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 			},
 			wmb.WMB{
@@ -431,11 +434,13 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 					processorManager: edge1ProcessorManagerNonIdle,
 					lastProcessedWm:  []int64{16, 18},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 				"edge2_non_idle": {
 					processorManager: edge2ProcessorManagerNonIdle,
 					lastProcessedWm:  []int64{17, 17},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 			},
 			wmb.WMB{},
@@ -447,11 +452,13 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 					processorManager: edge1ProcessorManagerIdle,
 					lastProcessedWm:  []int64{16, 18},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 				"edge2_non_idle": {
 					processorManager: edge2ProcessorManagerNonIdle,
 					lastProcessedWm:  []int64{17, 17},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 			},
 			wmb.WMB{},
@@ -463,11 +470,13 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 					processorManager: edge1ProcessorManagerIdle,
 					lastProcessedWm:  []int64{19, 18},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 				"edge2_idle": {
 					processorManager: edge2ProcessorManagerIdle,
 					lastProcessedWm:  []int64{15, 18},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 			},
 			wmb.WMB{
@@ -484,11 +493,13 @@ func Test_EdgeFetcherSet_GetHeadWMB(t *testing.T) {
 					processorManager: edge1ProcessorManagerIdle,
 					lastProcessedWm:  []int64{13, 15},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 				"edge2_idle": {
 					processorManager: edge2ProcessorManagerIdle,
 					lastProcessedWm:  []int64{14, 12},
 					log:              zaptest.NewLogger(t).Sugar(),
+					opts:             defaultOptions(),
 				},
 			},
 			wmb.WMB{},
