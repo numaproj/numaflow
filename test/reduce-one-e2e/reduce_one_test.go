@@ -245,8 +245,6 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	w.StreamVertexPodlogs("non-keyed-fixed-sum", "numa")
-
 	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	done := make(chan struct{})
@@ -283,7 +281,7 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	// we only have to extend the timeout for the first output to be produced. for the rest,
 	// we just need to wait for the default timeout for the rest of the outputs since its synchronous
 	w.Expect().
-		SinkContains("sink", "30", SinkCheckWithTimeout(300*time.Second)).
+		SinkContains("sink", "30").
 		SinkContains("sink", "60").
 		SinkNotContains("sink", "80").
 		SinkContains("sink", "90").
