@@ -30,13 +30,14 @@ import (
 
 func NewServerCommand() *cobra.Command {
 	var (
-		insecure         bool
-		port             int
-		namespaced       bool
-		managedNamespace string
-		baseHref         string
-		disableAuth      bool
-		serverAddr       string
+		insecure           bool
+		port               int
+		namespaced         bool
+		managedNamespace   string
+		baseHref           string
+		disableAuth        bool
+		serverAddr         string
+		corsAllowedOrigins []string
 	)
 
 	command := &cobra.Command{
@@ -58,6 +59,7 @@ func NewServerCommand() *cobra.Command {
 				DisableAuth:      disableAuth,
 				DexServerAddr:    common.NumaflowDexServerAddr,
 				ServerAddr:       serverAddr,
+				AllowedHost:      corsAllowedOrigins,
 			}
 			server := svrcmd.NewServer(opts)
 			log := logging.NewLogger().Named("server")
@@ -71,5 +73,6 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().StringVar(&baseHref, "base-href", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/"), "Base href for Numaflow server, defaults to '/'.")
 	command.Flags().BoolVar(&disableAuth, "disable-auth", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_AUTH", false), "Whether to disable authentication and authorization, defaults to false.")
 	command.Flags().StringVar(&serverAddr, "server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
+	command.Flags().StringSliceVar(&corsAllowedOrigins, "cors-allowed-origins", strings.Split(sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS", ""), ","), "The default values for allowed cors AllowOrigins header field")
 	return command
 }
