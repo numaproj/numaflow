@@ -114,7 +114,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				Name:       streamName,
 				Subjects:   []string{streamName}, // Use the stream name as the only subject
 				Retention:  nats.RetentionPolicy(v.GetInt("stream.retention")),
-				Discard:    nats.DiscardOld,
+				Discard:    nats.DiscardNew,
 				MaxMsgs:    v.GetInt64("stream.maxMsgs"),
 				MaxAge:     v.GetDuration("stream.maxAge"),
 				MaxBytes:   v.GetInt64("stream.maxBytes"),
