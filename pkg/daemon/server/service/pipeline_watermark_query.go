@@ -41,8 +41,10 @@ func BuildUXEdgeWatermarkFetchers(ctx context.Context, pipeline *v1alpha1.Pipeli
 		var fetchers []fetch.HeadFetcher
 		isReduce := pipeline.GetVertex(edge.To).IsReduceUDF()
 		partitionCount := pipeline.GetVertex(edge.To).GetPartitionCount()
+		fromVtxPartitionsCount := pipeline.GetVertex(edge.From).GetPartitionCount()
+		isFromVertexReduce := pipeline.GetVertex(edge.From).IsReduceUDF()
 		for i, s := range stores {
-			fetchers = append(fetchers, fetch.NewEdgeFetcher(ctx, s, partitionCount, fetch.WithIsReduce(isReduce), fetch.WithVertexReplica(int32(i))))
+			fetchers = append(fetchers, fetch.NewEdgeFetcher(ctx, s, partitionCount, fetch.WithIsReduce(isReduce), fetch.WithVertexReplica(int32(i)), fetch.WithIsFromVtxReduce(isFromVertexReduce), fetch.WithFromVtxPartitions(fromVtxPartitionsCount)))
 		}
 		wmFetchers[edge] = fetchers
 	}

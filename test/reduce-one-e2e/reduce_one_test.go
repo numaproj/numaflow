@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -283,7 +281,7 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	// we only have to extend the timeout for the first output to be produced. for the rest,
 	// we just need to wait for the default timeout for the rest of the outputs since its synchronous
 	w.Expect().
-		SinkContains("sink", "30", SinkCheckWithTimeout(300*time.Second)).
+		SinkContains("sink", "30").
 		SinkContains("sink", "60").
 		SinkNotContains("sink", "80").
 		SinkContains("sink", "90").
