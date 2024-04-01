@@ -151,6 +151,7 @@ func TestBuffer_updateWatermarkWithOnePartition(t *testing.T) {
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
 				lastProcessedWm:  lastProcessed,
+				opts:             defaultOptions(),
 			}
 			if got := b.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), 0); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
 				t.Errorf("ComputeWatermark() = %v, want %v", got, wmb.Watermark(time.UnixMilli(tt.want)))
@@ -313,6 +314,7 @@ func TestBuffer_updateWatermarkWithMultiplePartition(t *testing.T) {
 				processorManager: tt.pm,
 				log:              zaptest.NewLogger(t).Sugar(),
 				lastProcessedWm:  tt.lastProcessedWm,
+				opts:             defaultOptions(),
 			}
 			_ = b.updateWatermark(isb.SimpleStringOffset(func() string { return strconv.FormatInt(tt.args.offset, 10) }), tt.partitionIdx)
 			if got := b.getWatermark(); time.Time(got).In(location) != time.UnixMilli(tt.want).In(location) {
@@ -359,6 +361,7 @@ func Test_edgeFetcher_ComputeHeadWatermark(t *testing.T) {
 			e := &edgeFetcher{
 				processorManager: tt.processorManager,
 				log:              zaptest.NewLogger(t).Sugar(),
+				opts:             defaultOptions(),
 			}
 			assert.Equalf(t, tt.want, e.ComputeHeadWatermark(0).UnixMilli(), "ComputeHeadWatermark()")
 		})
@@ -551,6 +554,7 @@ func Test_edgeFetcher_updateHeadIdleWMB(t *testing.T) {
 				processorManager: tt.processorManager,
 				lastProcessedWm:  lastProcessedWm,
 				log:              zaptest.NewLogger(t).Sugar(),
+				opts:             defaultOptions(),
 			}
 			assert.Equalf(t, tt.want, e.updateHeadIdleWMB(0), "updateHeadIdleWMB()")
 		})

@@ -280,6 +280,9 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 			} else {
 				writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}
 				errs[idx] = nil
+				if pubAck.Duplicate {
+					isbDedupCount.With(metricsLabels).Inc()
+				}
 				jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain))
 			}
 		}(msg, index)

@@ -1559,6 +1559,13 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 						GroupBy: &dfv1.GroupBy{},
 					},
 				},
+				FromEdges: []dfv1.CombinedEdge{
+					{
+						Edge: dfv1.Edge{
+							From: "fromVertex",
+						},
+					},
+				},
 			},
 		},
 	}, map[string]wmstore.WatermarkStore{"fromVertex": store}, fetch.WithIsReduce(true))

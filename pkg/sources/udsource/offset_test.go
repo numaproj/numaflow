@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package utils
+package udsource
 
 import (
 	"testing"
@@ -24,17 +24,18 @@ import (
 )
 
 func TestOffsetConversion(t *testing.T) {
-	testIsbOffset := NewSimpleSourceOffset("test", 0)
-	convertedSrcOffset := ConvertToSourceOffset(testIsbOffset)
-	convertedBackIsbOffset := ConvertToIsbOffset(convertedSrcOffset)
+	offset := &sourcepb.Offset{Offset: []byte("test"), PartitionId: 0}
+	testIsbOffset := NewUserDefinedSourceOffset(offset)
+	ConvertToUserDefinedSourceOffset(testIsbOffset)
+	convertedBackIsbOffset := NewUserDefinedSourceOffset(offset)
 	assert.Equal(t, testIsbOffset.PartitionIdx(), convertedBackIsbOffset.PartitionIdx())
 	assert.Equal(t, testIsbOffset.String(), convertedBackIsbOffset.String())
 	testSrcOffset := &sourcepb.Offset{
 		PartitionId: 0,
 		Offset:      []byte("test"),
 	}
-	convertedIsbOffset := ConvertToIsbOffset(testSrcOffset)
-	convertedBackSrcOffset := ConvertToSourceOffset(convertedIsbOffset)
+	convertedIsbOffset := NewUserDefinedSourceOffset(offset)
+	convertedBackSrcOffset := ConvertToUserDefinedSourceOffset(convertedIsbOffset)
 	assert.Equal(t, testSrcOffset.GetPartitionId(), convertedBackSrcOffset.GetPartitionId())
 	assert.Equal(t, testSrcOffset.GetOffset(), convertedBackSrcOffset.GetOffset())
 }
