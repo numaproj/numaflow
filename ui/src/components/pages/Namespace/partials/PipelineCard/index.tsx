@@ -330,10 +330,19 @@ export function PipelineCard({
               <div
                 style={{
                   borderRadius: "1.3rem",
+                  padding: "0.8rem",
+                  height: "6.4rem",
                   width: "22.8rem",
                   background: "#F0F0F0",
                   display: "flex",
-                  flexDirection: "row",
+                  flexDirection: "column",
+                  fontSize: "1.6rem",
+                  overflowX: "hidden",
+                  overflowY: "scroll",
+                  textOverflow: "ellipsis",
+                  wordWrap: "break-word",
+                  scrollbarWidth: "none",
+                  msOverflowStyle: "none",
                 }}
               >
                 {error}

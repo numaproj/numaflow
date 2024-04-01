@@ -405,7 +405,11 @@ export function K8sEvents({
           >
             {[DEFAULT_FILTER_VALUE, ...pipelineFilterOptions].map(
               (pipeline) => (
-                <MenuItem key={pipeline} value={pipeline}>
+                <MenuItem
+                  key={pipeline}
+                  value={pipeline}
+                  sx={{ fontSize: "1.6rem" }}
+                >
                   {pipeline}
                 </MenuItem>
               )
@@ -432,7 +436,11 @@ export function K8sEvents({
                 ]
               : [DEFAULT_FILTER_VALUE]
             ).map((pipeline) => (
-              <MenuItem key={pipeline} value={pipeline}>
+              <MenuItem
+                key={pipeline}
+                value={pipeline}
+                sx={{ fontSize: "1.6rem" }}
+              >
                 {pipeline}
               </MenuItem>
             ))}

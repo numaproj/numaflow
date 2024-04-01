@@ -338,7 +338,11 @@ const Flow = (props: FlowProps) => {
             {error && statusPayload ? (
               <Alert
                 severity="error"
-                sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
+                sx={{
+                  backgroundColor: "#FDEDED",
+                  color: "#5F2120",
+                  fontSize: "1.6rem",
+                }}
               >
                 {error}
               </Alert>
@@ -786,13 +790,7 @@ export default function Graph(props: GraphProps) {
 
   return (
     <div style={{ height: "100%" }}>
-      <div
-        className="Graph"
-        data-testid="graph"
-        style={
-          isPlugin ? { height: "90vh", width: "100%", position: undefined } : {}
-        }
-      >
+      <div className="Graph" data-testid="graph">
         <HighlightContext.Provider
           value={{
             highlightValues,

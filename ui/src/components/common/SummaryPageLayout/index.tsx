@@ -250,8 +250,8 @@ export function SummaryPageLayout({
             background: "#F8F8FB",
             boxShadow: "0 0.4rem 0.6rem rgba(39, 76, 119, 0.16)",
             zIndex: (theme) => theme.zIndex.drawer - 1,
-            position: isPlugin ? undefined : "fixed",
-            top: isPlugin ? "3.28rem" : "10rem",
+            position: "fixed",
+            top: isPlugin ? "3.65rem" : "10rem",
             padding: "0 2rem",
             alignItems: "center",
             borderBottomLeftRadius: "2rem",
@@ -281,7 +281,7 @@ export function SummaryPageLayout({
           background: "#F8F8FB",
           boxShadow: "0 0.3rem 1.1rem rgba(39, 76, 119, 0.16)",
           zIndex: (theme) => theme.zIndex.drawer - 1,
-          position: isPlugin ? undefined : "fixed",
+          position: "fixed",
           top: isPlugin ? "3.2rem" : "9.2rem",
         }}
       >
