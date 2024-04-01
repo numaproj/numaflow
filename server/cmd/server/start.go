@@ -44,15 +44,15 @@ var (
 )
 
 type ServerOptions struct {
-	Insecure         bool
-	Port             int
-	Namespaced       bool
-	ManagedNamespace string
-	BaseHref         string
-	DisableAuth      bool
-	DexServerAddr    string
-	ServerAddr       string
-	AllowedHost      []string
+	Insecure           bool
+	Port               int
+	Namespaced         bool
+	ManagedNamespace   string
+	BaseHref           string
+	DisableAuth        bool
+	DexServerAddr      string
+	ServerAddr         string
+	CorsAllowedOrigins []string
 }
 
 type server struct {
@@ -70,7 +70,7 @@ func (s *server) Start(ctx context.Context) {
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     s.options.AllowedHost,
+		AllowOrigins:     s.options.CorsAllowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type"},
 		AllowCredentials: true,
