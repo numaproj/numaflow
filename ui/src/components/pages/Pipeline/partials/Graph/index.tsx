@@ -558,7 +558,7 @@ const getHiddenValue = (edges: Edge[]) => {
 
 export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId, refresh } = props;
-  const { sidebarProps, setSidebarProps, isPlugin } =
+  const { sidebarProps, setSidebarProps } =
     useContext<AppContextProps>(AppContext);
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
