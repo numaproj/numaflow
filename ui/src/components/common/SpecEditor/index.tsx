@@ -229,6 +229,9 @@ export function SpecEditor({
               display: "flex",
               flexDirection: "row",
               alignItems: "center",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             }}
           >
             {validationMessage.type === "error" && (
@@ -249,7 +252,14 @@ export function SpecEditor({
                 }}
               />
             )}
-            <span className="spec-editor-validation-message">
+            <span
+              className="spec-editor-validation-message"
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+              >
               {validationMessage.message}
             </span>
           </Box>

@@ -110,9 +110,16 @@ func (c *client) SessionReduceFn(ctx context.Context, datumStreamCh <-chan *sess
 				}
 			}
 		}
+
 		// close the stream after sending all the messages
-		if sendErr = stream.CloseSend(); sendErr != nil && !errors.Is(sendErr, io.EOF) {
-			errCh <- util.ToUDFErr("SessionReduceFn stream.Send()", sendErr)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			sendErr = stream.CloseSend()
+			if sendErr != nil && !errors.Is(sendErr, io.EOF) {
+				errCh <- util.ToUDFErr("SessionReduceFn stream.CloseSend()", sendErr)
+			}
 		}
 	}()
 

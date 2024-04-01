@@ -20,7 +20,9 @@ package reduce_two_e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,6 +44,12 @@ func (r *ReduceSuite) TestReduceStreamJava() {
 }
 
 func (r *ReduceSuite) testReduceStream(lang string) {
+
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline(fmt.Sprintf("@testdata/reduce-stream/reduce-stream-%s.yaml", lang)).
@@ -52,6 +60,8 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
@@ -80,6 +90,12 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 }
 
 func (r *ReduceSuite) TestSimpleSessionPipeline() {
+
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-sum-pipeline.yaml").
@@ -129,6 +145,12 @@ func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
 }
 
 func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
+
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline(fmt.Sprintf("@testdata/session-reduce/simple-session-keyed-counter-pipeline-%s.yaml", lang)).
@@ -139,6 +161,8 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	count := 0
 	done := make(chan struct{})
@@ -167,14 +191,20 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	}()
 
 	w.Expect().SinkContains("sink", "5")
-	w.Expect().SinkNotContains("sink", "4", WithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "3", WithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "2", WithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "1", WithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 
 func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
+
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-keyed-counter-pipeline-go.yaml").
@@ -223,10 +253,10 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 
 	w.Expect().
 		SinkContains("sink", "5").
-		SinkNotContains("sink", "4", WithTimeout(20*time.Second)).
-		SinkNotContains("sink", "3", WithTimeout(20*time.Second)).
-		SinkNotContains("sink", "2", WithTimeout(20*time.Second)).
-		SinkNotContains("sink", "1", WithTimeout(20*time.Second))
+		SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second)).
+		SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second)).
+		SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second)).
+		SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 

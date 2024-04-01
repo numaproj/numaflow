@@ -61,7 +61,7 @@ metadata:
 spec:
   redis:
     native:
-      version: 7.0.11`
+      version: 7.0.15`
 
 	e2eISBSvcJetStream = `apiVersion: numaflow.numaproj.io/v1alpha1
 kind: InterStepBufferService

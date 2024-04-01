@@ -41,33 +41,13 @@ type When struct {
 	kubeClient     kubernetes.Interface
 
 	portForwarderStopChannels map[string]chan struct{}
-	// Key: vertex label selector
-	// Value: the ip of, one of the pods matching the label selector
-	vertexToPodIpMapping map[string]string
+	streamLogsStopChannels    map[string]chan struct{}
 }
 
 // SendMessageTo sends msg to one of the pods in http source vertex.
 func (w *When) SendMessageTo(pipelineName string, vertexName string, req HttpPostRequest) *When {
 	w.t.Helper()
-	if w.vertexToPodIpMapping == nil {
-		w.vertexToPodIpMapping = make(map[string]string)
-	}
-	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
-	if w.vertexToPodIpMapping[labelSelector] == "" {
-		ctx := context.Background()
-		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
-		if err != nil {
-			w.t.Fatalf("Error getting vertex pod list: %v", err)
-		}
-		if len(podList.Items) == 0 {
-			w.t.Fatalf("No running pod found in pipeline %s, vertex: %s", pipelineName, vertexName)
-		}
-		w.vertexToPodIpMapping[labelSelector] = podList.Items[0].Status.PodIP
-	}
-
-	// There could be a rare corner case when a previous added pod gets replaced by a new one, making the mapping entry no longer valid.
-	// Considering current e2e tests are all lightweight, we assume no such case for now.
-	SendMessageTo(w.vertexToPodIpMapping[labelSelector], vertexName, req)
+	SendMessageTo(fmt.Sprintf("%s-%s-headless", pipelineName, vertexName), vertexName, req)
 	return w
 }
 
@@ -236,6 +216,36 @@ func (w *When) TerminateAllPodPortForwards() *When {
 	if len(w.portForwarderStopChannels) > 0 {
 		for k, v := range w.portForwarderStopChannels {
 			w.t.Logf("Terminating port-forward for POD %s", k)
+			close(v)
+		}
+	}
+	return w
+}
+
+func (w *When) StreamVertexPodlogs(vertexName, containerName string) *When {
+	w.t.Helper()
+	ctx := context.Background()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, w.pipeline.Name, dfv1.KeyVertexName, vertexName)
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting vertex pods: %v", err)
+	}
+	for _, pod := range podList.Items {
+		stopCh := make(chan struct{}, 1)
+		streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, containerName, stopCh)
+		if w.streamLogsStopChannels == nil {
+			w.streamLogsStopChannels = make(map[string]chan struct{})
+		}
+		w.streamLogsStopChannels[pod.Name+":"+containerName] = stopCh
+	}
+	return w
+}
+
+func (w *When) TerminateAllPodLogs() *When {
+	w.t.Helper()
+	if len(w.streamLogsStopChannels) > 0 {
+		for k, v := range w.streamLogsStopChannels {
+			w.t.Logf("Terminating log streaming for POD %s", k)
 			close(v)
 		}
 	}

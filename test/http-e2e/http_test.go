@@ -48,16 +48,16 @@ func (s *HTTPSuite) TestHTTPSourcePipeline() {
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-id"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-id")))
 	// No x-numaflow-id, expect 2 outputs
-	w.Expect().SinkContains("out", "no-id", WithContainCount(2))
+	w.Expect().SinkContains("out", "no-id", SinkCheckWithContainCount(2))
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("with-id")).WithHeader("x-numaflow-id", "101")).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("with-id")).WithHeader("x-numaflow-id", "101"))
 	// With same x-numaflow-id, expect 1 output
-	w.Expect().SinkContains("out", "with-id", WithContainCount(1))
+	w.Expect().SinkContains("out", "with-id", SinkCheckWithContainCount(1))
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("with-id")).WithHeader("x-numaflow-id", "102"))
 	// With a new x-numaflow-id, expect 2 outputs
-	w.Expect().SinkContains("out", "with-id", WithContainCount(2))
+	w.Expect().SinkContains("out", "with-id", SinkCheckWithContainCount(2))
 }
 
 func (s *HTTPSuite) TestHTTPSourceAuthPipeline() {

@@ -45,10 +45,10 @@ func (b HttpPostRequest) WithBody(body []byte) HttpPostRequest {
 }
 
 // SendMessageTo sends a http post request to a pod in http source vertex.
-func SendMessageTo(podIp string, vertexName string, r HttpPostRequest) {
+func SendMessageTo(host string, vertexName string, r HttpPostRequest) {
 	req, err := json.Marshal(r)
 	if err != nil {
 		panic(fmt.Sprintf("Failed serializing the request %v into json format. %v", r, err))
 	}
-	InvokeE2EAPIPOST("/http/send-message?podIp=%s&vertexName=%s", string(req[:]), podIp, vertexName)
+	InvokeE2EAPIPOST("/http/send-message?host=%s&vertexName=%s", string(req[:]), host, vertexName)
 }

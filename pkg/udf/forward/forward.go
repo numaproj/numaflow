@@ -444,6 +444,7 @@ func (isdf *InterStepDataForward) streamMessage(
 		// to send the result to. Then update the toBuffer(s) with writeMessage.
 		msgIndex := 0
 		for writeMessage := range writeMessageCh {
+			writeMessage.Headers = dataMessages[0].Headers
 			// add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
 			writeMessage.ID = fmt.Sprintf("%s-%s-%d", dataMessages[0].ReadOffset.String(), isdf.vertexName, msgIndex)
 			msgIndex += 1
@@ -638,6 +639,10 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 		metrics.UDFReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
 		writeMessages, err := isdf.applyUDF(ctx, message.readMessage)
 		metrics.UDFWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(writeMessages)))
+		// set the headers for the write messages
+		for _, m := range writeMessages {
+			m.Headers = message.readMessage.Headers
+		}
 		message.writeMessages = append(message.writeMessages, writeMessages...)
 		message.udfError = err
 		metrics.UDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))

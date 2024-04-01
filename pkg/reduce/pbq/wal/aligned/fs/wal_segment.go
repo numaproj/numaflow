@@ -431,10 +431,7 @@ func (w *alignedWAL) Close() (err error) {
 		return err
 	}
 
-	err = w.fp.Close()
-	if err != nil {
-		return err
-	}
+	_ = w.fp.Close()
 
 	return nil
 }
