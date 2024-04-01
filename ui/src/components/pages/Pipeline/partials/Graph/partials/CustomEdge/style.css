@@ -7,7 +7,7 @@
 }
 
 .edge-tooltip {
-    font-size: 0.8rem;
+    font-size: 1.28rem;
     text-align: center;
 
 }
@@ -16,11 +16,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 1.5rem;
-    width: 6.625rem;
+    height: 2.4rem;
+    width: 10.6rem;
     color: #8D9096;
     font-family: "IBM Plex Sans", sans-serif;
-    font-size: 0.75rem;
+    font-size: 1.2rem;
     font-style: normal;
     font-weight: 400;
     line-height: normal;
@@ -30,11 +30,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 1.5rem;
-    width: 6.625rem;
+    height: 2.4rem;
+    width: 10.6rem;
     color: #8D9096;
     font-family: "IBM Plex Sans", sans-serif;
-    font-size: 1rem;
+    font-size: 1.6rem;
     font-style: normal;
     font-weight: 400;
     line-height: normal;

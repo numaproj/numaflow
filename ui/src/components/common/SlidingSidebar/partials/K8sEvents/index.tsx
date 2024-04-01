@@ -259,6 +259,15 @@ export function K8sEvents({
             page={page}
             onChange={handlePageChange}
             shape="rounded"
+            sx={{
+              "& .MuiPaginationItem-root": {
+                fontSize: "1.4rem",
+              },
+              "& .MuiPaginationItem-icon": {
+                height: "2rem",
+                width: "2rem",
+              },
+            }}
           />
         </Box>
       </Box>
@@ -321,7 +330,11 @@ export function K8sEvents({
                 ]
               : [DEFAULT_FILTER_VALUE]
             ).map((pipeline) => (
-              <MenuItem key={pipeline} value={pipeline}>
+              <MenuItem
+                key={pipeline}
+                value={pipeline}
+                sx={{ fontSize: "1.6rem" }}
+              >
                 {pipeline}
               </MenuItem>
             ))}
@@ -356,7 +369,11 @@ export function K8sEvents({
           >
             {[DEFAULT_FILTER_VALUE, ...pipelineFilterOptions].map(
               (pipeline) => (
-                <MenuItem key={pipeline} value={pipeline}>
+                <MenuItem
+                  key={pipeline}
+                  value={pipeline}
+                  sx={{ fontSize: "1.6rem" }}
+                >
                   {pipeline}
                 </MenuItem>
               )

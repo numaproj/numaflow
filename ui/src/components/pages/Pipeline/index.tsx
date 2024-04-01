@@ -213,7 +213,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
             display: "flex",
             flexDirection: "row",
             justifyContent: "space-between",
-            margin: "0 1rem",
+            margin: "0 1.6rem",
             height: "100%",
           }}
         >

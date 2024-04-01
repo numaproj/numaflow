@@ -294,7 +294,7 @@ const Flow = (props: FlowProps) => {
     >
       <Panel
         position="top-left"
-        style={{ marginTop: isCollapsed ? "3rem" : "6.75rem" }}
+        style={{ marginTop: isCollapsed ? "4.8rem" : "10.8rem" }}
       >
         <Box
           sx={{
@@ -306,9 +306,10 @@ const Flow = (props: FlowProps) => {
             variant="contained"
             data-testid="resume"
             sx={{
-              height: "2rem",
-              width: "5rem",
+              height: "3.2rem",
+              width: "8rem",
               fontWeight: "bold",
+              fontSize: "1.4rem",
             }}
             onClick={handlePlayClick}
             disabled={data?.pipeline?.status?.phase === RUNNING}
@@ -319,10 +320,11 @@ const Flow = (props: FlowProps) => {
             variant="contained"
             data-testid="pause"
             sx={{
-              height: "2rem",
-              width: "5rem",
-              marginLeft: "1rem",
+              height: "3.2rem",
+              width: "8rem",
+              marginLeft: "1.6rem",
               fontWeight: "bold",
+              fontSize: "1.4rem",
             }}
             onClick={handlePauseClick}
             disabled={
@@ -332,7 +334,7 @@ const Flow = (props: FlowProps) => {
           >
             Pause
           </Button>
-          <Box sx={{ marginLeft: "1rem" }}>
+          <Box sx={{ marginLeft: "1.6rem" }}>
             {error && statusPayload ? (
               <Alert
                 severity="error"
@@ -348,12 +350,12 @@ const Flow = (props: FlowProps) => {
                   data?.pipeline?.status?.phase !== RUNNING)) ? (
               <div
                 style={{
-                  borderRadius: "0.8125rem",
-                  width: "14.25rem",
+                  borderRadius: "1.3rem",
+                  width: "22.8rem",
                   background: "#F0F0F0",
                   display: "flex",
                   flexDirection: "row",
-                  padding: "0.5rem",
+                  padding: "0.8rem",
                   color: "#516F91",
                   alignItems: "center",
                 }}
@@ -361,8 +363,8 @@ const Flow = (props: FlowProps) => {
               >
                 <CircularProgress
                   sx={{
-                    width: "1.25rem !important",
-                    height: "1.25rem !important",
+                    width: "2rem !important",
+                    height: "2rem !important",
                   }}
                 />{" "}
                 <Box
@@ -371,12 +373,14 @@ const Flow = (props: FlowProps) => {
                     flexDirection: "column",
                   }}
                 >
-                  <span style={{ marginLeft: "1rem" }}>
+                  <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
                     {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
                       ? "Pipeline Pausing..."
                       : "Pipeline Resuming..."}
                   </span>
-                  <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
+                  <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
+                    {timerDateStamp}
+                  </span>
                 </Box>
               </div>
             ) : (
@@ -387,13 +391,17 @@ const Flow = (props: FlowProps) => {
       </Panel>
       <Panel
         position="top-right"
-        style={{ marginTop: isCollapsed ? "0.5rem" : "6.75rem" }}
+        style={{ marginTop: isCollapsed ? "0.8rem" : "10.8rem" }}
       >
         <ErrorIndicator />
       </Panel>
       <Panel position="bottom-left" className={"interaction"}>
         <Tooltip
-          title={isLocked ? "Unlock Graph" : "Lock Graph"}
+          title={
+            <div className={"interaction-button-tooltip"}>
+              {isLocked ? "Unlock Graph" : "Lock Graph"}
+            </div>
+          }
           placement={"top"}
           arrow
         >
@@ -402,7 +410,11 @@ const Flow = (props: FlowProps) => {
           </IconButton>
         </Tooltip>
         <Tooltip
-          title={isPanOnScrollLocked ? "Zoom On Scroll" : "Pan on Scroll"}
+          title={
+            <div className={"interaction-button-tooltip"}>
+              {isPanOnScrollLocked ? "Zoom On Scroll" : "Pan on Scroll"}
+            </div>
+          }
           placement={"top"}
           arrow
         >
@@ -417,18 +429,30 @@ const Flow = (props: FlowProps) => {
           </IconButton>
         </Tooltip>
         <div className={"divider"} />
-        <Tooltip title={"Fit Graph"} placement={"top"} arrow>
+        <Tooltip
+          title={<div className={"interaction-button-tooltip"}>Fit Graph</div>}
+          placement={"top"}
+          arrow
+        >
           <IconButton onClick={onFullScreen} data-testid={"fitView"}>
             <img src={fullscreen} alt={"fullscreen"} />
           </IconButton>
         </Tooltip>
         <div className={"divider"} />
-        <Tooltip title={"Zoom In"} placement={"top"} arrow>
+        <Tooltip
+          title={<div className={"interaction-button-tooltip"}>Zoom In</div>}
+          placement={"top"}
+          arrow
+        >
           <IconButton onClick={onZoomIn} data-testid={"zoomIn"}>
             <img src={zoomInIcon} alt="zoom-in" />
           </IconButton>
         </Tooltip>
-        <Tooltip title={"Zoom Out"} placement="top" arrow>
+        <Tooltip
+          title={<div className={"interaction-button-tooltip"}>Zoom Out</div>}
+          placement="top"
+          arrow
+        >
           <IconButton onClick={onZoomOut} data-testid={"zoomOut"}>
             <img src={zoomOutIcon} alt="zoom-out" />
           </IconButton>
@@ -460,7 +484,7 @@ const Flow = (props: FlowProps) => {
         position="top-left"
         className={"legend"}
         style={{
-          marginTop: isCollapsed ? "5.75rem" : "9.5rem",
+          marginTop: isCollapsed ? "9.2rem" : "15.2rem",
           cursor: "default",
         }}
       >
@@ -470,7 +494,7 @@ const Flow = (props: FlowProps) => {
             aria-controls="panel1a-content"
             id="panel1a-header"
           >
-            <Typography>Legend</Typography>
+            <Typography sx={{ fontSize: "1.6rem" }}>Legend</Typography>
           </AccordionSummary>
           <AccordionDetails>
             <div className={"legend-title"}>
