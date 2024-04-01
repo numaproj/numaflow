@@ -213,7 +213,7 @@ function App(props: AppProps) {
             <Routes managedNamespace={systemInfo.managedNamespace} />
           </Route>
           <Route path="*">
-            <main style={{ padding: "1rem" }}>
+            <main style={{ padding: "1.6rem", fontSize: "1.6rem" }}>
               <p>There's nothing here!</p>
             </main>
           </Route>
@@ -230,7 +230,7 @@ function App(props: AppProps) {
           <Routes />
         </Route>
         <Route path="*">
-          <main style={{ padding: "1rem" }}>
+          <main style={{ padding: "1.6rem", fontSize: "1.6rem" }}>
             <p>There's nothing here!</p>
           </main>
         </Route>
@@ -268,7 +268,7 @@ function App(props: AppProps) {
             {!EXCLUDE_APP_BARS[location.pathname] && (
               <Box
                 sx={{
-                  height: "4rem",
+                  height: "6.4rem",
                 }}
               >
                 <AppBar
@@ -297,11 +297,11 @@ function App(props: AppProps) {
                   flexDirection: "column",
                   width: "100%",
                   overflow: "auto",
-                  height: "2.0625rem",
+                  height: "3.3rem",
                   background: "#F8F8FB",
                   zIndex: (theme) => theme.zIndex.drawer - 1,
                   position: "fixed",
-                  top: "3.75rem",
+                  top: "6rem",
                 }}
               >
                 <Breadcrumbs />
@@ -314,7 +314,7 @@ function App(props: AppProps) {
                 width: "100%",
                 height: "100%",
                 overflow: "auto",
-                marginTop: EXCLUDE_CRUMBS[location.pathname] ? 0 : "2.5rem",
+                marginTop: EXCLUDE_CRUMBS[location.pathname] ? 0 : "4rem",
               }}
             >
               {routes}

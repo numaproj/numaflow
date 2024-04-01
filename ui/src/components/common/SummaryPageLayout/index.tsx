@@ -247,11 +247,12 @@ export function SummaryPageLayout({
             display: "flex",
             flexDirection: "row",
             height: COLLAPSED_HEIGHT,
+            width: "14.4rem",
             background: "#F8F8FB",
             boxShadow: "0 0.4rem 0.6rem rgba(39, 76, 119, 0.16)",
             zIndex: (theme) => theme.zIndex.drawer - 1,
-            position: "fixed",
-            top: isPlugin ? "3.65rem" : "10rem",
+            position: isPlugin ? "relative" : "fixed",
+            top: isPlugin ? "3.85rem" : "10.2rem",
             padding: "0 2rem",
             alignItems: "center",
             borderBottomLeftRadius: "2rem",
@@ -281,8 +282,8 @@ export function SummaryPageLayout({
           background: "#F8F8FB",
           boxShadow: "0 0.3rem 1.1rem rgba(39, 76, 119, 0.16)",
           zIndex: (theme) => theme.zIndex.drawer - 1,
-          position: "fixed",
-          top: isPlugin ? "3.2rem" : "9.2rem",
+          position: isPlugin ? "relative" : "fixed",
+          top: isPlugin ? "10.5rem" : "9.2rem",
         }}
       >
         <Box
@@ -325,8 +326,23 @@ export function SummaryPageLayout({
     <Box
       sx={
         contentHideOverflow
-          ? { height: "100%", overflow: "hidden" }
-          : { height: "100%" }
+          ? {
+              height: "100%",
+              overflow: isPlugin ? undefined : "hidden",
+              mt: isPlugin
+                ? collapsed
+                  ? `-${COLLAPSED_HEIGHT}`
+                  : `-${SUMMARY_HEIGHT}`
+                : undefined,
+            }
+          : {
+              height: "100%",
+              mt: isPlugin
+                ? collapsed
+                  ? `-${COLLAPSED_HEIGHT}`
+                  : `-${SUMMARY_HEIGHT}`
+                : undefined,
+            }
       }
       data-testid="summary-page-layout"
     >
