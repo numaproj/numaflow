@@ -25,8 +25,8 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/memory"
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
@@ -40,7 +40,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 
 	ctx := context.Background()
 
-	qManager, _ := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(storeSize)),
+	qManager, _ := NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemManager(memory.WithStoreSize(storeSize)),
 		window.Aligned, WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
 
 	// write 10 window requests
@@ -81,7 +81,7 @@ func TestPBQ_ReadWrite(t *testing.T) {
 	}()
 
 	for _, msg := range writeRequests {
-		err := pq.Write(ctx, &msg)
+		err := pq.Write(ctx, &msg, true)
 		assert.NoError(t, err)
 	}
 	pq.CloseOfBook()
@@ -102,7 +102,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 
 	ctx := context.Background()
 
-	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(storeSize)),
+	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemManager(memory.WithStoreSize(storeSize)),
 		window.Aligned, WithChannelBufferSize(int64(bufferSize)), WithReadTimeout(1*time.Second))
 
 	assert.NoError(t, err)
@@ -148,7 +148,7 @@ func Test_PBQReadWithCanceledContext(t *testing.T) {
 	}()
 
 	for _, msg := range windowRequests {
-		err := pq.Write(ctx, &msg)
+		err := pq.Write(ctx, &msg, true)
 		assert.NoError(t, err)
 	}
 
@@ -170,7 +170,7 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	var err error
 	ctx := context.Background()
 
-	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemoryStores(memory.WithStoreSize(storeSize)),
+	qManager, err = NewManager(ctx, "reduce", "test-pipeline", 0, memory.NewMemManager(memory.WithStoreSize(storeSize)),
 		window.Aligned, WithChannelBufferSize(int64(buffSize)), WithReadTimeout(1*time.Second))
 	assert.NoError(t, err)
 
@@ -189,9 +189,9 @@ func TestPBQ_WriteWithStoreFull(t *testing.T) {
 	assert.NoError(t, err)
 
 	for _, req := range windowRequests {
-		err = pq.Write(ctx, &req)
+		err = pq.Write(ctx, &req, true)
 	}
 	pq.CloseOfBook()
 
-	assert.Error(t, err, store.ErrWriteStoreFull)
+	assert.Error(t, err, aligned.ErrWriteStoreFull)
 }

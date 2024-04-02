@@ -1,10 +1,11 @@
 package idlehandler
 
 import (
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
 	"time"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestSourceIdleHandler_IsSourceIdling(t *testing.T) {
@@ -82,11 +83,8 @@ func TestSourceIdleHandler_IsSourceIdling(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			iw := &SourceIdleHandler{
-				config:                  tt.fields.config,
-				lastIdleWmPublishedTime: tt.fields.lastIdleWmPublishedTime,
-				updatedTS:               tt.fields.updatedTS,
-			}
+			iw := NewSourceIdleHandler(tt.fields.config, nil, nil)
+			iw.lastIdleWmPublishedTime = tt.fields.lastIdleWmPublishedTime
 			time.Sleep(tt.sleep)
 			if got := iw.IsSourceIdling(); got != tt.want {
 				t.Errorf("IsSourceIdling() = %v, want %v", got, tt.want)

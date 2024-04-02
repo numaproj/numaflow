@@ -12,24 +12,24 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: even-sink
       partitions: 2
       sink:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
     - name: odd-sink
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
     - name: number-sink
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
       to: even-or-odd

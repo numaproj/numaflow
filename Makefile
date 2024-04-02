@@ -111,7 +111,8 @@ test-kafka-e2e:
 test-http-e2e:
 test-nats-e2e:
 test-sdks-e2e:
-test-reduce-e2e:
+test-reduce-one-e2e:
+test-reduce-two-e2e:
 test-api-e2e:
 test-udsource-e2e:
 test-transformer-e2e:
@@ -121,8 +122,7 @@ test-%:
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
 	$(MAKE) restart-control-plane-components
-	kubectl -n numaflow-system delete po e2e-api-pod --ignore-not-found=true
-	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
+	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
 	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$*
 	$(MAKE) cleanup-e2e
@@ -222,7 +222,7 @@ $(GOPATH)/bin/golangci-lint:
 .PHONY: lint
 lint: $(GOPATH)/bin/golangci-lint
 	go mod tidy
-	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
+	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m --enable goimports
 
 .PHONY: start
 start: image

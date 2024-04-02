@@ -29,7 +29,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
 	"github.com/numaproj/numaflow/pkg/window"
 
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -40,7 +40,7 @@ type Manager struct {
 	vertexName    string
 	pipelineName  string
 	vertexReplica int32
-	storeProvider store.StoreProvider
+	storeProvider wal.Manager
 	pbqOptions    *options
 	pbqMap        map[string]*PBQ
 	log           *zap.SugaredLogger
@@ -53,7 +53,7 @@ type Manager struct {
 
 // NewManager returns new instance of manager
 // We don't intend this to be called by multiple routines.
-func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider store.StoreProvider, windowType window.Type, opts ...PBQOption) (*Manager, error) {
+func NewManager(ctx context.Context, vertexName string, pipelineName string, vr int32, storeProvider wal.Manager, windowType window.Type, opts ...PBQOption) (*Manager, error) {
 	pbqOpts := DefaultOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -79,7 +79,7 @@ func NewManager(ctx context.Context, vertexName string, pipelineName string, vr 
 
 // CreateNewPBQ creates new pbq for a partition
 func (m *Manager) CreateNewPBQ(ctx context.Context, partitionID partition.ID) (ReadWriteCloser, error) {
-	persistentStore, err := m.storeProvider.CreateStore(ctx, partitionID)
+	persistentStore, err := m.storeProvider.CreateWAL(ctx, partitionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a PBQ store, %w", err)
 	}
@@ -129,38 +129,6 @@ func (m *Manager) GetPBQ(partitionID partition.ID) ReadWriteCloser {
 	return nil
 }
 
-// GetExistingPartitions restores the state of the pbqManager. It reads from the PBQs store to get the persisted partitions
-// and builds the PBQ Map.
-func (m *Manager) GetExistingPartitions(ctx context.Context) ([]partition.ID, error) {
-	var ctxClosedErr error
-	var partitionIDs []partition.ID
-
-	var discoverPartitionsBackoff = wait.Backoff{
-		Steps:    math.MaxInt,
-		Duration: 100 * time.Millisecond,
-		Factor:   1,
-		Jitter:   0.1,
-	}
-
-	ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, discoverPartitionsBackoff, func() (done bool, err error) {
-		var attempt int
-
-		partitionIDs, err = m.storeProvider.DiscoverPartitions(ctx)
-		if err != nil {
-			attempt += 1
-			m.log.Errorw("Failed to discover partitions during startup, retrying", zap.Any("attempt", attempt), zap.Error(err))
-			return false, nil
-		}
-		return true, nil
-	})
-	if ctxClosedErr != nil {
-		m.log.Errorw("Context closed while discovering partitions", zap.Error(ctxClosedErr))
-		return partitionIDs, ctxClosedErr
-	}
-
-	return partitionIDs, nil
-}
-
 // ShutDown for clean shut down, flushes pending messages to store and closes the store
 func (m *Manager) ShutDown(ctx context.Context) {
 	// iterate through the map of pbq
@@ -179,14 +147,19 @@ func (m *Manager) ShutDown(ctx context.Context) {
 			defer wg.Done()
 			var ctxClosedErr error
 			var attempt int
-			ctxClosedErr = wait.ExponentialBackoffWithContext(ctx, PBQCloseBackOff, func() (done bool, err error) {
+			ctxClosedErr = wait.ExponentialBackoff(PBQCloseBackOff, func() (done bool, err error) {
 				closeErr := q.Close()
 				if closeErr != nil {
 					attempt += 1
 					m.log.Errorw("Failed to close pbq, retrying", zap.Any("attempt", attempt), zap.Any("ID", q.PartitionID), zap.Error(closeErr))
+					// if ctx is closed, we should return true
+					if ctx.Err() != nil {
+						return false, ctx.Err()
+					}
 					// exponential backoff will return if err is not nil
 					return false, nil
 				}
+				m.log.Infow("Successfully closed pbq", zap.String("ID", q.PartitionID.String()))
 				return true, nil
 			})
 			if ctxClosedErr != nil {
@@ -228,7 +201,7 @@ func (m *Manager) deregister(partitionID partition.ID) error {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(m.vertexReplica)),
 	}).Dec()
 
-	return m.storeProvider.DeleteStore(partitionID)
+	return m.storeProvider.DeleteWAL(partitionID)
 }
 
 func (m *Manager) getPBQs() []*PBQ {
@@ -240,23 +213,4 @@ func (m *Manager) getPBQs() []*PBQ {
 	}
 
 	return pbqs
-}
-
-// Replay replays messages which are persisted in pbq store.
-func (m *Manager) Replay(ctx context.Context) {
-	var wg sync.WaitGroup
-	var tm = time.Now()
-	partitionsIds := make([]partition.ID, 0)
-	for _, val := range m.getPBQs() {
-		partitionsIds = append(partitionsIds, val.PartitionID)
-		wg.Add(1)
-		m.log.Info("Replaying records from store", zap.Any("PBQ", val.PartitionID))
-		go func(ctx context.Context, p *PBQ) {
-			defer wg.Done()
-			p.replayRecordsFromStore(ctx)
-		}(ctx, val)
-	}
-
-	wg.Wait()
-	m.log.Infow("Finished replaying records from store", zap.Duration("took", time.Since(tm)), zap.Any("partitions", partitionsIds))
 }

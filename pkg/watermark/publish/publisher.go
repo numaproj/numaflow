@@ -179,7 +179,7 @@ func (p *publish) validateWatermark(wm wmb.Watermark, toVertexPartitionIdx int32
 		p.log.Debugw("New watermark is updated for the head watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		p.SetHeadWM(wm, toVertexPartitionIdx)
 	} else if wm.BeforeWatermark(headWM) {
-		p.log.Infow("Skip publishing the new watermark because it's older than the current watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
+		p.log.Debugw("Skip publishing the new watermark because it's older than the current watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
 		return wmb.Watermark{}, true
 	} else {
 		p.log.Debugw("Skip publishing the new watermark because it's the same as the current watermark", zap.Int32("toVertexPartitionIdx", toVertexPartitionIdx), zap.String("entity", p.entity.GetName()), zap.Int64("head", headWM.UnixMilli()), zap.Int64("new", wm.UnixMilli()))
@@ -285,9 +285,15 @@ func (p *publish) publishHeartbeat() {
 func (p *publish) Close() error {
 	p.log.Info("Closing watermark publisher")
 
-	// clean up heartbeat bucket, upstream will take care of closing the stores
+	// delete the entry from the heartbeat bucket
 	if err := p.heartbeatStore.DeleteKey(p.ctx, p.entity.GetName()); err != nil {
 		p.log.Errorw("Failed to delete the key in the heartbeat bucket", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.String("key", p.entity.GetName()), zap.Error(err))
+		return err
+	}
+
+	// delete the entry from the offset bucket
+	if err := p.otStore.DeleteKey(p.ctx, p.entity.GetName()); err != nil {
+		p.log.Errorw("Failed to delete the key in the offset bucket", zap.String("bucket", p.otStore.GetStoreName()), zap.String("key", p.entity.GetName()), zap.Error(err))
 		return err
 	}
 	return nil

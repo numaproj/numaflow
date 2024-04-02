@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useNamespaceSummaryFetch } from "../../../utils/fetchWrappers/namespaceSummaryFetch";
@@ -45,7 +45,9 @@ export interface NamespaceProps {
 }
 
 export function Namespaces({ namespaceId: nsIdProp }: NamespaceProps) {
-  const { namespaceId: nsIdParam } = useParams();
+  const location = useLocation();
+  const query = new URLSearchParams(location.search);
+  const nsIdParam = query.get("namespace") || "";
   const namespaceId = nsIdProp || nsIdParam;
   const { setSidebarProps, addError } = useContext<AppContextProps>(AppContext);
   const { data, pipelineRawData, isbRawData, loading, error, refresh } =

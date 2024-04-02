@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import YAML from "yaml";
 import Box from "@mui/material/Box";
 import {
@@ -8,6 +8,8 @@ import {
   ValidationMessage,
 } from "../../../SpecEditor";
 import { SpecEditorSidebarProps } from "../..";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { AppContext } from "../../../../../App";
 import { getAPIResponseError, getBaseHref } from "../../../../../utils";
 
 import "./style.css";
@@ -42,6 +44,7 @@ export function ISBCreate({
     ValidationMessage | undefined
   >();
   const [status, setStatus] = useState<StatusIndicator | undefined>();
+  const { host } = useContext<AppContextProps>(AppContext);
 
   // Submit API call
   useEffect(() => {
@@ -55,7 +58,7 @@ export function ISBCreate({
       });
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services?dry-run=false`,
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services?dry-run=false`,
           {
             method: "POST",
             headers: {
@@ -100,7 +103,7 @@ export function ISBCreate({
     if (submitPayload) {
       postData();
     }
-  }, [namespaceId, submitPayload, onUpdateComplete]);
+  }, [namespaceId, submitPayload, onUpdateComplete, host]);
 
   // Validation API call
   useEffect(() => {
@@ -108,7 +111,7 @@ export function ISBCreate({
       setLoading(true);
       try {
         const response = await fetch(
-          `${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services?dry-run=true`,
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services?dry-run=true`,
           {
             method: "POST",
             headers: {
@@ -143,13 +146,13 @@ export function ISBCreate({
     if (validationPayload) {
       postData();
     }
-  }, [namespaceId, validationPayload]);
+  }, [namespaceId, validationPayload, host]);
 
   const handleValidate = useCallback((value: string) => {
     let parsed: any;
     try {
       parsed = YAML.parse(value);
-    } catch (e) {
+    } catch (e: any) {
       setValidationMessage({
         type: "error",
         message: `Invalid YAML: ${e.message}`,
@@ -171,7 +174,7 @@ export function ISBCreate({
     let parsed: any;
     try {
       parsed = YAML.parse(value);
-    } catch (e) {
+    } catch (e: any) {
       setValidationMessage({
         type: "error",
         message: `Invalid YAML: ${e.message}`,
@@ -223,7 +226,7 @@ export function ISBCreate({
         sx={{
           display: "flex",
           flexDirection: "row",
-          marginBottom: "2rem",
+          marginBottom: "3.2rem",
         }}
       >
         <span className="isb-spec-header-text">Create ISB Service</span>

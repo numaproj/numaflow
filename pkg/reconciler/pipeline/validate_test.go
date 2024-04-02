@@ -21,10 +21,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
@@ -103,7 +103,7 @@ var (
 				},
 				{
 					Name:       "p2",
-					Partitions: pointer.Int32(2),
+					Partitions: ptr.To[int32](2),
 					UDF: &dfv1.UDF{
 						Container: &dfv1.Container{
 							Image: "my-image",
@@ -548,12 +548,12 @@ func TestValidateReducePipeline(t *testing.T) {
 
 	t.Run("test partitions", func(t *testing.T) {
 		testObj := testReducePipeline.DeepCopy()
-		testObj.Spec.Vertices[0].Partitions = pointer.Int32(2)
+		testObj.Spec.Vertices[0].Partitions = ptr.To[int32](2)
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `partitions should not > 1 for source vertices`)
 		testObj.Spec.Vertices[0].Partitions = nil
-		testObj.Spec.Vertices[1].Partitions = pointer.Int32(2)
+		testObj.Spec.Vertices[1].Partitions = ptr.To[int32](2)
 		err = ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), `partitions should not > 1 for non-keyed reduce vertices`)
@@ -605,8 +605,8 @@ func TestValidateVertex(t *testing.T) {
 		v := dfv1.AbstractVertex{
 			Name: "my-vertex",
 			Scale: dfv1.Scale{
-				Min: pointer.Int32(-1),
-				Max: pointer.Int32(1),
+				Min: ptr.To[int32](-1),
+				Max: ptr.To[int32](1),
 			},
 		}
 		err := validateVertex(v)
@@ -618,13 +618,25 @@ func TestValidateVertex(t *testing.T) {
 		v := dfv1.AbstractVertex{
 			Name: "my-vertex",
 			Scale: dfv1.Scale{
-				Min: pointer.Int32(2),
-				Max: pointer.Int32(1),
+				Min: ptr.To[int32](2),
+				Max: ptr.To[int32](1),
 			},
 		}
 		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "or equal to")
+	})
+
+	t.Run("max == 0", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			Name: "my-vertex",
+			Scale: dfv1.Scale{
+				Max: ptr.To[int32](0),
+			},
+		}
+		err := validateVertex(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "can not be 0")
 	})
 
 	t.Run("good init container", func(t *testing.T) {

@@ -61,7 +61,7 @@ func (ps PersistenceStrategy) GetPVCSpec(name string) corev1.PersistentVolumeCla
 			},
 			VolumeMode:       &volMode,
 			StorageClassName: ps.StorageClassName,
-			Resources: corev1.ResourceRequirements{
+			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: volSize,
 				},

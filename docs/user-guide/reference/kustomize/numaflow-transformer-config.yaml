@@ -1,13 +1,19 @@
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/images.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/images.go
 images:
+- path: spec/vertices/sidecars/image
+  kind: Pipeline
 - path: spec/vertices/udf/container/image
   kind: Pipeline
 - path: spec/vertices/sink/udsink/container/image
   kind: Pipeline
 - path: spec/vertices/source/transformer/container/image
   kind: Pipeline
+- path: spec/vertices/source/udsource/container/image
+  kind: Pipeline
+- path: spec/sideInputs/container/image
+  kind: Pipeline
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/namereference.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/namereference.go
 nameReference:
 - kind: ConfigMap
   version: v1
@@ -23,6 +29,10 @@ nameReference:
   - path: spec/vertices/initContainerTemplate/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
   - path: spec/vertices/initContainerTemplate/envFrom/configMapRef/name
+    kind: Pipeline
+  - path: spec/vertices/sideInputsContainerTemplate/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/sideInputsContainerTemplate/envFrom/configMapRef/name
     kind: Pipeline
   - path: spec/vertices/initContainers/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
@@ -44,6 +54,14 @@ nameReference:
     kind: Pipeline
   - path: spec/vertices/source/transformer/container/envFrom/configMapRef/name
     kind: Pipeline
+  - path: spec/vertices/source/udsource/container/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/source/udsource/container/envFrom/configMapRef/name
+    kind: Pipeline
+  - path: spec/sideInputs/container/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/sideInputs/container/envFrom/configMapRef/name
+    kind: Pipeline
   - path: spec/templates/daemon/containerTemplate/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
   - path: spec/templates/daemon/containerTemplate/envFrom/configMapRef/name
@@ -55,6 +73,22 @@ nameReference:
   - path: spec/templates/job/containerTemplate/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
   - path: spec/templates/job/containerTemplate/envFrom/configMapRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/containerTemplate/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/containerTemplate/envFrom/configMapRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/initContainerTemplate/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/initContainerTemplate/envFrom/configMapRef/name
+    kind: Pipeline
+  - path: spec/templates/vertex/containerTemplate/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/vertex/containerTemplate/envFrom/configMapRef/name
+    kind: Pipeline
+  - path: spec/templates/vertex/initContainerTemplate/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/vertex/initContainerTemplate/envFrom/configMapRef/name
     kind: Pipeline
   - path: spec/jetstream/containerTemplate/env/valueFrom/configMapKeyRef/name
     kind: InterStepBufferService
@@ -83,6 +117,10 @@ nameReference:
     kind: Pipeline
   - path: spec/vertices/initContainerTemplate/envFrom/secretRef/name
     kind: Pipeline
+  - path: spec/vertices/sideInputsContainerTemplate/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/sideInputsContainerTemplate/envFrom/secretRef/name
+    kind: Pipeline
   - path: spec/vertices/initContainers/env/valueFrom/secretKeyRef/name
     kind: Pipeline
   - path: spec/vertices/initContainers/envFrom/secretRef/name
@@ -103,6 +141,14 @@ nameReference:
     kind: Pipeline
   - path: spec/vertices/source/transformer/container/envFrom/secretRef/name
     kind: Pipeline
+  - path: spec/vertices/source/udsource/container/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/source/udousrce/container/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/sideInputs/container/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/sideInputs/container/envFrom/secretRef/name
+    kind: Pipeline
   - path: spec/templates/daemon/containerTemplate/env/valueFrom/secretKeyRef/name
     kind: Pipeline
   - path: spec/templates/daemon/containerTemplate/envFrom/secretRef/name
@@ -115,11 +161,31 @@ nameReference:
     kind: Pipeline
   - path: spec/templates/job/containerTemplate/envFrom/secretRef/name
     kind: Pipeline
+  - path: spec/templates/sideInputsManager/containerTemplate/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/containerTemplate/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/initContainerTemplate/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/initContainerTemplate/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/templates/vertex/containerTemplate/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/vertex/containerTemplate/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/templates/vertex/initContainerTemplate/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/templates/vertex/initContainerTemplate/envFrom/secretRef/name
+    kind: Pipeline
   - path: spec/vertices/imagePullSecrets/name
     kind: Pipeline
   - path: spec/templates/daemon/imagePullSecrets/name
     kind: Pipeline
   - path: spec/templates/job/imagePullSecrets/name
+    kind: Pipeline
+  - path: spec/templates/sideInputsManager/imagePullSecrets/name
+    kind: Pipeline
+  - path: spec/templates/vertex/imagePullSecrets/name
     kind: Pipeline
   - path: spec/jetstream/containerTemplate/env/valueFrom/secretKeyRef/name
     kind: InterStepBufferService
@@ -142,6 +208,10 @@ nameReference:
     kind: Pipeline
   - path: spec/templates/job/serviceAccountName
     kind: Pipeline
+  - path: spec/templates/sideInputsManager/serviceAccountName
+    kind: Pipeline
+  - path: spec/templates/vertex/serviceAccountName
+    kind: Pipeline
   - path: spec/jetstream/serviceAccountName
     kind: InterStepBufferService
 - kind: PersistentVolumeClaim
@@ -159,10 +229,14 @@ nameReference:
     kind: Pipeline
   - path: spec/templates/job/priorityClassName
     kind: Pipeline
+  - path: spec/templates/sideInputsManager/priorityClassName
+    kind: Pipeline
+  - path: spec/templates/vertex/priorityClassName
+    kind: Pipeline
   - path: spec/jetstream/priorityClassName
     kind: InterStepBufferService
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/commonlabels.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/commonlabels.go
 commonLabels:
 - path: spec/vertices/metadata/labels
   create: true
@@ -173,11 +247,17 @@ commonLabels:
 - path: spec/templates/job/metadata/labels
   create: true
   kind: Pipeline
+- path: spec/templates/sideInputsManager/metadata/labels
+  create: true
+  kind: Pipeline
+- path: spec/templates/vertex/metadata/labels
+  create: true
+  kind: Pipeline
 - path: spec/jetstream/metadata/labels
   create: true
   kind: InterStepBufferService
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/commonannotations.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/commonannotations.go
 commonAnnotations:
 - path: spec/vertices/metadata/annotations
   create: true
@@ -188,12 +268,24 @@ commonAnnotations:
 - path: spec/templates/job/metadata/annotations
   create: true
   kind: Pipeline
+- path: spec/templates/sideInputsManager/metadata/annotations
+  create: true
+  kind: Pipeline
+- path: spec/templates/vertex/metadata/annotations
+  create: true
+  kind: Pipeline
 - path: spec/jetstream/metadata/annotations
   create: true
   kind: InterStepBufferService
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/varreference.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/varreference.go
 varReference:
+- path: spec/vertices/sidecars/args
+  kind: Pipeline
+- path: spec/vertices/sidecars/command
+  kind: Pipeline
+- path: spec/vertices/sidecars/env/value
+  kind: Pipeline
 - path: spec/vertices/udf/container/args
   kind: Pipeline
 - path: spec/vertices/udf/container/command
@@ -212,13 +304,25 @@ varReference:
   kind: Pipeline
 - path: spec/vertices/source/transformer/container/env/value
   kind: Pipeline
+- path: spec/vertices/source/udsource/container/args
+  kind: Pipeline
+- path: spec/vertices/source/udsource/container/command
+  kind: Pipeline
+- path: spec/vertices/source/udsource/container/env/value
+  kind: Pipeline
+- path: spec/sideInputs/container/args
+  kind: Pipeline
+- path: spec/sideInputs/container/command
+  kind: Pipeline
+- path: spec/sideInputs/container/env/value
+  kind: Pipeline
 - path: spec/vertices/containerTemplate/env/value
   kind: Pipeline
 - path: spec/vertices/initContainerTemplate/env/value
   kind: Pipeline
-- path: spec/vertices/initContainers/env/value
+- path: spec/vertices/sideInputsContainerTemplate/env/value
   kind: Pipeline
-- path: spec/vertices/sidecars/env/value
+- path: spec/vertices/initContainers/env/value
   kind: Pipeline
 - path: spec/templates/daemon/containerTemplate/env/value
   kind: Pipeline
@@ -226,11 +330,25 @@ varReference:
   kind: Pipeline
 - path: spec/templates/job/containerTemplate/env/value
   kind: Pipeline
+- path: spec/templates/sideInputsManager/containerTemplate/env/value
+  kind: Pipeline
+- path: spec/templates/sideInputsManager/initContainerTemplate/env/value
+  kind: Pipeline
+- path: spec/templates/vertex/containerTemplate/env/value
+  kind: Pipeline
+- path: spec/templates/vertex/initContainerTemplate/env/value
+  kind: Pipeline
+- path: spec/vertices/sidecars/volumeMounts/mountPath
+  kind: Pipeline
 - path: spec/vertices/udf/container/volumeMounts/mountPath
   kind: Pipeline
 - path: spec/vertices/sink/udsink/container/volumeMounts/mountPath
   kind: Pipeline
 - path: spec/vertices/source/transformer/container/volumeMounts/mountPath
+  kind: Pipeline
+- path: spec/vertices/source/udsource/container/volumeMounts/mountPath
+  kind: Pipeline
+- path: spec/sideInputs/container/volumeMounts/mountPath
   kind: Pipeline
 - path: spec/jetstream/containerTemplate/env/value
   kind: InterStepBufferService
@@ -239,7 +357,7 @@ varReference:
 - path: spec/jetstream/metricsContainerTemplate/env/value
   kind: InterStepBufferService
 
-# https://github.com/kubernetes-sigs/kustomize/blob/master/api/konfig/builtinpluginconsts/replicas.go
+# https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/replicas.go
 replicas:
 - path: spec/jetstream/replicas
   create: true

@@ -1,20 +1,17 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import {
-  GetISBType,
-  UNKNOWN,
-} from "../../../../../utils";
+import { GetISBType, UNKNOWN } from "../../../../../utils";
 
-export function PipelineISBSummaryStatus({ isbData }) {
+export function PipelineISBSummaryStatus({ isbData }: any) {
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
   return (
     <Box
       sx={{
         display: "flex",
         flexDirection: "column",
-        marginTop: "0.375rem",
+        marginTop: "0.6rem",
         flexGrow: 1,
-        paddingLeft: "1rem"
+        paddingLeft: "1.6rem",
       }}
     >
       <Box sx={{ display: "flex", flexDirection: "row" }}>
@@ -24,14 +21,14 @@ export function PipelineISBSummaryStatus({ isbData }) {
             sx={{
               display: "flex",
               flexDirection: "row",
-              marginTop: "0.3125rem",
+              marginTop: "0.5rem",
             }}
           >
             <Box
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                marginLeft: "0.3125rem",
+                marginLeft: "0.5rem",
               }}
             >
               <div className="pipeline-summary-text">
@@ -45,7 +42,7 @@ export function PipelineISBSummaryStatus({ isbData }) {
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                marginLeft: "0.3125rem",
+                marginLeft: "0.5rem",
               }}
             >
               <div className="isb-status-text">
@@ -59,7 +56,7 @@ export function PipelineISBSummaryStatus({ isbData }) {
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                marginLeft: "2rem",
+                marginLeft: "3.2rem",
               }}
             >
               <div className="pipeline-summary-text">

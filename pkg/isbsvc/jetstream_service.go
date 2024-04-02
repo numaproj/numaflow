@@ -34,9 +34,8 @@ import (
 
 type jetStreamSvc struct {
 	pipelineName string
-
-	jsClient *jsclient.NATSClient
-	js       nats.JetStreamContext
+	jsClient     *jsclient.Client
+	js           nats.JetStreamContext
 }
 
 func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBService, error) {
@@ -51,7 +50,7 @@ func NewISBJetStreamSvc(pipelineName string, opts ...JSServiceOption) (ISBServic
 
 type JSServiceOption func(*jetStreamSvc) error
 
-func WithJetStreamClient(jsClient *jsclient.NATSClient) JSServiceOption {
+func WithJetStreamClient(jsClient *jsclient.Client) JSServiceOption {
 	return func(j *jetStreamSvc) error {
 		j.jsClient = jsClient
 		return nil
@@ -138,8 +137,6 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}
 			log.Infow("Succeeded to create a consumer for a stream", zap.String("stream", streamName), zap.String("consumer", streamName))
 		}
-		// TODO: remove sleep and use a better way to wait for the stream to be ready
-		time.Sleep(3 * time.Second)
 	}
 
 	for _, bucket := range buckets {

@@ -11,13 +11,13 @@ import "./style.css";
 
 export function NamespaceCard({ data }: NamespaceCardProps) {
   return (
-    <Link to={`/namespaces/${data.name}`} style={{ textDecoration: "none" }}>
+    <Link to={`?namespace=${data.name}`} style={{ textDecoration: "none" }}>
       <Paper
         sx={{
           display: "flex",
           flexDirection: "column",
-          padding: "1.5rem",
-          minWidth: "27.1875rem",
+          padding: "2.4rem",
+          minWidth: "43.5rem",
         }}
       >
         <span className="namespace-card-name">{data.name}</span>
@@ -25,7 +25,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           sx={{
             display: "flex",
             flexDirection: "row",
-            marginTop: "1.6875rem",
+            marginTop: "2.7rem",
           }}
         >
           <span className="namespace-card-section-title">Pipelines:</span>
@@ -38,8 +38,8 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           rowSpacing={0}
           columnSpacing={0}
           sx={{
-            borderBottom: "0.03125rem solid #8D9096",
-            marginTop: "0.5rem",
+            borderBottom: "0.05rem solid #8D9096",
+            marginTop: "0.8rem",
           }}
         >
           <Grid item xs={3}>
@@ -52,7 +52,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
               sx={{
                 display: "flex",
                 flexDirection: "row",
-                borderRight: "0.03125rem solid #8D9096",
+                borderRight: "0.05rem solid #8D9096",
                 width: "67%",
               }}
             >
@@ -80,8 +80,8 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           rowSpacing={0}
           columnSpacing={0}
           sx={{
-            borderBottom: "0.03125rem solid #8D9096",
-            marginTop: "0.5rem",
+            borderBottom: "0.05rem solid #8D9096",
+            marginTop: "0.8rem",
           }}
         >
           <Grid item xs={2}>
@@ -89,7 +89,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
               Health:
             </span>
           </Grid>
-          <Grid item xs={8} sx={{ padding: "0.3125rem 0" }}>
+          <Grid item xs={8} sx={{ padding: "0.5rem 0" }}>
             <StatusCounts
               counts={{
                 healthy: data?.pipelinesHealthyCount,
@@ -103,7 +103,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           sx={{
             display: "flex",
             flexDirection: "row",
-            marginTop: "1.6875rem",
+            marginTop: "2.7rem",
           }}
         >
           <span className="namespace-card-section-title">ISB Services:</span>
@@ -116,8 +116,8 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           rowSpacing={0}
           columnSpacing={0}
           sx={{
-            borderBottom: "0.03125rem solid #8D9096",
-            marginTop: "0.5rem",
+            borderBottom: "0.05rem solid #8D9096",
+            marginTop: "0.8rem",
           }}
         >
           <Grid item xs={3}>
@@ -130,7 +130,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
               sx={{
                 display: "flex",
                 flexDirection: "row",
-                borderRight: "0.03125rem solid #8D9096",
+                borderRight: "0.05rem solid #8D9096",
                 width: "67%",
               }}
             >
@@ -158,7 +158,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           rowSpacing={0}
           columnSpacing={0}
           sx={{
-            marginTop: "0.5rem",
+            marginTop: "0.8rem",
           }}
         >
           <Grid item xs={2}>
@@ -166,7 +166,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
               Health:
             </span>
           </Grid>
-          <Grid item xs={8} sx={{ padding: "0.3125rem 0" }}>
+          <Grid item xs={8} sx={{ padding: "0.5rem 0" }}>
             <StatusCounts
               counts={{
                 healthy: data?.isbsHealthyCount,

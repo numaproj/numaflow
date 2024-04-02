@@ -36,7 +36,7 @@ func TestBlackhole_Start(t *testing.T) {
 	defer cancel()
 
 	startTime := time.Unix(1636470000, 0)
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), startTime)
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), startTime, nil)
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		AbstractVertex: dfv1.AbstractVertex{
@@ -51,7 +51,8 @@ func TestBlackhole_Start(t *testing.T) {
 		Replica: 0,
 	}
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	s, err := NewBlackhole(vertexInstance, fromStep, fetchWatermark, publishWatermark[vertex.Spec.Name], wmb.NewIdleManager(1))
+	idleManager, _ := wmb.NewIdleManager(1, 1)
+	s, err := NewBlackhole(vertexInstance, fromStep, fetchWatermark, publishWatermark[vertex.Spec.Name], idleManager)
 	assert.NoError(t, err)
 
 	stopped := s.Start()

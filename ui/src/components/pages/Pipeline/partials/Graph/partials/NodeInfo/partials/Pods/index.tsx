@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 import { useState, useEffect, useMemo, useCallback, ChangeEvent } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
@@ -65,7 +67,7 @@ export function Pods(props: PodsProps) {
   const containerSelector = useMemo(() => {
     return (
       <Box sx={{ display: "flex", flexDirection: "row" }}>
-        <Box sx={{ fontWeight: "600", width: "8rem" }}>
+        <Box sx={{ fontWeight: "600", width: "12.8rem" }}>
           <span>Select a container</span>
         </Box>
         <Box data-testid={"pods-containers"} sx={{ mt: 2 }}>
@@ -84,7 +86,7 @@ export function Pods(props: PodsProps) {
     return (
       <Box
         data-testid={"pods-poddetails"}
-        sx={{ mt: 2, border: "1px solid #E0E0E0", padding: "1rem" }}
+        sx={{ mt: 2, border: "1px solid #E0E0E0", padding: "1.6rem" }}
       >
         <PodDetail
           namespaceId={namespaceId}
@@ -116,7 +118,7 @@ export function Pods(props: PodsProps) {
 
   const podSearchDetails = (
     <Box sx={{ display: "flex", flexDirection: "row" }}>
-      <Box sx={{ fontWeight: "600", width: "8rem" }}>
+      <Box sx={{ fontWeight: "600", width: "12.8rem" }}>
         <span>Select a pod by name</span>
       </Box>
       <Box
@@ -128,13 +130,16 @@ export function Pods(props: PodsProps) {
           justifyContent: "space-between",
         }}
       >
-        <Box sx={{ paddingBottom: "0.625rem" }}>
+        <Box sx={{ paddingBottom: "1rem" }}>
           {pods && selectedPod && (
             <Autocomplete
               {...defaultProps}
               disablePortal
               disableClearable
               id="pod-select"
+              ListboxProps={{
+                sx: { fontSize: "1.6rem" },
+              }}
               sx={{
                 width: 300,
                 border: "1px solid #E0E0E0",
@@ -153,6 +158,7 @@ export function Pods(props: PodsProps) {
                   inputProps={{
                     ...params.inputProps,
                     autoComplete: "new-password", // disable autocomplete and autofill
+                    style: { fontSize: "1.6rem" },
                   }}
                 />
               )}
@@ -187,16 +193,16 @@ export function Pods(props: PodsProps) {
   }
 
   return (
-    <Paper square elevation={0} sx={{ padding: "1rem" }}>
+    <Paper square elevation={0} sx={{ padding: "1.6rem" }}>
       <Box sx={{ display: "flex", flexDirection: "row" }}>
         <Box
           sx={{
             width: "70%",
             border: "1px solid #E0E0E0",
-            marginRight: "1rem",
+            marginRight: "1.6rem",
             display: "flex",
             flexDirection: "column",
-            padding: "1rem",
+            padding: "1.6rem",
             justifyContent: "space-evenly",
           }}
           data-testid={"pods-searchablePodsHeatMap"}
@@ -216,7 +222,7 @@ export function Pods(props: PodsProps) {
               display: "flex",
               flexDirection: "column",
               width: "100%",
-              marginTop: "1rem",
+              marginTop: "1.6rem",
             }}
           >
             <PodInfo

@@ -81,16 +81,18 @@ export default function EdgeInfo(props: EdgeInfoProps) {
               </TableHead>
               <TableBody>
                 {edge.data.edgeWatermark?.watermarks &&
-                  edge.data.edgeWatermark.watermarks.map((wmVal, idx) => {
-                    return (
-                      <TableRow key={`edge-watermark-${idx}`}>
-                        <TableCell>{idx}</TableCell>
-                        <TableCell>
-                          {wmVal} ({new Date(wmVal).toISOString()})
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  edge.data.edgeWatermark.watermarks.map(
+                    (wmVal: any, idx: number) => {
+                      return (
+                        <TableRow key={`edge-watermark-${idx}`}>
+                          <TableCell>{idx}</TableCell>
+                          <TableCell>
+                            {wmVal} ({new Date(wmVal).toISOString()})
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                  )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -106,7 +108,7 @@ export default function EdgeInfo(props: EdgeInfoProps) {
             src={edge.data.conditions}
             style={{
               width: "100%",
-              borderRadius: "0.25rem",
+              borderRadius: "0.4rem",
               fontFamily: "IBM Plex Sans",
             }}
           />

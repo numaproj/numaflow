@@ -66,9 +66,9 @@ describe("ProcessingRates", () => {
     );
     await waitFor(() => {
       expect(screen.getByText("Partition")).toBeInTheDocument();
-      expect(screen.getByText("20.00")).toBeInTheDocument();
-      expect(screen.getByText("30.00")).toBeInTheDocument();
-      expect(screen.getByText("10.00")).toBeInTheDocument();
+      expect(screen.getByText("20.00/sec")).toBeInTheDocument();
+      expect(screen.getByText("30.00/sec")).toBeInTheDocument();
+      expect(screen.getByText("10.00/sec")).toBeInTheDocument();
     });
   });
   it("Renders when vertexData is null", async () => {

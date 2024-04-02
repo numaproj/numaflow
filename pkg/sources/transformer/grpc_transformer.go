@@ -95,7 +95,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, readMessage *
 				Factor:   1,
 				Jitter:   0.1,
 				Steps:    5,
-			}, func() (done bool, err error) {
+			}, func(_ context.Context) (done bool, err error) {
 				response, err = u.client.SourceTransformFn(ctx, req)
 				if err != nil {
 					udfErr, _ = sdkerr.FromError(err)

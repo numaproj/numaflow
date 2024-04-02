@@ -18,6 +18,7 @@ package sessionreducer
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	sessionreducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/sessionreduce/v1"
@@ -103,15 +104,22 @@ func (c *client) SessionReduceFn(ctx context.Context, datumStreamCh <-chan *sess
 				if !ok {
 					break outerLoop
 				}
-				if sendErr = stream.Send(datum); sendErr != nil {
+				if sendErr = stream.Send(datum); sendErr != nil && !errors.Is(sendErr, io.EOF) {
 					errCh <- util.ToUDFErr("SessionReduceFn stream.Send()", sendErr)
+					return
 				}
 			}
 		}
+
 		// close the stream after sending all the messages
-		sendErr = stream.CloseSend()
-		if sendErr != nil {
-			errCh <- util.ToUDFErr("SessionReduceFn stream.Send()", sendErr)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			sendErr = stream.CloseSend()
+			if sendErr != nil && !errors.Is(sendErr, io.EOF) {
+				errCh <- util.ToUDFErr("SessionReduceFn stream.CloseSend()", sendErr)
+			}
 		}
 	}()
 
@@ -128,7 +136,7 @@ func (c *client) SessionReduceFn(ctx context.Context, datumStreamCh <-chan *sess
 			default:
 				resp, recvErr = stream.Recv()
 				// if the stream is closed, close the responseCh and errCh channels and return
-				if recvErr == io.EOF {
+				if errors.Is(recvErr, io.EOF) {
 					// skip selection on nil channel
 					errCh = nil
 					close(responseCh)

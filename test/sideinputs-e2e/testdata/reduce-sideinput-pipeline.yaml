@@ -7,7 +7,7 @@ spec:
     - name: myticker
       container:
         # A reduce side input, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input
-        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:v0.0.2"
+        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:v0.6.1"
         imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
@@ -21,13 +21,13 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
           imagePullPolicy: Always
     - name: si-e2e
       udf:
         container:
           # A reduce side input udf, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input/udf
-          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:dev"
+          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:v0.6.1"
           imagePullPolicy: Always
         groupBy:
           window:
@@ -47,7 +47,7 @@ spec:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:v0.5.0
+            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
     - from: in
       to: atoi

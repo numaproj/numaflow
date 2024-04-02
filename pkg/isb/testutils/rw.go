@@ -38,10 +38,10 @@ type PayloadForTest struct {
 }
 
 // BuildTestWriteMessages builds test isb.Message which can be used for testing.
-func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
+func BuildTestWriteMessages(count int64, startTime time.Time, keys []string) []isb.Message {
 	var messages = make([]isb.Message, 0, count)
 	for i := int64(0); i < count; i++ {
-		tmpTime := startTime.Add(time.Duration(i) * time.Minute)
+		tmpTime := startTime.Add(time.Duration(i) * time.Second)
 		result, _ := json.Marshal(PayloadForTest{
 			Key:   fmt.Sprintf("paydload_%d", i),
 			Value: i,
@@ -53,19 +53,22 @@ func BuildTestWriteMessages(count int64, startTime time.Time) []isb.Message {
 						EventTime: tmpTime,
 					},
 					ID:   fmt.Sprintf("%d-testVertex-0-0", i), // TODO: hard coded ID suffix ATM, make configurable if needed
-					Keys: []string{},
+					Keys: keys,
+					Headers: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+					},
 				},
 				Body: isb.Body{Payload: result},
 			},
 		)
 	}
-
 	return messages
 }
 
 // BuildTestWindowRequests builds test window.TimedWindowRequest which can be used for testing.
 func BuildTestWindowRequests(count int64, startTime time.Time, windowOp window.Operation) []window.TimedWindowRequest {
-	var readMessages = BuildTestReadMessages(count, startTime)
+	var readMessages = BuildTestReadMessages(count, startTime, nil)
 	var windowRequests = make([]window.TimedWindowRequest, count)
 
 	for idx, readMessage := range readMessages {
@@ -78,14 +81,14 @@ func BuildTestWindowRequests(count int64, startTime time.Time, windowOp window.O
 }
 
 // BuildTestReadMessages builds test isb.ReadMessage which can be used for testing.
-func BuildTestReadMessages(count int64, startTime time.Time) []isb.ReadMessage {
-	writeMessages := BuildTestWriteMessages(count, startTime)
+func BuildTestReadMessages(count int64, startTime time.Time, keys []string) []isb.ReadMessage {
+	writeMessages := BuildTestWriteMessages(count, startTime, keys)
 	var readMessages = make([]isb.ReadMessage, count)
 
 	for idx, writeMessage := range writeMessages {
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
-			ReadOffset: isb.NewSimpleStringPartitionOffset(fmt.Sprintf("read_%s", writeMessage.Header.ID), 0),
+			ReadOffset: isb.NewSimpleStringPartitionOffset(fmt.Sprintf("%d", idx), 0),
 		}
 	}
 
@@ -93,8 +96,8 @@ func BuildTestReadMessages(count int64, startTime time.Time) []isb.ReadMessage {
 }
 
 // BuildTestReadMessagesIntOffset builds test isb.ReadMessage which can be used for testing.
-func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.ReadMessage {
-	writeMessages := BuildTestWriteMessages(count, startTime)
+func BuildTestReadMessagesIntOffset(count int64, startTime time.Time, keys []string) []isb.ReadMessage {
+	writeMessages := BuildTestWriteMessages(count, startTime, keys)
 	var readMessages = make([]isb.ReadMessage, count)
 
 	for idx, writeMessage := range writeMessages {
@@ -103,6 +106,7 @@ func BuildTestReadMessagesIntOffset(count int64, startTime time.Time) []isb.Read
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
 			ReadOffset: isb.NewSimpleIntPartitionOffset(int64(offset), 0),
+			Watermark:  writeMessage.EventTime,
 		}
 	}
 

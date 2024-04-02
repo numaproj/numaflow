@@ -56,7 +56,6 @@ func (k kvEntry) Operation() kvs.KVWatchOp {
 // inMemWatcher is a watcher for the in mem key-value store.
 type inMemWatcher struct {
 	updates chan kvs.KVEntry
-	stopped chan struct{}
 }
 
 // inMemStore implements the watermark's KV store backed up by in mem store.
@@ -174,10 +173,9 @@ func (kv *inMemStore) PutKV(ctx context.Context, k string, v []byte) error {
 }
 
 // Watch watches the key-value store and returns the "updates channel" and a done channel.
-func (kv *inMemStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan struct{}) {
+func (kv *inMemStore) Watch(ctx context.Context) <-chan kvs.KVEntry {
 	// create a new updates channel and fill in the history
 	var updates = make(chan kvs.KVEntry)
-	var stopped = make(chan struct{})
 
 	// for new updates channel initialization
 	go func() {
@@ -193,11 +191,10 @@ func (kv *inMemStore) Watch(ctx context.Context) (<-chan kvs.KVEntry, <-chan str
 		// add it to the list of watchers
 		kv.watchers = append(kv.watchers, &inMemWatcher{
 			updates: updates,
-			stopped: stopped,
 		})
 		kv.lock.Unlock()
 	}()
-	return updates, stopped
+	return updates
 }
 
 // Close closes the in mem key-value store. It will close all the watchers.
@@ -207,6 +204,5 @@ func (kv *inMemStore) Close() {
 	kv.isClosed = true
 	for _, watcher := range kv.watchers {
 		close(watcher.updates)
-		close(watcher.stopped)
 	}
 }

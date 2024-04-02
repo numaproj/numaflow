@@ -34,7 +34,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq"
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/partition"
-	"github.com/numaproj/numaflow/pkg/reduce/pbq/store/memory"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal"
+	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/aligned/memory"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
@@ -165,7 +166,7 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 			Message: ret,
 			Tags:    nil,
 		},
-		Window: window.NewWindowFromPartition(partitionID),
+		Window: window.NewAlignedTimedWindow(partitionID.Start, partitionID.End, partitionID.Slot),
 	}
 	responseCh <- response
 	return responseCh, errCh
@@ -221,7 +222,7 @@ func (s SessionSumReduceTest) ApplyReduce(ctx context.Context, partitionID *part
 					}
 					response := &window.TimedWindowResponse{
 						WriteMessage: outputMsg,
-						Window:       window.NewWindowFromPartition(partitionID),
+						Window:       window.NewAlignedTimedWindow(partitionID.Start, partitionID.End, partitionID.Slot),
 					}
 					responseCh <- response
 				}
@@ -283,7 +284,7 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 		}
 		response := &window.TimedWindowResponse{
 			WriteMessage: msg,
-			Window:       window.NewWindowFromPartition(partitionID),
+			Window:       window.NewAlignedTimedWindow(partitionID.Start, partitionID.End, partitionID.Slot),
 		}
 		responseCh <- response
 	}
@@ -342,7 +343,7 @@ func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 
 		response := &window.TimedWindowResponse{
 			WriteMessage: ret,
-			Window:       window.NewWindowFromPartition(partitionID),
+			Window:       window.NewAlignedTimedWindow(partitionID.Start, partitionID.End, partitionID.Slot),
 		}
 		responseCh <- response
 	}
@@ -386,11 +387,10 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 		toVertexName: {to},
 	}
 
-	var err error
-	var pbqManager *pbq.Manager
-
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(100))
 	// create pbqManager
-	pbqManager, err = pbq.NewManager(child, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(100)),
+	pbqManager, err := pbq.NewManager(child, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -408,11 +408,12 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 	// create new fixed windower of (windowTime)
 	windower := fixed.NewWindower(windowTime, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower)
 
 	var reduceDataForwarder *DataForward
-	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, wmpublisher, publisher,
+	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, wmpublisher, publisher,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -476,9 +477,12 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		toVertexName: {toBuffer},
 	}
 
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -501,11 +505,12 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 
 	// create a fixed windower of 5s
 	windower := fixed.NewWindower(5*time.Second, keyedVertex)
-	idleManager := wmb.NewIdleManager(len(toBuffers))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffers))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffers, pbqManager, CounterReduceTest{}, f, publisherMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffers, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -688,9 +693,12 @@ func TestReduceDataForward_Count(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -707,11 +715,12 @@ func TestReduceDataForward_Count(t *testing.T) {
 
 	// create a fixed window of 60s
 	windower := fixed.NewWindower(60*time.Second, keyedVertex)
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -769,9 +778,12 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -789,12 +801,13 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 	// create a fixed windower of 10s
 	windower := fixed.NewWindower(5*time.Second, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	allowedLatency := 1000
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publisherMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
 		windower, idleManager, op, WithReadBatchSize(int64(batchSize)),
 		WithAllowedLateness(time.Duration(allowedLatency)*time.Millisecond),
 	)
@@ -854,9 +867,12 @@ func TestReduceDataForward_Sum(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -873,11 +889,12 @@ func TestReduceDataForward_Sum(t *testing.T) {
 
 	// create a fixed window of 2 minutes
 	windower := fixed.NewWindower(2*time.Minute, keyedVertex)
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -936,9 +953,12 @@ func TestReduceDataForward_Max(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -955,11 +975,12 @@ func TestReduceDataForward_Max(t *testing.T) {
 
 	// create a fixed window of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -1018,9 +1039,12 @@ func TestReduceDataForward_FixedSumWithDifferentKeys(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1038,11 +1062,12 @@ func TestReduceDataForward_FixedSumWithDifferentKeys(t *testing.T) {
 	// create a fixed windower of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 
 	assert.NoError(t, err)
@@ -1121,9 +1146,12 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1141,11 +1169,12 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 	// create a session windower with 1 minute timeout
 	windower := session.NewWindower(1*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SessionSumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, SessionSumReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, SessionSumReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 
 	assert.NoError(t, err)
@@ -1222,9 +1251,12 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1242,11 +1274,12 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 	// create a fixed window of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 	assert.NoError(t, err)
 
@@ -1309,12 +1342,12 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		toVertexName: {buffer},
 	}
 
-	// create a store provider
-	storeProvider := memory.NewMemoryStores(memory.WithStoreSize(1000))
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(100))
 
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(cctx, "reduce", pipelineName, 0, storeProvider,
+	pbqManager, err = pbq.NewManager(cctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1332,11 +1365,12 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	// create a fixed windower of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(cctx, keyedVertex, fromBuffer, toBuffer, pbqManager, CounterReduceTest{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(cctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(1))
 	assert.NoError(t, err)
 
@@ -1360,11 +1394,11 @@ func TestDataForward_WithContextClose(t *testing.T) {
 		}
 	}
 
-	var discoveredPartitions []partition.ID
+	var discoveredStores []wal.WAL
 	for {
-		discoveredPartitions, _ = storeProvider.DiscoverPartitions(ctx)
+		discoveredStores, _ = storeManager.DiscoverWALs(ctx)
 
-		if len(discoveredPartitions) == 1 {
+		if len(discoveredStores) == 1 {
 			break
 		}
 		select {
@@ -1377,7 +1411,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 	}
 
 	// even though we have 2 different keys
-	assert.Len(t, discoveredPartitions, 1)
+	assert.Len(t, discoveredStores, 1)
 
 }
 
@@ -1406,9 +1440,12 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 		toVertexName: {buffer1, buffer2},
 	}
 
+	// create store manager
+	storeManager := memory.NewMemManager(memory.WithStoreSize(1000))
+
 	// create pbq manager
 	var pbqManager *pbq.Manager
-	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, memory.NewMemoryStores(memory.WithStoreSize(1000)),
+	pbqManager, err = pbq.NewManager(ctx, "reduce", pipelineName, 0, storeManager,
 		window.Aligned, pbq.WithReadTimeout(1*time.Second), pbq.WithChannelBufferSize(10))
 	assert.NoError(t, err)
 
@@ -1426,11 +1463,12 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 	// create a fixed windower of 5 minutes
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 
-	idleManager := wmb.NewIdleManager(len(toBuffer))
+	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
+	assert.NoError(t, err)
 	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
-	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, &myForwardTestRoundRobin{}, f, publishersMap,
+	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, &myForwardTestRoundRobin{}, f, publishersMap,
 		windower, idleManager, op, WithReadBatchSize(10))
 
 	assert.NoError(t, err)
@@ -1521,6 +1559,13 @@ func fetcherAndPublisher(ctx context.Context, fromBuffer *simplebuffer.InMemoryB
 						GroupBy: &dfv1.GroupBy{},
 					},
 				},
+				FromEdges: []dfv1.CombinedEdge{
+					{
+						Edge: dfv1.Edge{
+							From: "fromVertex",
+						},
+					},
+				},
 			},
 		},
 	}, map[string]wmstore.WatermarkStore{"fromVertex": store}, fetch.WithIsReduce(true))
@@ -1546,11 +1591,11 @@ func buildPublisherMapAndOTStore(ctx context.Context, toBuffers map[string][]isb
 	index := int32(0)
 	for key, partitionedBuffers := range toBuffers {
 		publishEntity := entity.NewProcessorEntity(key)
-		store, _ := wmstore.BuildInmemWatermarkStore(ctx, key)
-		hbWatcherCh, _ := store.HeartbeatStore().Watch(ctx)
-		otWatcherCh, _ := store.OffsetTimelineStore().Watch(ctx)
-		otStores[key] = store.OffsetTimelineStore()
-		p := publish.NewPublish(ctx, publishEntity, store, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
+		wmStore, _ := wmstore.BuildInmemWatermarkStore(ctx, key)
+		hbWatcherCh := wmStore.HeartbeatStore().Watch(ctx)
+		otWatcherCh := wmStore.OffsetTimelineStore().Watch(ctx)
+		otStores[key] = wmStore.OffsetTimelineStore()
+		p := publish.NewPublish(ctx, publishEntity, wmStore, int32(len(partitionedBuffers)), publish.WithAutoRefreshHeartbeatDisabled(), publish.WithPodHeartbeatRate(1))
 		publishers[key] = p
 
 		go func() {

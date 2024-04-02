@@ -54,6 +54,12 @@ kubectl patch -n kube-system deployment metrics-server --type=json -p '[{"op":"a
 - `make test`
   Run unit tests.
 
+- `make test-*`
+  Run one e2e test suite. e.g. `make test-kafka-e2e` to run the kafka e2e suite.
+
+- `make Test*`
+  Run one e2e test case. e.g. `make TestKafkaSourceSink` to run the `TestKafkaSourceSink` case in the kafka e2e suite.
+
 - `make image`
   Build container image, and import it to `k3d`, `kind`, or `minikube` cluster if corresponding `KUBECONFIG` is sourced.
 

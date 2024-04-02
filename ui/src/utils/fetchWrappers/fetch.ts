@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useHistory } from "react-router-dom";
 
 export interface Options {
   skip: boolean;
@@ -12,7 +12,7 @@ export const useFetch = (
   options?: Options
 ) => {
   const location = useLocation();
-  const navigate = useNavigate();
+  const history = useHistory();
   const [data, setData] = useState<any>(undefined);
   const [error, setError] = useState<any>(undefined);
   const [loading, setLoading] = useState<boolean>(
@@ -32,14 +32,16 @@ export const useFetch = (
         if (!response.ok) {
           if (response.status === 401) {
             // Unauthenticated user, redirect to login page
-            navigate(`/login?returnUrl=${location.pathname}`);
+            history.push(`/login?returnUrl=${location.pathname}`);
           } else if (response.status === 403) {
             // Unauthorized user, display given or default error message
             const data = await response.json();
             if (data.errMsg) {
               setError(`Error: ${data.errMsg}`);
             } else {
-              setError(`Error: user is not authorized to execute the requested action.`);
+              setError(
+                `Error: user is not authorized to execute the requested action.`
+              );
             }
           } else {
             setError(`Response code: ${response.status}`);

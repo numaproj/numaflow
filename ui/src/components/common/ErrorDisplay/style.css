@@ -1,9 +1,15 @@
 .error-display-title {
-  font-size: 1.25rem;
+  font-size: 2rem;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.error-display-message {
+  font-size: 1.6rem;
   font-style: normal;
   font-weight: 400;
 }
 
 .error-display-icon {
-  width: 5.625rem;
+  width: 9rem;
 }

@@ -1,6 +1,6 @@
 import HelpIcon from "@mui/icons-material/Help";
 import { HTMLlTooltip } from "../../../utils";
-export const Help = ({ tooltip }) => {
+export const Help = ({ tooltip }: { tooltip: string }) => {
   return (
     <HTMLlTooltip title={tooltip} arrow>
       <HelpIcon

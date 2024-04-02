@@ -1,10 +1,14 @@
 import { useEffect, useState, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { SystemInfo } from "../models/systemInfo";
 import { useFetch } from "./fetch";
 import { getBaseHref } from "../index";
-import { useLocation } from "react-router-dom";
 
-export const useSystemInfoFetch = () => {
+export interface SystemInfoProps {
+  host: string;
+}
+
+export const useSystemInfoFetch = (props: SystemInfoProps) => {
   const location = useLocation();
   const [systemInfo, setSystemInfo] = useState<SystemInfo | undefined>(
     undefined
@@ -16,12 +20,13 @@ export const useSystemInfoFetch = () => {
     () => ({ skip: location.pathname === "/login" }),
     [location.pathname]
   );
+  const { host } = props;
 
   const {
     data,
     loading: fetchLoading,
     error,
-  } = useFetch(`${getBaseHref()}/api/v1/sysinfo`, undefined, options);
+  } = useFetch(`${host}${getBaseHref()}/api/v1/sysinfo`, undefined, options);
 
   useEffect(() => {
     setLoading(fetchLoading);

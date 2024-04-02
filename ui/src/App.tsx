@@ -11,11 +11,9 @@ import Drawer from "@mui/material/Drawer";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Switch, Route, useLocation } from "react-router-dom";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
-import { Cluster } from "./components/pages/Cluster";
-import { Namespaces } from "./components/pages/Namespace";
-import { Pipeline } from "./components/pages/Pipeline";
+import { Routes } from "./components/common/Routes";
 import { Login } from "./components/pages/Login";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
@@ -24,7 +22,12 @@ import {
   SlidingSidebarProps,
 } from "./components/common/SlidingSidebar";
 import { ErrorDisplay } from "./components/common/ErrorDisplay";
-import { AppContextProps, AppError, UserInfo } from "./types/declarations/app";
+import {
+  AppContextProps,
+  AppError,
+  AppProps,
+  UserInfo,
+} from "./types/declarations/app";
 import AccountMenu from "./components/common/AccountMenu";
 import { getBaseHref } from "./utils";
 import logo from "./images/icon.png";
@@ -36,6 +39,9 @@ import "react-toastify/dist/ReactToastify.css";
 export const AppContext = React.createContext<AppContextProps>({
   systemInfo: undefined,
   systemInfoError: undefined,
+  host: "",
+  namespace: "",
+  isPlugin: false,
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   setSidebarProps: () => {},
   errors: [],
@@ -49,14 +55,14 @@ export const AppContext = React.createContext<AppContextProps>({
 
 const MAX_ERRORS = 6;
 
-const EXCLUDE_CRUMBS = {
+const EXCLUDE_CRUMBS: { [key: string]: boolean } = {
   "/login": true,
 };
-const EXCLUDE_APP_BARS = {
+const EXCLUDE_APP_BARS: { [key: string]: boolean } = {
   "/login": true,
 };
 
-function App() {
+function App(props: AppProps) {
   // TODO remove, used for testing ns only installation
   // const { systemInfo, error: systemInfoError } = {
   //   systemInfo: {
@@ -65,6 +71,7 @@ function App() {
   //   },
   //   error: undefined,
   // };
+  const { hostUrl = "", namespace = "" } = props;
   const pageRef = useRef<any>();
   const [pageWidth, setPageWidth] = useState(0);
   const [sidebarProps, setSidebarProps] = useState<
@@ -75,7 +82,12 @@ function App() {
   >();
   const [errors, setErrors] = useState<AppError[]>([]);
   const [userInfo, setUserInfo] = useState<UserInfo | undefined>();
-  const { systemInfo, error: systemInfoError, loading } = useSystemInfoFetch();
+  const {
+    systemInfo,
+    error: systemInfoError,
+    loading,
+  } = useSystemInfoFetch({ host: hostUrl });
+
   const location = useLocation();
 
   useEffect(() => {
@@ -193,46 +205,36 @@ function App() {
     if (systemInfo && systemInfo?.namespaced) {
       // Namespaced installation routing
       return (
-        <Routes>
-          <Route
-            path="/"
-            element={<Namespaces namespaceId={systemInfo.managedNamespace} />}
-          />
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/pipelines/:pipelineId"
-            element={<Pipeline namespaceId={systemInfo.managedNamespace} />}
-          />
-          <Route
-            path="*"
-            element={
-              <main style={{ padding: "1rem" }}>
-                <p>There's nothing here!</p>
-              </main>
-            }
-          />
-        </Routes>
+        <Switch>
+          <Route exact path="/login">
+            <Login />
+          </Route>
+          <Route exact path="/">
+            <Routes managedNamespace={systemInfo.managedNamespace} />
+          </Route>
+          <Route path="*">
+            <main style={{ padding: "1.6rem", fontSize: "1.6rem" }}>
+              <p>There's nothing here!</p>
+            </main>
+          </Route>
+        </Switch>
       );
     }
     // Cluster installation routing
     return (
-      <Routes>
-        <Route path="/" element={<Cluster />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/namespaces/:namespaceId" element={<Namespaces />} />
-        <Route
-          path="/namespaces/:namespaceId/pipelines/:pipelineId"
-          element={<Pipeline />}
-        />
-        <Route
-          path="*"
-          element={
-            <main style={{ padding: "1rem" }}>
-              <p>There's nothing here!</p>
-            </main>
-          }
-        />
-      </Routes>
+      <Switch>
+        <Route exact path="/login">
+          <Login />
+        </Route>
+        <Route exact path="/">
+          <Routes />
+        </Route>
+        <Route path="*">
+          <main style={{ padding: "1.6rem", fontSize: "1.6rem" }}>
+            <p>There's nothing here!</p>
+          </main>
+        </Route>
+      </Switch>
     );
   }, [systemInfo, systemInfoError, loading]);
 
@@ -242,6 +244,9 @@ function App() {
         value={{
           systemInfo,
           systemInfoError,
+          host: hostUrl,
+          namespace,
+          isPlugin: false,
           sidebarProps,
           setSidebarProps,
           errors,
@@ -263,7 +268,7 @@ function App() {
             {!EXCLUDE_APP_BARS[location.pathname] && (
               <Box
                 sx={{
-                  height: "4rem",
+                  height: "6.4rem",
                 }}
               >
                 <AppBar
@@ -292,11 +297,11 @@ function App() {
                   flexDirection: "column",
                   width: "100%",
                   overflow: "auto",
-                  height: "2.0625rem",
+                  height: "3.3rem",
                   background: "#F8F8FB",
                   zIndex: (theme) => theme.zIndex.drawer - 1,
                   position: "fixed",
-                  top: "3.75rem",
+                  top: "6rem",
                 }}
               >
                 <Breadcrumbs />
@@ -309,7 +314,7 @@ function App() {
                 width: "100%",
                 height: "100%",
                 overflow: "auto",
-                marginTop: EXCLUDE_CRUMBS[location.pathname] ? 0 : "2.5rem",
+                marginTop: EXCLUDE_CRUMBS[location.pathname] ? 0 : "4rem",
               }}
             >
               {routes}

@@ -155,11 +155,12 @@ func TestNewDataForward(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
-		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 		fetchWatermark := &testForwardFetcher{}
-		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(1))
+		idleManager, _ := wmb.NewIdleManager(1, 1)
+		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], idleManager)
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -243,7 +244,8 @@ func TestNewDataForward(t *testing.T) {
 		publishWatermark := map[string]publish.Publisher{
 			testVertexName: &testForwarderPublisher{},
 		}
-		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], wmb.NewIdleManager(1))
+		idleManager, _ := wmb.NewIdleManager(1, 1)
+		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], idleManager)
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -326,7 +328,8 @@ func TestWriteToBuffer(t *testing.T) {
 			publishWatermark := map[string]publish.Publisher{
 				"to1": &testForwarderPublisher{},
 			}
-			f, err := NewDataForward(vertexInstance, fromStep, buffer, fetchWatermark, publishWatermark["to1"], wmb.NewIdleManager(1))
+			idleManager, _ := wmb.NewIdleManager(1, 1)
+			f, err := NewDataForward(vertexInstance, fromStep, buffer, fetchWatermark, publishWatermark["to1"], idleManager)
 
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
@@ -348,7 +351,7 @@ func TestWriteToBuffer(t *testing.T) {
 
 			// try to write to buffer after it is full.
 			var messageToStep []isb.Message
-			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil)
 			messageToStep = append(messageToStep, writeMessages[0:value.batchSize+1]...)
 			_, err = f.writeToBuffer(ctx, buffer, messageToStep)
 

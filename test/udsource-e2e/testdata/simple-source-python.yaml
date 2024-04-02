@@ -9,11 +9,11 @@ spec:
         udsource:
           container:
             # A simple user-defined source for e2e testing
-            # See https://github.com/numaproj/numaflow-python/tree/main/examples/source
-            image: quay.io/numaio/numaflow-python/simple-source:v0.6.0
+            # See https://github.com/numaproj/numaflow-python/tree/main/examples/source/simple-source
+            image: quay.io/numaio/numaflow-python/simple-source:stable
             imagePullPolicy: Always
       limits:
-        readBatchSize: 2
+        readBatchSize: 500
     - name: out
       sink:
         log: {}

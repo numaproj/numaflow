@@ -386,7 +386,7 @@ redis_exporter`},
 					},
 					VolumeMode:       &volMode,
 					StorageClassName: nr.Persistence.StorageClassName,
-					Resources: corev1.ResourceRequirements{
+					Resources: corev1.VolumeResourceRequirements{
 						Requests: corev1.ResourceList{
 							corev1.ResourceStorage: volSize,
 						},
@@ -410,7 +410,7 @@ redis_exporter`},
 		spec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:            "volume-permissions",
-				Resources:       standardResources,
+				Resources:       req.DefaultResources,
 				SecurityContext: &corev1.SecurityContext{RunAsUser: &runAsUser0},
 				VolumeMounts:    []corev1.VolumeMount{{Name: req.PvcNameIfNeeded, MountPath: "/data"}},
 				Image:           req.InitContainerImage,

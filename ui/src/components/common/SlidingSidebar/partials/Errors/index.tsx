@@ -19,13 +19,13 @@ export function Errors() {
     const paperStyle = {
       display: "flex",
       flexDirection: "column",
-      padding: "1rem",
+      padding: "1.6rem",
     };
     return (
       <Grid
         container
         spacing={2}
-        sx={{ marginTop: "0.5rem", justifyContent: "center" }}
+        sx={{ marginTop: "0.8rem", justifyContent: "center" }}
       >
         {!errors.length && (
           <Grid item xs={12}>
@@ -44,7 +44,7 @@ export function Errors() {
         ))}
         {!!errors.length && (
           <Button
-            sx={{ marginTop: "1rem" }}
+            sx={{ marginTop: "1.6rem", fontSize: "1.4rem" }}
             onClick={handleClear}
             variant="outlined"
             color="primary"

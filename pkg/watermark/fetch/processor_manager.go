@@ -60,13 +60,7 @@ type processorManager struct {
 
 // newProcessorManager returns a new processorManager instance
 func newProcessorManager(ctx context.Context, wmStore store.WatermarkStore, fromBufferPartitionCount int32, inputOpts ...Option) *processorManager {
-	opts := &options{
-		podHeartbeatRate:         5,
-		refreshingProcessorsRate: 5,
-		isReduce:                 false,
-		isSource:                 false,
-		vertexReplica:            0,
-	}
+	opts := defaultOptions()
 
 	for _, opt := range inputOpts {
 		opt(opts)
@@ -186,14 +180,16 @@ func (v *processorManager) refreshingProcessors() {
 // startHeartBeatWatcher starts the processor Heartbeat Watcher to listen to the processor bucket and update the processor
 // Heartbeat map. In the processor heartbeat bucket we have the structure key: processor-name, value: processor-heartbeat.
 func (v *processorManager) startHeartBeatWatcher() {
-	watchCh, stopped := v.watermarkStore.HeartbeatStore().Watch(v.ctx)
+	watchCh := v.watermarkStore.HeartbeatStore().Watch(v.ctx)
 	for {
 		select {
 		case <-v.ctx.Done():
 			return
-		case <-stopped:
-			return
-		case value := <-watchCh:
+		case value, ok := <-watchCh:
+			if !ok {
+				v.log.Infow("Heartbeat watcher channel closed, watcher stopped", zap.String("hbKVName", v.watermarkStore.HeartbeatStore().GetStoreName()))
+				return
+			}
 			if value == nil {
 				v.log.Warnw("Received nil value from heartbeat watcher")
 				continue
@@ -248,15 +244,17 @@ func (v *processorManager) startHeartBeatWatcher() {
 
 // startTimeLineWatcher starts the processor Timeline Watcher to listen to offset timeline bucket and update the processor's timeline.
 func (v *processorManager) startTimeLineWatcher() {
-	watchCh, stopped := v.watermarkStore.OffsetTimelineStore().Watch(v.ctx)
+	watchCh := v.watermarkStore.OffsetTimelineStore().Watch(v.ctx)
 
 	for {
 		select {
 		case <-v.ctx.Done():
 			return
-		case <-stopped:
-			return
-		case value := <-watchCh:
+		case value, ok := <-watchCh:
+			if !ok {
+				v.log.Infow("Offset timeline watcher channel closed, watcher stopped", zap.String("otKVName", v.watermarkStore.OffsetTimelineStore().GetStoreName()))
+				return
+			}
 			if value == nil {
 				continue
 			}

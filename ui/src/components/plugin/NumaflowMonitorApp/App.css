@@ -1,0 +1,43 @@
+html,
+body,
+#root,
+.MuiScopedCssBaseline-root {
+    height: 100%;
+    font-family: Avenir !important;
+}
+
+.App-side-nav-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.react-flow__attribution {
+    display: none !important;
+}
+
+.logo {
+    width: 4.3rem;
+}
+
+.text-logo {
+    margin-left: 1.296rem;
+    width: 14.6rem;
+}
+
+.app-container {
+    height: 100%;
+}
+
+.MuiAppBar-root {
+    height: 6rem;
+    background: linear-gradient(90deg, #00254A 2.77%, #3492EF 105.54%) !important;
+}
+
+.MuiToolbar-root {
+    padding-left: 2rem !important;
+    min-height: 6rem !important;
+}
+
+.MuiBackdrop-root {
+    opacity: 0 !important;
+}

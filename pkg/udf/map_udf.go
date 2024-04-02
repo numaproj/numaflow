@@ -57,12 +57,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	natsClientPool, err := jsclient.NewClientPool(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create a new NATS client pool: %w", err)
-	}
-	defer natsClientPool.CloseAll()
-
 	fromBuffer := u.VertexInstance.Vertex.OwnedBuffers()
 	log = log.With("protocol", "uds-grpc-map-udf")
 
@@ -80,6 +74,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList(u.VertexInstance.Vertex.GetToBuffers())
 	idleManager = wmb.NewNoOpIdleManager()
 
+	var err error
+
 	// create readers and writers
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -89,13 +85,22 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 	case dfv1.ISBSvcTypeJetStream:
 
-		// build watermark progressors
+		natsClientPool, err := jsclient.NewClientPool(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create a new NATS client pool: %w", err)
+		}
+		defer natsClientPool.CloseAll()
+
 		// multiple go routines can share the same set of writers since nats conn is thread safe
 		// https://github.com/nats-io/nats.go/issues/241
+		readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
+		if err != nil {
+			return err
+		}
 
-		if u.VertexInstance.Vertex.Spec.Watermark.Disabled {
-			// use default no op fetcher, publisher, idleManager
-		} else {
+		// created watermark related components only if watermark is enabled
+		// otherwise no op will used
+		if !u.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			// create from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
@@ -115,11 +120,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			// create watermark publisher using watermark stores
 			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, toVertexWmStores)
 
-			readers, writers, err = buildJetStreamBufferIO(ctx, u.VertexInstance, natsClientPool)
-			if err != nil {
-				return err
-			}
-			idleManager = wmb.NewIdleManager(len(writers))
+			idleManager, _ = wmb.NewIdleManager(len(writers), len(writers))
 		}
 	default:
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
@@ -133,7 +134,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if enableMapUdfStream {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.MapStreamServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -157,7 +158,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	} else {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo()
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.MapServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -243,18 +244,18 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}
 		// create a forwarder for each partition
-		forwarder, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, idleManager, opts...)
+		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, idleManager, opts...)
 		if err != nil {
 			return err
 		}
 		finalWg.Add(1)
 
-		// start the forwarder for each partition using a go routine
+		// start the df for each partition using a go routine
 		go func(fromBufferPartitionName string, isdf *forward.InterStepDataForward) {
 			defer finalWg.Done()
 			log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferPartitionName), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
 
-			stopped := forwarder.Start()
+			stopped := isdf.Start()
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
@@ -268,10 +269,10 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 			<-ctx.Done()
 			log.Info("SIGTERM, exiting inside partition...", zap.String("partition", fromBufferPartitionName))
-			forwarder.Stop()
+			isdf.Stop()
 			wg.Wait()
 			log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
-		}(bufferPartition, forwarder)
+		}(bufferPartition, df)
 	}
 	// create lag readers from buffer readers
 	var lagReaders []isb.LagReader

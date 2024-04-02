@@ -19,10 +19,14 @@ limitations under the License.
 package sideinput_e2e
 
 import (
-	. "github.com/numaproj/numaflow/test/fixtures"
-	"github.com/stretchr/testify/suite"
+	"os"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/suite"
+
+	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
 type SideInputUDSSuite struct {
@@ -36,16 +40,28 @@ func (s *SideInputUDSSuite) setUpTests(pipeLineFile string) *When {
 }
 
 func (s *SideInputUDSSuite) TestSinkWithSideInput() {
+
+	// the side inputs feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		s.T().SkipNow()
+	}
+
 	w := s.setUpTests("@testdata/sideinput_sink.yaml")
 	defer w.DeletePipelineAndWait()
-	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(2*time.Minute))
+	w.Expect().SinkContains("redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
 
 }
 
 func (s *SideInputUDSSuite) TestSourceWithSideInput() {
+
+	// the side inputs feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		s.T().SkipNow()
+	}
+
 	w := s.setUpTests("@testdata/sideinput_source.yaml")
 	defer w.DeletePipelineAndWait()
-	w.Expect().SinkContains("redis-uds", "e2e-even", WithTimeout(2*time.Minute))
+	w.Expect().SinkContains("redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
 
 }
 

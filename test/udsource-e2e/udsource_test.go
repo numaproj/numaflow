@@ -19,12 +19,18 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
+	"math"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
@@ -33,15 +39,15 @@ type UserDefinedSourceSuite struct {
 }
 
 func (s *UserDefinedSourceSuite) testSimpleSourceGo() {
-	s.testSimpleSource("go")
+	s.testSimpleSource("go", true)
 }
 
 func (s *UserDefinedSourceSuite) testSimpleSourceJava() {
-	s.testSimpleSource("java")
+	s.testSimpleSource("java", false)
 }
 
 func (s *UserDefinedSourceSuite) testSimpleSourcePython() {
-	s.testSimpleSource("python")
+	s.testSimpleSource("python", false)
 }
 
 func (s *UserDefinedSourceSuite) TestUDSource() {
@@ -62,7 +68,7 @@ func (s *UserDefinedSourceSuite) TestUDSource() {
 	wg.Wait()
 }
 
-func (s *UserDefinedSourceSuite) testSimpleSource(lang string) {
+func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) {
 	w := s.Given().Pipeline(fmt.Sprintf("@testdata/simple-source-%s.yaml", lang)).
 		When().
 		CreatePipelineAndWait()
@@ -75,11 +81,83 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string) {
 	// such a large amount of data that the redis sink is not able to handle it, it breaks with OOM error
 
 	// the user-defined simple source sends the read index of the message as the message content
-	// verify the sink get the first batch of data
-	w.Expect().VertexPodLogContains("out", "0")
-	w.Expect().VertexPodLogContains("out", "1")
-	// verify the sink get the second batch of data
-	w.Expect().VertexPodLogContains("out", "2")
+	// verify the sink gets the first batch of data(0-499) - checking for some random numbers
+	w.Expect().VertexPodLogContains("out", "147")
+	w.Expect().VertexPodLogContains("out", "258")
+	w.Expect().VertexPodLogContains("out", "369")
+	// verify the sink get the second batch of data(500-999)
+	w.Expect().VertexPodLogContains("out", "520")
+	w.Expect().VertexPodLogContains("out", "630")
+	w.Expect().VertexPodLogContains("out", "999")
+
+	if verifyRate {
+		pipelineName := fmt.Sprintf("simple-source-%s", lang)
+		// wait for the daemon server to come up
+		w.Expect().DaemonPodsRunning().DaemonPodLogContains(pipelineName, LogDaemonStarted)
+		// port-forward daemon server
+		defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
+			TerminateAllPodPortForwards()
+
+		// verify the processing rate match between source and sink
+		client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+		assert.NoError(s.T(), err)
+		defer func() {
+			_ = client.Close()
+		}()
+		// timeout the test if rates don't match within 2 minutes.
+		timer := time.NewTimer(120 * time.Second)
+		// we use 10-second windows for rate calculation
+		// wait for 10 seconds for a new timestamped count entry to be added to the rate calculation windows
+		waitInterval := 10 * time.Second
+		succeedChan := make(chan struct{})
+		go func() {
+			vertexNames := []string{"in", "out"}
+			for {
+				var rates []float64
+				for _, vertexName := range vertexNames {
+					m, err := client.GetVertexMetrics(context.Background(), pipelineName, vertexName)
+					assert.NoError(s.T(), err)
+					assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+					oneMinRate := m[0].ProcessingRates["1m"]
+					rates = append(rates, oneMinRate)
+				}
+				if !ratesMatch(rates) {
+					time.Sleep(waitInterval)
+				} else {
+					succeedChan <- struct{}{}
+					break
+				}
+			}
+		}()
+		select {
+		case <-succeedChan:
+			break
+		case <-timer.C:
+			assert.Fail(s.T(), "timed out waiting for processing rate to match across vertices.")
+		}
+		timer.Stop()
+	}
+}
+
+func ratesMatch(rates []float64) bool {
+	if len(rates) <= 1 {
+		return true
+	}
+	firstVal := rates[0]
+	// the simple source with 2 pods can reach 8k TPS.
+	// we don't compare until the pipeline is stable.
+	// using 5k as a threshold
+	if firstVal < 5000 {
+		return false
+	}
+	for i := 1; i < len(rates); i++ {
+		diff := math.Abs(firstVal - rates[i])
+		// 0.1 - the processing rate compared with source vertex should not be off by more than 10%.
+		if diff > (firstVal * 0.1) {
+			return false
+		}
+	}
+	return true
 }
 
 func TestUserDefinedSourceSuite(t *testing.T) {

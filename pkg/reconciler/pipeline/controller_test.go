@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -64,21 +64,18 @@ var (
 		},
 	}
 
-	fakeConfig = &reconciler.GlobalConfig{
-		ISBSvc: &reconciler.ISBSvcConfig{
-			Redis: &reconciler.RedisConfig{
-				Versions: []reconciler.RedisVersion{
-					{
-						Version:            testVersion,
-						RedisImage:         testImage,
-						SentinelImage:      testSImage,
-						RedisExporterImage: testRedisExporterImage,
-					},
+	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
+		Redis: &reconciler.RedisConfig{
+			Versions: []reconciler.RedisVersion{
+				{
+					Version:            testVersion,
+					RedisImage:         testImage,
+					SentinelImage:      testSImage,
+					RedisExporterImage: testRedisExporterImage,
 				},
 			},
 		},
 	}
-
 	fakeIsbSvcConfig = dfv1.BufferServiceConfig{
 		Redis: &dfv1.RedisConfig{
 			URL:         "xxx",
@@ -110,7 +107,7 @@ func init() {
 
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
-	r := NewReconciler(cl, scheme.Scheme, fakeConfig, testFlowImage, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+	r := NewReconciler(cl, scheme.Scheme, reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig), testFlowImage, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 	_, ok := r.(*pipelineReconciler)
 	assert.True(t, ok)
 }
@@ -127,7 +124,7 @@ func Test_reconcile(t *testing.T) {
 		r := &pipelineReconciler{
 			client:   cl,
 			scheme:   scheme.Scheme,
-			config:   fakeConfig,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 			image:    testFlowImage,
 			logger:   zaptest.NewLogger(t).Sugar(),
 			recorder: record.NewFakeRecorder(64),
@@ -148,6 +145,8 @@ func Test_reconcile(t *testing.T) {
 }
 
 func Test_reconcileEvents(t *testing.T) {
+
+	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	t.Run("test reconcile - invalid name", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
@@ -214,7 +213,7 @@ func Test_buildVertices(t *testing.T) {
 func Test_buildReducesVertices(t *testing.T) {
 	pl := testReducePipeline.DeepCopy()
 	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
-	pl.Spec.Vertices[1].Partitions = pointer.Int32(2)
+	pl.Spec.Vertices[1].Partitions = ptr.To[int32](2)
 	r := buildVertices(pl)
 	assert.Equal(t, 6, len(r))
 	_, existing := r[pl.Name+"-"+pl.Spec.Vertices[1].Name]
@@ -223,40 +222,77 @@ func Test_buildReducesVertices(t *testing.T) {
 }
 
 func Test_pauseAndResumePipeline(t *testing.T) {
-	cl := fake.NewClientBuilder().Build()
-	ctx := context.TODO()
-	testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
-	testIsbSvc.Status.MarkConfigured()
-	testIsbSvc.Status.MarkDeployed()
-	err := cl.Create(ctx, testIsbSvc)
-	assert.Nil(t, err)
-	r := &pipelineReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   fakeConfig,
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-	}
-	testObj := testPipeline.DeepCopy()
-	testObj.Spec.Vertices[0].Scale.Min = pointer.Int32(3)
-	_, err = r.reconcile(ctx, testObj)
-	assert.NoError(t, err)
-	_, err = r.pausePipeline(ctx, testObj)
-	assert.NoError(t, err)
-	v, err := r.findExistingVertices(ctx, testObj)
-	assert.NoError(t, err)
-	assert.Equal(t, int32(0), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
-	assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
-	testObj.Annotations[dfv1.KeyPauseTimestamp] = ""
-	_, err = r.resumePipeline(ctx, testObj)
-	assert.NoError(t, err)
-	v, err = r.findExistingVertices(ctx, testObj)
-	assert.NoError(t, err)
-	// when auto-scaling is enabled, while resuming the pipeline, instead of setting the replicas to Scale.Min,
-	// we set it to one and let auto-scaling to scale up
-	assert.Equal(t, int32(1), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
-	assert.NoError(t, err)
+
+	t.Run("test normal pipeline", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		r := &pipelineReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			image:    testFlowImage,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](3)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		_, err = r.pausePipeline(ctx, testObj)
+		assert.NoError(t, err)
+		v, err := r.findExistingVertices(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, int32(0), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+		assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
+		testObj.Annotations[dfv1.KeyPauseTimestamp] = ""
+		_, err = r.resumePipeline(ctx, testObj)
+		assert.NoError(t, err)
+		v, err = r.findExistingVertices(ctx, testObj)
+		assert.NoError(t, err)
+		// when auto-scaling is enabled, while resuming the pipeline, instead of setting the replicas to Scale.Min,
+		// we set it to one and let auto-scaling to scale up
+		assert.Equal(t, int32(1), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+		assert.NoError(t, err)
+	})
+
+	t.Run("test reduce pipeline", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		r := &pipelineReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			image:    testFlowImage,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testReducePipeline.DeepCopy()
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		_, err = r.pausePipeline(ctx, testObj)
+		assert.NoError(t, err)
+		_, err = r.findExistingVertices(ctx, testObj)
+		assert.NoError(t, err)
+		assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
+		testObj.Annotations[dfv1.KeyPauseTimestamp] = ""
+		_, err = r.resumePipeline(ctx, testObj)
+		assert.NoError(t, err)
+		v, err := r.findExistingVertices(ctx, testObj)
+		assert.NoError(t, err)
+		// reduce UDFs are not autoscalable thus they are scaled manually back to their partition count
+		assert.Equal(t, int32(2), *v[testObj.Name+"-"+testObj.Spec.Vertices[2].Name].Spec.Replicas)
+		assert.NoError(t, err)
+	})
 }
 
 func Test_copyVertexLimits(t *testing.T) {
@@ -390,7 +426,7 @@ func Test_buildISBBatchJob(t *testing.T) {
 					Resources: resources,
 					Env:       []corev1.EnvVar{env},
 					SecurityContext: &corev1.SecurityContext{
-						Privileged: pointer.Bool(false),
+						Privileged: ptr.To[bool](false),
 					},
 				},
 				AbstractPodTemplate: dfv1.AbstractPodTemplate{
@@ -443,7 +479,7 @@ func Test_cleanupBuffers(t *testing.T) {
 	r := &pipelineReconciler{
 		client: cl,
 		scheme: scheme.Scheme,
-		config: fakeConfig,
+		config: reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 		image:  testFlowImage,
 		logger: zaptest.NewLogger(t).Sugar(),
 	}
@@ -485,7 +521,7 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 	r := &pipelineReconciler{
 		client:   cl,
 		scheme:   scheme.Scheme,
-		config:   fakeConfig,
+		config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 		image:    testFlowImage,
 		logger:   zaptest.NewLogger(t).Sugar(),
 		recorder: record.NewFakeRecorder(64),
@@ -520,7 +556,7 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 	r := &pipelineReconciler{
 		client:   cl,
 		scheme:   scheme.Scheme,
-		config:   fakeConfig,
+		config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
 		image:    testFlowImage,
 		logger:   zaptest.NewLogger(t).Sugar(),
 		recorder: record.NewFakeRecorder(64),

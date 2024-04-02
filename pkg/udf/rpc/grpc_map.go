@@ -78,6 +78,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 		Value:     payload,
 		EventTime: timestamppb.New(parentMessageInfo.EventTime),
 		Watermark: timestamppb.New(readMessage.Watermark),
+		Headers:   readMessage.Headers,
 	}
 
 	response, err := u.client.MapFn(ctx, req)
@@ -92,7 +93,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 				Factor:   1,
 				Jitter:   0.1,
 				Steps:    5,
-			}, func() (done bool, err error) {
+			}, func(_ context.Context) (done bool, err error) {
 				response, err = u.client.MapFn(ctx, req)
 				if err != nil {
 					udfErr, _ = sdkerr.FromError(err)

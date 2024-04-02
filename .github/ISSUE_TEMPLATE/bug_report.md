@@ -7,6 +7,8 @@ labels: "bug"
 **Describe the bug**
 A clear and concise description of what the bug is.
 
+
+
 **To Reproduce**
 Steps to reproduce the behavior:
 
@@ -30,8 +32,11 @@ Add any other context about the problem here.
 
 ---
 
+
 <!-- Issue Author: Don't delete this message to encourage other users to support your issue! -->
 
 **Message from the maintainers**:
 
 Impacted by this bug? Give it a 👍. We often sort issues this way to know what to prioritize.
+
+>For quick help and support, join our [slack](https://numaproj.slack.com/join/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg#/shared-invite/email) channel.

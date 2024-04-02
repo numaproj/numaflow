@@ -56,7 +56,7 @@ func NewSideInputsInitializer(isbSvcType dfv1.ISBSvcType, pipelineName, sideInpu
 // and update the values on the disk. This would exit once all the side inputs are initialized.
 func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 	var (
-		natsClient     *jsclient.NATSClient
+		natsClient     *jsclient.Client
 		err            error
 		sideInputStore kvs.KVStorer
 	)
@@ -94,13 +94,14 @@ func (sii *sideInputsInitializer) Run(ctx context.Context) error {
 func startSideInputInitializer(ctx context.Context, store kvs.KVStorer, mountPath string, sideInputs []string) error {
 	log := logging.FromContext(ctx)
 	m := make(map[string][]byte)
-	watchCh, stopped := store.Watch(ctx)
+	watchCh := store.Watch(ctx)
 	for {
 		select {
-		case <-stopped:
-			log.Info("Side Input watcher stopped")
-			return nil
-		case value := <-watchCh:
+		case value, ok := <-watchCh:
+			if !ok {
+				log.Info("Side Input watcher channel closed, watcher stopped")
+				return nil
+			}
 			if value == nil {
 				log.Warnw("Nil value received from Side Input watcher")
 				continue

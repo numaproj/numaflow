@@ -1,16 +1,21 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useFetch } from "./fetch";
 import { getBaseHref } from "../index";
+import { AppContextProps } from "../../types/declarations/app";
+import { AppContext } from "../../App";
 
 export const useNamespaceFetch = (namespaceId: string | undefined) => {
   const [pipelines, setPipelines] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const { host } = useContext<AppContextProps>(AppContext);
 
   const {
     data,
     loading: fetchLoading,
     error,
-  } = useFetch(`${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines`);
+  } = useFetch(
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines`
+  );
 
   useEffect(() => {
     if (fetchLoading) {

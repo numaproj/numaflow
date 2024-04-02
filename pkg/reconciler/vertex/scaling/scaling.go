@@ -30,7 +30,7 @@ import (
 	"go.uber.org/zap"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -215,7 +215,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), daemonClient)
 	}
 
-	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := getBufferInfos(ctx, key, daemonClient, pl, vertex)
+	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := getBufferInfos(ctx, daemonClient, pl, vertex)
 	if err != nil {
 		err := fmt.Errorf("error while fetching buffer info, %w", err)
 		return err
@@ -351,7 +351,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	return nil
 }
 
-func (s *Scaler) desiredReplicas(ctx context.Context, vertex *dfv1.Vertex, partitionProcessingRate []float64, partitionPending []int64, partitionBufferLengths []int64, partitionAvailableBufferLengths []int64) int32 {
+func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partitionProcessingRate []float64, partitionPending []int64, partitionBufferLengths []int64, partitionAvailableBufferLengths []int64) int32 {
 	maxDesired := int32(1)
 	// We calculate the max desired replicas based on the pending messages and processing rate for each partition.
 	for i := 0; i < len(partitionPending); i++ {
@@ -488,7 +488,7 @@ loop:
 func (s *Scaler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, desiredReplicas int32) error {
 	log := logging.FromContext(ctx)
 	origin := vertex.Spec.Replicas
-	vertex.Spec.Replicas = pointer.Int32(desiredReplicas)
+	vertex.Spec.Replicas = ptr.To[int32](desiredReplicas)
 	body, err := json.Marshal(vertex)
 	if err != nil {
 		return fmt.Errorf("failed to marshal vertex object to json, %w", err)
@@ -507,7 +507,6 @@ func KeyOfVertex(vertex dfv1.Vertex) string {
 
 func getBufferInfos(
 	ctx context.Context,
-	key string,
 	d *daemonclient.DaemonClient,
 	pl *dfv1.Pipeline,
 	vertex *dfv1.Vertex,

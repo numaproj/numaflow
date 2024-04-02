@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck
 import { FC, memo, useCallback, useContext, useMemo } from "react";
 import { Tooltip } from "@mui/material";
 import { Handle, NodeProps, Position } from "reactflow";
@@ -56,7 +58,7 @@ const inputColor = {
 };
 
 const isSelected = (selected: boolean) => {
-  return selected ? "0.1875rem solid" : "0.0625rem solid";
+  return selected ? "0.3rem solid" : "0.01rem solid";
 };
 
 const CustomNode: FC<NodeProps> = ({
@@ -87,8 +89,8 @@ const CustomNode: FC<NodeProps> = ({
   );
 
   const handleClick = useCallback(
-    (e) => {
-      const updatedNodeHighlightValues = {};
+    (e: any) => {
+      const updatedNodeHighlightValues: any = {};
       updatedNodeHighlightValues[data?.name] = true;
       if (data?.type === "sideInput")
         updatedNodeHighlightValues[e?.target?.innerText] = true;
@@ -98,7 +100,7 @@ const CustomNode: FC<NodeProps> = ({
   );
 
   const commonStyle = useMemo(() => {
-    const style = {};
+    const style: any = {};
     if (
       !sideInputNodes.has(data?.name) &&
       sideInputNodes.has(Object.keys(highlightValues)[0]) &&
@@ -110,7 +112,7 @@ const CustomNode: FC<NodeProps> = ({
   }, [highlightValues, sideInputNodes, data]);
 
   const blurHandle = (id: string) => {
-    const style = {};
+    const style: any = {};
     if (!highlightValues["---"]) return style;
     const sourceVertex = Object.keys(highlightValues)[0];
     if (sideInputNodes.has(sourceVertex)) {
@@ -159,8 +161,8 @@ const CustomNode: FC<NodeProps> = ({
             <div
               className={"sideInput_node_ele"}
               style={{
-                borderTopLeftRadius: "1rem",
-                borderBottomLeftRadius: "1rem",
+                borderTopLeftRadius: "1.6rem",
+                borderBottomLeftRadius: "1.6rem",
                 ...genStyle(""),
               }}
               data-testid={`sideInput-${data?.name}`}
@@ -183,8 +185,9 @@ const CustomNode: FC<NodeProps> = ({
               className={"sideInput_node_ele"}
               style={{
                 color: getSideInputColor(data?.name),
-                borderTopRightRadius: "1rem",
-                borderBottomRightRadius: "1rem",
+                borderTopRightRadius: "1.6rem",
+                borderBottomRightRadius: "1.6rem",
+                fontSize: "1.6rem",
                 ...genStyle("---"),
               }}
             >
@@ -207,7 +210,7 @@ const CustomNode: FC<NodeProps> = ({
       <div
         className={"generator_node"}
         style={{
-          height: `${(data?.sideInputCount + 1) * 3.4}rem`,
+          height: `${(data?.sideInputCount + 1) * 3.4 * 1.6}rem`,
           ...commonStyle,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -218,7 +221,7 @@ const CustomNode: FC<NodeProps> = ({
   }
 
   const handleInputClick = useCallback(
-    (e) => {
+    (e: any) => {
       e.stopPropagation();
       const targetId = e.target.id;
       let source: string;
@@ -231,7 +234,7 @@ const CustomNode: FC<NodeProps> = ({
           source = node;
         }
       });
-      const updatedHighlightedState = {};
+      const updatedHighlightedState: any = {};
       updatedHighlightedState[source] = true;
       updatedHighlightedState[""] = true;
       setHighlightValues(updatedHighlightedState);
@@ -241,7 +244,7 @@ const CustomNode: FC<NodeProps> = ({
   );
 
   const handleMouseOver = useCallback(
-    (e) => {
+    (e: any) => {
       const targetId = e.target.id;
       let source: string;
 
@@ -255,14 +258,14 @@ const CustomNode: FC<NodeProps> = ({
         }
       });
       setHidden((prevState) => {
-        const updatedState = {};
+        const updatedState: any = {};
         Object.keys(prevState).forEach((key) => {
           updatedState[key] = true;
         });
         updatedState[source] = false;
         return updatedState;
       });
-      const updatedHighlightedState = {};
+      const updatedHighlightedState: any = {};
       updatedHighlightedState[source] = true;
       updatedHighlightedState["---"] = true;
       setHighlightValues(updatedHighlightedState);
@@ -272,7 +275,7 @@ const CustomNode: FC<NodeProps> = ({
 
   const handleMouseOut = useCallback(() => {
     setHidden((prevState) => {
-      const updatedState = {};
+      const updatedState: any = {};
       Object.keys(prevState).forEach((key) => {
         updatedState[key] = true;
       });
@@ -391,7 +394,7 @@ const CustomNode: FC<NodeProps> = ({
             />
           </>
         )}
-        {data?.nodeInfo?.sideInputs?.map((_, idx) => {
+        {data?.nodeInfo?.sideInputs?.map((_: any, idx: number) => {
           return (
             <Handle
               key={idx}
@@ -405,7 +408,7 @@ const CustomNode: FC<NodeProps> = ({
           );
         })}
       </div>
-      {data?.nodeInfo?.sideInputs?.map((input, idx) => {
+      {data?.nodeInfo?.sideInputs?.map((input: any, idx: number) => {
         return (
           <img
             key={idx}

@@ -139,10 +139,12 @@ func TestNewInterStepDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -214,7 +216,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -244,7 +246,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 				}
 			}()
 
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -379,7 +382,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -409,7 +412,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 				}
 			}()
 
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -556,7 +560,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -586,7 +590,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 				}
 			}()
 
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -717,10 +722,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -748,7 +754,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -763,7 +769,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 			}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.True(t, to1.IsEmpty())
@@ -789,7 +796,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
 
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -804,7 +811,8 @@ func TestNewInterStepDataForward(t *testing.T) {
 			}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -922,7 +930,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	}
 
 	ctrlMessage := []isb.Message{{Header: isb.Header{Kind: isb.WMB}}}
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime, nil)
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
 	toVertexWmStores := buildWatermarkStores(toSteps)
@@ -940,7 +948,8 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 		}
 	}()
 
-	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(2))
+	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1093,7 +1102,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 		Replica: 0,
 	}
 
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime, nil)
 
 	fetchWatermark := &testWMBFetcher{WMBTestSameHeadWMB: true}
 	toVertexWmStores := buildWatermarkStores(toSteps)
@@ -1118,7 +1127,8 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 		}
 	}()
 
-	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(2))
+	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1340,12 +1350,13 @@ func TestInterStepDataForwardSinglePartition(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime, nil)
 	fetchWatermark := &testForwardFetcher{}
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
 	// create a forwarder
-	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(5))
+	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1362,6 +1373,7 @@ func TestInterStepDataForwardSinglePartition(t *testing.T) {
 	assert.Len(t, readMessages, int(count))
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[1].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
 	assert.Equal(t, []interface{}{"0-0-receivingVertex-0", "1-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.Headers, writeMessages[1].Header.Headers}, []interface{}{readMessages[0].Header.Headers, readMessages[1].Header.Headers})
 
 	f.Stop()
 	time.Sleep(1 * time.Millisecond)
@@ -1391,12 +1403,14 @@ func TestInterStepDataForwardMultiplePartition(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime)
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), testStartTime, nil)
 	fetchWatermark := &testForwardFetcher{}
 	_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
 	// create a forwarder
-	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(5))
+
+	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to11.IsFull())
 	assert.False(t, to12.IsFull())
@@ -1417,6 +1431,7 @@ func TestInterStepDataForwardMultiplePartition(t *testing.T) {
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[0].Header.Keys, writeMessages[2].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
 	assert.Equal(t, []interface{}{"0-0-receivingVertex-0", "2-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{writeMessages[0].Header.Headers, writeMessages[2].Header.Headers}, []interface{}{readMessages[0].Header.Headers, readMessages[1].Header.Headers})
 
 	time.Sleep(time.Second)
 
@@ -1425,6 +1440,7 @@ func TestInterStepDataForwardMultiplePartition(t *testing.T) {
 	assert.Len(t, readMessages, 2)
 	assert.Equal(t, []interface{}{writeMessages[1].Header.Keys, writeMessages[3].Header.Keys}, []interface{}{readMessages[0].Header.Keys, readMessages[1].Header.Keys})
 	assert.Equal(t, []interface{}{"1-0-receivingVertex-0", "3-0-receivingVertex-0"}, []interface{}{readMessages[0].Header.ID, readMessages[1].Header.ID})
+	assert.Equal(t, []interface{}{writeMessages[1].Header.Headers, writeMessages[3].Header.Headers}, []interface{}{readMessages[0].Header.Headers, readMessages[1].Header.Headers})
 
 	f.Stop()
 	time.Sleep(1 * time.Millisecond)
@@ -1497,7 +1513,8 @@ func TestWriteToBuffer(t *testing.T) {
 			}
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, wmb.NewIdleManager(len(toSteps)), WithReadBatchSize(value.batchSize), WithUDFStreaming(value.streamEnabled))
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(value.batchSize), WithUDFStreaming(value.streamEnabled))
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
 			assert.True(t, buffer.IsEmpty())
@@ -1519,7 +1536,7 @@ func TestWriteToBuffer(t *testing.T) {
 			// try to write to buffer after it is full.
 			var messageToStep = make(map[string][][]isb.Message)
 			messageToStep["to1"] = make([][]isb.Message, 1)
-			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime)
+			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil)
 			messageToStep["to1"][0] = append(messageToStep["to1"][0], writeMessages[0:value.batchSize+1]...)
 			_, err = f.writeToBuffers(ctx, messageToStep)
 

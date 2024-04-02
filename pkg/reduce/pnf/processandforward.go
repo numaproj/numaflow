@@ -63,6 +63,7 @@ type processAndForward struct {
 	windower           window.TimedWindower
 	latestWriteOffsets map[string][][]isb.Offset
 	done               chan struct{}
+	opts               *options
 }
 
 // newProcessAndForward will return a new processAndForward instance
@@ -78,7 +79,16 @@ func newProcessAndForward(ctx context.Context,
 	pw map[string]publish.Publisher,
 	idleManager wmb.IdleManager,
 	manager *pbq.Manager,
-	windower window.TimedWindower) *processAndForward {
+	windower window.TimedWindower,
+	opts ...Option) *processAndForward {
+
+	// apply the options
+	dOpts := &options{}
+	for _, opt := range opts {
+		if err := opt(dOpts); err != nil {
+			logging.FromContext(ctx).Panic("Got an error while applying options", zap.Error(err))
+		}
+	}
 
 	// latestWriteOffsets tracks the latest write offsets for each ISB buffer.
 	// which will be used for publishing the watermark when the window is closed.
@@ -103,6 +113,7 @@ func newProcessAndForward(ctx context.Context,
 		done:               make(chan struct{}),
 		latestWriteOffsets: latestWriteOffsets,
 		log:                logging.FromContext(ctx),
+		opts:               dOpts,
 	}
 	// start the processAndForward routine. This go-routine is collected by the Shutdown method which
 	// listens on the done channel.
@@ -133,7 +144,8 @@ outerLoop:
 	for {
 		select {
 		case err := <-errCh:
-			if errors.Is(err, ctx.Err()) {
+			if errors.Is(err, context.Canceled) {
+				p.log.Infow("Context is canceled, stopping the processAndForward", zap.Error(err), zap.Any("partitionID", p.partitionId))
 				return
 			}
 			if err != nil {
@@ -148,13 +160,18 @@ outerLoop:
 			if response.EOF {
 				// since we track session window for every key, we need to delete the closed windows
 				// when we have received the EOF response from the UDF.
-				// FIXME(session): we need to compact the pbq for unAligned when we have received the EOF response from the UDF.
 				// we should not use p.partitionId here, we should use the partition id from the response.
 				// because for unaligned p.partitionId indicates the shared partition id for the key.
-				p.publishWM(ctx, response.Window.Partition())
+				p.publishWM(ctx, response.Window.EndTime())
 
 				// delete the closed windows which are tracked by the windower
 				p.windower.DeleteClosedWindow(response.Window)
+
+				// FIXME: retry
+				err := p.opts.gcEventsTracker.PersistGCEvent(response.Window)
+				if err != nil {
+					p.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.Any("partitionID", p.partitionId))
+				}
 				continue
 			}
 
@@ -170,7 +187,7 @@ outerLoop:
 	for {
 		select {
 		case err := <-errCh:
-			if errors.Is(err, ctx.Err()) {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 				return
 			}
 			if err != nil {
@@ -190,9 +207,9 @@ outerLoop:
 
 	// for aligned we don't track the windows for every key, we need to delete the window
 	// once we have received all the responses from the UDF.
-	p.publishWM(ctx, p.partitionId)
+	p.publishWM(ctx, p.partitionId.End)
 	// delete the closed windows which are tracked by the windower
-	p.windower.DeleteClosedWindow(window.NewWindowFromPartition(p.partitionId))
+	p.windower.DeleteClosedWindow(window.NewAlignedTimedWindow(p.partitionId.Start, p.partitionId.End, p.partitionId.Slot))
 
 	// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
 	err := p.pbqReader.GC()
@@ -285,7 +302,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 
 	// write to isb with infinite exponential backoff (until shutdown is triggered)
 	var offsets []isb.Offset
-	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func() (done bool, err error) {
+	ctxClosedErr := wait.ExponentialBackoffWithContext(ctx, ISBWriteBackoff, func(_ context.Context) (done bool, err error) {
 		var writeErrs []error
 		var failedMessages []isb.Message
 		offsets, writeErrs = p.toBuffers[edgeName][partition].Write(ctx, writeMessages)
@@ -353,8 +370,7 @@ func (p *processAndForward) writeToBuffer(ctx context.Context, edgeName string, 
 }
 
 // publishWM publishes the watermark to each edge.
-// TODO: support multi partitioned edges.
-func (p *processAndForward) publishWM(ctx context.Context, id *partition.ID) {
+func (p *processAndForward) publishWM(ctx context.Context, endTime time.Time) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,
 	// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
@@ -363,7 +379,7 @@ func (p *processAndForward) publishWM(ctx context.Context, id *partition.ID) {
 	if oldestClosedWindowEndTime != time.UnixMilli(-1) && oldestClosedWindowEndTime.Before(p.partitionId.End) {
 		wm = wmb.Watermark(oldestClosedWindowEndTime.Add(-1 * time.Millisecond))
 	} else {
-		wm = wmb.Watermark(id.End.Add(-1 * time.Millisecond))
+		wm = wmb.Watermark(endTime.Add(-1 * time.Millisecond))
 	}
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
@@ -379,7 +395,7 @@ func (p *processAndForward) publishWM(ctx context.Context, id *partition.ID) {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is not idling
-					p.idleManager.Reset(p.toBuffers[toVertexName][index].GetName())
+					p.idleManager.MarkActive(wmb.PARTITION_0, p.toBuffers[toVertexName][index].GetName())
 				}
 			}
 		}
@@ -392,7 +408,7 @@ func (p *processAndForward) publishWM(ctx context.Context, id *partition.ID) {
 		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
 			if !activePartition {
 				if publisher, ok := p.wmPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, p.toBuffers[toVertexName][index], publisher, p.idleManager, p.log, dfv1.VertexTypeReduceUDF, wm)
+					idlehandler.PublishIdleWatermark(ctx, wmb.PARTITION_0, p.toBuffers[toVertexName][index], publisher, p.idleManager, p.log, p.vertexName, p.pipelineName, dfv1.VertexTypeReduceUDF, p.vertexReplica, wm)
 				}
 			}
 		}

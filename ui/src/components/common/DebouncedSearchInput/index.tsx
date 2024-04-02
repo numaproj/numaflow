@@ -16,7 +16,7 @@ export function DebouncedSearchInput({
   placeHolder,
   onChange,
 }: DebouncedSearchInputProps) {
-  const [timerId, setTimerId] = useState<number | undefined>();
+  const [timerId, setTimerId] = useState<any | undefined>();
 
   const debounceValue = useCallback(
     (updatedValue: string) => {
@@ -49,10 +49,10 @@ export function DebouncedSearchInput({
       sx={{
         background: "#FFFFFF",
         flexGrow: "2",
-        maxWidth: "39.375rem",
-        minWidth: "15.625rem",
+        maxWidth: "63rem",
+        minWidth: "25rem",
         border: "1px solid #6B6C72",
-        borderRadius: "0.25rem",
+        borderRadius: "0.4rem",
       }}
       variant="outlined"
       placeholder={placeHolder}
@@ -60,9 +60,14 @@ export function DebouncedSearchInput({
       InputProps={{
         startAdornment: (
           <InputAdornment position="start">
-            <SearchIcon sx={{ color: "#241C15" }} />
+            <SearchIcon
+              sx={{ color: "#241C15", height: "2.4rem", width: "2.4rem" }}
+            />
           </InputAdornment>
         ),
+        sx: {
+          fontSize: "1.6rem",
+        },
       }}
       onChange={handleInputChange}
       data-testid="debounced-search-input"

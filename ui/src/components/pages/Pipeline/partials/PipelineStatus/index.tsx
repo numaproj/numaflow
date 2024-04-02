@@ -8,21 +8,31 @@ import {
 
 import "./style.css";
 
-export function PipelineStatus({ status, healthStatus, healthData }) {
+export interface PipelineStatusProps {
+  status: any;
+  healthStatus: string;
+  healthData: any;
+}
+
+export function PipelineStatus({
+  status,
+  healthStatus,
+  healthData,
+}: PipelineStatusProps) {
   return (
     <Box
       sx={{
         display: "flex",
         flexDirection: "column",
-        marginTop: "0.375rem",
+        marginTop: "0.6rem",
         flexGrow: 1,
-        paddingLeft: "1rem",
+        paddingLeft: "1.6rem",
       }}
     >
       <Box sx={{ width: "fit-content" }}>
         <span className={"pipeline-status-title"}>STATUS</span>
         <Box
-          sx={{ display: "flex", flexDirection: "row", marginTop: "0.3125rem" }}
+          sx={{ display: "flex", flexDirection: "row", marginTop: "0.5rem" }}
         >
           <Box sx={{ display: "flex", flexDirection: "row" }}>
             <Box sx={{ display: "flex", flexDirection: "column" }}>
@@ -41,7 +51,7 @@ export function PipelineStatus({ status, healthStatus, healthData }) {
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                marginLeft: "0.3125rem",
+                marginLeft: "0.5rem",
               }}
             >
               <span className="pipeline-logo-text">{StatusString[status]}</span>

@@ -8,12 +8,13 @@ export interface StatusCountsProps {
     healthy: number;
     warning: number;
     critical: number;
+    [key: string]: number;
   };
 }
 
 export function StatusCounts(counts: StatusCountsProps) {
   return (
-    <Box sx={{ display: "flex", flexDirection: "row", marginLeft: "0.5rem" }}>
+    <Box sx={{ display: "flex", flexDirection: "row", marginLeft: "0.8rem" }}>
       {Object.keys(counts.counts).map((key) => {
         return (
           <Box
@@ -37,7 +38,7 @@ export function StatusCounts(counts: StatusCountsProps) {
                   alt={key}
                   className="status-icon-img"
                 />
-                <span style={{ marginLeft: "0.5rem" }} className="bold-text">
+                <span style={{ marginLeft: "0.8rem" }} className="bold-text">
                   : {counts.counts[key]}
                 </span>
               </Box>
@@ -47,9 +48,9 @@ export function StatusCounts(counts: StatusCountsProps) {
                   flexDirection: "row",
                   textTransform: "capitalize",
                   color: "#3C4348",
-                  fontSize: "0.75rem",
+                  fontSize: "1.2rem",
                   fontWeight: "400",
-                  lineHeight: "1.46875rem",
+                  lineHeight: "2.35rem",
                   wordWrap: "break-word",
                 }}
               >
