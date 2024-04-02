@@ -437,7 +437,6 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 
 	for _, message := range messages {
 		if message.Kind == isb.Data {
-			//log.Println("read message - ", message.ReadOffset.String(), " vertex - ", df.vertexName, " replica - ", df.vertexReplica, " value - ", string(message.Payload))
 			dataMessages = append(dataMessages, message)
 		} else {
 			ctrlMessages = append(ctrlMessages, message)

@@ -58,7 +58,6 @@ type ProcessAndForward struct {
 	pnfRoutines         map[string]chan struct{}
 	responseCh          chan *window.TimedWindowResponse
 	latestWriteOffsets  map[string][][]isb.Offset
-	writeMessages       []*isb.WriteMessage
 	opts                *options
 	log                 *zap.SugaredLogger
 	forwardDoneCh       chan struct{}
@@ -109,7 +108,6 @@ func NewProcessAndForward(ctx context.Context,
 		windower:            windower,
 		responseCh:          make(chan *window.TimedWindowResponse),
 		latestWriteOffsets:  latestWriteOffsets,
-		writeMessages:       make([]*isb.WriteMessage, 0),
 		pnfRoutines:         make(map[string]chan struct{}),
 		log:                 logging.FromContext(ctx),
 		forwardDoneCh:       make(chan struct{}),
@@ -172,97 +170,136 @@ func (pm *ProcessAndForward) forwardResponses(ctx context.Context) {
 	defer close(pm.forwardDoneCh)
 
 	flushTimer := time.NewTicker(pm.opts.flushDuration)
+	writeMessages := make([]*isb.WriteMessage, 0, pm.opts.batchSize)
 
+	// error != nil only when the context is closed, so we can safely return (our write loop will try indefinitely
+	// unless ctx.Done() happens)
+forwardLoop:
 	for {
 		select {
 		case response, ok := <-pm.responseCh:
 			if !ok {
-				return
+				break forwardLoop
 			}
 
-			// Process the response
-			err := pm.processResponse(ctx, response)
-			// error != nil only when the context is closed, so we can safely return (our write loop will try indefinitely
-			// unless ctx.Done() happens)
-			if err != nil {
-				pm.log.Errorw("Error while processing response, ctx was canceled", zap.Error(err))
-				return
+			if response.EOF {
+				if err := pm.forwardToBuffers(ctx, &writeMessages); err != nil {
+					return
+				}
+
+				if err := pm.handleEOFResponse(ctx, response); err != nil {
+					return
+				}
+
+				// we do not have to write anything as this is a EOF message
+				continue
+			}
+
+			// append the write message to the array
+			writeMessages = append(writeMessages, response.WriteMessage)
+
+			// if the batch size is reached, forward the messages to the ISB
+			if len(writeMessages) >= pm.opts.batchSize {
+				if err := pm.forwardToBuffers(ctx, &writeMessages); err != nil {
+					return
+				}
 			}
 
 		case <-flushTimer.C:
 			// if there are no messages to write, continue
-			if len(pm.writeMessages) == 0 {
+			if len(writeMessages) == 0 {
 				continue
 			}
-			// Since flushTimer is triggered, forward the messages to the ISBs
-			err := pm.forwardToBuffers(ctx)
-			// error != nil only when the context is closed, so we can safely return (our write loop will try indefinitely
-			// unless ctx.Done() happens)
-			if err != nil {
-				pm.log.Errorw("Error while forwarding messages, ctx was canceled", zap.Error(err))
+
+			// Since flushTimer is triggered, forward the messages to the ISB
+			if err := pm.forwardToBuffers(ctx, &writeMessages); err != nil {
 				return
 			}
 		}
 	}
+
+	// if there are any messages left, forward them to the ISB
+	if len(writeMessages) > 0 {
+		if err := pm.forwardToBuffers(ctx, &writeMessages); err != nil {
+			return
+		}
+	}
 }
 
-// processResponse processes a response received from the response channel.
-func (pm *ProcessAndForward) processResponse(ctx context.Context, response *window.TimedWindowResponse) error {
-	if response.EOF {
-		err := pm.forwardToBuffers(ctx)
-		// error will not be nil only when the context is closed, so we can safely return
-		if err != nil {
-			return err
-		}
+// handleEOFResponse handles the EOF response received from the response channel. It publishes the watermark and invokes GC on PBQ.
+func (pm *ProcessAndForward) handleEOFResponse(ctx context.Context, response *window.TimedWindowResponse) error {
+	// publish watermark
+	pm.publishWM(ctx, response.Window.Partition())
 
-		// publish watermark
-		pm.publishWM(ctx, response.Window.Partition())
+	// delete the closed windows which are tracked by the windower
+	pm.windower.DeleteClosedWindow(response.Window)
 
-		// delete the closed windows which are tracked by the windower
-		pm.windower.DeleteClosedWindow(response.Window)
+	var infiniteBackoff = wait.Backoff{
+		Steps:    math.MaxInt,
+		Duration: 1 * time.Second,
+		Factor:   1.5,
+		Jitter:   0.1,
+	}
 
-		// persist the GC event for unaligned window type (compactor will compact it) and invoke GC for aligned window type
-		if pm.windower.Type() == window.Unaligned {
+	// persist the GC event for unaligned window type (compactor will compact it) and invoke GC for aligned window type.
+	if pm.windower.Type() == window.Unaligned {
+		err := wait.ExponentialBackoff(infiniteBackoff, func() (done bool, err error) {
+			var attempt int
 			err = pm.opts.gcEventsTracker.PersistGCEvent(response.Window)
 			if err != nil {
-				pm.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", response.Window.ID()))
-			}
-		} else {
-			pid := *response.Window.Partition()
-
-			if pbqReader := pm.pbqManager.GetPBQ(pid); pbqReader != nil {
-				// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
-				err = pbqReader.GC()
-				if err != nil {
-					pm.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.String("partitionID", pid.String()))
-					return err
+				attempt++
+				pm.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", response.Window.ID()), zap.Int("attempt", attempt))
+				// no point retrying if ctx.Done has been invoked
+				select {
+				case <-ctx.Done():
+					// no point in retrying after we have been asked to stop.
+					return false, ctx.Err()
+				default:
+					// keep retrying
+					return false, nil
 				}
-				pm.log.Infow("Finished GC", zap.String("partitionID", pid.String()))
-
 			}
-
-		}
-		// we do not have to write anything as this is a EOF message
-		return nil
-	}
-
-	pm.writeMessages = append(pm.writeMessages, response.WriteMessage)
-
-	// if the batch size is reached, forward the messages to the ISBs
-	if len(pm.writeMessages) > pm.opts.batchSize {
-		err := pm.forwardToBuffers(ctx)
-		// error will not be nil only when the context is closed, so we can safely return
+			return true, nil
+		})
 		if err != nil {
 			return err
 		}
+	} else {
+		pid := *response.Window.Partition()
+		pbqReader := pm.pbqManager.GetPBQ(*response.Window.Partition())
+		err := wait.ExponentialBackoff(infiniteBackoff, func() (done bool, err error) {
+			var attempt int
+			err = pbqReader.GC()
+			if err != nil {
+				attempt++
+				pm.log.Errorw("Got an error while invoking GC on PBQ", zap.Error(err), zap.String("partitionID", pid.String()), zap.Int("attempt", attempt))
+				// no point retrying if ctx.Done has been invoked
+				select {
+				case <-ctx.Done():
+					// no point in retrying after we have been asked to stop.
+					return false, ctx.Err()
+				default:
+					// keep retrying
+					return false, nil
+				}
+			}
+			return true, nil
+		})
+		if err != nil {
+			return err
+		}
+		pm.log.Infow("Finished GC", zap.String("partitionID", pid.String()))
 	}
-
 	return nil
 }
 
 // forwardToBuffers writes the messages to the ISBs concurrently for each partition.
-func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context) error {
-	messagesToStep := pm.whereToStep(pm.writeMessages)
+func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context, writeMessages *[]*isb.WriteMessage) error {
+	if len(*writeMessages) == 0 {
+		return nil
+	}
+
+	messagesToStep := pm.whereToStep(*writeMessages)
 	// parallel writes to each ISB
 	var mu sync.Mutex
 	// use error group
@@ -294,7 +331,8 @@ func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context) error {
 		return err
 	}
 
-	pm.writeMessages = make([]*isb.WriteMessage, 0)
+	// clear the writeMessages
+	*writeMessages = make([]*isb.WriteMessage, 0, pm.opts.batchSize)
 	return nil
 }
 
