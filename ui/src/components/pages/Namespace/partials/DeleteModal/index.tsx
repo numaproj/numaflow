@@ -76,16 +76,16 @@ export function DeleteModal({
       left: "50%",
       transform: "translate(-50%, -50%)",
       bgcolor: "background.paper",
-      borderRadius: "0.3125rem",
+      borderRadius: "0.5rem",
       boxShadow: 24,
-      padding: "2rem",
+      padding: "3.2rem",
     };
     const buttonContainerStyle = {
       display: "flex",
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-evenly",
-      marginTop: "1rem",
+      marginTop: "1.6rem",
     };
     if ((type === "pipeline" && !pipelineId) || (type === "isb" && !isbId)) {
       return <Box sx={containerStyle}>Missing Props</Box>;
@@ -105,10 +105,16 @@ export function DeleteModal({
               onClick={handleDelete}
               variant="contained"
               color="secondary"
+              sx={{ fontSize: "1.4rem" }}
             >
               Try again
             </Button>
-            <Button onClick={onCancel} variant="outlined" color="primary">
+            <Button
+              onClick={onCancel}
+              variant="outlined"
+              color="primary"
+              sx={{ fontSize: "1.4rem" }}
+            >
               Cancel
             </Button>
           </Box>
@@ -122,10 +128,20 @@ export function DeleteModal({
             <CircularProgress />
           </Box>
           <Box sx={buttonContainerStyle}>
-            <Button variant="contained" color="secondary" disabled>
+            <Button
+              variant="contained"
+              color="secondary"
+              disabled
+              sx={{ fontSize: "1.4rem" }}
+            >
               Delete
             </Button>
-            <Button variant="outlined" color="primary" disabled>
+            <Button
+              variant="outlined"
+              color="primary"
+              disabled
+              sx={{ fontSize: "1.4rem" }}
+            >
               Cancel
             </Button>
           </Box>
@@ -158,10 +174,16 @@ export function DeleteModal({
             variant="contained"
             color="secondary"
             data-testid="delete-confirmation-button"
+            sx={{ fontSize: "1.4rem" }}
           >
             Delete
           </Button>
-          <Button onClick={onCancel} variant="outlined" color="primary">
+          <Button
+            onClick={onCancel}
+            variant="outlined"
+            color="primary"
+            sx={{ fontSize: "1.4rem" }}
+          >
             Cancel
           </Button>
         </Box>

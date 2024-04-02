@@ -1,13 +1,13 @@
 .pipeline-logo {
-    width: 1.5rem;
+    width: 2.4rem;
 }
 
 .pipeline-logo-text {
     color: #3C4348;
-    font-size: 0.875rem;
+    font-size: 1.4rem;
     font-style: normal;
     font-weight: 400;
-    margin-top: 0.125rem;
+    margin-top: 0.2rem;
 }
 
 .health-tooltip-text {

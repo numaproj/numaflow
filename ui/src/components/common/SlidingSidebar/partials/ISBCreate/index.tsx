@@ -226,7 +226,7 @@ export function ISBCreate({
         sx={{
           display: "flex",
           flexDirection: "row",
-          marginBottom: "2rem",
+          marginBottom: "3.2rem",
         }}
       >
         <span className="isb-spec-header-text">Create ISB Service</span>

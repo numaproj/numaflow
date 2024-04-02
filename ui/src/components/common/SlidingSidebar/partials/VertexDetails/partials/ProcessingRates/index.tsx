@@ -60,7 +60,7 @@ export function ProcessingRates({
         height: "100%",
       }}
     >
-      <TableContainer sx={{ maxHeight: "37.5rem", backgroundColor: "#FFF" }}>
+      <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
         <Table stickyHeader>
           <TableHead>
             <TableRow>

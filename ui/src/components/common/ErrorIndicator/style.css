@@ -1,4 +1,9 @@
 .error-indicator-text {
-  margin-left: 0.5rem;
-  min-width: 6.5625rem;
+  margin-left: 0.8rem;
+  min-width: 10.5rem;
+  font-size: 1.6rem;
+}
+
+.error-tooltip {
+  font-size: 1.1rem;
 }

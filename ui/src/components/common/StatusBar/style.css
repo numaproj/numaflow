@@ -1,36 +1,36 @@
 .status-bar {
   display: flex;
   flex-direction: row;
-  width: 16.3125rem;
-  height: 0.75rem;
-  border-radius: 0.5rem;
+  width: 26.1rem;
+  height: 1.2rem;
+  border-radius: 0.8rem;
   background: linear-gradient(90deg, #00C14E 50%, rgba(224, 192, 23, 0.53) 75.46%, #D1071F 96.83%);
 }
 
 .status-bar-tick {
-  width: 0.0625rem;
-  height: 0.75rem;
+  width: 0.1rem;
+  height: 1.2rem;
   background: #F8F8FB;
 }
 
 .status-bar-warn-tick {
-  margin-left: 11.5625rem;
+  margin-left: 18.5rem;
 }
 
 .status-bar-critical-tick {
-  margin-left: 2.4375rem;
+  margin-left: 3.9rem;
 }
 
 .status-bar-status-value {
   color: #393A3D;
-  font-size: 1rem;
+  font-size: 1.6rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .status-bar-status-text {
   color: #393A3D;
-  font-size: 0.625rem;
+  font-size: 1rem;
   font-style: normal;
   font-weight: 400;
 }

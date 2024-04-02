@@ -214,7 +214,7 @@ export function NamespaceListingWrapper({
       sx={{
         display: "flex",
         flexDirection: "column",
-        padding: "0 2.625rem",
+        padding: "0 4.2rem",
       }}
       data-testid="namespace-pipeline-listing"
     >
@@ -246,10 +246,12 @@ export function NamespaceListingWrapper({
             sx={{
               display: "flex",
               flexDirection: "column",
-              marginLeft: "1rem",
+              marginLeft: "1.6rem",
             }}
           >
-            <label style={{ color: "#6B6C72" }}>Health</label>
+            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+              Health
+            </label>
             <Select
               label="Health"
               defaultValue="All"
@@ -258,10 +260,11 @@ export function NamespaceListingWrapper({
                 id: "health",
               }}
               style={{
-                width: "14rem",
+                width: "22.4rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "2.125rem",
+                height: "3.4rem",
+                fontSize: "1.6rem",
               }}
               onChange={handleHealthFilterChange}
             >
@@ -269,7 +272,7 @@ export function NamespaceListingWrapper({
                 <MenuItem
                   key={health}
                   value={health}
-                  sx={{ textTransform: "capitalize" }}
+                  sx={{ textTransform: "capitalize", fontSize: "1.6rem" }}
                 >
                   {health}
                 </MenuItem>
@@ -280,11 +283,13 @@ export function NamespaceListingWrapper({
             sx={{
               display: "flex",
               flexDirection: "column",
-              marginLeft: "1rem",
-              marginRight: "20rem",
+              marginLeft: "1.6rem",
+              marginRight: "32rem",
             }}
           >
-            <label style={{ color: "#6B6C72" }}>Status</label>
+            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+              Status
+            </label>
             <Select
               label="Status"
               defaultValue="All"
@@ -293,10 +298,11 @@ export function NamespaceListingWrapper({
                 id: "health",
               }}
               style={{
-                width: "14rem",
+                width: "22.4rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "2.125rem",
+                height: "3.4rem",
+                fontSize: "1.6rem",
               }}
               onChange={handleStatusFilterChange}
             >
@@ -304,7 +310,10 @@ export function NamespaceListingWrapper({
                 <MenuItem
                   key={status}
                   value={status}
-                  sx={{ textTransform: "capitalize" }}
+                  sx={{
+                    textTransform: "capitalize",
+                    fontSize: "1.6rem",
+                  }}
                 >
                   {StatusString[status]}
                 </MenuItem>
@@ -320,7 +329,7 @@ export function NamespaceListingWrapper({
         sx={{
           display: "flex",
           flexDirection: "row",
-          marginTop: "2rem",
+          marginTop: "3.2rem",
           borderBottom: "1px solid #DBD9D2",
         }}
       >
@@ -335,10 +344,16 @@ export function NamespaceListingWrapper({
           <Box>
             <Tabs value={tabValue} onChange={handleTabsChange}>
               <Tab
+                sx={{
+                  fontSize: "1.4rem",
+                }}
                 value={NamespacePipelineListingTabs[0].value}
                 label={NamespacePipelineListingTabs[0].label}
               />
               <Tab
+                sx={{
+                  fontSize: "1.4rem",
+                }}
                 value={NamespacePipelineListingTabs[1].value}
                 label={NamespacePipelineListingTabs[1].label}
               />
@@ -349,7 +364,7 @@ export function NamespaceListingWrapper({
               display: "flex",
               flexDirection: "row",
               textDecoration: "none",
-              marginBottom: "0.7rem",
+              marginBottom: "1.12rem",
             }}
           >
             <Button
@@ -357,8 +372,9 @@ export function NamespaceListingWrapper({
               startIcon={<PlusIcon />}
               size="medium"
               sx={{
-                marginRight: "0.625rem",
+                marginRight: "1rem",
                 justifyContent: "flex-end",
+                fontSize: "1.4rem",
               }}
               onClick={handleCreatePiplineClick}
             >
@@ -369,7 +385,7 @@ export function NamespaceListingWrapper({
               startIcon={<PlusIcon />}
               size="small"
               onClick={handleCreateISBClick}
-              sx={{ justifyContent: "flex-end" }}
+              sx={{ justifyContent: "flex-end", fontSize: "1.4rem" }}
             >
               Create ISB Service
             </Button>
@@ -382,13 +398,13 @@ export function NamespaceListingWrapper({
           flexDirection: "row",
           flexGrow: 1,
           justifyContent: "center",
-          marginTop: "1.5rem",
+          marginTop: "2.4rem",
         }}
       >
         {sortOptions.map((option) => {
           return (
             <Button
-              sx={{ color: "#393A3D" }}
+              sx={{ color: "#393A3D", fontSize: "1.4rem" }}
               onClick={(e) => {
                 handleSortChange(e, option.value);
               }}
@@ -398,9 +414,9 @@ export function NamespaceListingWrapper({
               {option.label}{" "}
               {orderBy.value === option.value ? (
                 orderBy.sortOrder === ASC ? (
-                  <ArrowUpwardIcon fontSize="small" />
+                  <ArrowUpwardIcon fontSize="large" />
                 ) : (
-                  <ArrowDownwardIcon fontSize="small" />
+                  <ArrowDownwardIcon fontSize="large" />
                 )
               ) : (
                 ""
