@@ -123,14 +123,13 @@ func NewProcessAndForward(ctx context.Context,
 
 // AsyncSchedulePnF creates a go routine for each partition to invoke the UDF.
 // does not maintain the order of execution between partitions.
-func (pm *ProcessAndForward) AsyncSchedulePnF(ctx context.Context,
-	partitionID *partition.ID,
-	pbq pbq.Reader,
-) {
+func (pm *ProcessAndForward) AsyncSchedulePnF(ctx context.Context, partitionID *partition.ID, pbq pbq.Reader) {
 	doneCh := make(chan struct{})
+
 	pm.mu.Lock()
 	pm.pnfRoutines[partitionID.String()] = doneCh
 	pm.mu.Unlock()
+
 	go pm.invokeUDF(ctx, doneCh, partitionID, pbq)
 }
 
@@ -489,7 +488,6 @@ func (pm *ProcessAndForward) Shutdown() {
 	for _, doneCh := range doneChs {
 		<-doneCh
 	}
-
 	pm.log.Infow("All PnFs have finished, waiting for forwardDoneCh to be done")
 
 	// close the response channel
