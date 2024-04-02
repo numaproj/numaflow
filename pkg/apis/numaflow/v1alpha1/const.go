@@ -172,6 +172,10 @@ const (
 	DefaultWALCompactionDuration    = 60 * time.Second               // Default compaction duration
 	DefaultCompactWALPath           = PathPBQMount + "/compact-wals" // Default compaction wal path
 
+	// Default Pnf options
+	DefaultPnfBatchSize     = 100         // Default flush batch size for pnf
+	DefaultPnfFlushDuration = time.Second // Default flush duration for pnf
+
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 

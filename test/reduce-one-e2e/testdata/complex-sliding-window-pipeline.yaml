@@ -78,7 +78,7 @@ spec:
               accessMode: ReadWriteOnce
     - name: sink
       scale:
-          min: 1
+        min: 1
       sink:
         udsink:
           container:

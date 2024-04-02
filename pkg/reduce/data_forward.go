@@ -437,6 +437,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 
 	for _, message := range messages {
 		if message.Kind == isb.Data {
+			//log.Println("read message - ", message.ReadOffset.String(), " vertex - ", df.vertexName, " replica - ", df.vertexReplica, " value - ", string(message.Payload))
 			dataMessages = append(dataMessages, message)
 		} else {
 			ctrlMessages = append(ctrlMessages, message)
@@ -589,7 +590,6 @@ func (df *DataForward) shouldDropMessage(message *isb.ReadMessage) bool {
 	// to be violated.
 	// df.currentWatermark cannot be -1 except for the first time till it gets a valid watermark (wm > -1)
 	if !message.IsLate && message.EventTime.Before(df.currentWatermark.Add(-1*df.opts.allowedLateness)) {
-		// TODO: track as a counter metric
 		df.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message))
 		// mark it as a successfully written message as the message will be acked to avoid subsequent retries
 		// let's not continue processing this message, most likely the window has already been closed and the message

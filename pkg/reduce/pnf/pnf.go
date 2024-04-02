@@ -19,7 +19,6 @@ package pnf
 import (
 	"context"
 	"errors"
-	"log"
 	"math"
 	"strconv"
 	"sync"
@@ -59,6 +58,7 @@ type ProcessAndForward struct {
 	pnfRoutines         map[string]chan struct{}
 	responseCh          chan *window.TimedWindowResponse
 	latestWriteOffsets  map[string][][]isb.Offset
+	writeMessages       []*isb.WriteMessage
 	opts                *options
 	log                 *zap.SugaredLogger
 	forwardDoneCh       chan struct{}
@@ -79,7 +79,10 @@ func NewProcessAndForward(ctx context.Context,
 	opts ...Option) *ProcessAndForward {
 
 	// apply the options
-	dOpts := &options{}
+	dOpts := &options{
+		batchSize:     dfv1.DefaultPnfBatchSize,
+		flushDuration: dfv1.DefaultPnfFlushDuration,
+	}
 	for _, opt := range opts {
 		if err := opt(dOpts); err != nil {
 			logging.FromContext(ctx).Panic("Got an error while applying options", zap.Error(err))
@@ -106,6 +109,7 @@ func NewProcessAndForward(ctx context.Context,
 		windower:            windower,
 		responseCh:          make(chan *window.TimedWindowResponse),
 		latestWriteOffsets:  latestWriteOffsets,
+		writeMessages:       make([]*isb.WriteMessage, 0),
 		pnfRoutines:         make(map[string]chan struct{}),
 		log:                 logging.FromContext(ctx),
 		forwardDoneCh:       make(chan struct{}),
@@ -168,50 +172,98 @@ outerLoop:
 func (pm *ProcessAndForward) forwardResponses(ctx context.Context) {
 	defer close(pm.forwardDoneCh)
 
-	for response := range pm.responseCh {
-		if response.EOF {
-			// publish watermark
-			pm.publishWM(ctx, response.Window.Partition())
+	flushTimer := time.NewTicker(pm.opts.flushDuration)
 
-			// delete the closed windows which are tracked by the windower
-			pm.windower.DeleteClosedWindow(response.Window)
-
-			// persist the GC event for unaligned window type (compactor will compact it) and invoke GC for aligned window type
-			if pm.windower.Type() == window.Unaligned {
-				err := pm.opts.gcEventsTracker.PersistGCEvent(response.Window)
-				if err != nil {
-					pm.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", response.Window.ID()))
-				}
-			} else {
-				pid := *response.Window.Partition()
-
-				if pbqReader := pm.pbqManager.GetPBQ(pid); pbqReader != nil {
-					err := pbqReader.GC()
-					// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
-					if err != nil {
-						pm.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.String("partitionID", pid.String()))
-						return
-					}
-					pm.log.Infow("Finished GC", zap.String("partitionID", pid.String()))
-
-				}
-
+	for {
+		select {
+		case response, ok := <-pm.responseCh:
+			if !ok {
+				return
 			}
-			continue
-		}
 
-		err := pm.forwardToBuffers(ctx, response)
-		// error will not be nil only when the context is closed, so we can safely return
-		if err != nil {
-			pm.log.Errorw("Context was closed while forwarding messages to ISB", zap.Error(err))
-			return
+			// Process the response
+			err := pm.processResponse(ctx, response)
+			// error != nil only when the context is closed, so we can safely return (our write loop will try indefinitely
+			// unless ctx.Done() happens)
+			if err != nil {
+				pm.log.Errorw("Error while processing response, ctx was canceled", zap.Error(err))
+				return
+			}
+
+		case <-flushTimer.C:
+			// if there are no messages to write, continue
+			if len(pm.writeMessages) == 0 {
+				continue
+			}
+			// Since flushTimer is triggered, forward the messages to the ISBs
+			err := pm.forwardToBuffers(ctx)
+			// error != nil only when the context is closed, so we can safely return (our write loop will try indefinitely
+			// unless ctx.Done() happens)
+			if err != nil {
+				pm.log.Errorw("Error while forwarding messages, ctx was canceled", zap.Error(err))
+				return
+			}
 		}
 	}
 }
 
+// processResponse processes a response received from the response channel.
+func (pm *ProcessAndForward) processResponse(ctx context.Context, response *window.TimedWindowResponse) error {
+	if response.EOF {
+		err := pm.forwardToBuffers(ctx)
+		// error will not be nil only when the context is closed, so we can safely return
+		if err != nil {
+			return err
+		}
+
+		// publish watermark
+		pm.publishWM(ctx, response.Window.Partition())
+
+		// delete the closed windows which are tracked by the windower
+		pm.windower.DeleteClosedWindow(response.Window)
+
+		// persist the GC event for unaligned window type (compactor will compact it) and invoke GC for aligned window type
+		if pm.windower.Type() == window.Unaligned {
+			err = pm.opts.gcEventsTracker.PersistGCEvent(response.Window)
+			if err != nil {
+				pm.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", response.Window.ID()))
+			}
+		} else {
+			pid := *response.Window.Partition()
+
+			if pbqReader := pm.pbqManager.GetPBQ(pid); pbqReader != nil {
+				// Since we have successfully processed all the messages for a window, we can now delete the persisted messages.
+				err = pbqReader.GC()
+				if err != nil {
+					pm.log.Errorw("Got an error while invoking GC", zap.Error(err), zap.String("partitionID", pid.String()))
+					return err
+				}
+				pm.log.Infow("Finished GC", zap.String("partitionID", pid.String()))
+
+			}
+
+		}
+		// we do not have to write anything as this is a EOF message
+		return nil
+	}
+
+	pm.writeMessages = append(pm.writeMessages, response.WriteMessage)
+
+	// if the batch size is reached, forward the messages to the ISBs
+	if len(pm.writeMessages) > pm.opts.batchSize {
+		err := pm.forwardToBuffers(ctx)
+		// error will not be nil only when the context is closed, so we can safely return
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // forwardToBuffers writes the messages to the ISBs concurrently for each partition.
-func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context, response *window.TimedWindowResponse) error {
-	messagesToStep := pm.whereToStep([]*isb.WriteMessage{response.WriteMessage})
+func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context) error {
+	messagesToStep := pm.whereToStep(pm.writeMessages)
 	// parallel writes to each ISB
 	var mu sync.Mutex
 	// use error group
@@ -239,7 +291,12 @@ func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context, response *win
 	}
 
 	// wait until all the writer go routines return
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+
+	pm.writeMessages = make([]*isb.WriteMessage, 0)
+	return nil
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.
@@ -389,7 +446,6 @@ func (pm *ProcessAndForward) publishWM(ctx context.Context, pid *partition.ID) {
 		if publisher, ok := pm.watermarkPublishers[toVertexName]; ok {
 			for index, offsets := range bufferOffsets {
 				if len(offsets) > 0 {
-					log.Println("Publishing watermark ", wm.UnixMilli(), " partition - ", pid.String(), " with offset ", offsets[len(offsets)-1].String())
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is not idling
@@ -433,6 +489,9 @@ func (pm *ProcessAndForward) Shutdown() {
 	for _, doneCh := range doneChs {
 		<-doneCh
 	}
+
+	pm.log.Infow("All PnFs have finished, waiting for forwardDoneCh to be done")
+
 	// close the response channel
 	close(pm.responseCh)
 
