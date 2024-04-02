@@ -258,6 +258,12 @@ spec:
               key: server.address
               name: numaflow-cmd-params-config
               optional: true
+        - name: NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              key: server.cors.allowed.origins
+              name: numaflow-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
