@@ -169,6 +169,7 @@ function App(props: AppProps) {
           host: hostUrl,
           namespace,
           isPlugin: true,
+          isReadOnly: true,
           sidebarProps,
           setSidebarProps,
           errors,

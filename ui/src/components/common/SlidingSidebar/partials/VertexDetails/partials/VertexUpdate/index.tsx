@@ -41,7 +41,7 @@ export function VertexUpdate({
   const [status, setStatus] = useState<StatusIndicator | undefined>();
   const [mutationKey, setMutationKey] = useState<string>("");
   const [currentSpec, setCurrentSpec] = useState<any>(vertexSpec);
-  const { host } = useContext<AppContextProps>(AppContext);
+  const { host, isReadOnly } = useContext<AppContextProps>(AppContext);
 
   // Submit API call
   useEffect(() => {
@@ -225,7 +225,7 @@ export function VertexUpdate({
     >
       <SpecEditor
         initialYaml={currentSpec}
-        viewType={ViewType.TOGGLE_EDIT}
+        viewType={isReadOnly ? ViewType.READ_ONLY : ViewType.TOGGLE_EDIT}
         loading={loading}
         mutationKey={mutationKey}
         editResetKey={mutationKey}

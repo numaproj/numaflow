@@ -5,7 +5,7 @@
     border-radius: 2rem;
     background: #D1DEE9;
     color: #274C77;
-    font-family: "IBM Plex Sans", serif;
+    font-family: "IBM Plex Sans", sans-serif;
     font-size: 1.2rem;
     font-style: normal;
     font-weight: 500;
@@ -25,7 +25,7 @@
     border-radius: 2rem;
     background: #D1DEE9;
     color: #274C77;
-    font-family: "IBM Plex Sans", serif;
+    font-family: "IBM Plex Sans", sans-serif;
     font-size: 1.2rem;
     font-style: normal;
     font-weight: 700;
@@ -77,7 +77,7 @@
     justify-content: center;
     color: #274C77;
     text-align: center;
-    font-family: "IBM Plex Sans", serif;
+    font-family: "IBM Plex Sans", sans-serif;
     font-size: 1.4rem;
     font-style: normal;
     font-weight: 500;

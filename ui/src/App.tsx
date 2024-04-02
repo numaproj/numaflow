@@ -42,6 +42,7 @@ export const AppContext = React.createContext<AppContextProps>({
   host: "",
   namespace: "",
   isPlugin: false,
+  isReadOnly: false,
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   setSidebarProps: () => {},
   errors: [],
@@ -247,6 +248,7 @@ function App(props: AppProps) {
           host: hostUrl,
           namespace,
           isPlugin: false,
+          isReadOnly: false,
           sidebarProps,
           setSidebarProps,
           errors,
