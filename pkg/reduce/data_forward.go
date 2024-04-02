@@ -605,6 +605,67 @@ func (df *DataForward) shouldDropMessage(message *isb.ReadMessage) bool {
 	return false
 }
 
+// handleLateMessage handles the late message and returns the timed window requests to be written to PBQ.
+// if the message is dropped, it returns an empty slice.
+func (df *DataForward) handleLateMessage(message *isb.ReadMessage) []*window.TimedWindowRequest {
+	lateMessageWindowRequests := make([]*window.TimedWindowRequest, 0)
+	// we should be able to get the late message in as long as there is an open fixed window
+	// for unaligned windows, we never consider late messages since it will expand the existing window, which is not the ideal behavior
+	// (for aligned, the windows start and end are fixed).
+	// for sliding windows, we cannot accept late messages because a message can be part of multiple windows
+	// and some of the windows might have already been closed.
+	if df.windower.Type() == window.Unaligned {
+		return lateMessageWindowRequests
+	}
+
+	nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
+	// if there is no window open, or if the message belongs to unaligned or sliding window drop the message
+	if nextWinAsSeenByWriter == nil || df.windower.Strategy() != window.Fixed {
+		df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+		return lateMessageWindowRequests
+	}
+	// if the message doesn't fall in the next window that is about to be closed drop it.
+	if message.EventTime.Before(nextWinAsSeenByWriter.StartTime()) {
+		df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
+		return lateMessageWindowRequests
+	}
+
+	// We will accept data as long as window is open. If a straggler (late data) makes in before the window is closed,
+	// it is accepted.
+	// since the window is not closed yet, we can send an append request.
+	lateMessageWindowRequests = append(lateMessageWindowRequests, &window.TimedWindowRequest{
+		Operation:   window.Append,
+		ReadMessage: message,
+		ID:          nextWinAsSeenByWriter.Partition(),
+		Windows:     []window.TimedWindow{nextWinAsSeenByWriter},
+	})
+
+	return lateMessageWindowRequests
+}
+
+// handleOnTimeMessage handles the on-time message and returns the timed window requests to be written to PBQ.
+func (df *DataForward) handleOnTimeMessage(message *isb.ReadMessage) []*window.TimedWindowRequest {
+	// NOTE(potential bug): if we get a message where the event-time is < (watermark-allowedLateness), skip processing the message.
+	// This could be due to a couple of problem, eg. ack was not registered, etc.
+	// Please do not confuse this with late data! This is a platform related problem causing the watermark inequality
+	// to be violated.
+	if message.EventTime.Before(df.currentWatermark.Add(-1 * df.opts.allowedLateness)) {
+		df.log.Errorw("An old message just popped up", zap.Any("msgOffSet", message.ReadOffset.String()), zap.Int64("eventTime", message.EventTime.UnixMilli()),
+			zap.Int64("msg_watermark", message.Watermark.UnixMilli()), zap.Any("message", message.Message), zap.Int64("currentWatermark", df.currentWatermark.UnixMilli()))
+		// mark it as a successfully written message as the message will be acked to avoid subsequent retries
+		// let's not continue processing this message, most likely the window has already been closed and the message
+		// won't be processed anyways.
+		metrics.ReduceDroppedMessagesCount.With(map[string]string{
+			metrics.LabelVertex:             df.vertexName,
+			metrics.LabelPipeline:           df.pipelineName,
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+			metrics.LabelReason:             "watermark_issue"}).Inc()
+		return []*window.TimedWindowRequest{}
+	}
+
+	return df.windower.AssignWindows(message)
+}
+
 // writeToPBQ writes to the PBQ. It will return error only if it is not failing to write to PBQ and is in a continuous
 // error loop, and we have received ctx.Done() via SIGTERM.
 func (df *DataForward) writeToPBQ(ctx context.Context, winOp *window.TimedWindowRequest, persist bool) error {
