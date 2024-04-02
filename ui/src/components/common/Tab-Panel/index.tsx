@@ -14,7 +14,7 @@ export default function TabPanel(props: TabPanelProps) {
       data-testid="info-tabpanel"
       {...other}
     >
-      {value === index && <Box sx={{ p: "1.5rem" }}>{children}</Box>}
+      {value === index && <Box sx={{ p: "2.4rem" }}>{children}</Box>}
     </div>
   );
 }

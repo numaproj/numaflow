@@ -262,7 +262,7 @@ export function PipelineUpdate({
         sx={{
           display: "flex",
           flexDirection: "row",
-          marginBottom: "2rem",
+          marginBottom: "3.2rem",
         }}
       >
         <span className="pipeline-spec-header-text">

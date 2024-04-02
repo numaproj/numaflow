@@ -33,9 +33,9 @@ export function EdgeDetails({ edgeId, watermarks }: EdgeDetailsProps) {
       </Box>
       <TableContainer
         sx={{
-          maxHeight: "37.5rem",
+          maxHeight: "60rem",
           backgroundColor: "#FFF",
-          marginTop: "1rem",
+          marginTop: "1.6rem",
         }}
       >
         <Table stickyHeader>

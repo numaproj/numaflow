@@ -3,7 +3,7 @@ import { PodLogs } from "./partials/PodLogs";
 import { PodDetailProps } from "../../../../../../../../../../../types/declarations/pods";
 
 const headerSx = {
-  marginBottom: "0.625rem",
+  marginBottom: "1rem",
   fontWeight: "bold",
 };
 
@@ -16,7 +16,7 @@ export function PodDetail({ namespaceId, containerName, pod }: PodDetailProps) {
         display: "flex",
         flexDirection: "column",
         width: "100%",
-        marginTop: "1rem",
+        marginTop: "1.6rem",
       }}
     >
       <Box sx={headerSx}>Container Logs</Box>

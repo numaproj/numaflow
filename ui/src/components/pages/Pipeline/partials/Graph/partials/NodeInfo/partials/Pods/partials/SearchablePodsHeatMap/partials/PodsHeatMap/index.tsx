@@ -136,7 +136,7 @@ export const PodsHeatMap = ({
                         container.cpuPercent || -1,
                         1
                       ),
-                      color: "#ffffff"
+                      color: "#ffffff",
                     }}
                   >
                     {container.cpuPercent
@@ -152,7 +152,7 @@ export const PodsHeatMap = ({
                         container.memoryPercent || -1,
                         1
                       ),
-                      color: "#ffffff"
+                      color: "#ffffff",
                     }}
                   >
                     {container.memoryPercent
@@ -173,7 +173,7 @@ export const PodsHeatMap = ({
     <Box
       sx={{
         border: "1px solid #E0E0E0",
-        padding: "0.5rem",
+        padding: "0.8rem",
         flexGrow: 1,
       }}
     >
@@ -181,7 +181,7 @@ export const PodsHeatMap = ({
         sx={{
           display: "flex",
           flexDirection: "row",
-          padding: "0.5rem",
+          padding: "0.8rem",
           borderBottom: "1px solid #E0E0E0",
         }}
       >
@@ -192,7 +192,7 @@ export const PodsHeatMap = ({
         sx={{
           display: "flex",
           flexDirection: "row",
-          marginTop: "1rem",
+          marginTop: "1.6rem",
         }}
       >
         <Box

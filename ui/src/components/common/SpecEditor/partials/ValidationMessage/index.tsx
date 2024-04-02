@@ -41,7 +41,7 @@ export function ValidationMessage({
           <SuccessIcon
             fontSize="large"
             color="success"
-            sx={{ marginRight: "0.5rem" }}
+            sx={{ marginRight: "0.8rem", height: "3.5rem", width: "3.5rem" }}
           />
         )}
       </Box>

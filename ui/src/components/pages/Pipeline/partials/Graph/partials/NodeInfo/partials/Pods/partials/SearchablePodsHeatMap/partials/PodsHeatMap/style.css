@@ -1,17 +1,17 @@
 .heatmap-graph {
   display: flex;
   justify-content: space-evenly;
-  margin-top: 1rem;
+  margin-top: 1.6rem;
   border: 1px solid #d9d9d9;
 }
 
 .heatmap-graph-title {
   flex-grow: 1;
   color: #241C15;
-  font-size: 1.25rem;
+  font-size: 2rem;
   font-style: normal;
   font-weight: 500;
-  line-height: 1.75rem;
+  line-height: 2.8rem;
 }
 
 .heatmap-graph-wrapper {
@@ -27,10 +27,10 @@
 
 .hexagon-tooltip-table {
   border-spacing: 0;
-  border: 0.0625rem solid #dcdddc;
-  border-radius: 0.3125rem;
+  border: 0.1rem solid #dcdddc;
+  border-radius: 0.5rem;
   width: 100%;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.4rem;
 }
 
 .hexagon-table-tbody tr:nth-child(2n + 1) td {
@@ -39,11 +39,11 @@
 
 .hexagon-table-th,
 .hexagon-table-td {
-  padding: 0.6rem;
+  padding: 0.96rem;
 }
 
 .hexagon-table-span {
-  padding: 0.3125rem;
+  padding: 0.5rem;
   display: block;
   text-align: left;
 }

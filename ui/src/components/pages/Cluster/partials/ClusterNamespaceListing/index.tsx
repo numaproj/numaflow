@@ -138,7 +138,7 @@ export function ClusterNamespaceListing({
             display: "flex",
             flexDirection: "row",
             justifyContent: "center",
-            margin: "0.5rem 0 1.5rem 0",
+            margin: "0.8rem 0 2.4rem 0",
           }}
         >
           <span className="cluster-ns-listing-table-title">
@@ -154,7 +154,7 @@ export function ClusterNamespaceListing({
         columnSpacing={1}
         wrap="wrap"
         sx={{
-          margin: "0.5rem 0 1.5rem 0",
+          margin: "0.8rem 0 2.4rem 0",
         }}
       >
         {filteredNamespaces.map((ns: ClusterNamespaceSummary) => {
@@ -176,9 +176,15 @@ export function ClusterNamespaceListing({
     );
   }, [filteredNamespaces]);
 
+  const MenuStyle = { fontSize: "1.6rem" };
+
   return (
     <Box
-      sx={{ display: "flex", flexDirection: "column", padding: "0 2.625rem" }}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        padding: "0 4.2rem",
+      }}
     >
       <Box
         sx={{
@@ -196,7 +202,7 @@ export function ClusterNamespaceListing({
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
-            marginLeft: "2rem",
+            marginLeft: "3.2rem",
           }}
         >
           <Box
@@ -206,23 +212,32 @@ export function ClusterNamespaceListing({
               flexGrow: 0.15,
             }}
           >
-            <label style={{ color: "#6B6C72" }}>Namespaces</label>
+            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+              Namespaces
+            </label>
             <Select
               id="namespace-empty-filter"
               value={namespaceFilter}
               label=""
               onChange={handleNamespaceFilterChange}
               style={{
-                width: "14rem",
+                width: "22.4rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "2.125rem",
-                marginRight: "0.5rem",
+                height: "3.4rem",
+                marginRight: "0.8rem",
+                fontSize: "1.6rem",
               }}
             >
-              <MenuItem value={ALL}>{ALL}</MenuItem>
-              <MenuItem value={WITH_PIPELINES}>{WITH_PIPELINES}</MenuItem>
-              <MenuItem value={NO_PIPELINES}>{NO_PIPELINES}</MenuItem>
+              <MenuItem value={ALL} sx={MenuStyle}>
+                {ALL}
+              </MenuItem>
+              <MenuItem value={WITH_PIPELINES} sx={MenuStyle}>
+                {WITH_PIPELINES}
+              </MenuItem>
+              <MenuItem value={NO_PIPELINES} sx={MenuStyle}>
+                {NO_PIPELINES}
+              </MenuItem>
             </Select>
           </Box>
           <Box
@@ -232,7 +247,9 @@ export function ClusterNamespaceListing({
               flexGrow: 0.15,
             }}
           >
-            <label style={{ color: "#6B6C72" }}>Health</label>
+            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+              Health
+            </label>
             <Select
               label="Health"
               defaultValue="All"
@@ -241,12 +258,13 @@ export function ClusterNamespaceListing({
                 id: "health",
               }}
               style={{
-                width: "14rem",
+                width: "22.4rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "2.125rem",
-                marginRight: "0.5rem",
+                height: "3.4rem",
+                marginRight: "0.8rem",
                 textTransform: "capitalize",
+                fontSize: "1.6rem",
               }}
               onChange={handleHealthFilterChange}
             >
@@ -254,7 +272,7 @@ export function ClusterNamespaceListing({
                 <MenuItem
                   key={health}
                   value={health}
-                  sx={{ textTransform: "capitalize" }}
+                  sx={{ textTransform: "capitalize", fontSize: "1.6rem" }}
                 >
                   {health}
                 </MenuItem>
@@ -266,32 +284,43 @@ export function ClusterNamespaceListing({
               display: "flex",
               flexDirection: "column",
               flexGrow: 0.15,
-              marginRight: "20rem",
+              marginRight: "32rem",
               textTransform: "capitalize",
             }}
           >
-            <label style={{ color: "#6B6C72" }}>Status</label>
+            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+              Status
+            </label>
             <Select
               label="Status"
               defaultValue="All"
               inputProps={{
                 name: "Status",
-                id: "health",
+                id: "status",
               }}
               style={{
-                width: "14rem",
+                width: "22.4rem",
                 background: "#fff",
                 border: "1px solid #6B6C72",
-                height: "2.125rem",
+                height: "3.4rem",
                 textTransform: "capitalize",
+                fontSize: "1.6rem",
               }}
               onChange={handleStatusFilterChange}
             >
-              <MenuItem value={ALL}>{ALL}</MenuItem>
-              <MenuItem value={ACTIVE} sx={{ textTransform: "capitalize" }}>
+              <MenuItem value={ALL} sx={{ fontSize: "1.6rem" }}>
+                {ALL}
+              </MenuItem>
+              <MenuItem
+                value={ACTIVE}
+                sx={{ textTransform: "capitalize", fontSize: "1.6rem" }}
+              >
                 {ACTIVE}
               </MenuItem>
-              <MenuItem value={INACTIVE} sx={{ textTransform: "capitalize" }}>
+              <MenuItem
+                value={INACTIVE}
+                sx={{ textTransform: "capitalize", fontSize: "1.6rem" }}
+              >
                 {INACTIVE}
               </MenuItem>
             </Select>
@@ -301,7 +330,7 @@ export function ClusterNamespaceListing({
           <ErrorIndicator />
         </Box>
       </Box>
-      <Box sx={{ display: "flex", flexDirection: "row", marginTop: "2rem" }}>
+      <Box sx={{ display: "flex", flexDirection: "row", marginTop: "3.2rem" }}>
         <span className="cluster-ns-listing-table-title">Namespaces</span>
       </Box>
       {listing}
@@ -310,7 +339,7 @@ export function ClusterNamespaceListing({
           display: "flex",
           flexDirection: "row",
           justifyContent: "center",
-          marginBottom: "1.5rem",
+          marginBottom: "2.4rem",
         }}
       >
         <Pagination
@@ -318,6 +347,15 @@ export function ClusterNamespaceListing({
           page={page}
           onChange={handlePageChange}
           shape="rounded"
+          sx={{
+            "& .MuiPaginationItem-root": {
+              fontSize: "1.4rem",
+            },
+            "& .MuiPaginationItem-icon": {
+              height: "2rem",
+              width: "2rem",
+            },
+          }}
         />
       </Box>
     </Box>
