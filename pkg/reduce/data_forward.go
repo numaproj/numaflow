@@ -564,14 +564,14 @@ func (df *DataForward) handleLateMessage(message *isb.ReadMessage) []*window.Tim
 	// for unaligned windows, we never consider late messages since it will expand the existing window, which is not the ideal behavior
 	// (for aligned, the windows start and end are fixed).
 	// for sliding windows, we cannot accept late messages because a message can be part of multiple windows
-	// and some of the windows might have already been closed.
-	if df.windower.Type() == window.Unaligned {
+	// and some windows might have already been closed.
+	if df.windower.Strategy() != window.Fixed {
 		return lateMessageWindowRequests
 	}
 
 	nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
-	// if there is no window open, or if the message belongs to unaligned or sliding window drop the message
-	if nextWinAsSeenByWriter == nil || df.windower.Strategy() != window.Fixed {
+	// if there is no window open, drop the message.
+	if nextWinAsSeenByWriter == nil {
 		df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
 		return lateMessageWindowRequests
 	}
