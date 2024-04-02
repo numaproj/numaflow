@@ -30,7 +30,7 @@ export function SummaryTitledValue({
           display: "flex",
           flexDirection: "column",
           flexGrow: 1,
-          paddingLeft: "1rem"
+          paddingLeft: "1.6rem",
         }}
       >
         <span className="summary-titled-value-title">{title}</span>
@@ -44,7 +44,7 @@ export function SummaryTitledValue({
             alignItems: "right",
             height: "100%",
             justifyContent: "flex-end",
-            marginRight: "1rem",
+            marginRight: "1.6rem",
           }}
         >
           <Help tooltip={tooltip} />

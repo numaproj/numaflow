@@ -10,24 +10,28 @@
 .interaction {
     display: flex;
     flex-direction: row;
-    width: 21.375rem;
-    height: 2.5rem;
+    width: 34.2rem;
+    height: 4rem;
     justify-content: space-between;
     align-items: center;
-    border-radius: 0.25rem;
+    border-radius: 0.4rem;
     border: 1px solid var(--base-gray-gray-05, #D4D7DC);
     background: var(--primitives-white, #FFF);
     box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.00);
-    margin-bottom: 1rem;
-    margin-left: 1rem;
-    padding: 0 0.5rem;
+    margin-bottom: 1.6rem;
+    margin-left: 1.6rem;
+    padding: 0 0.8rem;
+}
+
+.interaction-button-tooltip {
+    font-size: 1.1rem;
 }
 
 .legend {
     display: flex;
     flex-direction: column;
-    height: 11rem;
-    width: 11rem;
+    height: 17.6rem;
+    width: 17.6rem;
     justify-content: space-between;
 }
 
@@ -37,7 +41,7 @@
     width: 100%;
     color: var(--badge-pending, #6B6C72);
     font-family: AvenirNext forINTUIT, "IBM Plex Sans";
-    font-size: 0.875rem;
+    font-size: 1.4rem;
     font-style: normal;
     font-weight: 400;
     line-height: normal;
@@ -50,36 +54,36 @@
     width: 100%;
     color: var(--badge-pending, #6B6C72);
     font-family: AvenirNext forINTUIT, "IBM Plex Sans";
-    font-size: 0.875rem;
+    font-size: 1.4rem;
     font-style: normal;
     font-weight: 400;
     line-height: normal;
-    margin-top: 1rem;
+    margin-top: 1.6rem;
 }
 
 .legend-title > img {
-    width: 1.25rem;
+    width: 2rem;
 }
 
 .legend-text {
-    margin-top: 0.15rem;
-    margin-left: 0.75rem;
+    margin-top: 0.24rem;
+    margin-left: 1.2rem;
 }
 
 .zoom-percent-text {
     fill: #000;
     text-anchor: middle;
     dominant-baseline: middle;
-    font-size: 0.75rem;
+    font-size: 1.2rem;
     font-style: normal;
     font-weight: 600;
-    line-height: 1rem;
+    line-height: 1.6rem;
     text-transform: uppercase;
 }
 
 .divider {
-    width: 0.0625rem;
-    height: 1.5rem;
+    width: 0.01rem;
+    height: 2.4rem;
     background-color: var(--primitives-white, #D4D7DC);
     box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.00);
 }

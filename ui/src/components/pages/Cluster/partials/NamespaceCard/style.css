@@ -1,5 +1,5 @@
 .namespace-card-name {
-  font-size: 1.25rem;
+  font-size: 2rem;
   font-style: normal;
   font-weight: 400;
   color: #000;
@@ -10,40 +10,40 @@
 
 .namespace-card-section-title {
   color: #3C4348;
-  font-size: 0.875rem;
+  font-size: 1.4rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .namespace-card-section-title-value {
   color: #3C4348;
-  font-size: 0.875rem;
+  font-size: 1.4rem;
   font-style: normal;
   font-weight: 400;
-  margin-left: 0.3125rem;
+  margin-left: 0.5rem;
 }
 
 .namespace-card-section-text-14-normal {
   color: #3C4348;
-  font-size: 0.875rem;
+  font-size: 1.4rem;
   font-style: normal;
   font-weight: 400;
 }
 
 .namespace-card-section-text-16-bold {
   color: #3C4348;
-  font-size: 1rem;
+  font-size: 1.6rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .namespace-card-section-text-16-normal {
   color: #3C4348;
-  font-size: 1rem;
+  font-size: 1.6rem;
   font-style: normal;
   font-weight: 400;
 }
 
 .namespace-card-group-spacing {
-  margin-left: 0.3125rem;
+  margin-left: 0.5rem;
 }

@@ -22,12 +22,15 @@ export function ErrorIndicator() {
   }, []);
 
   return (
-    <Tooltip title={ERRORS_TOOLTIP} arrow>
+    <Tooltip
+      title={<div className="error-tooltip">{ERRORS_TOOLTIP}</div>}
+      arrow
+    >
       <Paper
         elevation={1}
         sx={{
           cursor: "pointer",
-          padding: "0.25rem 0.5rem",
+          padding: "0.4rem 0.8rem",
         }}
         onClick={onErrorClick}
       >
@@ -35,9 +38,13 @@ export function ErrorIndicator() {
           sx={{ display: "flex", flexDirection: "row", alignItems: "center" }}
         >
           {errors && errors.length ? (
-            <ErrorIcon sx={{ color: "#D52B1E" }} />
+            <ErrorIcon
+              sx={{ color: "#D52B1E", height: "2.4rem", width: "2.4rem" }}
+            />
           ) : (
-            <ErrorOutlineIcon sx={{ color: "#6B6C72" }} />
+            <ErrorOutlineIcon
+              sx={{ color: "#6B6C72", height: "2.4rem", width: "2.4rem" }}
+            />
           )}
           {errors?.length ? (
             <span className="error-indicator-text">Error occurred</span>

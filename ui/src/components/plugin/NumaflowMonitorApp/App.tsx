@@ -9,7 +9,7 @@ import ScopedCssBaseline from "@mui/material/ScopedCssBaseline";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Route, useLocation, Switch, useHistory } from "react-router-dom";
+import { Route, useLocation, Switch } from "react-router-dom";
 import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
 import { Routes } from "../Routes/Routes";
 import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
@@ -54,16 +54,6 @@ function App(props: AppProps) {
   } = useSystemInfoFetch({ host: hostUrl });
 
   const location = useLocation();
-  // const history = useHistory();
-  //
-  // useEffect(() => {
-  //   const query = new URLSearchParams(location.search);
-  //   const ns = query.get("namespace") || "";
-  //
-  //   if (location.pathname === "/" && ns !== namespace) {
-  //     history.push(`?namespace=${namespace}`);
-  //   }
-  // }, [location, history, namespace]);
 
   useEffect(() => {
     // Route changed
@@ -160,7 +150,7 @@ function App(props: AppProps) {
             <Routes namespace={namespace} />
           </Route>
           <Route path="*">
-            <main style={{ padding: "1rem" }}>
+            <main style={{ padding: "1.6rem", fontSize: "1.6rem" }}>
               <p>There's nothing here!</p>
             </main>
           </Route>
@@ -171,7 +161,7 @@ function App(props: AppProps) {
   }, [systemInfo, systemInfoError, loading, hostUrl, namespace]);
 
   return (
-    <div ref={pageRef} className="app-container">
+    <div ref={pageRef} className="app-container" style={{ height: "1000px" }}>
       <AppContext.Provider
         value={{
           systemInfo,
@@ -203,11 +193,8 @@ function App(props: AppProps) {
                 flexDirection: "column",
                 width: "100%",
                 overflow: "auto",
-                height: "2.0625rem",
                 background: "#F8F8FB",
                 zIndex: (theme) => theme.zIndex.drawer - 1,
-                // position: "fixed",
-                top: "3.75rem",
               }}
             >
               <Breadcrumbs namespace={namespace} />
@@ -220,7 +207,6 @@ function App(props: AppProps) {
                 width: "100%",
                 height: "100%",
                 overflow: "auto",
-                marginTop: 0,
               }}
             >
               {routes}

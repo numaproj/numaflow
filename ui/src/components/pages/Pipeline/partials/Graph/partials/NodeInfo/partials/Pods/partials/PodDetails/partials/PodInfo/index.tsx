@@ -60,7 +60,7 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
   const podName = pod?.name?.slice(0, pod?.name?.lastIndexOf("-"));
 
   return (
-    <Box sx={{ padding: "1rem" }}>
+    <Box sx={{ padding: "1.6rem" }}>
       <Box sx={{ fontWeight: 600 }}>Container Info</Box>
       <Box
         data-testid="podInfo"
@@ -71,7 +71,7 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
           color: "#DCDCDC",
         }}
       >
-        <TableContainer sx={{ maxHeight: "37.5rem", backgroundColor: "#FFF" }}>
+        <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
           <Table stickyHeader>
             <TableBody>
               <TableRow>

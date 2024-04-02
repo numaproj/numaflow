@@ -19,7 +19,7 @@ export function ErrorDisplay({ title, message }: ErrorDisplayProps) {
         width: "100%",
         alignItems: "center",
         justifyContent: "center",
-        maxWidth: "37.5rem",
+        maxWidth: "60rem",
       }}
     >
       <Box
@@ -34,7 +34,7 @@ export function ErrorDisplay({ title, message }: ErrorDisplayProps) {
           sx={{
             display: "flex",
             flexDirection: "column",
-            marginLeft: "0.5rem",
+            marginLeft: "0.8rem",
           }}
         >
           <span className="error-display-title">{title}</span>
