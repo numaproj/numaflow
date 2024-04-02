@@ -49,12 +49,12 @@ export function SummaryStatuses({
           flexGrow: 1,
           alignItems: "center",
           justifyContent: "center",
-          paddingLeft: "1rem",
+          paddingLeft: "1.6rem",
         }}
       >
         <span className="summary-statuses-title">{title}</span>
         <Box
-          sx={{ display: "flex", flexDirection: "row", marginTop: "0.3125rem" }}
+          sx={{ display: "flex", flexDirection: "row", marginTop: "0.5rem" }}
         >
           <Box sx={{ display: "flex", flexDirection: "row" }}>
             <Box sx={{ display: "flex", flexDirection: "column" }}>
@@ -73,7 +73,7 @@ export function SummaryStatuses({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                marginLeft: "0.3125rem",
+                marginLeft: "0.5rem",
               }}
             >
               <span className="summary-statuses-count">{active}</span>
@@ -83,7 +83,7 @@ export function SummaryStatuses({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                marginLeft: "0.3125rem",
+                marginLeft: "0.5rem",
               }}
             >
               <span className="summary-statuses-active-text">{activeText}</span>
@@ -94,8 +94,8 @@ export function SummaryStatuses({
           </Box>
           <Box
             sx={{
-              marginTop: "0.3125rem",
-              marginLeft: "1rem",
+              marginTop: "0.5rem",
+              marginLeft: "1.6rem",
             }}
           >
             <StatusBar
@@ -109,7 +109,7 @@ export function SummaryStatuses({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                marginLeft: "1.5rem",
+                marginLeft: "2.4rem",
               }}
             >
               {linkComponent}
@@ -124,8 +124,8 @@ export function SummaryStatuses({
             flexDirection: "row",
             alignItems: "right",
             justifyContent: "flex-end",
-            paddingRight: "0.2rem",
-            marginRight: "1rem",
+            paddingRight: "0.32rem",
+            marginRight: "1.6rem",
             height: "100%",
           }}
         >

@@ -39,7 +39,11 @@ export default function AccountMenu() {
         <IconButton onClick={handleLogout} size="small" sx={{ ml: 2 }}>
           <Chip
             label="Log out"
-            sx={{ backgroundColor: "#00D0E0", color: "#000" }}
+            sx={{
+              backgroundColor: "#00D0E0",
+              color: "#000",
+              fontSize: "1.3rem",
+            }}
           />
         </IconButton>
       </Box>

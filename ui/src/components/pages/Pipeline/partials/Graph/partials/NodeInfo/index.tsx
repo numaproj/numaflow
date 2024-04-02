@@ -76,7 +76,7 @@ export default function NodeInfo(props: NodeInfoProps) {
               src={node.data.nodeInfo}
               style={{
                 width: "100%",
-                borderRadius: "0.25rem",
+                borderRadius: "0.4rem",
                 fontFamily: "IBM Plex Sans",
               }}
             />
@@ -158,7 +158,7 @@ export default function NodeInfo(props: NodeInfoProps) {
             src={node.data.nodeInfo}
             style={{
               width: "100%",
-              borderRadius: "0.25rem",
+              borderRadius: "0.4rem",
               fontFamily: "IBM Plex Sans",
             }}
           />
