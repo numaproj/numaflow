@@ -42,7 +42,11 @@ type AuthInfo struct {
 	ServerAddr    string `json:"serverAddr"`
 }
 
-func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref string, authRouteMap authz.RouteMap) {
+type ReadOnlyInfo struct {
+	IsReadOnly bool `json:"isReadOnly"`
+}
+
+func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, readOnlyInfo ReadOnlyInfo, baseHref string, authRouteMap authz.RouteMap) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -74,6 +78,9 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	} else {
 		v1Routes(ctx, r1Group, nil, nil)
 	}
+	r1Group.GET("/readonlyinfo", func(c *gin.Context) {
+		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, readOnlyInfo))
+	})
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
 	})

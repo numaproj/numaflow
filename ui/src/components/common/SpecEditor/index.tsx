@@ -2,13 +2,16 @@ import React, { useMemo, useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import YAML from "yaml";
-import Editor from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
+import Editor, { loader } from "@monaco-editor/react";
 import CircularProgress from "@mui/material/CircularProgress";
 import Button from "@mui/material/Button";
 import SuccessIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "../../../images/warning-triangle.png";
 
 import "./style.css";
+
+loader.config({ monaco });
 
 export enum ViewType {
   READ_ONLY,
@@ -259,7 +262,7 @@ export function SpecEditor({
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
               }}
-              >
+            >
               {validationMessage.message}
             </span>
           </Box>

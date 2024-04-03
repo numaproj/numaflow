@@ -48,6 +48,7 @@ type ServerOptions struct {
 	Namespaced       bool
 	ManagedNamespace string
 	BaseHref         string
+	ReadOnly         bool
 	DisableAuth      bool
 	DexServerAddr    string
 	ServerAddr       string
@@ -88,6 +89,9 @@ func (s *server) Start(ctx context.Context) {
 			DisableAuth:   s.options.DisableAuth,
 			DexServerAddr: s.options.DexServerAddr,
 			ServerAddr:    s.options.ServerAddr,
+		},
+		routes.ReadOnlyInfo{
+			IsReadOnly: s.options.ReadOnly,
 		},
 		s.options.BaseHref,
 		authRouteMap,
@@ -152,6 +156,7 @@ func UrlRewrite(r *gin.Engine) gin.HandlerFunc {
 func CreateAuthRouteMap(baseHref string) authz.RouteMap {
 	return authz.RouteMap{
 		"GET:" + baseHref + "api/v1/sysinfo":                                                         authz.NewRouteInfo(authz.ObjectPipeline, false),
+		"GET:" + baseHref + "api/v1/readonlyinfo":                                                    authz.NewRouteInfo(authz.ObjectEvents, false),
 		"GET:" + baseHref + "api/v1/authinfo":                                                        authz.NewRouteInfo(authz.ObjectEvents, false),
 		"GET:" + baseHref + "api/v1/namespaces":                                                      authz.NewRouteInfo(authz.ObjectEvents, false),
 		"GET:" + baseHref + "api/v1/cluster-summary":                                                 authz.NewRouteInfo(authz.ObjectPipeline, false),

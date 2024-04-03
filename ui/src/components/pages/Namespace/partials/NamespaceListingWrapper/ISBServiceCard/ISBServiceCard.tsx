@@ -32,7 +32,8 @@ export function ISBServiceCard({
   data,
   refresh,
 }: ISBServiceCardProps) {
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const { setSidebarProps, isReadOnly } =
+    useContext<AppContextProps>(AppContext);
   const [deleteProps, setDeleteProps] = useState<DeleteProps | undefined>();
 
   const handleUpdateComplete = useCallback(() => {
@@ -43,6 +44,20 @@ export function ISBServiceCard({
     // Close sidebar
     setSidebarProps(undefined);
   }, [setSidebarProps, refresh]);
+
+  const handleViewChange = useCallback(() => {
+    setSidebarProps({
+      type: SidebarType.ISB_UPDATE,
+      specEditorProps: {
+        titleOverride: `View ISB Service: ${data?.name}`,
+        initialYaml: data?.isbService,
+        namespaceId: namespace,
+        isbId: data?.name,
+        viewType: ViewType.READ_ONLY,
+        onUpdateComplete: handleUpdateComplete,
+      },
+    });
+  }, [setSidebarProps, handleUpdateComplete, data]);
 
   const handleEditChange = useCallback(() => {
     setSidebarProps({
@@ -234,26 +249,42 @@ export function ISBServiceCard({
               marginRight: "1.2rem",
             }}
           >
-            <Grid item>
-              <Button
-                onClick={handleEditChange}
-                variant="contained"
-                data-testid="edit-isb"
-                sx={{ fontSize: "1.4rem" }}
-              >
-                Edit
-              </Button>
-            </Grid>
-            <Grid item>
-              <Button
-                onClick={handleDeleteChange}
-                variant="contained"
-                sx={{ marginRight: "1.6rem", fontSize: "1.4rem" }}
-                data-testid="delete-isb"
-              >
-                Delete
-              </Button>
-            </Grid>
+            {isReadOnly && (
+              <Grid item>
+                <Button
+                  onClick={handleViewChange}
+                  variant="contained"
+                  data-testid="view-isb"
+                  sx={{ fontSize: "1.4rem" }}
+                >
+                  View
+                </Button>
+              </Grid>
+            )}
+            {!isReadOnly && (
+              <Grid item>
+                <Button
+                  onClick={handleEditChange}
+                  variant="contained"
+                  data-testid="edit-isb"
+                  sx={{ fontSize: "1.4rem" }}
+                >
+                  Edit
+                </Button>
+              </Grid>
+            )}
+            {!isReadOnly && (
+              <Grid item>
+                <Button
+                  onClick={handleDeleteChange}
+                  variant="contained"
+                  sx={{ marginRight: "1.6rem", fontSize: "1.4rem" }}
+                  data-testid="delete-isb"
+                >
+                  Delete
+                </Button>
+              </Grid>
+            )}
           </Grid>
         </Box>
         {deleteProps && (
