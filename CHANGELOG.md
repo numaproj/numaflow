@@ -1,5 +1,89 @@
 # Changelog
 
+## v1.2.0-rc2 (2024-04-03)
+
+ * [66cc4903](https://github.com/numaproj/numaflow/commit/66cc4903d480cd4b4eca73b829bfd78b483f4a95) Update manifests to v1.2.0-rc2
+ * [a4c1d480](https://github.com/numaproj/numaflow/commit/a4c1d4803d94226547db0d6db02e440aba933a93) feat: read only view for UI (#1628)
+ * [45032fc6](https://github.com/numaproj/numaflow/commit/45032fc6070494f3e7c16e56b6a7bd0b376f2f2f) fix: race condition while publishing wm inside reduce (#1599)
+ * [3e6cd333](https://github.com/numaproj/numaflow/commit/3e6cd333bfbd20aac9de57432b0c3d85c94695e4) fix: bug in late message handling for sliding window (#1471)
+ * [3d82431b](https://github.com/numaproj/numaflow/commit/3d82431b4fc00e7010f7318266396ebc50e0a392) fix: numaflow package style fixes (#1622)
+ * [73e434a9](https://github.com/numaproj/numaflow/commit/73e434a9742142da873fc9a7c27866a83d15ad45) doc: add new user to the list (#1623)
+ * [f6ed4bbe](https://github.com/numaproj/numaflow/commit/f6ed4bbeb0f163d0326ef07641ac0ecf64217b10) fix: watermark progression during pods creation/deletion (#1619)
+ * [941fc674](https://github.com/numaproj/numaflow/commit/941fc674e845170f9566e21e72622d175f266383) fix: allow pipeline to start with redis isbsvc (Fixes: #1513) (#1567)
+ * [d1e10ffc](https://github.com/numaproj/numaflow/commit/d1e10ffca6887b24a41059293e1964c056d888da) fix: dedup in user defined source (#1613)
+ * [e6b3d39c](https://github.com/numaproj/numaflow/commit/e6b3d39c64fbcd0bf553e2493649787de5a1a399) chore(deps): bump express from 4.18.2 to 4.19.2 in /ui (#1609)
+
+### Contributors
+
+ * Quentin FAIDIDE
+ * Vedant Gupta
+ * Yashash H L
+ * dependabot[bot]
+
+## v1.2.0-rc1 (2024-03-26)
+
+ * [0a1a2e8b](https://github.com/numaproj/numaflow/commit/0a1a2e8b85f98e15d3e6a71eb8c07f591e796ea6) Update manifests to v1.2.0-rc1
+ * [aab37c6c](https://github.com/numaproj/numaflow/commit/aab37c6c3e18cee2ac43bc94f0ba2c1617038edd) fix: flaky e2e tests (#1590)
+ * [84bafd0a](https://github.com/numaproj/numaflow/commit/84bafd0a1eb98f8ae8a6e2e12c50023a454b8bd9) chore(deps): bump webpack-dev-middleware from 5.3.3 to 5.3.4 in /ui (#1595)
+ * [04ff0c6e](https://github.com/numaproj/numaflow/commit/04ff0c6e642c225607c03ccf23261e45215343fe) fix: error message that cause Buttons overflow in the UI (#1591)
+ * [611bab70](https://github.com/numaproj/numaflow/commit/611bab7000fef3e6bd52b5a6a7fc84f78f87d8ae) feat: support headers for message (#1578)
+ * [b394024f](https://github.com/numaproj/numaflow/commit/b394024facea11499da1e5f3a469ac62bba4274d) feat: numaflow package (#1579)
+ * [ea55a92d](https://github.com/numaproj/numaflow/commit/ea55a92ddfa25a8591cbfe64ef21ad6ed7b1f37a) chore(deps): bump follow-redirects from 1.15.4 to 1.15.6 in /ui (#1573)
+ * [4457ac88](https://github.com/numaproj/numaflow/commit/4457ac8819ed031e51c5f2b2def38a5e1f3c0a68) feat: read Kafka header and propagate in the payload (#1565)
+ * [c1bc119c](https://github.com/numaproj/numaflow/commit/c1bc119cfb4d4ab8836b3a79be1b02f5cb9e2ffb) fix(codegen): protobuf upgrade (#1558)
+ * [4b580b14](https://github.com/numaproj/numaflow/commit/4b580b148c29ca12776eae134f31ec46563e8bcc) chore(deps): bump google.golang.org/protobuf from 1.31.0 to 1.33.0 (#1556)
+ * [dd3cbfe3](https://github.com/numaproj/numaflow/commit/dd3cbfe35e9b0fbbff27782f8825affa2a7c546c) Chore: go 1.21 and k8s 1.29 (#1555)
+ * [dc69b29b](https://github.com/numaproj/numaflow/commit/dc69b29b4c5a91d18436de5db848549ac6cb2948) feat: unaligned wal (#1511)
+ * [1844575f](https://github.com/numaproj/numaflow/commit/1844575f4fbabd2205e1260740ff9b1c2fd9bb3d) fix: initialize inflightAcks channel to not nil channel (#1548)
+ * [c6e5fd55](https://github.com/numaproj/numaflow/commit/c6e5fd55a852a2c57c527f0987d58ccfd6bef8f5) chore(deps): bump github.com/go-jose/go-jose/v3 from 3.0.1 to 3.0.3 (#1549)
+ * [cd05c47d](https://github.com/numaproj/numaflow/commit/cd05c47db27e607c42e819d56e10769a059b45d6) fix: break from retry loop when key is not found (#1535)
+ * [fd3f5e1a](https://github.com/numaproj/numaflow/commit/fd3f5e1adb2311d4164312959bf0ad163277af6e) feat: noop persistence store for reduce (#1532)
+ * [8c2a160d](https://github.com/numaproj/numaflow/commit/8c2a160d525e8fb455d730a67b48f4b535c1269b) fix(controller): vertex template metadata nil check (#1527)
+ * [5b31bac5](https://github.com/numaproj/numaflow/commit/5b31bac5afa5d67353feb368f8644a886b743fe1) feat: add support for SASL SCRAM 256 and 512 for Kafka (#1518)
+ * [76266ef6](https://github.com/numaproj/numaflow/commit/76266ef6354a7fc9c506c13bcef70fe76a530a10) fix: incorrect json schema for tls config (#1520)
+ * [762e130c](https://github.com/numaproj/numaflow/commit/762e130cd34576d056e773db7a55eddbc3e0919a) fix: podSpec incorrectly configured in case template exist (#1516)
+ * [37a9d5d7](https://github.com/numaproj/numaflow/commit/37a9d5d799156224efe00f8d0e7acdaf57eb2432) add separate server info file paths for services on client side (#1494)
+ * [f05ce9e2](https://github.com/numaproj/numaflow/commit/f05ce9e28b458674f17ec1a9cc39799f3849069e) fix: idle manager refactor for multi partitions (#1512)
+ * [c58f9a1b](https://github.com/numaproj/numaflow/commit/c58f9a1bc9dd45c6d6bbf508f2ae6afb05be73fa) fix: avoid panic when ctx is canceled (#1515)
+ * [abf7baf9](https://github.com/numaproj/numaflow/commit/abf7baf9095d9db1bb70eae2ef3f40bf9d00d1c2) fix: unknown for ISB details in pipeline card (#1497)
+ * [20cf66d9](https://github.com/numaproj/numaflow/commit/20cf66d9e2aed296b56ad0ffd534cc6c04b07674) feat: configure standardResources via controller configmap (#1490)
+ * [345e7ca7](https://github.com/numaproj/numaflow/commit/345e7ca76c47a9f1468e9cbc66d90e3014f5bc8f) fix: add idle handler offset nil check (#1489)
+ * [9954f847](https://github.com/numaproj/numaflow/commit/9954f8477aaa64030616cf35c4e51ffdd66efda1) feat: terminate reduce vertex pods when pausing pipeline (#1481)
+ * [0c53e8a0](https://github.com/numaproj/numaflow/commit/0c53e8a03c77d5caa833650015b57af640172220) fix(controller): incorrect cpu/mem resources calculation (#1477)
+ * [495d22bf](https://github.com/numaproj/numaflow/commit/495d22bf95304073b5f38f508131839b0381888b) feat: pipeline health status for UI (#1460)
+ * [cd27ce60](https://github.com/numaproj/numaflow/commit/cd27ce602f33587fc6e54bdb9c5a1c50a75f5466) fix: bug where dashed line is treated as permalink + spelling/formatting (#1467)
+ * [870d86bf](https://github.com/numaproj/numaflow/commit/870d86bf1c7b32a00aa3d128bd19e32658425d59) feat: improve dex server (#1440)
+ * [85e76c7c](https://github.com/numaproj/numaflow/commit/85e76c7c16c82d9ab81cdddb7d463450da4ba1ee) fix: memory leak inside session windower (#1445)
+ * [43063576](https://github.com/numaproj/numaflow/commit/430635766cec3298e0127e82d653719395e64e3a) fix: GetDownstreamEdges is not cycle safe (#1447)
+ * [d1ad022e](https://github.com/numaproj/numaflow/commit/d1ad022e2388ceec4a6b63426a601a2966731df9) chore(deps): bump follow-redirects from 1.15.3 to 1.15.4 in /ui (#1448)
+ * [70c78e73](https://github.com/numaproj/numaflow/commit/70c78e7365fa86d6f3da51e896e238540d1db67a) fix: UI Filter by status for pipelines doesn't work as expected (#1444)
+ * [795bef68](https://github.com/numaproj/numaflow/commit/795bef6828854b38925eeb4819344cd1ce93d35b) fix: Kafka source reads duplicated messages (#1438)
+ * [7fe3225c](https://github.com/numaproj/numaflow/commit/7fe3225cbb4d74d3c11775cbb8fb16d969c590cb) feat: enhance autoscaling peeking logic (#1432)
+ * [58e215e1](https://github.com/numaproj/numaflow/commit/58e215e176137f6017ff9751891c06a0d0218a87) fix: server-secrets-init container restart  (#1433)
+ * [9dc3bfd1](https://github.com/numaproj/numaflow/commit/9dc3bfd1d2ac5705e8f834299f4432d15145e972) feat: update tcp client connections (#1429)
+ * [45c85942](https://github.com/numaproj/numaflow/commit/45c85942c312c0770695298c17623ba1bd323a1c) feat: Session Window and Reduce Streaming (#1384)
+ * [38b44e69](https://github.com/numaproj/numaflow/commit/38b44e69fe32dfb040aaa270415b4cc8a970455e) doc: idle source (#1426)
+ * [bca1b3b9](https://github.com/numaproj/numaflow/commit/bca1b3b9a16ad2cf202133fdc0970ef0a72762d4) feat: health status implementation (#1406)
+ * [412bb210](https://github.com/numaproj/numaflow/commit/412bb210b9ac07f851f001c153356f91058b0f8b) chore(deps): bump golang.org/x/crypto from 0.14.0 to 0.17.0 (#1424)
+ * [5c734726](https://github.com/numaproj/numaflow/commit/5c7347265e7bb45f82aac4501d45640997cce4f3) fix: configmap const name (#1423)
+
+### Contributors
+
+ * Abdullah Hadi
+ * Ali Ibrahim
+ * Antonino Fugazzotto
+ * Damien RAYMOND
+ * Derek Wang
+ * Dillen Padhiar
+ * Juanlu Yu
+ * Nishchith Shetty
+ * Sidhant Kohli
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+ * akash khamkar
+ * dependabot[bot]
+
 ## v1.1.7 (2024-03-15)
 
  * [d4e0bd28](https://github.com/numaproj/numaflow/commit/d4e0bd2854faf17705b575fb3e4afd97b3cf5094) Update manifests to v1.1.7
