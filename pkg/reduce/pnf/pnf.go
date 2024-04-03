@@ -172,6 +172,9 @@ func (pm *ProcessAndForward) forwardResponses(ctx context.Context) {
 	flushTimer := time.NewTicker(pm.opts.flushDuration)
 	writeMessages := make([]*isb.WriteMessage, 0, pm.opts.batchSize)
 
+	// should we flush?
+	var flush bool
+
 	// error != nil only when the context is closed, so we can safely return (our write loop will try indefinitely
 	// unless ctx.Done() happens)
 forwardLoop:
@@ -198,11 +201,9 @@ forwardLoop:
 			// append the write message to the array
 			writeMessages = append(writeMessages, response.WriteMessage)
 
-			// if the batch size is reached, forward the messages to the ISB
+			// if the batch size is reached, let's flush
 			if len(writeMessages) >= pm.opts.batchSize {
-				if err := pm.forwardToBuffers(ctx, &writeMessages); err != nil {
-					return
-				}
+				flush = true
 			}
 
 		case <-flushTimer.C:
@@ -211,10 +212,15 @@ forwardLoop:
 				continue
 			}
 
-			// Since flushTimer is triggered, forward the messages to the ISB
+			// Since flushTimer is triggered, it is time to flush
+			flush = true
+		}
+
+		if flush {
 			if err := pm.forwardToBuffers(ctx, &writeMessages); err != nil {
 				return
 			}
+			flush = false
 		}
 	}
 
@@ -229,7 +235,7 @@ forwardLoop:
 // handleEOFResponse handles the EOF response received from the response channel. It publishes the watermark and invokes GC on PBQ.
 func (pm *ProcessAndForward) handleEOFResponse(ctx context.Context, response *window.TimedWindowResponse) error {
 	// publish watermark
-	pm.publishWM(ctx, response.Window.Partition())
+	pm.publishWM(ctx)
 
 	// delete the closed windows which are tracked by the windower
 	pm.windower.DeleteClosedWindow(response.Window)
@@ -464,7 +470,7 @@ func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 }
 
 // publishWM publishes the watermark to each edge.
-func (pm *ProcessAndForward) publishWM(ctx context.Context, pid *partition.ID) {
+func (pm *ProcessAndForward) publishWM(ctx context.Context) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,
 	// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
