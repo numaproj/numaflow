@@ -16987,6 +16987,7 @@ apiVersion: v1
 data:
   namespaced: "true"
   server.disable.auth: "true"
+  server.readonly: "false"
 kind: ConfigMap
 metadata:
   name: numaflow-cmd-params-config
@@ -17454,6 +17455,12 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: server.base.href
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_READONLY
+          valueFrom:
+            configMapKeyRef:
+              key: server.readonly
               name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_DISABLE_AUTH
