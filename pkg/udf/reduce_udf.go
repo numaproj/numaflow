@@ -205,7 +205,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// created watermark related components only if watermark is enabled
-		// otherwise no pnFManager will used
+		// otherwise noop will used
 		if !u.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			// create from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
@@ -367,11 +367,11 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}(compactor)
 	}
 
-	// create the pnf manager
-	pnFManager := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfOption...)
+	// create the pnf
+	processAndForward := pnf.NewProcessAndForward(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfOption...)
 
 	// for reduce, we read only from one partition
-	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, walManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, pnFManager, opts...)
+	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, walManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, processAndForward, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}
@@ -391,8 +391,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		dataForwarder.Start()
 		log.Info("Forwarder stopped, exiting reduce udf data processor...")
 
-		// after exiting from pbq write loop, we need to gracefully shut down the pnf manager
-		pnFManager.Shutdown()
+		// after exiting from pbq write loop, we need to gracefully shut down the pnf
+		processAndForward.Shutdown()
 	}()
 
 	<-ctx.Done()
