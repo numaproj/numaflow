@@ -196,7 +196,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to create a new gRPC client: %w", err)
 		}
 
-		udsGRPCClient, err = udsource.NewUDSgRPCBasedUDSource(srcClient)
+		udsGRPCClient, err = udsource.NewUDSgRPCBasedUDSource(sp.VertexInstance, srcClient)
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
