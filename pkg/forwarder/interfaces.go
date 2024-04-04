@@ -27,15 +27,15 @@ type ToWhichStepDecider interface {
 	// WhereTo decides where to forward the result to based on the name of the step it returns.
 	// It supports 2 addition keywords which need not be a step name. They are "ALL" and "DROP"
 	// where former means, forward to all the neighbouring steps and latter means do not forward anywhere.
-	WhereTo([]string, []string) ([]VertexBuffer, error)
+	WhereTo([]string, []string, string) ([]VertexBuffer, error)
 }
 
 // GoWhere is the step decider on where it needs to go
-type GoWhere func([]string, []string) ([]VertexBuffer, error)
+type GoWhere func([]string, []string, string) ([]VertexBuffer, error)
 
 // WhereTo decides where the data goes to.
-func (gw GoWhere) WhereTo(ks []string, ts []string) ([]VertexBuffer, error) {
-	return gw(ks, ts)
+func (gw GoWhere) WhereTo(ks []string, ts []string, id string) ([]VertexBuffer, error) {
+	return gw(ks, ts, id)
 }
 
 // StarterStopper starts/stops the forwarding.

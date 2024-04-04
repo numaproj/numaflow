@@ -175,7 +175,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var toVertexPartitionMap = make(map[string]int)
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
+		if edge.GetToVertexPartitionCount() > 1 {
 			s := shuffle.NewShuffle(edge.To, edge.GetToVertexPartitionCount())
 			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 		}
@@ -344,83 +344,73 @@ func (sp *SourceProcessor) getSourcer(
 }
 
 func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forwarder.GoWhere {
-	getToBufferPartition := GetPartitionedBufferIdx()
-
-	fsd := forwarder.GoWhere(func(keys []string, tags []string) ([]forwarder.VertexBuffer, error) {
+	// create the conditional forwarder
+	conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string, msgId string) ([]forwarder.VertexBuffer, error) {
 		var result []forwarder.VertexBuffer
 
+		// Iterate through the edges
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
-				toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-				result = append(result, forwarder.VertexBuffer{
-					ToVertexName:         edge.To,
-					ToVertexPartitionIdx: toVertexPartition,
-				})
-			} else {
-				result = append(result, forwarder.VertexBuffer{
-					ToVertexName:         edge.To,
-					ToVertexPartitionIdx: getToBufferPartition(edge.To, edge.GetToVertexPartitionCount()),
-				})
+			edgeKey := fmt.Sprintf("%s:%s", edge.From, edge.To)
+
+			// if the edge has more than one partition, shuffle the message
+			// else forward the message to the default partition
+			partitionIdx := isb.DefaultPartitionIdx
+			if edge.GetToVertexPartitionCount() > 1 {
+				if edge.ToVertexType == dfv1.VertexTypeReduceUDF { // Shuffle on keys
+					partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnKeys(keys)
+				} else { // Shuffle on msgId
+					partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnId(msgId)
+				}
 			}
+
+			result = append(result, forwarder.VertexBuffer{
+				ToVertexName:         edge.To,
+				ToVertexPartitionIdx: partitionIdx,
+			})
 		}
+
 		return result, nil
 	})
-	return fsd
+	return conditionalForwarder
 }
 
 func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[string]*shuffle.Shuffle) forwarder.GoWhere {
-	getToBufferPartition := GetPartitionedBufferIdx()
-	fsd := forwarder.GoWhere(func(keys []string, tags []string) ([]forwarder.VertexBuffer, error) {
+	// create the conditional forwarder
+	conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string, msgId string) ([]forwarder.VertexBuffer, error) {
 		var result []forwarder.VertexBuffer
 
+		// Drop message if it contains the special tag
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 			return result, nil
 		}
 
+		// Iterate through the edges
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			// If returned tags are not "DROP", and there are no conditions defined in the edge, treat it as "ALL".
-			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
-					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-					result = append(result, forwarder.VertexBuffer{
-						ToVertexName:         edge.To,
-						ToVertexPartitionIdx: toVertexPartition,
-					})
-				} else {
-					result = append(result, forwarder.VertexBuffer{
-						ToVertexName:         edge.To,
-						ToVertexPartitionIdx: getToBufferPartition(edge.To, edge.GetToVertexPartitionCount()),
-					})
-				}
-			} else {
-				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
-						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-						result = append(result, forwarder.VertexBuffer{
-							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: toVertexPartition,
-						})
-					} else {
-						result = append(result, forwarder.VertexBuffer{
-							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: getToBufferPartition(edge.To, edge.GetToVertexPartitionCount()),
-						})
+			edgeKey := fmt.Sprintf("%s:%s", edge.From, edge.To)
+
+			// Condition to proceed for forwarding message: No conditions on edge, or message tags match edge conditions
+			proceed := edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 || sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values)
+
+			if proceed {
+				// if the edge has more than one partition, shuffle the message
+				// else forward the message to the default partition
+				partitionIdx := isb.DefaultPartitionIdx
+				if edge.GetToVertexPartitionCount() > 1 {
+					if edge.ToVertexType == dfv1.VertexTypeReduceUDF { // Shuffle on keys
+						partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnKeys(keys)
+					} else { // Shuffle on msgId
+						partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnId(msgId)
 					}
 				}
+
+				result = append(result, forwarder.VertexBuffer{
+					ToVertexName:         edge.To,
+					ToVertexPartitionIdx: partitionIdx,
+				})
 			}
 		}
+
 		return result, nil
 	})
-	return fsd
-}
-
-// GetPartitionedBufferIdx returns a function that returns a partitioned buffer index based on the toVertex name and the partition count
-// it distributes the messages evenly to the partitions of the toVertex based on the message count(round robin)
-func GetPartitionedBufferIdx() func(toVertex string, toVertexPartitionCount int) int32 {
-	messagePerPartitionMap := make(map[string]int)
-	return func(toVertex string, toVertexPartitionCount int) int32 {
-		vertexPartition := (messagePerPartitionMap[toVertex] + 1) % toVertexPartitionCount
-		messagePerPartitionMap[toVertex] = vertexPartition
-		return int32(vertexPartition)
-	}
+	return conditionalForwarder
 }

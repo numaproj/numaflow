@@ -69,7 +69,7 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, per
 
 	// write the request to the output channel
 	select {
-	case <-p.output:
+	case p.output <- request:
 
 	case <-ctx.Done():
 		return ctx.Err()

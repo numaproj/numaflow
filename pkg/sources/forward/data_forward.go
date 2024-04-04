@@ -578,7 +578,7 @@ func (df *DataForward) applyTransformer(ctx context.Context, readMessage *isb.Re
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
 func (df *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-	to, err := df.toWhichStepDecider.WhereTo(writeMessage.Keys, writeMessage.Tags)
+	to, err := df.toWhichStepDecider.WhereTo(writeMessage.Keys, writeMessage.Tags, "")
 	if err != nil {
 		df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: df.reader.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
 		// a shutdown can break the blocking loop caused due to InternalErr

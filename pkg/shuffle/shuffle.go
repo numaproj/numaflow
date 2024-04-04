@@ -56,11 +56,17 @@ func NewShuffle(vertexName string, partitionCount int) *Shuffle {
 	}
 }
 
-// Shuffle functions returns a shuffled identifier.
-func (s *Shuffle) Shuffle(keys []string) int32 {
+// ShuffleOnKeys accepts array of keys and returns a shuffled identifier.
+func (s *Shuffle) ShuffleOnKeys(keys []string) int32 {
 	// hash of the message keys returns a unique hashValue
 	// mod of hashValue will decide which isb it will belong
 	hashValue := s.generateHash(keys)
+	hashValue = hashValue % uint64(s.partitionCount)
+	return int32(hashValue)
+}
+
+func (s *Shuffle) ShuffleOnId(msgId string) int32 {
+	hashValue := s.generateHash([]string{msgId})
 	hashValue = hashValue % uint64(s.partitionCount)
 	return int32(hashValue)
 }
@@ -69,7 +75,7 @@ func (s *Shuffle) Shuffle(keys []string) int32 {
 func (s *Shuffle) ShuffleMessages(messages []*isb.Message) map[int32][]*isb.Message {
 	hashMap := make(map[int32][]*isb.Message)
 	for _, message := range messages {
-		identifier := s.Shuffle(message.Keys)
+		identifier := s.ShuffleOnKeys(message.Keys)
 		hashMap[identifier] = append(hashMap[identifier], message)
 	}
 	return hashMap

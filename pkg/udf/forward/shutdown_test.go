@@ -35,7 +35,7 @@ import (
 type myShutdownTest struct {
 }
 
-func (s myShutdownTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (s myShutdownTest) WhereTo(_ []string, _ []string, s2 string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{}, nil
 }
 
