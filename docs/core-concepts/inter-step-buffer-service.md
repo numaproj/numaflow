@@ -113,8 +113,6 @@ Both these 2 places expect a YAML format configuration like below:
 bufferConfig: |
   # The properties of the buffers (streams) to be created in this JetStream service
   stream:
-    # 0: Limits, 1: Interest, 2: WorkQueue
-    retention: 1
     maxMsgs: 30000
     maxAge: 168h
     maxBytes: -1

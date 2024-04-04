@@ -185,7 +185,7 @@ func addStream(t *testing.T, js nats.JetStreamContext, streamName string) {
 		Name:       streamName,
 		Subjects:   []string{streamName},
 		Retention:  nats.WorkQueuePolicy,
-		Discard:    nats.DiscardOld,
+		Discard:    nats.DiscardNew,
 		MaxMsgs:    100, //
 		Storage:    nats.FileStorage,
 		Duplicates: 2 * 60 * time.Second,

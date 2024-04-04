@@ -17147,8 +17147,6 @@ data:
         bufferConfig: |
           # The default properties of the buffers (streams) to be created in this JetStream service
           stream:
-            # 0: Limits, 1: Interest, 2: WorkQueue
-            retention: 0
             maxMsgs: 100000
             maxAge: 72h
             maxBytes: -1

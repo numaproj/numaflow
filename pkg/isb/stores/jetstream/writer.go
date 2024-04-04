@@ -101,11 +101,7 @@ func (jw *jetStreamWriter) runStatusChecker(ctx context.Context) {
 		}
 		var solidUsage, softUsage float64
 		softUsage = (float64(c.NumPending) + float64(c.NumAckPending)) / float64(jw.opts.maxLength)
-		if s.Config.Retention == nats.LimitsPolicy {
-			solidUsage = softUsage
-		} else {
-			solidUsage = float64(s.State.Msgs) / float64(jw.opts.maxLength)
-		}
+		solidUsage = float64(s.State.Msgs) / float64(jw.opts.maxLength)
 		// TODO: solid usage calculation might be incorrect due to incorrect JetStream metadata issue caused by pod migration, need to revisit this later.
 		// We should set up alerts with sort of rules to detect the metadata issue. For example, solidUsage is too much greater than softUsage for a while.
 		if solidUsage >= jw.opts.bufferUsageLimit && softUsage >= jw.opts.bufferUsageLimit {
