@@ -14,6 +14,7 @@ spec:
         container:
           # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/retry
           image: quay.io/numaio/numaflow-go/map-retry:stable
+          imagePullPolicy: Always
     - name: out
       sink:
         udsink:

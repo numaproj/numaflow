@@ -13,6 +13,7 @@ spec:
           container:
             # Filter messages based on event time, see https://github.com/numaproj/numaflow-python/tree/main/examples/sourcetransform/event_time_filter
             image: quay.io/numaio/numaflow-python/mapt-event-time-filter:stable
+            imagePullPolicy: Always
     - name: sink-within-2022
       scale:
         min: 1
