@@ -20,6 +20,7 @@ spec:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
+          imagePullPolicy: Always
     - name: keyed-fixed-sum
       containerTemplate:
         env:
@@ -30,6 +31,7 @@ spec:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
           image: quay.io/numaio/numaflow-go/reduce-sum:stable
+          imagePullPolicy: Always
         groupBy:
           window:
             fixed:
@@ -48,6 +50,7 @@ spec:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
           image: quay.io/numaio/numaflow-go/reduce-sum:stable
+          imagePullPolicy: Always
         groupBy:
           window:
             fixed:
@@ -66,6 +69,7 @@ spec:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
           image: quay.io/numaio/numaflow-go/reduce-sum:stable
+          imagePullPolicy: Always
         groupBy:
           window:
             sliding:

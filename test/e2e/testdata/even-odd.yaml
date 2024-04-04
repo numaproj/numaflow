@@ -13,6 +13,7 @@ spec:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
+          imagePullPolicy: Always
     - name: even-sink
       partitions: 2
       sink:
