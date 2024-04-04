@@ -40,6 +40,7 @@ func TestRoutes(t *testing.T) {
 	sysInfo := SystemInfo{
 		ManagedNamespace: managedNamespace,
 		Namespaced:       namespaced,
+		IsReadOnly:       false,
 	}
 
 	authInfo := AuthInfo{
@@ -47,11 +48,8 @@ func TestRoutes(t *testing.T) {
 		DexServerAddr: "test-dex-server-addr",
 	}
 
-	readOnlyInfo := ReadOnlyInfo{
-		IsReadOnly: false,
-	}
 	authRouteMap := authz.RouteMap{}
-	Routes(logging.WithLogger(signals.SetupSignalHandler(), log), router, sysInfo, authInfo, readOnlyInfo, "/", authRouteMap)
+	Routes(logging.WithLogger(signals.SetupSignalHandler(), log), router, sysInfo, authInfo, "/", authRouteMap)
 	t.Run("/404", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, "/404", nil)
