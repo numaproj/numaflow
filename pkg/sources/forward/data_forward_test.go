@@ -110,7 +110,7 @@ func (t *testForwardFetcher) ComputeHeadWatermark(int32) wmb.Watermark {
 type myForwardTest struct {
 }
 
-func (f myForwardTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -829,7 +829,7 @@ func TestNewDataForward(t *testing.T) {
 type mySourceForwardTest struct {
 }
 
-func (f mySourceForwardTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f mySourceForwardTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -840,7 +840,7 @@ type mySourceForwardTestRoundRobin struct {
 	count int
 }
 
-func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	var output = []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: int32(f.count % 2),
@@ -1121,7 +1121,7 @@ func TestWriteToBuffer(t *testing.T) {
 type myForwardDropTest struct {
 }
 
-func (f myForwardDropTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardDropTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{}, nil
 }
 
@@ -1133,7 +1133,7 @@ type myForwardToAllTest struct {
 	count int
 }
 
-func (f *myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f *myForwardToAllTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	var output = []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: int32(f.count % 2),
@@ -1153,7 +1153,7 @@ func (f *myForwardToAllTest) ApplyTransform(ctx context.Context, message *isb.Re
 type myForwardInternalErrTest struct {
 }
 
-func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -1174,7 +1174,7 @@ func (f myForwardInternalErrTest) ApplyTransform(_ context.Context, _ *isb.ReadM
 type myForwardApplyWhereToErrTest struct {
 }
 
-func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -1188,7 +1188,7 @@ func (f myForwardApplyWhereToErrTest) ApplyTransform(ctx context.Context, messag
 type myForwardApplyTransformerErrTest struct {
 }
 
-func (f myForwardApplyTransformerErrTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardApplyTransformerErrTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,

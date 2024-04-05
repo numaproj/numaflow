@@ -19,12 +19,14 @@ package udsource
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -33,12 +35,20 @@ import (
 // GRPCBasedUDSource applies a user-defined source over gRPC
 // connection where server is the UDSource.
 type GRPCBasedUDSource struct {
-	client sourceclient.Client
+	vertexName         string
+	pipelineName       string
+	vertexReplicaIndex int32
+	client             sourceclient.Client
 }
 
-// NewUDSgRPCBasedUDSource accepts a gRPC client and returns a new GRPCBasedUDSource.
-func NewUDSgRPCBasedUDSource(c sourceclient.Client) (*GRPCBasedUDSource, error) {
-	return &GRPCBasedUDSource{c}, nil
+// NewUDSgRPCBasedUDSource accepts a vertex instance, gRPC client and returns a new GRPCBasedUDSource.
+func NewUDSgRPCBasedUDSource(vertexInstance *dfv1.VertexInstance, c sourceclient.Client) (*GRPCBasedUDSource, error) {
+	return &GRPCBasedUDSource{
+		vertexName:         vertexInstance.Vertex.Name,
+		pipelineName:       vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplicaIndex: vertexInstance.Replica,
+		client:             c,
+	}, nil
 }
 
 // CloseConn closes the gRPC client connection.
@@ -75,6 +85,11 @@ func (u *GRPCBasedUDSource) ApplyPendingFn(ctx context.Context) (int64, error) {
 		if resp.Result.Count < 0 {
 			return isb.PendingNotAvailable, nil
 		}
+		udsourcePending.WithLabelValues(
+			u.vertexName,
+			u.pipelineName,
+			strconv.Itoa(int(u.vertexReplicaIndex)),
+		).Set(float64(resp.Result.Count))
 		return resp.Result.Count, nil
 	} else {
 		return isb.PendingNotAvailable, err
@@ -143,6 +158,12 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 				},
 				ReadOffset: offset,
 			}
+			udsourceReadCount.WithLabelValues(
+				u.vertexName,
+				u.pipelineName,
+				strconv.Itoa(int(u.vertexReplicaIndex)),
+				strconv.Itoa(int(offset.PartitionIdx())),
+			).Inc()
 			readMessages = append(readMessages, readMessage)
 		}
 	}

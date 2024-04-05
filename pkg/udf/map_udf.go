@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -185,53 +184,47 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		// Populate shuffle function map
 		shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
+			if edge.GetToVertexPartitionCount() > 1 {
 				s := shuffle.NewShuffle(edge.To, edge.GetToVertexPartitionCount())
 				shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
 			}
 		}
 
 		// create a conditional forwarder for each partition
-		getVertexPartitionIdx := GetPartitionedBufferIdx(u.VertexInstance)
-		conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string) ([]forwarder.VertexBuffer, error) {
+		conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string, msgId string) ([]forwarder.VertexBuffer, error) {
 			var result []forwarder.VertexBuffer
 
+			// Drop message if it contains the special tag
 			if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
 				return result, nil
 			}
 
+			// Iterate through the edges
 			for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-				// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
-				if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
-						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-						result = append(result, forwarder.VertexBuffer{
-							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: toVertexPartition,
-						})
-					} else {
-						result = append(result, forwarder.VertexBuffer{
-							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, int32(edge.GetToVertexPartitionCount())),
-						})
-					}
-				} else {
-					if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-						if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
-							toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-							result = append(result, forwarder.VertexBuffer{
-								ToVertexName:         edge.To,
-								ToVertexPartitionIdx: toVertexPartition,
-							})
-						} else {
-							result = append(result, forwarder.VertexBuffer{
-								ToVertexName:         edge.To,
-								ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, int32(edge.GetToVertexPartitionCount())),
-							})
+				edgeKey := fmt.Sprintf("%s:%s", edge.From, edge.To)
+
+				// Condition to proceed for forwarding message: No conditions on edge, or message tags match edge conditions
+				proceed := edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 || sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values)
+
+				if proceed {
+					// if the edge has more than one partition, shuffle the message
+					// else forward the message to the default partition
+					partitionIdx := isb.DefaultPartitionIdx
+					if edge.GetToVertexPartitionCount() > 1 {
+						if edge.ToVertexType == dfv1.VertexTypeReduceUDF { // Shuffle on keys
+							partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnKeys(keys)
+						} else { // Shuffle on msgId
+							partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnId(msgId)
 						}
 					}
+
+					result = append(result, forwarder.VertexBuffer{
+						ToVertexName:         edge.To,
+						ToVertexPartitionIdx: partitionIdx,
+					})
 				}
 			}
+
 			return result, nil
 		})
 
@@ -321,18 +314,4 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	log.Info("All udf data processors exited...")
 	return nil
-}
-
-// GetPartitionedBufferIdx returns a function that returns a partitioned buffer index based on the toVertex name and the partition count
-// it distributes the messages evenly to the partitions of the toVertex based on the message count(round-robin)
-func GetPartitionedBufferIdx(vertexInstance *dfv1.VertexInstance) func(toVertex string, toVertexPartitionCount int32) int32 {
-	messagePerPartitionMap := make(map[string]*atomic.Int32)
-	for _, edge := range vertexInstance.Vertex.Spec.ToEdges {
-		messagePerPartitionMap[edge.To] = atomic.NewInt32(0)
-	}
-	return func(toVertex string, toVertexPartitionCount int32) int32 {
-		toVertexPartition := (messagePerPartitionMap[toVertex].Load() + 1) % toVertexPartitionCount
-		messagePerPartitionMap[toVertex].Store(toVertexPartition)
-		return toVertexPartition
-	}
 }
