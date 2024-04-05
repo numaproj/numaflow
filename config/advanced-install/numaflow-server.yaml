@@ -126,7 +126,6 @@ subjects:
 apiVersion: v1
 data:
   server.disable.auth: "true"
-  server.readonly: "false"
 kind: ConfigMap
 metadata:
   name: numaflow-cmd-params-config

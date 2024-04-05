@@ -16,7 +16,6 @@ import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Routes } from "./components/common/Routes";
 import { Login } from "./components/pages/Login";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
-import { useReadOnlyInfoFetch } from "./utils/fetchWrappers/readOnlyInfoFetch";
 import { notifyError } from "./utils/error";
 import {
   SlidingSidebar,
@@ -90,12 +89,6 @@ function App(props: AppProps) {
     loading,
   } = useSystemInfoFetch({ host: hostUrl });
 
-  const {
-    readOnlyInfo,
-    error: readOnlyInfoError,
-    loading: readOnlyInfoLoading,
-  } = useReadOnlyInfoFetch({ host: hostUrl });
-
   const location = useLocation();
 
   useEffect(() => {
@@ -154,18 +147,6 @@ function App(props: AppProps) {
     }
   }, [systemInfoError]);
 
-  // Notify if error loading read only info
-  useEffect(() => {
-    if (readOnlyInfoError) {
-      notifyError([
-        {
-          error: readOnlyInfoError,
-          options: { toastId: "read-only-info-fetch", autoClose: 5000 },
-        },
-      ]);
-    }
-  }, [readOnlyInfoError]);
-
   const handleSideBarClose = useCallback(() => {
     setSidebarCloseIndicator("id" + Math.random().toString(16).slice(2));
   }, []);
@@ -185,8 +166,8 @@ function App(props: AppProps) {
   }, []);
 
   const routes = useMemo(() => {
-    if (loading || readOnlyInfoLoading) {
-      // System info or Read Only info loading
+    if (loading) {
+      // System info loading
       return (
         <Box
           sx={{
@@ -218,26 +199,6 @@ function App(props: AppProps) {
           <ErrorDisplay
             title="Error loading system info"
             message={systemInfoError}
-          />
-        </Box>
-      );
-    }
-    if (readOnlyInfoError) {
-      // Read Only info load error
-      return (
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            width: "100%",
-            height: "100%",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <ErrorDisplay
-            title="Error loading read only info"
-            message={readOnlyInfoError}
           />
         </Box>
       );
@@ -276,13 +237,7 @@ function App(props: AppProps) {
         </Route>
       </Switch>
     );
-  }, [
-    systemInfo,
-    systemInfoError,
-    loading,
-    readOnlyInfoError,
-    readOnlyInfoLoading,
-  ]);
+  }, [systemInfo, systemInfoError, loading]);
 
   return (
     <div ref={pageRef} className="app-container">
@@ -293,7 +248,7 @@ function App(props: AppProps) {
           host: hostUrl,
           namespace,
           isPlugin: false,
-          isReadOnly: readOnlyInfo?.isReadOnly || false,
+          isReadOnly: systemInfo?.isReadOnly || false,
           sidebarProps,
           setSidebarProps,
           errors,
