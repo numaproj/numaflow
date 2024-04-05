@@ -11,6 +11,7 @@ spec:
           container:
             # Filter messages based on event time, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter
             image: quay.io/numaio/numaflow-java/mapt-event-time-filter-function:stable
+            imagePullPolicy: Always
     - name: sink-within-2022
       scale:
         min: 1

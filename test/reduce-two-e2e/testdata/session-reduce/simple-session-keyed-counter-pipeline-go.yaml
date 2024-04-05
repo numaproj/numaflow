@@ -17,12 +17,14 @@ spec:
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
+          imagePullPolicy: Always
     - name: compute-count
       partitions: 1
       udf:
         container:
           # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
           image: quay.io/numaio/numaflow-go/session-counter:stable
+          imagePullPolicy: Always
         groupBy:
           window:
             session:

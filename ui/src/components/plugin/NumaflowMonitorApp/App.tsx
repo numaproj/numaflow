@@ -13,7 +13,6 @@ import { Route, useLocation, Switch } from "react-router-dom";
 import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
 import { Routes } from "../Routes/Routes";
 import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
-import { useReadOnlyInfoFetch } from "../../../utils/fetchWrappers/readOnlyInfoFetch";
 import { notifyError } from "../../../utils/error";
 import {
   SlidingSidebar,
@@ -54,12 +53,6 @@ function App(props: AppProps) {
     loading,
   } = useSystemInfoFetch({ host: hostUrl });
 
-  const {
-    readOnlyInfo,
-    error: readOnlyInfoError,
-    loading: readOnlyInfoLoading,
-  } = useReadOnlyInfoFetch({ host: hostUrl });
-
   const location = useLocation();
 
   useEffect(() => {
@@ -93,18 +86,6 @@ function App(props: AppProps) {
     }
   }, [systemInfoError]);
 
-  // Notify if error loading read only info
-  useEffect(() => {
-    if (readOnlyInfoError) {
-      notifyError([
-        {
-          error: readOnlyInfoError,
-          options: { toastId: "read-only-info-fetch", autoClose: 5000 },
-        },
-      ]);
-    }
-  }, [readOnlyInfoError]);
-
   const handleSideBarClose = useCallback(() => {
     setSidebarCloseIndicator("id" + Math.random().toString(16).slice(2));
   }, []);
@@ -124,8 +105,8 @@ function App(props: AppProps) {
   }, []);
 
   const routes = useMemo(() => {
-    if (loading || readOnlyInfoLoading) {
-      // System info or Read Only info loading
+    if (loading) {
+      // System info loading
       return (
         <Box
           sx={{
@@ -161,26 +142,6 @@ function App(props: AppProps) {
         </Box>
       );
     }
-    if (readOnlyInfoError) {
-      // Read Only info load error
-      return (
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            width: "100%",
-            height: "100%",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <ErrorDisplay
-            title="Error loading read only info"
-            message={readOnlyInfoError}
-          />
-        </Box>
-      );
-    }
     if (hostUrl && namespace) {
       // Namespaced installation routing
       return (
@@ -196,16 +157,12 @@ function App(props: AppProps) {
         </Switch>
       );
     }
-    return <Box>Missing host or namespace</Box>;
-  }, [
-    systemInfo,
-    systemInfoError,
-    loading,
-    hostUrl,
-    namespace,
-    readOnlyInfoError,
-    readOnlyInfoLoading,
-  ]);
+    return (
+      <Box sx={{ padding: "1.6rem", fontSize: "1.6rem" }}>
+        Missing host or namespace
+      </Box>
+    );
+  }, [systemInfo, systemInfoError, loading, hostUrl, namespace]);
 
   return (
     <div ref={pageRef} className="app-container" style={{ height: "1000px" }}>
@@ -216,7 +173,7 @@ function App(props: AppProps) {
           host: hostUrl,
           namespace,
           isPlugin: true,
-          isReadOnly: readOnlyInfo?.isReadOnly || true,
+          isReadOnly: systemInfo?.isReadOnly || false,
           sidebarProps,
           setSidebarProps,
           errors,

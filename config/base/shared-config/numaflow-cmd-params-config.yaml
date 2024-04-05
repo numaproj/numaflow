@@ -22,7 +22,7 @@ data:
   # server.base.href: "/"
   #
   ### Whether to enable read only view for the UX server, defaults to false.
-  server.readonly: "false"
+  #  server.readonly: "false"
   #
   ### Whether to disable authentication and authorization for the UX server, defaults to false.
   server.disable.auth: "true"

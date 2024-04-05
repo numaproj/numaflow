@@ -65,11 +65,12 @@ type handler struct {
 	daemonClientsCache   *lru.Cache[string, *daemonclient.DaemonClient]
 	dexObj               *DexObject
 	localUsersAuthObject *LocalUsersAuthObject
+	isReadOnly           bool
 	healthChecker        *HealthChecker
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, isReadOnly bool) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -94,6 +95,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		daemonClientsCache:   daemonClientsCache,
 		dexObj:               dexObj,
 		localUsersAuthObject: localUsersAuthObject,
+		isReadOnly:           isReadOnly,
 		healthChecker:        NewHealthChecker(ctx),
 	}, nil
 }
@@ -282,6 +284,12 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 
 // CreatePipeline is used to create a given pipeline
 func (h *handler) CreatePipeline(c *gin.Context) {
+	if h.isReadOnly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual creation
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
@@ -410,6 +418,12 @@ func (h *handler) GetPipeline(c *gin.Context) {
 
 // UpdatePipeline is used to update a given pipeline
 func (h *handler) UpdatePipeline(c *gin.Context) {
+	if h.isReadOnly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 	// dryRun is used to check if the operation is just a validation or an actual update
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
@@ -460,6 +474,12 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 
 // DeletePipeline is used to delete a given pipeline
 func (h *handler) DeletePipeline(c *gin.Context) {
+	if h.isReadOnly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	if err := h.numaflowClient.Pipelines(ns).Delete(context.Background(), pipeline, metav1.DeleteOptions{}); err != nil {
@@ -475,6 +495,12 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 
 // PatchPipeline is used to patch the pipeline spec to achieve operations such as "pause" and "resume"
 func (h *handler) PatchPipeline(c *gin.Context) {
+	if h.isReadOnly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	patchSpec, err := io.ReadAll(c.Request.Body)
@@ -498,6 +524,12 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 }
 
 func (h *handler) CreateInterStepBufferService(c *gin.Context) {
+	if h.isReadOnly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual update
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
@@ -567,6 +599,12 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 }
 
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
+	if h.isReadOnly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 	// dryRun is used to check if the operation is just a validation or an actual update
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
@@ -603,6 +641,12 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 }
 
 func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
+	if h.isReadOnly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 
 	pipelines, err := h.numaflowClient.Pipelines(ns).List(context.Background(), metav1.ListOptions{})
@@ -672,6 +716,12 @@ func (h *handler) respondWithError(c *gin.Context, message string) {
 
 // UpdateVertex is used to update the vertex spec
 func (h *handler) UpdateVertex(c *gin.Context) {
+	if h.isReadOnly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	var (
 		requestBody     dfv1.AbstractVertex
 		inputVertexName = c.Param("vertex")
