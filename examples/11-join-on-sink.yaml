@@ -13,7 +13,7 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.7.0-rc1
     - name: even-cat
       udf:
         builtin:
