@@ -51,22 +51,16 @@ func StringSliceContains(list []string, str string) bool {
 	return false
 }
 
-// CompareSlice compares two slices based on operator
-func CompareSlice(operator v1alpha1.LogicOperator, sa []string, sb []string) bool {
+// CompareSlice compares two slices based on operator.
+// OP == AND returns true if all the elements of slice a are in slice b
+// OP = OR returns true if any of the elements of slice a are in slice b
+// OP = NOT returns false if any of the elements of slice a are in slice b
+func CompareSlice(operator v1alpha1.LogicOperator, a []string, b []string) bool {
 	switch operator {
 	case v1alpha1.LogicOperatorAnd:
 		// returns true if all the elements of slice a are in slice b
-		for _, val := range sa {
-			if !StringSliceContains(sb, val) {
-				return false
-			}
-		}
-		return true
-
-	case v1alpha1.LogicOperatorNot:
-		// returns false if any of the elements of slice a are in slice b
-		for _, val := range sa {
-			if StringSliceContains(sb, val) {
+		for _, val := range a {
+			if !StringSliceContains(b, val) {
 				return false
 			}
 		}
@@ -74,12 +68,21 @@ func CompareSlice(operator v1alpha1.LogicOperator, sa []string, sb []string) boo
 
 	case v1alpha1.LogicOperatorOr:
 		// returns true if any of the elements of slice a are in slice b
-		for _, val := range sa {
-			if StringSliceContains(sb, val) {
+		for _, val := range a {
+			if StringSliceContains(b, val) {
 				return true
 			}
 		}
 		return false
+
+	case v1alpha1.LogicOperatorNot:
+		// returns false if any of the elements of slice a are in slice b
+		for _, val := range a {
+			if StringSliceContains(b, val) {
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }

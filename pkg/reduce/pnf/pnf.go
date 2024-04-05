@@ -350,7 +350,7 @@ func (pm *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[
 	var to []forwarder.VertexBuffer
 	var err error
 	for _, msg := range writeMessages {
-		to, err = pm.whereToDecider.WhereTo(msg.Keys, msg.Tags)
+		to, err = pm.whereToDecider.WhereTo(msg.Keys, msg.Tags, msg.ID)
 		if err != nil {
 			metrics.PlatformError.With(map[string]string{
 				metrics.LabelVertex:             pm.vertexName,

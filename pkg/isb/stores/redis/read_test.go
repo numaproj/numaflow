@@ -300,7 +300,7 @@ type ReadWritePerformance struct {
 type forwardReadWritePerformance struct {
 }
 
-func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,

@@ -39,7 +39,7 @@ func (s myShutdownTest) IsHealthy(context.Context) error {
 	return nil
 }
 
-func (s myShutdownTest) WhereTo([]string, []string) ([]forwarder.VertexBuffer, error) {
+func (s myShutdownTest) WhereTo([]string, []string, string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{}, nil
 }
 
