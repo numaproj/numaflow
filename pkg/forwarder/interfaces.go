@@ -29,9 +29,13 @@ type ToWhichStepDecider interface {
 	// where former means, forward to all the neighbouring steps and latter means do not forward anywhere.
 	//
 	// Parameters:
-	// - keys: Used by shuffle to decide which partition to write, if the toVertex is 'reduce' and has multiple partitions.
+	// - keys: Used by shuffle to decide which partition to write, if the toVertex is 'reduce' and has
+	// multiple partitions. It is deterministic messages with same set of keys will always go to the same partition.
+	//
 	// - tags: Used for conditional forwarding.
-	// - id: Used by shuffle to decide which partition to write, if the toVertex is a 'map' and has multiple partitions.
+	//
+	// - id: Used by shuffle to decide which partition to write, if the toVertex is a 'map' and has
+	// multiple partitions. It is deterministic messages with same id will always go to the same partition.
 	WhereTo([]string, []string, string) ([]VertexBuffer, error)
 }
 
