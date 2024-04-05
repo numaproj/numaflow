@@ -24,9 +24,14 @@ type VertexBuffer struct {
 
 // ToWhichStepDecider decides which step to forward after applying the WhereTo function.
 type ToWhichStepDecider interface {
-	// WhereTo decides where to forward the result to based on the name of the step it returns.
-	// It supports 2 addition keywords which need not be a step name. They are "ALL" and "DROP"
+	// WhereTo decides where to forward the result based on the name of the step it returns.
+	// It supports 2 additional keywords which need not be a step name. They are "ALL" and "DROP"
 	// where former means, forward to all the neighbouring steps and latter means do not forward anywhere.
+	//
+	// Parameters:
+	// - keys: Used by shuffle to decide which partition to write, if the toVertex is 'reduce' and has multiple partitions.
+	// - tags: Used for conditional forwarding.
+	// - id: Used by shuffle to decide which partition to write, if the toVertex is a 'map' and has multiple partitions.
 	WhereTo([]string, []string, string) ([]VertexBuffer, error)
 }
 
