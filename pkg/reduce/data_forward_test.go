@@ -127,7 +127,7 @@ type myForwardTestRoundRobin struct {
 	count atomic.Int32
 }
 
-func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	var output = []forwarder.VertexBuffer{{
 		ToVertexName:         "reduce-to-vertex",
 		ToVertexPartitionIdx: f.count.Load() % 2,
@@ -180,7 +180,7 @@ func (f CounterReduceTest) CloseConn(_ context.Context) error {
 	return nil
 }
 
-func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f CounterReduceTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "reduce-to-vertex",
 		ToVertexPartitionIdx: 0,
@@ -241,7 +241,7 @@ func (s SessionSumReduceTest) CloseConn(ctx context.Context) error {
 	return nil
 }
 
-func (s SessionSumReduceTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (s SessionSumReduceTest) WhereTo(_ []string, _ []string, s2 string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "reduce-to-vertex",
 		ToVertexPartitionIdx: 0,
