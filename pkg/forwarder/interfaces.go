@@ -25,6 +25,7 @@ type VertexBuffer struct {
 // ToWhichStepDecider decides which step to forward after applying the WhereTo function.
 type ToWhichStepDecider interface {
 	// WhereTo decides where to forward the result to based on the name of the step it returns.
+	// It is deterministic and will forward the same message-id to the partition using a hashing algorithm.
 	// It supports 2 addition keywords which need not be a step name. They are "ALL" and "DROP"
 	// where former means, forward to all the neighbouring steps and latter means do not forward anywhere.
 	WhereTo([]string, []string, string) ([]VertexBuffer, error)
