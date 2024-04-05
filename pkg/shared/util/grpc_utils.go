@@ -28,9 +28,46 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	"github.com/Masterminds/semver/v3"
+
+	"github.com/numaproj/numaflow"
+
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 )
+
+// isCompatible checks if the current numaflow version is compatible with the given language's SDK version
+func isCompatible(serverInfo *info.ServerInfo) error {
+	type sdkVersions map[info.Language]string
+	var versionMappingConfig = sdkVersions{
+		info.Go:     ">= 0.7.0-0",
+		info.Java:   ">= 0.7.0-0",
+		info.Python: ">= 0.7.0-0",
+	}
+
+	sdkLanguage := serverInfo.Language
+	sdkVersion, err := semver.NewVersion(serverInfo.Version)
+	if err != nil {
+		return fmt.Errorf("error parsing SDK version: %w", err)
+	}
+
+	sdkVersionConstraint, ok := versionMappingConfig[sdkLanguage]
+	if !ok {
+		return fmt.Errorf("language %s is currently not supported", sdkLanguage)
+	}
+
+	c, err := semver.NewConstraint(sdkVersionConstraint)
+	if err != nil {
+		return fmt.Errorf("error parsing constraint: %w", err)
+	}
+
+	isValid, _ := c.Validate(sdkVersion)
+	if !isValid {
+		return fmt.Errorf("SDK version %s must be upgraded to %s, in order to work with numaflow version %s", sdkVersion, sdkVersionConstraint, numaflow.ReleaseVersion)
+	}
+
+	return nil
+}
 
 // ToUDFErr converts gRPC error to UDF Error
 func ToUDFErr(name string, err error) error {
@@ -76,6 +113,10 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	serverInfo, err := info.Read(info.WithServerInfoFilePath(filePath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read server info: %w", err)
+	}
+
+	if err := isCompatible(serverInfo); err != nil {
+		return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
 	}
 
 	return serverInfo, nil
