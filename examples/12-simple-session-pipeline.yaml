@@ -1,0 +1,49 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-session-counter
+spec:
+  watermark:
+    maxDelay: 30s
+  vertices:
+    - name: in
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: even-odd
+      scale:
+        min: 1
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.7.0-rc1
+          imagePullPolicy: Always
+    - name: compute-count
+      partitions: 1
+      udf:
+        container:
+          # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
+          # computes the count of even numbers and odd numbers in a session
+          image: quay.io/numaio/numaflow-go/session-counter:v0.7.0-rc1
+          imagePullPolicy: Always
+        groupBy:
+          window:
+            session:
+              timeout: 120s # session window will be closed after 120 seconds of inactivity
+          keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 2Gi
+              accessMode: ReadWriteOnce
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: even-odd
+    - from: even-odd
+      to: compute-count
+    - from: compute-count
+      to: sink
