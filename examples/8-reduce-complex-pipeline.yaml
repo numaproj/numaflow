@@ -17,13 +17,13 @@ spec:
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/function/examples/evenodd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.7.0-rc1
+          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
     - name: keyed-fixed-sum
       partitions: 2
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.7.0-rc1
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             fixed:
@@ -37,7 +37,7 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.7.0-rc1
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             fixed:
@@ -51,7 +51,7 @@ spec:
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.7.0-rc1
+          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
         groupBy:
           window:
             sliding:

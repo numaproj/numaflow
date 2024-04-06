@@ -19,7 +19,7 @@ spec:
         container:
           # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/retry
           # (a more realistic example might retry only on failure)
-          image: quay.io/numaio/numaflow-go/map-retry:v0.7.0-rc1
+          image: quay.io/numaio/numaflow-go/map-retry:v0.6.1
     - name: out
       scale:
         min: 1
