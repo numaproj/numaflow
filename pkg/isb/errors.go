@@ -18,6 +18,11 @@ package isb
 
 import "fmt"
 
+var (
+	BufferFullMessage  = "Buffer full!"
+	DuplicateIDMessage = "Duplicate ID!"
+)
+
 // MessageWriteErr is associated with message write errors.
 type MessageWriteErr struct {
 	Name    string

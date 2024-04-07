@@ -69,7 +69,7 @@ func TestNewSimpleBuffer(t *testing.T) {
 
 	// try to write 3 messages and it should fail (we have only space for 2)
 	_, errs3 := sb.Write(ctx, writeMessages[0:3])
-	assert.EqualValues(t, []error{nil, nil, isb.BufferWriteErr{Name: "test", Full: true, Message: "Buffer full!"}}, errs3)
+	assert.EqualValues(t, []error{nil, nil, isb.BufferWriteErr{Name: "test", Full: true, Message: isb.BufferFullMessage}}, errs3)
 
 	// let's read some more
 	readMessages, err = sb.Read(ctx, 2)
@@ -95,7 +95,7 @@ func TestNewSimpleBuffer_BufferFullWritingStrategyIsDiscard(t *testing.T) {
 	_, errors := sb.Write(ctx, writeMessages[0:3])
 	assert.NoError(t, errors[0])
 	assert.NoError(t, errors[1])
-	assert.EqualValues(t, []error{nil, nil, isb.NoRetryableBufferWriteErr{Name: "test", Message: "Buffer full!"}}, errors)
+	assert.EqualValues(t, []error{nil, nil, isb.NoRetryableBufferWriteErr{Name: "test", Message: isb.BufferFullMessage}}, errors)
 
 	// still full as we did not ack
 	assert.Equal(t, true, sb.IsFull())

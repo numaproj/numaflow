@@ -174,7 +174,7 @@ func TestRedisQWrite_WithInfoRefreshInterval(t *testing.T) {
 
 	// assert the actual error that the buffer is full
 	for _, err := range errs {
-		assert.Equal(t, err, isb.BufferWriteErr{Name: stream, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.BufferWriteErr{Name: stream, Full: true, Message: isb.BufferFullMessage})
 	}
 }
 
@@ -214,7 +214,7 @@ func TestRedisQWrite_WithInfoRefreshInterval_WithBufferFullWritingStrategyIsDisc
 
 	// assert the NoRetryableBufferWriteErr
 	for _, err := range errs {
-		assert.Equal(t, err, isb.NoRetryableBufferWriteErr{Name: stream, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.NoRetryableBufferWriteErr{Name: stream, Message: isb.BufferFullMessage})
 	}
 }
 
@@ -309,7 +309,7 @@ func Test_updateIsFullFlag(t *testing.T) {
 
 	// assert the actual error that the buffer is full
 	for _, err := range errs {
-		assert.Equal(t, err, isb.BufferWriteErr{Name: stream, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.BufferWriteErr{Name: stream, Full: true, Message: isb.BufferFullMessage})
 	}
 }
 
@@ -510,7 +510,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 	// Buffer is full at this point so write will fail with errors because of usage limit
 	_, errs := rqw.Write(ctx, messages)
 	for _, err := range errs {
-		assert.Equal(t, err, isb.BufferWriteErr{Name: buffer, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.BufferWriteErr{Name: buffer, Full: true, Message: isb.BufferFullMessage})
 	}
 
 	// Read all the messages.

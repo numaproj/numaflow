@@ -474,7 +474,6 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 		totalCount int
 		writeCount int
 		writeBytes float64
-		dropBytes  float64
 	)
 	totalCount = len(messages)
 	writeOffsets = make([]isb.Offset, 0, totalCount)
@@ -485,11 +484,31 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 		var failedMessages []isb.Message
 		needRetry := false
 		for idx, msg := range messages {
-			if err := errs[idx]; err != nil {
+			if err = errs[idx]; err != nil {
 				// ATM there are no user-defined errors during writing, all are InternalErrors.
+				// Non retryable error, drop the message. Non retryable errors are only returned
+				// when the buffer is full and the user has set the buffer full strategy to
+				// DiscardLatest or when the message is duplicate.
 				if errors.As(err, &isb.NoRetryableBufferWriteErr{}) {
-					// If toBufferPartition returns us a NoRetryableBufferWriteErr, we drop the message.
-					dropBytes += float64(len(msg.Payload))
+					metrics.DropMessagesCount.With(map[string]string{
+						metrics.LabelVertex:             df.vertexName,
+						metrics.LabelPipeline:           df.pipelineName,
+						metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+						metrics.LabelPartitionName:      toBufferPartition.GetName(),
+						metrics.LabelReason:             err.Error(),
+					}).Inc()
+
+					metrics.DropBytesCount.With(map[string]string{
+						metrics.LabelVertex:             df.vertexName,
+						metrics.LabelPipeline:           df.pipelineName,
+						metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+						metrics.LabelPartitionName:      toBufferPartition.GetName(),
+						metrics.LabelReason:             err.Error(),
+					}).Add(float64(len(msg.Payload)))
+
+					df.opts.logger.Infow("Dropped message", zap.String("reason", err.Error()), zap.String("partition", toBufferPartition.GetName()), zap.String("vertex", df.vertexName), zap.String("pipeline", df.pipelineName))
 				} else {
 					needRetry = true
 					// we retry only failed messages
@@ -527,8 +546,6 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 		}
 	}
 
-	metrics.DropMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(totalCount - writeCount))
-	metrics.DropBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(dropBytes)
 	metrics.WriteMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(writeCount))
 	metrics.WriteBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(writeBytes)
 	return writeOffsets, nil

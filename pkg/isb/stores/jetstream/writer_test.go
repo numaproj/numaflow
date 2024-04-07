@@ -300,7 +300,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
-		assert.Equal(t, errMsg, isb.NoRetryableBufferWriteErr{Name: streamName, Message: "Buffer full!"})
+		assert.Equal(t, errMsg, isb.NoRetryableBufferWriteErr{Name: streamName, Message: isb.BufferFullMessage})
 	}
 }
 
