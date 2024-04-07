@@ -109,5 +109,5 @@ type NoRetryableBufferWriteErr struct {
 }
 
 func (e NoRetryableBufferWriteErr) Error() string {
-	return fmt.Sprintf("(%s) %s %#v", e.Name, e.Message, e)
+	return e.Message
 }
