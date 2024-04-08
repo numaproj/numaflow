@@ -3056,7 +3056,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 					},
 					"retryInterval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RetryInterval is the wait time before retrying a batch after getting an error from a user defined processor or ISBSVC. A small value similar to the default of 0.001s will use more CPU if a processor or buffer enters a prolonged failed state, while a larger value might introduce unecessary delays on short-lived errors.",
+							Description: "RetryInterval is the wait time before retrying a batch after getting an error from a user defined processor or ISBSVC.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},

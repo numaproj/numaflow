@@ -596,8 +596,6 @@ type PipelineLimits struct {
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,4,opt,name=readTimeout"`
 	// RetryInterval is the wait time before retrying a batch after getting an error from a user defined processor or ISBSVC.
-	// A small value similar to the default of 0.001s will use more CPU if a processor or buffer enters a prolonged failed state, while a larger value might
-	// introduce unecessary delays on short-lived errors.
 	// +kubebuilder:default= "0.001s"
 	// +optional
 	RetryInterval *metav1.Duration `json:"retryInterval,omitempty" protobuf:"bytes,5,opt,name=retryInterval"`

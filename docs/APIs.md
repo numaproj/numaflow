@@ -3538,10 +3538,7 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 RetryInterval is the wait time before retrying a batch after getting an
-error from a user defined processor or ISBSVC. A small value similar to
-the default of 0.001s will use more CPU if a processor or buffer enters
-a prolonged failed state, while a larger value might introduce
-unecessary delays on short-lived errors.
+error from a user defined processor or ISBSVC.
 </p>
 </td>
 </tr>

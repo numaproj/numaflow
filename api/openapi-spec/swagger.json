@@ -19133,7 +19133,7 @@
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "retryInterval": {
-          "description": "RetryInterval is the wait time before retrying a batch after getting an error from a user defined processor or ISBSVC. A small value similar to the default of 0.001s will use more CPU if a processor or buffer enters a prolonged failed state, while a larger value might introduce unecessary delays on short-lived errors.",
+          "description": "RetryInterval is the wait time before retrying a batch after getting an error from a user defined processor or ISBSVC.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }
