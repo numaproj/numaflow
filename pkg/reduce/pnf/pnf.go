@@ -405,7 +405,7 @@ func (pf *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 				// Non retryable error, drop the message. Non retryable errors are only returned
 				// when the buffer is full and the user has set the buffer full strategy to
 				// DiscardLatest or when the message is duplicate.
-				if errors.As(writeErr, &isb.NoRetryableBufferWriteErr{}) {
+				if errors.As(writeErr, &isb.NonRetryableBufferWriteErr{}) {
 					metrics.DropMessagesCount.With(map[string]string{
 						metrics.LabelVertex:             pf.vertexName,
 						metrics.LabelPipeline:           pf.pipelineName,

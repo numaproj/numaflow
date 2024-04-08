@@ -166,7 +166,7 @@ func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([
 			// user explicitly wants to discard the message when buffer if full.
 			// return no retryable error as a callback to let caller know that the message is discarded.
 			for i := 0; i < len(errs); i++ {
-				errs[i] = isb.NoRetryableBufferWriteErr{Name: jw.name, Message: isb.BufferFullMessage}
+				errs[i] = isb.NonRetryableBufferWriteErr{Name: jw.name, Message: isb.BufferFullMessage}
 			}
 		default:
 			// Default behavior is to return a BufferWriteErr.
@@ -226,7 +226,7 @@ func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message,
 					// If a message gets repeated, it will have the same offset number as the one before it.
 					// We shouldn't try to publish watermark on these repeated messages. Doing so would
 					// violate the principle of publishing watermarks to monotonically increasing offsets.
-					errs[idx] = isb.NoRetryableBufferWriteErr{Name: jw.name, Message: isb.DuplicateIDMessage}
+					errs[idx] = isb.NonRetryableBufferWriteErr{Name: jw.name, Message: isb.DuplicateIDMessage}
 				} else {
 					writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}
 					errs[idx] = nil
@@ -289,7 +289,7 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 					// If a message gets repeated, it will have the same offset number as the one before it.
 					// We shouldn't try to publish watermark on these repeated messages. Doing so would
 					// violate the principle of publishing watermarks to monotonically increasing offsets.
-					errs[idx] = isb.NoRetryableBufferWriteErr{Name: jw.name, Message: isb.DuplicateIDMessage}
+					errs[idx] = isb.NonRetryableBufferWriteErr{Name: jw.name, Message: isb.DuplicateIDMessage}
 				} else {
 					writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}
 					errs[idx] = nil

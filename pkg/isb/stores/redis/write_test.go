@@ -212,9 +212,9 @@ func TestRedisQWrite_WithInfoRefreshInterval_WithBufferFullWritingStrategyIsDisc
 	defer func() { _ = client.DeleteKeys(ctx, internalKeys...) }()
 	_, errs = rqw.Write(ctx, writeMessages)
 
-	// assert the NoRetryableBufferWriteErr
+	// assert the NonRetryableBufferWriteErr
 	for _, err := range errs {
-		assert.Equal(t, err, isb.NoRetryableBufferWriteErr{Name: stream, Message: isb.BufferFullMessage})
+		assert.Equal(t, err, isb.NonRetryableBufferWriteErr{Name: stream, Message: isb.BufferFullMessage})
 	}
 }
 

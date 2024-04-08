@@ -152,7 +152,7 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 		} else {
 			switch b.options.bufferFullWritingStrategy {
 			case v1alpha1.DiscardLatest:
-				errs[idx] = isb.NoRetryableBufferWriteErr{Name: b.name, Message: isb.BufferFullMessage}
+				errs[idx] = isb.NonRetryableBufferWriteErr{Name: b.name, Message: isb.BufferFullMessage}
 			default:
 				errs[idx] = isb.BufferWriteErr{Name: b.name, Full: true, Message: isb.BufferFullMessage}
 			}

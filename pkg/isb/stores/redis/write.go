@@ -167,7 +167,7 @@ func (bw *BufferWrite) Write(_ context.Context, messages []isb.Message) ([]isb.O
 		case dfv1.DiscardLatest:
 			// user explicitly wants to discard the message when buffer if full.
 			// return no retryable error as a callback to let caller know that the message is discarded.
-			initializeErrorArray(errs, isb.NoRetryableBufferWriteErr{Name: bw.Name, Message: isb.BufferFullMessage})
+			initializeErrorArray(errs, isb.NonRetryableBufferWriteErr{Name: bw.Name, Message: isb.BufferFullMessage})
 		default:
 			// Default behavior is to return a BufferWriteErr.
 			initializeErrorArray(errs, isb.BufferWriteErr{Name: bw.Name, Full: true, Message: isb.BufferFullMessage})

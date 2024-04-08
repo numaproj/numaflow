@@ -95,7 +95,7 @@ func TestNewSimpleBuffer_BufferFullWritingStrategyIsDiscard(t *testing.T) {
 	_, errors := sb.Write(ctx, writeMessages[0:3])
 	assert.NoError(t, errors[0])
 	assert.NoError(t, errors[1])
-	assert.EqualValues(t, []error{nil, nil, isb.NoRetryableBufferWriteErr{Name: "test", Message: isb.BufferFullMessage}}, errors)
+	assert.EqualValues(t, []error{nil, nil, isb.NonRetryableBufferWriteErr{Name: "test", Message: isb.BufferFullMessage}}, errors)
 
 	// still full as we did not ack
 	assert.Equal(t, true, sb.IsFull())

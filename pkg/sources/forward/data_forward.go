@@ -489,7 +489,7 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 				// Non retryable error, drop the message. Non retryable errors are only returned
 				// when the buffer is full and the user has set the buffer full strategy to
 				// DiscardLatest or when the message is duplicate.
-				if errors.As(err, &isb.NoRetryableBufferWriteErr{}) {
+				if errors.As(err, &isb.NonRetryableBufferWriteErr{}) {
 					metrics.DropMessagesCount.With(map[string]string{
 						metrics.LabelVertex:             df.vertexName,
 						metrics.LabelPipeline:           df.pipelineName,
