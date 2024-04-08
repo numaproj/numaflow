@@ -140,6 +140,9 @@ spec:
                   readTimeout:
                     default: 1s
                     type: string
+                  retryInterval:
+                    default: 0.001s
+                    type: string
                 type: object
               sideInputs:
                 items:
@@ -5901,6 +5904,8 @@ spec:
                           format: int64
                           type: integer
                         readTimeout:
+                          type: string
+                        retryInterval:
                           type: string
                       type: object
                     metadata:

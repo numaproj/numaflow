@@ -51,6 +51,7 @@ interface Limits {
   bufferMaxLength: number;
   bufferUsageLimit: number;
   readTimeout: string;
+  retryInterval: string;
 }
 
 interface Lifecycle {

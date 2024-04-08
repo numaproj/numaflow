@@ -18,9 +18,12 @@ package pipeline
 
 import (
 	"context"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/kylelemons/godebug/pretty"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
@@ -548,6 +551,76 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 		assert.Len(t, deployList.Items, 1)
 		assert.Equal(t, "test-pl-daemon", deployList.Items[0].Name)
 	})
+}
+
+// abortIfStructHasZeroValueFields will ensure that this instance of limits has no
+// field which are set to nil or to a zero value. This is used to ensure a change
+// of vertex limits will be tested and reflected in controller's mergeLimits.
+func abortIfStructHasZeroValueFields(t *testing.T, limits dfv1.PipelineLimits) {
+	v := reflect.ValueOf(limits)
+	for i := 0; i < v.NumField(); i++ {
+		if v.Field(i).IsZero() {
+			t.Fatal("Field " + v.Type().Field(i).Name + " of PipelineLimits object has a non zero value which is not allowed in this test")
+		}
+	}
+}
+
+// Test_mergeLimits verifies that the mergeLimits function work as expect.
+// This test asserts that all defaultLimits test struct have a non zero value with reflect.
+// A person updating the VertexLimits or PipelineLimits would have to change this test as well.
+func Test_mergeLimits(t *testing.T) {
+
+	// defining test inputs
+	v1 := uint64(20)
+	v2 := uint32(30)
+	v3 := uint64(24)
+	v4 := uint64(120)
+	v6 := uint64(124)
+	// by convention, for this test, this one should have no nil values
+	defaultLimits := dfv1.PipelineLimits{
+		ReadBatchSize:    &v1,
+		ReadTimeout:      &metav1.Duration{Duration: time.Minute * time.Duration(3)},
+		BufferMaxLength:  &v3,
+		BufferUsageLimit: &v2,
+		RetryInterval:    &metav1.Duration{Duration: time.Minute * time.Duration(5)},
+	}
+	customLimits1 := dfv1.VertexLimits{}
+	customLimits2 := dfv1.VertexLimits{
+		ReadBatchSize:    &v4,
+		ReadTimeout:      &metav1.Duration{Duration: time.Minute * time.Duration(13)},
+		BufferMaxLength:  &v6,
+		BufferUsageLimit: nil,
+		RetryInterval:    &metav1.Duration{Duration: time.Minute * time.Duration(15)},
+	}
+
+	// this ensures that users won't forget about updating mergeLimits and its tests after
+	// modifying PipelineLimits or VertexLimits
+	abortIfStructHasZeroValueFields(t, defaultLimits)
+
+	// defining expected output
+	expectedOutput1 := defaultLimits
+	expectedOutput2 := dfv1.VertexLimits{
+		ReadBatchSize:    &v4,
+		ReadTimeout:      &metav1.Duration{Duration: time.Minute * time.Duration(13)},
+		BufferMaxLength:  &v6,
+		BufferUsageLimit: &v2,
+		RetryInterval:    &metav1.Duration{Duration: time.Minute * time.Duration(15)},
+	}
+
+	// running tests
+	testResult1 := mergeLimits(defaultLimits, &customLimits1)
+	testResult2 := mergeLimits(defaultLimits, &customLimits2)
+
+	// comparings results and providing the struct pretty diff on failure
+	if !reflect.DeepEqual(testResult1, expectedOutput1) {
+		t.Logf("Expected: %+v\n", expectedOutput1)
+		t.Logf("Actual: %+v\n", testResult1)
+		t.Fatal("Divergint expected and returned result for mergeLimits test 1")
+	}
+	if !reflect.DeepEqual(testResult2, expectedOutput2) {
+		t.Log("Divergeance: \n" + pretty.Compare(testResult2, expectedOutput2))
+		t.Fatal("Divergint expected and returned result for mergeLimits test 2")
+	}
 }
 
 func Test_createOrUpdateSIMDeployments(t *testing.T) {

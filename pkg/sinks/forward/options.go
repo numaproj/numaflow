@@ -39,11 +39,12 @@ type options struct {
 
 type Option func(*options) error
 
+// DefaultOptions return the default options.
 func DefaultOptions() *options {
 	return &options{
 		readBatchSize:   dfv1.DefaultReadBatchSize,
 		sinkConcurrency: dfv1.DefaultReadBatchSize,
-		retryInterval:   time.Millisecond,
+		retryInterval:   dfv1.DefaultRetryInterval,
 		logger:          logging.NewLogger(),
 	}
 }

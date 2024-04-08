@@ -3528,6 +3528,23 @@ the vertex’s limit settings
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>retryInterval</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+RetryInterval is the wait time before retrying a batch after getting an
+error from a user defined processor or ISBSVC. A small value similar to
+the default of 0.001s will use more CPU if a processor or buffer enters
+a prolonged failed state, while a larger value might introduce
+unecessary delays on short-lived errors.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.PipelinePhase">
@@ -5350,6 +5367,21 @@ overrides the settings from pipeline limits.
 BufferUsageLimit is used to define the percentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. It
 overrides the settings from pipeline limits.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>retryInterval</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+RetryInterval is the duration waited for before retrying after a UDF
+processing or buffer writing. It overrides the settings from the
+pipeline limits.
 </p>
 </td>
 </tr>

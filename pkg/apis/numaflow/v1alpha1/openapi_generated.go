@@ -3054,6 +3054,12 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"retryInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RetryInterval is the wait time before retrying a batch after getting an error from a user defined processor or ISBSVC. A small value similar to the default of 0.001s will use more CPU if a processor or buffer enters a prolonged failed state, while a larger value might introduce unecessary delays on short-lived errors.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 				},
 			},
 		},
@@ -4321,6 +4327,12 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref common.ReferenceCallback
 							Description: "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
 							Type:        []string{"integer"},
 							Format:      "int64",
+						},
+					},
+					"retryInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RetryInterval is the duration waited for before retrying after a UDF processing or buffer writing. It overrides the settings from the pipeline limits.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 				},

@@ -1448,6 +1448,11 @@ func (in *PipelineLimits) DeepCopyInto(out *PipelineLimits) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
+	if in.RetryInterval != nil {
+		in, out := &in.RetryInterval, &out.RetryInterval
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	return
 }
 
@@ -2301,6 +2306,11 @@ func (in *VertexLimits) DeepCopyInto(out *VertexLimits) {
 	if in.BufferUsageLimit != nil {
 		in, out := &in.BufferUsageLimit, &out.BufferUsageLimit
 		*out = new(uint32)
+		**out = **in
+	}
+	if in.RetryInterval != nil {
+		in, out := &in.RetryInterval, &out.RetryInterval
+		*out = new(metav1.Duration)
 		**out = **in
 	}
 	return
