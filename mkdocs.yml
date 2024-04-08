@@ -80,6 +80,7 @@ nav:
                   - Overview: "user-guide/user-defined-functions/reduce/windowing/windowing.md"
                   - Fixed: "user-guide/user-defined-functions/reduce/windowing/fixed.md"
                   - Sliding: "user-guide/user-defined-functions/reduce/windowing/sliding.md"
+                  - Session: "user-guide/user-defined-functions/reduce/windowing/session.md"
               - Examples: "user-guide/user-defined-functions/reduce/examples.md"
       - Reference:
           - user-guide/reference/pipeline-tuning.md
