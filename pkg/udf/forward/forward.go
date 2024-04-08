@@ -572,7 +572,6 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 		totalCount int
 		writeCount int
 		writeBytes float64
-		dropBytes  float64
 	)
 	totalCount = len(messages)
 	writeOffsets = make([]isb.Offset, 0, totalCount)
@@ -583,11 +582,31 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 		var failedMessages []isb.Message
 		needRetry := false
 		for idx, msg := range messages {
-			if err := errs[idx]; err != nil {
+			if err = errs[idx]; err != nil {
 				// ATM there are no user defined errors during write, all are InternalErrors.
-				if errors.As(err, &isb.NoRetryableBufferWriteErr{}) {
-					// If toBufferPartition returns us a NoRetryableBufferWriteErr, we drop the message.
-					dropBytes += float64(len(msg.Payload))
+				// Non retryable error, drop the message. Non retryable errors are only returned
+				// when the buffer is full and the user has set the buffer full strategy to
+				// DiscardLatest or when the message is duplicate.
+				if errors.As(err, &isb.NonRetryableBufferWriteErr{}) {
+					metrics.DropMessagesCount.With(map[string]string{
+						metrics.LabelVertex:             isdf.vertexName,
+						metrics.LabelPipeline:           isdf.pipelineName,
+						metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
+						metrics.LabelPartitionName:      toBufferPartition.GetName(),
+						metrics.LabelReason:             err.Error(),
+					}).Inc()
+
+					metrics.DropBytesCount.With(map[string]string{
+						metrics.LabelVertex:             isdf.vertexName,
+						metrics.LabelPipeline:           isdf.pipelineName,
+						metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
+						metrics.LabelPartitionName:      toBufferPartition.GetName(),
+						metrics.LabelReason:             err.Error(),
+					}).Add(float64(len(msg.Payload)))
+
+					isdf.opts.logger.Infow("Dropped message", zap.String("reason", err.Error()), zap.String("partition", toBufferPartition.GetName()), zap.String("vertex", isdf.vertexName), zap.String("pipeline", isdf.pipelineName))
 				} else {
 					needRetry = true
 					// we retry only failed messages
@@ -625,8 +644,6 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 		}
 	}
 
-	metrics.DropMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(totalCount - writeCount))
-	metrics.DropBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(dropBytes)
 	metrics.WriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(writeCount))
 	metrics.WriteBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(writeBytes)
 	return writeOffsets, nil

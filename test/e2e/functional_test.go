@@ -240,8 +240,8 @@ func (s *FunctionalSuite) TestDropOnFull() {
 	time.Sleep(time.Second * 5)
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
 
-	expectedDropMetricOne := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-0",pipeline="drop-on-full",replica="0",vertex="in",vertex_type="Source"} 1`
-	expectedDropMetricTwo := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-1",pipeline="drop-on-full",replica="0",vertex="in",vertex_type="Source"} 1`
+	expectedDropMetricOne := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-0",pipeline="drop-on-full",reason="Buffer full!",replica="0",vertex="in",vertex_type="Source"} 1`
+	expectedDropMetricTwo := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-1",pipeline="drop-on-full",reason="Buffer full!",replica="0",vertex="in",vertex_type="Source"} 1`
 	// wait for the drop metric to be updated, time out after 10s.
 	timeoutChan := time.After(time.Second * 10)
 	ticker := time.NewTicker(time.Second * 2)
