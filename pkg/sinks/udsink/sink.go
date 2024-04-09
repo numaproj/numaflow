@@ -112,6 +112,7 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 			EventTime: timestamppb.New(m.EventTime),
 			// Watermark is only available in readmessage....
 			Watermark: timestamppb.New(time.Time{}), // TODO: insert the correct watermark
+			Headers:   m.Headers,
 		}
 	}
 	return nil, s.udsink.ApplySink(ctx, msgs)
