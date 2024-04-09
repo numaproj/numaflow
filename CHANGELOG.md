@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.2.0-rc3 (2024-04-09)
+
+ * [4e172e80](https://github.com/numaproj/numaflow/commit/4e172e808d31659b2364088d8a07fcf6381d4040) Update manifests to v1.2.0-rc3
+ * [109582c8](https://github.com/numaproj/numaflow/commit/109582c861a0603184e412602488df81eca8c474) fix: add headers to custom sinkrequest (#1653)
+ * [6e12f09e](https://github.com/numaproj/numaflow/commit/6e12f09e42efba50fe251dc1954a3d15ee29c1a8) fix: pass headers to transfomer (#1651)
+ * [0b76352c](https://github.com/numaproj/numaflow/commit/0b76352c5f1d557152f028df3166f098380c0bb8) fix: avoid publishing watermarks for duplicate messages. (#1649)
+ * [1717e511](https://github.com/numaproj/numaflow/commit/1717e511579fb78bc2e51c2da18ea4ef66e81afc) fix: flaky TestDropOnFull  (#1647)
+ * [b4b21a5e](https://github.com/numaproj/numaflow/commit/b4b21a5eb346d6b9d2be149b2c00f7dcbf66ec28) fix: Dedup not working for multi-partitioned edge (#1639)
+ * [7a23eda0](https://github.com/numaproj/numaflow/commit/7a23eda07ae7fc8e7ea89af60af15813b67aae91) fix: readonly view (#1640)
+
+### Contributors
+
+ * Naga
+ * Vedant Gupta
+ * Yashash H L
+
 ## v1.2.0-rc2 (2024-04-03)
 
  * [66cc4903](https://github.com/numaproj/numaflow/commit/66cc4903d480cd4b4eca73b829bfd78b483f4a95) Update manifests to v1.2.0-rc2
