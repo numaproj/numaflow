@@ -100,7 +100,7 @@ Similarly, another approach is to add `--managed-namespace` and the specific nam
 
 By default, the Numaflow controller is installed with `Active-Passive` HA strategy enabled, which means you can run the controller with multiple replicas (defaults to 1 in the manifests).
 
-There are 3 parameters can be tuned for the leader election mechanism of HA.
+There are some parameters can be tuned for the leader election mechanism of HA.
 
 ```yaml
 apiVersion: v1
@@ -123,7 +123,7 @@ data:
   controller.leader.election.lease.renew.period: 2s
 ```
 
-These 3 parameters are useful when you want to tune the frequency of leader election renewal calls to K8s API server, which are usually configured at a high priority level of [API Priority and Fairness](https://kubernetes.io/docs/concepts/cluster-administration/flow-control/).
+These parameters are useful when you want to tune the frequency of leader election renewal calls to K8s API server, which are usually configured at a high priority level of [API Priority and Fairness](https://kubernetes.io/docs/concepts/cluster-administration/flow-control/).
 
 To turn off HA, configure the ConfigMap `numaflow-cmd-params-config` as following.
 
