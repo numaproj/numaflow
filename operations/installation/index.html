@@ -2334,6 +2334,27 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 </code></pre></div>
 <h2 id="high-availability">High Availability<a class="headerlink" href="#high-availability" title="Permanent link">&para;</a></h2>
 <p>By default, the Numaflow controller is installed with <code>Active-Passive</code> HA strategy enabled, which means you can run the controller with multiple replicas (defaults to 1 in the manifests).</p>
+<p>There are some parameters can be tuned for the leader election mechanism of HA.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="c1">### The duration that non-leader candidates will wait to force acquire leadership.</span>
+<span class="w">  </span><span class="c1">#   This is measured against time of last observed ack. Default is 15 seconds.</span>
+<span class="w">  </span><span class="c1">#   The configuration has to be: lease.duration &gt; lease.renew.deadline &gt; lease.renew.period</span>
+<span class="w">  </span><span class="nt">controller.leader.election.lease.duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15s</span>
+<span class="w">  </span><span class="c1">#</span>
+<span class="w">  </span><span class="c1">### The duration that the acting controlplane will retry refreshing leadership before giving up.</span>
+<span class="w">  </span><span class="c1">#   Default is 10 seconds.</span>
+<span class="w">  </span><span class="c1">#   The configuration has to be: lease.duration &gt; lease.renew.deadline &gt; lease.renew.period</span>
+<span class="w">  </span><span class="nt">controller.leader.election.lease.renew.deadline</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">  </span><span class="c1">### The duration the LeaderElector clients should wait between tries of actions, which means every</span>
+<span class="w">  </span><span class="c1">#   this period of time, it tries to renew the lease. Default is 2 seconds.</span>
+<span class="w">  </span><span class="c1">#   The configuration has to be: lease.duration &gt; lease.renew.deadline &gt; lease.renew.period</span>
+<span class="w">  </span><span class="nt">controller.leader.election.lease.renew.period</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2s</span>
+</code></pre></div>
+<p>These parameters are useful when you want to tune the frequency of leader election renewal calls to K8s API server, which are usually configured at a high priority level of <a href="https://kubernetes.io/docs/concepts/cluster-administration/flow-control/">API Priority and Fairness</a>.</p>
 <p>To turn off HA, configure the ConfigMap <code>numaflow-cmd-params-config</code> as following.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
@@ -2341,7 +2362,7 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-cmd-params-config</span>
 <span class="nt">data</span><span class="p">:</span>
 <span class="w">  </span><span class="c1"># Whether to disable leader election for the controller, defaults to false</span>
-<span class="w">  </span><span class="nt">controller.disable.leader.election</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">  </span><span class="nt">controller.leader.election.disabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </code></pre></div>
 <p>If HA is turned off, the controller deployment should not run with multiple replicas.</p>
 
