@@ -87,6 +87,9 @@ func New(
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
+		if x.RetryInterval != nil {
+			forwardOpts = append(forwardOpts, sourceforward.WithRetryInterval(x.RetryInterval.Duration))
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

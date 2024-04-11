@@ -377,11 +377,13 @@ func (p Pipeline) GetPipelineLimits() PipelineLimits {
 	defaultBufferMaxLength := uint64(DefaultBufferLength)
 	defaultBufferUsageLimit := uint32(100 * DefaultBufferUsageLimit)
 	defaultReadTimeout := time.Second
+	defaultRetryInterval := time.Millisecond
 	limits := PipelineLimits{
 		ReadBatchSize:    &defaultReadBatchSize,
 		BufferMaxLength:  &defaultBufferMaxLength,
 		BufferUsageLimit: &defaultBufferUsageLimit,
 		ReadTimeout:      &metav1.Duration{Duration: defaultReadTimeout},
+		RetryInterval:    &metav1.Duration{Duration: defaultRetryInterval},
 	}
 	if x := p.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
@@ -395,6 +397,9 @@ func (p Pipeline) GetPipelineLimits() PipelineLimits {
 		}
 		if x.ReadTimeout != nil {
 			limits.ReadTimeout = x.ReadTimeout
+		}
+		if x.RetryInterval != nil {
+			limits.RetryInterval = x.RetryInterval
 		}
 	}
 	return limits
@@ -590,6 +595,10 @@ type PipelineLimits struct {
 	// +kubebuilder:default= "1s"
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,4,opt,name=readTimeout"`
+	// RetryInterval is the wait time before retrying a batch after getting an error from a user defined processor or ISBSVC.
+	// +kubebuilder:default= "0.001s"
+	// +optional
+	RetryInterval *metav1.Duration `json:"retryInterval,omitempty" protobuf:"bytes,5,opt,name=retryInterval"`
 }
 
 type PipelineStatus struct {

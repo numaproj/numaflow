@@ -628,6 +628,8 @@ func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
 	v.Limits = &mergedLimits
 }
 
+// mergeLimits returns a new dfv1.VertexLimits struct copied from vLimits
+// and where all the unset entries are replaced with the values from plLimits.
 func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.VertexLimits {
 	result := dfv1.VertexLimits{}
 	if vLimits != nil {
@@ -635,6 +637,7 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 		result.BufferUsageLimit = vLimits.BufferUsageLimit
 		result.ReadBatchSize = vLimits.ReadBatchSize
 		result.ReadTimeout = vLimits.ReadTimeout
+		result.RetryInterval = vLimits.RetryInterval
 	}
 	if result.ReadBatchSize == nil {
 		result.ReadBatchSize = plLimits.ReadBatchSize
@@ -647,6 +650,9 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 	}
 	if result.BufferUsageLimit == nil {
 		result.BufferUsageLimit = plLimits.BufferUsageLimit
+	}
+	if result.RetryInterval == nil {
+		result.RetryInterval = plLimits.RetryInterval
 	}
 	return result
 }

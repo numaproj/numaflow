@@ -162,6 +162,7 @@ const mockPipeline = {
       bufferMaxLength: 30000,
       bufferUsageLimit: 80,
       readTimeout: "1s",
+      retryInterval: "0.001s",
     },
     watermark: {
       maxDelay: "0s",

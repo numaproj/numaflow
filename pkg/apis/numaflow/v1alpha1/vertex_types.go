@@ -677,6 +677,10 @@ type VertexLimits struct {
 	// It overrides the settings from pipeline limits.
 	// +optional
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
+	// RetryInterval is the duration waited for before retrying after a UDF processing or buffer writing.
+	// It overrides the settings from the pipeline limits.
+	// +optional
+	RetryInterval *metav1.Duration `json:"retryInterval,omitempty" protobuf:"bytes,5,opt,name=retryInterval"`
 }
 
 func (v VertexSpec) getType() containerSupplier {

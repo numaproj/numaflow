@@ -88,6 +88,9 @@ func NewToKafka(vertexInstance *dfv1.VertexInstance,
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
+		if x.RetryInterval != nil {
+			forwardOpts = append(forwardOpts, sinkforward.WithRetryInterval(x.RetryInterval.Duration))
+		}
 	}
 
 	f, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, toKafka, fetchWatermark, publishWatermark, idleManager, forwardOpts...)

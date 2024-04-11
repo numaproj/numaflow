@@ -679,6 +679,8 @@ spec:
                           type: integer
                         readTimeout:
                           type: string
+                        retryInterval:
+                          type: string
                       type: object
                     fromVertexPartitionCount:
                       format: int32
@@ -704,6 +706,8 @@ spec:
                           format: int64
                           type: integer
                         readTimeout:
+                          type: string
+                        retryInterval:
                           type: string
                       type: object
                     toVertexPartitionCount:
@@ -1547,6 +1551,8 @@ spec:
                     format: int64
                     type: integer
                   readTimeout:
+                    type: string
+                  retryInterval:
                     type: string
                 type: object
               metadata:
@@ -3756,6 +3762,8 @@ spec:
                           type: integer
                         readTimeout:
                           type: string
+                        retryInterval:
+                          type: string
                       type: object
                     fromVertexPartitionCount:
                       format: int32
@@ -3781,6 +3789,8 @@ spec:
                           format: int64
                           type: integer
                         readTimeout:
+                          type: string
+                        retryInterval:
                           type: string
                       type: object
                     toVertexPartitionCount:

@@ -75,6 +75,9 @@ func NewBlackhole(vertexInstance *dfv1.VertexInstance,
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
+		if x.RetryInterval != nil {
+			forwardOpts = append(forwardOpts, sinkforward.WithRetryInterval(x.RetryInterval.Duration))
+		}
 	}
 
 	isdf, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, bh, fetchWatermark, publishWatermark, idleManager, forwardOpts...)

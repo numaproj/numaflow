@@ -916,6 +916,11 @@ message PipelineLimits {
   // +kubebuilder:default= "1s"
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 4;
+
+  // RetryInterval is the wait time before retrying a batch after getting an error from a user defined processor or ISBSVC.
+  // +kubebuilder:default= "0.001s"
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration retryInterval = 5;
 }
 
 // +kubebuilder:object:root=true
@@ -1348,6 +1353,11 @@ message VertexLimits {
   // It overrides the settings from pipeline limits.
   // +optional
   optional uint32 bufferUsageLimit = 4;
+
+  // RetryInterval is the duration waited for before retrying after a UDF processing or buffer writing.
+  // It overrides the settings from the pipeline limits.
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration retryInterval = 5;
 }
 
 // +kubebuilder:object:root=true

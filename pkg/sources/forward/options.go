@@ -43,7 +43,7 @@ func DefaultOptions() *options {
 	return &options{
 		readBatchSize:          dfv1.DefaultReadBatchSize,
 		transformerConcurrency: dfv1.DefaultReadBatchSize,
-		retryInterval:          time.Millisecond,
+		retryInterval:          dfv1.DefaultRetryInterval,
 		logger:                 logging.NewLogger(),
 	}
 }

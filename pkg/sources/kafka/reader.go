@@ -351,6 +351,9 @@ func NewKafkaSource(
 		if x.ReadBatchSize != nil {
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
+		if x.RetryInterval != nil {
+			forwardOpts = append(forwardOpts, sourceforward.WithRetryInterval(x.RetryInterval.Duration))
+		}
 	}
 	// create a source watermark publisher
 	sourceWmPublisher := publish.NewSourcePublish(ctx, ks.pipelineName, ks.vertexName, publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))

@@ -359,6 +359,7 @@ func Test_GetPipelineLimits(t *testing.T) {
 	assert.Equal(t, float64(DefaultBufferUsageLimit), float64(*l.BufferUsageLimit)/100)
 	assert.Equal(t, int64(DefaultReadBatchSize), int64(*l.ReadBatchSize))
 	assert.Equal(t, "1s", l.ReadTimeout.Duration.String())
+	//assert.Equal(t, "1ms", l.RetryInterval.Duration.String())
 
 	length := uint64(2000)
 	usuageLimit := uint32(40)
@@ -368,12 +369,14 @@ func Test_GetPipelineLimits(t *testing.T) {
 		BufferUsageLimit: &usuageLimit,
 		ReadBatchSize:    &readBatch,
 		ReadTimeout:      &metav1.Duration{Duration: time.Duration(5 * time.Second)},
+		RetryInterval:    &metav1.Duration{Duration: time.Duration(500 * time.Millisecond)},
 	}
 	l = pl.GetPipelineLimits()
 	assert.Equal(t, length, *l.BufferMaxLength)
 	assert.Equal(t, float64(40)/100, float64(*l.BufferUsageLimit)/100)
 	assert.Equal(t, readBatch, *l.ReadBatchSize)
 	assert.Equal(t, "5s", l.ReadTimeout.Duration.String())
+	assert.Equal(t, "500ms", l.RetryInterval.Duration.String())
 }
 
 func Test_GetAllBuckets(t *testing.T) {

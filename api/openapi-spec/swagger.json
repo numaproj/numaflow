@@ -19131,6 +19131,10 @@
         "readTimeout": {
           "description": "Read timeout for all the vertices in the pipeline, can be overridden by the vertex's limit settings",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "retryInterval": {
+          "description": "RetryInterval is the wait time before retrying a batch after getting an error from a user defined processor or ISBSVC.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }
     },
@@ -19809,6 +19813,10 @@
         },
         "readTimeout": {
           "description": "Read timeout duration from the source or buffer It overrides the settings from pipeline limits.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "retryInterval": {
+          "description": "RetryInterval is the duration waited for before retrying after a UDF processing or buffer writing. It overrides the settings from the pipeline limits.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }

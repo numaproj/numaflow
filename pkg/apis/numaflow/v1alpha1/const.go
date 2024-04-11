@@ -139,6 +139,9 @@ const (
 	DefaultBufferUsageLimit = 0.8
 	DefaultReadBatchSize    = 500
 
+	// Time to wait before a retry for datum batches on user defined processors or isbsvc errors.
+	DefaultRetryInterval = time.Millisecond
+
 	// Auto scaling
 	DefaultLookbackSeconds          = 120 // Default lookback seconds for calculating avg rate and pending
 	DefaultCooldownSeconds          = 90  // Default cooldown seconds after a scaling operation
