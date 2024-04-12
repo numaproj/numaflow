@@ -37,7 +37,7 @@ func NewServerCommand() *cobra.Command {
 		baseHref           string
 		disableAuth        bool
 		serverAddr         string
-		corsAllowedOrigins []string
+		corsAllowedOrigins string
 		readOnly           bool
 	)
 
@@ -76,6 +76,6 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().BoolVar(&readOnly, "readonly", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_READONLY", false), "Whether to enable read only view for the UX server, defaults to false.")
 	command.Flags().BoolVar(&disableAuth, "disable-auth", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_AUTH", false), "Whether to disable authentication and authorization, defaults to false.")
 	command.Flags().StringVar(&serverAddr, "server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
-	command.Flags().StringSliceVar(&corsAllowedOrigins, "cors-allowed-origins", strings.Split(sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS", "https://localhost:8443,https://localhost:8444"), ","), "The default values for allowed cors AllowOrigins header field")
+	command.Flags().StringVar(&corsAllowedOrigins, "cors-allowed-origins", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS", ""), "The values for allowed cors AllowOrigins header field, separated by comma.")
 	return command
 }
