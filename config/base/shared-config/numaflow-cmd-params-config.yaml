@@ -28,4 +28,4 @@ data:
   # server.address: https://localhost:8443
 #
   # The list of allowed origins for CORS on numaflow api
-  # server.cors.allowed.origins: https://localhost:8443, https://localhost:8444
+  # server.cors.allowed.origins: "https://localhost:8443,https://localhost:8444"

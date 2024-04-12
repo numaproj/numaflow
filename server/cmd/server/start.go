@@ -70,7 +70,7 @@ func (s *server) Start(ctx context.Context) {
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"https://localhost:8443", "https://localhost:8444"}, // s.options.CorsAllowedOrigins,
+		AllowOrigins:     s.options.CorsAllowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
 		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type"},
 		AllowCredentials: true,
