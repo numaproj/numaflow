@@ -38,7 +38,7 @@ func NewServerCommand() *cobra.Command {
 		disableAuth        bool
 		serverAddr         string
 		corsAllowedOrigins []string
-		readOnly         bool
+		readOnly           bool
 	)
 
 	command := &cobra.Command{
@@ -52,7 +52,6 @@ func NewServerCommand() *cobra.Command {
 				baseHref = baseHref + "/"
 			}
 			opts := svrcmd.ServerOptions{
-<<<<<<< HEAD
 				Insecure:           insecure,
 				Port:               port,
 				Namespaced:         namespaced,
@@ -62,17 +61,7 @@ func NewServerCommand() *cobra.Command {
 				DexServerAddr:      common.NumaflowDexServerAddr,
 				ServerAddr:         serverAddr,
 				CorsAllowedOrigins: corsAllowedOrigins,
-=======
-				Insecure:         insecure,
-				Port:             port,
-				Namespaced:       namespaced,
-				ManagedNamespace: managedNamespace,
-				BaseHref:         baseHref,
-				ReadOnly:         readOnly,
-				DisableAuth:      disableAuth,
-				DexServerAddr:    common.NumaflowDexServerAddr,
-				ServerAddr:       serverAddr,
->>>>>>> main
+				ReadOnly:           readOnly,
 			}
 			server := svrcmd.NewServer(opts)
 			log := logging.NewLogger().Named("server")
