@@ -157,7 +157,11 @@ function App(props: AppProps) {
         </Switch>
       );
     }
-    return <Box>Missing host or namespace</Box>;
+    return (
+      <Box sx={{ padding: "1.6rem", fontSize: "1.6rem" }}>
+        Missing host or namespace
+      </Box>
+    );
   }, [systemInfo, systemInfoError, loading, hostUrl, namespace]);
 
   return (
@@ -169,6 +173,7 @@ function App(props: AppProps) {
           host: hostUrl,
           namespace,
           isPlugin: true,
+          isReadOnly: systemInfo?.isReadOnly || false,
           sidebarProps,
           setSidebarProps,
           errors,

@@ -19,6 +19,7 @@ export function ISBUpdate({
   namespaceId,
   isbId,
   viewType,
+  titleOverride,
   onUpdateComplete,
   setModalOnClose,
 }: SpecEditorSidebarProps) {
@@ -214,7 +215,9 @@ export function ISBUpdate({
           marginBottom: "3.2rem",
         }}
       >
-        <span className="isb-spec-header-text">{`Edit ISB Service: ${isbId}`}</span>
+        <span className="isb-spec-header-text">
+          {titleOverride ? titleOverride : `Edit ISB Service: ${isbId}`}
+        </span>
       </Box>
       <SpecEditor
         initialYaml={initialYaml}

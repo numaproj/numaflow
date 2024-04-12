@@ -53,6 +53,7 @@ type ServerOptions struct {
 	DexServerAddr      string
 	ServerAddr         string
 	CorsAllowedOrigins []string
+	ReadOnly           bool
 }
 
 type server struct {
@@ -91,6 +92,7 @@ func (s *server) Start(ctx context.Context) {
 		routes.SystemInfo{
 			ManagedNamespace: s.options.ManagedNamespace,
 			Namespaced:       s.options.Namespaced,
+			IsReadOnly:       s.options.ReadOnly,
 			Version:          numaflow.GetVersion().String()},
 		routes.AuthInfo{
 			DisableAuth:   s.options.DisableAuth,

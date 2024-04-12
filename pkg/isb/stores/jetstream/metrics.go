@@ -107,10 +107,3 @@ var isbAckTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Help:      "Processing times of acks for jetstream",
 	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*2, 10),
 }, []string{"buffer"})
-
-// isbDedupCount is used to indicate the number of messages that are duplicate
-var isbDedupCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "isb_jetstream",
-	Name:      "dedup_total",
-	Help:      "Total number of jetstream dedup",
-}, []string{"buffer"})

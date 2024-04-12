@@ -113,7 +113,8 @@ export function NamespaceListingWrapper({
   isbData,
   refresh,
 }: NamespacePipelineListingProps) {
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const { setSidebarProps, isReadOnly } =
+    useContext<AppContextProps>(AppContext);
   const [search, setSearch] = useState("");
   const [health, setHealth] = useState(ALL);
   const [status, setStatus] = useState(ALL);
@@ -359,37 +360,39 @@ export function NamespaceListingWrapper({
               />
             </Tabs>
           </Box>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              textDecoration: "none",
-              marginBottom: "1.12rem",
-            }}
-          >
-            <Button
-              variant="outlined"
-              startIcon={<PlusIcon />}
-              size="medium"
+          {!isReadOnly && (
+            <Box
               sx={{
-                marginRight: "1rem",
-                justifyContent: "flex-end",
-                fontSize: "1.4rem",
+                display: "flex",
+                flexDirection: "row",
+                textDecoration: "none",
+                marginBottom: "1.12rem",
               }}
-              onClick={handleCreatePiplineClick}
             >
-              Create Pipeline
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<PlusIcon />}
-              size="small"
-              onClick={handleCreateISBClick}
-              sx={{ justifyContent: "flex-end", fontSize: "1.4rem" }}
-            >
-              Create ISB Service
-            </Button>
-          </Box>
+              <Button
+                variant="outlined"
+                startIcon={<PlusIcon />}
+                size="medium"
+                sx={{
+                  marginRight: "1rem",
+                  justifyContent: "flex-end",
+                  fontSize: "1.4rem",
+                }}
+                onClick={handleCreatePiplineClick}
+              >
+                Create Pipeline
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<PlusIcon />}
+                size="small"
+                onClick={handleCreateISBClick}
+                sx={{ justifyContent: "flex-end", fontSize: "1.4rem" }}
+              >
+                Create ISB Service
+              </Button>
+            </Box>
+          )}
         </Box>
       </Box>
       <Box

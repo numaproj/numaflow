@@ -33,6 +33,7 @@ import (
 type SystemInfo struct {
 	ManagedNamespace string `json:"managedNamespace"`
 	Namespaced       bool   `json:"namespaced"`
+	IsReadOnly       bool   `json:"isReadOnly"`
 	Version          string `json:"version"`
 }
 
@@ -70,9 +71,9 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
-		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj)
+		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, sysInfo.IsReadOnly)
 	} else {
-		v1Routes(ctx, r1Group, nil, nil)
+		v1Routes(ctx, r1Group, nil, nil, sysInfo.IsReadOnly)
 	}
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
@@ -96,8 +97,8 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
 // for the route along with an entry in the RouteMap in auth/route_map.go.
-func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject) {
-	handler, err := v1.NewHandler(ctx, dexObj, localUsersAuthObject)
+func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject, isReadOnly bool) {
+	handler, err := v1.NewHandler(ctx, dexObj, localUsersAuthObject, isReadOnly)
 	if err != nil {
 		panic(err)
 	}

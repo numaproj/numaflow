@@ -30,6 +30,7 @@ spec:
       udf:
         container:
           image: quay.io/numaio/numaflow-go/reduce-counter:stable
+          imagePullPolicy: Always
         groupBy:
           window:
             fixed:

@@ -229,6 +229,12 @@ spec:
               key: server.base.href
               name: numaflow-cmd-params-config
               optional: true
+        - name: NUMAFLOW_SERVER_READONLY
+          valueFrom:
+            configMapKeyRef:
+              key: server.readonly
+              name: numaflow-cmd-params-config
+              optional: true
         - name: NUMAFLOW_SERVER_DISABLE_AUTH
           valueFrom:
             configMapKeyRef:

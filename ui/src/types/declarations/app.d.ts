@@ -21,6 +21,7 @@ export interface AppContextProps {
   host: string;
   namespace: string;
   isPlugin: boolean;
+  isReadOnly: boolean;
   sidebarProps?: SlidingSideBarProps;
   setSidebarProps: (props: SlidingSideBarProps | undefined) => void;
   errors: AppError[];

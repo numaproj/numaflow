@@ -51,8 +51,9 @@ export function PipelineCard({
   isbData,
   refresh,
 }: PipelineCardProps) {
-  const { addError, setSidebarProps, systemInfo, host } =
+  const { addError, setSidebarProps, systemInfo, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
+  const [viewOption] = useState("view");
   const [editOption] = useState("edit");
   const [deleteOption] = useState("delete");
   const [deleteProps, setDeleteProps] = useState<DeleteProps | undefined>();
@@ -86,6 +87,37 @@ export function PipelineCard({
     // Close sidebar
     setSidebarProps(undefined);
   }, [setSidebarProps, refresh]);
+
+  const handleViewChange = useCallback(
+    (event: SelectChangeEvent<string>) => {
+      if (event.target.value === "pipeline" && setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.PIPELINE_UPDATE,
+          specEditorProps: {
+            titleOverride: `View Pipeline: ${data?.name}`,
+            initialYaml: statusData?.pipeline,
+            namespaceId: namespace,
+            pipelineId: data?.name,
+            viewType: ViewType.READ_ONLY,
+            onUpdateComplete: handleUpdateComplete,
+          },
+        });
+      } else if (event.target.value === "isb" && setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.ISB_UPDATE,
+          specEditorProps: {
+            titleOverride: `View ISB Service: ${isbData?.name}`,
+            initialYaml: isbData?.isbService,
+            namespaceId: namespace,
+            isbId: isbData?.name,
+            viewType: ViewType.READ_ONLY,
+            onUpdateComplete: handleUpdateComplete,
+          },
+        });
+      }
+    },
+    [setSidebarProps, handleUpdateComplete, isbData, data]
+  );
 
   const handleEditChange = useCallback(
     (event: SelectChangeEvent<string>) => {
@@ -316,115 +348,117 @@ export function PipelineCard({
               <span className="pipeline-card-name">{data?.name}</span>
             </Link>
           </Box>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              flexGrow: 1,
-              justifyContent: "flex-end",
-              alignItems: "center",
-              height: "6.4rem",
-            }}
-          >
-            {error && statusPayload ? (
-              <div
-                style={{
-                  borderRadius: "1.3rem",
-                  padding: "0.8rem",
-                  height: "6.4rem",
-                  width: "22.8rem",
-                  background: "#F0F0F0",
-                  display: "flex",
-                  flexDirection: "column",
-                  fontSize: "1.6rem",
-                  overflowX: "hidden",
-                  overflowY: "scroll",
-                  textOverflow: "ellipsis",
-                  wordWrap: "break-word",
-                  scrollbarWidth: "none",
-                  msOverflowStyle: "none",
-                }}
-              >
-                {error}
-              </div>
-            ) : successMessage &&
-              statusPayload &&
-              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
-                statusData?.pipeline?.status?.phase !== PAUSED) ||
-                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
-                  statusData?.pipeline?.status?.phase !== RUNNING)) ? (
-              <div
-                style={{
-                  borderRadius: "1.3rem",
-                  width: "22.8rem",
-                  background: "#F0F0F0",
-                  display: "flex",
-                  flexDirection: "row",
-                  marginLeft: "1.6rem",
-                  padding: "0.8rem",
-                  color: "#516F91",
-                  alignItems: "center",
-                }}
-              >
-                <CircularProgress
-                  sx={{
-                    width: "2rem !important",
-                    height: "2rem !important",
-                  }}
-                />{" "}
-                <Box
-                  sx={{
+          {!isReadOnly && (
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                flexGrow: 1,
+                justifyContent: "flex-end",
+                alignItems: "center",
+                height: "6.4rem",
+              }}
+            >
+              {error && statusPayload ? (
+                <div
+                  style={{
+                    borderRadius: "1.3rem",
+                    padding: "0.8rem",
+                    height: "6.4rem",
+                    width: "22.8rem",
+                    background: "#F0F0F0",
                     display: "flex",
                     flexDirection: "column",
+                    fontSize: "1.6rem",
+                    overflowX: "hidden",
+                    overflowY: "scroll",
+                    textOverflow: "ellipsis",
+                    wordWrap: "break-word",
+                    scrollbarWidth: "none",
+                    msOverflowStyle: "none",
                   }}
                 >
-                  <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
-                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
-                      ? "Pipeline Pausing..."
-                      : "Pipeline Resuming..."}
-                  </span>
-                  <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
-                    {timerDateStamp}
-                  </span>
-                </Box>
-              </div>
-            ) : (
-              ""
-            )}
+                  {error}
+                </div>
+              ) : successMessage &&
+                statusPayload &&
+                ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                  statusData?.pipeline?.status?.phase !== PAUSED) ||
+                  (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                    statusData?.pipeline?.status?.phase !== RUNNING)) ? (
+                <div
+                  style={{
+                    borderRadius: "1.3rem",
+                    width: "22.8rem",
+                    background: "#F0F0F0",
+                    display: "flex",
+                    flexDirection: "row",
+                    marginLeft: "1.6rem",
+                    padding: "0.8rem",
+                    color: "#516F91",
+                    alignItems: "center",
+                  }}
+                >
+                  <CircularProgress
+                    sx={{
+                      width: "2rem !important",
+                      height: "2rem !important",
+                    }}
+                  />{" "}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
+                      {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
+                        ? "Pipeline Pausing..."
+                        : "Pipeline Resuming..."}
+                    </span>
+                    <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
+                      {timerDateStamp}
+                    </span>
+                  </Box>
+                </div>
+              ) : (
+                ""
+              )}
 
-            <Button
-              variant="contained"
-              sx={{
-                marginRight: "2.08rem",
-                marginLeft: "1.6rem",
-                height: "3.4rem",
-                fontSize: "1.4rem",
-              }}
-              onClick={handlePlayClick}
-              disabled={
-                statusData?.pipeline?.status?.phase === RUNNING ||
-                pipelineStatus === DELETING
-              }
-            >
-              Resume
-            </Button>
-            <Button
-              variant="contained"
-              sx={{
-                marginRight: "7.8rem",
-                height: "3.4rem",
-                fontSize: "1.4rem",
-              }}
-              onClick={handlePauseClick}
-              disabled={
-                statusData?.pipeline?.status?.phase === PAUSED ||
-                statusData?.pipeline?.status?.phase === PAUSING ||
-                pipelineStatus === DELETING
-              }
-            >
-              Pause
-            </Button>
-          </Box>
+              <Button
+                variant="contained"
+                sx={{
+                  marginRight: "2.08rem",
+                  marginLeft: "1.6rem",
+                  height: "3.4rem",
+                  fontSize: "1.4rem",
+                }}
+                onClick={handlePlayClick}
+                disabled={
+                  statusData?.pipeline?.status?.phase === RUNNING ||
+                  pipelineStatus === DELETING
+                }
+              >
+                Resume
+              </Button>
+              <Button
+                variant="contained"
+                sx={{
+                  marginRight: "7.8rem",
+                  height: "3.4rem",
+                  fontSize: "1.4rem",
+                }}
+                onClick={handlePauseClick}
+                disabled={
+                  statusData?.pipeline?.status?.phase === PAUSED ||
+                  statusData?.pipeline?.status?.phase === PAUSING ||
+                  pipelineStatus === DELETING
+                }
+              >
+                Pause
+              </Button>
+            </Box>
+          )}
           <Link
             to={
               systemInfo?.namespaced
@@ -640,58 +674,91 @@ export function PipelineCard({
               marginRight: "1.2rem",
             }}
           >
-            <Grid item>
-              <Select
-                defaultValue="edit"
-                onChange={handleEditChange}
-                value={editOption}
-                variant="outlined"
-                data-testid="pipeline-card-edit-select"
-                disabled={pipelineStatus === DELETING}
-                sx={{
-                  color: "#0077C5",
-                  height: "3.4rem",
-                  background: "#fff",
-                  marginRight: "2rem",
-                  fontSize: "1.6rem",
-                }}
-              >
-                <MenuItem sx={{ display: "none" }} hidden value="edit">
-                  EDIT
-                </MenuItem>
-                <MenuItem value="pipeline" sx={{ fontSize: "1.6rem" }}>
-                  Pipeline
-                </MenuItem>
-                <MenuItem value="isb" sx={{ fontSize: "1.6rem" }}>
-                  ISB Service
-                </MenuItem>
-              </Select>
-            </Grid>
-            <Grid item>
-              <Select
-                defaultValue="delete"
-                onChange={handleDeleteChange}
-                value={deleteOption}
-                disabled={pipelineStatus === DELETING}
-                sx={{
-                  color: "#0077C5",
-                  height: "3.4rem",
-                  marginRight: "6.4rem",
-                  background: "#fff",
-                  fontSize: "1.6rem",
-                }}
-              >
-                <MenuItem value="delete" sx={{ display: "none" }}>
-                  DELETE
-                </MenuItem>
-                <MenuItem value="pipeline" sx={{ fontSize: "1.6rem" }}>
-                  Pipeline
-                </MenuItem>
-                <MenuItem value="isb" sx={{ fontSize: "1.6rem" }}>
-                  ISB Service
-                </MenuItem>
-              </Select>
-            </Grid>
+            {isReadOnly && (
+              <Grid item>
+                <Select
+                  defaultValue="view"
+                  onChange={handleViewChange}
+                  value={viewOption}
+                  variant="outlined"
+                  data-testid="pipeline-card-view-select"
+                  disabled={pipelineStatus === DELETING}
+                  sx={{
+                    color: "#0077C5",
+                    height: "3.4rem",
+                    background: "#fff",
+                    marginRight: "2rem",
+                    fontSize: "1.6rem",
+                  }}
+                >
+                  <MenuItem sx={{ display: "none" }} hidden value="view">
+                    VIEW
+                  </MenuItem>
+                  <MenuItem value="pipeline" sx={{ fontSize: "1.6rem" }}>
+                    Pipeline
+                  </MenuItem>
+                  <MenuItem value="isb" sx={{ fontSize: "1.6rem" }}>
+                    ISB Service
+                  </MenuItem>
+                </Select>
+              </Grid>
+            )}
+            {!isReadOnly && (
+              <Grid item>
+                <Select
+                  defaultValue="edit"
+                  onChange={handleEditChange}
+                  value={editOption}
+                  variant="outlined"
+                  data-testid="pipeline-card-edit-select"
+                  disabled={pipelineStatus === DELETING}
+                  sx={{
+                    color: "#0077C5",
+                    height: "3.4rem",
+                    background: "#fff",
+                    marginRight: "2rem",
+                    fontSize: "1.6rem",
+                  }}
+                >
+                  <MenuItem sx={{ display: "none" }} hidden value="edit">
+                    EDIT
+                  </MenuItem>
+                  <MenuItem value="pipeline" sx={{ fontSize: "1.6rem" }}>
+                    Pipeline
+                  </MenuItem>
+                  <MenuItem value="isb" sx={{ fontSize: "1.6rem" }}>
+                    ISB Service
+                  </MenuItem>
+                </Select>
+              </Grid>
+            )}
+            {!isReadOnly && (
+              <Grid item>
+                <Select
+                  defaultValue="delete"
+                  onChange={handleDeleteChange}
+                  value={deleteOption}
+                  disabled={pipelineStatus === DELETING}
+                  sx={{
+                    color: "#0077C5",
+                    height: "3.4rem",
+                    marginRight: "6.4rem",
+                    background: "#fff",
+                    fontSize: "1.6rem",
+                  }}
+                >
+                  <MenuItem value="delete" sx={{ display: "none" }}>
+                    DELETE
+                  </MenuItem>
+                  <MenuItem value="pipeline" sx={{ fontSize: "1.6rem" }}>
+                    Pipeline
+                  </MenuItem>
+                  <MenuItem value="isb" sx={{ fontSize: "1.6rem" }}>
+                    ISB Service
+                  </MenuItem>
+                </Select>
+              </Grid>
+            )}
           </Grid>
         </Box>
         {deleteProps && (

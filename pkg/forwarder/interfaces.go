@@ -24,18 +24,27 @@ type VertexBuffer struct {
 
 // ToWhichStepDecider decides which step to forward after applying the WhereTo function.
 type ToWhichStepDecider interface {
-	// WhereTo decides where to forward the result to based on the name of the step it returns.
-	// It supports 2 addition keywords which need not be a step name. They are "ALL" and "DROP"
+	// WhereTo decides where to forward the result based on the name of the step it returns.
+	// It supports 2 additional keywords which need not be a step name. They are "ALL" and "DROP"
 	// where former means, forward to all the neighbouring steps and latter means do not forward anywhere.
-	WhereTo([]string, []string) ([]VertexBuffer, error)
+	//
+	// Parameters:
+	// - keys: Used by shuffle to decide which partition to write, if the toVertex is 'reduce' and has
+	// multiple partitions. It is deterministic messages with same set of keys will always go to the same partition.
+	//
+	// - tags: Used for conditional forwarding.
+	//
+	// - id: Used by shuffle to decide which partition to write, if the toVertex is a 'map' and has
+	// multiple partitions. It is deterministic messages with same id will always go to the same partition.
+	WhereTo([]string, []string, string) ([]VertexBuffer, error)
 }
 
 // GoWhere is the step decider on where it needs to go
-type GoWhere func([]string, []string) ([]VertexBuffer, error)
+type GoWhere func([]string, []string, string) ([]VertexBuffer, error)
 
 // WhereTo decides where the data goes to.
-func (gw GoWhere) WhereTo(ks []string, ts []string) ([]VertexBuffer, error) {
-	return gw(ks, ts)
+func (gw GoWhere) WhereTo(ks []string, ts []string, id string) ([]VertexBuffer, error) {
+	return gw(ks, ts, id)
 }
 
 // StarterStopper starts/stops the forwarding.

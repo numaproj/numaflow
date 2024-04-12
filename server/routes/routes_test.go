@@ -40,12 +40,14 @@ func TestRoutes(t *testing.T) {
 	sysInfo := SystemInfo{
 		ManagedNamespace: managedNamespace,
 		Namespaced:       namespaced,
+		IsReadOnly:       false,
 	}
 
 	authInfo := AuthInfo{
 		DisableAuth:   false,
 		DexServerAddr: "test-dex-server-addr",
 	}
+
 	authRouteMap := authz.RouteMap{}
 	Routes(logging.WithLogger(signals.SetupSignalHandler(), log), router, sysInfo, authInfo, "/", authRouteMap)
 	t.Run("/404", func(t *testing.T) {

@@ -36,7 +36,7 @@ import (
 type myForwardJetStreamTest struct {
 }
 
-func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -300,7 +300,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
-		assert.Equal(t, errMsg, isb.NoRetryableBufferWriteErr{Name: streamName, Message: "Buffer full!"})
+		assert.Equal(t, errMsg, isb.NonRetryableBufferWriteErr{Name: streamName, Message: isb.BufferFullMessage})
 	}
 }
 

@@ -29,7 +29,8 @@ export function PipelineSummaryStatus({
   const location = useLocation();
   const query = new URLSearchParams(location.search);
   const namespaceId = query.get("namespace") || "";
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const { setSidebarProps, isReadOnly } =
+    useContext<AppContextProps>(AppContext);
 
   const handleUpdateComplete = useCallback(() => {
     refresh();
@@ -47,11 +48,13 @@ export function PipelineSummaryStatus({
     setSidebarProps({
       type: SidebarType.PIPELINE_UPDATE,
       specEditorProps: {
-        titleOverride: `View/Edit Pipeline: ${pipelineId}`,
+        titleOverride: isReadOnly
+          ? `View Pipeline: ${pipelineId}`
+          : `View/Edit Pipeline: ${pipelineId}`,
         initialYaml: pipeline,
         namespaceId,
         pipelineId,
-        viewType: ViewType.TOGGLE_EDIT,
+        viewType: isReadOnly ? ViewType.READ_ONLY : ViewType.TOGGLE_EDIT,
         onUpdateComplete: handleUpdateComplete,
       },
     });
@@ -149,7 +152,7 @@ export function PipelineSummaryStatus({
                   onClick={handleSpecClick}
                   data-testid="pipeline-spec-click"
                 >
-                  View/Edit Specs
+                  {isReadOnly ? `View Specs` : `View / Edit Specs`}
                 </div>
               </span>
             </div>

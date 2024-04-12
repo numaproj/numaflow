@@ -147,7 +147,7 @@ const Flow = (props: FlowProps) => {
   const [isReduce, setIsReduce] = useState(false);
   const [isSideInput, setIsSideInput] = useState(false);
   const isCollapsed = useContext(CollapseContext);
-  const { host } = useContext<AppContextProps>(AppContext);
+  const { host, isReadOnly } = useContext<AppContextProps>(AppContext);
   const {
     nodes,
     edges,
@@ -292,107 +292,109 @@ const Flow = (props: FlowProps) => {
       minZoom={0.1}
       maxZoom={3.1}
     >
-      <Panel
-        position="top-left"
-        style={{ marginTop: isCollapsed ? "4.8rem" : "10.8rem" }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-          }}
+      {!isReadOnly && (
+        <Panel
+          position="top-left"
+          style={{ marginTop: isCollapsed ? "4.8rem" : "10.8rem" }}
         >
-          <Button
-            variant="contained"
-            data-testid="resume"
+          <Box
             sx={{
-              height: "3.2rem",
-              width: "8rem",
-              fontWeight: "bold",
-              fontSize: "1.4rem",
+              display: "flex",
+              flexDirection: "row",
             }}
-            onClick={handlePlayClick}
-            disabled={data?.pipeline?.status?.phase === RUNNING}
           >
-            Resume
-          </Button>
-          <Button
-            variant="contained"
-            data-testid="pause"
-            sx={{
-              height: "3.2rem",
-              width: "8rem",
-              marginLeft: "1.6rem",
-              fontWeight: "bold",
-              fontSize: "1.4rem",
-            }}
-            onClick={handlePauseClick}
-            disabled={
-              data?.pipeline?.status?.phase === PAUSED ||
-              data?.pipeline?.status?.phase === PAUSING
-            }
-          >
-            Pause
-          </Button>
-          <Box sx={{ marginLeft: "1.6rem" }}>
-            {error && statusPayload ? (
-              <Alert
-                severity="error"
-                sx={{
-                  backgroundColor: "#FDEDED",
-                  color: "#5F2120",
-                  fontSize: "1.6rem",
-                }}
-              >
-                {error}
-              </Alert>
-            ) : successMessage &&
-              statusPayload &&
-              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
-                data?.pipeline?.status?.phase !== PAUSED) ||
-                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
-                  data?.pipeline?.status?.phase !== RUNNING)) ? (
-              <div
-                style={{
-                  borderRadius: "1.3rem",
-                  width: "22.8rem",
-                  background: "#F0F0F0",
-                  display: "flex",
-                  flexDirection: "row",
-                  padding: "0.8rem",
-                  color: "#516F91",
-                  alignItems: "center",
-                }}
-                data-testid="pipeline-status"
-              >
-                <CircularProgress
+            <Button
+              variant="contained"
+              data-testid="resume"
+              sx={{
+                height: "3.2rem",
+                width: "8rem",
+                fontWeight: "bold",
+                fontSize: "1.4rem",
+              }}
+              onClick={handlePlayClick}
+              disabled={data?.pipeline?.status?.phase === RUNNING}
+            >
+              Resume
+            </Button>
+            <Button
+              variant="contained"
+              data-testid="pause"
+              sx={{
+                height: "3.2rem",
+                width: "8rem",
+                marginLeft: "1.6rem",
+                fontWeight: "bold",
+                fontSize: "1.4rem",
+              }}
+              onClick={handlePauseClick}
+              disabled={
+                data?.pipeline?.status?.phase === PAUSED ||
+                data?.pipeline?.status?.phase === PAUSING
+              }
+            >
+              Pause
+            </Button>
+            <Box sx={{ marginLeft: "1.6rem" }}>
+              {error && statusPayload ? (
+                <Alert
+                  severity="error"
                   sx={{
-                    width: "2rem !important",
-                    height: "2rem !important",
-                  }}
-                />{" "}
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
+                    backgroundColor: "#FDEDED",
+                    color: "#5F2120",
+                    fontSize: "1.6rem",
                   }}
                 >
-                  <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
-                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
-                      ? "Pipeline Pausing..."
-                      : "Pipeline Resuming..."}
-                  </span>
-                  <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
-                    {timerDateStamp}
-                  </span>
-                </Box>
-              </div>
-            ) : (
-              ""
-            )}
+                  {error}
+                </Alert>
+              ) : successMessage &&
+                statusPayload &&
+                ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                  data?.pipeline?.status?.phase !== PAUSED) ||
+                  (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                    data?.pipeline?.status?.phase !== RUNNING)) ? (
+                <div
+                  style={{
+                    borderRadius: "1.3rem",
+                    width: "22.8rem",
+                    background: "#F0F0F0",
+                    display: "flex",
+                    flexDirection: "row",
+                    padding: "0.8rem",
+                    color: "#516F91",
+                    alignItems: "center",
+                  }}
+                  data-testid="pipeline-status"
+                >
+                  <CircularProgress
+                    sx={{
+                      width: "2rem !important",
+                      height: "2rem !important",
+                    }}
+                  />{" "}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
+                      {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
+                        ? "Pipeline Pausing..."
+                        : "Pipeline Resuming..."}
+                    </span>
+                    <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
+                      {timerDateStamp}
+                    </span>
+                  </Box>
+                </div>
+              ) : (
+                ""
+              )}
+            </Box>
           </Box>
-        </Box>
-      </Panel>
+        </Panel>
+      )}
       <Panel
         position="top-right"
         style={{ marginTop: isCollapsed ? "0.8rem" : "10.8rem" }}
@@ -488,7 +490,13 @@ const Flow = (props: FlowProps) => {
         position="top-left"
         className={"legend"}
         style={{
-          marginTop: isCollapsed ? "9.2rem" : "15.2rem",
+          marginTop: isCollapsed
+            ? isReadOnly
+              ? "5.2rem"
+              : "9.2rem"
+            : isReadOnly
+            ? "12rem"
+            : "15.2rem",
           cursor: "default",
         }}
       >

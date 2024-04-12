@@ -17276,7 +17276,25 @@ spec:
         - name: NUMAFLOW_LEADER_ELECTION_DISABLED
           valueFrom:
             configMapKeyRef:
-              key: controller.disable.leader.election
+              key: controller.leader.election.disabled
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_LEADER_ELECTION_LEASE_DURATION
+          valueFrom:
+            configMapKeyRef:
+              key: controller.leader.election.lease.duration
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_DEADLINE
+          valueFrom:
+            configMapKeyRef:
+              key: controller.leader.election.lease.renew.deadline
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_PERIOD
+          valueFrom:
+            configMapKeyRef:
+              key: controller.leader.election.lease.renew.period
               name: numaflow-cmd-params-config
               optional: true
         image: quay.io/numaproj/numaflow:latest
@@ -17454,6 +17472,12 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: server.base.href
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_READONLY
+          valueFrom:
+            configMapKeyRef:
+              key: server.readonly
               name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_DISABLE_AUTH

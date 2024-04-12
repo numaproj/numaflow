@@ -25,7 +25,7 @@ spec:
               length: 60s
           keyed: true
           storage:
-            none: {}
+            emptyDir: {}
       partitions: 2
     - name: sink
       scale:

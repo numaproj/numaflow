@@ -17,6 +17,8 @@ limitations under the License.
 package pnf
 
 import (
+	"time"
+
 	"github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned"
 	"github.com/numaproj/numaflow/pkg/window"
 )
@@ -24,6 +26,8 @@ import (
 type options struct {
 	gcEventsTracker unaligned.GCEventsWAL
 	windowType      window.Type
+	batchSize       int
+	flushDuration   time.Duration
 }
 
 type Option func(options *options) error
@@ -40,6 +44,22 @@ func WithGCEventsTracker(gcTracker unaligned.GCEventsWAL) Option {
 func WithWindowType(windowType window.Type) Option {
 	return func(o *options) error {
 		o.windowType = windowType
+		return nil
+	}
+}
+
+// WithBatchSize sets the batch size for forwarding messages to ISB.
+func WithBatchSize(batchSize int) Option {
+	return func(o *options) error {
+		o.batchSize = batchSize
+		return nil
+	}
+}
+
+// WithFlushDuration sets the flush duration for forwarding messages to ISB.
+func WithFlushDuration(flushDuration time.Duration) Option {
+	return func(o *options) error {
+		o.flushDuration = flushDuration
 		return nil
 	}
 }
