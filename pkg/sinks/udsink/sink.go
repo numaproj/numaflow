@@ -27,64 +27,24 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type UserDefinedSink struct {
 	name         string
 	pipelineName string
-	isdf         *sinkforward.DataForward
 	logger       *zap.SugaredLogger
 	udsink       SinkApplier
 }
 
-type Option func(*UserDefinedSink) error
-
-func WithLogger(log *zap.SugaredLogger) Option {
-	return func(t *UserDefinedSink) error {
-		t.logger = log
-		return nil
-	}
-}
-
 // NewUserDefinedSink returns genericSink type.
-func NewUserDefinedSink(vertexInstance *dfv1.VertexInstance,
-	fromBuffer isb.BufferReader,
-	fetchWatermark fetch.Fetcher,
-	publishWatermark publish.Publisher,
-	idleManager wmb.IdleManager,
-	udsink SinkApplier,
-	opts ...Option) (*UserDefinedSink, error) {
+func NewUserDefinedSink(ctx context.Context, vertexInstance *dfv1.VertexInstance, udsink SinkApplier) (*UserDefinedSink, error) {
 
-	s := new(UserDefinedSink)
-	name := vertexInstance.Vertex.Spec.Name
-	s.name = name
-	s.pipelineName = vertexInstance.Vertex.Spec.PipelineName
-	for _, o := range opts {
-		if err := o(s); err != nil {
-			return nil, err
-		}
-	}
-	if s.logger == nil {
-		s.logger = logging.NewLogger()
-	}
-
-	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(s.logger)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-	s.udsink = udsink
-	isdf, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, s, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
-	if err != nil {
-		return nil, err
-	}
-	s.isdf = isdf
-	return s, nil
+	return &UserDefinedSink{
+		name:         vertexInstance.Vertex.Spec.Name,
+		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
+		logger:       logging.FromContext(ctx),
+		udsink:       udsink,
+	}, nil
 }
 
 func (s *UserDefinedSink) GetName() string {
@@ -120,16 +80,4 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 
 func (s *UserDefinedSink) Close() error {
 	return nil
-}
-
-func (s *UserDefinedSink) Start() <-chan struct{} {
-	return s.isdf.Start()
-}
-
-func (s *UserDefinedSink) Stop() {
-	s.isdf.Stop()
-}
-
-func (s *UserDefinedSink) ForceStop() {
-	s.isdf.ForceStop()
 }
