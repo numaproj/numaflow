@@ -23,9 +23,11 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
+	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -46,7 +48,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/sinks/udsink"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
 )
 
 type SinkProcessor struct {
@@ -174,31 +175,45 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	var finalWg sync.WaitGroup
 	for index := range u.VertexInstance.Vertex.OwnedBuffers() {
 		finalWg.Add(1)
-		sinker, err := u.getSinker(readers[index], log, fetchWatermark, publishWatermark[u.VertexInstance.Vertex.Spec.Name], idleManager, sinkHandler)
+		sinkWriter, err := u.createSinkWriter(ctx, sinkHandler)
 		if err != nil {
-			return fmt.Errorf("failed to find a sink, errpr: %w", err)
+			return fmt.Errorf("failed to find a sink, error: %w", err)
 		}
-		// start sinker using a goroutine for each partition.
-		go func(sinker Sinker, fromBufferPartitionName string) {
+
+		forwardOpts := []sinkforward.Option{sinkforward.WithLogger(log)}
+		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
+			if x.ReadBatchSize != nil {
+				forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			}
+		}
+
+		// NOTE: forwarder can make multiple sink writers when we introduce fallback sinks
+		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[u.VertexInstance.Vertex.Spec.Name], idleManager, forwardOpts...)
+		if err != nil {
+			return fmt.Errorf("failed to create data forward, error: %w", err)
+		}
+
+		// start a forwarder using a goroutine for each partition.
+		go func(sinkForwarder forwarder.StarterStopper, fromBufferPartitionName string) {
 			defer finalWg.Done()
 			log.Infow("Start processing sink messages ", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("fromPartition ", fromBufferPartitionName))
-			stopped := sinker.Start()
+			stopped := sinkForwarder.Start()
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				for {
 					<-stopped
-					log.Info("Sinker stopped, exiting sink processor...")
+					log.Info("Sink forwarder stopped, exiting sink processor...")
 					return
 				}
 			}()
 			<-ctx.Done()
 			log.Infow("SIGTERM exiting inside partition...", zap.String("fromPartition", fromBufferPartitionName))
-			sinker.Stop()
+			sinkForwarder.Stop()
 			wg.Wait()
 			log.Infow("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
-		}(sinker, readers[index].GetName())
+		}(df, readers[index].GetName())
 	}
 
 	// create lag readers from buffer readers
@@ -215,7 +230,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 
-	// wait for all the sinkers to exit
+	// wait for all the forwarders to exit
 	finalWg.Wait()
 
 	// closing the publisher will only delete the keys from the store, but not the store itself
@@ -244,18 +259,18 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	return nil
 }
 
-// getSinker takes in the logger from the parent context
-func (u *SinkProcessor) getSinker(reader isb.BufferReader, logger *zap.SugaredLogger, fetchWM fetch.Fetcher, publishWM publish.Publisher, idleManager wmb.IdleManager, sinkHandler udsink.SinkApplier) (Sinker, error) {
+// createSinkWriter creates a sink writer based on the sink spec
+func (u *SinkProcessor) createSinkWriter(ctx context.Context, sinkHandler udsink.SinkApplier) (isb.BufferWriter, error) {
 	sink := u.VertexInstance.Vertex.Spec.Sink
 	if x := sink.Log; x != nil {
-		return logsink.NewToLog(u.VertexInstance, reader, fetchWM, publishWM, idleManager, logsink.WithLogger(logger))
+		return logsink.NewToLog(ctx, u.VertexInstance)
 	} else if x := sink.Kafka; x != nil {
-		return kafkasink.NewToKafka(u.VertexInstance, reader, fetchWM, publishWM, idleManager, kafkasink.WithLogger(logger))
+		return kafkasink.NewToKafka(ctx, u.VertexInstance)
 	} else if x := sink.Blackhole; x != nil {
-		return blackhole.NewBlackhole(u.VertexInstance, reader, fetchWM, publishWM, idleManager, blackhole.WithLogger(logger))
+		return blackhole.NewBlackhole(ctx, u.VertexInstance)
 	} else if x := sink.UDSink; x != nil {
 		// if the sink is a user defined sink, then we need to pass the sinkHandler to it which will be used to invoke the user defined sink
-		return udsink.NewUserDefinedSink(u.VertexInstance, reader, fetchWM, publishWM, idleManager, sinkHandler, udsink.WithLogger(logger))
+		return udsink.NewUserDefinedSink(ctx, u.VertexInstance, sinkHandler)
 	}
 	return nil, fmt.Errorf("invalid sink spec")
 }
