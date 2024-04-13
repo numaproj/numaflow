@@ -307,6 +307,12 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: NUMAFLOW_SERVER_DISABLE_AUTH
+          valueFrom:
+            configMapKeyRef:
+              key: server.disable.auth
+              name: numaflow-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:v1.2.0-rc3
         imagePullPolicy: Always
         name: server-secrets-init
