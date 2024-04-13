@@ -236,6 +236,61 @@ merged to the generated DNS configuration based on DNSPolicy.
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.AbstractSink">
+AbstractSink
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>log</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.Log">
+Log </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>kafka</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.KafkaSink"> KafkaSink </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>blackhole</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Blackhole"> Blackhole </a> </em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>udsink</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UDSink"> UDSink </a> </em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.AbstractVertex">
 AbstractVertex
 </h3>
@@ -529,7 +584,7 @@ Blackhole
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
 </p>
 <p>
 <p>
@@ -2642,7 +2697,7 @@ KafkaSink
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
 </p>
 <p>
 </p>
@@ -2850,7 +2905,7 @@ Log
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
 </p>
 <p>
 </p>
@@ -4499,34 +4554,29 @@ Description
 <tbody>
 <tr>
 <td>
-<code>log</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.Log">
-Log </a> </em>
+<code>AbstractSink</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink"> AbstractSink </a>
+</em>
 </td>
 <td>
-</td>
-</tr>
-<tr>
-<td>
-<code>kafka</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.KafkaSink"> KafkaSink </a> </em>
-</td>
-<td>
+<p>
+(Members of <code>AbstractSink</code> are embedded into this type.)
+</p>
 </td>
 </tr>
 <tr>
 <td>
-<code>blackhole</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Blackhole"> Blackhole </a> </em>
+<code>fallback</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink"> AbstractSink </a>
+</em>
 </td>
 <td>
-</td>
-</tr>
-<tr>
-<td>
-<code>udsink</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.UDSink"> UDSink </a> </em>
-</td>
-<td>
+<em>(Optional)</em>
+<p>
+Fallback sink can be imagined as DLQ for primary Sink. The writes to
+Fallback sink will only be initiated if the ud-sink response field sets
+it.
+</p>
 </td>
 </tr>
 </tbody>
@@ -5011,7 +5061,7 @@ UDSink
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
 </p>
 <p>
 </p>

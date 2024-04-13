@@ -67,11 +67,20 @@ const (
 	CtrMain              = "numa"
 	CtrUdf               = "udf"
 	CtrUdsink            = "udsink"
+	CtrFallbackUdsink    = "fb-udsink"
 	CtrUdsource          = "udsource"
 	CtrUdtransformer     = "transformer"
 	CtrUdSideInput       = "udsi"
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
+
+	// user-defined container types
+	UDContainerFunction     = "udf"
+	UDContainerSink         = "udsink"
+	UDContainerFackbackSink = "fb-udsink"
+	UDContainerTransformer  = "transformer"
+	UDContainerSource       = "udsource"
+	UDContainerSideInputs   = "udsi"
 
 	// components
 	ComponentISBSvc           = "isbsvc"
@@ -113,6 +122,7 @@ const (
 	EnvLeaderElectionLeaseDuration      = "NUMAFLOW_LEADER_ELECTION_LEASE_DURATION"
 	EnvLeaderElectionLeaseRenewDeadline = "NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_DEADLINE"
 	EnvLeaderElectionLeaseRenewPeriod   = "NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_PERIOD"
+	EnvUDContainerType                  = "NUMAFLOW_UD_CONTAINER_TYPE"
 	EnvDebug                            = "NUMAFLOW_DEBUG"
 	EnvPPROF                            = "NUMAFLOW_PPROF"
 	EnvHealthCheckDisabled              = "NUMAFLOW_HEALTH_CHECK_DISABLED"

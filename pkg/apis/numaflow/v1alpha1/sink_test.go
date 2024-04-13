@@ -43,14 +43,16 @@ func Test_Sink_getContainers(t *testing.T) {
 
 func Test_Sink_getUDSinkContainer(t *testing.T) {
 	x := Sink{
-		UDSink: &UDSink{
-			Container: Container{
-				Image:           "my-image",
-				Args:            []string{"my-arg"},
-				SecurityContext: &corev1.SecurityContext{},
-				EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
-				}}},
+		AbstractSink: AbstractSink{
+			UDSink: &UDSink{
+				Container: Container{
+					Image:           "my-image",
+					Args:            []string{"my-arg"},
+					SecurityContext: &corev1.SecurityContext{},
+					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+					}}},
+				},
 			},
 		},
 	}
@@ -58,11 +60,68 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 		image:           "main-image",
 		imagePullPolicy: corev1.PullAlways,
 	})
+	assert.Equal(t, CtrUdsink, c.Name)
 	assert.NotNil(t, c.SecurityContext)
 	assert.Equal(t, corev1.PullAlways, c.ImagePullPolicy)
 	assert.Equal(t, "my-image", c.Image)
 	assert.Contains(t, c.Args, "my-arg")
 	assert.Equal(t, 1, len(c.EnvFrom))
+	envs := map[string]string{}
+	for _, e := range c.Env {
+		envs[e.Name] = e.Value
+	}
+	assert.Equal(t, envs[EnvUDContainerType], UDContainerSink)
+	x.UDSink.Container.ImagePullPolicy = &testImagePullPolicy
+	c = x.getUDSinkContainer(getContainerReq{
+		image:           "main-image",
+		imagePullPolicy: corev1.PullAlways,
+	})
+	assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
+	assert.True(t, c.LivenessProbe != nil)
+}
+
+func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
+	x := Sink{
+		AbstractSink: AbstractSink{
+			UDSink: &UDSink{
+				Container: Container{
+					Image:           "my-image",
+					Args:            []string{"my-arg"},
+					SecurityContext: &corev1.SecurityContext{},
+					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+					}}},
+				},
+			},
+		},
+		Fallback: &AbstractSink{
+			UDSink: &UDSink{
+				Container: Container{
+					Image:           "my-image",
+					Args:            []string{"my-arg"},
+					SecurityContext: &corev1.SecurityContext{},
+					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+					}}},
+				},
+			},
+		},
+	}
+	c := x.getFallbackUDSinkContainer(getContainerReq{
+		image:           "main-image",
+		imagePullPolicy: corev1.PullAlways,
+	})
+	assert.Equal(t, CtrFallbackUdsink, c.Name)
+	assert.NotNil(t, c.SecurityContext)
+	assert.Equal(t, corev1.PullAlways, c.ImagePullPolicy)
+	assert.Equal(t, "my-image", c.Image)
+	assert.Contains(t, c.Args, "my-arg")
+	assert.Equal(t, 1, len(c.EnvFrom))
+	envs := map[string]string{}
+	for _, e := range c.Env {
+		envs[e.Name] = e.Value
+	}
+	assert.Equal(t, envs[EnvUDContainerType], UDContainerFackbackSink)
 	x.UDSink.Container.ImagePullPolicy = &testImagePullPolicy
 	c = x.getUDSinkContainer(getContainerReq{
 		image:           "main-image",

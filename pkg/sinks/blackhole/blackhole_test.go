@@ -38,7 +38,9 @@ func TestBlackhole_Start(t *testing.T) {
 		AbstractVertex: dfv1.AbstractVertex{
 			Name: "sinks.blackhole",
 			Sink: &dfv1.Sink{
-				Blackhole: &dfv1.Blackhole{},
+				AbstractSink: dfv1.AbstractSink{
+					Blackhole: &dfv1.Blackhole{},
+				},
 			},
 		},
 	}}
