@@ -17726,7 +17726,6 @@ rules:
   - events
   - pods
   - pods/log
-  - pods/exec
   - configmaps
   - services
   - persistentvolumeclaims
