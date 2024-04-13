@@ -10303,8 +10303,6 @@ spec:
                           required:
                           - container
                           type: object
-                      required:
-                      - fallback
                       type: object
                     source:
                       properties:
@@ -15583,8 +15581,6 @@ spec:
                     required:
                     - container
                     type: object
-                required:
-                - fallback
                 type: object
               source:
                 properties:

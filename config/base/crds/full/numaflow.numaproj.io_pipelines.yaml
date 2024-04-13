@@ -7694,8 +7694,6 @@ spec:
                           required:
                           - container
                           type: object
-                      required:
-                      - fallback
                       type: object
                     source:
                       properties:

@@ -19594,9 +19594,6 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
         }
       },
-      "required": [
-        "fallback"
-      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.SlidingWindow": {

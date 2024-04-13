@@ -19564,9 +19564,6 @@
     },
     "io.numaproj.numaflow.v1alpha1.Sink": {
       "type": "object",
-      "required": [
-        "fallback"
-      ],
       "properties": {
         "blackhole": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"

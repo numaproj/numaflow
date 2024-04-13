@@ -1175,6 +1175,7 @@ message SideInputsManagerTemplate {
 message Sink {
   optional AbstractSink abstractSink = 1;
 
+  // +optional
   optional AbstractSink fallback = 2;
 }
 

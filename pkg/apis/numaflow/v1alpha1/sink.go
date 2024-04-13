@@ -23,7 +23,8 @@ import (
 
 type Sink struct {
 	AbstractSink `json:",inline" protobuf:"bytes,1,opt,name=abstractSink"`
-	Fallback     *AbstractSink `json:"fallback" protobuf:"bytes,2,opt,name=fallback"`
+	// +optional
+	Fallback *AbstractSink `json:"fallback,omitempty" protobuf:"bytes,2,opt,name=fallback"`
 }
 
 type AbstractSink struct {

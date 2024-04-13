@@ -3877,7 +3877,6 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 						},
 					},
 				},
-				Required: []string{"fallback"},
 			},
 		},
 		Dependencies: []string{
