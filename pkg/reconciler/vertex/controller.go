@@ -289,6 +289,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrUdsource
 			} else if vertex.HasUDTransformer() {
 				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrUdtransformer
+			} else if vertex.HasFallbackUDSink() {
+				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrFallbackUdsink
 			}
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{

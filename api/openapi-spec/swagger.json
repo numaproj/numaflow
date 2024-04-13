@@ -17614,6 +17614,23 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.AbstractSink": {
+      "type": "object",
+      "properties": {
+        "blackhole": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+        },
+        "kafka": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
+        },
+        "log": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
+        },
+        "udsink": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.AbstractVertex": {
       "type": "object",
       "required": [
@@ -19547,9 +19564,15 @@
     },
     "io.numaproj.numaflow.v1alpha1.Sink": {
       "type": "object",
+      "required": [
+        "fallback"
+      ],
       "properties": {
         "blackhole": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+        },
+        "fallback": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AbstractSink"
         },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"

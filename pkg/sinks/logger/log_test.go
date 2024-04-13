@@ -38,7 +38,9 @@ func TestToLog_Start(t *testing.T) {
 		AbstractVertex: dfv1.AbstractVertex{
 			Name: "sinks.logger",
 			Sink: &dfv1.Sink{
-				Log: &dfv1.Log{},
+				AbstractSink: dfv1.AbstractSink{
+					Log: &dfv1.Log{},
+				},
 			},
 		},
 	}}
