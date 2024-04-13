@@ -23,6 +23,8 @@ import (
 
 type Sink struct {
 	AbstractSink `json:",inline" protobuf:"bytes,1,opt,name=abstractSink"`
+	// Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be
+	// initiated if the ud-sink response field sets it.
 	// +optional
 	Fallback *AbstractSink `json:"fallback,omitempty" protobuf:"bytes,2,opt,name=fallback"`
 }

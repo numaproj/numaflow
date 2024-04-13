@@ -19582,7 +19582,8 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
         },
         "fallback": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AbstractSink"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AbstractSink",
+          "description": "Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be initiated if the ud-sink response field sets it."
         },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
