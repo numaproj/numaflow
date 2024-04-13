@@ -77,7 +77,7 @@ const (
 	// user-defined container types
 	UDContainerFunction     = "udf"
 	UDContainerSink         = "udsink"
-	UDContainerFackbackSink = "fallback-udsink"
+	UDContainerFackbackSink = "fb-udsink"
 	UDContainerTransformer  = "transformer"
 	UDContainerSource       = "udsource"
 	UDContainerSideInputs   = "udsi"
