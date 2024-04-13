@@ -77,6 +77,10 @@ func (v Vertex) HasUDTransformer() bool {
 	return v.Spec.HasUDTransformer()
 }
 
+func (v Vertex) HasFallbackUDSink() bool {
+	return v.Spec.HasFallbackUDSink()
+}
+
 func (v Vertex) IsUDSource() bool {
 	return v.Spec.IsUDSource()
 }
@@ -510,6 +514,10 @@ func (av AbstractVertex) IsASource() bool {
 
 func (av AbstractVertex) HasUDTransformer() bool {
 	return av.Source != nil && av.Source.UDTransformer != nil
+}
+
+func (av AbstractVertex) HasFallbackUDSink() bool {
+	return av.IsASink() && av.Sink.Fallback != nil && av.Sink.Fallback.UDSink != nil
 }
 
 func (av AbstractVertex) IsUDSource() bool {

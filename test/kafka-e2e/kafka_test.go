@@ -67,9 +67,11 @@ func (ks *KafkaSuite) TestKafkaSink() {
 				{
 					Name: "output",
 					Sink: &dfv1.Sink{
-						Kafka: &dfv1.KafkaSink{
-							Brokers: []string{"kafka-broker:9092"},
-							Topic:   outputTopic,
+						AbstractSink: dfv1.AbstractSink{
+							Kafka: &dfv1.KafkaSink{
+								Brokers: []string{"kafka-broker:9092"},
+								Topic:   outputTopic,
+							},
 						},
 					},
 				},
@@ -123,11 +125,13 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 				{
 					Name: "output",
 					Sink: &dfv1.Sink{
-						Kafka: &dfv1.KafkaSink{
-							Brokers: []string{"kafka-broker:9092"},
-							Topic:   outputTopic,
+						AbstractSink: dfv1.AbstractSink{
+							Kafka: &dfv1.KafkaSink{
+								Brokers: []string{"kafka-broker:9092"},
+								Topic:   outputTopic,
+							},
+							//Log: &dfv1.Log{},
 						},
-						//Log: &dfv1.Log{},
 					},
 				},
 			},

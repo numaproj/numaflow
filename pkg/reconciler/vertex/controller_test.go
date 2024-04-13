@@ -315,11 +315,13 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Name = "test-pl-output"
 		testObj.Spec.Name = "output"
 		testObj.Spec.Sink = &dfv1.Sink{
-			UDSink: &dfv1.UDSink{
-				Container: dfv1.Container{
-					Image:   "image",
-					Command: []string{"cmd"},
-					Args:    []string{"arg0"},
+			AbstractSink: dfv1.AbstractSink{
+				UDSink: &dfv1.UDSink{
+					Container: dfv1.Container{
+						Image:   "image",
+						Command: []string{"cmd"},
+						Args:    []string{"arg0"},
+					},
 				},
 			},
 		}

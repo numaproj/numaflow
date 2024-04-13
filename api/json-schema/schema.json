@@ -17610,6 +17610,23 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.AbstractSink": {
+      "properties": {
+        "blackhole": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+        },
+        "kafka": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
+        },
+        "log": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
+        },
+        "udsink": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.AbstractVertex": {
       "properties": {
         "affinity": {
@@ -19563,6 +19580,10 @@
       "properties": {
         "blackhole": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+        },
+        "fallback": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AbstractSink",
+          "description": "Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be initiated if the ud-sink response field sets it."
         },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
