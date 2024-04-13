@@ -29,10 +29,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // ToKafka produce the output to a kafka sinks.
@@ -42,65 +38,29 @@ type ToKafka struct {
 	producer     sarama.AsyncProducer
 	connected    bool
 	topic        string
-	isdf         *sinkforward.DataForward
 	kafkaSink    *dfv1.KafkaSink
 	log          *zap.SugaredLogger
 }
 
-type Option func(*ToKafka) error
-
-func WithLogger(log *zap.SugaredLogger) Option {
-	return func(t *ToKafka) error {
-		t.log = log
-		return nil
-	}
-}
-
 // NewToKafka returns ToKafka type.
-func NewToKafka(vertexInstance *dfv1.VertexInstance,
-	fromBuffer isb.BufferReader,
-	fetchWatermark fetch.Fetcher,
-	publishWatermark publish.Publisher,
-	idleManager wmb.IdleManager,
-	opts ...Option) (*ToKafka, error) {
+func NewToKafka(ctx context.Context, vertexInstance *dfv1.VertexInstance) (*ToKafka, error) {
 
 	kafkaSink := vertexInstance.Vertex.Spec.Sink.Kafka
 	toKafka := new(ToKafka)
-	// apply options for kafka sink
-	for _, o := range opts {
-		if err := o(toKafka); err != nil {
-			return nil, err
-		}
-	}
 
-	// set default logger
-	if toKafka.log == nil {
-		toKafka.log = logging.NewLogger()
-	}
-	toKafka.log = toKafka.log.With("sinkType", "kafka").With("topic", kafkaSink.Topic)
 	toKafka.name = vertexInstance.Vertex.Spec.Name
 	toKafka.pipelineName = vertexInstance.Vertex.Spec.PipelineName
 	toKafka.topic = kafkaSink.Topic
 	toKafka.kafkaSink = kafkaSink
 
-	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(toKafka.log)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-
-	f, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, toKafka, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
-	if err != nil {
-		return nil, err
-	}
-	toKafka.isdf = f
 	producer, err := connect(kafkaSink)
 	if err != nil {
 		return nil, err
 	}
 	toKafka.producer = producer
 	toKafka.connected = true
+
+	toKafka.log = logging.FromContext(ctx).With("sinkType", "kafka").With("topic", kafkaSink.Topic)
 	return toKafka, nil
 }
 
@@ -212,21 +172,4 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 func (tk *ToKafka) Close() error {
 	tk.log.Info("Closing kafka producer...")
 	return tk.producer.Close()
-}
-
-// Start starts sinking to kafka.
-func (tk *ToKafka) Start() <-chan struct{} {
-	return tk.isdf.Start()
-}
-
-// Stop stops sinking
-func (tk *ToKafka) Stop() {
-	tk.isdf.Stop()
-	tk.log.Info("forwarder stopped successfully")
-}
-
-// ForceStop stops sinking
-func (tk *ToKafka) ForceStop() {
-	tk.isdf.ForceStop()
-	tk.log.Info("forwarder force stopped successfully")
 }

@@ -24,14 +24,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 func TestBlackhole_Start(t *testing.T) {
-	fromStep := simplebuffer.NewInMemoryBuffer("from", 25, 0)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
@@ -50,21 +46,13 @@ func TestBlackhole_Start(t *testing.T) {
 		Vertex:  vertex,
 		Replica: 0,
 	}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	idleManager, _ := wmb.NewIdleManager(1, 1)
-	s, err := NewBlackhole(vertexInstance, fromStep, fetchWatermark, publishWatermark[vertex.Spec.Name], idleManager)
+	s, err := NewBlackhole(ctx, vertexInstance)
 	assert.NoError(t, err)
 
-	stopped := s.Start()
-	// write some data
-	_, errs := fromStep.Write(ctx, writeMessages[0:5])
+	_, errs := s.Write(ctx, writeMessages[0:5])
 	assert.Equal(t, make([]error, 5), errs)
 
 	// write some data
-	_, errs = fromStep.Write(ctx, writeMessages[5:20])
+	_, errs = s.Write(ctx, writeMessages[5:20])
 	assert.Equal(t, make([]error, 15), errs)
-
-	s.Stop()
-
-	<-stopped
 }
