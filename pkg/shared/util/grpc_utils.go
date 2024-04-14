@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/numaproj/numaflow-go/pkg/info"
@@ -27,22 +29,28 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v3"
 
 	"github.com/Masterminds/semver/v3"
 
 	"github.com/numaproj/numaflow"
-
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 )
 
 // isCompatible checks if the current numaflow version is compatible with the given language's SDK version
 func isCompatible(serverInfo *info.ServerInfo) error {
-	type sdkVersions map[info.Language]string
-	var versionMappingConfig = sdkVersions{
-		info.Go:     ">= 0.7.0-0",
-		info.Java:   ">= 0.7.0-0",
-		info.Python: ">= 0.7.0-0",
+	mappingData, err := os.ReadFile("../../../version-mapping.yaml")
+	if err != nil {
+		return fmt.Errorf("error attempting to read file version mapping file: %w", err)
+	}
+
+	type sdkConstraints map[info.Language]string
+	var versionMappingConfig map[string]sdkConstraints
+
+	err = yaml.Unmarshal(mappingData, &versionMappingConfig)
+	if err != nil {
+		return fmt.Errorf("error reading yaml file into map: %w", err)
 	}
 
 	sdkLanguage := serverInfo.Language
@@ -51,22 +59,30 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 		return fmt.Errorf("error parsing SDK version: %w", err)
 	}
 
-	sdkVersionConstraint, ok := versionMappingConfig[sdkLanguage]
-	if !ok {
-		return fmt.Errorf("language %s is currently not supported", sdkLanguage)
+	numaflowVersion := numaflow.GetVersion().Version
+	// When running loc
+	if strings.Contains("latest", numaflowVersion) {
+
 	}
 
-	c, err := semver.NewConstraint(sdkVersionConstraint)
+	sdkConstraint, ok := versionMappingConfig[numaflowVersion][sdkLanguage]
+	if !ok {
+		return nil
+	}
+
+	// Check if the SDK version satisfies the minimum required SDK version by the Numaflow platform
+	c, err := semver.NewConstraint(sdkConstraint)
 	if err != nil {
 		return fmt.Errorf("error parsing constraint: %w", err)
 	}
 
 	isValid, _ := c.Validate(sdkVersion)
 	if !isValid {
-		return fmt.Errorf("SDK version %s must be upgraded to %s, in order to work with numaflow version %s", sdkVersion, sdkVersionConstraint, numaflow.ReleaseVersion)
+		return fmt.Errorf("SDK version %s must be upgraded to %s, in order to work with numaflow version", sdkVersion, sdkConstraint)
 	}
 
-	return nil
+	// Check if the Numaflow version satisfies the minimum required Numaflow version by SDK
+	sdkMinimumNumaflowVersion := serverInfo.MinimumNumaflowVersion
 }
 
 // ToUDFErr converts gRPC error to UDF Error
