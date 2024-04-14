@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
+	"reflect"
 	"time"
 
 	"github.com/numaproj/numaflow-go/pkg/info"
@@ -38,6 +38,20 @@ import (
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 )
 
+func checkConstraint(version *semver.Version, constraint string) error {
+	c, err := semver.NewConstraint(constraint)
+	if err != nil {
+		return fmt.Errorf("error parsing constraint: %w", err)
+	}
+
+	isValid, _ := c.Validate(version)
+	if !isValid {
+		return fmt.Errorf("version did not meet constraint requirement")
+	}
+
+	return nil
+}
+
 // isCompatible checks if the current numaflow version is compatible with the given language's SDK version
 func isCompatible(serverInfo *info.ServerInfo) error {
 	mappingData, err := os.ReadFile("../../../version-mapping.yaml")
@@ -48,8 +62,7 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 	type sdkConstraints map[info.Language]string
 	var versionMappingConfig map[string]sdkConstraints
 
-	err = yaml.Unmarshal(mappingData, &versionMappingConfig)
-	if err != nil {
+	if err := yaml.Unmarshal(mappingData, &versionMappingConfig); err != nil {
 		return fmt.Errorf("error reading yaml file into map: %w", err)
 	}
 
@@ -59,30 +72,33 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 		return fmt.Errorf("error parsing SDK version: %w", err)
 	}
 
-	numaflowVersion := numaflow.GetVersion().Version
-	// When running loc
-	if strings.Contains("latest", numaflowVersion) {
-
-	}
-
-	sdkConstraint, ok := versionMappingConfig[numaflowVersion][sdkLanguage]
-	if !ok {
-		return nil
-	}
-
-	// Check if the SDK version satisfies the minimum required SDK version by the Numaflow platform
-	c, err := semver.NewConstraint(sdkConstraint)
+	numaflowVersion, err := semver.NewVersion(numaflow.GetVersion().Version)
 	if err != nil {
-		return fmt.Errorf("error parsing constraint: %w", err)
+		return fmt.Errorf("error parsing SDK version: %w", err)
 	}
 
-	isValid, _ := c.Validate(sdkVersion)
-	if !isValid {
-		return fmt.Errorf("SDK version %s must be upgraded to %s, in order to work with numaflow version", sdkVersion, sdkConstraint)
+	sdkConstraint, ok := versionMappingConfig[numaflowVersion.Original()][sdkLanguage]
+	if ok {
+		// Check if the SDK version satisfies the minimum required SDK version by the numaflow platform
+		sdkConstraint = fmt.Sprintf(">= %s", sdkConstraint)
+		if err := checkConstraint(sdkVersion, sdkConstraint); err != nil {
+			return fmt.Errorf("SDK version %s must be upgraded to %s, in order to work with numaflow version", sdkVersion, sdkConstraint)
+		}
+
+		rv := reflect.ValueOf(serverInfo)
+		val := rv.Elem()
+		if _, ok := val.Type().FieldByName("MinimumNumaflowVersion"); !ok {
+			return fmt.Errorf("server information missing minimum numaflow version. Upgrade SDK to latest version")
+		}
+
+		// Check if the numaflow version satisfies the minimum required numaflow version by SDK
+		numaflowConstraint := fmt.Sprintf(">= %s", serverInfo.MinimumNumaflowVersion)
+		if err := checkConstraint(numaflowVersion, numaflowConstraint); err != nil {
+			return fmt.Errorf("numaflow version %s must be upgraded to %s, in order to work with SDK version", numaflowVersion, numaflowConstraint)
+		}
 	}
 
-	// Check if the Numaflow version satisfies the minimum required Numaflow version by SDK
-	sdkMinimumNumaflowVersion := serverInfo.MinimumNumaflowVersion
+	return nil
 }
 
 // ToUDFErr converts gRPC error to UDF Error
