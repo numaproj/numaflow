@@ -56,7 +56,7 @@ func checkConstraint(version *semver.Version, constraint string) error {
 func isCompatible(serverInfo *info.ServerInfo) error {
 	mappingData, err := os.ReadFile("../../../version-mapping.yaml")
 	if err != nil {
-		return fmt.Errorf("error attempting to read file version mapping file: %w", err)
+		return fmt.Errorf("error attempting to read version mapping file: %w", err)
 	}
 
 	type sdkConstraints map[info.Language]string
@@ -74,7 +74,7 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 
 	numaflowVersion, err := semver.NewVersion(numaflow.GetVersion().Version)
 	if err != nil {
-		return fmt.Errorf("error parsing SDK version: %w", err)
+		return fmt.Errorf("error parsing numaflow version: %w", err)
 	}
 
 	sdkConstraint, ok := versionMappingConfig[numaflowVersion.Original()][sdkLanguage]
@@ -84,18 +84,18 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 		if err := checkConstraint(sdkVersion, sdkConstraint); err != nil {
 			return fmt.Errorf("SDK version %s must be upgraded to %s, in order to work with numaflow version", sdkVersion, sdkConstraint)
 		}
+	}
 
-		rv := reflect.ValueOf(serverInfo)
-		val := rv.Elem()
-		if _, ok := val.Type().FieldByName("MinimumNumaflowVersion"); !ok {
-			return fmt.Errorf("server information missing minimum numaflow version. Upgrade SDK to latest version")
-		}
+	rv := reflect.ValueOf(serverInfo)
+	val := rv.Elem()
+	if _, ok := val.Type().FieldByName("MinimumNumaflowVersion"); !ok {
+		return fmt.Errorf("server information missing minimum numaflow version. Upgrade SDK to latest version")
+	}
 
-		// Check if the numaflow version satisfies the minimum required numaflow version by SDK
-		numaflowConstraint := fmt.Sprintf(">= %s", serverInfo.MinimumNumaflowVersion)
-		if err := checkConstraint(numaflowVersion, numaflowConstraint); err != nil {
-			return fmt.Errorf("numaflow version %s must be upgraded to %s, in order to work with SDK version", numaflowVersion, numaflowConstraint)
-		}
+	// Check if the numaflow version satisfies the minimum required numaflow version by SDK
+	numaflowConstraint := fmt.Sprintf(">= %s", serverInfo.MinimumNumaflowVersion)
+	if err := checkConstraint(numaflowVersion, numaflowConstraint); err != nil {
+		return fmt.Errorf("numaflow version %s must be upgraded to %s, in order to work with SDK version", numaflowVersion, numaflowConstraint)
 	}
 
 	return nil
