@@ -291,11 +291,13 @@ func TestGetPodSpec(t *testing.T) {
 	t.Run("test user defined sink", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &Sink{
-			UDSink: &UDSink{
-				Container: Container{
-					Image:   "image",
-					Command: []string{"cmd"},
-					Args:    []string{"arg0"},
+			AbstractSink: AbstractSink{
+				UDSink: &UDSink{
+					Container: Container{
+						Image:   "image",
+						Command: []string{"cmd"},
+						Args:    []string{"arg0"},
+					},
 				},
 			},
 		}
@@ -475,6 +477,23 @@ func Test_VertexHasTransformer(t *testing.T) {
 		UDTransformer: &UDTransformer{},
 	}
 	assert.True(t, o.HasUDTransformer())
+}
+
+func Test_VertexHasFallbackUDSink(t *testing.T) {
+	o := testVertex.DeepCopy()
+	o.Spec.Sink = &Sink{
+		AbstractSink: AbstractSink{
+			Log: &Log{},
+		},
+		Fallback: &AbstractSink{
+			Log: &Log{},
+		},
+	}
+	assert.False(t, o.HasFallbackUDSink())
+	o.Spec.Sink.Fallback = &AbstractSink{
+		UDSink: &UDSink{},
+	}
+	assert.True(t, o.HasFallbackUDSink())
 }
 
 func Test_VertexIsSink(t *testing.T) {

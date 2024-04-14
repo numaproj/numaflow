@@ -39,7 +39,7 @@ type forwardTest struct {
 	buffers []string
 }
 
-func (f *forwardTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f *forwardTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	var steps []forwarder.VertexBuffer
 	for _, buffer := range f.buffers {
 		steps = append(steps, forwarder.VertexBuffer{

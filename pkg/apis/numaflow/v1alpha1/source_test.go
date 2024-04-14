@@ -57,7 +57,11 @@ func TestSource_getContainers(t *testing.T) {
 	assert.Contains(t, c[1].VolumeMounts, c[1].VolumeMounts[0])
 	assert.Equal(t, x.UDTransformer.Container.Command, c[1].Command)
 	assert.Equal(t, x.UDTransformer.Container.Args, c[1].Args)
-	assert.Equal(t, x.UDTransformer.Container.Env, c[1].Env)
+	envs := map[string]string{}
+	for _, e := range c[1].Env {
+		envs[e.Name] = e.Value
+	}
+	assert.Equal(t, envs[EnvUDContainerType], UDContainerTransformer)
 	assert.Equal(t, x.UDTransformer.Container.EnvFrom, c[1].EnvFrom)
 	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[1].Resources)
 	assert.Equal(t, c[0].ImagePullPolicy, c[1].ImagePullPolicy)
@@ -96,6 +100,11 @@ func Test_getTransformerContainer(t *testing.T) {
 		assert.Equal(t, x.UDTransformer.Container.EnvFrom, c.EnvFrom)
 		assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 		assert.True(t, c.LivenessProbe != nil)
+		envs := map[string]string{}
+		for _, e := range c.Env {
+			envs[e.Name] = e.Value
+		}
+		assert.Equal(t, envs[EnvUDContainerType], UDContainerTransformer)
 	})
 
 	t.Run("with built-in transformers", func(t *testing.T) {
@@ -129,6 +138,7 @@ func Test_getTransformerContainer(t *testing.T) {
 			envNames = append(envNames, e.Name)
 		}
 		assert.NotContains(t, envNames, "a")
+		assert.Contains(t, envNames, EnvUDContainerType)
 		assert.True(t, c.LivenessProbe != nil)
 	})
 

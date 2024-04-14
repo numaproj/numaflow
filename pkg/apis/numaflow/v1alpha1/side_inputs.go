@@ -170,6 +170,7 @@ func (si SideInput) getUDContainer(req GetSideInputDeploymentReq) corev1.Contain
 	// Do not append the envs from req here, as they might contain sensitive information
 	cb = cb.appendEnv(si.Container.Env...).appendVolumeMounts(si.Container.VolumeMounts...).
 		resources(si.Container.Resources).securityContext(si.Container.SecurityContext).appendEnvFrom(si.Container.EnvFrom...)
+	cb = cb.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerSideInputs})
 	return cb.build()
 }
 

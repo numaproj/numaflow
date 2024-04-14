@@ -61,7 +61,12 @@ func (r *rpcMsg) String() string {
 
 func NewMockUDSgRPCBasedUDSource(mockClient *sourcemock.MockSourceClient) *GRPCBasedUDSource {
 	c, _ := sourceclient.NewFromClient(mockClient)
-	return &GRPCBasedUDSource{c}
+	return &GRPCBasedUDSource{
+		vertexName:         "testVertex",
+		pipelineName:       "testPipeline",
+		vertexReplicaIndex: 0,
+		client:             c,
+	}
 }
 
 func Test_gRPCBasedUDSource_WaitUntilReadyWithMockClient(t *testing.T) {
