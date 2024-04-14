@@ -28,6 +28,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
+var WriteToFallbackErr = "write to fallback sink"
+
 // SinkApplier applies the sink on the read message and gives back a response. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type SinkApplier interface {
@@ -98,12 +100,16 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 		if r, existing := resMap[m.GetId()]; !existing {
 			errs[i] = fmt.Errorf("not found in response")
 		} else {
-			if !r.Success {
+			if r.GetStatus() == sinkpb.Status_FAILURE {
 				if r.GetErrMsg() != "" {
 					errs[i] = fmt.Errorf(r.GetErrMsg())
 				} else {
 					errs[i] = fmt.Errorf("unsuccessful due to unknown reason")
 				}
+			} else if r.GetStatus() == sinkpb.Status_FALLBACK {
+				errs[i] = fmt.Errorf(WriteToFallbackErr)
+			} else {
+				errs[i] = nil
 			}
 		}
 	}

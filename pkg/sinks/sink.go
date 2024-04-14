@@ -23,31 +23,30 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/numaproj/numaflow/pkg/forwarder"
-	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
-	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
-
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	jetstreamisb "github.com/numaproj/numaflow/pkg/isb/stores/jetstream"
 	redisisb "github.com/numaproj/numaflow/pkg/isb/stores/redis"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
+	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/sinks/blackhole"
+	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
 	kafkasink "github.com/numaproj/numaflow/pkg/sinks/kafka"
 	logsink "github.com/numaproj/numaflow/pkg/sinks/logger"
+	"github.com/numaproj/numaflow/pkg/sinks/sinker"
 	"github.com/numaproj/numaflow/pkg/sinks/udsink"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
+	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type SinkProcessor struct {
@@ -62,9 +61,9 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		err                error
 		fromVertexWmStores map[string]store.WatermarkStore
 		sinkWmStores       map[string]store.WatermarkStore
-		idleManager        wmb.IdleManager
-		sdkClient          sinkclient.Client
 		sinkHandler        *udsink.UDSgRPCBasedUDSink
+		fbSinkHandler      *udsink.UDSgRPCBasedUDSink
+		healthCheckers     = make([]metrics.HealthChecker, 0)
 	)
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
@@ -73,8 +72,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	// For sinks, the buffer name is the vertex name
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{u.VertexInstance.Vertex.Spec.Name})
-	idleManager = wmb.NewNoOpIdleManager()
+	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{u.VertexInstance.Vertex.Spec.Name})
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -126,17 +124,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 			// create watermark fetcher using watermark stores
 			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, fromVertexWmStores)
-
-			// create watermark stores
-			sinkWmStores, err = jetstream.BuildToVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
-			if err != nil {
-				return fmt.Errorf("failed to to vertex watermark stores: %w", err)
-			}
-
-			// create watermark publisher using watermark stores
-			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, sinkWmStores)
-			// sink vertex has only one toBuffer, so the length is 1
-			idleManager, _ = wmb.NewIdleManager(len(readers), 1)
 		}
 
 	default:
@@ -150,7 +137,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		sdkClient, err = sinkclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		sdkClient, err := sinkclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create sdk client, %w", err)
 		}
@@ -164,6 +151,41 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			return fmt.Errorf("failed on UDSink readiness check, %w", err)
 		}
 
+		// add sinkHandler to healthCheckers
+		healthCheckers = append(healthCheckers, sinkHandler)
+
+		defer func() {
+			err = sdkClient.CloseConn(ctx)
+			if err != nil {
+				log.Warnw("Failed to close sdk client", zap.Error(err))
+			}
+		}()
+	}
+
+	if u.VertexInstance.Vertex.HasFallbackUDSink() {
+		// Wait for server info to be ready
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.FbSinkServerInfoFile))
+		if err != nil {
+			return err
+		}
+
+		sdkClient, err := sinkclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.FbSinkAddr))
+		if err != nil {
+			return fmt.Errorf("failed to create sdk client, %w", err)
+		}
+
+		fbSinkHandler = udsink.NewUDSgRPCBasedUDSink(sdkClient)
+		if err != nil {
+			return fmt.Errorf("failed to create gRPC client, %w", err)
+		}
+		// Readiness check
+		if err = fbSinkHandler.WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on UDSink readiness check, %w", err)
+		}
+
+		// add fbSinkHandler to healthCheckers
+		healthCheckers = append(healthCheckers, fbSinkHandler)
+
 		defer func() {
 			err = sdkClient.CloseConn(ctx)
 			if err != nil {
@@ -175,10 +197,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	var finalWg sync.WaitGroup
 	for index := range u.VertexInstance.Vertex.OwnedBuffers() {
 		finalWg.Add(1)
-		sinkWriter, err := u.createSinkWriter(ctx, sinkHandler)
-		if err != nil {
-			return fmt.Errorf("failed to find a sink, error: %w", err)
-		}
 
 		forwardOpts := []sinkforward.Option{sinkforward.WithLogger(log)}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
@@ -187,8 +205,24 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			}
 		}
 
+		// create the main sink writer
+		sinkWriter, err := u.createSinkWriter(ctx, &u.VertexInstance.Vertex.Spec.Sink.AbstractSink, sinkHandler)
+		if err != nil {
+			return fmt.Errorf("failed to find a sink, error: %w", err)
+		}
+
+		// create the fallback sink writer if fallback sink is present
+		if u.VertexInstance.Vertex.Spec.Sink.Fallback != nil {
+			fbSinkWriter, err := u.createSinkWriter(ctx, u.VertexInstance.Vertex.Spec.Sink.Fallback, fbSinkHandler)
+			if err != nil {
+				return fmt.Errorf("failed to find a sink, error: %w", err)
+			}
+			log.Infow("Fallback sink writer created", zap.String("vertex", u.VertexInstance.Vertex.Spec.Sink.Fallback.String()))
+			forwardOpts = append(forwardOpts, sinkforward.WithFbSinkWriter(fbSinkWriter))
+		}
+
 		// NOTE: forwarder can make multiple sink writers when we introduce fallback sinks
-		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[u.VertexInstance.Vertex.Spec.Name], idleManager, forwardOpts...)
+		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, forwardOpts...)
 		if err != nil {
 			return fmt.Errorf("failed to create data forward, error: %w", err)
 		}
@@ -221,8 +255,9 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	for _, reader := range readers {
 		lagReaders = append(lagReaders, reader)
 	}
+
 	// start metrics server and pass the sinkHandler to it, so that it can be used to check the readiness of the sink
-	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{sinkHandler}, lagReaders)
+	metricsOpts := metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, healthCheckers, lagReaders)
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -232,16 +267,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 	// wait for all the forwarders to exit
 	finalWg.Wait()
-
-	// closing the publisher will only delete the keys from the store, but not the store itself
-	// we cannot close the store inside publisher because in some cases stores are shared between publishers
-	// and store itself is a separate entity that can be used by other components
-	for _, publisher := range publishWatermark {
-		err = publisher.Close()
-		if err != nil {
-			log.Errorw("Failed to close the watermark publisher", zap.Error(err))
-		}
-	}
 
 	// close the from vertex wm stores
 	// since we created the stores, we can close them
@@ -260,15 +285,14 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 }
 
 // createSinkWriter creates a sink writer based on the sink spec
-func (u *SinkProcessor) createSinkWriter(ctx context.Context, sinkHandler udsink.SinkApplier) (isb.BufferWriter, error) {
-	sink := u.VertexInstance.Vertex.Spec.Sink
-	if x := sink.Log; x != nil {
+func (u *SinkProcessor) createSinkWriter(ctx context.Context, abstractSink *dfv1.AbstractSink, sinkHandler udsink.SinkApplier) (sinker.SinkWriter, error) {
+	if x := abstractSink.Log; x != nil {
 		return logsink.NewToLog(ctx, u.VertexInstance)
-	} else if x := sink.Kafka; x != nil {
+	} else if x := abstractSink.Kafka; x != nil {
 		return kafkasink.NewToKafka(ctx, u.VertexInstance)
-	} else if x := sink.Blackhole; x != nil {
+	} else if x := abstractSink.Blackhole; x != nil {
 		return blackhole.NewBlackhole(ctx, u.VertexInstance)
-	} else if x := sink.UDSink; x != nil {
+	} else if x := abstractSink.UDSink; x != nil {
 		// if the sink is a user defined sink, then we need to pass the sinkHandler to it which will be used to invoke the user defined sink
 		return udsink.NewUserDefinedSink(ctx, u.VertexInstance, sinkHandler)
 	}

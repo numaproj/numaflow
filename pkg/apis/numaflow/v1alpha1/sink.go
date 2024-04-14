@@ -100,7 +100,7 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 	if len(x.Args) > 0 {
 		c = c.args(x.Args...)
 	}
-	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerFackbackSink})
+	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerFallbackSink})
 	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
 	if x.ImagePullPolicy != nil {
 		c = c.imagePullPolicy(*x.ImagePullPolicy)

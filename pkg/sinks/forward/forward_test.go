@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -35,7 +34,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
@@ -50,36 +48,6 @@ var (
 
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
-}
-
-// testForwarderPublisher is for data_forward_test.go only
-type testForwarderPublisher struct {
-	Name string
-	idle bool
-	lock sync.RWMutex
-}
-
-func (t *testForwarderPublisher) IsIdle() bool {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	return t.idle
-}
-
-func (t *testForwarderPublisher) Close() error {
-	return nil
-}
-
-func (t *testForwarderPublisher) PublishWatermark(_ wmb.Watermark, _ isb.Offset, _ int32) {
-}
-
-func (t *testForwarderPublisher) PublishIdleWatermark(_ wmb.Watermark, _ isb.Offset, _ int32) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	t.idle = true
-}
-
-func (t *testForwarderPublisher) GetLatestWatermark() wmb.Watermark {
-	return wmb.InitialWatermark
 }
 
 // testForwardFetcher is for data_forward_test.go only
@@ -101,29 +69,6 @@ func (t *testForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
 	return wmb.WMB{}
 }
 
-// testForwardFetcher is for data_forward_test.go only
-type testIdleForwardFetcher struct {
-}
-
-// ComputeWatermark uses current time as the watermark because we want to make sure
-// the test publisher is publishing watermark
-func (t *testIdleForwardFetcher) ComputeWatermark(_ isb.Offset, _ int32) wmb.Watermark {
-	return t.getWatermark()
-}
-
-func (t *testIdleForwardFetcher) getWatermark() wmb.Watermark {
-	return wmb.Watermark(testStartTime)
-}
-
-func (t *testIdleForwardFetcher) ComputeHeadIdleWMB(int32) wmb.WMB {
-	return wmb.WMB{
-		Idle:      true,
-		Offset:    10,
-		Watermark: 100,
-		Partition: 0,
-	}
-}
-
 func TestNewDataForward(t *testing.T) {
 	var (
 		testName        = "forward"
@@ -134,7 +79,7 @@ func TestNewDataForward(t *testing.T) {
 		metricsReset()
 		// set the buffer size to be 5 * batchSize, so we have enough space for testing
 		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-		// as of now, all of our sinkers have only 1 toBuffer
+		// as of now, all of our sinkers have only 1 sinkWriter
 		to1 := simplebuffer.NewInMemoryBuffer(testVertexName, 5*batchSize, 0)
 		toSteps := map[string][]isb.BufferWriter{
 			testVertexName: {to1},
@@ -157,10 +102,9 @@ func TestNewDataForward(t *testing.T) {
 
 		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
 
-		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+		_, _ = generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 		fetchWatermark := &testForwardFetcher{}
-		idleManager, _ := wmb.NewIdleManager(1, 1)
-		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], idleManager)
+		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark)
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -218,54 +162,6 @@ func TestNewDataForward(t *testing.T) {
 
 		<-stopped
 
-	})
-
-	t.Run(testName+"_idle", func(t *testing.T) {
-
-		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-		to1 := simplebuffer.NewInMemoryBuffer(testVertexName, 5*batchSize, 0)
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-		defer cancel()
-
-		vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-			PipelineName: testPipelineName,
-			AbstractVertex: dfv1.AbstractVertex{
-				Name: testVertexName,
-			},
-		}}
-
-		vertexInstance := &dfv1.VertexInstance{
-			Vertex:  vertex,
-			Replica: 0,
-		}
-
-		fetchWatermark := &testIdleForwardFetcher{}
-		publishWatermark := map[string]publish.Publisher{
-			testVertexName: &testForwarderPublisher{},
-		}
-		idleManager, _ := wmb.NewIdleManager(1, 1)
-		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], idleManager)
-
-		assert.NoError(t, err)
-		assert.False(t, to1.IsFull())
-		assert.True(t, to1.IsEmpty())
-
-		stopped := f.Start()
-
-		// we don't write control message for sink, only publish idle watermark
-		for !publishWatermark[testVertexName].(*testForwarderPublisher).IsIdle() {
-			select {
-			case <-ctx.Done():
-				logging.FromContext(ctx).Fatalf("expect to have the idle wm in to1, %s", ctx.Err())
-			default:
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-
-		f.Stop()
-
-		<-stopped
 	})
 }
 
@@ -325,11 +221,8 @@ func TestWriteToBuffer(t *testing.T) {
 			}
 
 			fetchWatermark := &testForwardFetcher{}
-			publishWatermark := map[string]publish.Publisher{
-				"to1": &testForwarderPublisher{},
-			}
-			idleManager, _ := wmb.NewIdleManager(1, 1)
-			f, err := NewDataForward(vertexInstance, fromStep, buffer, fetchWatermark, publishWatermark["to1"], idleManager)
+
+			f, err := NewDataForward(vertexInstance, fromStep, buffer, fetchWatermark)
 
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
@@ -353,7 +246,7 @@ func TestWriteToBuffer(t *testing.T) {
 			var messageToStep []isb.Message
 			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil)
 			messageToStep = append(messageToStep, writeMessages[0:value.batchSize+1]...)
-			_, err = f.writeToBuffer(ctx, buffer, messageToStep)
+			_, err = f.writeToSink(ctx, buffer, messageToStep)
 
 			assert.Equal(t, value.throwError, err != nil)
 			if value.throwError {
