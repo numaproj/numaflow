@@ -6,6 +6,8 @@ images:
   kind: Pipeline
 - path: spec/vertices/sink/udsink/container/image
   kind: Pipeline
+- path: spec/vertices/sink/fallback/udsink/container/image
+  kind: Pipeline
 - path: spec/vertices/source/transformer/container/image
   kind: Pipeline
 - path: spec/vertices/source/udsource/container/image
@@ -49,6 +51,10 @@ nameReference:
   - path: spec/vertices/sink/udsink/container/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
   - path: spec/vertices/sink/udsink/container/envFrom/configMapRef/name
+    kind: Pipeline
+  - path: spec/vertices/sink/fallback/udsink/container/env/valueFrom/configMapKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/sink/fallback/udsink/container/envFrom/configMapRef/name
     kind: Pipeline
   - path: spec/vertices/source/transformer/container/env/valueFrom/configMapKeyRef/name
     kind: Pipeline
@@ -136,6 +142,10 @@ nameReference:
   - path: spec/vertices/sink/udsink/container/env/valueFrom/secretKeyRef/name
     kind: Pipeline
   - path: spec/vertices/sink/udsink/container/envFrom/secretRef/name
+    kind: Pipeline
+  - path: spec/vertices/sink/fallback/udsink/container/env/valueFrom/secretKeyRef/name
+    kind: Pipeline
+  - path: spec/vertices/sink/fallback/udsink/container/envFrom/secretRef/name
     kind: Pipeline
   - path: spec/vertices/source/transformer/container/env/valueFrom/secretKeyRef/name
     kind: Pipeline
@@ -298,6 +308,12 @@ varReference:
   kind: Pipeline
 - path: spec/vertices/sink/udsink/container/env/value
   kind: Pipeline
+- path: spec/vertices/sink/fallback/udsink/container/args
+  kind: Pipeline
+- path: spec/vertices/sink/fallback/udsink/container/command
+  kind: Pipeline
+- path: spec/vertices/sink/fallback/udsink/container/env/value
+  kind: Pipeline
 - path: spec/vertices/source/transformer/container/args
   kind: Pipeline
 - path: spec/vertices/source/transformer/container/command
@@ -343,6 +359,8 @@ varReference:
 - path: spec/vertices/udf/container/volumeMounts/mountPath
   kind: Pipeline
 - path: spec/vertices/sink/udsink/container/volumeMounts/mountPath
+  kind: Pipeline
+- path: spec/vertices/sink/fallback/udsink/container/volumeMounts/mountPath
   kind: Pipeline
 - path: spec/vertices/source/transformer/container/volumeMounts/mountPath
   kind: Pipeline
