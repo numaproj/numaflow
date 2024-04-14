@@ -81,6 +81,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, readMessage *
 		Value:     payload,
 		EventTime: timestamppb.New(parentMessageInfo.EventTime),
 		Watermark: timestamppb.New(readMessage.Watermark),
+		Headers:   readMessage.Headers,
 	}
 
 	response, err := u.client.SourceTransformFn(ctx, req)

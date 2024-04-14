@@ -61,7 +61,6 @@ rules:
   - events
   - pods
   - pods/log
-  - pods/exec
   - configmaps
   - services
   - persistentvolumeclaims
@@ -264,6 +263,12 @@ spec:
               key: server.address
               name: numaflow-cmd-params-config
               optional: true
+        - name: NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              key: server.cors.allowed.origins
+              name: numaflow-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
@@ -313,6 +318,12 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: NUMAFLOW_SERVER_DISABLE_AUTH
+          valueFrom:
+            configMapKeyRef:
+              key: server.disable.auth
+              name: numaflow-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         name: server-secrets-init

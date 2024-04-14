@@ -52,6 +52,12 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: NUMAFLOW_SERVER_DISABLE_AUTH
+            valueFrom:
+              configMapKeyRef:
+                name: numaflow-cmd-params-config
+                key: server.disable.auth
+                optional: true
       containers:
         - name: main
           image: quay.io/numaproj/numaflow:latest
@@ -125,6 +131,12 @@ spec:
               configMapKeyRef:
                 name: numaflow-cmd-params-config
                 key: server.address
+                optional: true
+          - name: NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS
+            valueFrom:
+              configMapKeyRef:
+                name: numaflow-cmd-params-config
+                key: server.cors.allowed.origins
                 optional: true
           resources:
             limits:

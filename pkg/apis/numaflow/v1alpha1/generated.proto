@@ -116,6 +116,16 @@ message AbstractPodTemplate {
   optional k8s.io.api.core.v1.PodDNSConfig dnsConfig = 13;
 }
 
+message AbstractSink {
+  optional Log log = 1;
+
+  optional KafkaSink kafka = 2;
+
+  optional Blackhole blackhole = 3;
+
+  optional UDSink udsink = 4;
+}
+
 message AbstractVertex {
   optional string name = 1;
 
@@ -1163,13 +1173,12 @@ message SideInputsManagerTemplate {
 }
 
 message Sink {
-  optional Log log = 1;
+  optional AbstractSink abstractSink = 1;
 
-  optional KafkaSink kafka = 2;
-
-  optional Blackhole blackhole = 3;
-
-  optional UDSink udsink = 4;
+  // Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be
+  // initiated if the ud-sink response field sets it.
+  // +optional
+  optional AbstractSink fallback = 2;
 }
 
 // SlidingWindow describes a sliding window

@@ -26,33 +26,23 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 func TestWriteSuccessToKafka(t *testing.T) {
 	var err error
-	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25, 0)
 	toKafka := new(ToKafka)
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
 		AbstractVertex: dfv1.AbstractVertex{
 			Name: "testVertex",
 			Sink: &dfv1.Sink{
-				Kafka: &dfv1.KafkaSink{},
+				AbstractSink: dfv1.AbstractSink{
+					Kafka: &dfv1.KafkaSink{},
+				},
 			},
 		},
 	}}
-	vertexInstance := &dfv1.VertexInstance{
-		Vertex:  vertex,
-		Replica: 0,
-	}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertex.Spec.Name})
-	idleManager, _ := wmb.NewIdleManager(1, 1)
-	toKafka.isdf, err = sinkforward.NewDataForward(vertexInstance, fromStep, toKafka, fetchWatermark, publishWatermark["testVertex"], idleManager)
 	assert.NoError(t, err)
 	toKafka.kafkaSink = vertex.Spec.Sink.Kafka
 	toKafka.name = "Test"
@@ -66,7 +56,6 @@ func TestWriteSuccessToKafka(t *testing.T) {
 	producer.ExpectInputAndSucceed()
 	toKafka.producer = producer
 	toKafka.connected = true
-	toKafka.Start()
 	msgs := []isb.Message{
 		{
 			Header: isb.Header{
@@ -87,30 +76,11 @@ func TestWriteSuccessToKafka(t *testing.T) {
 	for _, err := range errs {
 		assert.Nil(t, err)
 	}
-	toKafka.Stop()
 }
 
 func TestWriteFailureToKafka(t *testing.T) {
 	var err error
-	fromStep := simplebuffer.NewInMemoryBuffer("toKafka", 25, 0)
 	toKafka := new(ToKafka)
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-			Sink: &dfv1.Sink{
-				Kafka: &dfv1.KafkaSink{},
-			},
-		},
-	}}
-	vertexInstance := &dfv1.VertexInstance{
-		Vertex:  vertex,
-		Replica: 0,
-	}
-	toSteps := map[string][]isb.BufferWriter{vertex.Spec.Name: {toKafka}}
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	idleManager, _ := wmb.NewIdleManager(1, 1)
-	toKafka.isdf, err = sinkforward.NewDataForward(vertexInstance, fromStep, toKafka, fetchWatermark, publishWatermark["testVertex"], idleManager)
 	assert.NoError(t, err)
 	toKafka.name = "Test"
 	toKafka.topic = "topic-1"
@@ -123,7 +93,6 @@ func TestWriteFailureToKafka(t *testing.T) {
 	producer.ExpectInputAndFail(fmt.Errorf("test1"))
 	toKafka.producer = producer
 	toKafka.connected = true
-	toKafka.Start()
 	msgs := []isb.Message{
 		{
 			Header: isb.Header{
@@ -146,6 +115,5 @@ func TestWriteFailureToKafka(t *testing.T) {
 	}
 	assert.Equal(t, "test", errs[0].Error())
 	assert.Equal(t, "test1", errs[1].Error())
-	toKafka.Stop()
 
 }

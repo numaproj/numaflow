@@ -121,56 +121,56 @@ func NewProcessAndForward(ctx context.Context,
 
 // AsyncSchedulePnF creates a go routine for each partition to invoke the UDF.
 // does not maintain the order of execution between partitions.
-func (pm *ProcessAndForward) AsyncSchedulePnF(ctx context.Context, partitionID *partition.ID, pbq pbq.Reader) {
+func (pf *ProcessAndForward) AsyncSchedulePnF(ctx context.Context, partitionID *partition.ID, pbq pbq.Reader) {
 	doneCh := make(chan struct{})
 
-	pm.mu.Lock()
-	pm.pnfRoutines[partitionID.String()] = doneCh
-	pm.mu.Unlock()
+	pf.mu.Lock()
+	pf.pnfRoutines[partitionID.String()] = doneCh
+	pf.mu.Unlock()
 
-	go pm.invokeUDF(ctx, doneCh, partitionID, pbq)
+	go pf.invokeUDF(ctx, doneCh, partitionID, pbq)
 }
 
 // invokeUDF reads requests from the supplied PBQ, invokes the UDF to gets the response and writes the response to the
 // main channel.
-func (pm *ProcessAndForward) invokeUDF(ctx context.Context, done chan struct{}, pid *partition.ID, pbqReader pbq.Reader) {
+func (pf *ProcessAndForward) invokeUDF(ctx context.Context, done chan struct{}, pid *partition.ID, pbqReader pbq.Reader) {
 	defer func() {
-		pm.mu.Lock()
-		delete(pm.pnfRoutines, pid.String())
-		pm.mu.Unlock()
+		pf.mu.Lock()
+		delete(pf.pnfRoutines, pid.String())
+		pf.mu.Unlock()
 	}()
 
 	defer close(done)
-	udfResponseCh, errCh := pm.reduceApplier.ApplyReduce(ctx, pid, pbqReader.ReadCh())
+	udfResponseCh, errCh := pf.reduceApplier.ApplyReduce(ctx, pid, pbqReader.ReadCh())
 
 outerLoop:
 	for {
 		select {
 		case err := <-errCh:
 			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-				pm.log.Infow("Context is canceled, stopping the processAndForward", zap.Error(err))
+				pf.log.Infow("Context is canceled, stopping the processAndForward", zap.Error(err))
 				return
 			}
 			if err != nil {
-				pm.log.Panic("Got an error while invoking ApplyReduce", zap.Error(err))
+				pf.log.Panic("Got an error while invoking ApplyReduce", zap.Error(err))
 			}
 		case response, ok := <-udfResponseCh:
 			if !ok {
 				break outerLoop
 			}
 
-			pm.responseCh <- response
+			pf.responseCh <- response
 		}
 	}
 }
 
 // forwardResponses forwards the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ.
 // The watermark is only published at COB at key level for Unaligned and at Partition level for Aligned.
-func (pm *ProcessAndForward) forwardResponses(ctx context.Context) {
-	defer close(pm.forwardDoneCh)
+func (pf *ProcessAndForward) forwardResponses(ctx context.Context) {
+	defer close(pf.forwardDoneCh)
 
-	flushTimer := time.NewTicker(pm.opts.flushDuration)
-	writeMessages := make([]*isb.WriteMessage, 0, pm.opts.batchSize)
+	flushTimer := time.NewTicker(pf.opts.flushDuration)
+	writeMessages := make([]*isb.WriteMessage, 0, pf.opts.batchSize)
 
 	// should we flush?
 	var flush bool
@@ -180,17 +180,17 @@ func (pm *ProcessAndForward) forwardResponses(ctx context.Context) {
 forwardLoop:
 	for {
 		select {
-		case response, ok := <-pm.responseCh:
+		case response, ok := <-pf.responseCh:
 			if !ok {
 				break forwardLoop
 			}
 
 			if response.EOF {
-				if err := pm.forwardToBuffers(ctx, &writeMessages); err != nil {
+				if err := pf.forwardToBuffers(ctx, &writeMessages); err != nil {
 					return
 				}
 
-				if err := pm.handleEOFResponse(ctx, response); err != nil {
+				if err := pf.handleEOFResponse(ctx, response); err != nil {
 					return
 				}
 
@@ -202,7 +202,7 @@ forwardLoop:
 			writeMessages = append(writeMessages, response.WriteMessage)
 
 			// if the batch size is reached, let's flush
-			if len(writeMessages) >= pm.opts.batchSize {
+			if len(writeMessages) >= pf.opts.batchSize {
 				flush = true
 			}
 
@@ -217,7 +217,7 @@ forwardLoop:
 		}
 
 		if flush {
-			if err := pm.forwardToBuffers(ctx, &writeMessages); err != nil {
+			if err := pf.forwardToBuffers(ctx, &writeMessages); err != nil {
 				return
 			}
 			flush = false
@@ -226,19 +226,19 @@ forwardLoop:
 
 	// if there are any messages left, forward them to the ISB
 	if len(writeMessages) > 0 {
-		if err := pm.forwardToBuffers(ctx, &writeMessages); err != nil {
+		if err := pf.forwardToBuffers(ctx, &writeMessages); err != nil {
 			return
 		}
 	}
 }
 
 // handleEOFResponse handles the EOF response received from the response channel. It publishes the watermark and invokes GC on PBQ.
-func (pm *ProcessAndForward) handleEOFResponse(ctx context.Context, response *window.TimedWindowResponse) error {
+func (pf *ProcessAndForward) handleEOFResponse(ctx context.Context, response *window.TimedWindowResponse) error {
 	// publish watermark
-	pm.publishWM(ctx)
+	pf.publishWM(ctx)
 
 	// delete the closed windows which are tracked by the windower
-	pm.windower.DeleteClosedWindow(response.Window)
+	pf.windower.DeleteClosedWindow(response.Window)
 
 	var infiniteBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
@@ -248,13 +248,13 @@ func (pm *ProcessAndForward) handleEOFResponse(ctx context.Context, response *wi
 	}
 
 	// persist the GC event for unaligned window type (compactor will compact it) and invoke GC for aligned window type.
-	if pm.windower.Type() == window.Unaligned {
+	if pf.windower.Type() == window.Unaligned {
 		err := wait.ExponentialBackoff(infiniteBackoff, func() (done bool, err error) {
 			var attempt int
-			err = pm.opts.gcEventsTracker.PersistGCEvent(response.Window)
+			err = pf.opts.gcEventsTracker.PersistGCEvent(response.Window)
 			if err != nil {
 				attempt++
-				pm.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", response.Window.ID()), zap.Int("attempt", attempt))
+				pf.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", response.Window.ID()), zap.Int("attempt", attempt))
 				// no point retrying if ctx.Done has been invoked
 				select {
 				case <-ctx.Done():
@@ -272,13 +272,13 @@ func (pm *ProcessAndForward) handleEOFResponse(ctx context.Context, response *wi
 		}
 	} else {
 		pid := *response.Window.Partition()
-		pbqReader := pm.pbqManager.GetPBQ(*response.Window.Partition())
+		pbqReader := pf.pbqManager.GetPBQ(*response.Window.Partition())
 		err := wait.ExponentialBackoff(infiniteBackoff, func() (done bool, err error) {
 			var attempt int
 			err = pbqReader.GC()
 			if err != nil {
 				attempt++
-				pm.log.Errorw("Got an error while invoking GC on PBQ", zap.Error(err), zap.String("partitionID", pid.String()), zap.Int("attempt", attempt))
+				pf.log.Errorw("Got an error while invoking GC on PBQ", zap.Error(err), zap.String("partitionID", pid.String()), zap.Int("attempt", attempt))
 				// no point retrying if ctx.Done has been invoked
 				select {
 				case <-ctx.Done():
@@ -294,18 +294,18 @@ func (pm *ProcessAndForward) handleEOFResponse(ctx context.Context, response *wi
 		if err != nil {
 			return err
 		}
-		pm.log.Infow("Finished GC", zap.String("partitionID", pid.String()))
+		pf.log.Infow("Finished GC", zap.String("partitionID", pid.String()))
 	}
 	return nil
 }
 
 // forwardToBuffers writes the messages to the ISBs concurrently for each partition.
-func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context, writeMessages *[]*isb.WriteMessage) error {
+func (pf *ProcessAndForward) forwardToBuffers(ctx context.Context, writeMessages *[]*isb.WriteMessage) error {
 	if len(*writeMessages) == 0 {
 		return nil
 	}
 
-	messagesToStep := pm.whereToStep(*writeMessages)
+	messagesToStep := pf.whereToStep(*writeMessages)
 	// parallel writes to each ISB
 	var mu sync.Mutex
 	// use error group
@@ -318,13 +318,13 @@ func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context, writeMessages
 
 			func(toVertexName string, toVertexPartitionIdx int32, resultMessages []isb.Message) {
 				eg.Go(func() error {
-					offsets, err := pm.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
+					offsets, err := pf.writeToBuffer(ctx, toVertexName, toVertexPartitionIdx, resultMessages)
 					if err != nil {
 						return err
 					}
 					mu.Lock()
 					// TODO: do we need lock? isn't each buffer isolated since we do sequential per ISB?
-					pm.latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
+					pf.latestWriteOffsets[toVertexName][toVertexPartitionIdx] = offsets
 					mu.Unlock()
 					return nil
 				})
@@ -338,27 +338,27 @@ func (pm *ProcessAndForward) forwardToBuffers(ctx context.Context, writeMessages
 	}
 
 	// clear the writeMessages
-	*writeMessages = make([]*isb.WriteMessage, 0, pm.opts.batchSize)
+	*writeMessages = make([]*isb.WriteMessage, 0, pf.opts.batchSize)
 	return nil
 }
 
 // whereToStep assigns a message to the ISBs based on the Message.Keys.
-func (pm *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[string][][]isb.Message {
+func (pf *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[string][][]isb.Message {
 	// writer doesn't accept array of pointers
 	messagesToStep := make(map[string][][]isb.Message)
 
 	var to []forwarder.VertexBuffer
 	var err error
 	for _, msg := range writeMessages {
-		to, err = pm.whereToDecider.WhereTo(msg.Keys, msg.Tags, msg.ID)
+		to, err = pf.whereToDecider.WhereTo(msg.Keys, msg.Tags, msg.ID)
 		if err != nil {
 			metrics.PlatformError.With(map[string]string{
-				metrics.LabelVertex:             pm.vertexName,
-				metrics.LabelPipeline:           pm.pipelineName,
+				metrics.LabelVertex:             pf.vertexName,
+				metrics.LabelPipeline:           pf.pipelineName,
 				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pm.vertexReplica)),
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
 			}).Inc()
-			pm.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.Strings("keys", msg.Keys), zap.Error(err))
+			pf.log.Errorw("Got an error while invoking WhereTo, dropping the message", zap.Strings("keys", msg.Keys), zap.Error(err))
 			continue
 		}
 
@@ -368,7 +368,7 @@ func (pm *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[
 
 		for _, step := range to {
 			if _, ok := messagesToStep[step.ToVertexName]; !ok {
-				messagesToStep[step.ToVertexName] = make([][]isb.Message, len(pm.toBuffers[step.ToVertexName]))
+				messagesToStep[step.ToVertexName] = make([][]isb.Message, len(pf.toBuffers[step.ToVertexName]))
 			}
 			messagesToStep[step.ToVertexName][step.ToVertexPartitionIdx] = append(messagesToStep[step.ToVertexName][step.ToVertexPartitionIdx], msg.Message)
 		}
@@ -378,11 +378,10 @@ func (pm *ProcessAndForward) whereToStep(writeMessages []*isb.WriteMessage) map[
 }
 
 // writeToBuffer writes to the ISBs.
-func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) ([]isb.Offset, error) {
+func (pf *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string, partition int32, resultMessages []isb.Message) ([]isb.Offset, error) {
 	var (
 		writeCount int
 		writeBytes float64
-		dropBytes  float64
 	)
 
 	var ISBWriteBackoff = wait.Backoff{
@@ -399,12 +398,33 @@ func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 	ctxClosedErr := wait.ExponentialBackoff(ISBWriteBackoff, func() (done bool, err error) {
 		var writeErrs []error
 		var failedMessages []isb.Message
-		offsets, writeErrs = pm.toBuffers[edgeName][partition].Write(ctx, writeMessages)
+		offsets, writeErrs = pf.toBuffers[edgeName][partition].Write(ctx, writeMessages)
 		for i, message := range writeMessages {
-			if writeErrs[i] != nil {
-				if errors.As(writeErrs[i], &isb.NoRetryableBufferWriteErr{}) {
-					// If toBuffer returns us a NoRetryableBufferWriteErr, we drop the message.
-					dropBytes += float64(len(message.Payload))
+			writeErr := writeErrs[i]
+			if writeErr != nil {
+				// Non retryable error, drop the message. Non retryable errors are only returned
+				// when the buffer is full and the user has set the buffer full strategy to
+				// DiscardLatest or when the message is duplicate.
+				if errors.As(writeErr, &isb.NonRetryableBufferWriteErr{}) {
+					metrics.DropMessagesCount.With(map[string]string{
+						metrics.LabelVertex:             pf.vertexName,
+						metrics.LabelPipeline:           pf.pipelineName,
+						metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
+						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
+						metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName(),
+						metrics.LabelReason:             writeErr.Error(),
+					}).Inc()
+
+					metrics.DropBytesCount.With(map[string]string{
+						metrics.LabelVertex:             pf.vertexName,
+						metrics.LabelPipeline:           pf.pipelineName,
+						metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
+						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
+						metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName(),
+						metrics.LabelReason:             writeErr.Error(),
+					}).Add(float64(len(message.Payload)))
+
+					pf.log.Infow("Dropped message", zap.String("reason", writeErr.Error()), zap.String("vertex", pf.vertexName), zap.String("pipeline", pf.pipelineName))
 				} else {
 					failedMessages = append(failedMessages, message)
 				}
@@ -415,14 +435,14 @@ func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 		}
 		// retry only the failed messages
 		if len(failedMessages) > 0 {
-			pm.log.Warnw("Failed to write messages to isb inside pnf", zap.Errors("errors", writeErrs))
+			pf.log.Warnw("Failed to write messages to isb inside pnf", zap.Errors("errors", writeErrs))
 			writeMessages = failedMessages
 			metrics.WriteMessagesError.With(map[string]string{
-				metrics.LabelVertex:             pm.vertexName,
-				metrics.LabelPipeline:           pm.pipelineName,
+				metrics.LabelVertex:             pf.vertexName,
+				metrics.LabelPipeline:           pf.pipelineName,
 				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pm.vertexReplica)),
-				metrics.LabelPartitionName:      pm.toBuffers[edgeName][partition].GetName()}).Add(float64(len(failedMessages)))
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
+				metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName()}).Add(float64(len(failedMessages)))
 
 			if ctx.Err() != nil {
 				// no need to retry if the context is closed
@@ -435,47 +455,33 @@ func (pm *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 	})
 
 	if ctxClosedErr != nil {
-		pm.log.Errorw("Ctx closed while writing messages to ISB", zap.Error(ctxClosedErr))
+		pf.log.Errorw("Ctx closed while writing messages to ISB", zap.Error(ctxClosedErr))
 		return nil, ctxClosedErr
 	}
 
-	metrics.DropMessagesCount.With(map[string]string{
-		metrics.LabelVertex:             pm.vertexName,
-		metrics.LabelPipeline:           pm.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pm.vertexReplica)),
-		metrics.LabelPartitionName:      pm.toBuffers[edgeName][partition].GetName()}).Add(float64(len(resultMessages) - writeCount))
-
-	metrics.DropBytesCount.With(map[string]string{
-		metrics.LabelVertex:             pm.vertexName,
-		metrics.LabelPipeline:           pm.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pm.vertexReplica)),
-		metrics.LabelPartitionName:      pm.toBuffers[edgeName][partition].GetName()}).Add(dropBytes)
-
 	metrics.WriteMessagesCount.With(map[string]string{
-		metrics.LabelVertex:             pm.vertexName,
-		metrics.LabelPipeline:           pm.pipelineName,
+		metrics.LabelVertex:             pf.vertexName,
+		metrics.LabelPipeline:           pf.pipelineName,
 		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pm.vertexReplica)),
-		metrics.LabelPartitionName:      pm.toBuffers[edgeName][partition].GetName()}).Add(float64(writeCount))
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
+		metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName()}).Add(float64(writeCount))
 
 	metrics.WriteBytesCount.With(map[string]string{
-		metrics.LabelVertex:             pm.vertexName,
-		metrics.LabelPipeline:           pm.pipelineName,
+		metrics.LabelVertex:             pf.vertexName,
+		metrics.LabelPipeline:           pf.pipelineName,
 		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pm.vertexReplica)),
-		metrics.LabelPartitionName:      pm.toBuffers[edgeName][partition].GetName()}).Add(writeBytes)
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
+		metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName()}).Add(writeBytes)
 	return offsets, nil
 }
 
 // publishWM publishes the watermark to each edge.
-func (pm *ProcessAndForward) publishWM(ctx context.Context) {
+func (pf *ProcessAndForward) publishWM(ctx context.Context) {
 	// publish watermark, we publish window end time minus one millisecond  as watermark
 	// but if there's a window that's about to be closed which has a end time before the current window end time,
 	// we publish that window's end time as watermark. This is to ensure that the watermark is monotonically increasing.
 	wm := wmb.Watermark(time.UnixMilli(-1))
-	if oldestClosedWindowEndTime := pm.windower.OldestWindowEndTime(); oldestClosedWindowEndTime.UnixMilli() != -1 {
+	if oldestClosedWindowEndTime := pf.windower.OldestWindowEndTime(); oldestClosedWindowEndTime.UnixMilli() != -1 {
 		wm = wmb.Watermark(oldestClosedWindowEndTime.Add(-1 * time.Millisecond))
 	}
 
@@ -484,15 +490,15 @@ func (pm *ProcessAndForward) publishWM(ctx context.Context) {
 	// it's used to determine which buffers should receive an idle watermark.
 	// Created as a slice since it tracks per partition of the buffer.
 	var activeWatermarkBuffers = make(map[string][]bool)
-	for toVertexName, bufferOffsets := range pm.latestWriteOffsets {
+	for toVertexName, bufferOffsets := range pf.latestWriteOffsets {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
-		if publisher, ok := pm.watermarkPublishers[toVertexName]; ok {
+		if publisher, ok := pf.watermarkPublishers[toVertexName]; ok {
 			for index, offsets := range bufferOffsets {
 				if len(offsets) > 0 {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is not idling
-					pm.idleManager.MarkActive(wmb.PARTITION_0, pm.toBuffers[toVertexName][index].GetName())
+					pf.idleManager.MarkActive(wmb.PARTITION_0, pf.toBuffers[toVertexName][index].GetName())
 				}
 			}
 		}
@@ -501,55 +507,55 @@ func (pm *ProcessAndForward) publishWM(ctx context.Context) {
 
 	// if there's any buffers that haven't received any watermark during this
 	// batch processing cycle, send an idle watermark
-	for toVertexName := range pm.watermarkPublishers {
+	for toVertexName := range pf.watermarkPublishers {
 		for index, activePartition := range activeWatermarkBuffers[toVertexName] {
 			if !activePartition {
-				if publisher, ok := pm.watermarkPublishers[toVertexName]; ok {
-					idlehandler.PublishIdleWatermark(ctx, wmb.PARTITION_0, pm.toBuffers[toVertexName][index], publisher, pm.idleManager, pm.log, pm.vertexName, pm.pipelineName, dfv1.VertexTypeReduceUDF, pm.vertexReplica, wm)
+				if publisher, ok := pf.watermarkPublishers[toVertexName]; ok {
+					idlehandler.PublishIdleWatermark(ctx, wmb.PARTITION_0, pf.toBuffers[toVertexName][index], publisher, pf.idleManager, pf.log, pf.vertexName, pf.pipelineName, dfv1.VertexTypeReduceUDF, pf.vertexReplica, wm)
 				}
 			}
 		}
 	}
 
 	// reset the latestWriteOffsets after publishing watermark
-	pm.latestWriteOffsets = make(map[string][][]isb.Offset)
-	for toVertexName, toVertexBuffer := range pm.toBuffers {
-		pm.latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
+	pf.latestWriteOffsets = make(map[string][][]isb.Offset)
+	for toVertexName, toVertexBuffer := range pf.toBuffers {
+		pf.latestWriteOffsets[toVertexName] = make([][]isb.Offset, len(toVertexBuffer))
 	}
 }
 
 // Shutdown closes all the partitions of the buffer.
-func (pm *ProcessAndForward) Shutdown() {
-	pm.log.Infow("Shutting down ProcessAndForward")
+func (pf *ProcessAndForward) Shutdown() {
+	pf.log.Infow("Shutting down ProcessAndForward")
 
-	pm.mu.RLock()
-	doneChs := make([]chan struct{}, 0, len(pm.pnfRoutines))
-	for _, doneCh := range pm.pnfRoutines {
+	pf.mu.RLock()
+	doneChs := make([]chan struct{}, 0, len(pf.pnfRoutines))
+	for _, doneCh := range pf.pnfRoutines {
 		doneChs = append(doneChs, doneCh)
 	}
-	pm.mu.RUnlock()
+	pf.mu.RUnlock()
 
 	for _, doneCh := range doneChs {
 		<-doneCh
 	}
-	pm.log.Infow("All PnFs have finished, waiting for forwardDoneCh to be done")
+	pf.log.Infow("All PnFs have finished, waiting for forwardDoneCh to be done")
 
 	// close the response channel
-	close(pm.responseCh)
+	close(pf.responseCh)
 
 	// wait for the forwardResponses to finish
-	<-pm.forwardDoneCh
+	<-pf.forwardDoneCh
 
 	// close all the buffers since the forwardResponses is done
-	for _, buffer := range pm.toBuffers {
+	for _, buffer := range pf.toBuffers {
 		for _, p := range buffer {
 			if err := p.Close(); err != nil {
-				pm.log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", p.GetName()))
+				pf.log.Errorw("Failed to close partition writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", p.GetName()))
 			} else {
-				pm.log.Infow("Closed partition writer", zap.String("bufferTo", p.GetName()))
+				pf.log.Infow("Closed partition writer", zap.String("bufferTo", p.GetName()))
 			}
 		}
 	}
 
-	pm.log.Infow("Successfully shutdown ProcessAndForward")
+	pf.log.Infow("Successfully shutdown ProcessAndForward")
 }

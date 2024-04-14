@@ -10,7 +10,22 @@ data:
   # managed.namespace: numaflow-system
   #
   ### Whether to disable leader election for the controller, defaults to false
-  # controller.disable.leader.election: "false"
+  # controller.leader.election.disabled: "false"
+  #
+  ### The duration that non-leader candidates will wait to force acquire leadership. 
+  #   This is measured against time of last observed ack. Default is 15 seconds.
+  #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
+  # controller.leader.election.lease.duration: 15s
+  #
+  ### The duration that the acting controlplane will retry refreshing leadership before giving up. 
+  #   Default is 10 seconds.
+  #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
+  # controller.leader.election.lease.renew.deadline: 10s
+  #
+  ### The duration the LeaderElector clients should wait between tries of actions, which means every
+  #   this period of time, it tries to renew the lease. Default is 2 seconds.
+  #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
+  # controller.leader.election.lease.renew.period: 2s
   #
   ### Whether to disable TLS for UX server.
   # server.insecure: "false"
@@ -29,3 +44,7 @@ data:
   #
   ### The external address of the Numaflow server. This is needed when using Dex for authentication.
   # server.address: https://localhost:8443
+  #
+  ### The list of allowed origins for CORS on Numaflow server, separated by a comma, defaults to ''.
+  #   For example: server.cors.allowed.origins: "http://localhost:3000,http://localhost:3001"
+  #  server.cors.allowed.origins: ""
