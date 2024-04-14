@@ -1,0 +1,13 @@
+# This file documents Numaflow versions and their minimum required SDK versions
+v1.2.0-rc1:
+  go: 0.7.0-0
+  python: 0.7.0-0
+  java: 0.7.0-0
+v1.2.0-rc2:
+  go: 0.7.0-0
+  python: 0.7.0-0
+  java: 0.7.0-0
+v1.2.0-rc3:
+  go: 0.7.0-0
+  python: 0.7.0-0
+  java: 0.7.0-0
