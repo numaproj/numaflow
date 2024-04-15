@@ -58,7 +58,7 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 		info.Python: "0.7.0a",
 	}
 
-	numaflowVersionStr := "1.2.0-0"
+	numaflowVersionStr := "1.2.0"
 
 	if !strings.Contains(numaflowVersionStr, "latest") {
 		numaflowVersion, err := semver.NewVersion(numaflowVersionStr)
