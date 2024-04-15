@@ -45,7 +45,7 @@ type Version struct {
 
 // String outputs the version as a string
 func (v Version) String() string {
-	return fmt.Sprintf(`Version: %s, BuildDate: %s, GitCommit: %s, GitTag: %s, GitTreeState: %s, GoVersion: %s, Compiler: %s, Platform: %s, ReleaseVersion: %s`, v.Version, v.BuildDate, v.GitCommit, v.GitTag, v.GitTreeState, v.GoVersion, v.Compiler, v.Platform)
+	return fmt.Sprintf(`Version: %s, BuildDate: %s, GitCommit: %s, GitTag: %s, GitTreeState: %s, GoVersion: %s, Compiler: %s, Platform: %s`, v.Version, v.BuildDate, v.GitCommit, v.GitTag, v.GitTreeState, v.GoVersion, v.Compiler, v.Platform)
 }
 
 // GetVersion returns the version information
