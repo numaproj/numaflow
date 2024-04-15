@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	"github.com/numaproj/numaflow"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 )
@@ -58,7 +57,7 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 		info.Python: "0.7.0-0",
 	}
 
-	numaflowVersionStr := numaflow.GetVersion().Version
+	numaflowVersionStr := "1.2.0"
 
 	if !strings.Contains(numaflowVersionStr, "latest") {
 		numaflowVersion, err := semver.NewVersion(numaflowVersionStr)
@@ -137,9 +136,9 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 		return nil, fmt.Errorf("failed to read server info: %w", err)
 	}
 
-	//if err := isCompatible(serverInfo); err != nil {
-	//	return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
-	//}
+	if err := isCompatible(serverInfo); err != nil {
+		return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
+	}
 
 	return serverInfo, nil
 }
