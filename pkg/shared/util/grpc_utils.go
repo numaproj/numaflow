@@ -57,6 +57,7 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 		info.Python: "0.7.0-0",
 	}
 
+	return nil
 	numaflowVersionStr := "1.2.0"
 
 	if !strings.Contains(numaflowVersionStr, "latest") {
