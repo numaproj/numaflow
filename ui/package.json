@@ -108,6 +108,9 @@
     "transformIgnorePatterns": [
       "/node_modules/(?!d3|d3-array|internmap|delaunator|robust-predicates|reactflow|react-toastify|moment)"
     ],
+    "moduleNameMapper": {
+      "^monaco-editor$": "<rootDir>/node_modules/@monaco-editor/react"
+    },
     "resetMocks": false
   }
 }
