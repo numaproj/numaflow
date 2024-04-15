@@ -51,7 +51,7 @@ export function PipelineCard({
   isbData,
   refresh,
 }: PipelineCardProps) {
-  const { addError, setSidebarProps, systemInfo, host, isReadOnly } =
+  const { addError, setSidebarProps, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
   const [viewOption] = useState("view");
   const [editOption] = useState("edit");
@@ -334,11 +334,7 @@ export function PipelineCard({
             }}
           >
             <Link
-              to={
-                systemInfo?.namespaced
-                  ? `?pipeline=${data.name}`
-                  : `?namespace=${namespace}&pipeline=${data.name}`
-              }
+              to={`?namespace=${namespace}&pipeline=${data.name}`}
               style={
                 pipelineStatus === DELETING || !pipelineAbleToLoad
                   ? { pointerEvents: "none", textDecoration: "none" }
@@ -460,11 +456,7 @@ export function PipelineCard({
             </Box>
           )}
           <Link
-            to={
-              systemInfo?.namespaced
-                ? `?pipeline=${data.name}`
-                : `?namespace=${namespace}&pipeline=${data.name}`
-            }
+            to={`?namespace=${namespace}&pipeline=${data.name}`}
             style={
               pipelineStatus === DELETING || !pipelineAbleToLoad
                 ? { pointerEvents: "none", textDecoration: "none" }

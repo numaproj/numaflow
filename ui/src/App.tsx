@@ -11,7 +11,7 @@ import Drawer from "@mui/material/Drawer";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Switch, Route, useLocation } from "react-router-dom";
+import { Switch, Route, useLocation, useHistory } from "react-router-dom";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Routes } from "./components/common/Routes";
 import { Login } from "./components/pages/Login";
@@ -65,12 +65,18 @@ const EXCLUDE_APP_BARS: { [key: string]: boolean } = {
 
 function App(props: AppProps) {
   // TODO remove, used for testing ns only installation
-  // const { systemInfo, error: systemInfoError } = {
+  // const {
+  //   systemInfo,
+  //   error: systemInfoError,
+  //   loading,
+  // } = {
   //   systemInfo: {
   //     namespaced: true,
-  //     managedNamespace: "test",
+  //     managedNamespace: "default",
+  //     isReadOnly: false,
   //   },
   //   error: undefined,
+  //   loading: false,
   // };
   const { hostUrl = "", namespace = "" } = props;
   const pageRef = useRef<any>();
@@ -90,6 +96,22 @@ function App(props: AppProps) {
   } = useSystemInfoFetch({ host: hostUrl });
 
   const location = useLocation();
+  const history = useHistory();
+
+  useEffect(() => {
+    if (systemInfo?.namespaced) {
+      const query = new URLSearchParams(location.search);
+      const ns = query.get("namespace") || "";
+
+      if (
+        location.pathname === "/" &&
+        systemInfo &&
+        ns !== systemInfo.managedNamespace
+      ) {
+        history.push(`?namespace=${systemInfo.managedNamespace}`);
+      }
+    }
+  }, [location, history, systemInfo]);
 
   useEffect(() => {
     // Attempt to load user info on app load
