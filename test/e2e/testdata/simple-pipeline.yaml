@@ -15,15 +15,7 @@ spec:
           name: cat
     - name: output
       sink:
-        udsink:
-          container:
-            image: quay.io/yhl25/go-log-sink:v0.0.1
-            imagePullPolicy: Always
-        fallback:
-          udsink:
-            container:
-              image: quay.io/yhl25/go-fb-log-sink:v0.0.1
-              imagePullPolicy: Always
+        log: {}
   edges:
     - from: input
       to: p1
