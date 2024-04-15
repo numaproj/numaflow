@@ -80,14 +80,14 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		}
 		testResponseList := []*sinkpb.SinkResponse_Result{
 			{
-				Id:      "test_id_0",
-				Success: true,
-				ErrMsg:  "",
+				Id:     "test_id_0",
+				Status: sinkpb.Status_SUCCESS,
+				ErrMsg: "",
 			},
 			{
-				Id:      "test_id_1",
-				Success: false,
-				ErrMsg:  "mock sink message error",
+				Id:     "test_id_1",
+				Status: sinkpb.Status_FAILURE,
+				ErrMsg: "mock sink message error",
 			},
 		}
 

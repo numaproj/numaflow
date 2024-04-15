@@ -47,6 +47,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type SinkProcessor struct {
@@ -61,6 +62,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		err                error
 		fromVertexWmStores map[string]store.WatermarkStore
 		sinkWmStores       map[string]store.WatermarkStore
+		idleManager        wmb.IdleManager
 		sinkHandler        *udsink.UDSgRPCBasedUDSink
 		fbSinkHandler      *udsink.UDSgRPCBasedUDSink
 		healthCheckers     = make([]metrics.HealthChecker, 0)
@@ -72,7 +74,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	// For sinks, the buffer name is the vertex name
-	fetchWatermark, _ := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{u.VertexInstance.Vertex.Spec.Name})
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{u.VertexInstance.Vertex.Spec.Name})
+	idleManager = wmb.NewNoOpIdleManager()
 
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
@@ -124,6 +127,17 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 			// create watermark fetcher using watermark stores
 			fetchWatermark = fetch.NewEdgeFetcherSet(ctx, u.VertexInstance, fromVertexWmStores)
+
+			// create watermark stores
+			sinkWmStores, err = jetstream.BuildToVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
+			if err != nil {
+				return fmt.Errorf("failed to to vertex watermark stores: %w", err)
+			}
+
+			// create watermark publisher using watermark stores
+			publishWatermark = jetstream.BuildPublishersFromStores(ctx, u.VertexInstance, sinkWmStores)
+			// sink vertex has only one toBuffer, so the length is 1
+			idleManager, _ = wmb.NewIdleManager(len(readers), 1)
 		}
 
 	default:
@@ -221,8 +235,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			forwardOpts = append(forwardOpts, sinkforward.WithFbSinkWriter(fbSinkWriter))
 		}
 
-		// NOTE: forwarder can make multiple sink writers when we introduce fallback sinks
-		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, forwardOpts...)
+		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[u.VertexInstance.Vertex.Spec.Name], idleManager, forwardOpts...)
 		if err != nil {
 			return fmt.Errorf("failed to create data forward, error: %w", err)
 		}

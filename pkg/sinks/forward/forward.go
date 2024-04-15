@@ -31,10 +31,12 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sinks/sinker"
 	"github.com/numaproj/numaflow/pkg/sinks/udsink"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
@@ -47,17 +49,27 @@ type DataForward struct {
 	fromBufferPartition isb.BufferReader
 	sinkWriter          sinker.SinkWriter
 	wmFetcher           fetch.Fetcher
+	wmPublisher         publish.Publisher
 	opts                options
 	vertexName          string
 	pipelineName        string
 	vertexReplica       int32
+	// idleManager manages the idle watermark status.
+	idleManager wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid.
 	wmbChecker wmb.WMBChecker
 	Shutdown
 }
 
 // NewDataForward creates a sink data forwarder.
-func NewDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.BufferReader, sinkWriter sinker.SinkWriter, fetchWatermark fetch.Fetcher, opts ...Option) (*DataForward, error) {
+func NewDataForward(
+	vertexInstance *dfv1.VertexInstance,
+	fromStep isb.BufferReader,
+	sinkWriter sinker.SinkWriter,
+	fetchWatermark fetch.Fetcher,
+	publishWatermark publish.Publisher,
+	idleManager wmb.IdleManager,
+	opts ...Option) (*DataForward, error) {
 
 	dOpts := DefaultOptions()
 	for _, o := range opts {
@@ -74,10 +86,12 @@ func NewDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.BufferRead
 		fromBufferPartition: fromStep,
 		sinkWriter:          sinkWriter,
 		wmFetcher:           fetchWatermark,
+		wmPublisher:         publishWatermark,
 		// should we do a check here for the values not being null?
 		vertexName:    vertexInstance.Vertex.Spec.Name,
 		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
 		vertexReplica: vertexInstance.Replica,
+		idleManager:   idleManager,
 		wmbChecker:    wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
@@ -163,6 +177,25 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
 	// reading, and we are not able to proceed.
 	if len(readMessages) == 0 {
+		// When the read length is zero, the write length is definitely zero too,
+		// meaning there's no data to be published to the next vertex, and we consider this
+		// situation as idling.
+		// In order to continue propagating watermark, we will set watermark idle=true and publish it.
+		// We also publish a control message if this is the first time we get this idle situation.
+		// We compute the HeadIdleWMB using the given partition as the idle watermark
+		var processorWMB = df.wmFetcher.ComputeHeadIdleWMB(df.fromBufferPartition.GetPartitionIdx())
+		if !df.wmbChecker.ValidateHeadWMB(processorWMB) {
+			// validation failed, skip publishing
+			df.opts.logger.Debugw("skip publishing idle watermark",
+				zap.Int("counter", df.wmbChecker.GetCounter()),
+				zap.Int64("offset", processorWMB.Offset),
+				zap.Int64("watermark", processorWMB.Watermark),
+				zap.Bool("idle", processorWMB.Idle))
+			return
+		}
+
+		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
+		idlehandler.PublishIdleWatermark(ctx, df.sinkWriter.GetPartitionIdx(), df.sinkWriter, df.wmPublisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSink, df.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 		return
 	}
 
@@ -193,25 +226,36 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	// write the messages to the sink
-	fallbackMessages, err := df.writeToSink(ctx, df.sinkWriter, writeMessages)
+	writeOffsets, fallbackMessages, err := df.writeToSink(ctx, df.sinkWriter, writeMessages)
 	if err != nil {
 		df.opts.logger.Errorw("failed to write to sink", zap.Error(err))
 		df.fromBufferPartition.NoAck(ctx, readOffsets)
 		return
 	}
 
-	// if we have any fallback messages, we should write them to the fallback sink
-	if len(fallbackMessages) > 0 {
+	for len(fallbackMessages) > 0 {
 		if df.opts.fbSinkWriter == nil {
 			df.opts.logger.Errorw("Fallback sink is not specified, dropping messages", zap.Int("count", len(fallbackMessages)))
 		} else {
 			df.opts.logger.Infow("Writing to fallback sink", zap.Int("count", len(fallbackMessages)))
-			_, err = df.writeToSink(ctx, df.opts.fbSinkWriter, fallbackMessages)
+			_, fallbackMessages, err = df.writeToSink(ctx, df.opts.fbSinkWriter, fallbackMessages)
 			if err != nil {
 				df.opts.logger.Errorw("Failed to write to fallback sink", zap.Error(err))
 				return
 			}
 		}
+	}
+
+	// FIXME: offsets are not supported for sink, so len(writeOffsets) > 0 will always fail
+	// in sink we don't drop any messages
+	// so len(dataMessages) should be the same as len(writeOffsets)
+	// if len(writeOffsets) is greater than 0, publish normal watermark
+	// if len(writeOffsets) is 0, meaning we only have control messages,
+	// we should not publish anything: the next len(readMessage) check will handle this idling situation
+	if len(writeOffsets) > 0 {
+		df.wmPublisher.PublishWatermark(processorWM, nil, int32(0))
+		// reset because the toBuffer is no longer idling
+		df.idleManager.MarkActive(df.fromBufferPartition.GetPartitionIdx(), df.sinkWriter.GetName())
 	}
 
 	df.opts.logger.Debugw("write to sink completed")
@@ -279,16 +323,17 @@ func (df *DataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) 
 }
 
 // writeToSink forwards an array of messages to a sink and it is a blocking call it keeps retrying until shutdown has been initiated.
-func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWriter, messages []isb.Message) ([]isb.Message, error) {
+func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWriter, messages []isb.Message) ([]isb.Offset, []isb.Message, error) {
 	var (
 		err        error
 		writeCount int
 		writeBytes float64
 	)
+	writeOffsets := make([]isb.Offset, 0, len(messages))
 	var fallbackMessages []isb.Message
 
 	for {
-		_, errs := sinkWriter.Write(ctx, messages)
+		_writeOffsets, errs := sinkWriter.Write(ctx, messages)
 		// Note: this is an unwanted memory allocation during a happy path. We want only minimal allocation since using failedMessages is an unlikely path.
 		var failedMessages []isb.Message
 		needRetry := false
@@ -331,12 +376,16 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 					// a shutdown can break the blocking loop caused due to InternalErr
 					if ok, _ := df.IsShuttingDown(); ok {
 						metrics.PlatformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica))}).Inc()
-						return nil, fmt.Errorf("writeToSink failed, Stop called while stuck on an internal error with failed messages:%d, %v", len(failedMessages), errs)
+						return nil, nil, fmt.Errorf("writeToSink failed, Stop called while stuck on an internal error with failed messages:%d, %v", len(failedMessages), errs)
 					}
 				}
 			} else {
 				writeCount++
 				writeBytes += float64(len(msg.Payload))
+				// we support write offsets only for jetstream
+				if _writeOffsets != nil {
+					writeOffsets = append(writeOffsets, _writeOffsets[idx])
+				}
 			}
 		}
 
@@ -359,7 +408,7 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 	metrics.WriteMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: sinkWriter.GetName()}).Add(float64(writeCount))
 	metrics.WriteBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: sinkWriter.GetName()}).Add(writeBytes)
 
-	return fallbackMessages, nil
+	return writeOffsets, fallbackMessages, nil
 }
 
 // errorArrayToMap summarizes an error array to map
