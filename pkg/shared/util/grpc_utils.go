@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	pep440 "github.com/aquasecurity/go-pep440-version"
 	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -54,7 +55,7 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 	versionMappingConfig := sdkVersions{
 		info.Go:     "0.7.0-0",
 		info.Java:   "0.7.0-0",
-		info.Python: "0.7.0-0",
+		info.Python: "0.7.0a",
 	}
 
 	numaflowVersionStr := "1.2.0-0"
@@ -73,17 +74,36 @@ func isCompatible(serverInfo *info.ServerInfo) error {
 	}
 
 	sdkLanguage := serverInfo.Language
-	sdkVersion, err := semver.NewVersion(serverInfo.Version)
-	if err != nil {
-		return fmt.Errorf("error parsing SDK version: %w", err)
-	}
-
+	sdkVersion := serverInfo.Version
 	sdkConstraint, ok := versionMappingConfig[sdkLanguage]
 	if ok {
-		// Check if the SDK version satisfies the minimum required SDK version by the numaflow platform
 		sdkConstraint = fmt.Sprintf(">= %s", sdkConstraint)
-		if err := checkConstraint(sdkVersion, sdkConstraint); err != nil {
-			return fmt.Errorf("SDK version %s must be upgraded to %s, in order to work with current numaflow version", sdkVersion, sdkConstraint)
+		if sdkLanguage == "python" {
+			// Python releases/pre-releases follow PEP440 specification which requires a different library to parse
+			sdkVersionPep440, err := pep440.Parse(sdkVersion)
+			if err != nil {
+				return fmt.Errorf("error parsing SDK version: %w", err)
+			}
+
+			c, err := pep440.NewSpecifiers(sdkConstraint)
+			if err != nil {
+				return fmt.Errorf("error parsing SDK constraint: %w", err)
+			}
+
+			if !c.Check(sdkVersionPep440) {
+				return fmt.Errorf("SDK version %s must be upgraded to %s, in order to work with current numaflow version", sdkVersion, sdkConstraint)
+			}
+
+		} else {
+			sdkVersion, err := semver.NewVersion(serverInfo.Version)
+			if err != nil {
+				return fmt.Errorf("error parsing SDK version: %w", err)
+			}
+
+			// Check if the SDK version satisfies the minimum required SDK version by the numaflow platform
+			if err := checkConstraint(sdkVersion, sdkConstraint); err != nil {
+				return fmt.Errorf("SDK version %s must be upgraded to %s, in order to work with current numaflow version", sdkVersion, sdkConstraint)
+			}
 		}
 	}
 

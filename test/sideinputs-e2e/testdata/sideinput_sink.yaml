@@ -8,7 +8,6 @@ spec:
       container:
         # see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/sideInput-function
         image: "quay.io/numaio/numaflow-sideinput/sideinput-sink-e2e-test:latest"
-        imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
         # timezone: America/Los_Angeles
