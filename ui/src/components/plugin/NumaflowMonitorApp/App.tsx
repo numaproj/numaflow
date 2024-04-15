@@ -9,7 +9,7 @@ import ScopedCssBaseline from "@mui/material/ScopedCssBaseline";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Route, useLocation, Switch } from "react-router-dom";
+import { Route, useLocation, useHistory, Switch } from "react-router-dom";
 import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
 import { Routes } from "../Routes/Routes";
 import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
@@ -54,6 +54,16 @@ function App(props: AppProps) {
   } = useSystemInfoFetch({ host: hostUrl });
 
   const location = useLocation();
+  const history = useHistory();
+
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    const ns = query.get("namespace") || "";
+
+    if (location.pathname === "/" && ns !== namespace) {
+      history.push(`?namespace=${namespace}`);
+    }
+  }, [location, history, namespace]);
 
   useEffect(() => {
     // Route changed
