@@ -137,9 +137,9 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 		return nil, fmt.Errorf("failed to read server info: %w", err)
 	}
 
-	//if err := isCompatible(serverInfo); err != nil {
-	//	return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
-	//}
+	if err := isCompatible(serverInfo); err != nil {
+		return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
+	}
 
 	return serverInfo, nil
 }
