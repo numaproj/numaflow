@@ -51,16 +51,20 @@ export function Breadcrumbs(props: BreadcrumbsProps) {
     } else if (pl !== "") {
       // Pipeline summary view
       return [
-        <Link key={"namespace-view"} to="/" className="Breadcrumbs-link">
-          Namespace
-        </Link>,
         <Typography
-          key={"namespace-typ"}
+          key={"namespace-view"}
           data-testid="namespace-breadcrumb"
           className="Breadcrumbs-typ"
         >
-          {namespace}
+          Namespace
         </Typography>,
+        <Link
+          key={"namespace-typ"}
+          to={`?namespace=${namespace}`}
+          className="Breadcrumbs-link"
+        >
+          {namespace}
+        </Link>,
         <Typography
           key={"pipeline-typ"}
           data-testid="pipeline-breadcrumb"
@@ -77,7 +81,7 @@ export function Breadcrumbs(props: BreadcrumbsProps) {
         Unknown
       </Typography>
     );
-  }, [location, systemInfo]);
+  }, [location, systemInfo, namespace, pl]);
 
   return (
     <MUIBreadcrumbs
