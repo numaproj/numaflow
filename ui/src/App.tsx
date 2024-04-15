@@ -64,20 +64,6 @@ const EXCLUDE_APP_BARS: { [key: string]: boolean } = {
 };
 
 function App(props: AppProps) {
-  // TODO remove, used for testing ns only installation
-  // const {
-  //   systemInfo,
-  //   error: systemInfoError,
-  //   loading,
-  // } = {
-  //   systemInfo: {
-  //     namespaced: true,
-  //     managedNamespace: "default",
-  //     isReadOnly: false,
-  //   },
-  //   error: undefined,
-  //   loading: false,
-  // };
   const { hostUrl = "", namespace = "" } = props;
   const pageRef = useRef<any>();
   const [pageWidth, setPageWidth] = useState(0);
