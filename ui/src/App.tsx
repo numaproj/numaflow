@@ -99,15 +99,11 @@ function App(props: AppProps) {
   const history = useHistory();
 
   useEffect(() => {
-    if (systemInfo?.namespaced) {
+    if (systemInfo?.namespaced && systemInfo?.managedNamespace) {
       const query = new URLSearchParams(location.search);
       const ns = query.get("namespace") || "";
 
-      if (
-        location.pathname === "/" &&
-        systemInfo &&
-        ns !== systemInfo.managedNamespace
-      ) {
+      if (location.pathname === "/" && ns !== systemInfo.managedNamespace) {
         history.push(`?namespace=${systemInfo.managedNamespace}`);
       }
     }
