@@ -34,7 +34,7 @@ func TestCheckCompatibility(t *testing.T) {
 		shouldErr            bool
 	}{
 		{
-			name: "Test with incompatible sdk version",
+			name: "Test with incompatible SDK version",
 			serverInfo: &info.ServerInfo{
 				Protocol:               info.UDS,
 				Language:               info.Python,
@@ -60,7 +60,7 @@ func TestCheckCompatibility(t *testing.T) {
 			shouldErr:            true,
 		},
 		{
-			name: "Test with incompatible numaflow and sdk version",
+			name: "Test with incompatible numaflow and SDK version",
 			serverInfo: &info.ServerInfo{
 				Protocol:               info.UDS,
 				Language:               info.Go,
@@ -73,7 +73,7 @@ func TestCheckCompatibility(t *testing.T) {
 			shouldErr:            true,
 		},
 		{
-			name: "Test with compatible numaflow and sdk version",
+			name: "Test with compatible numaflow and SDK version",
 			serverInfo: &info.ServerInfo{
 				Protocol:               info.UDS,
 				Language:               info.Go,
