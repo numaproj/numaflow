@@ -73,7 +73,7 @@ func checkCompatibility(serverInfo *info.ServerInfo) error {
 	}
 
 	sdkLanguage := serverInfo.Language
-	sdkConstraint, ok := versionMappingConfig[numaflowVersion.String()][sdkLanguage]
+	sdkConstraint, ok := versionMappingConfig[numaflowVersion.Original()][sdkLanguage]
 	if ok {
 		sdkConstraint = fmt.Sprintf(">= %s", sdkConstraint)
 		if sdkLanguage == "python" {

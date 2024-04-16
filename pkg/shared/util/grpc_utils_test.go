@@ -7,29 +7,53 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIsCompatible(t *testing.T) {
+func TestCheckCompatibility(t *testing.T) {
 	tests := []struct {
 		name       string
 		serverInfo *info.ServerInfo
 		shouldErr  bool
 	}{
 		{
-			name: "Test with incompatible version",
+			name: "Test with incompatible sdk version",
 			serverInfo: &info.ServerInfo{
-				Protocol: info.UDS,
-				Language: info.Python,
-				Version:  "0.6.0",
-				Metadata: nil,
+				Protocol:               info.UDS,
+				Language:               info.Python,
+				MinimumNumaflowVersion: "1.2.0-0",
+				Version:                "0.6.0",
+				Metadata:               nil,
 			},
 			shouldErr: true,
 		},
 		{
-			name: "Test with compatible version",
+			name: "Test with incompatible numaflow version",
 			serverInfo: &info.ServerInfo{
-				Protocol: info.UDS,
-				Language: info.Go,
-				Version:  "0.7.0-rc1",
-				Metadata: nil,
+				Protocol:               info.UDS,
+				Language:               info.Java,
+				MinimumNumaflowVersion: "1000.0.0",
+				Version:                "0.7.0-rc1",
+				Metadata:               nil,
+			},
+			shouldErr: true,
+		},
+		{
+			name: "Test with incompatible numaflow and sdk version",
+			serverInfo: &info.ServerInfo{
+				Protocol:               info.UDS,
+				Language:               info.Go,
+				MinimumNumaflowVersion: "1000.0.0",
+				Version:                "0.5.3",
+				Metadata:               nil,
+			},
+			shouldErr: true,
+		},
+		{
+			name: "Test with compatible numaflow and sdk version",
+			serverInfo: &info.ServerInfo{
+				Protocol:               info.UDS,
+				Language:               info.Go,
+				MinimumNumaflowVersion: "1.2.0-0",
+				Version:                "0.7.0-rc1",
+				Metadata:               nil,
 			},
 			shouldErr: false,
 		},
