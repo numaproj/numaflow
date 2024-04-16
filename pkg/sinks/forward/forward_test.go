@@ -353,7 +353,7 @@ func TestWriteToBuffer(t *testing.T) {
 			var messageToStep []isb.Message
 			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil)
 			messageToStep = append(messageToStep, writeMessages[0:value.batchSize+1]...)
-			_, _, err = f.writeToSink(ctx, buffer, messageToStep)
+			_, _, err = f.writeToSink(ctx, buffer, messageToStep, false)
 
 			assert.Equal(t, value.throwError, err != nil)
 			if value.throwError {

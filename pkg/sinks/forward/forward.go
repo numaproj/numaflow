@@ -152,6 +152,15 @@ func (df *DataForward) Start() <-chan struct{} {
 			log.Infow("Closed sink writer", zap.String("sink", df.sinkWriter.GetName()))
 		}
 
+		// Close the fallback sinkWriter if configured
+		if df.opts.fbSinkWriter != nil {
+			if err := df.opts.fbSinkWriter.Close(); err != nil {
+				log.Errorw("Failed to close fallback sink writer, shutdown anyways...", zap.Error(err), zap.String("bufferTo", df.opts.fbSinkWriter.GetName()))
+			} else {
+				log.Infow("Closed fallback sink writer", zap.String("sink", df.opts.fbSinkWriter.GetName()))
+			}
+		}
+
 		close(stopped)
 	}()
 
