@@ -37,7 +37,7 @@ func TestIsCompatible(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := isCompatible(tt.serverInfo)
+			err := checkCompatibility(tt.serverInfo)
 			if tt.shouldErr {
 				assert.Error(t, err, "Expected error")
 			} else {
