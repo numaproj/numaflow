@@ -68,6 +68,18 @@ func TestCheckCompatibility(t *testing.T) {
 			shouldErr:            true,
 		},
 		{
+			name: "Test with no MinimumNumaflowVersion field",
+			serverInfo: &info.ServerInfo{
+				Protocol: info.UDS,
+				Language: info.Go,
+				Version:  "0.4.0-rc3",
+				Metadata: nil,
+			},
+			versionMappingConfig: testVersionMappingConfig,
+			numaflowVersion:      "1.0.0",
+			shouldErr:            true,
+		},
+		{
 			name: "Test with compatible numaflow and SDK version",
 			serverInfo: &info.ServerInfo{
 				Protocol:               info.UDS,
