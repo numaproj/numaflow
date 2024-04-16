@@ -237,7 +237,9 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// if we have any messages to write to the fallback sink, write them.
 	if len(fallbackMessages) > 0 {
 		df.opts.logger.Infow("Writing messages to fallback sink", zap.Int("count", len(fallbackMessages)))
-		_, fallbackMessages, err = df.writeToSink(ctx, df.opts.fbSinkWriter, fallbackMessages, true)
+		// write to sink is an infinite loop; it will return only if writes are successful or
+		// ctx.Done happens due to shutdown.
+		_, _, err = df.writeToSink(ctx, df.opts.fbSinkWriter, fallbackMessages, true)
 		if err != nil {
 			df.opts.logger.Errorw("Failed to write to fallback sink", zap.Error(err))
 			return
