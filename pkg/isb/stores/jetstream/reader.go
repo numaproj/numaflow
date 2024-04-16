@@ -119,12 +119,27 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 	}(time.Now())
 	var err error
 	var result []*isb.ReadMessage
-	msgs, err := jr.sub.Fetch(int(count), nats.MaxWait(jr.opts.readTimeOut))
+	// We use FetchBatch to have batching in our code with two parameters, ie ReadBatchSize
+	// and ReadTimeout. This function should read from Jetstream until we have a read ReadBatchSize
+	// number of messages or the ReadTimeout duration has elapsed.
+	msgs, err := jr.sub.FetchBatch(int(count), nats.MaxWait(jr.opts.readTimeOut))
 	if err != nil && !errors.Is(err, nats.ErrTimeout) {
 		isbReadErrors.With(map[string]string{"buffer": jr.GetName()}).Inc()
 		return nil, fmt.Errorf("failed to fetch messages from jet stream subject %q, %w", jr.subject, err)
 	}
-	for _, msg := range msgs {
+
+	// Wait until the batch processing is done
+	<-msgs.Done()
+
+	// Check if there was any error while fetching the messages
+	// No error is returned from the FetchBatch method in case of pull request expiry (even if there are no messages).
+	if err = msgs.Error(); err != nil {
+		return nil, err
+	}
+
+	// The returned channel is always closed after all messages for a batch have been
+	// delivered by the server - it is safe to iterate over it using range.
+	for msg := range msgs.Messages() {
 		var m = new(isb.Message)
 		// err should be nil as we have our own marshaller/unmarshaller
 		err = m.UnmarshalBinary(msg.Data)
