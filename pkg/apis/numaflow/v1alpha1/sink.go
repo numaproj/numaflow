@@ -30,10 +30,19 @@ type Sink struct {
 }
 
 type AbstractSink struct {
-	Log       *Log       `json:"log,omitempty" protobuf:"bytes,1,opt,name=log"`
-	Kafka     *KafkaSink `json:"kafka,omitempty" protobuf:"bytes,2,opt,name=kafka"`
+	// Log sink is used to write the data to the log.
+	// +optional
+	Log *Log `json:"log,omitempty" protobuf:"bytes,1,opt,name=log"`
+	// Kafka sink is used to write the data to the Kafka.
+	// +optional
+	Kafka *KafkaSink `json:"kafka,omitempty" protobuf:"bytes,2,opt,name=kafka"`
+	// Blackhole sink is used to write the data to the blackhole sink,
+	// which is a sink that discards all the data written to it.
+	// +optional
 	Blackhole *Blackhole `json:"blackhole,omitempty" protobuf:"bytes,3,opt,name=blackhole"`
-	UDSink    *UDSink    `json:"udsink,omitempty" protobuf:"bytes,4,opt,name=udsink"`
+	// UDSink sink is used to write the data to the user-defined sink.
+	// +optional
+	UDSink *UDSink `json:"udsink,omitempty" protobuf:"bytes,4,opt,name=udsink"`
 }
 
 func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, error) {
@@ -76,7 +85,7 @@ func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Contai
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/sidecar-livez",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
@@ -110,7 +119,7 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/sidecar-livez",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
@@ -119,4 +128,9 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 		TimeoutSeconds:      30,
 	}
 	return container
+}
+
+// IsAnySinkSpecified returns true if any sink is specified.
+func (a *AbstractSink) IsAnySinkSpecified() bool {
+	return a.Log != nil || a.Kafka != nil || a.Blackhole != nil || a.UDSink != nil
 }

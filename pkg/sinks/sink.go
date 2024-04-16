@@ -226,7 +226,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		// create the fallback sink writer if fallback sink is present
-		if u.VertexInstance.Vertex.Spec.Sink.Fallback != nil {
+		fbSink := u.VertexInstance.Vertex.Spec.Sink.Fallback
+		if fbSink != nil && fbSink.IsAnySinkSpecified() {
 			fbSinkWriter, err := u.createSinkWriter(ctx, u.VertexInstance.Vertex.Spec.Sink.Fallback, fbSinkHandler)
 			if err != nil {
 				return fmt.Errorf("failed to find a sink, error: %w", err)

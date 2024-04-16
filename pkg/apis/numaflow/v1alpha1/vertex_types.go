@@ -135,7 +135,7 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	return svcs
 }
 
-func (v Vertex) getServiceObj(name string, headless bool, port int, servicePortName string) *corev1.Service {
+func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       v.Namespace,
@@ -151,7 +151,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int, servicePortN
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Port: int32(port), TargetPort: intstr.FromInt(port), Name: servicePortName},
+				{Port: port, TargetPort: intstr.FromInt32(port), Name: servicePortName},
 			},
 			Selector: map[string]string{
 				KeyPartOf:       Project,
@@ -238,7 +238,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/readyz",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
@@ -250,7 +250,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/livez",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
