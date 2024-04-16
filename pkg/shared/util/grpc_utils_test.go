@@ -52,7 +52,7 @@ func TestCheckCompatibility(t *testing.T) {
 				Protocol:               info.UDS,
 				Language:               info.Go,
 				MinimumNumaflowVersion: "1.2.0-0",
-				Version:                "0.7.0-rc1",
+				Version:                "0.7.0-rc3",
 				Metadata:               nil,
 			},
 			shouldErr: false,
