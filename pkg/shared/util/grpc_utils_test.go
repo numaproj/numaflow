@@ -18,11 +18,6 @@ var testVersionMappingConfig = map[string]sdkConstraints{
 		info.Python: "0.6.0a",
 		info.Java:   "0.6.0-0",
 	},
-	"1.1.9": {
-		info.Go:     "0.7.0-0",
-		info.Python: "0.7.0a",
-		info.Java:   "0.7.0-0",
-	},
 }
 
 func TestCheckCompatibility(t *testing.T) {
