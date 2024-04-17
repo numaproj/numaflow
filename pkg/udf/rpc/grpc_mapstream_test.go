@@ -176,7 +176,7 @@ func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {
 			},
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		}, writeMessageCh)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: InternalErr{

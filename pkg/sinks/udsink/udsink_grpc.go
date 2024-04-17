@@ -94,7 +94,7 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 	response, err := u.client.SinkFn(ctx, requests)
 	if err != nil {
 		for i := range requests {
-			errs[i] = ApplyUDSinkErr{
+			errs[i] = &ApplyUDSinkErr{
 				UserUDSinkErr: false,
 				Message:       fmt.Sprintf("gRPC client.SinkFn failed, %s", err),
 				InternalErr: InternalErr{
@@ -112,19 +112,19 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 	}
 	for i, m := range requests {
 		if r, existing := resMap[m.GetId()]; !existing {
-			errs[i] = NotFoundErr
+			errs[i] = &NotFoundErr
 		} else {
 			if r.GetStatus() == sinkpb.Status_FAILURE {
 				if r.GetErrMsg() != "" {
-					errs[i] = ApplyUDSinkErr{
+					errs[i] = &ApplyUDSinkErr{
 						UserUDSinkErr: true,
 						Message:       r.GetErrMsg(),
 					}
 				} else {
-					errs[i] = UnknownUDSinkErr
+					errs[i] = &UnknownUDSinkErr
 				}
 			} else if r.GetStatus() == sinkpb.Status_FALLBACK {
-				errs[i] = WriteToFallbackErr
+				errs[i] = &WriteToFallbackErr
 			} else {
 				errs[i] = nil
 			}

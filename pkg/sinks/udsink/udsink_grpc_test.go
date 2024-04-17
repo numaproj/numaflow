@@ -114,7 +114,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		assert.Equal(t, 2, len(gotErrList))
 		assert.Equal(t, nil, gotErrList[0])
 
-		assert.Equal(t, ApplyUDSinkErr{
+		assert.Equal(t, &ApplyUDSinkErr{
 			UserUDSinkErr: true,
 			Message:       "mock sink message error",
 		}, gotErrList[1])
@@ -158,7 +158,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		u := NewMockUDSgRPCBasedUDSink(mockClient)
 		gotErrList := u.ApplySink(ctx, testDatumList)
 		expectedErrList := []error{
-			ApplyUDSinkErr{
+			&ApplyUDSinkErr{
 				UserUDSinkErr: false,
 				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock SinkFn error",
 				InternalErr: InternalErr{
@@ -166,7 +166,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 					MainCarDown: false,
 				},
 			},
-			ApplyUDSinkErr{
+			&ApplyUDSinkErr{
 				UserUDSinkErr: false,
 				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock SinkFn error",
 				InternalErr: InternalErr{
