@@ -77,7 +77,7 @@ func checkCompatibility(serverInfo *info.ServerInfo, versionMappingConfig map[st
 		}
 
 		sdkLanguage := serverInfo.Language
-		if sdkRequiredVersion, ok := versionMappingConfig[numaflowVersion][sdkLanguage]; ok {
+		if sdkRequiredVersion, ok := versionMappingConfig[numaflowVersionSemVer.String()][sdkLanguage]; ok {
 			sdkConstraint := fmt.Sprintf(">= %s", sdkRequiredVersion)
 			if sdkLanguage == info.Python {
 				// Python pre-releases/releases follow PEP440 specification which requires a different library for parsing
