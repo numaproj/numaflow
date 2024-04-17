@@ -55,7 +55,7 @@ func checkConstraint(version *semver.Version, constraint string) error {
 func checkCompatibility(serverInfo *info.ServerInfo, versionMappingConfig map[string]sdkConstraints, numaflowVersion string) error {
 	// If numaflowVersion contains 'latest' then we know that we are in CI or testing locally, and thus do not need to check for compatibility issues
 	if !strings.Contains(numaflowVersion, "latest") {
-		// Check if server info contains MinimumNumaflowVersion field
+		// Check if server info contains the MinimumNumaflowVersion field
 		sdkVersion := serverInfo.Version
 		rv := reflect.ValueOf(serverInfo)
 		val := rv.Elem()
