@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -55,7 +54,8 @@ func checkConstraint(version *semver.Version, constraint string) error {
 // checkCompatibility checks if the current numaflow version is compatible with the given language's SDK version
 func checkCompatibility(serverInfo *info.ServerInfo, versionMappingConfig map[string]sdkConstraints, numaflowVersion string) error {
 	// If we are in CI or testing locally, we do not need to check for compatibility issues
-	if !strings.Contains(numaflowVersion, "latest") && os.Getenv("CI") != "true" {
+	if !strings.Contains(numaflowVersion, "latest") {
+		print("keran is testing, the version is " + numaflowVersion)
 		// Check if server info contains the MinimumNumaflowVersion field
 		sdkVersion := serverInfo.Version
 		rv := reflect.ValueOf(serverInfo)
