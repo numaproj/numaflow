@@ -189,8 +189,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodlogs("compute-sum", "numa").TerminateAllPodLogs()
-
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=even-odd-sum,numaflow.numaproj.io/vertex-name=compute-sum"
 
@@ -198,6 +196,7 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	done := make(chan struct{})
 
+	defer w.StreamVertexPodlogs("compute-sum", "numa").TerminateAllPodLogs()
 	go func() {
 		startTime := int(time.Unix(1000, 0).UnixMilli())
 		for i := 1; true; i++ {

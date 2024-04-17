@@ -212,8 +212,6 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodlogs("compute-count", "numa").TerminateAllPodLogs()
-
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=simple-session-counter-go,numaflow.numaproj.io/vertex-name=compute-count"
 
@@ -221,6 +219,7 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	done := make(chan struct{})
 	count := 0
+	defer w.StreamVertexPodlogs("compute-count", "numa").TerminateAllPodLogs()
 	go func() {
 		startTime := 0
 		for i := 1; true; i++ {
