@@ -263,6 +263,10 @@ Description
 Log </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>
+Log sink is used to write the data to the log.
+</p>
 </td>
 </tr>
 <tr>
@@ -271,6 +275,10 @@ Log </a> </em>
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink"> KafkaSink </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>
+Kafka sink is used to write the data to the Kafka.
+</p>
 </td>
 </tr>
 <tr>
@@ -279,6 +287,11 @@ Log </a> </em>
 <a href="#numaflow.numaproj.io/v1alpha1.Blackhole"> Blackhole </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>
+Blackhole sink is used to write the data to the blackhole sink, which is
+a sink that discards all the data written to it.
+</p>
 </td>
 </tr>
 <tr>
@@ -287,6 +300,10 @@ Log </a> </em>
 <a href="#numaflow.numaproj.io/v1alpha1.UDSink"> UDSink </a> </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>
+UDSink sink is used to write the data to the user-defined sink.
+</p>
 </td>
 </tr>
 </tbody>

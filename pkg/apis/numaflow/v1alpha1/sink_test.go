@@ -121,7 +121,7 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 	for _, e := range c.Env {
 		envs[e.Name] = e.Value
 	}
-	assert.Equal(t, envs[EnvUDContainerType], UDContainerFackbackSink)
+	assert.Equal(t, envs[EnvUDContainerType], UDContainerFallbackSink)
 	x.UDSink.Container.ImagePullPolicy = &testImagePullPolicy
 	c = x.getUDSinkContainer(getContainerReq{
 		image:           "main-image",

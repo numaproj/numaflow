@@ -23,8 +23,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"

@@ -14,13 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sinks
+package sinker
 
 import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// Sinker interface defines what a Sink should implement.
-type Sinker interface {
+// SinkWriter interface defines the methods that a sink writer should implement.
+type SinkWriter interface {
 	isb.BufferWriter
 }
