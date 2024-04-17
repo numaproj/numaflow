@@ -102,7 +102,7 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/sidecar-livez",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
@@ -139,7 +139,7 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/sidecar-livez",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},

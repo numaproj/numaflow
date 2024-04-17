@@ -117,12 +117,21 @@ message AbstractPodTemplate {
 }
 
 message AbstractSink {
+  // Log sink is used to write the data to the log.
+  // +optional
   optional Log log = 1;
 
+  // Kafka sink is used to write the data to the Kafka.
+  // +optional
   optional KafkaSink kafka = 2;
 
+  // Blackhole sink is used to write the data to the blackhole sink,
+  // which is a sink that discards all the data written to it.
+  // +optional
   optional Blackhole blackhole = 3;
 
+  // UDSink sink is used to write the data to the user-defined sink.
+  // +optional
   optional UDSink udsink = 4;
 }
 

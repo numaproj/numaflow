@@ -80,14 +80,14 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		}
 		testResponseList := []*sinkpb.SinkResponse_Result{
 			{
-				Id:      "test_id_0",
-				Success: true,
-				ErrMsg:  "",
+				Id:     "test_id_0",
+				Status: sinkpb.Status_SUCCESS,
+				ErrMsg: "",
 			},
 			{
-				Id:      "test_id_1",
-				Success: false,
-				ErrMsg:  "mock sink message error",
+				Id:     "test_id_1",
+				Status: sinkpb.Status_FAILURE,
+				ErrMsg: "mock sink message error",
 			},
 		}
 
@@ -113,7 +113,11 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		gotErrList := u.ApplySink(ctx, testDatumList)
 		assert.Equal(t, 2, len(gotErrList))
 		assert.Equal(t, nil, gotErrList[0])
-		assert.Equal(t, fmt.Errorf("mock sink message error"), gotErrList[1])
+
+		assert.Equal(t, ApplyUDSinkErr{
+			UserUDSinkErr: true,
+			Message:       "mock sink message error",
+		}, gotErrList[1])
 	})
 
 	t.Run("test err", func(t *testing.T) {
