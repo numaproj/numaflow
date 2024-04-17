@@ -204,14 +204,14 @@ func createAlignedReduceRequest(windowRequest *window.TimedWindowRequest) *reduc
 }
 
 // convertToUdfError converts the error returned by the reduceFn to ApplyUDFErr
-func convertToUdfError(err error) ApplyUDFErr {
+func convertToUdfError(err error) error {
 	// if any error happens in reduce
 	// will exit and restart the numa container
 	udfErr, _ := sdkerr.FromError(err)
 	switch udfErr.ErrorKind() {
 	case sdkerr.Retryable:
 		// TODO: currently we don't handle retryable errors for reduce
-		return ApplyUDFErr{
+		return &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
 			InternalErr: InternalErr{
@@ -220,7 +220,7 @@ func convertToUdfError(err error) ApplyUDFErr {
 			},
 		}
 	case sdkerr.NonRetryable:
-		return ApplyUDFErr{
+		return &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
 			InternalErr: InternalErr{
@@ -229,7 +229,7 @@ func convertToUdfError(err error) ApplyUDFErr {
 			},
 		}
 	case sdkerr.Canceled:
-		return ApplyUDFErr{
+		return &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    context.Canceled.Error(),
 			InternalErr: InternalErr{
@@ -238,7 +238,7 @@ func convertToUdfError(err error) ApplyUDFErr {
 			},
 		}
 	default:
-		return ApplyUDFErr{
+		return &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
 			InternalErr: InternalErr{

@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -340,6 +338,23 @@ func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClie
 		prevWatermark = currentWatermark
 	}
 	return true, nil
+}
+
+func (s *FunctionalSuite) TestFallbackSink() {
+
+	w := s.Given().Pipeline("@testdata/simple-fallback.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "simple-fallback"
+
+	// send a message to the pipeline
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fallback-message")))
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	w.Expect().SinkContains("output", "fallback-message")
 }
 
 func TestFunctionalSuite(t *testing.T) {
