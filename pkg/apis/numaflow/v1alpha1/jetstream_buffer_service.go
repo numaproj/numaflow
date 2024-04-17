@@ -208,7 +208,7 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
 							Path: "/healthz",
-							Port: intstr.FromInt(int(req.MonitorPort)),
+							Port: intstr.FromInt32(req.MonitorPort),
 						},
 					},
 					FailureThreshold:    30,
@@ -219,7 +219,7 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
 							Path: "/",
-							Port: intstr.FromInt(int(req.MonitorPort)),
+							Port: intstr.FromInt32(req.MonitorPort),
 						},
 					},
 					InitialDelaySeconds: 10,
