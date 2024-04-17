@@ -7,8 +7,7 @@ spec:
     - name: myticker
       container:
         # A reduce side input, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input
-        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:v0.6.1"
-        imagePullPolicy: Always
+        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:latest"
       trigger:
         schedule: "@every 5s"
   vertices:
@@ -27,8 +26,7 @@ spec:
       udf:
         container:
           # A reduce side input udf, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input/udf
-          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:v0.6.1"
-          imagePullPolicy: Always
+          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:latest"
         groupBy:
           window:
             fixed:

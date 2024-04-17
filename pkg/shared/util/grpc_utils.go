@@ -20,17 +20,96 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"reflect"
+	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
+	pep440 "github.com/aquasecurity/go-pep440-version"
 	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	"github.com/numaproj/numaflow"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 )
+
+func checkConstraint(version *semver.Version, constraint string) error {
+	c, err := semver.NewConstraint(constraint)
+	if err != nil {
+		return fmt.Errorf("error parsing constraint: %w", err)
+	}
+
+	isValid, _ := c.Validate(version)
+	if !isValid {
+		return fmt.Errorf("version did not meet constraint requirement")
+	}
+
+	return nil
+}
+
+// checkCompatibility checks if the current numaflow version is compatible with the given language's SDK version
+func checkCompatibility(serverInfo *info.ServerInfo, versionMappingConfig map[string]sdkConstraints, numaflowVersion string) error {
+	// If we are in CI or testing locally, we do not need to check for compatibility issues
+	if !strings.Contains(numaflowVersion, "latest") && os.Getenv("CI") != "true" {
+		// Check if server info contains the MinimumNumaflowVersion field
+		sdkVersion := serverInfo.Version
+		rv := reflect.ValueOf(serverInfo)
+		val := rv.Elem()
+		if _, ok := val.Type().FieldByName("MinimumNumaflowVersion"); !ok {
+			return fmt.Errorf("server info does not contain minimum numaflow version. Upgrade SDK version %s to latest version", sdkVersion)
+		}
+
+		numaflowVersionSemVer, err := semver.NewVersion(numaflowVersion)
+		if err != nil {
+			return fmt.Errorf("error parsing numaflow version: %w", err)
+		}
+
+		// Check if the numaflow version satisfies the minimum required numaflow version by SDK
+		numaflowConstraint := fmt.Sprintf(">= %s", serverInfo.MinimumNumaflowVersion)
+		if err := checkConstraint(numaflowVersionSemVer, numaflowConstraint); err != nil {
+			return fmt.Errorf("numaflow version %s must be upgraded to %s or later, in order to work with current SDK version %s: %w", numaflowVersion, numaflowConstraint, sdkVersion, err)
+		}
+
+		sdkLanguage := serverInfo.Language
+		if sdkRequiredVersion, ok := versionMappingConfig[numaflowVersion][sdkLanguage]; ok {
+			sdkConstraint := fmt.Sprintf(">= %s", sdkRequiredVersion)
+			if sdkLanguage == info.Python {
+				// Python pre-releases/releases follow PEP440 specification which requires a different library for parsing
+				sdkVersionPep440, err := pep440.Parse(sdkVersion)
+				if err != nil {
+					return fmt.Errorf("error parsing SDK version: %w", err)
+				}
+
+				c, err := pep440.NewSpecifiers(sdkConstraint)
+				if err != nil {
+					return fmt.Errorf("error parsing SDK constraint: %w", err)
+				}
+
+				if !c.Check(sdkVersionPep440) {
+					return fmt.Errorf("SDK version %s must be upgraded to %s or later, in order to work with current numaflow version %s: %w", sdkVersion, sdkConstraint, numaflowVersion, err)
+				}
+
+			} else {
+				sdkVersionSemVer, err := semver.NewVersion(sdkVersion)
+				if err != nil {
+					return fmt.Errorf("error parsing SDK version: %w", err)
+				}
+
+				// Check if the SDK version satisfies the minimum required SDK version by the numaflow platform
+				if err := checkConstraint(sdkVersionSemVer, sdkConstraint); err != nil {
+					return fmt.Errorf("SDK version %s must be upgraded to %s or later, in order to work with current numaflow version %s: %w", sdkVersion, sdkConstraint, numaflowVersion, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
 
 // ToUDFErr converts gRPC error to UDF Error
 func ToUDFErr(name string, err error) error {
@@ -76,6 +155,10 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	serverInfo, err := info.Read(info.WithServerInfoFilePath(filePath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read server info: %w", err)
+	}
+
+	if err := checkCompatibility(serverInfo, versionMappingConfig, numaflow.GetVersion().Version); err != nil {
+		return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
 	}
 
 	return serverInfo, nil
