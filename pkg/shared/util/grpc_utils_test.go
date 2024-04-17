@@ -41,7 +41,7 @@ func TestCheckCompatibility(t *testing.T) {
 			versionMappingConfig: testVersionMappingConfig,
 			numaflowVersion:      "1.1.8",
 			shouldErr:            true,
-			errMessage:           "SDK version 0.5.3 must be upgraded to >= 0.6.0a or later, in order to work with current numaflow version 1.1.8",
+			errMessage:           "SDK version 0.5.3 must be upgraded to 0.6.0a or later, in order to work with current numaflow version 1.1.8",
 		},
 		{
 			name: "Test with incompatible numaflow version",
@@ -55,7 +55,7 @@ func TestCheckCompatibility(t *testing.T) {
 			versionMappingConfig: testVersionMappingConfig,
 			numaflowVersion:      "1.1.7",
 			shouldErr:            true,
-			errMessage:           "numaflow version 1.1.7 must be upgraded to >= 1.1.8-0 or later, in order to work with current SDK version 0.7.0-rc1",
+			errMessage:           "numaflow version 1.1.7 must be upgraded to 1.1.8-0 or later, in order to work with current SDK version 0.7.0-rc1",
 		},
 		{
 			name: "Test with compatible numaflow and SDK version",
