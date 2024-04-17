@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -195,6 +193,8 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	// Kill the reducer pods before processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	done := make(chan struct{})
+
+	w.Expect().VertexPodsRunning()
 
 	defer w.StreamVertexPodlogs("compute-sum", "numa").TerminateAllPodLogs()
 	go func() {

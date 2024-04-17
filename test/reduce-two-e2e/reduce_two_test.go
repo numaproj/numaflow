@@ -219,6 +219,9 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	done := make(chan struct{})
 	count := 0
+
+	w.Expect().VertexPodsRunning()
+
 	defer w.StreamVertexPodlogs("compute-count", "numa").TerminateAllPodLogs()
 	go func() {
 		startTime := 0
