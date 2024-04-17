@@ -49,11 +49,6 @@ func checkConstraint(version *semver.Version, constraint string) error {
 
 // checkCompatibility checks if the current numaflow version is compatible with the given language's SDK version
 func checkCompatibility(serverInfo *info.ServerInfo, versionMappingConfig map[string]sdkConstraints, numaflowVersion string) error {
-	// If we are testing locally or in CI, we skip checking for compatibility issues
-	if strings.Contains(numaflowVersion, "latest") || os.Getenv("GITHUB_ACTIONS") == "true" {
-		return nil
-	}
-
 	numaflowVersionSemVer, err := semver.NewVersion(numaflowVersion)
 	if err != nil {
 		return fmt.Errorf("error parsing numaflow version: %w", err)
@@ -156,10 +151,13 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 		return nil, fmt.Errorf("failed to read server info: %w", err)
 	}
 
+	// If we are testing locally or in CI, we skip checking for compatibility issues
+	if strings.Contains(numaflow.GetVersion().Version, "latest") || os.Getenv("GITHUB_ACTIONS") == "true" {
+		return serverInfo, nil
+	}
 	if err := checkCompatibility(serverInfo, minimumSupportedSDKVersion, numaflow.GetVersion().Version); err != nil {
 		return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
 	}
-
 	return serverInfo, nil
 }
 
