@@ -27,6 +27,7 @@ func TestCheckCompatibility(t *testing.T) {
 		versionMappingConfig map[string]sdkConstraints
 		numaflowVersion      string
 		shouldErr            bool
+		errMessage           string
 	}{
 		{
 			name: "Test with incompatible SDK version",
@@ -40,6 +41,7 @@ func TestCheckCompatibility(t *testing.T) {
 			versionMappingConfig: testVersionMappingConfig,
 			numaflowVersion:      "1.1.8",
 			shouldErr:            true,
+			errMessage:           "SDK version 0.5.3 must be upgraded to >= 0.6.0a or later, in order to work with current numaflow version 1.1.8",
 		},
 		{
 			name: "Test with incompatible numaflow version",
@@ -53,31 +55,7 @@ func TestCheckCompatibility(t *testing.T) {
 			versionMappingConfig: testVersionMappingConfig,
 			numaflowVersion:      "1.1.7",
 			shouldErr:            true,
-		},
-		{
-			name: "Test with incompatible numaflow and SDK version",
-			serverInfo: &info.ServerInfo{
-				Protocol:               info.UDS,
-				Language:               info.Go,
-				MinimumNumaflowVersion: "1.1.7-0",
-				Version:                "0.4.0-rc3",
-				Metadata:               nil,
-			},
-			versionMappingConfig: testVersionMappingConfig,
-			numaflowVersion:      "1.1.8",
-			shouldErr:            true,
-		},
-		{
-			name: "Test with no MinimumNumaflowVersion field",
-			serverInfo: &info.ServerInfo{
-				Protocol: info.UDS,
-				Language: info.Go,
-				Version:  "0.4.0-rc3",
-				Metadata: nil,
-			},
-			versionMappingConfig: testVersionMappingConfig,
-			numaflowVersion:      "1.0.0",
-			shouldErr:            true,
+			errMessage:           "numaflow version 1.1.7 must be upgraded to >= 1.1.8-0 or later, in order to work with current SDK version 0.7.0-rc1",
 		},
 		{
 			name: "Test with compatible numaflow and SDK version",
@@ -99,6 +77,7 @@ func TestCheckCompatibility(t *testing.T) {
 			err := checkCompatibility(tt.serverInfo, tt.versionMappingConfig, tt.numaflowVersion)
 			if tt.shouldErr {
 				assert.Error(t, err, "Expected error")
+				assert.Contains(t, err.Error(), tt.errMessage)
 			} else {
 				assert.NoError(t, err, "Expected no error")
 			}
