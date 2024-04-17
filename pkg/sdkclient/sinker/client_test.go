@@ -49,8 +49,8 @@ func TestClient_SinkFn(t *testing.T) {
 	mockSinkClient.EXPECT().CloseAndRecv().Return(&sinkpb.SinkResponse{
 		Results: []*sinkpb.SinkResponse_Result{
 			{
-				Id:      "temp-id",
-				Success: true,
+				Id:     "temp-id",
+				Status: sinkpb.Status_SUCCESS,
 			},
 		},
 	}, nil)
@@ -67,8 +67,8 @@ func TestClient_SinkFn(t *testing.T) {
 	response, err := testClient.SinkFn(ctx, []*sinkpb.SinkRequest{})
 	assert.Equal(t, &sinkpb.SinkResponse{Results: []*sinkpb.SinkResponse_Result{
 		{
-			Id:      "temp-id",
-			Success: true,
+			Id:     "temp-id",
+			Status: sinkpb.Status_SUCCESS,
 		},
 	}}, response)
 	assert.NoError(t, err)

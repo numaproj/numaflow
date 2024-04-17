@@ -38,7 +38,6 @@ type UserDefinedSink struct {
 
 // NewUserDefinedSink returns genericSink type.
 func NewUserDefinedSink(ctx context.Context, vertexInstance *dfv1.VertexInstance, udsink SinkApplier) (*UserDefinedSink, error) {
-
 	return &UserDefinedSink{
 		name:         vertexInstance.Vertex.Spec.Name,
 		pipelineName: vertexInstance.Vertex.Spec.PipelineName,

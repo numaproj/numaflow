@@ -17613,16 +17613,20 @@
     "io.numaproj.numaflow.v1alpha1.AbstractSink": {
       "properties": {
         "blackhole": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole",
+          "description": "Blackhole sink is used to write the data to the blackhole sink, which is a sink that discards all the data written to it."
         },
         "kafka": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink",
+          "description": "Kafka sink is used to write the data to the Kafka."
         },
         "log": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
+          "description": "Log sink is used to write the data to the log."
         },
         "udsink": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",
+          "description": "UDSink sink is used to write the data to the user-defined sink."
         }
       },
       "type": "object"
@@ -19579,20 +19583,24 @@
     "io.numaproj.numaflow.v1alpha1.Sink": {
       "properties": {
         "blackhole": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole",
+          "description": "Blackhole sink is used to write the data to the blackhole sink, which is a sink that discards all the data written to it."
         },
         "fallback": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AbstractSink",
           "description": "Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be initiated if the ud-sink response field sets it."
         },
         "kafka": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink",
+          "description": "Kafka sink is used to write the data to the Kafka."
         },
         "log": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
+          "description": "Log sink is used to write the data to the log."
         },
         "udsink": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",
+          "description": "UDSink sink is used to write the data to the user-defined sink."
         }
       },
       "type": "object"
