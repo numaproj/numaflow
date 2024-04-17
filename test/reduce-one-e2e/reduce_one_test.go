@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -187,6 +189,8 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodlogs("compute-sum", "numa").TerminateAllPodLogs()
+
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=even-odd-sum,numaflow.numaproj.io/vertex-name=compute-sum"
 
@@ -244,8 +248,6 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-
-	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
