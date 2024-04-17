@@ -243,7 +243,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		return
 	}
 
-	// if we have any messages to write to the fallback sink, write them.
+	// Only when fallback is configured, it is possible to return fallbackMessages. If there's any, write to the fallback sink.
 	if len(fallbackMessages) > 0 {
 		df.opts.logger.Infow("Writing messages to fallback sink", zap.Int("count", len(fallbackMessages)))
 		// write to sink is an infinite loop; it will return only if writes are successful or
