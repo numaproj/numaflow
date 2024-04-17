@@ -113,7 +113,11 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		gotErrList := u.ApplySink(ctx, testDatumList)
 		assert.Equal(t, 2, len(gotErrList))
 		assert.Equal(t, nil, gotErrList[0])
-		assert.Equal(t, fmt.Errorf("mock sink message error"), gotErrList[1])
+
+		assert.Equal(t, ApplyUDSinkErr{
+			UserUDSinkErr: true,
+			Message:       "mock sink message error",
+		}, gotErrList[1])
 	})
 
 	t.Run("test err", func(t *testing.T) {

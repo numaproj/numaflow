@@ -29,9 +29,19 @@ import (
 )
 
 var (
-	WriteToFallbackErr = fmt.Errorf("write to fallback sink")
-	UnknownUDSinkErr   = fmt.Errorf("unknown error in udsink")
-	NotFoundErr        = fmt.Errorf("not found in response")
+	WriteToFallbackErr = ApplyUDSinkErr{
+		UserUDSinkErr: true,
+		Message:       "write to fallback sink",
+	}
+
+	UnknownUDSinkErr = ApplyUDSinkErr{
+		UserUDSinkErr: true,
+		Message:       "unknown error in udsink",
+	}
+	NotFoundErr = ApplyUDSinkErr{
+		UserUDSinkErr: true,
+		Message:       "not found in response",
+	}
 )
 
 // SinkApplier applies the sink on the read message and gives back a response. Any UserError will be retried here, while
@@ -106,7 +116,10 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 		} else {
 			if r.GetStatus() == sinkpb.Status_FAILURE {
 				if r.GetErrMsg() != "" {
-					errs[i] = fmt.Errorf(r.GetErrMsg())
+					errs[i] = ApplyUDSinkErr{
+						UserUDSinkErr: true,
+						Message:       r.GetErrMsg(),
+					}
 				} else {
 					errs[i] = UnknownUDSinkErr
 				}
