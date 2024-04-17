@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -52,55 +53,56 @@ func checkConstraint(version *semver.Version, constraint string) error {
 
 // checkCompatibility checks if the current numaflow version is compatible with the given language's SDK version
 func checkCompatibility(serverInfo *info.ServerInfo, versionMappingConfig map[string]sdkConstraints, numaflowVersion string) error {
-	// Check if server info contains MinimumNumaflowVersion field
-	sdkVersion := serverInfo.Version
-	rv := reflect.ValueOf(serverInfo)
-	val := rv.Elem()
-	_, ok := val.Type().FieldByName("MinimumNumaflowVersion")
-	if !ok {
-		return fmt.Errorf("server info does not contain minimum numaflow version. Upgrade SDK version %s to latest version", sdkVersion)
-	}
+	// If numaflowVersion contains 'latest' then we know that we are in CI or testing locally, and thus do not need to check for compatibility issues
+	if !strings.Contains(numaflowVersion, "latest") {
+		// Check if server info contains MinimumNumaflowVersion field
+		sdkVersion := serverInfo.Version
+		rv := reflect.ValueOf(serverInfo)
+		val := rv.Elem()
+		if _, ok := val.Type().FieldByName("MinimumNumaflowVersion"); !ok {
+			return fmt.Errorf("server info does not contain minimum numaflow version. Upgrade SDK version %s to latest version", sdkVersion)
+		}
 
-	numaflowVersionSemVer, err := semver.NewVersion(numaflowVersion)
-	if err != nil {
-		return fmt.Errorf("error parsing numaflow version: %w", err)
-	}
+		numaflowVersionSemVer, err := semver.NewVersion(numaflowVersion)
+		if err != nil {
+			return fmt.Errorf("error parsing numaflow version: %w", err)
+		}
 
-	// Check if the numaflow version satisfies the minimum required numaflow version by SDK
-	numaflowConstraint := fmt.Sprintf(">= %s", serverInfo.MinimumNumaflowVersion)
-	if err := checkConstraint(numaflowVersionSemVer, numaflowConstraint); err != nil {
-		return fmt.Errorf("numaflow version %s must be upgraded to %s or later, in order to work with current SDK version %s", numaflowVersion, numaflowConstraint, sdkVersion)
-	}
+		// Check if the numaflow version satisfies the minimum required numaflow version by SDK
+		numaflowConstraint := fmt.Sprintf(">= %s", serverInfo.MinimumNumaflowVersion)
+		if err := checkConstraint(numaflowVersionSemVer, numaflowConstraint); err != nil {
+			return fmt.Errorf("numaflow version %s must be upgraded to %s or later, in order to work with current SDK version %s: %w", numaflowVersion, numaflowConstraint, sdkVersion, err)
+		}
 
-	sdkLanguage := serverInfo.Language
-	sdkConstraint, ok := versionMappingConfig[numaflowVersion][sdkLanguage]
-	if ok {
-		sdkConstraint = fmt.Sprintf(">= %s", sdkConstraint)
-		if sdkLanguage == "python" {
-			// Python pre-releases/releases follow PEP440 specification which requires a different library for parsing
-			sdkVersionPep440, err := pep440.Parse(sdkVersion)
-			if err != nil {
-				return fmt.Errorf("error parsing SDK version: %w", err)
-			}
+		sdkLanguage := serverInfo.Language
+		if sdkRequiredVersion, ok := versionMappingConfig[numaflowVersion][sdkLanguage]; ok {
+			sdkConstraint := fmt.Sprintf(">= %s", sdkRequiredVersion)
+			if sdkLanguage == info.Python {
+				// Python pre-releases/releases follow PEP440 specification which requires a different library for parsing
+				sdkVersionPep440, err := pep440.Parse(sdkVersion)
+				if err != nil {
+					return fmt.Errorf("error parsing SDK version: %w", err)
+				}
 
-			c, err := pep440.NewSpecifiers(sdkConstraint)
-			if err != nil {
-				return fmt.Errorf("error parsing SDK constraint: %w", err)
-			}
+				c, err := pep440.NewSpecifiers(sdkConstraint)
+				if err != nil {
+					return fmt.Errorf("error parsing SDK constraint: %w", err)
+				}
 
-			if !c.Check(sdkVersionPep440) {
-				return fmt.Errorf("SDK version %s must be upgraded to %s or later, in order to work with current numaflow version %s", sdkVersion, sdkConstraint, numaflowVersion)
-			}
+				if !c.Check(sdkVersionPep440) {
+					return fmt.Errorf("SDK version %s must be upgraded to %s or later, in order to work with current numaflow version %s: %w", sdkVersion, sdkConstraint, numaflowVersion, err)
+				}
 
-		} else {
-			sdkVersionSemVer, err := semver.NewVersion(sdkVersion)
-			if err != nil {
-				return fmt.Errorf("error parsing SDK version: %w", err)
-			}
+			} else {
+				sdkVersionSemVer, err := semver.NewVersion(sdkVersion)
+				if err != nil {
+					return fmt.Errorf("error parsing SDK version: %w", err)
+				}
 
-			// Check if the SDK version satisfies the minimum required SDK version by the numaflow platform
-			if err := checkConstraint(sdkVersionSemVer, sdkConstraint); err != nil {
-				return fmt.Errorf("SDK version %s must be upgraded to %s or later, in order to work with current numaflow version %s", sdkVersion, sdkConstraint, numaflowVersion)
+				// Check if the SDK version satisfies the minimum required SDK version by the numaflow platform
+				if err := checkConstraint(sdkVersionSemVer, sdkConstraint); err != nil {
+					return fmt.Errorf("SDK version %s must be upgraded to %s or later, in order to work with current numaflow version %s: %w", sdkVersion, sdkConstraint, numaflowVersion, err)
+				}
 			}
 		}
 	}
@@ -154,8 +156,7 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 		return nil, fmt.Errorf("failed to read server info: %w", err)
 	}
 
-	numaflowVersion := numaflow.GetVersion().ReleaseVersion
-	if err := checkCompatibility(serverInfo, versionMappingConfig, numaflowVersion); err != nil {
+	if err := checkCompatibility(serverInfo, versionMappingConfig, numaflow.GetVersion().Version); err != nil {
 		return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
 	}
 
