@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	"github.com/numaproj/numaflow"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 )
@@ -52,8 +54,8 @@ func checkConstraint(version *semver.Version, constraint string) error {
 
 // checkCompatibility checks if the current numaflow version is compatible with the given language's SDK version
 func checkCompatibility(serverInfo *info.ServerInfo, versionMappingConfig map[string]sdkConstraints, numaflowVersion string) error {
-	// If numaflowVersion contains 'latest' then we know that we are in CI or testing locally, and thus do not need to check for compatibility issues
-	if !strings.Contains(numaflowVersion, "latest") {
+	// If we are in CI or testing locally, we do not need to check for compatibility issues
+	if !strings.Contains(numaflowVersion, "latest") && os.Getenv("CI") != "true" {
 		// Check if server info contains the MinimumNumaflowVersion field
 		sdkVersion := serverInfo.Version
 		rv := reflect.ValueOf(serverInfo)
@@ -155,11 +157,9 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 		return nil, fmt.Errorf("failed to read server info: %w", err)
 	}
 
-	/*
-		if err := checkCompatibility(serverInfo, versionMappingConfig, numaflow.GetVersion().Version); err != nil {
-			return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
-		}
-	*/
+	if err := checkCompatibility(serverInfo, versionMappingConfig, numaflow.GetVersion().Version); err != nil {
+		return nil, fmt.Errorf("numaflow and SDK versions are incompatible: %w", err)
+	}
 
 	return serverInfo, nil
 }

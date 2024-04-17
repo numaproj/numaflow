@@ -22,7 +22,6 @@ import (
 
 type sdkConstraints map[info.Language]string
 
-/*
 var versionMappingConfig = map[string]sdkConstraints{
 	"1.2.0-rc1": {
 		info.Go:     "0.7.0-0",
@@ -40,4 +39,3 @@ var versionMappingConfig = map[string]sdkConstraints{
 		info.Java:   "0.7.1-0",
 	},
 }
-*/
