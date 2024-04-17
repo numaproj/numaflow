@@ -102,7 +102,7 @@ func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/sidecar-livez",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},

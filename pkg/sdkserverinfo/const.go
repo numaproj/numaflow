@@ -9,6 +9,7 @@ const (
 	SessionReduceServerInfoFile     = "/var/run/numaflow/sessionreducer-server-info"
 	SideInputServerInfoFile         = "/var/run/numaflow/sideinput-server-info"
 	SinkServerInfoFile              = "/var/run/numaflow/sinker-server-info"
+	FbSinkServerInfoFile            = "/var/run/numaflow/fb-sinker-server-info"
 	SourceServerInfoFile            = "/var/run/numaflow/sourcer-server-info"
 	SourceTransformerServerInfoFile = "/var/run/numaflow/sourcetransformer-server-info"
 )
