@@ -4,7 +4,7 @@ metadata:
   name: simple-fallback
 spec:
   vertices:
-    - name: input
+    - name: in
       source:
         http: {}
     - name: cat
@@ -26,7 +26,7 @@ spec:
             container:
               image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
   edges:
-    - from: input
+    - from: in
       to: cat
     - from: cat
       to: output
