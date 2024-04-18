@@ -60,7 +60,7 @@ func checkNumaflowCompatibility(numaflowVersion string, minNumaflowVersion strin
 	numaflowConstraint := fmt.Sprintf(">= %s", minNumaflowVersion)
 	if err = checkConstraint(numaflowVersionSemVer, numaflowConstraint); err != nil {
 		return fmt.Errorf("numaflow version %s must be upgraded to at least %s, in order to work with current SDK version: %w",
-			numaflowVersion, minNumaflowVersion, err)
+			numaflowVersionSemVer.String(), minNumaflowVersion, err)
 	}
 
 	return nil
@@ -84,7 +84,7 @@ func checkSDKCompatibility(sdkVersion string, sdkLanguage info.Language, minSupp
 
 			if !c.Check(sdkVersionPEP440) {
 				return fmt.Errorf("SDK version %s must be upgraded to at least %s, in order to work with current numaflow version: %w",
-					sdkVersion, sdkRequiredVersion, err)
+					sdkVersionPEP440.String(), sdkRequiredVersion, err)
 			}
 		} else {
 			sdkVersionSemVer, err := semver.NewVersion(sdkVersion)
@@ -94,7 +94,7 @@ func checkSDKCompatibility(sdkVersion string, sdkLanguage info.Language, minSupp
 
 			if err := checkConstraint(sdkVersionSemVer, sdkConstraint); err != nil {
 				return fmt.Errorf("SDK version %s must be upgraded to at least %s, in order to work with current numaflow version: %w",
-					sdkVersion, sdkRequiredVersion, err)
+					sdkVersionSemVer.String(), sdkRequiredVersion, err)
 			}
 		}
 	}
@@ -155,13 +155,13 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	// because both return us a version string that the version check libraries can't properly parse. (local: "*latest*" CI: commit SHA)
 	if !strings.Contains(numaflowVersion, "latest") && !strings.Contains(numaflowVersion, numaflow.GetVersion().GitCommit) {
 		if err := checkNumaflowCompatibility(numaflowVersion, serverInfo.MinimumNumaflowVersion); err != nil {
-			return nil, fmt.Errorf("numaflow version %s does not satisfy the minimum required by SDK version %s: %w",
+			return nil, fmt.Errorf("numaflow %s does not satisfy the minimum required by SDK %s: %w",
 				numaflowVersion, sdkVersion, err)
 		}
 	}
 
 	if err := checkSDKCompatibility(sdkVersion, serverInfo.Language, minimumSupportedSDKVersions); err != nil {
-		return nil, fmt.Errorf("SDK version %s does not satisfy the minimum required by numaflow version %s: %w",
+		return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
 			sdkVersion, numaflowVersion, err)
 	}
 
