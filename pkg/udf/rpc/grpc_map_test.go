@@ -183,7 +183,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: InternalErr{
@@ -233,7 +233,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: InternalErr{
@@ -337,7 +337,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: InternalErr{

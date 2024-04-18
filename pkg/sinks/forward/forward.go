@@ -351,18 +351,18 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 			if err = errs[idx]; err != nil {
 				// if we are asked to write to fallback sink, check if the fallback sink is configured,
 				// and we are not already in the fallback sink write path.
-				if errors.As(err, &udsink.WriteToFallbackErr) && df.opts.fbSinkWriter != nil && !isFbSinkWriter {
+				if errors.Is(err, &udsink.WriteToFallbackErr) && df.opts.fbSinkWriter != nil && !isFbSinkWriter {
 					fallbackMessages = append(fallbackMessages, msg)
 					continue
 				}
 
 				// if we are asked to write to fallback but no fallback sink is configured, we will retry the messages to the same sink
-				if errors.As(err, &udsink.WriteToFallbackErr) && df.opts.fbSinkWriter == nil {
+				if errors.Is(err, &udsink.WriteToFallbackErr) && df.opts.fbSinkWriter == nil {
 					df.opts.logger.Error("Asked to write to fallback but no fallback sink is configured, retrying the message to the same sink")
 				}
 
 				// if we are asked to write to fallback sink inside the fallback sink, we will retry the messages to the fallback sink
-				if errors.As(err, &udsink.WriteToFallbackErr) && isFbSinkWriter {
+				if errors.Is(err, &udsink.WriteToFallbackErr) && isFbSinkWriter {
 					df.opts.logger.Error("Asked to write to fallback sink inside the fallback sink, retrying the message to fallback sink")
 				}
 

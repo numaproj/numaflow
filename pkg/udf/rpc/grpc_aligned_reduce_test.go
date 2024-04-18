@@ -199,7 +199,7 @@ func TestGRPCBasedUDF_AsyncReduceWithMockClient(t *testing.T) {
 					break readLoop
 				}
 				if err != nil {
-					assert.ErrorIs(t, err, ApplyUDFErr{
+					assert.ErrorIs(t, err, &ApplyUDFErr{
 						UserUDFErr: false,
 						Message:    err.Error(),
 						InternalErr: InternalErr{
