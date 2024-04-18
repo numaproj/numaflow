@@ -49,7 +49,7 @@ func checkConstraint(version *semver.Version, constraint string) error {
 func checkNumaflowCompatibility(numaflowVersion string, minNumaflowVersion string) error {
 	// Check if server info contains MinimumNumaflowVersion
 	if minNumaflowVersion == "" {
-		return fmt.Errorf("server info does not contain minimum numaflow version. Upgrade SDK to latest version")
+		return fmt.Errorf("server info does not contain minimum numaflow version. Upgrade to newer SDK")
 	}
 
 	numaflowVersionSemVer, err := semver.NewVersion(numaflowVersion)
