@@ -104,8 +104,6 @@ func (s *TransformerSuite) TestBuiltinEventTimeExtractor() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning().DaemonPodsRunning()
 
-	defer w.StreamVertexPodlogs("in", "numa").TerminateAllPodLogs()
-
 	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
 		TerminateAllPodPortForwards()
 
