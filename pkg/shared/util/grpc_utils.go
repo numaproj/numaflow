@@ -152,7 +152,7 @@ func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	sdkVersion := serverInfo.Version
 	numaflowVersion := numaflow.GetVersion().Version
 
-	print("abdullah is testing" + numaflowVersion + os.Getenv("CI"))
+	print("abdullah is testing" + "numaflow version " + numaflowVersion + "CI ENV VAR " + os.Getenv("CI") + "GA ENV VAR " + os.Getenv("GITHUB_ACTIONS"))
 	print(!strings.Contains(numaflowVersion, "latest"))
 	print(os.Getenv("CI") == "")
 	print(!strings.Contains(numaflowVersion, "latest") && os.Getenv("CI") == "")
