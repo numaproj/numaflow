@@ -18213,7 +18213,7 @@ spec:
         - controller
         env:
         - name: NUMAFLOW_IMAGE
-          value: quay.io/numaproj/numaflow:v1.2.0-rc3
+          value: quay.io/numaproj/numaflow:v1.2.0-rc4
         - name: NAMESPACE
           valueFrom:
             fieldRef:
@@ -18254,7 +18254,7 @@ spec:
               key: controller.leader.election.lease.renew.period
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.2.0-rc3
+        image: quay.io/numaproj/numaflow:v1.2.0-rc4
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -18353,7 +18353,7 @@ spec:
               key: server.base.href
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.2.0-rc3
+        image: quay.io/numaproj/numaflow:v1.2.0-rc4
         imagePullPolicy: Always
         name: dex-init
         volumeMounts:
@@ -18463,7 +18463,7 @@ spec:
               key: server.cors.allowed.origins
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.2.0-rc3
+        image: quay.io/numaproj/numaflow:v1.2.0-rc4
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -18499,7 +18499,7 @@ spec:
               key: server.base.href
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.2.0-rc3
+        image: quay.io/numaproj/numaflow:v1.2.0-rc4
         imagePullPolicy: Always
         name: server-init
         volumeMounts:
@@ -18518,7 +18518,7 @@ spec:
               key: server.disable.auth
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.2.0-rc3
+        image: quay.io/numaproj/numaflow:v1.2.0-rc4
         imagePullPolicy: Always
         name: server-secrets-init
       securityContext:

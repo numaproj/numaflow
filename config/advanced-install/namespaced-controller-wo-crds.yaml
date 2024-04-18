@@ -306,7 +306,7 @@ spec:
         - controller
         env:
         - name: NUMAFLOW_IMAGE
-          value: quay.io/numaproj/numaflow:v1.2.0-rc3
+          value: quay.io/numaproj/numaflow:v1.2.0-rc4
         - name: NAMESPACE
           valueFrom:
             fieldRef:
@@ -347,7 +347,7 @@ spec:
               key: controller.leader.election.lease.renew.period
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.2.0-rc3
+        image: quay.io/numaproj/numaflow:v1.2.0-rc4
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
