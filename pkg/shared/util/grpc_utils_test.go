@@ -75,8 +75,8 @@ func TestCheckSDKCompatibility(t *testing.T) {
 		},
 		{
 			name:                        "Test with compatible SDK version",
-			sdkVersion:                  "v0.6.0a2",
-			sdkLanguage:                 info.Python,
+			sdkVersion:                  "v0.6.0-rc2",
+			sdkLanguage:                 info.Go,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   false,
 		},
