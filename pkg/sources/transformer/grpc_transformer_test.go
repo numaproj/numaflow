@@ -173,7 +173,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, rpc.ApplyUDFErr{
+		assert.ErrorIs(t, err, &rpc.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: rpc.InternalErr{
@@ -227,7 +227,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, rpc.ApplyUDFErr{
+		assert.ErrorIs(t, err, &rpc.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: rpc.InternalErr{
@@ -277,7 +277,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, rpc.ApplyUDFErr{
+		assert.ErrorIs(t, err, &rpc.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: rpc.InternalErr{
@@ -377,7 +377,7 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, rpc.ApplyUDFErr{
+		assert.ErrorIs(t, err, &rpc.ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: rpc.InternalErr{

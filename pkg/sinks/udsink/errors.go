@@ -32,15 +32,15 @@ type InternalErr struct {
 }
 
 // IsUserUDSinkErr is true if the problem is due to the user code in the UDSink.
-func (e ApplyUDSinkErr) IsUserUDSinkErr() bool {
+func (e *ApplyUDSinkErr) IsUserUDSinkErr() bool {
 	return e.UserUDSinkErr
 }
 
 // IsInternalErr is true if this is a platform issue. This is a blocking error.
-func (e ApplyUDSinkErr) IsInternalErr() bool {
+func (e *ApplyUDSinkErr) IsInternalErr() bool {
 	return e.InternalErr.Flag
 }
 
-func (e ApplyUDSinkErr) Error() string {
+func (e *ApplyUDSinkErr) Error() string {
 	return fmt.Sprint(e.Message)
 }
