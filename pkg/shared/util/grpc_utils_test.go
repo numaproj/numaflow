@@ -33,7 +33,7 @@ func TestCheckNumaflowCompatibility(t *testing.T) {
 			numaflowVersion:    "1.1.7",
 			minNumaflowVersion: "",
 			shouldErr:          true,
-			errMessage:         "server info does not contain minimum numaflow version. Upgrade SDK to newer version",
+			errMessage:         "server info does not contain minimum numaflow version. Upgrade to newer SDK version",
 		},
 		{
 			name:               "Test with compatible numaflow version",
