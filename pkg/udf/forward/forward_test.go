@@ -1601,7 +1601,7 @@ func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string, s string) ([]f
 }
 
 func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return nil, udfapplier.ApplyUDFErr{
+	return nil, &udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
 			Flag        bool
@@ -1613,7 +1613,7 @@ func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage
 
 func (f myForwardInternalErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadMessage, writeMessagesCh chan<- isb.WriteMessage) error {
 	close(writeMessagesCh)
-	return udfapplier.ApplyUDFErr{
+	return &udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
 			Flag        bool
