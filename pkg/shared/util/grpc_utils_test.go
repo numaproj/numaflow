@@ -83,7 +83,7 @@ func TestCheckSDKCompatibility(t *testing.T) {
 		{
 			name:                        "Test with incompatible Java version",
 			sdkVersion:                  "v0.4.3",
-			sdkLanguage:                 info.Go,
+			sdkLanguage:                 info.Java,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
 			errMessage:                  "SDK version 0.4.3 must be upgraded to at least 0.6.0-0, in order to work with current numaflow version",
