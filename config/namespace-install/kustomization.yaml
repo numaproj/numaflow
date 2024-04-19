@@ -5,11 +5,11 @@ resources:
   - ../base
   - rbac
 
-patchesStrategicMerge:
-  - |
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: numaflow-cmd-params-config
-    data:
-      namespaced: "true"
+patches:
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: numaflow-cmd-params-config
+      data:
+        namespaced: "true"
