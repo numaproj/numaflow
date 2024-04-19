@@ -58,10 +58,44 @@ event time characteristic) of `2031-09-29T18:47:00Z` will belong to the window w
 `[2031-09-29T18:47:00Z, 2031-09-29T18:48:00Z)`
 
 It is important to note that because of this property, for a constant throughput, the first window 
-may contain fewer elements than other windows. 
+may contain fewer elements than other windows.
+
+Check the links below to see the UDF examples for different languages.
+
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/reduce)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce)
 
 
 
+## Streaming Mode
+
+Reduce can be enabled on streaming mode to stream messages or forward partial responses to the next vertex.
+This is useful for custom triggering, where we want to forward responses to the next vertex quickly,
+even before the fixed window closes. The close-of-book and a final triggering will still happen even if
+partial results have been emitted.
+
+
+To enable reduce streaming, set the `streaming` flag to `true` in the fixed window configuration.
+
+```yaml
+vertices:
+  - name: my-udf
+    udf:
+      groupBy:
+        window:
+          fixed:
+            length: duration
+            streaming: true # set streaming to true to enable reduce streamer
+```
+
+Note: UDFs should use the ReduceStreamer functionality in the SDKs to use this feature.
+
+Check the links below to see the UDF examples in streaming mode for different languages.
+
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/reducestream)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/reducestreamer/examples)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducestreamer/sum)
 
 
 

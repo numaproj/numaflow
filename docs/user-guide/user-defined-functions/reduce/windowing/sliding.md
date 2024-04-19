@@ -78,6 +78,43 @@ window `present + sliding`)
 From the point above, it follows then that immediately upon startup, for the first window, fewer elements may get 
 aggregated depending on the current _lateness_ of the data stream.
 
+Check the links below to see the UDF examples for different languages.
+
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/reduce)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce)
+
+
+## Streaming Mode
+
+Reduce can be enabled on streaming mode to stream messages or forward partial responses to the next vertex.
+This is useful for custom triggering, where we want to forward responses to the next vertex quickly,
+even before the fixed window closes. The close-of-book and a final triggering will still happen even if
+partial results have been emitted.
+
+
+To enable reduce streaming, set the `streaming` flag to `true` in the sliding window configuration.
+
+```yaml
+vertices:
+  - name: my-udf
+    udf:
+      groupBy:
+        window:
+          sliding:
+            length: duration
+            slide: duration
+            streaming: true # set streaming to true to enable reduce streamer
+```
+
+Note: UDFs should use the ReduceStreamer functionality in the SDKs to use this feature.
+
+Check the links below to see the UDF examples in streaming mode for different languages.
+
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/reducestream)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/reducestreamer/examples)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducestreamer/sum)
+
 
 
 
