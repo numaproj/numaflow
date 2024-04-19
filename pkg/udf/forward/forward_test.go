@@ -1671,7 +1671,7 @@ func validateMetrics(t *testing.T, batchSize int64) {
 
 	err := testutil.CollectAndCompare(metrics.ReadDataMessagesCount, strings.NewReader(metadata+expected), "forwarder_data_read_total")
 	if err != nil {
-		t.Errorf("unexpected collecting result:\n%s", err)
+		t.Errorf("unexpected collecting result: %v", err)
 	}
 
 	writeMetadata := `
