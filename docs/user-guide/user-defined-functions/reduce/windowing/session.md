@@ -3,7 +3,8 @@
 ## Overview
 
 Session window is a type of Unaligned window where the window’s end time keeps moving until there is no data for a 
-given time duration.
+given time duration. Unlike fixed and sliding windows, session windows do not overlap, nor do they have a set start
+and end time. They can be used to group data based on activity.
 
 ![plot](../../../../assets/session.png)
 
@@ -27,7 +28,7 @@ considered to be closed.
 
 ## Example
 
-To create a sliding window of length 1 minute which slides every 10 seconds, we can use the following snippet.
+To create a session window of timeout 1 minute, we can use the following snippet.
 
 ```yaml
 vertices:
@@ -39,36 +40,32 @@ vertices:
             timeout: 60s
 ```
 
-The yaml snippet above contains an example spec of a _reduce_ vertex that uses session window aggregation. As we can see,
+The yaml snippet above contains an example spec of a _reduce_ vertex that uses sliding window aggregation. As we can see,
 the timeout of the window is 60s. This means we no data arrives for a particular key for 60 seconds, we will mark
-it as clised.
+it as closed.
 
-Let's say, `time.now()` in the pipeline is `2031-09-29T18:46:30Z` the active window boundaries will be as follows (there
-are total of 6 windows `60s/10s`)
+Let's say, `time.now()` in the pipeline is `2031-09-29T18:46:30Z` as the current time, and we have a session gap of 30s.
+If we receive events in this pattern:
 
 ```text
-[2031-09-29T18:45:40Z, 2031-09-29T18:46:40Z)
-[2031-09-29T18:45:50Z, 2031-09-29T18:46:50Z) # notice the 10 sec shift from the above window
-[2031-09-29T18:46:00Z, 2031-09-29T18:47:00Z)
-[2031-09-29T18:46:10Z, 2031-09-29T18:47:10Z)
-[2031-09-29T18:46:20Z, 2031-09-29T18:47:20Z)
-[2031-09-29T18:46:30Z, 2031-09-29T18:47:30Z)
+Event-1 at 2031-09-29T18:45:40Z
+Event-2 at 2031-09-29T18:45:55Z   # Notice the 15 sec interval from Event-1, still within session gap
+Event-3 at 2031-09-29T18:46:20Z   # Notice the 25 sec interval from Event-2, still within session gap
+Event-4 at 2031-09-29T18:46:55Z   # Notice the 35 sec interval from Event-3, beyond the session gap
+Event-5 at 2031-09-29T18:47:10Z   # Notice the 15 sec interval from Event-4, within the new session gap
 ```
 
-The window start time is always be left inclusive and right exclusive. That is why `[2031-09-29T18:45:30Z, 2031-09-29T18:46:30Z)`
-window is not considered active (it fell on the previous window, right exclusive) but `[2031-09-29T18:46:30Z, 2031-09-29T18:47:30Z)`
-is an active (left inclusive).
+This would lead to two session windows as follows:
 
-The first window always ends after the sliding seconds from the `time.Now()`, the start time of the window will be the
-nearest integer multiple of the slide which is less than the message's event time. So the first window starts in the
-past and ends _sliding_duration (based on time progression in the pipeline and not the wall time) from present. It is
-important to note that regardless of the window boundary (starting in the past or ending in the future) the target element
-set totally depends on the matching time (in case of event time, all the elements with the time that falls with in the
-boundaries of the window, and in case of system time, all the elements that arrive from the `present` until the end of
-window `present + sliding`)
+```text
+[2031-09-29T18:45:40Z, 2031-09-29T18:46:20Z)   # includes Event-1, Event-2 and Event-3
+[2031-09-29T18:46:55Z, 2031-09-29T18:47:10Z)   # includes Event-4 and Event-5
+```
 
-From the point above, it follows then that immediately upon startup, for the first window, fewer elements may get
-aggregated depending on the current _lateness_ of the data stream.
+In this example, the start time is inclusive and the end time is exclusive. `Event-1`, `Event-2`, and `Event-3` fall within 
+the first window, and this window closes 30 seconds after `Event-3` at `2031-09-29T18:46:50Z`. `Event-4` arrives 5 seconds 
+later, meaning it's beyond the session gap of the previous window, initiating a new window. The second window includes 
+`Event-4` and `Event-5`, and it closes 30 seconds after `Event-5` at `2031-09-29T18:47:40Z`
 
 
 
