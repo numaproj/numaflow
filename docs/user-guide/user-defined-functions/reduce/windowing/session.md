@@ -68,6 +68,13 @@ later, meaning it's beyond the session gap of the previous window, initiating a 
 `Event-4` and `Event-5`, and it closes 30 seconds after `Event-5` at `2031-09-29T18:47:40Z`, if no further events arrive
 for the key until the timeout.
 
+Note: Streaming mode is by default enabled for session windows. 
+
+Check the links below to see the UDF examples for different languages. Currently, we have the   SDK support for Golang and Java.
+
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducesession/counter)
+
 
 
 
