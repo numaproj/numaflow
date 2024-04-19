@@ -2311,18 +2311,18 @@
 <span class="nt">openapi</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://raw.githubusercontent.com/numaproj/numaflow/main/api/json-schema/schema.json</span>
 
-<span class="nt">patchesStrategicMerge</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">|-</span>
-<span class="w">    </span><span class="no">apiVersion: numaflow.numaproj.io/v1alpha1</span>
-<span class="w">    </span><span class="no">kind: Pipeline</span>
-<span class="w">    </span><span class="no">metadata:</span>
-<span class="w">      </span><span class="no">name: my-pipeline</span>
-<span class="w">    </span><span class="no">spec:</span>
-<span class="w">      </span><span class="no">vertices:</span>
-<span class="w">        </span><span class="no">- name: in</span>
-<span class="w">          </span><span class="no">source:</span>
-<span class="w">            </span><span class="no">generator:</span>
-<span class="w">              </span><span class="no">rpu: 500</span>
+<span class="nt">patches</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">patch</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|-</span>
+<span class="w">      </span><span class="no">apiVersion: numaflow.numaproj.io/v1alpha1</span>
+<span class="w">      </span><span class="no">kind: Pipeline</span>
+<span class="w">      </span><span class="no">metadata:</span>
+<span class="w">        </span><span class="no">name: my-pipeline</span>
+<span class="w">      </span><span class="no">spec:</span>
+<span class="w">        </span><span class="no">vertices:</span>
+<span class="w">          </span><span class="no">- name: in</span>
+<span class="w">            </span><span class="no">source:</span>
+<span class="w">              </span><span class="no">generator:</span>
+<span class="w">                </span><span class="no">rpu: 500</span>
 </code></pre></div>
 <p>See the full example <a href="https://github.com/numaproj/numaflow/tree/main/docs/user-guide/reference/kustomize/examples/patch">here</a>.</p>
 
