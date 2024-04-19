@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"reflect"
+	"time"
 
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
@@ -71,6 +72,31 @@ func Start(namespaced bool, managedNamespace string) {
 
 	if sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionDisabled, "false") == "true" {
 		opts.LeaderElection = false
+	} else {
+		leaseDurationStr := sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionLeaseDuration, "15s") // Defaults to 15s
+		leaseDuration, err := time.ParseDuration(leaseDurationStr)
+		if err != nil {
+			logger.Fatalf("Invalid ENV %s value: %s", dfv1.EnvLeaderElectionLeaseDuration, leaseDurationStr)
+		}
+		opts.LeaseDuration = &leaseDuration
+		leaseRenewDeadlineStr := sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionLeaseRenewDeadline, "10s") // Defaults to 10s
+		leaseRenewDeadline, err := time.ParseDuration(leaseRenewDeadlineStr)
+		if err != nil {
+			logger.Fatalf("Invalid ENV %s value: %s", dfv1.EnvLeaderElectionLeaseRenewDeadline, leaseRenewDeadlineStr)
+		}
+		if leaseDuration <= leaseRenewDeadline {
+			logger.Fatalf("Invalid config: %s should always be greater than %s", dfv1.EnvLeaderElectionLeaseDuration, dfv1.EnvLeaderElectionLeaseRenewDeadline)
+		}
+		opts.RenewDeadline = &leaseRenewDeadline
+		leaseRenewPeriodStr := sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionLeaseRenewPeriod, "2s") // Defaults to 2s
+		leaseRenewPeriod, err := time.ParseDuration(leaseRenewPeriodStr)
+		if err != nil {
+			logger.Fatalf("Invalid ENV %s value: %s", dfv1.EnvLeaderElectionLeaseRenewPeriod, leaseRenewPeriodStr)
+		}
+		if leaseRenewDeadline <= leaseRenewPeriod {
+			logger.Fatalf("Invalid config: %s should always be greater than %s", dfv1.EnvLeaderElectionLeaseRenewDeadline, dfv1.EnvLeaderElectionLeaseRenewPeriod)
+		}
+		opts.RetryPeriod = &leaseRenewPeriod
 	}
 
 	if namespaced {

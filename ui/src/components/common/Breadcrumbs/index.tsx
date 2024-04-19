@@ -50,16 +50,20 @@ export function Breadcrumbs() {
         } else if (pl !== "") {
           // Pipeline summary view
           return [
-            <Link key={"namespace-view"} to="/" className="Breadcrumbs-link">
-              Namespace
-            </Link>,
             <Typography
-              key={"namespace-typ"}
+              key={"namespace-view"}
               data-testid="namespace-breadcrumb"
               className="Breadcrumbs-typ"
             >
-              {systemInfo.managedNamespace}
+              Namespace
             </Typography>,
+            <Link
+              key={"namespace-typ"}
+              to={`?namespace=${systemInfo.managedNamespace}`}
+              className="Breadcrumbs-link"
+            >
+              {systemInfo.managedNamespace}
+            </Link>,
             <Typography
               key={"pipeline-typ"}
               data-testid="pipeline-breadcrumb"
@@ -125,7 +129,7 @@ export function Breadcrumbs() {
         Unknown
       </Typography>
     );
-  }, [location, systemInfo]);
+  }, [location, systemInfo, ns, pl]);
 
   return (
     <MUIBreadcrumbs

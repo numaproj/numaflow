@@ -58,7 +58,7 @@ patchesStrategicMerge:
     metadata:
       name: numaflow-cmd-params-config
     data:
-      controller.disable.leader.election: "true"
+      controller.leader.election.disabled: "true"
 
 namespace: numaflow-system
 

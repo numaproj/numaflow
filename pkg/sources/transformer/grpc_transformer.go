@@ -81,6 +81,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, readMessage *
 		Value:     payload,
 		EventTime: timestamppb.New(parentMessageInfo.EventTime),
 		Watermark: timestamppb.New(readMessage.Watermark),
+		Headers:   readMessage.Headers,
 	}
 
 	response, err := u.client.SourceTransformFn(ctx, req)
@@ -112,7 +113,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, readMessage *
 				return true, nil
 			})
 			if !success {
-				return nil, rpc.ApplyUDFErr{
+				return nil, &rpc.ApplyUDFErr{
 					UserUDFErr: false,
 					Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
 					InternalErr: rpc.InternalErr{
@@ -122,7 +123,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, readMessage *
 				}
 			}
 		case sdkerr.NonRetryable:
-			return nil, rpc.ApplyUDFErr{
+			return nil, &rpc.ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
 				InternalErr: rpc.InternalErr{
@@ -131,7 +132,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, readMessage *
 				},
 			}
 		default:
-			return nil, rpc.ApplyUDFErr{
+			return nil, &rpc.ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
 				InternalErr: rpc.InternalErr{

@@ -59,6 +59,11 @@ func Test_getUDContainer(t *testing.T) {
 	for _, env := range testSideInput.Container.Env {
 		assert.Contains(t, c.Env, env)
 	}
+	envs := map[string]string{}
+	for _, e := range c.Env {
+		envs[e.Name] = e.Value
+	}
+	assert.Equal(t, envs[EnvUDContainerType], UDContainerSideInputs)
 	assert.Equal(t, imagePullNever, c.ImagePullPolicy)
 }
 

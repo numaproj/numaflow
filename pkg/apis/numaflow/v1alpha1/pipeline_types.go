@@ -261,7 +261,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/readyz",
-				Port:   intstr.FromInt(DaemonServicePort),
+				Port:   intstr.FromInt32(DaemonServicePort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
@@ -273,7 +273,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/livez",
-				Port:   intstr.FromInt(DaemonServicePort),
+				Port:   intstr.FromInt32(DaemonServicePort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
@@ -364,7 +364,7 @@ func (p Pipeline) GetDaemonServiceObj() *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Port: DaemonServicePort, TargetPort: intstr.FromInt(int(DaemonServicePort))},
+				{Port: DaemonServicePort, TargetPort: intstr.FromInt32(DaemonServicePort)},
 			},
 			Selector: labels,
 		},

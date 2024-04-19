@@ -25,65 +25,22 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // Blackhole is a sink to emulate /dev/null
 type Blackhole struct {
 	name         string
 	pipelineName string
-	isdf         *sinkforward.DataForward
 	logger       *zap.SugaredLogger
 }
 
-type Option func(*Blackhole) error
-
-func WithLogger(log *zap.SugaredLogger) Option {
-	return func(bl *Blackhole) error {
-		bl.logger = log
-		return nil
-	}
-}
-
-// NewBlackhole returns Blackhole type.
-func NewBlackhole(vertexInstance *dfv1.VertexInstance,
-	fromBuffer isb.BufferReader,
-	fetchWatermark fetch.Fetcher,
-	publishWatermark publish.Publisher,
-	idleManager wmb.IdleManager,
-	opts ...Option) (*Blackhole, error) {
-
-	bh := new(Blackhole)
-	name := vertexInstance.Vertex.Spec.Name
-	bh.name = name
-	bh.pipelineName = vertexInstance.Vertex.Spec.PipelineName
-
-	for _, o := range opts {
-		if err := o(bh); err != nil {
-			return nil, err
-		}
-	}
-	if bh.logger == nil {
-		bh.logger = logging.NewLogger()
-	}
-
-	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(bh.logger)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-
-	isdf, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, bh, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
-	if err != nil {
-		return nil, err
-	}
-	bh.isdf = isdf
-
-	return bh, nil
+// NewBlackhole returns a new Blackhole sink.
+func NewBlackhole(ctx context.Context, vertexInstance *dfv1.VertexInstance) (*Blackhole, error) {
+	return &Blackhole{
+		name:         vertexInstance.Vertex.Spec.Name,
+		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
+		logger:       logging.FromContext(ctx),
+	}, nil
 }
 
 // GetName returns the name.
@@ -112,19 +69,4 @@ func (b *Blackhole) Write(_ context.Context, messages []isb.Message) ([]isb.Offs
 
 func (b *Blackhole) Close() error {
 	return nil
-}
-
-// Start starts the sink.
-func (b *Blackhole) Start() <-chan struct{} {
-	return b.isdf.Start()
-}
-
-// Stop stops sinking
-func (b *Blackhole) Stop() {
-	b.isdf.Stop()
-}
-
-// ForceStop stops sinking
-func (b *Blackhole) ForceStop() {
-	b.isdf.ForceStop()
 }

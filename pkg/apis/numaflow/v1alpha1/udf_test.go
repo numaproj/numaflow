@@ -53,7 +53,11 @@ func TestUDF_getContainers(t *testing.T) {
 	assert.Contains(t, c[1].VolumeMounts, c[1].VolumeMounts[0])
 	assert.Equal(t, x.Container.Command, c[1].Command)
 	assert.Equal(t, x.Container.Args, c[1].Args)
-	assert.Equal(t, x.Container.Env, c[1].Env)
+	envs := map[string]string{}
+	for _, e := range c[1].Env {
+		envs[e.Name] = e.Value
+	}
+	assert.Equal(t, envs[EnvUDContainerType], UDContainerFunction)
 	assert.Equal(t, 1, len(c[1].EnvFrom))
 	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[1].Resources)
 	assert.Equal(t, corev1.PullAlways, c[1].ImagePullPolicy)
@@ -90,6 +94,11 @@ func Test_getUDFContainer(t *testing.T) {
 		assert.Equal(t, 1, len(c.EnvFrom))
 		assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 		assert.True(t, c.LivenessProbe != nil)
+		envs := map[string]string{}
+		for _, e := range c.Env {
+			envs[e.Name] = e.Value
+		}
+		assert.Equal(t, envs[EnvUDContainerType], UDContainerFunction)
 	})
 
 	t.Run("with built-in functions", func(t *testing.T) {

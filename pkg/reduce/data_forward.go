@@ -572,12 +572,12 @@ func (df *DataForward) handleLateMessage(message *isb.ReadMessage) []*window.Tim
 	nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
 	// if there is no window open, drop the message.
 	if nextWinAsSeenByWriter == nil {
-		df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+		df.log.Infow("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
 		return lateMessageWindowRequests
 	}
 	// if the message doesn't fall in the next window that is about to be closed drop it.
 	if message.EventTime.Before(nextWinAsSeenByWriter.StartTime()) {
-		df.log.Warnw("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
+		df.log.Infow("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
 		return lateMessageWindowRequests
 	}
 
@@ -643,7 +643,7 @@ func (df *DataForward) writeToPBQ(ctx context.Context, winOp *window.TimedWindow
 	err = wait.ExponentialBackoff(pbqWriteBackoff, func() (done bool, err error) {
 		rErr := q.Write(ctx, winOp, persist)
 		if rErr != nil {
-			df.log.Errorw("Failed to write message", zap.String("msgOffSet", winOp.ReadMessage.ReadOffset.String()), zap.String("partitionID", winOp.ID.String()), zap.Error(rErr))
+			df.log.Errorw("Failed to write message to pbq", zap.String("partitionID", winOp.ID.String()), zap.Error(rErr))
 			metrics.PBQWriteErrorCount.With(map[string]string{
 				metrics.LabelVertex:             df.vertexName,
 				metrics.LabelPipeline:           df.pipelineName,

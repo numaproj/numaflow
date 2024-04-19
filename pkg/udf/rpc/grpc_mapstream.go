@@ -89,7 +89,7 @@ func (u *GRPCBasedMapStream) ApplyMapStream(ctx context.Context, message *isb.Re
 	errs.Go(func() error {
 		err := u.client.MapStreamFn(ctx, d, responseCh)
 		if err != nil {
-			err = ApplyUDFErr{
+			err = &ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.MapStreamFn failed, %s", err),
 				InternalErr: InternalErr{

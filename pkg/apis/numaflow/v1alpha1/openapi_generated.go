@@ -31,6 +31,7 @@ import (
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractPodTemplate":            schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink":                   schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex":                 schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization":                  schema_pkg_apis_numaflow_v1alpha1_Authorization(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth":                      schema_pkg_apis_numaflow_v1alpha1_BasicAuth(ref),
@@ -243,6 +244,44 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref common.ReferenceC
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"log": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Log sink is used to write the data to the log.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log"),
+						},
+					},
+					"kafka": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kafka sink is used to write the data to the Kafka.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink"),
+						},
+					},
+					"blackhole": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Blackhole sink is used to write the data to the blackhole sink, which is a sink that discards all the data written to it.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole"),
+						},
+					},
+					"udsink": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UDSink sink is used to write the data to the user-defined sink.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 
@@ -3818,29 +3857,39 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 				Properties: map[string]spec.Schema{
 					"log": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log"),
+							Description: "Log sink is used to write the data to the log.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log"),
 						},
 					},
 					"kafka": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink"),
+							Description: "Kafka sink is used to write the data to the Kafka.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink"),
 						},
 					},
 					"blackhole": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole"),
+							Description: "Blackhole sink is used to write the data to the blackhole sink, which is a sink that discards all the data written to it.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole"),
 						},
 					},
 					"udsink": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"),
+							Description: "UDSink sink is used to write the data to the user-defined sink.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"),
+						},
+					},
+					"fallback": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be initiated if the ud-sink response field sets it.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 

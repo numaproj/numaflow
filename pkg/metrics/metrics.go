@@ -87,14 +87,14 @@ var (
 		Subsystem: "forwarder",
 		Name:      "drop_total",
 		Help:      "Total number of Messages Dropped",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName, LabelReason})
 
 	// DropBytesCount is to indicate the number of bytes dropped
 	DropBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "drop_bytes_total",
 		Help:      "Total number of Bytes Dropped",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName, LabelReason})
 
 	// AckMessagesCount is used to indicate the number of  messages acknowledged
 	AckMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{

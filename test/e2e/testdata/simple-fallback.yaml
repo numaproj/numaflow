@@ -1,0 +1,32 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-fallback
+spec:
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: cat
+      scale:
+        min: 1
+      udf:
+        builtin:
+          name: cat
+    - name: output
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-go/fb-sink-log:stable
+            imagePullPolicy: Always
+        fallback:
+          udsink:
+            container:
+              image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+  edges:
+    - from: in
+      to: cat
+    - from: cat
+      to: output

@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -240,8 +238,8 @@ func (s *FunctionalSuite) TestDropOnFull() {
 	time.Sleep(time.Second * 5)
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
 
-	expectedDropMetricOne := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-0",pipeline="drop-on-full",replica="0",vertex="in",vertex_type="Source"} 1`
-	expectedDropMetricTwo := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-1",pipeline="drop-on-full",replica="0",vertex="in",vertex_type="Source"} 1`
+	expectedDropMetricOne := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-0",pipeline="drop-on-full",reason="Buffer full!",replica="0",vertex="in",vertex_type="Source"} 1`
+	expectedDropMetricTwo := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-1",pipeline="drop-on-full",reason="Buffer full!",replica="0",vertex="in",vertex_type="Source"} 1`
 	// wait for the drop metric to be updated, time out after 10s.
 	timeoutChan := time.After(time.Second * 10)
 	ticker := time.NewTicker(time.Second * 2)
@@ -340,6 +338,23 @@ func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClie
 		prevWatermark = currentWatermark
 	}
 	return true, nil
+}
+
+func (s *FunctionalSuite) TestFallbackSink() {
+
+	w := s.Given().Pipeline("@testdata/simple-fallback.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "simple-fallback"
+
+	// send a message to the pipeline
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fallback-message")))
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	w.Expect().SinkContains("output", "fallback-message")
 }
 
 func TestFunctionalSuite(t *testing.T) {

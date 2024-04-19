@@ -24,6 +24,8 @@ spec:
             # https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/log
             image: quay.io/numaio/numaflow-go/sink-log:stable
             imagePullPolicy: Always
+
+# FIXME(fb-sink): python
     - name: python-split
       scale:
         min: 1

@@ -21,23 +21,26 @@ import (
 
 	"github.com/spf13/cobra"
 
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	secretinitcmd "github.com/numaproj/numaflow/server/cmd/serversecretinit"
 )
 
 func NewServerSecretsInitCommand() *cobra.Command {
+	var disableAuth bool
 
 	command := &cobra.Command{
 		Use:   "server-secrets-init",
-		Short: "Initialize numaflow-server-secrets with admin password and jwt secret key",
+		Short: "Initialize numaflow-server-secrets with admin password and jwt secret key if needed",
 		RunE: func(cmd *cobra.Command, args []string) error {
-
+			if disableAuth { // Skip when auth is disabled
+				return nil
+			}
 			if err := secretinitcmd.Start(); err != nil {
 				return fmt.Errorf("failed to start server secrets init service: %w", err)
 			}
-
 			return nil
 		},
 	}
-
+	command.Flags().BoolVar(&disableAuth, "disable-auth", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_AUTH", false), "Whether to disable authentication and authorization, defaults to false.")
 	return command
 }
