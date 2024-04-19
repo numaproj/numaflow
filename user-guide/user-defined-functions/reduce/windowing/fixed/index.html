@@ -1219,6 +1219,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#streaming-mode" class="md-nav__link">
+    Streaming Mode
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2266,6 +2273,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#streaming-mode" class="md-nav__link">
+    Streaming Mode
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2328,7 +2342,35 @@ Windows are left inclusive and right exclusive which means an element with event
 event time characteristic) of <code>2031-09-29T18:47:00Z</code> will belong to the window with boundaries
 <code>[2031-09-29T18:47:00Z, 2031-09-29T18:48:00Z)</code></p>
 <p>It is important to note that because of this property, for a constant throughput, the first window 
-may contain fewer elements than other windows. </p>
+may contain fewer elements than other windows.</p>
+<p>Check the links below to see the UDF examples for different languages.</p>
+<ul>
+<li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/reduce">Python</a></li>
+<li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples">Golang</a></li>
+<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce">Java</a></li>
+</ul>
+<h2 id="streaming-mode">Streaming Mode<a class="headerlink" href="#streaming-mode" title="Permanent link">&para;</a></h2>
+<p>Reduce can be enabled on streaming mode to stream messages or forward partial responses to the next vertex.
+This is useful for custom triggering, where we want to forward responses to the next vertex quickly,
+even before the fixed window closes. The close-of-book and a final triggering will still happen even if
+partial results have been emitted.</p>
+<p>To enable reduce streaming, set the <code>streaming</code> flag to <code>true</code> in the fixed window configuration.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
+<span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">groupBy</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">window</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">fixed</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">length</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">duration</span>
+<span class="w">            </span><span class="nt">streaming</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># set streaming to true to enable reduce streamer</span>
+</code></pre></div>
+<p>Note: UDFs should use the ReduceStreamer functionality in the SDKs to use this feature.</p>
+<p>Check the links below to see the UDF examples in streaming mode for different languages.</p>
+<ul>
+<li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/reducestream">Python</a></li>
+<li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/reducestreamer/examples">Golang</a></li>
+<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducestreamer/sum">Java</a></li>
+</ul>
 
               
             </article>
