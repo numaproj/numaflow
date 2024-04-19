@@ -50,15 +50,13 @@ patches:
     target:
       kind: Deployment
       name: numaflow-webhook
-
-patchesStrategicMerge:
-  - |
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: numaflow-cmd-params-config
-    data:
-      controller.leader.election.disabled: "true"
+  - patch: |
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: numaflow-cmd-params-config
+      data:
+        controller.leader.election.disabled: "true"
 
 namespace: numaflow-system
 
