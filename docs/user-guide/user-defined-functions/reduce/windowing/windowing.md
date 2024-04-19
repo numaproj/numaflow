@@ -32,6 +32,7 @@ Numaflow supports the following types of windows
 
 - [Fixed](fixed.md)
 - [Sliding](sliding.md)
+- [Session](session.md)
 
 ## Non-Keyed v/s Keyed Windows
 
