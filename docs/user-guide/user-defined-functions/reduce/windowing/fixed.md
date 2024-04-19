@@ -70,9 +70,10 @@ Check the links below to see the UDF examples for different languages.
 
 ## Streaming Mode
 
-Reduce can be enabled on streaming mode to stream messages or forward partial responses to next vertex. 
-This is useful for custom triggering, where we want to forward responses to the next vertex quickly, 
-even before the fixed window closes.
+Reduce can be enabled on streaming mode to stream messages or forward partial responses to the next vertex.
+This is useful for custom triggering, where we want to forward responses to the next vertex quickly,
+even before the fixed window closes. The close-of-book and a final triggering will still happen even if
+partial results have been emitted.
 
 
 To enable reduce streaming, set the `streaming` flag to `true` in the fixed window configuration.
