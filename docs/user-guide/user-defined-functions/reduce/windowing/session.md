@@ -40,7 +40,7 @@ vertices:
             timeout: 60s
 ```
 
-The yaml snippet above contains an example spec of a _reduce_ vertex that uses sliding window aggregation. As we can see,
+The yaml snippet above contains an example spec of a _reduce_ vertex that uses session window aggregation. As we can see,
 the timeout of the window is 60s. This means we no data arrives for a particular key for 60 seconds, we will mark
 it as closed.
 
@@ -65,7 +65,8 @@ This would lead to two session windows as follows:
 In this example, the start time is inclusive and the end time is exclusive. `Event-1`, `Event-2`, and `Event-3` fall within 
 the first window, and this window closes 30 seconds after `Event-3` at `2031-09-29T18:46:50Z`. `Event-4` arrives 5 seconds 
 later, meaning it's beyond the session gap of the previous window, initiating a new window. The second window includes 
-`Event-4` and `Event-5`, and it closes 30 seconds after `Event-5` at `2031-09-29T18:47:40Z`
+`Event-4` and `Event-5`, and it closes 30 seconds after `Event-5` at `2031-09-29T18:47:40Z`, if no further events arrive
+for the key until the timeout.
 
 
 
