@@ -22,3 +22,8 @@ supported by the platform's built-in sinks. As an example, once we have processe
 we can use Elasticsearch as a User defined sink to store the processed data and enable search and 
 analysis on the data.
 
+## Fallback Sink (DLQ)
+
+There is an explicit DLQ support for sinks using a concept called [fallback sink](fallback.md). For the rest of vertices,
+if you need DLQ, please use [conditional-forwarding](http://127.0.0.1:8000/user-guide/reference/conditional-forwarding/).
+Sink cannot not do conditional-forwarding since it is a terminal state and hence we have explicit fallback option. 
