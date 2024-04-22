@@ -831,9 +831,40 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Overview
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         Overview
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#fallback-sink-dlq" class="md-nav__link">
+    Fallback Sink (DLQ)
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -890,6 +921,20 @@
     <li class="md-nav__item">
       <a href="../user-defined-sinks/" class="md-nav__link">
         User Defined Sinks
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fallback/" class="md-nav__link">
+        Fallback Sink
       </a>
     </li>
   
@@ -2178,6 +2223,21 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#fallback-sink-dlq" class="md-nav__link">
+    Fallback Sink (DLQ)
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2214,6 +2274,10 @@ the user needs to output the processed data to a system or using a certain trans
 supported by the platform's built-in sinks. As an example, once we have processed the input messages, 
 we can use Elasticsearch as a User defined sink to store the processed data and enable search and 
 analysis on the data.</p>
+<h2 id="fallback-sink-dlq">Fallback Sink (DLQ)<a class="headerlink" href="#fallback-sink-dlq" title="Permanent link">&para;</a></h2>
+<p>There is an explicit DLQ support for sinks using a concept called <a href="../fallback/">fallback sink</a>. For the rest of vertices,
+if you need DLQ, please use <a href="../../reference/conditional-forwarding/">conditional-forwarding</a>.
+Sink cannot not do conditional-forwarding since it is a terminal state and hence we have explicit fallback option. </p>
 
               
             </article>
