@@ -6,8 +6,9 @@ spec:
   sideInputs:
     - name: myticker
       container:
-        # A reduce side input, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input
-        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:latest"
+        # A reduce side input, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/reduce_sideinput
+        image: quay.io/numaio/numaflow-go/reduce-sideinput:stable
+        imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
   vertices:
@@ -25,8 +26,9 @@ spec:
     - name: si-e2e
       udf:
         container:
-          # A reduce side input udf, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input/udf
-          image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-udf:latest"
+          # A reduce side input udf, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/reduce_sideinput/udf
+          image: quay.io/numaio/numaflow-go/reduce-sideinput-udf:stable
+          imagePullPolicy: Always
         groupBy:
           window:
             fixed:
@@ -44,8 +46,9 @@ spec:
       sink:
         udsink:
           container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
+            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            imagePullPolicy: Always
   edges:
     - from: in
       to: atoi
