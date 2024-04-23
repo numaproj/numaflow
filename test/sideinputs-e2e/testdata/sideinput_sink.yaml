@@ -6,8 +6,9 @@ spec:
   sideInputs:
     - name: myticker
       container:
-        # see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/sideInput-function
-        image: "quay.io/numaio/numaflow-sideinput/sideinput-sink-e2e-test:latest"
+        # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/sideinput_function
+        image: quay.io/numaio/numaflow-go/sideinput-function:stable
+        imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
         # timezone: America/Los_Angeles
@@ -24,8 +25,9 @@ spec:
       sink:
         udsink:
           container:
-            # see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/sink-side-input
-            image: "quay.io/numaio/numaflow-sink/redis-e2e-test-sink-with-sideinput:latest"
+            # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/sink_sideinput
+            image: quay.io/numaio/numaflow-go/redis-sink-with-sideinput:stable
+            imagePullPolicy: Always
       sideInputs:
         - myticker
 
