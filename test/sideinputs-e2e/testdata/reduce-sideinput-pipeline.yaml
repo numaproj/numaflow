@@ -6,8 +6,9 @@ spec:
   sideInputs:
     - name: myticker
       container:
-        # A reduce side input, see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/reduce-side-input
-        image: "quay.io/numaio/numaproj-contrib/e2e-reduce-sideinput-example:latest"
+        # A reduce side input, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/reduce_sideinput
+        image: quay.io/numaio/numaflow-go/reduce-sideinput:stable
+        imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
   vertices:
