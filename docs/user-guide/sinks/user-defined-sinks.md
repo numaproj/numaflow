@@ -1,8 +1,8 @@
 # User-defined Sinks
 
-A `Pipeline` may have multiple Sinks, those sinks could either be a pre-defined sink such as `kafka`, `log`, etc., or a `User Defined Sink`.
+A `Pipeline` may have multiple Sinks, those sinks could either be a pre-defined sink such as `kafka`, `log`, etc., or a `user-defined sink`.
 
-A pre-defined sink vertex runs single-container pods, a user defined sink runs two-container pods.
+A pre-defined sink vertex runs single-container pods, a user-defined sink runs two-container pods.
 
 ## Build Your Own User-defined Sinks
 
@@ -14,7 +14,7 @@ Check the links below to see the examples for different languages.
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)
 - [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/sink/)
 
-A user defined sink vertex looks like below.
+A user-defined sink vertex looks like below.
 
 ```yaml
 spec:
@@ -28,7 +28,7 @@ spec:
 
 ## Available Environment Variables
 
-Some environment variables are available in the user defined sink container:
+Some environment variables are available in the user-defined sink container:
 
 - `NUMAFLOW_NAMESPACE` - Namespace.
 - `NUMAFLOW_POD` - Pod name.
@@ -36,7 +36,7 @@ Some environment variables are available in the user defined sink container:
 - `NUMAFLOW_PIPELINE_NAME` - Name of the pipeline.
 - `NUMAFLOW_VERTEX_NAME` - Name of the vertex.
 
-## User-defined Sink contributed from the open source community
+## User-defined Sinks contributed from the open source community
 
 If you're looking for examples and usages contributed by the open source community, head over to [the numaproj-contrib repositories](https://github.com/orgs/numaproj-contrib/repositories).
 

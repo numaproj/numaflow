@@ -64,9 +64,9 @@ nav:
           - user-guide/sinks/kafka.md
           - user-guide/sinks/log.md
           - user-guide/sinks/blackhole.md
-          - User Defined Sinks: "user-guide/sinks/user-defined-sinks.md"
+          - User-defined Sinks: "user-guide/sinks/user-defined-sinks.md"
           - Fallback Sink: "user-guide/sinks/fallback.md"
-      - User Defined Functions:
+      - User-defined Functions:
           - Overview: "user-guide/user-defined-functions/user-defined-functions.md"
           - Map:
               - Overview: "user-guide/user-defined-functions/map/map.md"

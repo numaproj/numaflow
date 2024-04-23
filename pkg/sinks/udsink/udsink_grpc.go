@@ -50,7 +50,7 @@ type SinkApplier interface {
 	ApplySink(ctx context.Context, requests []*sinkpb.SinkRequest) []error
 }
 
-// UDSgRPCBasedUDSink applies user defined sink over gRPC (over Unix Domain Socket) client/server where server is the UDSink.
+// UDSgRPCBasedUDSink applies user-defined sink over gRPC (over Unix Domain Socket) client/server where server is the UDSink.
 type UDSgRPCBasedUDSink struct {
 	client sinkclient.Client
 }
@@ -105,7 +105,7 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 		}
 		return errs
 	}
-	// Use ID to map the response messages, so that there's no strict requirement for the user defined sink to return the response in order.
+	// Use ID to map the response messages, so that there's no strict requirement for the user-defined sink to return the response in order.
 	resMap := make(map[string]*sinkpb.SinkResponse_Result)
 	for _, res := range response.GetResults() {
 		resMap[res.GetId()] = res

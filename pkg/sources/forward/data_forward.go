@@ -270,9 +270,9 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
 	}
 
-	// user defined transformer concurrent processing request channel
+	// user-defined transformer concurrent processing request channel
 	transformerCh := make(chan *readWriteMessagePair)
-	// transformerResults stores the results after user defined transformer processing for all read messages. It indexes
+	// transformerResults stores the results after user-defined transformer processing for all read messages. It indexes
 	// a read message to the corresponding write message
 	transformerResults := make([]readWriteMessagePair, len(readMessages))
 	// applyTransformer, if there is an Internal error, it is a blocking call and
