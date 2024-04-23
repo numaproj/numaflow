@@ -288,7 +288,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 	})
 
-	t.Run("test user defined sink", func(t *testing.T) {
+	t.Run("test user-defined sink", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &Sink{
 			AbstractSink: AbstractSink{
@@ -319,7 +319,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, sidecarEnvNames, EnvMemoryRequest)
 	})
 
-	t.Run("test user defined source, with a source transformer", func(t *testing.T) {
+	t.Run("test user-defined source, with a source transformer", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{
 			UDSource: &UDSource{

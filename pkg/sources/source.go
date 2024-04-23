@@ -202,7 +202,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 		// Readiness check
 		if err = udsGRPCClient.WaitUntilReady(ctx); err != nil {
-			return fmt.Errorf("failed on user defined source readiness check, %w", err)
+			return fmt.Errorf("failed on user-defined source readiness check, %w", err)
 		}
 		defer func() {
 			err = udsGRPCClient.CloseConn(ctx)
@@ -238,7 +238,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 		// Readiness check
 		if err = transformerGRPCClient.WaitUntilReady(ctx); err != nil {
-			return fmt.Errorf("failed on user defined source readiness check, %w", err)
+			return fmt.Errorf("failed on user-defined source readiness check, %w", err)
 		}
 
 		readyCheckers = append(readyCheckers, transformerGRPCClient)

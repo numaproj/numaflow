@@ -39,7 +39,7 @@ spec:
         - redis
 ```
 
-### Implementing User Defined Side Inputs
+### Implementing User-defined Side Inputs
 
 To use the `Side Inputs` feature, a User-defined function implementing an interface defined in the Numaflow SDK
 ([Go](https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/), 
@@ -48,11 +48,11 @@ To use the `Side Inputs` feature, a User-defined function implementing an interf
 is needed to retrieve the data.
 
 You can choose the SDK of your choice to create a
-User Defined Side Input image which implements the
+User-defined Side Input image which implements the
 Side Inputs Update.
 
 #### Example in Golang
-Here is an example of how to write a User Defined Side Input in Golang,
+Here is an example of how to write a User-defined Side Input in Golang,
 
 ```go
 // handle is the side input handler function.
@@ -91,7 +91,7 @@ sideinputsdk.NoBroadcastMessage()
 
 ### UDF
 Users need to add a watcher on the filesystem to fetch the 
-updated side inputs in their User Defined Source/Function/Sink 
+updated side inputs in their User-defined Source/Function/Sink 
 in order to apply the new changes into the data process.
 
 For each side input there will be a file with the given path and after any update to the side input value the file will be updated.

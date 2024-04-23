@@ -10,8 +10,8 @@ In Numaflow, we currently support the following sources
 * [HTTP](./http.md)
 * [Ticker](./generator.md)
 * [Nats](./nats.md)
-* [User Defined Source](./user-defined-sources.md)
+* [User-defined Source](./user-defined-sources.md)
 
-A user defined source is a custom source that a user can write using Numaflow SDK when 
-the user needs to read data from a system that is not supported by the platform's built-in sources. User defined source also supports custom acknowledge management for
+A user-defined source is a custom source that a user can write using Numaflow SDK when 
+the user needs to read data from a system that is not supported by the platform's built-in sources. User-defined source also supports custom acknowledge management for
 exactly-once reading.

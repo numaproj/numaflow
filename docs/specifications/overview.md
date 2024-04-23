@@ -92,9 +92,9 @@ Logic:
 1.  Write to the sink;
 1.  Ack the data in the upstream buffer.
 
-**UDF (User Defined Function)**
+**UDF (User-defined Function)**
 
-- User Defined Functions run in data processors.
+- Use-defined Functions run in data processors.
 - UDFs implements a unified interface to process data.
 - UDFs are typically implemented by end-users, but there will be some
   built-in functions that can be used without writing any code.

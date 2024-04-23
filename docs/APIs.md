@@ -791,7 +791,7 @@ Container
 </p>
 <p>
 <p>
-Container is used to define the container properties for user defined
+Container is used to define the container properties for user-defined
 functions, sinks, etc.
 </p>
 </p>
