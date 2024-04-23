@@ -20,13 +20,13 @@ import (
 	"context"
 	"fmt"
 
-	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/shared/util"
+	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -45,7 +45,7 @@ func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client,
 	}
 
 	// Connect to the server
-	conn, err := util.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
+	conn, err := grpcutil.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
 	if err != nil {
 		return nil, err
 	}

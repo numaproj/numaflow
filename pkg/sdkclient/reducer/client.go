@@ -21,13 +21,14 @@ import (
 	"errors"
 	"io"
 
-	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/shared/util"
+	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
+	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -45,7 +46,7 @@ func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client,
 	}
 
 	// Connect to the server
-	conn, err := util.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
+	conn, err := grpcutil.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +89,7 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 
 	if err != nil {
 		go func(sErr error) {
-			errCh <- util.ToUDFErr("c.grpcClt.ReduceFn", sErr)
+			errCh <- sdkerr.ToUDFErr("c.grpcClt.ReduceFn", sErr)
 		}(err)
 	}
 
@@ -106,7 +107,7 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 				}
 				// TODO: figure out why send is getting EOF (could be because the client has already handled SIGTERM)
 				if sendErr = stream.Send(datum); sendErr != nil && !errors.Is(sendErr, io.EOF) {
-					errCh <- util.ToUDFErr("ReduceFn stream.Send()", sendErr)
+					errCh <- sdkerr.ToUDFErr("ReduceFn stream.Send()", sendErr)
 					return
 				}
 			}
@@ -118,7 +119,7 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 		default:
 			sendErr = stream.CloseSend()
 			if sendErr != nil && !errors.Is(sendErr, io.EOF) {
-				errCh <- util.ToUDFErr("ReduceFn stream.CloseSend()", sendErr)
+				errCh <- sdkerr.ToUDFErr("ReduceFn stream.CloseSend()", sendErr)
 			}
 		}
 	}()
@@ -143,7 +144,7 @@ func (c *client) ReduceFn(ctx context.Context, datumStreamCh <-chan *reducepb.Re
 					return
 				}
 				if recvErr != nil {
-					errCh <- util.ToUDFErr("ReduceFn stream.Recv()", recvErr)
+					errCh <- sdkerr.ToUDFErr("ReduceFn stream.Recv()", recvErr)
 				}
 				responseCh <- resp
 			}
