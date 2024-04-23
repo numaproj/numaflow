@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
+package serverinfo
 
 import (
 	"github.com/numaproj/numaflow-go/pkg/info"
