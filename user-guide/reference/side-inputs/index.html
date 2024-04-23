@@ -638,7 +638,7 @@
   
     <li class="md-nav__item">
       <a href="../../sources/user-defined-sources/" class="md-nav__link">
-        User Defined Sources
+        User-defined Sources
       </a>
     </li>
   
@@ -877,7 +877,7 @@
   
     <li class="md-nav__item">
       <a href="../../sinks/user-defined-sinks/" class="md-nav__link">
-        User Defined Sinks
+        User-defined Sinks
       </a>
     </li>
   
@@ -920,14 +920,14 @@
       
       
         <label class="md-nav__link" for="__nav_3_4">
-          User Defined Functions
+          User-defined Functions
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <nav class="md-nav" aria-label="User Defined Functions" data-md-level="2">
+      <nav class="md-nav" aria-label="User-defined Functions" data-md-level="2">
         <label class="md-nav__title" for="__nav_3_4">
           <span class="md-nav__icon md-icon"></span>
-          User Defined Functions
+          User-defined Functions
         </label>
         <ul class="md-nav__list" data-md-scrollfix>
           
@@ -1412,10 +1412,10 @@
       
         <li class="md-nav__item">
   <a href="#implementing-user-defined-side-inputs" class="md-nav__link">
-    Implementing User Defined Side Inputs
+    Implementing User-defined Side Inputs
   </a>
   
-    <nav class="md-nav" aria-label="Implementing User Defined Side Inputs">
+    <nav class="md-nav" aria-label="Implementing User-defined Side Inputs">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2265,10 +2265,10 @@
       
         <li class="md-nav__item">
   <a href="#implementing-user-defined-side-inputs" class="md-nav__link">
-    Implementing User Defined Side Inputs
+    Implementing User-defined Side Inputs
   </a>
   
-    <nav class="md-nav" aria-label="Implementing User Defined Side Inputs">
+    <nav class="md-nav" aria-label="Implementing User-defined Side Inputs">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2343,17 +2343,17 @@ Multiple side inputs are supported as well. </p>
 <span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3</span>
 <span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redis</span>
 </code></pre></div>
-<h3 id="implementing-user-defined-side-inputs">Implementing User Defined Side Inputs<a class="headerlink" href="#implementing-user-defined-side-inputs" title="Permanent link">&para;</a></h3>
+<h3 id="implementing-user-defined-side-inputs">Implementing User-defined Side Inputs<a class="headerlink" href="#implementing-user-defined-side-inputs" title="Permanent link">&para;</a></h3>
 <p>To use the <code>Side Inputs</code> feature, a User-defined function implementing an interface defined in the Numaflow SDK
 (<a href="https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/">Go</a>, 
 <a href="https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sideinput/">Python</a>, 
 <a href="https://github.com/numaproj/numaflow-java/tree/main/src/main/java/io/numaproj/numaflow/sideinput">Java</a>) 
 is needed to retrieve the data.</p>
 <p>You can choose the SDK of your choice to create a
-User Defined Side Input image which implements the
+User-defined Side Input image which implements the
 Side Inputs Update.</p>
 <h4 id="example-in-golang">Example in Golang<a class="headerlink" href="#example-in-golang" title="Permanent link">&para;</a></h4>
-<p>Here is an example of how to write a User Defined Side Input in Golang,</p>
+<p>Here is an example of how to write a User-defined Side Input in Golang,</p>
 <p><div class="highlight"><pre><span></span><code><span class="c1">// handle is the side input handler function.</span>
 <span class="kd">func</span><span class="w"> </span><span class="nx">handle</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="nx">sideinputsdk</span><span class="p">.</span><span class="nx">Message</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nx">t</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
@@ -2383,7 +2383,7 @@ and <a href="https://github.com/numaproj/numaflow-java/blob/main/examples/src/ma
 </code></pre></div></p>
 <h3 id="udf">UDF<a class="headerlink" href="#udf" title="Permanent link">&para;</a></h3>
 <p>Users need to add a watcher on the filesystem to fetch the 
-updated side inputs in their User Defined Source/Function/Sink 
+updated side inputs in their User-defined Source/Function/Sink 
 in order to apply the new changes into the data process.</p>
 <p>For each side input there will be a file with the given path and after any update to the side input value the file will be updated.</p>
 <p>The directory is fixed and can be accessed through a sideinput constant and the file name is the name of the side input.</p>

@@ -636,7 +636,7 @@
   
     <li class="md-nav__item">
       <a href="../../user-guide/sources/user-defined-sources/" class="md-nav__link">
-        User Defined Sources
+        User-defined Sources
       </a>
     </li>
   
@@ -875,7 +875,7 @@
   
     <li class="md-nav__item">
       <a href="../../user-guide/sinks/user-defined-sinks/" class="md-nav__link">
-        User Defined Sinks
+        User-defined Sinks
       </a>
     </li>
   
@@ -918,14 +918,14 @@
       
       
         <label class="md-nav__link" for="__nav_3_4">
-          User Defined Functions
+          User-defined Functions
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <nav class="md-nav" aria-label="User Defined Functions" data-md-level="2">
+      <nav class="md-nav" aria-label="User-defined Functions" data-md-level="2">
         <label class="md-nav__title" for="__nav_3_4">
           <span class="md-nav__icon md-icon"></span>
-          User Defined Functions
+          User-defined Functions
         </label>
         <ul class="md-nav__list" data-md-scrollfix>
           
@@ -2447,7 +2447,7 @@
 
 
 <h1 id="side-inputs">Side Inputs<a class="headerlink" href="#side-inputs" title="Permanent link">&para;</a></h1>
-<p>Side Inputs allow the user defined functions (including UDF, UDSink, Transformer, etc.) to access slow updated data or configuration (such as database, file system, etc.) without needing to load it during each message processing. Side Inputs are read-only and can be used in both batch and streaming jobs.</p>
+<p>Side Inputs allow the user-defined functions (including UDF, UDSink, Transformer, etc.) to access slow updated data or configuration (such as database, file system, etc.) without needing to load it during each message processing. Side Inputs are read-only and can be used in both batch and streaming jobs.</p>
 <h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
 <ul>
 <li>The Side Inputs should be programmable with any language.</li>
@@ -2481,23 +2481,26 @@
 <p>Each of the Side Inputs Manager pods contains:</p>
 <ul>
 <li>An init container, which checks if the data store is ready.</li>
-<li>A user defined container, which runs a predefined Numaflow SDK to start a service, calling a user implemented function to get Side Input data.</li>
-<li>A numa container, which runs a cron like job to call the service in the user defined container, and store the returned data in the data store.</li>
+<li>A user-defined container, which runs a predefined Numaflow SDK to start a service, calling a user implemented function to get Side Input data.</li>
+<li>A numa container, which runs a cron like job to call the service in the user-defined container, and store the returned data in the data store.</li>
 </ul>
 <p><img alt="Diagram" src="../../assets/side-inputs-manager.png" /></p>
 <p>The communication protocol between the 2 containers could be based on UDS or FIFO (TBD).</p>
 <h4 id="high-availability">High Availability<a class="headerlink" href="#high-availability" title="Permanent link">&para;</a></h4>
 <p>Side Inputs Manager needs to run with Active-Passive HA, which requires a leader election mechanism support. Kubernetes has a native leader election API backed by etcd, but it requires extra RBAC privileges to use it.</p>
-<p>Considering a similar leader election mechanism is needed in some other scenarios such as Active-Passive User Defined Source, a proposal is to implement our own leader election mechanism by leveraging ISB Service.</p>
+<p>Considering a similar leader election mechanism is needed in some other scenarios such as Active-Passive User-defined Source, a proposal is to implement our own leader election mechanism by leveraging ISB Service.</p>
 <h4 id="why-not-cronjob">Why NOT CronJob?<a class="headerlink" href="#why-not-cronjob" title="Permanent link">&para;</a></h4>
 <p>Using Kubernetes CronJob could also achieve the cron like job orchestration, but there are few downsides.
 A K8s Job has to be used together with the CronJob to solve the immediate starting problem - A CronJob can not trigger a job immediately after it’s created, it has to wait until the first trigger condition meets.
 Using K8s CronJob/Job will be a <a href="https://github.com/istio/istio/issues/6324">challenge</a> when ServiceMesh (Istio) is enabled.</p>
 <h3 id="vertex-pod-sidecar">Vertex Pod Sidecar<a class="headerlink" href="#vertex-pod-sidecar" title="Permanent link">&para;</a></h3>
 <p><img alt="Diagram" src="../../assets/side-inputs-vertex-pod.png" /></p>
-<p>When Side Inputs is enabled for a pipeline, each of its vertex pods will have a second init container added, the init container will have a shared volume (emptyDir) mounted, and the same volume will be mounted to the User Defined Function/Sink/Transformer container. The init container reads from the data store, and saves to the shared volume.</p>
+<p>When Side Inputs is enabled for a pipeline, each of its vertex pods will have a second init container added,
+the init container will have a shared volume (emptyDir) mounted,
+and the same volume will be mounted to the User-defined Function/Sink/Transformer container.
+The init container reads from the data store, and saves to the shared volume.</p>
 <p>A sidecar container will also be injected by the controller, and it mounts the same volume as above. The sidecar runs a service provided by numaflow, watching the Side Inputs data from the data store, if there’s any update, reads the data and updates the shared volume.</p>
-<p>In the User Defined Function/Sink/Sink container, a helper function will be provided by Numaflow SDK, to return the Side Input data. The helper function caches the Side Inputs data in the memory, but performs thread safe updates if it watches the changes in the shared volume.</p>
+<p>In the User-defined Function/Sink/Sink container, a helper function will be provided by Numaflow SDK, to return the Side Input data. The helper function caches the Side Inputs data in the memory, but performs thread safe updates if it watches the changes in the shared volume.</p>
 <h3 id="numaflow-sdk">Numaflow SDK<a class="headerlink" href="#numaflow-sdk" title="Permanent link">&para;</a></h3>
 <p>Some new features will be added to the Numaflow SDK.</p>
 <ul>

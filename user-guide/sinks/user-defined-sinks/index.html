@@ -13,7 +13,7 @@
     
     
       
-        <title>User Defined Sinks - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>User-defined Sinks - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              User Defined Sinks
+              User-defined Sinks
             
           </span>
         </div>
@@ -638,7 +638,7 @@
   
     <li class="md-nav__item">
       <a href="../../sources/user-defined-sources/" class="md-nav__link">
-        User Defined Sources
+        User-defined Sources
       </a>
     </li>
   
@@ -888,12 +888,12 @@
       
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
-          User Defined Sinks
+          User-defined Sinks
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <a href="./" class="md-nav__link md-nav__link--active">
-        User Defined Sinks
+        User-defined Sinks
       </a>
       
         
@@ -912,8 +912,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#build-your-own-user-defined-sinks" class="md-nav__link">
+    Build Your Own User-defined Sinks
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#available-environment-variables" class="md-nav__link">
     Available Environment Variables
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#user-defined-sinks-contributed-from-the-open-source-community" class="md-nav__link">
+    User-defined Sinks contributed from the open source community
   </a>
   
 </li>
@@ -963,14 +977,14 @@
       
       
         <label class="md-nav__link" for="__nav_3_4">
-          User Defined Functions
+          User-defined Functions
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <nav class="md-nav" aria-label="User Defined Functions" data-md-level="2">
+      <nav class="md-nav" aria-label="User-defined Functions" data-md-level="2">
         <label class="md-nav__title" for="__nav_3_4">
           <span class="md-nav__icon md-icon"></span>
-          User Defined Functions
+          User-defined Functions
         </label>
         <ul class="md-nav__list" data-md-scrollfix>
           
@@ -2230,8 +2244,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#build-your-own-user-defined-sinks" class="md-nav__link">
+    Build Your Own User-defined Sinks
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#available-environment-variables" class="md-nav__link">
     Available Environment Variables
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#user-defined-sinks-contributed-from-the-open-source-community" class="md-nav__link">
+    User-defined Sinks contributed from the open source community
   </a>
   
 </li>
@@ -2254,10 +2282,18 @@
 
 
 
-<h1 id="user-defined-sinks">User Defined Sinks<a class="headerlink" href="#user-defined-sinks" title="Permanent link">&para;</a></h1>
-<p>A <code>Pipeline</code> may have multiple Sinks, those sinks could either be a pre-defined sink such as <code>kafka</code>, <code>log</code>, etc., or a <code>User Defined Sink</code>.</p>
-<p>A pre-defined sink vertex runs single-container pods, a user defined sink runs two-container pods.</p>
-<p>A user defined sink vertex looks like below.</p>
+<h1 id="user-defined-sinks">User-defined Sinks<a class="headerlink" href="#user-defined-sinks" title="Permanent link">&para;</a></h1>
+<p>A <code>Pipeline</code> may have multiple Sinks, those sinks could either be a pre-defined sink such as <code>kafka</code>, <code>log</code>, etc., or a <code>user-defined sink</code>.</p>
+<p>A pre-defined sink vertex runs single-container pods, a user-defined sink runs two-container pods.</p>
+<h2 id="build-your-own-user-defined-sinks">Build Your Own User-defined Sinks<a class="headerlink" href="#build-your-own-user-defined-sinks" title="Permanent link">&para;</a></h2>
+<p>You can build your own user-defined sinks in multiple languages.</p>
+<p>Check the links below to see the examples for different languages.</p>
+<ul>
+<li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/">Golang</a></li>
+<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/">Java</a></li>
+<li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/sink/">Python</a></li>
+</ul>
+<p>A user-defined sink vertex looks like below.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">output</span>
@@ -2267,7 +2303,7 @@
 <span class="w">            </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span>
 </code></pre></div>
 <h2 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h2>
-<p>Some environment variables are available in the user defined sink container:</p>
+<p>Some environment variables are available in the user-defined sink container:</p>
 <ul>
 <li><code>NUMAFLOW_NAMESPACE</code> - Namespace.</li>
 <li><code>NUMAFLOW_POD</code> - Pod name.</li>
@@ -2275,6 +2311,9 @@
 <li><code>NUMAFLOW_PIPELINE_NAME</code> - Name of the pipeline.</li>
 <li><code>NUMAFLOW_VERTEX_NAME</code> - Name of the vertex.</li>
 </ul>
+<h2 id="user-defined-sinks-contributed-from-the-open-source-community">User-defined Sinks contributed from the open source community<a class="headerlink" href="#user-defined-sinks-contributed-from-the-open-source-community" title="Permanent link">&para;</a></h2>
+<p>If you're looking for examples and usages contributed by the open source community, head over to <a href="https://github.com/orgs/numaproj-contrib/repositories">the numaproj-contrib repositories</a>.</p>
+<p>These user-defined sinks like AWS SQS, GCP Pub/Sub, provide valuable insights and guidance on how to use and write a user-defined sink.</p>
 
               
             </article>
