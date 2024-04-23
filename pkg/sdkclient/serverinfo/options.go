@@ -1,4 +1,4 @@
-package sdkserverinfo
+package serverinfo
 
 import "time"
 

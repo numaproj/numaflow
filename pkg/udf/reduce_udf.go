@@ -40,8 +40,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
+	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sessionreducer"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -98,14 +98,14 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		// if streaming is enabled, use the reduceStreaming address
 		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
 			// Wait for server info to be ready
-			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceStreamServerInfoFile))
+			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.ReduceStreamServerInfoFile))
 			if err != nil {
 				return err
 			}
 			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
 		} else {
 			// Wait for server info to be ready
-			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceServerInfoFile))
+			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.ReduceServerInfoFile))
 			if err != nil {
 				return err
 			}
@@ -131,7 +131,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		healthChecker = reduceHandler
 	} else if windowType.Session != nil {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SessionReduceServerInfoFile))
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SessionReduceServerInfoFile))
 		if err != nil {
 			return err
 		}

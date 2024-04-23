@@ -19,13 +19,14 @@ package mapper
 import (
 	"context"
 
-	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/shared/util"
+	sdkerror "github.com/numaproj/numaflow/pkg/sdkclient/error"
+	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -43,7 +44,7 @@ func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client,
 	}
 
 	// Connect to the server
-	conn, err := util.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
+	conn, err := grpcutil.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +82,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 // MapFn applies a function to each datum element.
 func (c *client) MapFn(ctx context.Context, request *mappb.MapRequest) (*mappb.MapResponse, error) {
 	mapResponse, err := c.grpcClt.MapFn(ctx, request)
-	err = util.ToUDFErr("c.grpcClt.MapFn", err)
+	err = sdkerror.ToUDFErr("c.grpcClt.MapFn", err)
 	if err != nil {
 		return nil, err
 	}
