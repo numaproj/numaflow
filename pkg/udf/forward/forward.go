@@ -583,7 +583,7 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 		needRetry := false
 		for idx, msg := range messages {
 			if err = errs[idx]; err != nil {
-				// ATM there are no user defined errors during write, all are InternalErrors.
+				// ATM there are no user-defined errors during write, all are InternalErrors.
 				// Non retryable error, drop the message. Non retryable errors are only returned
 				// when the buffer is full and the user has set the buffer full strategy to
 				// DiscardLatest or when the message is duplicate.

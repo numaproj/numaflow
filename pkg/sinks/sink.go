@@ -307,7 +307,7 @@ func (u *SinkProcessor) createSinkWriter(ctx context.Context, abstractSink *dfv1
 	} else if x := abstractSink.Blackhole; x != nil {
 		return blackhole.NewBlackhole(ctx, u.VertexInstance)
 	} else if x := abstractSink.UDSink; x != nil {
-		// if the sink is a user defined sink, then we need to pass the sinkHandler to it which will be used to invoke the user defined sink
+		// if the sink is a user-defined sink, then we need to pass the sinkHandler to it which will be used to invoke the user-defined sink
 		return udsink.NewUserDefinedSink(ctx, u.VertexInstance, sinkHandler)
 	}
 	return nil, fmt.Errorf("invalid sink spec")

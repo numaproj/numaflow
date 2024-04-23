@@ -14,12 +14,12 @@ Numaflow currently supports the following Sinks
 * [Kafka](./kafka.md)
 * [Log](./log.md)
 * [Black Hole](./blackhole.md)
-* [User Defined Sink](./user-defined-sinks.md)
+* [User-defined Sink](./user-defined-sinks.md)
 
 A user-defined sink is a custom Sink that a user can write using Numaflow SDK when 
 the user needs to output the processed data to a system or using a certain transformation that is not 
 supported by the platform's built-in sinks. As an example, once we have processed the input messages, 
-we can use Elasticsearch as a User defined sink to store the processed data and enable search and 
+we can use Elasticsearch as a user-defined sink to store the processed data and enable search and 
 analysis on the data.
 
 ## Fallback Sink (DLQ)

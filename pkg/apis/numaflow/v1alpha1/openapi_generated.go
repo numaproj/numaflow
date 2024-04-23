@@ -707,7 +707,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Container(ref common.ReferenceCallback) c
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Container is used to define the container properties for user defined functions, sinks, etc.",
+				Description: "Container is used to define the container properties for user-defined functions, sinks, etc.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"image": {
