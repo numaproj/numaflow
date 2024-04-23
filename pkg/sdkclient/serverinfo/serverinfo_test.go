@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/numaproj/numaflow-go/pkg/info"
+
 	"github.com/stretchr/testify/assert"
 )
 
