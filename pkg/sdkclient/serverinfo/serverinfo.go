@@ -84,7 +84,7 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	// If Version or Language are empty, skip the SDK compatibility check as there was an
 	// error writing server info on the SDK side
 	if sdkVersion == "" || sdkLanguage == "" {
-		log.Printf("warning: failed to get SDK version/language, skipping SDK version compatibility check")
+		log.Printf("warning: failed to get the SDK version/language, skipping SDK version compatibility check")
 	} else {
 		if err := checkSDKCompatibility(sdkVersion, sdkLanguage, minimumSupportedSDKVersions); err != nil {
 			return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
