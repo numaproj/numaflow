@@ -64,23 +64,29 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	}
 
 	sdkVersion := serverInfo.Version
+	minNumaflowVersion := serverInfo.MinimumNumaflowVersion
+	sdkLanguage := serverInfo.Language
 	numaflowVersion := numaflow.GetVersion().Version
 
-	// If we are testing locally or in CI, we can skip checking for numaflow compatibility issues
-	// because both return us a version string that the version check libraries can't properly parse. (local: "*latest*" CI: commit SHA)
-	if !strings.Contains(numaflowVersion, "latest") && !strings.Contains(numaflowVersion, numaflow.GetVersion().GitCommit) {
-		if err := checkNumaflowCompatibility(numaflowVersion, serverInfo.MinimumNumaflowVersion); err != nil {
+	// If MinimumNumaflowVersion is empty, skip the numaflow compatibility check as there was an
+	// error writing server info on the SDK side
+	if minNumaflowVersion == "" {
+		log.Printf("warning: failed to get minimum numaflow version")
+	} else if !strings.Contains(numaflowVersion, "latest") && !strings.Contains(numaflowVersion, numaflow.GetVersion().GitCommit) {
+		// If we are testing locally or in CI, we can skip checking for numaflow compatibility issues
+		//because both return us a version string that the version check libraries can't properly parse (local: "*latest*" CI: commit SHA)
+		if err := checkNumaflowCompatibility(numaflowVersion, minNumaflowVersion); err != nil {
 			return nil, fmt.Errorf("numaflow %s does not satisfy the minimum required by SDK %s: %w",
 				numaflowVersion, sdkVersion, err)
 		}
 	}
 
-	// If the server info does not contain the SDK version, skip the SDK compatibility check as there will be an error
-	// when parsing the SDK version otherwise
-	if sdkVersion == "" {
-		log.Printf("warning: failed to read SDK version")
+	// If Version or Language are empty, skip the SDK compatibility check as there was an
+	// error writing server info on the SDK side
+	if sdkVersion == "" || sdkLanguage == "" {
+		log.Printf("warning: failed to get SDK version/language")
 	} else {
-		if err := checkSDKCompatibility(sdkVersion, serverInfo.Language, minimumSupportedSDKVersions); err != nil {
+		if err := checkSDKCompatibility(sdkVersion, sdkLanguage, minimumSupportedSDKVersions); err != nil {
 			return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
 				sdkVersion, numaflowVersion, err)
 		}
