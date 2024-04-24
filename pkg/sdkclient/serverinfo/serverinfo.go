@@ -26,8 +26,9 @@ import (
 	"github.com/Masterminds/semver/v3"
 	pep440 "github.com/aquasecurity/go-pep440-version"
 
-	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow-go/pkg/info"
+
+	"github.com/numaproj/numaflow"
 )
 
 // SDKServerInfo wait for the server to start and return the server info.
@@ -63,20 +64,32 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	}
 
 	sdkVersion := serverInfo.Version
+	minNumaflowVersion := serverInfo.MinimumNumaflowVersion
+	sdkLanguage := serverInfo.Language
 	numaflowVersion := numaflow.GetVersion().Version
 
-	// If we are testing locally or in CI, we can skip checking for numaflow compatibility issues
-	// because both return us a version string that the version check libraries can't properly parse. (local: "*latest*" CI: commit SHA)
-	if !strings.Contains(numaflowVersion, "latest") && !strings.Contains(numaflowVersion, numaflow.GetVersion().GitCommit) {
-		if err := checkNumaflowCompatibility(numaflowVersion, serverInfo.MinimumNumaflowVersion); err != nil {
+	// If MinimumNumaflowVersion is empty, skip the numaflow compatibility check as there was an
+	// error writing server info on the SDK side
+	if minNumaflowVersion == "" {
+		log.Printf("warning: failed to get the minimum numaflow version, skipping numaflow version compatibility check")
+		// If we are testing locally or in CI, we can skip checking for numaflow compatibility issues
+		// because both return us a version string that the version check libraries can't properly parse (local: "*latest*" CI: commit SHA)
+	} else if !strings.Contains(numaflowVersion, "latest") && !strings.Contains(numaflowVersion, numaflow.GetVersion().GitCommit) {
+		if err := checkNumaflowCompatibility(numaflowVersion, minNumaflowVersion); err != nil {
 			return nil, fmt.Errorf("numaflow %s does not satisfy the minimum required by SDK %s: %w",
 				numaflowVersion, sdkVersion, err)
 		}
 	}
 
-	if err := checkSDKCompatibility(sdkVersion, serverInfo.Language, minimumSupportedSDKVersions); err != nil {
-		return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
-			sdkVersion, numaflowVersion, err)
+	// If Version or Language are empty, skip the SDK compatibility check as there was an
+	// error writing server info on the SDK side
+	if sdkVersion == "" || sdkLanguage == "" {
+		log.Printf("warning: failed to get the SDK version/language, skipping SDK version compatibility check")
+	} else {
+		if err := checkSDKCompatibility(sdkVersion, sdkLanguage, minimumSupportedSDKVersions); err != nil {
+			return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
+				sdkVersion, numaflowVersion, err)
+		}
 	}
 
 	return serverInfo, nil
