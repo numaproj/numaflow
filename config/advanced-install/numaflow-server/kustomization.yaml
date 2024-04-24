@@ -14,5 +14,5 @@ namespace: numaflow-system
 
 images:
   - name: quay.io/numaproj/numaflow
-    newTag: v1.2.0-rc4
+    newTag: v1.2.0-rc5
 
