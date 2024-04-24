@@ -7,8 +7,13 @@ Always create a release branch for the releases. For example branch `release-0.5
 ## Before Release 
 
 If the new version to be released has backwards incompatible changes, i.e. it does not support older SDK versions, you 
-must update the `pkg/sdkclient/serverinfo/versions.go` [file](https://github.com/numaproj/numaflow/blob/main/pkg/sdkclient/serverinfo/versions.go). Change the
-value of the necessary languages to the new minimum supported SDK version. Ensure that this change is merged and included in the release.
+must:
+
+1. Update the `pkg/sdkclient/serverinfo/versions.go` [file](https://github.com/numaproj/numaflow/blob/main/pkg/sdkclient/serverinfo/versions.go) by
+changing the value of the necessary languages to the new minimum supported SDK version 
+2. Add this new mapping to `docs/version-mapping.yaml` (with the key being the version to be released), so that if it is overwritten in the future we have it documented
+
+Ensure that these changes are merged and included in the release.
 
 ## Release Steps
 
