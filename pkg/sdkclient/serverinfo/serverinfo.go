@@ -71,9 +71,9 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	// If MinimumNumaflowVersion is empty, skip the numaflow compatibility check as there was an
 	// error writing server info on the SDK side
 	if minNumaflowVersion == "" {
-		log.Printf("warning: failed to get minimum numaflow version")
+		log.Printf("warning: failed to get the minimum numaflow version, skipping numaflow version compatibility check")
 		// If we are testing locally or in CI, we can skip checking for numaflow compatibility issues
-		//because both return us a version string that the version check libraries can't properly parse (local: "*latest*" CI: commit SHA)
+		// because both return us a version string that the version check libraries can't properly parse (local: "*latest*" CI: commit SHA)
 	} else if !strings.Contains(numaflowVersion, "latest") && !strings.Contains(numaflowVersion, numaflow.GetVersion().GitCommit) {
 		if err := checkNumaflowCompatibility(numaflowVersion, minNumaflowVersion); err != nil {
 			return nil, fmt.Errorf("numaflow %s does not satisfy the minimum required by SDK %s: %w",
@@ -84,7 +84,7 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 	// If Version or Language are empty, skip the SDK compatibility check as there was an
 	// error writing server info on the SDK side
 	if sdkVersion == "" || sdkLanguage == "" {
-		log.Printf("warning: failed to get SDK version/language")
+		log.Printf("warning: failed to get SDK version/language, skipping SDK version compatibility check")
 	} else {
 		if err := checkSDKCompatibility(sdkVersion, sdkLanguage, minimumSupportedSDKVersions); err != nil {
 			return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
