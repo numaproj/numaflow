@@ -33,8 +33,8 @@ func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessage
 	var err error
 	var sockAddr string
 
-	// Check if multiproc server is enabled
-	if serverInfo.MultiProcServer == true {
+	// Check if Multiproc server mode is enabled
+	if _, ok := serverInfo.Metadata["MULTIPROC"]; ok {
 		// In Multiprocessing server mode we have multiple servers forks
 		// and each server will listen on a different port.
 		// On the client side we will create a connection to each of these server instances.

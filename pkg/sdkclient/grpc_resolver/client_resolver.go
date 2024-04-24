@@ -101,7 +101,7 @@ func buildConnAddrs(numServers int) []string {
 // on multiprocessing TCP or UDS connection
 func RegMultiProcResolver(svrInfo *info.ServerInfo) error {
 	// Extract the server ports from the server info file and convert it to a list
-	numServers, _ := strconv.Atoi(svrInfo.Metadata["NUM_SERVERS"])
+	numServers, _ := strconv.Atoi(svrInfo.Metadata["MULTIPROC"])
 	log.Println("Multiprocessing Servers :", numServers)
 	conn := buildConnAddrs(numServers)
 	res := newMultiProcResolverBuilder(conn)
