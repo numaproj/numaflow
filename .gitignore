@@ -16,3 +16,4 @@ site/
 *.idea/
 *.pytest_cache/
 docs/APIs.html
+test/profile.cov.tmp
