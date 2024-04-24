@@ -26,8 +26,9 @@ import (
 	"github.com/Masterminds/semver/v3"
 	pep440 "github.com/aquasecurity/go-pep440-version"
 
-	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow-go/pkg/info"
+
+	"github.com/numaproj/numaflow"
 )
 
 // SDKServerInfo wait for the server to start and return the server info.
@@ -74,9 +75,15 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 		}
 	}
 
-	if err := checkSDKCompatibility(sdkVersion, serverInfo.Language, minimumSupportedSDKVersions); err != nil {
-		return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
-			sdkVersion, numaflowVersion, err)
+	// If the server info does not contain the SDK version, skip the SDK compatibility check as there will be an error
+	// when parsing the SDK version otherwise
+	if sdkVersion == "" {
+		log.Printf("warning: failed to read SDK version")
+	} else {
+		if err := checkSDKCompatibility(sdkVersion, serverInfo.Language, minimumSupportedSDKVersions); err != nil {
+			return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
+				sdkVersion, numaflowVersion, err)
+		}
 	}
 
 	return serverInfo, nil
