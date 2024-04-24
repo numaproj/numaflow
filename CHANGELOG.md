@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.2.0-rc5 (2024-04-24)
+
+ * [2780c8e7](https://github.com/numaproj/numaflow/commit/2780c8e7992187e8b3c135df5d3d95321f418e8c) Update manifests to v1.2.0-rc5
+ * [59e4b453](https://github.com/numaproj/numaflow/commit/59e4b4538575c5ddbf59a5897014da8ae81e5c9c) doc: add "nav" for fallback-sink (#1694)
+ * [df40e089](https://github.com/numaproj/numaflow/commit/df40e0894f8811b8530c44f5d044c1f3feef37e6) doc: reduce streaming (#1689)
+ * [8a6872e8](https://github.com/numaproj/numaflow/commit/8a6872e87e3e91eb380f14593d85e2236891a5a1) doc: Fallback Sink (#1691)
+ * [746ddb0a](https://github.com/numaproj/numaflow/commit/746ddb0abf4a26af65ab6dd3e32514e5bdd44577) chore(deps): bump golang.org/x/net from 0.22.0 to 0.23.0 (#1692)
+ * [e21ac91c](https://github.com/numaproj/numaflow/commit/e21ac91ca03bd4f58fd5aca019d713f08609bfd1) doc: session doc (#1650)
+
+### Contributors
+
+ * Derek Wang
+ * Vigith Maurice
+ * Yashash H L
+ * dependabot[bot]
+
 ## v1.2.0-rc4 (2024-04-18)
 
  * [211bfaca](https://github.com/numaproj/numaflow/commit/211bfacaad4a160d4e94a4dc139e6157b67e43d6) Update manifests to v1.2.0-rc4
