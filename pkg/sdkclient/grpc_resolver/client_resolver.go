@@ -84,7 +84,7 @@ func (*multiProcResolver) Resolve(target resolver.Target)          {}
 // buildConnAddrs Populate the connection list for the clients
 // Format (serverAddr, serverIdx) :
 // (unix:///var/run/numaflow/multiproc0.sock, 1),
-// (unix:///var/run/numaflow/multiproc2.sock, 2)
+// (unix:///var/run/numaflow/multiproc1.sock, 2)
 func buildConnAddrs(numServers int) []string {
 	var conn = make([]string, numServers)
 	for i := 0; i < numServers; i++ {
