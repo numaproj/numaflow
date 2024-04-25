@@ -12,7 +12,7 @@ Before a new release you must update `version-mapping.yaml`. There are two scena
 i.e. it does not support older SDK versions, add a mapping where the key is the new version to be released,
 and the values are the SDKs and their new minimum supported versions 
 - If there are no breaking changes since the last release, the key is the new version to be released, and
-the values are the SDKs and the minimum supported versions from the previous entry 
+the values are the SDKs and the minimum supported versions from the previous entry/release 
 
 Ensure that this change is merged and included in the release.
 
