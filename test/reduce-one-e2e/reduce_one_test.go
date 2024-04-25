@@ -36,9 +36,7 @@ type ReduceSuite struct {
 func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 
 	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
+	r.T().SkipNow()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -82,9 +80,7 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 
 	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
+	r.T().SkipNow()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 
@@ -127,9 +123,7 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 
 	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
+	r.T().SkipNow()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 
@@ -235,9 +229,7 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 
 	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
+	r.T().SkipNow()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 

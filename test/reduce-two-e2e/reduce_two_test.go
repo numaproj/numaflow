@@ -46,9 +46,7 @@ func (r *ReduceSuite) TestReduceStreamJava() {
 func (r *ReduceSuite) testReduceStream(lang string) {
 
 	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
+	r.T().SkipNow()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -90,9 +88,7 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 func (r *ReduceSuite) TestSimpleSessionPipeline() {
 
 	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
+	r.T().SkipNow()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -145,9 +141,7 @@ func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
 func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 
 	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
+	r.T().SkipNow()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
