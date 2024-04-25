@@ -20,7 +20,7 @@ spec:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
           imagePullPolicy: Always
     - name: compute-sum
-      partitions: 2
+      partitions: 1
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
