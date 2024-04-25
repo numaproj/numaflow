@@ -21,13 +21,14 @@ import (
 	"fmt"
 	"io"
 
-	mapstreampb "github.com/numaproj/numaflow-go/pkg/apis/proto/mapstream/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	mapstreampb "github.com/numaproj/numaflow-go/pkg/apis/proto/mapstream/v1"
+	"github.com/numaproj/numaflow-go/pkg/info"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/shared/util"
+	sdkerror "github.com/numaproj/numaflow/pkg/sdkclient/error"
+	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -45,7 +46,7 @@ func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client,
 	}
 
 	// Connect to the server
-	conn, err := util.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
+	conn, err := grpcutil.ConnectToServer(opts.UdsSockAddr(), serverInfo, opts.MaxMessageSize())
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func (c *client) MapStreamFn(ctx context.Context, request *mapstreampb.MapStream
 			if err == io.EOF {
 				return nil
 			}
-			err = util.ToUDFErr("c.grpcClt.MapStreamFn", err)
+			err = sdkerror.ToUDFErr("c.grpcClt.MapStreamFn", err)
 			if err != nil {
 				return err
 			}

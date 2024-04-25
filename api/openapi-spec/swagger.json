@@ -17862,7 +17862,7 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.Container": {
-      "description": "Container is used to define the container properties for user defined functions, sinks, etc.",
+      "description": "Container is used to define the container properties for user-defined functions, sinks, etc.",
       "type": "object",
       "properties": {
         "args": {

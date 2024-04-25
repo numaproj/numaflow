@@ -31,8 +31,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -146,7 +146,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SinkServerInfoFile))
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SinkServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 	if u.VertexInstance.Vertex.HasFallbackUDSink() {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.FbSinkServerInfoFile))
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.FbSinkServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -307,7 +307,7 @@ func (u *SinkProcessor) createSinkWriter(ctx context.Context, abstractSink *dfv1
 	} else if x := abstractSink.Blackhole; x != nil {
 		return blackhole.NewBlackhole(ctx, u.VertexInstance)
 	} else if x := abstractSink.UDSink; x != nil {
-		// if the sink is a user defined sink, then we need to pass the sinkHandler to it which will be used to invoke the user defined sink
+		// if the sink is a user-defined sink, then we need to pass the sinkHandler to it which will be used to invoke the user-defined sink
 		return udsink.NewUserDefinedSink(ctx, u.VertexInstance, sinkHandler)
 	}
 	return nil, fmt.Errorf("invalid sink spec")

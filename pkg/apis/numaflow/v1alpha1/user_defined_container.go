@@ -18,7 +18,7 @@ package v1alpha1
 
 import corev1 "k8s.io/api/core/v1"
 
-// Container is used to define the container properties for user defined functions, sinks, etc.
+// Container is used to define the container properties for user-defined functions, sinks, etc.
 type Container struct {
 	// +optional
 	Image string `json:"image" protobuf:"bytes,1,opt,name=image"`

@@ -14,72 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package util
+package grpc
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 
-	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
 )
-
-// ToUDFErr converts gRPC error to UDF Error
-func ToUDFErr(name string, err error) error {
-	if err == nil {
-		return nil
-	}
-	statusCode, ok := status.FromError(err)
-	// default udfError
-	udfError := sdkerr.New(sdkerr.NonRetryable, statusCode.Message())
-	// check if it's a standard status code
-	if !ok {
-		// if not, the status code will be unknown which we consider as non retryable
-		// return default udfError
-		log.Printf("failed %s: %s", name, udfError.Error())
-		return udfError
-	}
-	switch statusCode.Code() {
-	case codes.OK:
-		return nil
-	case codes.DeadlineExceeded, codes.Unavailable, codes.Unknown:
-		// update to retryable err
-		udfError = sdkerr.New(sdkerr.Retryable, statusCode.Message())
-		log.Printf("failed %s: %s", name, udfError.Error())
-		return udfError
-	case codes.Canceled:
-		udfError = sdkerr.New(sdkerr.Canceled, statusCode.Message())
-		return udfError
-	default:
-		log.Printf("failed %s: %s", name, udfError.Error())
-		return udfError
-	}
-}
-
-// WaitForServerInfo waits until the server info is ready. It returns an error if the server info is not ready within the given timeout.
-func WaitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if err := info.WaitUntilReady(ctx, info.WithServerInfoFilePath(filePath)); err != nil {
-		return nil, fmt.Errorf("failed to wait until server info is ready: %w", err)
-	}
-
-	serverInfo, err := info.Read(info.WithServerInfoFilePath(filePath))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read server info: %w", err)
-	}
-
-	return serverInfo, nil
-}
 
 // ConnectToServer connects to the server with the given socket address based on the server info protocol.
 func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessageSize int) (*grpc.ClientConn, error) {

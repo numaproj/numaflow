@@ -33,7 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
 )
 
-// GRPCBasedTransformer applies user defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
+// GRPCBasedTransformer applies user-defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
 type GRPCBasedTransformer struct {
 	client sourcetransformer.Client
 }

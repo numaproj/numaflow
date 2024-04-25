@@ -21,7 +21,7 @@ spec:
           rpu: 5
           duration: 1s
     - name: cat
-      udf: # A user defined function
+      udf: # A user-defined function
         builtin: # Use a built-in function as the udf
           name: cat # cats the message
     - name: out

@@ -14,25 +14,25 @@ images:
   - name: quay.io/numaproj/numaflow
     newTag: latest
 
-patchesStrategicMerge:
+patches:
   # For release scripts
-  - |
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: numaflow-controller
-    spec:
-      template:
-        spec:
-          containers:
-            - name: controller-manager
-              env:
-                - name: NUMAFLOW_IMAGE
-                  value: quay.io/numaproj/numaflow:latest
-  - |
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: numaflow-cmd-params-config
-    data:
-      namespaced: "true"
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: numaflow-controller
+      spec:
+        template:
+          spec:
+            containers:
+              - name: controller-manager
+                env:
+                  - name: NUMAFLOW_IMAGE
+                    value: quay.io/numaproj/numaflow:latest
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: numaflow-cmd-params-config
+      data:
+        namespaced: "true"

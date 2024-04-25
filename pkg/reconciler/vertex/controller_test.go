@@ -301,7 +301,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.Contains(t, argStr, strings.Join(testObj.GetToBuckets(), ","))
 	})
 
-	t.Run("test user defined sink", func(t *testing.T) {
+	t.Run("test user-defined sink", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		r := &vertexReconciler{
 			client:   cl,
