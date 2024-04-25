@@ -68,11 +68,13 @@ func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, per
 	}
 
 	// write the request to the output channel
+	// since it is a blocking write, we should have a select with context,
 	select {
 	case p.output <- request:
-
 	case <-ctx.Done():
-		return ctx.Err()
+		// we can persist the message even if the context is done that way we will not rely on
+		// the no-ack functionality of the buffer instead we will completely rely on the pbq to
+		// replay the messages in case of failure.
 	}
 
 	switch request.Operation {
