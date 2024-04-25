@@ -83,8 +83,8 @@ func (*multiProcResolver) Resolve(target resolver.Target)          {}
 
 // buildConnAddrs Populate the connection list for the clients
 // Format (serverAddr, serverIdx) :
-// (unix:///var/run/numaflow/multiproc0.sock, 1),
-// (unix:///var/run/numaflow/multiproc1.sock, 2)
+// (unix:///var/run/numaflow/multiproc0.sock, 0),
+// (unix:///var/run/numaflow/multiproc1.sock, 1)
 func buildConnAddrs(numServers int) []string {
 	var conn = make([]string, numServers)
 	for i := 0; i < numServers; i++ {
@@ -92,7 +92,7 @@ func buildConnAddrs(numServers int) []string {
 		// unix:///var/run/numaflow/multiproc#serv_num.sock
 		serverAddr := ConnAddr + sdkclient.MultiProcAddr + strconv.Itoa(i) + ".sock"
 		// Format (serverAddr, serverIdx)
-		conn[i] = serverAddr + "," + strconv.Itoa(i+1)
+		conn[i] = serverAddr + "," + strconv.Itoa(i)
 	}
 	return conn
 }
