@@ -65,8 +65,6 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 
 	sdkVersion := serverInfo.Version
 	minNumaflowVersion := serverInfo.MinimumNumaflowVersion
-	sdkLanguage := serverInfo.Language
-	numaflowVersion := numaflow.GetVersion().Version
 
 	// If MinimumNumaflowVersion is empty, skip the numaflow compatibility check as there was an
 	// error writing server info on the SDK side
@@ -81,14 +79,23 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 		}
 	}
 
-	// If Version or Language are empty, skip the SDK compatibility check as there was an
-	// error writing server info on the SDK side
-	if sdkVersion == "" || sdkLanguage == "" {
-		log.Printf("warning: failed to get the SDK version/language, skipping SDK version compatibility check")
-	} else {
-		if err := checkSDKCompatibility(sdkVersion, sdkLanguage, minimumSupportedSDKVersions); err != nil {
-			return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
-				sdkVersion, numaflowVersion, err)
+	sdkLanguage := serverInfo.Language
+	versionMapping, err := readVersionMappingFile()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load numaflow version matrix into memory: %w", err)
+	}
+
+	// Only need to do SDK compatibility check if the current numaflow version is present in version-mapping.yaml
+	if minimumSupportedSDKVersions, ok := versionMapping[numaflowVersion]; ok {
+		// If Version or Language are empty, skip the SDK compatibility check as there was an
+		// error writing server info on the SDK side
+		if sdkVersion == "" || sdkLanguage == "" {
+			log.Printf("warning: failed to get the SDK version/language, skipping SDK version compatibility check")
+		} else {
+			if err := checkSDKCompatibility(sdkVersion, sdkLanguage, minimumSupportedSDKVersions); err != nil {
+				return nil, fmt.Errorf("SDK %s does not satisfy the minimum required by numaflow %s: %w",
+					sdkVersion, numaflowVersion, err)
+			}
 		}
 	}
 

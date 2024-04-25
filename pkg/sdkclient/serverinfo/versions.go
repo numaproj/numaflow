@@ -17,13 +17,28 @@ limitations under the License.
 package serverinfo
 
 import (
+	_ "embed"
+	"fmt"
+
 	"github.com/numaproj/numaflow-go/pkg/info"
+	"gopkg.in/yaml.v3"
+
+	"github.com/numaproj/numaflow"
 )
 
-type sdkConstraints map[info.Language]string
+//go:embed version-mapping.yaml
+var data []byte
 
-var minimumSupportedSDKVersions = sdkConstraints{
-	info.Go:     "0.7.0-rc2",
-	info.Python: "0.7.0a1",
-	info.Java:   "0.7.2-0",
+var numaflowVersion = numaflow.GetVersion().Version
+
+type sdkConstraints map[info.Language]string
+type versionMappingConfig map[string]sdkConstraints
+
+func readVersionMappingFile() (versionMappingConfig, error) {
+	var config versionMappingConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to read version mapping file into map: %w", err)
+	}
+
+	return config, nil
 }

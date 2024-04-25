@@ -6,8 +6,15 @@ Always create a release branch for the releases. For example branch `release-0.5
 
 ## Before Release 
 
-If the new version to be released has backwards incompatible changes, i.e. it does not support older SDK versions, you 
-must update `version-mapping.yaml` by adding the new mapping. Ensure that this change is merged and included in the release.
+ 
+Before a new release you must update `version-mapping.yaml`. There are two scenarios:
+- If the new version to be released has backwards incompatible changes, 
+i.e. it does not support older SDK versions, add a mapping where the key is the new version to be released,
+and the values are the SDKs and their new minimum supported versions 
+- If there are no breaking changes since the last release, the key is the new version to be released, and
+the values are the SDKs and the minimum supported versions from the previous entry 
+
+Ensure that this change is merged and included in the release.
 
 ## Release Steps
 
