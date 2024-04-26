@@ -23,12 +23,14 @@ import (
 
 	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc/resolver"
+
+	"github.com/numaproj/numaflow/pkg/sdkclient"
 )
 
 const (
 	CustScheme      = "udf"
 	CustServiceName = "numaflow.numaproj.io"
-	ConnAddr        = "0.0.0.0"
+	ConnAddr        = "unix://"
 )
 
 type MultiProcResolverBuilder struct {
@@ -80,14 +82,17 @@ func (*multiProcResolver) Close()                                  {}
 func (*multiProcResolver) Resolve(target resolver.Target)          {}
 
 // buildConnAddrs Populate the connection list for the clients
-// Format (serverAddr, serverIdx) : (0.0.0.0:5551, 1), (0.0.0.0:5552, 2)
-func buildConnAddrs(servPorts []string) []string {
-	var conn = make([]string, len(servPorts))
-	for i := 0; i < len(servPorts); i++ {
-		// Use the server ports from the server info file and assign to each client
-		addr, _ := strconv.Atoi(servPorts[i])
+// Format (serverAddr, serverIdx) :
+// (unix:///var/run/numaflow/multiproc0.sock, 0),
+// (unix:///var/run/numaflow/multiproc1.sock, 1)
+func buildConnAddrs(numServers int) []string {
+	var conn = make([]string, numServers)
+	for i := 0; i < numServers; i++ {
+		// Create a server port assign to each client
+		// unix:///var/run/numaflow/multiproc#serv_num.sock
+		serverAddr := ConnAddr + sdkclient.MultiProcAddr + strconv.Itoa(i) + ".sock"
 		// Format (serverAddr, serverIdx)
-		conn[i] = ConnAddr + ":" + strconv.Itoa(addr) + "," + strconv.Itoa(i+1)
+		conn[i] = serverAddr + "," + strconv.Itoa(i)
 	}
 	return conn
 }
@@ -96,9 +101,9 @@ func buildConnAddrs(servPorts []string) []string {
 // on multiprocessing TCP or UDS connection
 func RegMultiProcResolver(svrInfo *info.ServerInfo) error {
 	// Extract the server ports from the server info file and convert it to a list
-	servPorts := strings.Split(svrInfo.Metadata["SERV_PORTS"], ",")
-	log.Println("Multiprocessing TCP Server Ports:", servPorts)
-	conn := buildConnAddrs(servPorts)
+	numServers, _ := strconv.Atoi(svrInfo.Metadata["MULTIPROC"])
+	log.Println("Multiprocessing Servers :", numServers)
+	conn := buildConnAddrs(numServers)
 	res := newMultiProcResolverBuilder(conn)
 	resolver.Register(res)
 	return nil

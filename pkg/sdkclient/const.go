@@ -33,6 +33,7 @@ const (
 	FbSinkAddr            = "/var/run/numaflow/fb-sink.sock"
 	SourceAddr            = "/var/run/numaflow/source.sock"
 	SourceTransformerAddr = "/var/run/numaflow/sourcetransform.sock"
+	MultiProcAddr         = "/var/run/numaflow/multiproc"
 
 	// Server information file configs
 	MapServerInfoFile               = "/var/run/numaflow/mapper-server-info"
