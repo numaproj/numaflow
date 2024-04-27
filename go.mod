@@ -2,6 +2,8 @@ module github.com/numaproj/numaflow
 
 go 1.21
 
+replace github.com/numaproj/numaflow-go => ../numaflow-go
+
 require (
 	github.com/IBM/sarama v1.43.0
 	github.com/Masterminds/semver/v3 v3.1.1

@@ -103,3 +103,35 @@ func (c *client) MapStreamFn(ctx context.Context, request *mapstreampb.MapStream
 		}
 	}
 }
+
+func (c *client) MapStreamBatchFn(ctx context.Context, requests []*mapstreampb.MapStreamRequest, responseCh chan<- *mapstreampb.MapStreamResponse) error {
+	stream, err := c.grpcClt.MapStreamBatchFn(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to execute c.grpcClt.MapStreamBatchFn(): %w", err)
+	}
+
+	for _, datum := range requests {
+		if err := stream.Send(datum); err != nil {
+			return fmt.Errorf("failed to execute stream.Send(%v): %w", datum, err)
+		}
+	}
+	stream.CloseSend()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			var resp *mapstreampb.MapStreamResponse
+			resp, err = stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			err = sdkerror.ToUDFErr("c.grpcClt.MapStreamBatchFn", err)
+			if err != nil {
+				return err
+			}
+			responseCh <- resp
+		}
+	}
+}

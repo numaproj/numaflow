@@ -125,3 +125,71 @@ func (u *GRPCBasedMapStream) ApplyMapStream(ctx context.Context, message *isb.Re
 
 	return errs.Wait()
 }
+
+func (u *GRPCBasedMapStream) ApplyMapStreamBatch(ctx context.Context, messages []*isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	defer close(writeMessageCh)
+
+	globalParentMessageInfo := messages[0].MessageInfo
+	globalOffset := messages[0].ReadOffset
+
+	// Format to sending format
+	requests := make([]*mapstreampb.MapStreamRequest, len(messages))
+	for idx, msg := range messages {
+		keys := msg.Keys
+		payload := msg.Body.Payload
+		// offset := msg.ReadOffset
+		parentMessageInfo := msg.MessageInfo
+
+		var d = &mapstreampb.MapStreamRequest{
+			Keys:      keys,
+			Value:     payload,
+			EventTime: timestamppb.New(parentMessageInfo.EventTime),
+			Watermark: timestamppb.New(msg.Watermark),
+			Headers:   msg.Headers,
+		}
+		requests[idx] = d
+	}
+
+	responseCh := make(chan *mapstreampb.MapStreamResponse)
+
+	errs, ctx := errgroup.WithContext(ctx)
+	errs.Go(func() error {
+		// Ensure closes so read loop can have an end
+		defer close(responseCh)
+		err := u.client.MapStreamBatchFn(ctx, requests, responseCh)
+
+		if err != nil {
+			err = &ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.ApplyMapStreamBatch failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+			return err
+		}
+		return nil
+	})
+
+	i := 0
+	for response := range responseCh {
+		result := response.GetResult()
+		keys := result.GetKeys()
+		taggedMessage := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: globalParentMessageInfo,
+					ID:          fmt.Sprintf("%s-%d", globalOffset.String(), i),
+					Keys:        keys,
+				},
+				Body: isb.Body{
+					Payload: result.GetValue(),
+				},
+			},
+			Tags: result.GetTags(),
+		}
+		writeMessageCh <- *taggedMessage
+	}
+	return errs.Wait()
+}

@@ -26,11 +26,18 @@ import (
 // InternalErr can be returned and could be retried by the callee.
 type MapStreamApplier interface {
 	ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error
+	ApplyMapStreamBatch(ctx context.Context, messages []*isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error
 }
 
 // ApplyMapStreamFunc  utility function used to create a MapStreamApplier implementation
 type ApplyMapStreamFunc func(context.Context, *isb.ReadMessage, chan<- isb.WriteMessage) error
 
 func (f ApplyMapStreamFunc) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	return f(ctx, message, writeMessageCh)
+}
+
+type ApplyMapStreamBatchFunc func(context.Context, []*isb.ReadMessage, chan<- isb.WriteMessage) error
+
+func (f ApplyMapStreamBatchFunc) ApplyMapBatchStream(ctx context.Context, message []*isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
 	return f(ctx, message, writeMessageCh)
 }

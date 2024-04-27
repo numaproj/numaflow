@@ -67,7 +67,7 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 
 	// If we are testing locally or in CI, we can skip checking for numaflow compatibility issues
 	// because both return us a version string that the version check libraries can't properly parse. (local: "*latest*" CI: commit SHA)
-	if !strings.Contains(numaflowVersion, "latest") && !strings.Contains(numaflowVersion, numaflow.GetVersion().GitCommit) {
+	if !strings.Contains(numaflowVersion, "warner") && !strings.Contains(numaflowVersion, numaflow.GetVersion().GitCommit) {
 		if err := checkNumaflowCompatibility(numaflowVersion, serverInfo.MinimumNumaflowVersion); err != nil {
 			return nil, fmt.Errorf("numaflow %s does not satisfy the minimum required by SDK %s: %w",
 				numaflowVersion, sdkVersion, err)
