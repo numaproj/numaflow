@@ -25,7 +25,6 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 )
 
@@ -40,11 +39,10 @@ func WithReadTimeout(t time.Duration) Option {
 }
 
 type userDefinedSource struct {
-	vertexName    string                     // name of the user-defined source vertex
-	pipelineName  string                     // name of the pipeline
-	sourceApplier *GRPCBasedUDSource         // sourceApplier applies the user-defined source functions
-	forwarder     *sourceforward.DataForward // forwarder writes the source data to destination
-	readTimeout   time.Duration              // read timeout for the source
+	vertexName    string             // name of the user-defined source vertex
+	pipelineName  string             // name of the pipeline
+	sourceApplier *GRPCBasedUDSource // sourceApplier applies the user-defined source functions
+	readTimeout   time.Duration      // read timeout for the source
 	logger        *zap.SugaredLogger
 }
 

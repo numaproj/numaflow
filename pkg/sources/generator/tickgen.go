@@ -32,7 +32,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 )
 
@@ -156,13 +155,6 @@ func NewMemGen(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ..
 		}
 	}
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(genSrc.logger)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-
 	// start the generator
 	go genSrc.generator(ctx, genSrc.rpu, genSrc.timeunit)
 
@@ -177,10 +169,6 @@ func (mg *memGen) GetName() string {
 // Partitions returns the partitions for the source.
 func (mg *memGen) Partitions(context.Context) []int32 {
 	return []int32{mg.vertexInstance.Replica}
-}
-
-func (mg *memGen) isEmpty() bool {
-	return len(mg.srcChan) == 0
 }
 
 func (mg *memGen) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {

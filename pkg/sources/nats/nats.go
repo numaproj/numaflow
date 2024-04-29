@@ -30,7 +30,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 )
 
@@ -64,13 +63,6 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 	}
 
 	n.messages = make(chan *isb.ReadMessage, n.bufferSize)
-
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(n.logger)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
 
 	source := vertexInstance.Vertex.Spec.Source.Nats
 	opt := []natslib.Option{

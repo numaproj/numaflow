@@ -36,7 +36,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 )
 
@@ -178,14 +177,6 @@ func NewHttpSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, opt
 		h.logger.Info("Shutdown http source server")
 	}()
 	h.shutdown = server.Shutdown
-
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(h.logger)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-
 	h.ready = true
 	return h, nil
 }

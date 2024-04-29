@@ -50,8 +50,9 @@ func TestRead(t *testing.T) {
 	}
 
 	mGen, err := NewMemGen(ctx, m, WithReadTimeout(3*time.Second))
+	assert.NoError(t, err)
 	messages, err := mGen.Read(ctx, 5)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 5, len(messages))
 }
 
