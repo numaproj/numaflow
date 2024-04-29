@@ -189,6 +189,9 @@ const (
 	DefaultPnfBatchSize     = 100         // Default flush batch size for pnf
 	DefaultPnfFlushDuration = time.Second // Default flush duration for pnf
 
+	// DefaultKafkaHandlerChannelSize is the default channel size for kafka handler
+	DefaultKafkaHandlerChannelSize = 100
+
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 

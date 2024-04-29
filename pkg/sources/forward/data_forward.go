@@ -78,9 +78,9 @@ func NewDataForward(
 	toVertexWmStores map[string]store.WatermarkStore,
 	idleManager wmb.IdleManager,
 	opts ...Option) (*DataForward, error) {
-	defaultOptions := DefaultOptions()
+	dOpts := defaultOptions()
 	for _, o := range opts {
-		if err := o(defaultOptions); err != nil {
+		if err := o(dOpts); err != nil {
 			return nil, err
 		}
 	}
@@ -115,10 +115,10 @@ func NewDataForward(
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
-		opts: *defaultOptions,
+		opts: *dOpts,
 	}
 	// add logger from parent ctx to child context.
-	isdf.ctx = logging.WithLogger(ctx, defaultOptions.logger)
+	isdf.ctx = logging.WithLogger(ctx, dOpts.logger)
 	return &isdf, nil
 }
 
@@ -270,6 +270,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
 	}
 
+	// FIXME: when the transformer is not defined, we should avoid doing this.
 	// user-defined transformer concurrent processing request channel
 	transformerCh := make(chan *readWriteMessagePair)
 	// transformerResults stores the results after user-defined transformer processing for all read messages. It indexes

@@ -29,20 +29,12 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-	applier2 "github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
-
-var log = logging.NewLogger()
 
 type Data struct {
 	Value uint64 `json:"value,omitempty"`
@@ -66,8 +58,7 @@ type record struct {
 	ts     int64
 }
 
-var recordGenerator = func(size int32, value *uint64, createdTS int64) []byte {
-
+var recordGenerator = func(size int32, value *uint64, createdTS int64) ([]byte, error) {
 	data := Data{}
 	if value != nil {
 		data.Value = *value
@@ -78,50 +69,34 @@ var recordGenerator = func(size int32, value *uint64, createdTS int64) []byte {
 	if size > 0 {
 		// padding to guarantee the size of the message
 		b := make([]byte, size)
-		_, err := rand.Read(b) // we do not care about failures here.
-		if err != nil {
-			log.Warn("error while generating random bytes", err)
-		}
+		_, _ = rand.Read(b) // we do not care about failures here.
 		data.Padding = b
 	}
 
 	r := payload{Data: data, Createdts: createdTS}
-	marshalled, err := json.Marshal(r)
-	if err != nil {
-		log.Errorf("Error marshalling the record [%v]", r)
-	}
-	return marshalled
+	return json.Marshal(r)
 }
 
 type memGen struct {
-	srcChan        chan record                        // srcChan provides a go channel that supplies generated data
-	rpu            int                                // rpu - records per time unit
-	keyCount       int32                              // keyCount is the number of unique keys in the payload
-	value          *uint64                            // value is the optional uint64 number that can be set in the payload
-	msgSize        int32                              // msgSize is the size of each generated message
-	timeunit       time.Duration                      // timeunit - ticker will fire once per timeunit
-	genFn          func(int32, *uint64, int64) []byte // genFn function that generates a payload as a byte array
-	vertexName     string                             // name is the name of the source vertex
-	pipelineName   string                             // pipelineName is the name of the pipeline
-	cancelFn       context.CancelFunc                 // cancelFn terminates the source will not generate any more records.
-	forwarder      *sourceforward.DataForward         // forwarder to read from the source and write to the inter step buffer.
-	lifecycleCtx   context.Context                    // lifecycleCtx context is used to control the lifecycle of this instance.
-	readTimeout    time.Duration                      // read timeout for the reader
-	vertexInstance *dfv1.VertexInstance               // vertex instance
+	srcChan        chan record                                 // srcChan provides a go channel that supplies generated data
+	rpu            int                                         // rpu - records per time unit
+	keyCount       int32                                       // keyCount is the number of unique keys in the payload
+	value          *uint64                                     // value is the optional uint64 number that can be set in the payload
+	msgSize        int32                                       // msgSize is the size of each generated message
+	timeunit       time.Duration                               // timeunit - ticker will fire once per timeunit
+	genFn          func(int32, *uint64, int64) ([]byte, error) // genFn function that generates a payload as a byte array
+	vertexName     string                                      // name is the name of the source vertex
+	pipelineName   string                                      // pipelineName is the name of the pipeline
+	cancelFn       context.CancelFunc                          // cancelFn terminates the source will not generate any more records.
+	readTimeout    time.Duration                               // read timeout for the reader
+	vertexInstance *dfv1.VertexInstance                        // vertex instance
 	jitter         time.Duration
 	logger         *zap.SugaredLogger
 }
 
 type Option func(*memGen) error
 
-// WithLogger is used to return logger information
-func WithLogger(l *zap.SugaredLogger) Option {
-	return func(o *memGen) error {
-		o.logger = l
-		return nil
-	}
-}
-
+// WithReadTimeout sets the read timeout for the reader.
 func WithReadTimeout(timeout time.Duration) Option {
 	return func(o *memGen) error {
 		o.readTimeout = timeout
@@ -129,17 +104,8 @@ func WithReadTimeout(timeout time.Duration) Option {
 	}
 }
 
-// NewMemGen function creates an instance of generator.
-func NewMemGen(
-	vertexInstance *dfv1.VertexInstance,
-	writers map[string][]isb.BufferWriter,
-	fsd forwarder.ToWhichStepDecider,
-	transformerApplier applier2.SourceTransformApplier,
-	fetchWM fetch.SourceFetcher,
-	toVertexPublisherStores map[string]store.WatermarkStore,
-	publishWMStores store.WatermarkStore,
-	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.SourceReader, error) {
+// NewMemGen function creates an instance of generator source reader.
+func NewMemGen(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Option) (sourcer.SourceReader, error) {
 
 	// minimal CRDs don't have defaults
 	rpu := 5
@@ -181,6 +147,7 @@ func NewMemGen(
 		srcChan:        make(chan record, rpu*int(keyCount)*5),
 		readTimeout:    3 * time.Second, // default timeout
 		jitter:         jitter,
+		logger:         logging.FromContext(ctx),
 	}
 
 	for _, o := range opts {
@@ -188,15 +155,6 @@ func NewMemGen(
 			return nil, err
 		}
 	}
-	if genSrc.logger == nil {
-		genSrc.logger = logging.NewLogger()
-	}
-
-	// this context is to be used internally for controlling the lifecycle of generator
-	ctx, cancel := context.WithCancel(context.Background())
-
-	genSrc.lifecycleCtx = ctx
-	genSrc.cancelFn = cancel
 
 	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(genSrc.logger)}
 	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
@@ -205,19 +163,8 @@ func NewMemGen(
 		}
 	}
 
-	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublish(ctx, genSrc.pipelineName, genSrc.vertexName, publishWMStores,
-		publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()), publish.WithDefaultPartitionIdx(vertexInstance.Replica))
-
-	// we pass in the context to sourceForwarder as well so that it can shut down when we cancelFn the context
-	sourceForwarder, err := sourceforward.NewDataForward(vertexInstance, genSrc, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
-	if err != nil {
-		return nil, err
-	}
-	genSrc.forwarder = sourceForwarder
-
 	// start the generator
-	go genSrc.generator(genSrc.lifecycleCtx, genSrc.rpu, genSrc.timeunit)
+	go genSrc.generator(ctx, genSrc.rpu, genSrc.timeunit)
 
 	return genSrc, nil
 }
@@ -249,7 +196,7 @@ loop:
 			tickgenSourceReadCount.With(map[string]string{metrics.LabelVertex: mg.vertexName, metrics.LabelPipeline: mg.pipelineName}).Inc()
 			msgs = append(msgs, mg.newReadMessage(r.key, r.data, r.offset, r.ts))
 		case <-timeout:
-			mg.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
+			mg.logger.Infow("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
 			break loop
 		}
 	}
@@ -274,7 +221,7 @@ func (mg *memGen) newWorker(ctx context.Context, rate int) func(chan time.Time, 
 		defer func() {
 			// empty any pending ticks
 			if len(tickChan) > 0 {
-				log.Info("emptying any pending ticks")
+				mg.logger.Info("emptying any pending ticks")
 				for len(tickChan) > 0 {
 					<-tickChan
 				}
@@ -296,11 +243,15 @@ func (mg *memGen) newWorker(ctx context.Context, rate int) func(chan time.Time, 
 				for i := 0; i < rate; i++ {
 					for k := int32(0); k < mg.keyCount; k++ {
 						key := fmt.Sprintf("key-%d-%d", mg.vertexInstance.Replica, k)
-						d := mg.genFn(mg.msgSize, mg.value, t)
+						d, err := mg.genFn(mg.msgSize, mg.value, t)
+						if err != nil {
+							mg.logger.Errorw("Error while generating the record, skipping the record", zap.Error(err))
+							continue
+						}
 						r := record{data: d, offset: time.Now().UTC().UnixNano(), key: key, ts: t}
 						select {
 						case <-ctx.Done():
-							log.Info("Context.Done is called. returning from the inner function")
+							mg.logger.Info("Context.Done is called. returning from the inner function")
 							return
 						case mg.srcChan <- r:
 						}
@@ -315,7 +266,7 @@ func (mg *memGen) newWorker(ctx context.Context, rate int) func(chan time.Time, 
 func (mg *memGen) generator(ctx context.Context, rate int, timeunit time.Duration) {
 	// capping the rate to 10000 msgs/sec
 	if rate > 10000 {
-		log.Infow("Capping the rate to 10000 msg/sec. rate has been changed from %d to 10000", rate)
+		mg.logger.Infow("Capping the rate to 10000 msg/sec. rate has been changed from %d to 10000", rate)
 		rate = 10000
 	}
 
@@ -338,7 +289,7 @@ func (mg *memGen) generator(ctx context.Context, rate int, timeunit time.Duratio
 		// we don't need to wait for ticker to fire to return
 		// when the context closes
 		case <-ctx.Done():
-			log.Info("Context.Done is called. exiting generator loop.")
+			mg.logger.Info("Context.Done is called. exiting generator loop.")
 			childCancel()
 			<-doneChan
 			return

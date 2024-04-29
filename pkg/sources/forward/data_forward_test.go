@@ -57,6 +57,10 @@ type SimpleSource struct {
 	buffer *simplebuffer.InMemoryBuffer
 }
 
+func (s *SimpleSource) Pending(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
 func NewSimpleSource(buffer *simplebuffer.InMemoryBuffer) *SimpleSource {
 	return &SimpleSource{buffer: buffer}
 }
@@ -158,7 +162,6 @@ func TestNewDataForward(t *testing.T) {
 			defer cancel()
 
 			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
-
 			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			noOpStores := buildNoOpToVertexStores(toSteps)
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))

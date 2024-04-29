@@ -17,26 +17,30 @@ limitations under the License.
 package kafka
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 func TestNewKafkasource(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
-	toBuffers := map[string][]isb.BufferWriter{
-		"test": {dest},
-	}
+	// Create a new Sarama mock broker
+	broker := sarama.NewMockBroker(t, 1)
+
+	// Set expectations on the mock broker
+	broker.SetHandlerByMap(map[string]sarama.MockResponse{
+		"MetadataRequest": sarama.NewMockMetadataResponse(t).
+			SetBroker(broker.Addr(), broker.BrokerID()).
+			SetLeader("testtopic", 0, broker.BrokerID()).
+			SetController(broker.BrokerID()), // Set the controller
+	})
+
+	ctx := context.Background()
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -44,7 +48,7 @@ func TestNewKafkasource(t *testing.T) {
 			Name: "testVertex",
 			Source: &dfv1.Source{
 				Kafka: &dfv1.KafkaSource{
-					Topic: "testtopic", Brokers: []string{"b1"},
+					Topic: "testtopic", Brokers: []string{broker.Addr()},
 				},
 			},
 		},
@@ -54,14 +58,11 @@ func TestNewKafkasource(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	publishWMStore, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
-	toVertexWmStores := map[string]store.WatermarkStore{
-		"testVertex": publishWMStore,
-	}
 
-	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, err := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	handler := NewConsumerHandler(100)
+	close(handler.ready)
+
+	ks, err := NewKafkaSource(ctx, vi, handler, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	// no errors if everything is good.
 	assert.Nil(t, err)
@@ -74,14 +75,21 @@ func TestNewKafkasource(t *testing.T) {
 	assert.Equal(t, 100, ks.(*kafkaSource).handlerBuffer)
 	assert.Equal(t, 100*time.Millisecond, ks.(*kafkaSource).readTimeout)
 	assert.Equal(t, 100, cap(ks.(*kafkaSource).handler.messages))
-	assert.NotNil(t, ks.(*kafkaSource).forwarder)
 }
 
 func TestGroupNameOverride(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
-	toBuffers := map[string][]isb.BufferWriter{
-		"test": {dest},
-	}
+	// Create a new Sarama mock broker
+	broker := sarama.NewMockBroker(t, 1)
+
+	// Set expectations on the mock broker
+	broker.SetHandlerByMap(map[string]sarama.MockResponse{
+		"MetadataRequest": sarama.NewMockMetadataResponse(t).
+			SetBroker(broker.Addr(), broker.BrokerID()).
+			SetLeader("testtopic", 0, broker.BrokerID()).
+			SetController(broker.BrokerID()), // Set the controller
+	})
+
+	ctx := context.Background()
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -89,7 +97,7 @@ func TestGroupNameOverride(t *testing.T) {
 			Name: "testVertex",
 			Source: &dfv1.Source{
 				Kafka: &dfv1.KafkaSource{
-					Topic: "testtopic", Brokers: []string{"b1"}, ConsumerGroupName: "custom",
+					Topic: "testtopic", Brokers: []string{broker.Addr()}, ConsumerGroupName: "custom",
 				},
 			},
 		},
@@ -99,24 +107,27 @@ func TestGroupNameOverride(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	publishWMStore, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
-	toVertexWmStores := map[string]store.WatermarkStore{
-		"testVertex": publishWMStore,
-	}
-
-	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	handler := NewConsumerHandler(100)
+	close(handler.ready)
+	ks, _ := NewKafkaSource(ctx, vi, handler, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	assert.Equal(t, "default", ks.(*kafkaSource).groupName)
 
 }
 
 func TestDefaultBufferSize(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
-	toBuffers := map[string][]isb.BufferWriter{
-		"test": {dest},
-	}
+	// Create a new Sarama mock broker
+	broker := sarama.NewMockBroker(t, 1)
+
+	// Set expectations on the mock broker
+	broker.SetHandlerByMap(map[string]sarama.MockResponse{
+		"MetadataRequest": sarama.NewMockMetadataResponse(t).
+			SetBroker(broker.Addr(), broker.BrokerID()).
+			SetLeader("testtopic", 0, broker.BrokerID()).
+			SetController(broker.BrokerID()), // Set the controller
+	})
+
+	ctx := context.Background()
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -124,7 +135,7 @@ func TestDefaultBufferSize(t *testing.T) {
 			Name: "testVertex",
 			Source: &dfv1.Source{
 				Kafka: &dfv1.KafkaSource{
-					Topic: "testtopic", Brokers: []string{"b1"},
+					Topic: "testtopic", Brokers: []string{broker.Addr()},
 				},
 			},
 		},
@@ -134,24 +145,26 @@ func TestDefaultBufferSize(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	publishWMStore, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
-	toVertexWmStores := map[string]store.WatermarkStore{
-		"testVertex": publishWMStore,
-	}
-
-	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
-
+	handler := NewConsumerHandler(100)
+	close(handler.ready)
+	ks, _ := NewKafkaSource(ctx, vi, handler, WithLogger(logging.NewLogger()), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 	assert.Equal(t, 100, ks.(*kafkaSource).handlerBuffer)
-
+	broker.Close()
 }
 
 func TestBufferSizeOverrides(t *testing.T) {
-	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
-	toBuffers := map[string][]isb.BufferWriter{
-		"test": {dest},
-	}
+	// Create a new Sarama mock broker
+	broker := sarama.NewMockBroker(t, 1)
+
+	// Set expectations on the mock broker
+	broker.SetHandlerByMap(map[string]sarama.MockResponse{
+		"MetadataRequest": sarama.NewMockMetadataResponse(t).
+			SetBroker(broker.Addr(), broker.BrokerID()).
+			SetLeader("testtopic", 0, broker.BrokerID()).
+			SetController(broker.BrokerID()), // Set the controller
+	})
+
+	ctx := context.Background()
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -159,7 +172,7 @@ func TestBufferSizeOverrides(t *testing.T) {
 			Name: "testVertex",
 			Source: &dfv1.Source{
 				Kafka: &dfv1.KafkaSource{
-					Topic: "testtopic", Brokers: []string{"b1"},
+					Topic: "testtopic", Brokers: []string{broker.Addr()},
 				},
 			},
 		},
@@ -169,14 +182,9 @@ func TestBufferSizeOverrides(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	publishWMStore, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
-	toVertexWmStores := map[string]store.WatermarkStore{
-		"testVertex": publishWMStore,
-	}
-
-	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithBufferSize(110), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	handler := NewConsumerHandler(100)
+	close(handler.ready)
+	ks, _ := NewKafkaSource(ctx, vi, handler, WithLogger(logging.NewLogger()), WithBufferSize(110), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	assert.Equal(t, 110, ks.(*kafkaSource).handlerBuffer)
 

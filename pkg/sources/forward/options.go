@@ -39,7 +39,7 @@ type options struct {
 
 type Option func(*options) error
 
-func DefaultOptions() *options {
+func defaultOptions() *options {
 	return &options{
 		readBatchSize:          dfv1.DefaultReadBatchSize,
 		transformerConcurrency: dfv1.DefaultReadBatchSize,

@@ -23,27 +23,13 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type Option func(*userDefinedSource) error
-
-// WithLogger is used to return logger information
-func WithLogger(l *zap.SugaredLogger) Option {
-	return func(u *userDefinedSource) error {
-		u.logger = l
-		return nil
-	}
-}
 
 // WithReadTimeout sets the read timeout
 func WithReadTimeout(t time.Duration) Option {
@@ -54,59 +40,30 @@ func WithReadTimeout(t time.Duration) Option {
 }
 
 type userDefinedSource struct {
-	vertexName         string                     // name of the user-defined source vertex
-	pipelineName       string                     // name of the pipeline
-	sourceApplier      *GRPCBasedUDSource         // sourceApplier applies the user-defined source functions
-	forwarder          *sourceforward.DataForward // forwarder writes the source data to destination
-	cancelFn           context.CancelFunc         // context cancel function
-	srcPublishWMStores store.WatermarkStore       // source watermark publisher stores
-	lifecycleCtx       context.Context            // lifecycleCtx context is used to control the lifecycle of this source.
-	readTimeout        time.Duration              // read timeout for the source
-	logger             *zap.SugaredLogger
+	vertexName    string                     // name of the user-defined source vertex
+	pipelineName  string                     // name of the pipeline
+	sourceApplier *GRPCBasedUDSource         // sourceApplier applies the user-defined source functions
+	forwarder     *sourceforward.DataForward // forwarder writes the source data to destination
+	readTimeout   time.Duration              // read timeout for the source
+	logger        *zap.SugaredLogger
 }
 
-func New(
-	vertexInstance *dfv1.VertexInstance,
-	writers map[string][]isb.BufferWriter,
-	fsd forwarder.ToWhichStepDecider,
-	transformer applier.SourceTransformApplier,
-	sourceApplier *GRPCBasedUDSource,
-	fetchWM fetch.SourceFetcher,
-	toVertexPublisherStores map[string]store.WatermarkStore,
-	publishWMStores store.WatermarkStore,
-	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.SourceReader, error) {
-
+// NewUserDefinedSource returns a new user-defined source reader.
+func NewUserDefinedSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, sourceApplier *GRPCBasedUDSource, opts ...Option) (sourcer.SourceReader, error) {
 	var err error
 
 	u := &userDefinedSource{
-		vertexName:         vertexInstance.Vertex.Spec.Name,
-		pipelineName:       vertexInstance.Vertex.Spec.PipelineName,
-		sourceApplier:      sourceApplier,
-		srcPublishWMStores: publishWMStores,
-		logger:             logging.NewLogger(), // default logger
+		vertexName:    vertexInstance.Vertex.Spec.Name,
+		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
+		sourceApplier: sourceApplier,
+		logger:        logging.FromContext(ctx), // default logger
 	}
 	for _, opt := range opts {
-		if err := opt(u); err != nil {
+		if err = opt(u); err != nil {
 			return nil, err
 		}
 	}
 
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(u.logger)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	u.cancelFn = cancel
-	u.lifecycleCtx = ctx
-
-	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublish(ctx, u.pipelineName, u.vertexName, publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
-
-	u.forwarder, err = sourceforward.NewDataForward(vertexInstance, u, writers, fsd, transformer, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
 	if err != nil {
 		u.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
 		return nil, err
@@ -147,6 +104,5 @@ func (u *userDefinedSource) Pending(ctx context.Context) (int64, error) {
 
 func (u *userDefinedSource) Close() error {
 	u.logger.Info("Shutting down user-defined source...")
-	u.cancelFn()
 	return u.sourceApplier.CloseConn(context.Background())
 }

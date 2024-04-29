@@ -31,19 +31,13 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type httpSource struct {
@@ -55,20 +49,10 @@ type httpSource struct {
 	bufferSize    int
 	messages      chan *isb.ReadMessage
 	logger        *zap.SugaredLogger
-	forwarder     *sourceforward.DataForward
-	cancelFunc    context.CancelFunc // context cancel function
 	shutdown      func(context.Context) error
 }
 
 type Option func(*httpSource) error
-
-// WithLogger is used to return logger information
-func WithLogger(l *zap.SugaredLogger) Option {
-	return func(o *httpSource) error {
-		o.logger = l
-		return nil
-	}
-}
 
 // WithReadTimeout is used to set the read timeout for the from buffer
 func WithReadTimeout(t time.Duration) Option {
@@ -85,17 +69,8 @@ func WithBufferSize(s int) Option {
 	}
 }
 
-func New(
-	vertexInstance *dfv1.VertexInstance,
-	writers map[string][]isb.BufferWriter,
-	fsd forwarder.ToWhichStepDecider,
-	transformerApplier applier.SourceTransformApplier,
-	fetchWM fetch.SourceFetcher,
-	toVertexPublisherStores map[string]store.WatermarkStore,
-	publishWMStores store.WatermarkStore,
-	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.SourceReader, error) {
-
+// NewHttpSource creates a new http source reader.
+func NewHttpSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Option) (sourcer.SourceReader, error) {
 	h := &httpSource{
 		vertexName:    vertexInstance.Vertex.Spec.Name,
 		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
@@ -103,6 +78,7 @@ func New(
 		ready:         false,
 		bufferSize:    1000,            // default size
 		readTimeout:   1 * time.Second, // default timeout
+		logger:        logging.FromContext(ctx),
 	}
 
 	for _, o := range opts {
@@ -110,9 +86,7 @@ func New(
 			return nil, err
 		}
 	}
-	if h.logger == nil {
-		h.logger = logging.NewLogger()
-	}
+
 	h.messages = make(chan *isb.ReadMessage, h.bufferSize)
 
 	auth := ""
@@ -211,18 +185,8 @@ func New(
 			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 		}
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	h.cancelFunc = cancel
 
-	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublish(ctx, vertexInstance.Vertex.Spec.PipelineName, vertexInstance.Vertex.Spec.Name,
-		publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()), publish.WithDefaultPartitionIdx(vertexInstance.Replica))
-	h.forwarder, err = sourceforward.NewDataForward(vertexInstance, h, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
-	if err != nil {
-		h.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
-		return nil, err
-	}
-
+	h.ready = true
 	return h, nil
 }
 
@@ -264,7 +228,6 @@ func (h *httpSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 
 func (h *httpSource) Close() error {
 	h.logger.Info("Shutting down http source server...")
-	h.cancelFunc()
 	close(h.messages)
 	if err := h.shutdown(context.Background()); err != nil {
 		return err

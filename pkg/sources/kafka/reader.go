@@ -28,50 +28,33 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 type kafkaSource struct {
-	vertexName    string                     // name of the source vertex
-	pipelineName  string                     // name of the pipeline
-	groupName     string                     // group name for the source vertex
-	topic         string                     // topic to consume messages from
-	brokers       []string                   // kafka brokers
-	forwarder     *sourceforward.DataForward // forwarder that writes the consumed data to destination
-	cancelFn      context.CancelFunc         // context cancel function
-	lifecycleCtx  context.Context            // lifecycle context
-	handler       *consumerHandler           // handler for a kafka consumer group
-	config        *sarama.Config             // sarama config for kafka consumer group
-	logger        *zap.SugaredLogger         // logger
-	stopCh        chan struct{}              // channel to indicate that we are done
-	handlerBuffer int                        // size of the buffer that holds consumed but yet to be forwarded messages
-	readTimeout   time.Duration              // read timeout for the from buffer
-	adminClient   sarama.ClusterAdmin        // client used to calculate pending messages
-	saramaClient  sarama.Client              // sarama client
+	vertexName    string              // name of the source vertex
+	pipelineName  string              // name of the pipeline
+	groupName     string              // group name for the source vertex
+	topic         string              // topic to consume messages from
+	brokers       []string            // kafka brokers
+	cancelFn      context.CancelFunc  // context cancel function
+	lifecycleCtx  context.Context     // lifecycle context
+	handler       *ConsumerHandler    // handler for a kafka consumer group
+	config        *sarama.Config      // sarama config for kafka consumer group
+	logger        *zap.SugaredLogger  // logger
+	stopCh        chan struct{}       // channel to indicate that we are done
+	handlerBuffer int                 // size of the buffer that holds consumed but yet to be forwarded messages
+	readTimeout   time.Duration       // read timeout for the from buffer
+	adminClient   sarama.ClusterAdmin // client used to calculate pending messages
+	saramaClient  sarama.Client       // sarama client
 }
 
 // NewKafkaSource returns a kafkaSource reader based on Kafka Consumer Group.
-func NewKafkaSource(
-	vertexInstance *dfv1.VertexInstance,
-	writers map[string][]isb.BufferWriter,
-	fsd forwarder.ToWhichStepDecider,
-	transformerApplier applier.SourceTransformApplier,
-	fetchWM fetch.SourceFetcher,
-	toVertexPublisherStores map[string]store.WatermarkStore,
-	publishWMStores store.WatermarkStore,
-	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.SourceReader, error) {
+func NewKafkaSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, handler *ConsumerHandler, opts ...Option) (sourcer.SourceReader, error) {
 
 	source := vertexInstance.Vertex.Spec.Source.Kafka
 	ks := &kafkaSource{
@@ -79,9 +62,10 @@ func NewKafkaSource(
 		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
 		topic:         source.Topic,
 		brokers:       source.Brokers,
-		readTimeout:   1 * time.Second,     // default timeout
-		handlerBuffer: 100,                 // default buffer size for kafka reads
-		logger:        logging.NewLogger(), // default logger
+		readTimeout:   1 * time.Second, // default timeout
+		handlerBuffer: 100,             // default buffer size for kafka reads
+		handler:       handler,
+		logger:        logging.FromContext(ctx), // default logger
 	}
 
 	for _, o := range opts {
@@ -125,24 +109,6 @@ func NewKafkaSource(
 
 	ks.stopCh = make(chan struct{})
 
-	handler := newConsumerHandler(ks.handlerBuffer)
-	ks.handler = handler
-
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(ks.logger)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublish(ctx, ks.pipelineName, ks.vertexName, publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
-	sourceForwarder, err := sourceforward.NewDataForward(vertexInstance, ks, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
-	if err != nil {
-		ks.logger.Errorw("Error instantiating the sourceForwarder", zap.Error(err))
-		return nil, err
-	}
-	ks.forwarder = sourceForwarder
-
 	// create a sarama client and a cluster admin client
 	client, err := sarama.NewClient(ks.brokers, ks.config)
 	if err != nil {
@@ -165,10 +131,10 @@ func NewKafkaSource(
 	// wait for the consumer to setup.
 	<-ks.handler.ready
 	ks.logger.Info("Consumer ready. Starting kafka reader...")
-
 	return ks, nil
 }
 
+// GetName returns the name of the source.
 func (ks *kafkaSource) GetName() string {
 	return ks.vertexName
 }
