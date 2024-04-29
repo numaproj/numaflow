@@ -139,7 +139,7 @@ func NewMemGen(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.Sourcer, error) {
+	opts ...Option) (sourcer.SourceReader, error) {
 
 	// minimal CRDs don't have defaults
 	rpu := 5
@@ -216,6 +216,9 @@ func NewMemGen(
 	}
 	genSrc.forwarder = sourceForwarder
 
+	// start the generator
+	go genSrc.generator(genSrc.lifecycleCtx, genSrc.rpu, genSrc.timeunit)
+
 	return genSrc, nil
 }
 
@@ -229,7 +232,7 @@ func (mg *memGen) Partitions(context.Context) []int32 {
 	return []int32{mg.vertexInstance.Replica}
 }
 
-func (mg *memGen) IsEmpty() bool {
+func (mg *memGen) isEmpty() bool {
 	return len(mg.srcChan) == 0
 }
 
@@ -266,27 +269,7 @@ func (mg *memGen) Close() error {
 	return nil
 }
 
-func (mg *memGen) Stop() {
-	mg.cancelFn()
-	mg.forwarder.Stop()
-}
-
-func (mg *memGen) ForceStop() {
-	mg.Stop()
-	mg.forwarder.ForceStop()
-
-}
-
-// Start starts reading from the source
-// context is used to control the lifecycle of this component.
-// this context will be used to shut down the vertex once an os.signal is received.
-func (mg *memGen) Start() <-chan struct{} {
-	mg.generator(mg.lifecycleCtx, mg.rpu, mg.timeunit)
-	return mg.forwarder.Start()
-}
-
-func (mg *memGen) NewWorker(ctx context.Context, rate int) func(chan time.Time, chan struct{}) {
-
+func (mg *memGen) newWorker(ctx context.Context, rate int) func(chan time.Time, chan struct{}) {
 	return func(tickChan chan time.Time, done chan struct{}) {
 		defer func() {
 			// empty any pending ticks
@@ -330,41 +313,39 @@ func (mg *memGen) NewWorker(ctx context.Context, rate int) func(chan time.Time, 
 
 // generator fires once per time unit and generates records and writes them to the channel
 func (mg *memGen) generator(ctx context.Context, rate int, timeunit time.Duration) {
-	go func() {
-		// capping the rate to 10000 msgs/sec
-		if rate > 10000 {
-			log.Infow("Capping the rate to 10000 msg/sec. rate has been changed from %d to 10000", rate)
-			rate = 10000
+	// capping the rate to 10000 msgs/sec
+	if rate > 10000 {
+		log.Infow("Capping the rate to 10000 msg/sec. rate has been changed from %d to 10000", rate)
+		rate = 10000
+	}
+
+	tickChan := make(chan time.Time, 1000)
+	doneChan := make(chan struct{})
+	childCtx, childCancel := context.WithCancel(ctx)
+
+	defer childCancel()
+
+	// make sure that there is only one worker all the time.
+	// even when there is back pressure, max number of go routines inflight should be 1.
+	// at the same time, we don't want to miss any ticks that cannot be processed.
+	worker := mg.newWorker(childCtx, rate)
+	go worker(tickChan, doneChan)
+
+	ticker := time.NewTicker(timeunit)
+	defer ticker.Stop()
+	for {
+		select {
+		// we don't need to wait for ticker to fire to return
+		// when the context closes
+		case <-ctx.Done():
+			log.Info("Context.Done is called. exiting generator loop.")
+			childCancel()
+			<-doneChan
+			return
+		case ts := <-ticker.C:
+			tickChan <- ts
 		}
-
-		tickChan := make(chan time.Time, 1000)
-		doneChan := make(chan struct{})
-		childCtx, childCancel := context.WithCancel(ctx)
-
-		defer childCancel()
-
-		// make sure that there is only one worker all the time.
-		// even when there is back pressure, max number of go routines inflight should be 1.
-		// at the same time, we don't want to miss any ticks that cannot be processed.
-		worker := mg.NewWorker(childCtx, rate)
-		go worker(tickChan, doneChan)
-
-		ticker := time.NewTicker(timeunit)
-		defer ticker.Stop()
-		for {
-			select {
-			// we don't need to wait for ticker to fire to return
-			// when the context closes
-			case <-ctx.Done():
-				log.Info("Context.Done is called. exiting generator loop.")
-				childCancel()
-				<-doneChan
-				return
-			case ts := <-ticker.C:
-				tickChan <- ts
-			}
-		}
-	}()
+	}
 }
 
 func (mg *memGen) newReadMessage(key string, payload []byte, offset int64, et int64) *isb.ReadMessage {

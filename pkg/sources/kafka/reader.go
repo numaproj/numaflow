@@ -61,224 +61,6 @@ type kafkaSource struct {
 	saramaClient  sarama.Client              // sarama client
 }
 
-// kafkaOffset implements isb.Offset
-// we need topic information to ack the message
-type kafkaOffset struct {
-	offset       int64
-	partitionIdx int32
-	topic        string
-}
-
-func (k *kafkaOffset) String() string {
-	return fmt.Sprintf("%s:%d:%d", k.topic, k.offset, k.partitionIdx)
-}
-
-func (k *kafkaOffset) Sequence() (int64, error) {
-	return k.offset, nil
-}
-
-// AckIt acking is taken care by the consumer group
-func (k *kafkaOffset) AckIt() error {
-	// NOOP
-	return nil
-}
-
-func (k *kafkaOffset) NoAck() error {
-	return nil
-}
-
-func (k *kafkaOffset) PartitionIdx() int32 {
-	return k.partitionIdx
-}
-
-func (k *kafkaOffset) Topic() string {
-	return k.topic
-}
-
-type Option func(*kafkaSource) error
-
-// WithLogger is used to return logger information
-func WithLogger(l *zap.SugaredLogger) Option {
-	return func(o *kafkaSource) error {
-		o.logger = l
-		return nil
-	}
-}
-
-// WithBufferSize is used to return size of message channel information
-func WithBufferSize(s int) Option {
-	return func(o *kafkaSource) error {
-		o.handlerBuffer = s
-		return nil
-	}
-}
-
-// WithReadTimeOut is used to set the read timeout for the from buffer
-func WithReadTimeOut(t time.Duration) Option {
-	return func(o *kafkaSource) error {
-		o.readTimeout = t
-		return nil
-	}
-}
-
-// WithGroupName is used to set the group name
-func WithGroupName(gn string) Option {
-	return func(o *kafkaSource) error {
-		o.groupName = gn
-		return nil
-	}
-}
-
-func (ks *kafkaSource) GetName() string {
-	return ks.vertexName
-}
-
-// Partitions returns the partitions from which the source is reading.
-func (ks *kafkaSource) Partitions(context.Context) []int32 {
-	for topic, partitions := range ks.handler.sess.Claims() {
-		if topic == ks.topic {
-			return partitions
-		}
-	}
-	return []int32{}
-}
-
-func (ks *kafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
-	msgs := make([]*isb.ReadMessage, 0, count)
-	timeout := time.After(ks.readTimeout)
-loop:
-	for i := int64(0); i < count; i++ {
-		select {
-		case m := <-ks.handler.messages:
-			kafkaSourceReadCount.With(map[string]string{
-				metrics.LabelVertex:        ks.vertexName,
-				metrics.LabelPipeline:      ks.pipelineName,
-				metrics.LabelPartitionName: strconv.Itoa(int(m.Partition)),
-			}).Inc()
-			msgs = append(msgs, ks.toReadMessage(m))
-		case <-timeout:
-			// log that timeout has happened and don't return an error
-			ks.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", ks.readTimeout))
-			break loop
-		}
-	}
-
-	return msgs, nil
-}
-
-// Ack acknowledges an array of offset.
-func (ks *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
-	// we want to block the handler from exiting if there are any inflight acks.
-	ks.handler.inflightAcks = make(chan bool)
-	defer close(ks.handler.inflightAcks)
-
-	for _, offset := range offsets {
-		topic := offset.(*kafkaOffset).Topic()
-
-		pOffset, err := offset.Sequence()
-		if err != nil {
-			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Inc()
-			ks.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("supplied-offset", offset.String()), zap.Error(err))
-			continue
-		}
-		// we need to mark the offset of the next message to read
-		ks.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset+1, "")
-		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Inc()
-
-	}
-	// How come it does not return errors at all?
-	return make([]error, len(offsets))
-}
-
-func (ks *kafkaSource) Start() <-chan struct{} {
-	client, err := sarama.NewClient(ks.brokers, ks.config)
-	if err != nil {
-		ks.logger.Panicw("Failed to create sarama client", zap.Error(err))
-	} else {
-		ks.saramaClient = client
-	}
-	// Does it require any special privileges to create a cluster admin client?
-	adminClient, err := sarama.NewClusterAdminFromClient(client)
-	if err != nil {
-		if !client.Closed() {
-			_ = client.Close()
-		}
-		ks.logger.Panicw("Failed to create sarama cluster admin client", zap.Error(err))
-	} else {
-		ks.adminClient = adminClient
-	}
-
-	go ks.startConsumer()
-	// wait for the consumer to setup.
-	<-ks.handler.ready
-	ks.logger.Info("Consumer ready. Starting kafka reader...")
-
-	return ks.forwarder.Start()
-}
-
-func (ks *kafkaSource) Stop() {
-	ks.logger.Info("Stopping kafka reader...")
-	// stop the forwarder
-	ks.forwarder.Stop()
-}
-
-func (ks *kafkaSource) ForceStop() {
-	// ForceStop means everything has to stop.
-	// don't wait for anything.
-	ks.forwarder.ForceStop()
-	ks.Stop()
-}
-
-func (ks *kafkaSource) Close() error {
-	ks.logger.Info("Closing kafka reader...")
-	// finally, shut down the client
-	ks.cancelFn()
-	if ks.adminClient != nil {
-		// closes the underlying sarama client as well.
-		if err := ks.adminClient.Close(); err != nil {
-			ks.logger.Errorw("Error in closing kafka admin client", zap.Error(err))
-		}
-	}
-	<-ks.stopCh
-	ks.logger.Info("Kafka reader closed")
-	return nil
-}
-
-func (ks *kafkaSource) Pending(_ context.Context) (int64, error) {
-	if ks.adminClient == nil || ks.saramaClient == nil {
-		return isb.PendingNotAvailable, nil
-	}
-	partitions, err := ks.saramaClient.Partitions(ks.topic)
-	if err != nil {
-		return isb.PendingNotAvailable, fmt.Errorf("failed to get partitions, %w", err)
-	}
-	totalPending := int64(0)
-	rep, err := ks.adminClient.ListConsumerGroupOffsets(ks.groupName, map[string][]int32{ks.topic: partitions})
-	if err != nil {
-		err := ks.refreshAdminClient()
-		if err != nil {
-			return isb.PendingNotAvailable, fmt.Errorf("failed to update the admin client, %w", err)
-		}
-		return isb.PendingNotAvailable, fmt.Errorf("failed to list consumer group offsets, %w", err)
-	}
-	for _, partition := range partitions {
-		block := rep.GetBlock(ks.topic, partition)
-		if block.Offset == -1 {
-			// Note: if there is no offset associated with the partition under the consumer group, offset fetch sets the offset field to -1.
-			// This is not an error and usually means that there has been no data published to this particular partition yet.
-			// In this case, we can safely skip this partition from the pending calculation.
-			continue
-		}
-		partitionOffset, err := ks.saramaClient.GetOffset(ks.topic, partition, sarama.OffsetNewest)
-		if err != nil {
-			return isb.PendingNotAvailable, fmt.Errorf("failed to get offset of topic %q, partition %v, %w", ks.topic, partition, err)
-		}
-		totalPending += partitionOffset - block.Offset
-	}
-	kafkaPending.WithLabelValues(ks.vertexName, ks.pipelineName, ks.topic, ks.groupName).Set(float64(totalPending))
-	return totalPending, nil
-}
-
 // NewKafkaSource returns a kafkaSource reader based on Kafka Consumer Group.
 func NewKafkaSource(
 	vertexInstance *dfv1.VertexInstance,
@@ -289,7 +71,7 @@ func NewKafkaSource(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.Sourcer, error) {
+	opts ...Option) (sourcer.SourceReader, error) {
 
 	source := vertexInstance.Vertex.Spec.Source.Kafka
 	ks := &kafkaSource{
@@ -361,7 +143,141 @@ func NewKafkaSource(
 	}
 	ks.forwarder = sourceForwarder
 
+	// create a sarama client and a cluster admin client
+	client, err := sarama.NewClient(ks.brokers, ks.config)
+	if err != nil {
+		ks.logger.Panicw("Failed to create sarama client", zap.Error(err))
+	} else {
+		ks.saramaClient = client
+	}
+	// Does it require any special privileges to create a cluster admin client?
+	adminClient, err := sarama.NewClusterAdminFromClient(client)
+	if err != nil {
+		if !client.Closed() {
+			_ = client.Close()
+		}
+		ks.logger.Panicw("Failed to create sarama cluster admin client", zap.Error(err))
+	} else {
+		ks.adminClient = adminClient
+	}
+
+	go ks.startConsumer()
+	// wait for the consumer to setup.
+	<-ks.handler.ready
+	ks.logger.Info("Consumer ready. Starting kafka reader...")
+
 	return ks, nil
+}
+
+func (ks *kafkaSource) GetName() string {
+	return ks.vertexName
+}
+
+// Partitions returns the partitions from which the source is reading.
+func (ks *kafkaSource) Partitions(context.Context) []int32 {
+	for topic, partitions := range ks.handler.sess.Claims() {
+		if topic == ks.topic {
+			return partitions
+		}
+	}
+	return []int32{}
+}
+
+func (ks *kafkaSource) Read(_ context.Context, count int64) ([]*isb.ReadMessage, error) {
+	msgs := make([]*isb.ReadMessage, 0, count)
+	timeout := time.After(ks.readTimeout)
+loop:
+	for i := int64(0); i < count; i++ {
+		select {
+		case m := <-ks.handler.messages:
+			kafkaSourceReadCount.With(map[string]string{
+				metrics.LabelVertex:        ks.vertexName,
+				metrics.LabelPipeline:      ks.pipelineName,
+				metrics.LabelPartitionName: strconv.Itoa(int(m.Partition)),
+			}).Inc()
+			msgs = append(msgs, ks.toReadMessage(m))
+		case <-timeout:
+			// log that timeout has happened and don't return an error
+			ks.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", ks.readTimeout))
+			break loop
+		}
+	}
+
+	return msgs, nil
+}
+
+// Ack acknowledges an array of offset.
+func (ks *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
+	// we want to block the handler from exiting if there are any inflight acks.
+	ks.handler.inflightAcks = make(chan bool)
+	defer close(ks.handler.inflightAcks)
+
+	for _, offset := range offsets {
+		topic := offset.(*kafkaOffset).Topic()
+
+		pOffset, err := offset.Sequence()
+		if err != nil {
+			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Inc()
+			ks.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("supplied-offset", offset.String()), zap.Error(err))
+			continue
+		}
+		// we need to mark the offset of the next message to read
+		ks.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset+1, "")
+		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Inc()
+
+	}
+	// How come it does not return errors at all?
+	return make([]error, len(offsets))
+}
+
+func (ks *kafkaSource) Close() error {
+	ks.logger.Info("Closing kafka reader...")
+	// finally, shut down the client
+	ks.cancelFn()
+	if ks.adminClient != nil {
+		// closes the underlying sarama client as well.
+		if err := ks.adminClient.Close(); err != nil {
+			ks.logger.Errorw("Error in closing kafka admin client", zap.Error(err))
+		}
+	}
+	<-ks.stopCh
+	ks.logger.Info("Kafka reader closed")
+	return nil
+}
+
+func (ks *kafkaSource) Pending(_ context.Context) (int64, error) {
+	if ks.adminClient == nil || ks.saramaClient == nil {
+		return isb.PendingNotAvailable, nil
+	}
+	partitions, err := ks.saramaClient.Partitions(ks.topic)
+	if err != nil {
+		return isb.PendingNotAvailable, fmt.Errorf("failed to get partitions, %w", err)
+	}
+	totalPending := int64(0)
+	rep, err := ks.adminClient.ListConsumerGroupOffsets(ks.groupName, map[string][]int32{ks.topic: partitions})
+	if err != nil {
+		err := ks.refreshAdminClient()
+		if err != nil {
+			return isb.PendingNotAvailable, fmt.Errorf("failed to update the admin client, %w", err)
+		}
+		return isb.PendingNotAvailable, fmt.Errorf("failed to list consumer group offsets, %w", err)
+	}
+	for _, partition := range partitions {
+		block := rep.GetBlock(ks.topic, partition)
+		if block.Offset == -1 {
+			// Note: if there is no offset associated with the partition under the consumer group, offset fetch sets the offset field to -1.
+			// This is not an error and usually means that there has been no data published to this particular partition yet.
+			// In this case, we can safely skip this partition from the pending calculation.
+			continue
+		}
+		partitionOffset, err := ks.saramaClient.GetOffset(ks.topic, partition, sarama.OffsetNewest)
+		if err != nil {
+			return isb.PendingNotAvailable, fmt.Errorf("failed to get offset of topic %q, partition %v, %w", ks.topic, partition, err)
+		}
+		totalPending += partitionOffset - block.Offset
+	}
+	kafkaPending.WithLabelValues(ks.vertexName, ks.pipelineName, ks.topic, ks.groupName).Set(float64(totalPending))
+	return totalPending, nil
 }
 
 // refreshAdminClient refreshes the admin client
@@ -390,10 +306,10 @@ func configFromOpts(yamlConfig string) (*sarama.Config, error) {
 }
 
 func (ks *kafkaSource) startConsumer() {
-	client, err := sarama.NewConsumerGroup(ks.brokers, ks.groupName, ks.config)
+	consumerGroup, err := sarama.NewConsumerGroupFromClient(ks.groupName, ks.saramaClient)
 	ks.logger.Infow("creating NewConsumerGroup", zap.String("topic", ks.topic), zap.String("consumerGroupName", ks.groupName), zap.Strings("brokers", ks.brokers))
 	if err != nil {
-		ks.logger.Panicw("Problem initializing sarama client", zap.Error(err))
+		ks.logger.Panicw("Problem initializing sarama consumerGroup", zap.Error(err))
 	}
 	wg := new(sync.WaitGroup)
 
@@ -404,7 +320,7 @@ func (ks *kafkaSource) startConsumer() {
 			select {
 			case <-ks.lifecycleCtx.Done():
 				return
-			case cErr := <-client.Errors():
+			case cErr := <-consumerGroup.Errors():
 				ks.logger.Errorw("Kafka consumer error", zap.Error(cErr))
 			}
 		}
@@ -417,7 +333,7 @@ func (ks *kafkaSource) startConsumer() {
 			// `Consume` should be called inside an infinite loop; when a
 			// server-side re-balance happens, the consumer session will need to be
 			// recreated to get the new claims
-			if conErr := client.Consume(ks.lifecycleCtx, []string{ks.topic}, ks.handler); conErr != nil {
+			if conErr := consumerGroup.Consume(ks.lifecycleCtx, []string{ks.topic}, ks.handler); conErr != nil {
 				if errors.Is(err, sarama.ErrClosedConsumerGroup) {
 					return
 				}
@@ -433,7 +349,7 @@ func (ks *kafkaSource) startConsumer() {
 		}
 	}()
 	wg.Wait()
-	_ = client.Close()
+	_ = consumerGroup.Close()
 	close(ks.stopCh)
 }
 

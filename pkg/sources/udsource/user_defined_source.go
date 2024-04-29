@@ -75,7 +75,7 @@ func New(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.Sourcer, error) {
+	opts ...Option) (sourcer.SourceReader, error) {
 
 	var err error
 
@@ -149,20 +149,4 @@ func (u *userDefinedSource) Close() error {
 	u.logger.Info("Shutting down user-defined source...")
 	u.cancelFn()
 	return u.sourceApplier.CloseConn(context.Background())
-}
-
-func (u *userDefinedSource) Stop() {
-	u.forwarder.Stop()
-	u.logger.Info("forwarder stopped successfully")
-}
-
-func (u *userDefinedSource) ForceStop() {
-	u.forwarder.ForceStop()
-	u.logger.Info("forwarder force stopped successfully")
-}
-
-// Start starts the data forwarding
-func (u *userDefinedSource) Start() <-chan struct{} {
-	u.logger.Info("Starting user-defined source...")
-	return u.forwarder.Start()
 }

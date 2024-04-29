@@ -94,7 +94,7 @@ func New(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.Sourcer, error) {
+	opts ...Option) (sourcer.SourceReader, error) {
 
 	h := &httpSource{
 		vertexName:    vertexInstance.Vertex.Spec.Name,
@@ -271,19 +271,4 @@ func (h *httpSource) Close() error {
 	}
 	h.logger.Info("HTTP source server shutdown")
 	return nil
-}
-
-func (h *httpSource) Stop() {
-	h.logger.Info("Stopping http reader...")
-	h.ready = false
-	h.forwarder.Stop()
-}
-
-func (h *httpSource) ForceStop() {
-	h.Stop()
-}
-
-func (h *httpSource) Start() <-chan struct{} {
-	defer func() { h.ready = true }()
-	return h.forwarder.Start()
 }

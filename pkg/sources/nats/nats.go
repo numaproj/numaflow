@@ -63,7 +63,7 @@ func New(
 	toVertexPublisherStores map[string]store.WatermarkStore,
 	publishWMStores store.WatermarkStore,
 	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.Sourcer, error) {
+	opts ...Option) (sourcer.SourceReader, error) {
 
 	n := &natsSource{
 		vertexName:    vertexInstance.Vertex.Spec.Name,
@@ -255,17 +255,4 @@ func (ns *natsSource) Close() error {
 	ns.natsConn.Close()
 	ns.logger.Info("Nats source server shutdown")
 	return nil
-}
-
-func (ns *natsSource) Stop() {
-	ns.logger.Info("Stopping nats reader...")
-	ns.forwarder.Stop()
-}
-
-func (ns *natsSource) ForceStop() {
-	ns.Stop()
-}
-
-func (ns *natsSource) Start() <-chan struct{} {
-	return ns.forwarder.Start()
 }
