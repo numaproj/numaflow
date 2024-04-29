@@ -332,7 +332,7 @@ func (sp *SourceProcessor) createSourceReader(ctx context.Context, udsGRPCClient
 	} else if x := src.Generator; x != nil {
 		return generator.NewMemGen(ctx, sp.VertexInstance, generator.WithReadTimeout(readTimeout))
 	} else if x := src.Kafka; x != nil {
-		return kafka.NewKafkaSource(ctx, sp.VertexInstance, kafka.NewConsumerHandler(dfv1.DefaultKafkaHandlerChannelSize), kafka.WithReadTimeOut(readTimeout))
+		return kafka.NewKafkaSource(ctx, sp.VertexInstance, kafka.NewConsumerHandler(dfv1.DefaultKafkaHandlerChannelSize), kafka.WithReadTimeOut(readTimeout), kafka.WithGroupName(x.ConsumerGroupName))
 	} else if x := src.HTTP; x != nil {
 		return http.NewHttpSource(ctx, sp.VertexInstance, http.WithReadTimeout(readTimeout))
 	} else if x := src.Nats; x != nil {

@@ -86,7 +86,6 @@ type memGen struct {
 	genFn          func(int32, *uint64, int64) ([]byte, error) // genFn function that generates a payload as a byte array
 	vertexName     string                                      // name is the name of the source vertex
 	pipelineName   string                                      // pipelineName is the name of the pipeline
-	cancelFn       context.CancelFunc                          // cancelFn terminates the source will not generate any more records.
 	readTimeout    time.Duration                               // read timeout for the reader
 	vertexInstance *dfv1.VertexInstance                        // vertex instance
 	jitter         time.Duration
