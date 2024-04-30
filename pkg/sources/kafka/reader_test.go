@@ -18,6 +18,7 @@ package kafka
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -28,7 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-func TestNewKafkasource(t *testing.T) {
+func TestKafkaSource_Read(t *testing.T) {
 	// Create a new Sarama mock broker
 	broker := sarama.NewMockBroker(t, 1)
 
@@ -53,139 +54,50 @@ func TestNewKafkasource(t *testing.T) {
 			},
 		},
 	}}
+
 	vi := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "test-host",
 		Replica:  0,
 	}
 
+	// Create a new Sarama mock client
+	client, err := sarama.NewClient([]string{broker.Addr()}, nil)
+	assert.NoError(t, err)
+
+	adminClient, err := sarama.NewClusterAdminFromClient(client)
+	assert.NoError(t, err)
+
 	handler := NewConsumerHandler(100)
-	close(handler.ready)
 
-	ks, err := NewKafkaSource(ctx, vi, handler, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
-
-	// no errors if everything is good.
-	assert.Nil(t, err)
-	assert.NotNil(t, ks)
-
-	assert.Equal(t, "default", ks.(*kafkaSource).groupName)
-
-	// config is all set and initialized correctly
-	assert.NotNil(t, ks.(*kafkaSource).config)
-	assert.Equal(t, 100, ks.(*kafkaSource).handlerBuffer)
-	assert.Equal(t, 100*time.Millisecond, ks.(*kafkaSource).readTimeout)
-	assert.Equal(t, 100, cap(ks.(*kafkaSource).handler.messages))
-}
-
-func TestGroupNameOverride(t *testing.T) {
-	// Create a new Sarama mock broker
-	broker := sarama.NewMockBroker(t, 1)
-
-	// Set expectations on the mock broker
-	broker.SetHandlerByMap(map[string]sarama.MockResponse{
-		"MetadataRequest": sarama.NewMockMetadataResponse(t).
-			SetBroker(broker.Addr(), broker.BrokerID()).
-			SetLeader("testtopic", 0, broker.BrokerID()).
-			SetController(broker.BrokerID()), // Set the controller
-	})
-
-	ctx := context.Background()
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-			Source: &dfv1.Source{
-				Kafka: &dfv1.KafkaSource{
-					Topic: "testtopic", Brokers: []string{broker.Addr()}, ConsumerGroupName: "custom",
-				},
-			},
-		},
-	}}
-	vi := &dfv1.VertexInstance{
-		Vertex:   vertex,
-		Hostname: "test-host",
-		Replica:  0,
+	ks := &kafkaSource{
+		readTimeout:  1 * time.Second,
+		vertexName:   vi.Vertex.Name,
+		pipelineName: vi.Vertex.Spec.PipelineName,
+		handler:      handler,
+		logger:       logging.FromContext(ctx),
+		saramaClient: client,
+		adminClient:  adminClient,
 	}
-	handler := NewConsumerHandler(100)
-	close(handler.ready)
-	ks, _ := NewKafkaSource(ctx, vi, handler, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
-	assert.Equal(t, "default", ks.(*kafkaSource).groupName)
+	// Write messages to the handler's messages channel
+	go func() {
+		for i := 0; i < 10; i++ {
+			handler.messages <- &sarama.ConsumerMessage{
+				Topic:     "testtopic",
+				Partition: 0,
+				Offset:    int64(i),
+				Value:     []byte(fmt.Sprintf("message-%d", i)),
+			}
+		}
+	}()
 
-}
+	// Test the Read method
+	messages, err := ks.Read(context.Background(), 10)
+	assert.NoError(t, err)
+	assert.Len(t, messages, 10)
 
-func TestDefaultBufferSize(t *testing.T) {
-	// Create a new Sarama mock broker
-	broker := sarama.NewMockBroker(t, 1)
-
-	// Set expectations on the mock broker
-	broker.SetHandlerByMap(map[string]sarama.MockResponse{
-		"MetadataRequest": sarama.NewMockMetadataResponse(t).
-			SetBroker(broker.Addr(), broker.BrokerID()).
-			SetLeader("testtopic", 0, broker.BrokerID()).
-			SetController(broker.BrokerID()), // Set the controller
-	})
-
-	ctx := context.Background()
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-			Source: &dfv1.Source{
-				Kafka: &dfv1.KafkaSource{
-					Topic: "testtopic", Brokers: []string{broker.Addr()},
-				},
-			},
-		},
-	}}
-	vi := &dfv1.VertexInstance{
-		Vertex:   vertex,
-		Hostname: "test-host",
-		Replica:  0,
-	}
-	handler := NewConsumerHandler(100)
-	close(handler.ready)
-	ks, _ := NewKafkaSource(ctx, vi, handler, WithLogger(logging.NewLogger()), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
-	assert.Equal(t, 100, ks.(*kafkaSource).handlerBuffer)
+	// Close the client and broker
+	_ = client.Close()
 	broker.Close()
-}
-
-func TestBufferSizeOverrides(t *testing.T) {
-	// Create a new Sarama mock broker
-	broker := sarama.NewMockBroker(t, 1)
-
-	// Set expectations on the mock broker
-	broker.SetHandlerByMap(map[string]sarama.MockResponse{
-		"MetadataRequest": sarama.NewMockMetadataResponse(t).
-			SetBroker(broker.Addr(), broker.BrokerID()).
-			SetLeader("testtopic", 0, broker.BrokerID()).
-			SetController(broker.BrokerID()), // Set the controller
-	})
-
-	ctx := context.Background()
-
-	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-		PipelineName: "testPipeline",
-		AbstractVertex: dfv1.AbstractVertex{
-			Name: "testVertex",
-			Source: &dfv1.Source{
-				Kafka: &dfv1.KafkaSource{
-					Topic: "testtopic", Brokers: []string{broker.Addr()},
-				},
-			},
-		},
-	}}
-	vi := &dfv1.VertexInstance{
-		Vertex:   vertex,
-		Hostname: "test-host",
-		Replica:  0,
-	}
-	handler := NewConsumerHandler(100)
-	close(handler.ready)
-	ks, _ := NewKafkaSource(ctx, vi, handler, WithLogger(logging.NewLogger()), WithBufferSize(110), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
-
-	assert.Equal(t, 110, ks.(*kafkaSource).handlerBuffer)
-
 }

@@ -2,19 +2,9 @@ package kafka
 
 import (
 	"time"
-
-	"go.uber.org/zap"
 )
 
 type Option func(*kafkaSource) error
-
-// WithLogger is used to return logger information
-func WithLogger(l *zap.SugaredLogger) Option {
-	return func(o *kafkaSource) error {
-		o.logger = l
-		return nil
-	}
-}
 
 // WithBufferSize is used to return size of message channel information
 func WithBufferSize(s int) Option {

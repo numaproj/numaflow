@@ -102,9 +102,6 @@ func NewKafkaSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, ha
 	// return errors from the underlying kafka client using the Errors channel
 	config.Consumer.Return.Errors = true
 	ks.config = config
-
-	ctx, cancel := context.WithCancel(context.Background())
-	ks.cancelFn = cancel
 	ks.lifecycleCtx = ctx
 
 	ks.stopCh = make(chan struct{})
@@ -199,7 +196,6 @@ func (ks *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 func (ks *kafkaSource) Close() error {
 	ks.logger.Info("Closing kafka reader...")
 	// finally, shut down the client
-	ks.cancelFn()
 	if ks.adminClient != nil {
 		// closes the underlying sarama client as well.
 		if err := ks.adminClient.Close(); err != nil {
