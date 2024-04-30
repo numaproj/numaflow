@@ -69,7 +69,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		toVertexWatermarkStores  = make(map[string]store.WatermarkStore)
 		log                      = logging.FromContext(ctx)
 		writersMap               = make(map[string][]isb.BufferWriter)
-		transformerClient        *transformer.GRPCBasedTransformer
+		srcTransformerGRPCClient *transformer.GRPCBasedTransformer
 		sourceReader             sourcer.SourceReader
 		healthCheckers           []metrics.HealthChecker
 		idleManager              wmb.IdleManager
@@ -229,27 +229,27 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		sdkClient, err := sourcetransformer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		srcTransformerClient, err := sourcetransformer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create transformer gRPC client, %w", err)
 		}
 
-		transformerClient = transformer.NewGRPCBasedTransformer(sdkClient)
+		srcTransformerGRPCClient = transformer.NewGRPCBasedTransformer(srcTransformerClient)
 
 		// Close the connection when we are done
 		defer func() {
-			err = transformerClient.CloseConn(ctx)
+			err = srcTransformerGRPCClient.CloseConn(ctx)
 			if err != nil {
 				log.Warnw("Failed to close transformer gRPC client conn", zap.Error(err))
 			}
 		}()
 
 		// Readiness check
-		if err = transformerClient.WaitUntilReady(ctx); err != nil {
+		if err = srcTransformerGRPCClient.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on user-defined transfomer readiness check, %w", err)
 		}
 
-		healthCheckers = append(healthCheckers, transformerClient)
+		healthCheckers = append(healthCheckers, srcTransformerGRPCClient)
 	}
 
 	sourceReader, err := sp.createSourceReader(ctx, udsGRPCClient)
@@ -269,7 +269,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// create source data forwarder
 	var sourceForwarder *sourceforward.DataForward
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
-		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), transformerClient, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
+		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), srcTransformerGRPCClient, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
 	} else {
 		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
 	}
