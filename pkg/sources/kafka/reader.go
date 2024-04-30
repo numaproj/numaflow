@@ -41,7 +41,6 @@ type kafkaSource struct {
 	groupName     string              // group name for the source vertex
 	topic         string              // topic to consume messages from
 	brokers       []string            // kafka brokers
-	cancelFn      context.CancelFunc  // context cancel function
 	lifecycleCtx  context.Context     // lifecycle context
 	handler       *ConsumerHandler    // handler for a kafka consumer group
 	config        *sarama.Config      // sarama config for kafka consumer group
