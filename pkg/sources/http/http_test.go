@@ -26,7 +26,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -87,7 +86,7 @@ func Test_NewHTTP(t *testing.T) {
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, idleManager)
+	h, err := New(vi, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStores, idleManager)
 	assert.NoError(t, err)
 	assert.False(t, h.(*httpSource).ready)
 	assert.Equal(t, v.Spec.Name, h.GetName())

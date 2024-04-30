@@ -30,7 +30,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -83,7 +82,7 @@ func TestMessageHandling(t *testing.T) {
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()),
+	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()),
 		WithBufferSize(100), WithReadTimeOut(100*time.Millisecond))
 
 	msg := &sarama.ConsumerMessage{

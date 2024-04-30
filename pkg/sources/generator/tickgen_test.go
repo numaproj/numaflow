@@ -28,7 +28,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -78,7 +77,7 @@ func TestRead(t *testing.T) {
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStore, idleManager)
 	assert.NoError(t, err)
 	_ = mgen.Start()
 
@@ -139,7 +138,7 @@ func TestStop(t *testing.T) {
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStore, idleManager)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 
@@ -223,7 +222,7 @@ func TestWatermark(t *testing.T) {
 	}
 
 	publishWMStore, _ := store.BuildNoOpWatermarkStore()
-	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, applier.Terminal, nil, nil, publishWMStore, nil)
+	mgen, err := NewMemGen(m, toBuffers, myForwardToAllTest{}, nil, nil, nil, publishWMStore, nil)
 	assert.NoError(t, err)
 	stop := mgen.Start()
 

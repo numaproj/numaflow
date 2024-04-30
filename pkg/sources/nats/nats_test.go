@@ -30,7 +30,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
@@ -85,7 +84,7 @@ func newInstance(t *testing.T, vi *dfv1.VertexInstance) (sourcer.Sourcer, error)
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	return New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, idleManager, WithReadTimeout(1*time.Second))
+	return New(vi, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStores, idleManager, WithReadTimeout(1*time.Second))
 }
 
 func Test_Single(t *testing.T) {

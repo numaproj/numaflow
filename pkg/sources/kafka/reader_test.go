@@ -26,7 +26,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -61,7 +60,7 @@ func TestNewKafkasource(t *testing.T) {
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, err := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	ks, err := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	// no errors if everything is good.
 	assert.Nil(t, err)
@@ -106,7 +105,7 @@ func TestGroupNameOverride(t *testing.T) {
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithBufferSize(100), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	assert.Equal(t, "default", ks.(*kafkaSource).groupName)
 
@@ -141,7 +140,7 @@ func TestDefaultBufferSize(t *testing.T) {
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	assert.Equal(t, 100, ks.(*kafkaSource).handlerBuffer)
 
@@ -176,7 +175,7 @@ func TestBufferSizeOverrides(t *testing.T) {
 	}
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithBufferSize(110), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
+	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()), WithBufferSize(110), WithReadTimeOut(100*time.Millisecond), WithGroupName("default"))
 
 	assert.Equal(t, 110, ks.(*kafkaSource).handlerBuffer)
 

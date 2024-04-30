@@ -142,7 +142,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 
 		// created watermark related components only if watermark is enabled
-		// otherwise no op will used
+		// otherwise no op will be used
 		if !sp.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			// build watermark stores for from vertex
 			sourceWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
@@ -244,7 +244,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		readyCheckers = append(readyCheckers, transformerGRPCClient)
 		source, err = sp.getSourcer(writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), transformerGRPCClient, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
 	} else {
-		source, err = sp.getSourcer(writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
+		source, err = sp.getSourcer(writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), nil, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to find a source, error: %w", err)
