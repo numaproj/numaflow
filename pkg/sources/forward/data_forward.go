@@ -212,7 +212,7 @@ func processReadMessages(hasUDTransformer bool, readMessages []*isb.ReadMessage,
 			transformerCh <- &transformerResults[idx]
 		} else {
 			// if no user-defined transformer exists, then the messages to write will be identical to the messages read from source
-			transformerCh <- &transformerResults[idx]
+			transformerResults[idx].writeMessages = []*isb.WriteMessage{{Message: m.Message}}
 		}
 	}
 }
