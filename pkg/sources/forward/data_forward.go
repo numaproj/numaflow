@@ -312,6 +312,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	} else {
 		// if no user-defined transformer exists, then the messages to write will be identical to the messages read from source
 		for idx, m := range readMessages {
+			// emit message size metric
+			metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(m.Payload)))
 			transformerResults[idx].readMessage = m
 			transformerResults[idx].writeMessages = []*isb.WriteMessage{{Message: m.Message}}
 		}
