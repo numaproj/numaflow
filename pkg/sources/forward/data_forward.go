@@ -192,6 +192,31 @@ type readWriteMessagePair struct {
 	transformerError error
 }
 
+func processReadMessages(hasUDTransformer bool, readMessages []*isb.ReadMessage, processorWM wmb.Watermark,
+	transformerResults []readWriteMessagePair, df *DataForward, transformerCh chan *readWriteMessagePair) {
+	for idx, m := range readMessages {
+		// emit message size metric
+		metrics.ReadBytesCount.With(map[string]string{
+			metrics.LabelVertex:             df.vertexName,
+			metrics.LabelPipeline:           df.pipelineName,
+			metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+			metrics.LabelPartitionName:      df.reader.GetName(),
+		}).Add(float64(len(m.Payload)))
+		// assign watermark to the message
+		m.Watermark = time.Time(processorWM)
+		transformerResults[idx].readMessage = m
+
+		if hasUDTransformer {
+			// send transformer processing work to the channel
+			transformerCh <- &transformerResults[idx]
+		} else {
+			// if no user-defined transformer exists, then the messages to write will be identical to the messages read from source
+			transformerCh <- &transformerResults[idx]
+		}
+	}
+}
+
 // forwardAChunk forwards a chunk of message from the reader to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
@@ -290,17 +315,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			}()
 		}
 		concurrentTransformerProcessingStart := time.Now()
+		processReadMessages(true, readMessages, processorWM, transformerResults, df, transformerCh)
 
-		// send to transformer only the data messages
-		for idx, m := range readMessages {
-			// emit message size metric
-			metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(m.Payload)))
-			// assign watermark to the message
-			m.Watermark = time.Time(processorWM)
-			// send transformer processing work to the channel
-			transformerResults[idx].readMessage = m
-			transformerCh <- &transformerResults[idx]
-		}
 		// let the go routines know that there is no more work
 		close(transformerCh)
 		// wait till the processing is done. this will not be an infinite wait because the transformer processing will exit if
@@ -310,13 +326,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.SourceTransformerConcurrentProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.reader.GetName()}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
 		// transformer processing is done.
 	} else {
-		// if no user-defined transformer exists, then the messages to write will be identical to the messages read from source
-		for idx, m := range readMessages {
-			// emit message size metric
-			metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSource), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.reader.GetName()}).Add(float64(len(m.Payload)))
-			transformerResults[idx].readMessage = m
-			transformerResults[idx].writeMessages = []*isb.WriteMessage{{Message: m.Message}}
-		}
+		processReadMessages(false, readMessages, processorWM, transformerResults, df, nil)
 	}
 
 	// publish source watermark and assign IsLate attribute based on new event time.
