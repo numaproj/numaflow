@@ -192,8 +192,13 @@ type readWriteMessagePair struct {
 	transformerError error
 }
 
+// processReadMessages takes the messages read from source and processes them one of two ways:
+//  1. If a user-defined transformer exists then it will send the messages to the transformer channel. Thus, the results of
+//     the transformer application on a read message will be stored as the corresponding writeMessage in readWriteMessagePairs
+//  2. If a user-defined transformer does not exist, then there is no transformer application to take place, and so
+//     the unmodified read message will be stored as the corresponding writeMessage in readWriteMessagePairs
 func processReadMessages(hasUDTransformer bool, readMessages []*isb.ReadMessage, processorWM wmb.Watermark,
-	transformerResults []readWriteMessagePair, df *DataForward, transformerCh chan *readWriteMessagePair) {
+	readWriteMessagePairs []readWriteMessagePair, df *DataForward, transformerCh chan *readWriteMessagePair) {
 	for idx, m := range readMessages {
 		// emit message size metric
 		metrics.ReadBytesCount.With(map[string]string{
@@ -205,14 +210,14 @@ func processReadMessages(hasUDTransformer bool, readMessages []*isb.ReadMessage,
 		}).Add(float64(len(m.Payload)))
 		// assign watermark to the message
 		m.Watermark = time.Time(processorWM)
-		transformerResults[idx].readMessage = m
+		readWriteMessagePairs[idx].readMessage = m
 
 		if hasUDTransformer {
 			// send transformer processing work to the channel
-			transformerCh <- &transformerResults[idx]
+			transformerCh <- &readWriteMessagePairs[idx]
 		} else {
-			// if no user-defined transformer exists, then the messages to write will be identical to the messages read from source
-			transformerResults[idx].writeMessages = []*isb.WriteMessage{{Message: m.Message}}
+			// if no user-defined transformer exists, then the messages to write will be identical to the message read from source
+			readWriteMessagePairs[idx].writeMessages = []*isb.WriteMessage{{Message: m.Message}}
 		}
 	}
 }
@@ -295,16 +300,13 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
 	}
 
-	// user-defined transformer concurrent processing request channel
-	transformerCh := make(chan *readWriteMessagePair)
-	// transformerResults stores the results after user-defined transformer processing for all read messages. It indexes
-	// a read message to the corresponding write message
-	transformerResults := make([]readWriteMessagePair, len(readMessages))
-	// applyTransformer, if there is an Internal error, it is a blocking call and
-	// will return only if shutdown has been initiated.
+	readWriteMessagePairs := make([]readWriteMessagePair, len(readMessages))
 
 	// If a user defined transformer exists, apply it
 	if df.transformer != nil {
+		// user-defined transformer concurrent processing request channel
+		transformerCh := make(chan *readWriteMessagePair)
+
 		// create a pool of Transformer Processors
 		var wg sync.WaitGroup
 		for i := 0; i < df.opts.transformerConcurrency; i++ {
@@ -315,7 +317,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			}()
 		}
 		concurrentTransformerProcessingStart := time.Now()
-		processReadMessages(true, readMessages, processorWM, transformerResults, df, transformerCh)
+		processReadMessages(true, readMessages, processorWM, readWriteMessagePairs, df, transformerCh)
 
 		// let the go routines know that there is no more work
 		close(transformerCh)
@@ -326,7 +328,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.SourceTransformerConcurrentProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.reader.GetName()}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
 		// transformer processing is done.
 	} else {
-		processReadMessages(false, readMessages, processorWM, transformerResults, df, nil)
+		processReadMessages(false, readMessages, processorWM, readWriteMessagePairs, df, nil)
 	}
 
 	// publish source watermark and assign IsLate attribute based on new event time.
@@ -334,7 +336,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	var transformedReadMessages []*isb.ReadMessage
 	latestEtMap := make(map[int32]int64)
 
-	for _, m := range transformerResults {
+	for _, m := range readWriteMessagePairs {
 		writeMessages = append(writeMessages, m.writeMessages...)
 		for _, message := range m.writeMessages {
 			message.Headers = m.readMessage.Headers
@@ -365,7 +367,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	var sourcePartitionsIndices = make(map[int32]bool)
 	// let's figure out which vertex to send the results to.
 	// update the toBuffer(s) with writeMessages.
-	for _, m := range transformerResults {
+	for _, m := range readWriteMessagePairs {
 		// Look for errors in transformer processing if we see even 1 error we return.
 		// Handling partial retrying is not worth ATM.
 		if m.transformerError != nil {
