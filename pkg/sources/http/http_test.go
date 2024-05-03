@@ -64,5 +64,5 @@ func Test_NewHTTP(t *testing.T) {
 	h, err := NewHttpSource(ctx, vi)
 	assert.NoError(t, err)
 	assert.NotNil(t, h.(*httpSource).shutdown)
-	assert.True(t, h.(*httpSource).ready)
+	assert.True(t, h.(*httpSource).ready.Load())
 }
