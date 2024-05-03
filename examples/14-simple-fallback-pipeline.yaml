@@ -22,12 +22,12 @@ spec:
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-go/fb-sink-log:v0.7.0-rc2
+            image: quay.io/numaio/numaflow-go/fb-sink-log:v0.7.0
             imagePullPolicy: Always
         fallback:
           udsink:
             container:
-              image: quay.io/numaio/numaflow-go/fb-sink-log:v0.7.0-rc2
+              image: quay.io/numaio/numaflow-go/fb-sink-log:v0.7.0
   edges:
     - from: in
       to: cat
