@@ -2504,7 +2504,8 @@
 
 <h1 id="inter-step-buffer-service">Inter-Step Buffer Service<a class="headerlink" href="#inter-step-buffer-service" title="Permanent link">&para;</a></h1>
 <p>Inter-Step Buffer Service is the service to provide <a href="../inter-step-buffer/">Inter-Step Buffers</a>.</p>
-<p>An Inter-Step Buffer Service is described by a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>. It is required to be existing in a namespace before Pipeline objects are created. A sample <code>InterStepBufferService</code> with JetStream implementation looks like below.</p>
+<p>An Inter-Step Buffer Service is described by a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>. It is required to be existing in a namespace before 
+Pipeline objects are created. A sample <code>InterStepBufferService</code> with JetStream implementation looks like below.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2513,7 +2514,10 @@
 <span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use &quot;latest&quot; but a specific version in your real deployment</span>
 </code></pre></div>
-<p><code>InterStepBufferService</code> is a namespaced object. It can be used by all the Pipelines in the same namespace. By default, Pipeline objects look for an <code>InterStepBufferService</code> named <code>default</code>, so a common practice is to create an <code>InterStepBufferService</code> with the name <code>default</code>. If you give the <code>InterStepBufferService</code> a name other than <code>default</code>, then you need to give the same name in the Pipeline spec.</p>
+<p><code>InterStepBufferService</code> is a namespaced object. It can be used by all the Pipelines in the same namespace. By default, 
+Pipeline objects look for an <code>InterStepBufferService</code> named <code>default</code>, so a common practice is to create an <code>InterStepBufferService</code> 
+with the name <code>default</code>. If you give the <code>InterStepBufferService</code> a name other than <code>default</code>, then you need to give the
+same name in the Pipeline spec.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2526,11 +2530,14 @@
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>isbsvc
 </code></pre></div>
 <h2 id="jetstream">JetStream<a class="headerlink" href="#jetstream" title="Permanent link">&para;</a></h2>
-<p><code>JetStream</code> is one of the supported <code>Inter-Step Buffer Service</code> implementations. A keyword <code>jetstream</code> under <code>spec</code> means a JetStream cluster will be created in the namespace.</p>
+<p><code>JetStream</code> is one of the supported <code>Inter-Step Buffer Service</code> implementations. A keyword <code>jetstream</code> under <code>spec</code> means 
+a JetStream cluster will be created in the namespace.</p>
 <h3 id="version">Version<a class="headerlink" href="#version" title="Permanent link">&para;</a></h3>
-<p>Property <code>spec.jetstream.version</code> is required for a JetStream <code>InterStepBufferService</code>. Supported versions can be found from the ConfigMap <code>numaflow-controller-config</code> in the control plane namespace.</p>
+<p>Property <code>spec.jetstream.version</code> is required for a JetStream <code>InterStepBufferService</code>. Supported versions can be found 
+from the ConfigMap <a href="https://github.com/numaproj/numaflow/blob/main/config/base/controller-manager/numaflow-controller-config.yaml"><code>numaflow-controller-config</code></a> in the control plane namespace.</p>
 <p><strong>Note</strong></p>
-<p>The version <code>latest</code> in the ConfigMap should only be used for testing purpose. It's recommended that you always use a fixed version in your real workload.</p>
+<p>The version <code>latest</code> in the ConfigMap should only be used for testing purpose. It's recommended that you always use a 
+fixed version in your real workload.</p>
 <h3 id="replicas">Replicas<a class="headerlink" href="#replicas" title="Permanent link">&para;</a></h3>
 <p>An optional property <code>spec.jetstream.replicas</code> (defaults to 3) can be specified, which gives the total number of nodes. </p>
 <h3 id="persistence">Persistence<a class="headerlink" href="#persistence" title="Permanent link">&para;</a></h3>
@@ -2576,11 +2583,15 @@ max_file_store: 1TB
 <ul>
 <li>ConfigMap <code>numaflow-controller-config</code> in the control plane namespace.</li>
 </ul>
-<p>This is the place to configure the default properties for the streams and consumers created in all the Jet Stream ISB Services in the Kubernetes cluster.</p>
+<p>This is the place to configure the default properties for the streams and consumers created in all the Jet Stream ISB 
+- Services in the Kubernetes cluster.</p>
 <ul>
 <li>Field <code>spec.jetstream.bufferConfig</code> in an <code>InterStepBufferService</code> object.</li>
 </ul>
-<p>This optional field can be used to customize the stream and consumer properties of that particular <code>InterStepBufferService</code>, and the configuration will be merged into the default one from the ConfigMap <code>numaflow-controller-config</code>. For example, if you only want to change <code>maxMsgs</code> for created streams, then you only need to give <code>stream.maxMsgs</code> in the field, all the rest config will still go with the default values in the control plane ConfigMap.</p>
+<p>This optional field can be used to customize the stream and consumer properties of that particular <code>InterStepBufferService</code>,
+- and the configuration will be merged into the default one from the ConfigMap <code>numaflow-controller-config</code>. For example, 
+- if you only want to change <code>maxMsgs</code> for created streams, then you only need to give <code>stream.maxMsgs</code> in the field, all 
+- the rest config will still go with the default values in the control plane ConfigMap.</p>
 <p>Both these 2 places expect a YAML format configuration like below:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">bufferConfig</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 <span class="w">  </span><span class="no"># The properties of the buffers (streams) to be created in this JetStream service</span>
@@ -2600,20 +2611,27 @@ max_file_store: 1TB
 <span class="w">    </span><span class="no">maxAckPending: 20000</span>
 </code></pre></div>
 <p><strong>Note</strong></p>
-<p>Changing the buffer configuration either in the control plane ConfigMap or in the <code>InterStepBufferService</code> object does <strong>NOT</strong> make any change to the buffers (streams) already existing.</p>
+<p>Changing the buffer configuration either in the control plane ConfigMap or in the <code>InterStepBufferService</code> object does 
+<strong>NOT</strong> make any change to the buffers (streams) already existing.</p>
 <h3 id="tls">TLS<a class="headerlink" href="#tls" title="Permanent link">&para;</a></h3>
-<p><code>TLS</code> is optional to configure through <code>spec.jetstream.tls: true</code>. Enabling TLS will use a self signed CERT to encrypt the connection from Vertex Pods to JetStream service. By default <code>TLS</code> is not enabled.</p>
+<p><code>TLS</code> is optional to configure through <code>spec.jetstream.tls: true</code>. Enabling TLS will use a self signed CERT to encrypt 
+the connection from Vertex Pods to JetStream service. By default <code>TLS</code> is not enabled.</p>
 <h3 id="encryption-at-rest">Encryption At Rest<a class="headerlink" href="#encryption-at-rest" title="Permanent link">&para;</a></h3>
-<p>Encryption at rest can be enabled by setting <code>spec.jetstream.encryption: true</code>. Be aware this will impact the performance a bit, see the detail at <a href="https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest">official doc</a>.</p>
-<p>Once a JetStream ISB Service is created, toggling the <code>encryption</code> field will cause problem for the exiting messages, so if you want to change the value, please delete and recreate the ISB Service, and you also need to restart all the Vertex Pods to pick up the new credentials.</p>
+<p>Encryption at rest can be enabled by setting <code>spec.jetstream.encryption: true</code>. Be aware this will impact the performance
+a bit, see the detail at <a href="https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest">official doc</a>.</p>
+<p>Once a JetStream ISB Service is created, toggling the <code>encryption</code> field will cause problem for the exiting messages, so
+if you want to change the value, please delete and recreate the ISB Service, and you also need to restart all the Vertex
+Pods to pick up the new credentials.</p>
 <h3 id="other-configuration">Other Configuration<a class="headerlink" href="#other-configuration" title="Permanent link">&para;</a></h3>
 <p>Check <a href="../../APIs/#numaflow.numaproj.io/v1alpha1.JetStreamBufferService">here</a> for the full spec of <code>spec.jetstream</code>.</p>
 <h2 id="redis">Redis<a class="headerlink" href="#redis" title="Permanent link">&para;</a></h2>
 <p><strong>NOTE</strong> Today when using Redis, the pipeline will stall if Redis has any data loss, especially during failovers.</p>
-<p><code>Redis</code> is supported as an <code>Inter-Step Buffer Service</code> implementation. A keyword <code>native</code> under <code>spec.redis</code> means several Redis nodes with a <a href="https://redis.io/topics/replication">Master-Replicas</a> topology will be created in the namespace.
+<p><code>Redis</code> is supported as an <code>Inter-Step Buffer Service</code> implementation. A keyword <code>native</code> under <code>spec.redis</code> means several
+Redis nodes with a <a href="https://redis.io/topics/replication">Master-Replicas</a> topology will be created in the namespace.
 We also support external redis.</p>
 <h4 id="external-redis">External Redis<a class="headerlink" href="#external-redis" title="Permanent link">&para;</a></h4>
-<p>If you have a managed Redis, say in AWS, etc., we can make that Redis your ISB. All you need to do is provide the external Redis endpoint name.</p>
+<p>If you have a managed Redis, say in AWS, etc., we can make that Redis your ISB. All you need to do is provide the external
+Redis endpoint name.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2631,9 +2649,11 @@ requires more than one address to indicate the Redis is in cluster mode.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;numaflow-redis-cluster-0.numaflow-redis-cluster-headless:6379,numaflow-redis-cluster-1.numaflow-redis-cluster-headless:6379&quot;</span>
 </code></pre></div>
 <h3 id="version_1">Version<a class="headerlink" href="#version_1" title="Permanent link">&para;</a></h3>
-<p>Property <code>spec.redis.native.version</code> is required for a <code>native</code> Redis <code>InterStepBufferService</code>. Supported versions can be found from the ConfigMap <code>numaflow-controller-config</code> in the control plane namespace.</p>
+<p>Property <code>spec.redis.native.version</code> is required for a <code>native</code> Redis <code>InterStepBufferService</code>. Supported versions can be
+found from the ConfigMap <code>numaflow-controller-config</code> in the control plane namespace.</p>
 <h3 id="replicas_1">Replicas<a class="headerlink" href="#replicas_1" title="Permanent link">&para;</a></h3>
-<p>An optional property <code>spec.redis.native.replicas</code> (defaults to 3) can be specified, which gives the total number of nodes (including master and replicas). An odd number &gt;= 3 is suggested. If the given number &lt; 3, 3 will be used.</p>
+<p>An optional property <code>spec.redis.native.replicas</code> (defaults to 3) can be specified, which gives the total number of nodes
+(including master and replicas). An odd number &gt;= 3 is suggested. If the given number &lt; 3, 3 will be used.</p>
 <h3 id="persistence_1">Persistence<a class="headerlink" href="#persistence_1" title="Permanent link">&para;</a></h3>
 <p>The following example shows an <code>native</code> Redis <code>InterStepBufferService</code> with persistence.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
