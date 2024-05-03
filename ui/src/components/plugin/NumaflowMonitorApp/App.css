@@ -1,10 +1,6 @@
 html,
 body,
 #root,
-.MuiScopedCssBaseline-root {
-    height: 100%;
-    font-family: Avenir !important;
-}
 
 .App-side-nav-link {
     text-decoration: none;
