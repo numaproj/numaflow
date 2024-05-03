@@ -195,35 +195,15 @@ type readWriteMessagePair struct {
 	transformerError error
 }
 
-// processReadMessages takes the messages read from source and processes them one of two ways:
-//  1. If a user-defined transformer exists then it will send the messages to the transformer channel. Thus, the results of
-//     the transformer application on a read message will be stored as the corresponding writeMessage in readWriteMessagePairs
-//  2. If a user-defined transformer does not exist, then there is no transformer application to take place, and so
-//     the unmodified read message will be stored as the corresponding writeMessage in readWriteMessagePairs
-func processReadMessages(hasUDTransformer bool, readMessages []*isb.ReadMessage, processorWM wmb.Watermark,
-	readWriteMessagePairs []readWriteMessagePair, df *DataForward, transformerCh chan *readWriteMessagePair) {
-	for idx, m := range readMessages {
-		// emit message size metric
-		metrics.ReadBytesCount.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      df.reader.GetName(),
-		}).Add(float64(len(m.Payload)))
-
-		// assign watermark to the message
-		m.Watermark = time.Time(processorWM)
-		readWriteMessagePairs[idx].readMessage = m
-
-		if hasUDTransformer {
-			// send transformer processing work to the channel
-			transformerCh <- &readWriteMessagePairs[idx]
-		} else {
-			// if no user-defined transformer exists, then the messages to write will be identical to the message read from source
-			readWriteMessagePairs[idx].writeMessages = []*isb.WriteMessage{{Message: m.Message}}
-		}
-	}
+// emitMessageSizeMetric emits the message size metric
+func emitMessageSizeMetric(df *DataForward, m *isb.ReadMessage) {
+	metrics.ReadBytesCount.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Add(float64(len(m.Payload)))
 }
 
 // forwardAChunk forwards a chunk of message from the reader to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
@@ -325,7 +305,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	readWriteMessagePairs := make([]readWriteMessagePair, len(readMessages))
 
-	// If a user defined transformer exists, apply it
+	// If a user-defined transformer exists then it will send the messages to the transformer channel. Thus, the results of
+	// the transformer application on a read message will be stored as the corresponding writeMessage in readWriteMessagePairs
 	if df.transformer != nil {
 		// user-defined transformer concurrent processing request channel
 		transformerCh := make(chan *readWriteMessagePair)
@@ -340,7 +321,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			}()
 		}
 		concurrentTransformerProcessingStart := time.Now()
-		processReadMessages(true, readMessages, processorWM, readWriteMessagePairs, df, transformerCh)
+		for idx, m := range readMessages {
+			emitMessageSizeMetric(df, m)
+			// assign watermark to the message
+			m.Watermark = time.Time(processorWM)
+			readWriteMessagePairs[idx].readMessage = m
+			// send transformer processing work to the channel
+			transformerCh <- &readWriteMessagePairs[idx]
+		}
 
 		// let the go routines know that there is no more work
 		close(transformerCh)
@@ -358,9 +346,17 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
-		// transformer processing is done.
+		// If a user-defined transformer does not exist, then there is no transformer application to take place, and so
+		// the unmodified read message will be stored as the corresponding writeMessage in readWriteMessagePairs
 	} else {
-		processReadMessages(false, readMessages, processorWM, readWriteMessagePairs, df, nil)
+		for idx, m := range readMessages {
+			emitMessageSizeMetric(df, m)
+			// assign watermark to the message
+			m.Watermark = time.Time(processorWM)
+			readWriteMessagePairs[idx].readMessage = m
+			// if no user-defined transformer exists, then the messages to write will be identical to the message read from source
+			readWriteMessagePairs[idx].writeMessages = []*isb.WriteMessage{{Message: m.Message}}
+		}
 	}
 
 	// publish source watermark and assign IsLate attribute based on new event time.
