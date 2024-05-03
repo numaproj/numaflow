@@ -250,7 +250,7 @@ export function SummaryPageLayout({
             width: "14.4rem",
             background: "#F8F8FB",
             boxShadow: "0 0.4rem 0.6rem rgba(39, 76, 119, 0.16)",
-            zIndex: (theme) => theme.zIndex.drawer - 1,
+            zIndex: isPlugin ? "auto" : (theme) => theme.zIndex.drawer - 1,
             position: isPlugin ? "relative" : "fixed",
             top: isPlugin ? "3.85rem" : "10.2rem",
             padding: "0 2rem",
@@ -281,7 +281,7 @@ export function SummaryPageLayout({
           minHeight: SUMMARY_HEIGHT,
           background: "#F8F8FB",
           boxShadow: "0 0.3rem 1.1rem rgba(39, 76, 119, 0.16)",
-          zIndex: (theme) => theme.zIndex.drawer - 1,
+          zIndex: isPlugin ? "auto" : (theme) => theme.zIndex.drawer - 1,
           position: isPlugin ? "relative" : "fixed",
           top: isPlugin ? "10.5rem" : "9.2rem",
         }}

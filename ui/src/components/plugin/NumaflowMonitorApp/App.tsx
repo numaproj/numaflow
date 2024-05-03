@@ -193,7 +193,9 @@ function App(props: AppProps) {
           setUserInfo,
         }}
       >
-        <ScopedCssBaseline>
+        <ScopedCssBaseline
+          sx={{ height: "100%", fontFamily: "Avenir, sans-serif" }}
+        >
           <Box
             sx={{
               display: "flex",
@@ -209,7 +211,7 @@ function App(props: AppProps) {
                 width: "100%",
                 overflow: "auto",
                 background: "#F8F8FB",
-                zIndex: (theme) => theme.zIndex.drawer - 1,
+                zIndex: "auto",
               }}
             >
               <Breadcrumbs namespace={namespace} />
