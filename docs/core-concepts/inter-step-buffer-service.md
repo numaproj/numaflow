@@ -2,7 +2,8 @@
 
 Inter-Step Buffer Service is the service to provide [Inter-Step Buffers](inter-step-buffer.md).
 
-An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). It is required to be existing in a namespace before Pipeline objects are created. A sample `InterStepBufferService` with JetStream implementation looks like below.
+An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). It is required to be existing in a namespace before 
+Pipeline objects are created. A sample `InterStepBufferService` with JetStream implementation looks like below.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -14,7 +15,10 @@ spec:
     version: latest # Do NOT use "latest" but a specific version in your real deployment
 ```
 
-`InterStepBufferService` is a namespaced object. It can be used by all the Pipelines in the same namespace. By default, Pipeline objects look for an `InterStepBufferService` named `default`, so a common practice is to create an `InterStepBufferService` with the name `default`. If you give the `InterStepBufferService` a name other than `default`, then you need to give the same name in the Pipeline spec.
+`InterStepBufferService` is a namespaced object. It can be used by all the Pipelines in the same namespace. By default, 
+Pipeline objects look for an `InterStepBufferService` named `default`, so a common practice is to create an `InterStepBufferService` 
+with the name `default`. If you give the `InterStepBufferService` a name other than `default`, then you need to give the
+same name in the Pipeline spec.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -34,15 +38,18 @@ kubectl get isbsvc
 
 ## JetStream
 
-`JetStream` is one of the supported `Inter-Step Buffer Service` implementations. A keyword `jetstream` under `spec` means a JetStream cluster will be created in the namespace.
+`JetStream` is one of the supported `Inter-Step Buffer Service` implementations. A keyword `jetstream` under `spec` means 
+a JetStream cluster will be created in the namespace.
 
 ### Version
 
-Property `spec.jetstream.version` is required for a JetStream `InterStepBufferService`. Supported versions can be found from the ConfigMap `numaflow-controller-config` in the control plane namespace.
+Property `spec.jetstream.version` is required for a JetStream `InterStepBufferService`. Supported versions can be found 
+from the ConfigMap [`numaflow-controller-config`](https://github.com/numaproj/numaflow/blob/main/config/base/controller-manager/numaflow-controller-config.yaml) in the control plane namespace.
 
 **Note**
 
-The version `latest` in the ConfigMap should only be used for testing purpose. It's recommended that you always use a fixed version in your real workload.
+The version `latest` in the ConfigMap should only be used for testing purpose. It's recommended that you always use a 
+fixed version in your real workload.
 
 ### Replicas
 
@@ -101,11 +108,15 @@ For the Inter-Step Buffers created in JetStream ISB Service, there are 2 places 
 
 - ConfigMap `numaflow-controller-config` in the control plane namespace.
 
-  This is the place to configure the default properties for the streams and consumers created in all the Jet Stream ISB Services in the Kubernetes cluster.
+  This is the place to configure the default properties for the streams and consumers created in all the Jet Stream ISB 
+- Services in the Kubernetes cluster.
 
 - Field `spec.jetstream.bufferConfig` in an `InterStepBufferService` object.
 
-  This optional field can be used to customize the stream and consumer properties of that particular `InterStepBufferService`, and the configuration will be merged into the default one from the ConfigMap `numaflow-controller-config`. For example, if you only want to change `maxMsgs` for created streams, then you only need to give `stream.maxMsgs` in the field, all the rest config will still go with the default values in the control plane ConfigMap.
+  This optional field can be used to customize the stream and consumer properties of that particular `InterStepBufferService`,
+- and the configuration will be merged into the default one from the ConfigMap `numaflow-controller-config`. For example, 
+- if you only want to change `maxMsgs` for created streams, then you only need to give `stream.maxMsgs` in the field, all 
+- the rest config will still go with the default values in the control plane ConfigMap.
 
 Both these 2 places expect a YAML format configuration like below:
 
@@ -130,17 +141,22 @@ bufferConfig: |
 
 **Note**
 
-Changing the buffer configuration either in the control plane ConfigMap or in the `InterStepBufferService` object does **NOT** make any change to the buffers (streams) already existing.
+Changing the buffer configuration either in the control plane ConfigMap or in the `InterStepBufferService` object does 
+**NOT** make any change to the buffers (streams) already existing.
 
 ### TLS
 
-`TLS` is optional to configure through `spec.jetstream.tls: true`. Enabling TLS will use a self signed CERT to encrypt the connection from Vertex Pods to JetStream service. By default `TLS` is not enabled.
+`TLS` is optional to configure through `spec.jetstream.tls: true`. Enabling TLS will use a self signed CERT to encrypt 
+the connection from Vertex Pods to JetStream service. By default `TLS` is not enabled.
 
 ### Encryption At Rest
 
-Encryption at rest can be enabled by setting `spec.jetstream.encryption: true`. Be aware this will impact the performance a bit, see the detail at [official doc](https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest).
+Encryption at rest can be enabled by setting `spec.jetstream.encryption: true`. Be aware this will impact the performance
+a bit, see the detail at [official doc](https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest).
 
-Once a JetStream ISB Service is created, toggling the `encryption` field will cause problem for the exiting messages, so if you want to change the value, please delete and recreate the ISB Service, and you also need to restart all the Vertex Pods to pick up the new credentials.
+Once a JetStream ISB Service is created, toggling the `encryption` field will cause problem for the exiting messages, so
+if you want to change the value, please delete and recreate the ISB Service, and you also need to restart all the Vertex
+Pods to pick up the new credentials.
 
 ### Other Configuration
 
@@ -150,12 +166,14 @@ Check [here](../APIs.md#numaflow.numaproj.io/v1alpha1.JetStreamBufferService) fo
 
 **NOTE** Today when using Redis, the pipeline will stall if Redis has any data loss, especially during failovers.
 
-`Redis` is supported as an `Inter-Step Buffer Service` implementation. A keyword `native` under `spec.redis` means several Redis nodes with a [Master-Replicas](https://redis.io/topics/replication) topology will be created in the namespace.
+`Redis` is supported as an `Inter-Step Buffer Service` implementation. A keyword `native` under `spec.redis` means several
+Redis nodes with a [Master-Replicas](https://redis.io/topics/replication) topology will be created in the namespace.
 We also support external redis.
 
 #### External Redis
 
-If you have a managed Redis, say in AWS, etc., we can make that Redis your ISB. All you need to do is provide the external Redis endpoint name.
+If you have a managed Redis, say in AWS, etc., we can make that Redis your ISB. All you need to do is provide the external
+Redis endpoint name.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -181,11 +199,13 @@ url: "numaflow-redis-cluster-0.numaflow-redis-cluster-headless:6379,numaflow-red
 
 ### Version
 
-Property `spec.redis.native.version` is required for a `native` Redis `InterStepBufferService`. Supported versions can be found from the ConfigMap `numaflow-controller-config` in the control plane namespace.
+Property `spec.redis.native.version` is required for a `native` Redis `InterStepBufferService`. Supported versions can be
+found from the ConfigMap `numaflow-controller-config` in the control plane namespace.
 
 ### Replicas
 
-An optional property `spec.redis.native.replicas` (defaults to 3) can be specified, which gives the total number of nodes (including master and replicas). An odd number >= 3 is suggested. If the given number < 3, 3 will be used.
+An optional property `spec.redis.native.replicas` (defaults to 3) can be specified, which gives the total number of nodes
+(including master and replicas). An odd number >= 3 is suggested. If the given number < 3, 3 will be used.
 
 ### Persistence
 
