@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -43,7 +44,7 @@ type httpSource struct {
 	vertexName    string
 	pipelineName  string
 	vertexReplica int32
-	ready         bool
+	ready         atomic.Bool
 	readTimeout   time.Duration
 	bufferSize    int
 	messages      chan *isb.ReadMessage
@@ -74,7 +75,7 @@ func NewHttpSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, opt
 		vertexName:    vertexInstance.Vertex.Spec.Name,
 		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
 		vertexReplica: vertexInstance.Replica,
-		ready:         false,
+		ready:         atomic.Bool{},
 		bufferSize:    1000,            // default size
 		readTimeout:   1 * time.Second, // default timeout
 		logger:        logging.FromContext(ctx),
@@ -97,8 +98,16 @@ func NewHttpSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, opt
 		}
 	}
 	mux := http.NewServeMux()
+
+	go func() {
+		<-ctx.Done()
+		// Once the context is done, set the 'ready' state of the httpSource instance to false.
+		// This indicates that the httpSource is no longer ready to process requests.
+		h.ready.Store(false)
+	}()
+
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if !h.ready {
+		if !h.ready.Load() {
 			http.Error(w, "http source not ready", http.StatusServiceUnavailable)
 			return
 		}
@@ -109,7 +118,7 @@ func NewHttpSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, opt
 			http.Error(w, "request not authorized", http.StatusForbidden)
 			return
 		}
-		if !h.ready {
+		if !h.ready.Load() {
 			http.Error(w, "http source not ready", http.StatusServiceUnavailable)
 			return
 		}
@@ -177,7 +186,7 @@ func NewHttpSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, opt
 		h.logger.Info("Shutdown http source server")
 	}()
 	h.shutdown = server.Shutdown
-	h.ready = true
+	h.ready.Store(true)
 	return h, nil
 }
 
