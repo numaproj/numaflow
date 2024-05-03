@@ -305,8 +305,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	readWriteMessagePairs := make([]readWriteMessagePair, len(readMessages))
 
-	// If a user-defined transformer exists then it will send the messages to the transformer channel. Thus, the results of
-	// the transformer application on a read message will be stored as the corresponding writeMessage in readWriteMessagePairs
+	// If a user-defined transformer exists, apply it
 	if df.transformer != nil {
 		// user-defined transformer concurrent processing request channel
 		transformerCh := make(chan *readWriteMessagePair)
@@ -326,7 +325,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
 			readWriteMessagePairs[idx].readMessage = m
-			// send transformer processing work to the channel
+			// send transformer processing work to the channel. Thus, the results of the transformer
+			// application on a read message will be stored as the corresponding writeMessage in readWriteMessagePairs
 			transformerCh <- &readWriteMessagePairs[idx]
 		}
 
@@ -346,8 +346,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
-		// If a user-defined transformer does not exist, then there is no transformer application to take place, and so
-		// the unmodified read message will be stored as the corresponding writeMessage in readWriteMessagePairs
 	} else {
 		for idx, m := range readMessages {
 			emitMessageSizeMetric(df, m)
@@ -355,6 +353,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			m.Watermark = time.Time(processorWM)
 			readWriteMessagePairs[idx].readMessage = m
 			// if no user-defined transformer exists, then the messages to write will be identical to the message read from source
+			// thus, the unmodified read message will be stored as the corresponding writeMessage in readWriteMessagePairs
 			readWriteMessagePairs[idx].writeMessages = []*isb.WriteMessage{{Message: m.Message}}
 		}
 	}
