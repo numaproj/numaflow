@@ -135,7 +135,7 @@ spec:
           value: numaflow-webhook
         - name: CLUSTER_ROLE_NAME
           value: numaflow-webhook
-        image: quay.io/numaproj/numaflow:v1.2.0-rc5
+        image: quay.io/numaproj/numaflow:v1.2.0
         imagePullPolicy: Always
         name: webhook
       serviceAccountName: numaflow-webhook-sa
