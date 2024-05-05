@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.0 (2024-05-03)
+
+ * [636ef873](https://github.com/numaproj/numaflow/commit/636ef873b4a59e4350d4030ddcc7d86cf5400994) Update manifests to v1.2.0
+ * [c9fc458b](https://github.com/numaproj/numaflow/commit/c9fc458be27b828e143db3fe5b4bb6668e0d1dde) fix: summary bar overlay fix for plugin (#1710)
+ * [120244a3](https://github.com/numaproj/numaflow/commit/120244a3c77192fdfbfb59e96a23d2d37a699154) chore(deps): bump ejs from 3.1.9 to 3.1.10 in /ui (#1711)
+
+### Contributors
+
+ * Vedant Gupta
+ * Yashash H L
+ * dependabot[bot]
+
 ## v1.2.0-rc5 (2024-04-24)
 
  * [2780c8e7](https://github.com/numaproj/numaflow/commit/2780c8e7992187e8b3c135df5d3d95321f418e8c) Update manifests to v1.2.0-rc5
