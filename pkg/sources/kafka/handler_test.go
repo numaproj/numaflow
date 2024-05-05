@@ -26,38 +26,16 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forwarder"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
-type myForwardToAllTest struct {
-}
-
-func (f myForwardToAllTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
-	return []forwarder.VertexBuffer{{
-		ToVertexName:         "test",
-		ToVertexPartitionIdx: 0,
-	}}, nil
-}
-
 func TestMessageHandling(t *testing.T) {
-
+	ctx := context.Background()
 	topic := "testtopic"
 	partition := int32(1)
 	offset := int64(1)
 	value := "testvalue"
 	keys := []string{"testkey"}
-
-	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
-	toBuffers := map[string][]isb.BufferWriter{
-		"test": {dest},
-	}
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		PipelineName: "testPipeline",
@@ -71,20 +49,20 @@ func TestMessageHandling(t *testing.T) {
 			},
 		},
 	}}
+
 	vi := &dfv1.VertexInstance{
 		Vertex:   vertex,
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	publishWMStore, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
-	toVertexWmStores := map[string]store.WatermarkStore{
-		"test": publishWMStore,
-	}
 
-	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	ks, _ := NewKafkaSource(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStore, idleManager, WithLogger(logging.NewLogger()),
-		WithBufferSize(100), WithReadTimeOut(100*time.Millisecond))
+	ks := &kafkaSource{
+		readTimeout:  3 * time.Second,
+		vertexName:   vi.Vertex.Name,
+		pipelineName: vi.Vertex.Spec.PipelineName,
+		handler:      NewConsumerHandler(100),
+		logger:       logging.FromContext(ctx),
+	}
 
 	msg := &sarama.ConsumerMessage{
 		Topic:     topic,
@@ -96,7 +74,7 @@ func TestMessageHandling(t *testing.T) {
 
 	expectedoffset := fmt.Sprintf("%s:%v:%v", topic, partition, offset)
 	// push one message
-	ks.(*kafkaSource).handler.messages <- msg
+	ks.handler.messages <- msg
 
 	readmsgs, err := ks.Read(context.Background(), 10)
 	assert.Nil(t, err)

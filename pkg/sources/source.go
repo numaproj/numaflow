@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -39,6 +40,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
+	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
@@ -50,6 +52,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/generic/jetstream"
+	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
@@ -66,10 +69,12 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		toVertexWatermarkStores  = make(map[string]store.WatermarkStore)
 		log                      = logging.FromContext(ctx)
 		writersMap               = make(map[string][]isb.BufferWriter)
-		sdkClient                sourcetransformer.Client
-		source                   sourcer.Sourcer
-		readyCheckers            []metrics.HealthChecker
+		srcTransformerGRPCClient *transformer.GRPCBasedTransformer
+		sourceReader             sourcer.SourceReader
+		healthCheckers           []metrics.HealthChecker
 		idleManager              wmb.IdleManager
+		pipelineName             = sp.VertexInstance.Vertex.Spec.PipelineName
+		vertexName               = sp.VertexInstance.Vertex.Name
 	)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -159,7 +164,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 				return err
 			}
 
-			// build watermark stores for source (we publish twice for source)
+			// build watermark stores for sourceReader (we publish twice for sourceReader)
 			sourcePublisherStores, err = jetstream.BuildSourcePublisherStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
 			if err != nil {
 				return err
@@ -171,7 +176,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	}
 
 	// Populate the shuffle function map
-	// we need to shuffle the messages, because we can have a reduce vertex immediately after a source vertex.
+	// we need to shuffle the messages, because we can have a reduce vertex immediately after a sourceReader vertex.
 	var toVertexPartitionMap = make(map[string]int)
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
@@ -182,7 +187,9 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		toVertexPartitionMap[edge.To] = edge.GetToVertexPartitionCount()
 	}
 
-	// if the source is a user-defined source, we create a gRPC client for it.
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
+
+	// if the sourceReader is a user-defined sourceReader, we create a gRPC client for it.
 	var udsGRPCClient *udsource.GRPCBasedUDSource
 	if sp.VertexInstance.Vertex.IsUDSource() {
 		// Wait for server info to be ready
@@ -191,7 +198,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		srcClient, err := sourceclient.New(serverInfo)
+		srcClient, err := sourceclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create a new gRPC client: %w", err)
 		}
@@ -200,20 +207,21 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC client, %w", err)
 		}
+
 		// Readiness check
 		if err = udsGRPCClient.WaitUntilReady(ctx); err != nil {
-			return fmt.Errorf("failed on user-defined source readiness check, %w", err)
+			return fmt.Errorf("failed on user-defined sourceReader readiness check, %w", err)
 		}
+
 		defer func() {
 			err = udsGRPCClient.CloseConn(ctx)
 			if err != nil {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
-		readyCheckers = append(readyCheckers, udsGRPCClient)
+		healthCheckers = append(healthCheckers, udsGRPCClient)
 	}
-	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
-	var err error
+
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		// Wait for server info to be ready
 		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SourceTransformerServerInfoFile))
@@ -221,48 +229,68 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		sdkClient, err = sourcetransformer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		srcTransformerClient, err := sourcetransformer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
-			return fmt.Errorf("failed to create gRPC client, %w", err)
+			return fmt.Errorf("failed to create transformer gRPC client, %w", err)
 		}
 
-		transformerGRPCClient := transformer.NewGRPCBasedTransformer(sdkClient)
+		srcTransformerGRPCClient = transformer.NewGRPCBasedTransformer(srcTransformerClient)
 
 		// Close the connection when we are done
 		defer func() {
-			err = transformerGRPCClient.CloseConn(ctx)
+			err = srcTransformerGRPCClient.CloseConn(ctx)
 			if err != nil {
-				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+				log.Warnw("Failed to close transformer gRPC client conn", zap.Error(err))
 			}
 		}()
 
 		// Readiness check
-		if err = transformerGRPCClient.WaitUntilReady(ctx); err != nil {
-			return fmt.Errorf("failed on user-defined source readiness check, %w", err)
+		if err = srcTransformerGRPCClient.WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on user-defined transfomer readiness check, %w", err)
 		}
 
-		readyCheckers = append(readyCheckers, transformerGRPCClient)
-		source, err = sp.getSourcer(writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), transformerGRPCClient, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
+		healthCheckers = append(healthCheckers, srcTransformerGRPCClient)
+	}
+
+	sourceReader, err := sp.createSourceReader(ctx, udsGRPCClient)
+	if err != nil {
+		return fmt.Errorf("failed to create source, error: %w", err)
+	}
+
+	// create a source watermark publisher
+	sourceWmPublisher := publish.NewSourcePublish(ctx, pipelineName, vertexName, sourcePublisherStores, publish.WithDelay(sp.VertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+	var forwardOpts []sourceforward.Option
+	if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil {
+		if x.ReadBatchSize != nil {
+			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+		}
+	}
+
+	// create source data forwarder
+	var sourceForwarder *sourceforward.DataForward
+	if sp.VertexInstance.Vertex.HasUDTransformer() {
+		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), srcTransformerGRPCClient, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
 	} else {
-		source, err = sp.getSourcer(writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, udsGRPCClient, fetchWatermark, toVertexWatermarkStores, sourcePublisherStores, idleManager, log)
+		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to find a source, error: %w", err)
+		return fmt.Errorf("failed to create source forwarder, error: %w", err)
 	}
+
 	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToBuffers()))
-	stopped := source.Start()
+	stopped := sourceForwarder.Start()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for {
 			<-stopped
-			log.Info("Sourcer stopped, exiting source processor...")
+			log.Info("Source forwarder stopped, exiting...")
 			return
 		}
 	}()
 
-	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, readyCheckers, []isb.LagReader{source})
+	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, healthCheckers, []isb.LagReader{sourceReader})
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server, error: %w", err)
@@ -271,10 +299,10 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	}
 	<-ctx.Done()
 	log.Info("SIGTERM, exiting...")
-	source.Stop()
+	sourceForwarder.Stop()
 	wg.Wait()
 
-	// close all the source wm stores
+	// close all the sourceReader wm stores
 	for _, wmStore := range sourceWmStores {
 		_ = wmStore.Close()
 	}
@@ -284,61 +312,31 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		_ = ws.Close()
 	}
 
-	// close all the source publisher stores
+	// close all the sourceReader publisher stores
 	_ = sourcePublisherStores.Close()
 
 	log.Info("Exited...")
 	return nil
 }
 
-// getSourcer is used to send the sourcer information
-func (sp *SourceProcessor) getSourcer(
-	writers map[string][]isb.BufferWriter,
-	fsd forwarder.ToWhichStepDecider,
-	transformerApplier applier.SourceTransformApplier,
-	udsGRPCClient *udsource.GRPCBasedUDSource,
-	fetchWM fetch.SourceFetcher,
-	toVertexPublisherStores map[string]store.WatermarkStore,
-	publishWMStores store.WatermarkStore,
-	idleManager wmb.IdleManager,
-	logger *zap.SugaredLogger) (sourcer.Sourcer, error) {
+// createSourceReader is used to send the sourcer information
+func (sp *SourceProcessor) createSourceReader(ctx context.Context, udsGRPCClient *udsource.GRPCBasedUDSource) (sourcer.SourceReader, error) {
+	var readTimeout time.Duration
+	if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
+		readTimeout = l.ReadTimeout.Duration
+	}
 
 	src := sp.VertexInstance.Vertex.Spec.Source
 	if x := src.UDSource; x != nil && udsGRPCClient != nil {
-		readOptions := []udsource.Option{
-			udsource.WithLogger(logger),
-		}
-		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
-			readOptions = append(readOptions, udsource.WithReadTimeout(l.ReadTimeout.Duration))
-		}
-		return udsource.New(sp.VertexInstance, writers, fsd, transformerApplier, udsGRPCClient, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
+		return udsource.NewUserDefinedSource(ctx, sp.VertexInstance, udsGRPCClient, udsource.WithReadTimeout(readTimeout))
 	} else if x := src.Generator; x != nil {
-		readOptions := []generator.Option{
-			generator.WithLogger(logger),
-		}
-		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
-			readOptions = append(readOptions, generator.WithReadTimeout(l.ReadTimeout.Duration))
-		}
-		return generator.NewMemGen(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
+		return generator.NewMemGen(ctx, sp.VertexInstance, generator.WithReadTimeout(readTimeout))
 	} else if x := src.Kafka; x != nil {
-		readOptions := []kafka.Option{
-			kafka.WithGroupName(x.ConsumerGroupName),
-			kafka.WithLogger(logger),
-		}
-		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
-			readOptions = append(readOptions, kafka.WithReadTimeOut(l.ReadTimeout.Duration))
-		}
-		return kafka.NewKafkaSource(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
+		return kafka.NewKafkaSource(ctx, sp.VertexInstance, kafka.NewConsumerHandler(dfv1.DefaultKafkaHandlerChannelSize), kafka.WithReadTimeOut(readTimeout), kafka.WithGroupName(x.ConsumerGroupName))
 	} else if x := src.HTTP; x != nil {
-		return http.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, http.WithLogger(logger))
+		return http.NewHttpSource(ctx, sp.VertexInstance, http.WithReadTimeout(readTimeout))
 	} else if x := src.Nats; x != nil {
-		readOptions := []nats.Option{
-			nats.WithLogger(logger),
-		}
-		if l := sp.VertexInstance.Vertex.Spec.Limits; l != nil && l.ReadTimeout != nil {
-			readOptions = append(readOptions, nats.WithReadTimeout(l.ReadTimeout.Duration))
-		}
-		return nats.New(sp.VertexInstance, writers, fsd, transformerApplier, fetchWM, toVertexPublisherStores, publishWMStores, idleManager, readOptions...)
+		return nats.New(ctx, sp.VertexInstance, nats.WithReadTimeout(readTimeout))
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }
