@@ -26,25 +26,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
-
-type myForwardToAllTest struct {
-}
-
-func (f myForwardToAllTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
-	return []forwarder.VertexBuffer{{
-		ToVertexName:         "test",
-		ToVertexPartitionIdx: 0,
-	}}, nil
-}
 
 func testVertex(t *testing.T, url, subject, queue string, hostname string, replicaIndex int32) *dfv1.VertexInstance {
 	t.Helper()
@@ -70,21 +55,10 @@ func testVertex(t *testing.T, url, subject, queue string, hostname string, repli
 	return vi
 }
 
-func newInstance(t *testing.T, vi *dfv1.VertexInstance) (sourcer.Sourcer, error) {
+func newInstance(t *testing.T, vi *dfv1.VertexInstance) (sourcer.SourceReader, error) {
 	t.Helper()
-	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
-	toBuffers := map[string][]isb.BufferWriter{
-		"test": {dest},
-	}
-
-	publishWMStores, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
-	toVertexWmStores := map[string]store.WatermarkStore{
-		"testVertex": publishWMStores,
-	}
-
-	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	return New(vi, toBuffers, myForwardToAllTest{}, nil, fetchWatermark, toVertexWmStores, publishWMStores, idleManager, WithReadTimeout(1*time.Second))
+	ctx := context.Background()
+	return New(ctx, vi, WithReadTimeout(1*time.Second))
 }
 
 func Test_Single(t *testing.T) {

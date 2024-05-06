@@ -78,9 +78,9 @@ func NewDataForward(
 	toVertexWmStores map[string]store.WatermarkStore,
 	idleManager wmb.IdleManager,
 	opts ...Option) (*DataForward, error) {
-	defaultOptions := DefaultOptions()
+	dOpts := defaultOptions()
 	for _, o := range opts {
-		if err := o(defaultOptions); err != nil {
+		if err := o(dOpts); err != nil {
 			return nil, err
 		}
 	}
@@ -115,10 +115,10 @@ func NewDataForward(
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
-		opts: *defaultOptions,
+		opts: *dOpts,
 	}
 	// add logger from parent ctx to child context.
-	isdf.ctx = logging.WithLogger(ctx, defaultOptions.logger)
+	isdf.ctx = logging.WithLogger(ctx, dOpts.logger)
 	return &isdf, nil
 }
 
@@ -329,7 +329,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// application on a read message will be stored as the corresponding writeMessage in readWriteMessagePairs
 			transformerCh <- &readWriteMessagePairs[idx]
 		}
-
 		// let the go routines know that there is no more work
 		close(transformerCh)
 		// wait till the processing is done. this will not be an infinite wait because the transformer processing will exit if
