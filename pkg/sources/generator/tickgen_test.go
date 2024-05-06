@@ -49,7 +49,6 @@ func TestRead(t *testing.T) {
 		Replica:  0,
 	}
 
-
 	mGen, err := NewMemGen(ctx, m, WithReadTimeout(3*time.Second))
 	assert.NoError(t, err)
 	messages, err := mGen.Read(ctx, 5)
