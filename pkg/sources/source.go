@@ -41,7 +41,6 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
@@ -271,7 +270,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), srcTransformerGRPCClient, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
 	} else {
-		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
+		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), nil, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to create source forwarder, error: %w", err)
