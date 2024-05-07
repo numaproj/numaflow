@@ -193,9 +193,7 @@ function App(props: AppProps) {
           setUserInfo,
         }}
       >
-        <ScopedCssBaseline
-          sx={{ height: "100%", fontFamily: "Avenir, sans-serif" }}
-        >
+        <ScopedCssBaseline sx={{ fontFamily: "Avenir, sans-serif" }}>
           <Box
             sx={{
               display: "flex",
