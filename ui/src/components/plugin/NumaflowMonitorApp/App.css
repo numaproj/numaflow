@@ -2,6 +2,10 @@ html,
 body,
 #root,
 
+.MuiScopedCssBaseline-root {
+    height: 100%;
+}
+
 .App-side-nav-link {
     text-decoration: none;
     color: inherit;
