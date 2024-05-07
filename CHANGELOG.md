@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.1 (2024-05-07)
+
+ * [89ea33f1](https://github.com/numaproj/numaflow/commit/89ea33f1d69785f6f5f17f1d5854ac189003918a) Update manifests to v1.2.1
+ * [05610ad3](https://github.com/numaproj/numaflow/commit/05610ad3e1a40915ad48c7fa62a8fee0b9235226) fix: height fixes to render pipeline view (#1721)
+
+### Contributors
+
+ * Vedant Gupta
+ * Yashash H L
+
 ## v1.2.0 (2024-05-03)
 
  * [636ef873](https://github.com/numaproj/numaflow/commit/636ef873b4a59e4350d4030ddcc7d86cf5400994) Update manifests to v1.2.0
