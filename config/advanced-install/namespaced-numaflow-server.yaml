@@ -258,7 +258,7 @@ spec:
               key: server.cors.allowed.origins
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.2.0
+        image: quay.io/numaproj/numaflow:v1.2.1
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -294,7 +294,7 @@ spec:
               key: server.base.href
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.2.0
+        image: quay.io/numaproj/numaflow:v1.2.1
         imagePullPolicy: Always
         name: server-init
         volumeMounts:
@@ -313,7 +313,7 @@ spec:
               key: server.disable.auth
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.2.0
+        image: quay.io/numaproj/numaflow:v1.2.1
         imagePullPolicy: Always
         name: server-secrets-init
       securityContext:
