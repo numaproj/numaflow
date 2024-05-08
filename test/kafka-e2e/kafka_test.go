@@ -30,18 +30,15 @@ import (
 	"github.com/numaproj/numaflow/test/fixtures"
 )
 
-//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
-//go:generate kubectl apply -k ../../config/apps/kafka -n numaflow-system
-// Wait for zookeeper to come up
-//go:generate sleep 60
-
 type KafkaSuite struct {
 	fixtures.E2ESuite
 }
 
 func (ks *KafkaSuite) TestKafkaSink() {
-	outputTopic := fixtures.CreateKafkaTopic()
-	defer fixtures.DeleteKafkaTopic(outputTopic)
+	topicName := fixtures.GenerateKafkaTopicName()
+	fixtures.CreateKafkaTopic(topicName, 1)
+	defer fixtures.DeleteKafkaTopic(topicName)
+
 	pipeline := &dfv1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "kafka-sink-e2e",
@@ -70,7 +67,7 @@ func (ks *KafkaSuite) TestKafkaSink() {
 						AbstractSink: dfv1.AbstractSink{
 							Kafka: &dfv1.KafkaSink{
 								Brokers: []string{"kafka-broker:9092"},
-								Topic:   outputTopic,
+								Topic:   topicName,
 							},
 						},
 					},
@@ -92,13 +89,15 @@ func (ks *KafkaSuite) TestKafkaSink() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	fixtures.ExpectKafkaTopicCount(outputTopic, 15, 3*time.Second)
-
+	fixtures.ExpectKafkaTopicCount(topicName, 15, 3*time.Second)
 }
 
 func (ks *KafkaSuite) TestKafkaSourceSink() {
-	inputTopic := fixtures.CreateKafkaTopic()
-	outputTopic := fixtures.CreateKafkaTopic()
+	inputTopic := fixtures.GenerateKafkaTopicName()
+	fixtures.CreateKafkaTopic(inputTopic, 1)
+
+	outputTopic := fixtures.GenerateKafkaTopicName()
+	fixtures.CreateKafkaTopic(outputTopic, 1)
 	pipeline := &dfv1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "kafka-sink-e2e",
