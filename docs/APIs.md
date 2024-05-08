@@ -2617,6 +2617,84 @@ TLS enabled or not
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.JetStreamSource">
+JetStreamSource
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>url</code></br> <em> string </em>
+</td>
+<td>
+<p>
+URL to connect to NATS cluster, multiple urls could be separated by
+comma.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>subject</code></br> <em> string </em>
+</td>
+<td>
+<p>
+Subject holds the name of the subject onto which messages are published.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>stream</code></br> <em> string </em>
+</td>
+<td>
+<p>
+Stream represents the name of the stream.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
+TLS </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+TLS configuration for the nats client.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.NatsAuth"> NatsAuth </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Auth information
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.JobTemplate">
 JobTemplate
 </h3>
@@ -3109,6 +3187,7 @@ NatsAuth
 <p>
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamConfig">JetStreamConfig</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.JetStreamSource">JetStreamSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>)
 </p>
 <p>
@@ -4740,6 +4819,16 @@ GeneratorSource </a> </em>
 <em>(Optional)</em>
 </td>
 </tr>
+<tr>
+<td>
+<code>jetstream</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.JetStreamSource">
+JetStreamSource </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.Status">
@@ -4788,6 +4877,7 @@ TLS
 </h3>
 <p>
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.JetStreamSource">JetStreamSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>)
