@@ -195,17 +195,6 @@ type readWriteMessagePair struct {
 	transformerError error
 }
 
-// emitMessageSizeMetric emits the message size metric
-func emitMessageSizeMetric(df *DataForward, m *isb.ReadMessage) {
-	metrics.ReadBytesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}).Add(float64(len(m.Payload)))
-}
-
 // forwardAChunk forwards a chunk of message from the reader to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
@@ -321,7 +310,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 		concurrentTransformerProcessingStart := time.Now()
 		for idx, m := range readMessages {
-			emitMessageSizeMetric(df, m)
+			metrics.ReadBytesCount.With(map[string]string{
+				metrics.LabelVertex:             df.vertexName,
+				metrics.LabelPipeline:           df.pipelineName,
+				metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+				metrics.LabelPartitionName:      df.reader.GetName(),
+			}).Add(float64(len(m.Payload)))
+
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
 			readWriteMessagePairs[idx].readMessage = m
@@ -347,7 +343,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
 	} else {
 		for idx, m := range readMessages {
-			emitMessageSizeMetric(df, m)
+			metrics.ReadBytesCount.With(map[string]string{
+				metrics.LabelVertex:             df.vertexName,
+				metrics.LabelPipeline:           df.pipelineName,
+				metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+				metrics.LabelPartitionName:      df.reader.GetName(),
+			}).Add(float64(len(m.Payload)))
+
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
 			readWriteMessagePairs[idx].readMessage = m
