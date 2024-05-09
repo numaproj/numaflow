@@ -71,7 +71,7 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 		if err == nil && resp.StatusCode < 300 {
 			return true, nil
 		}
-		fmt.Printf("Got error %v, response %v, retrying.\n", err, resp)
+		fmt.Printf("Got error %v, response %v, retrying.\n", err, *resp)
 		return false, nil
 	})
 

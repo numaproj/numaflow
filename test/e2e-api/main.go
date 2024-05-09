@@ -34,7 +34,6 @@ func main() {
 	// initialize Redis handlers
 	redisController := NewRedisController()
 	http.HandleFunc("/redis/get-msg-count-contains", redisController.GetMsgCountContains)
-	http.HandleFunc("/redis/pump-stream", redisController.PumpStream)
 
 	// initialize http handlers
 	httpController := NewHttpController()
