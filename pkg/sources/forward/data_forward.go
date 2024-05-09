@@ -32,7 +32,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
@@ -51,7 +50,6 @@ type DataForward struct {
 	reader               sourcer.SourceReader          // reader reads data from source.
 	toBuffers            map[string][]isb.BufferWriter // toBuffers store the toVertex name to its owned buffers mapping.
 	toWhichStepDecider   forwarder.ToWhichStepDecider
-	transformer          applier.SourceTransformApplier
 	wmFetcher            fetch.SourceFetcher
 	toVertexWMStores     map[string]store.WatermarkStore
 	toVertexWMPublishers map[string]map[int32]publish.Publisher // toVertexWMPublishers stores the toVertex to publisher mapping.
@@ -100,7 +98,6 @@ func NewDataForward(
 		reader:               reader,
 		toBuffers:            toSteps,
 		toWhichStepDecider:   toWhichStepDecider,
-		transformer:          dOpts.transformer,
 		wmFetcher:            fetchWatermark,
 		toVertexWMStores:     toVertexWmStores,
 		toVertexWMPublishers: toVertexWMPublishers,
@@ -294,7 +291,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	readWriteMessagePairs := make([]readWriteMessagePair, len(readMessages))
 
 	// If a user-defined transformer exists, apply it
-	if df.transformer != nil {
+	if df.opts.transformer != nil {
 		// user-defined transformer concurrent processing request channel
 		transformerCh := make(chan *readWriteMessagePair)
 
@@ -693,7 +690,7 @@ func (df *DataForward) concurrentApplyTransformer(ctx context.Context, readMessa
 // The UserError retry will be done on the applyTransformer.
 func (df *DataForward) applyTransformer(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
-		writeMessages, err := df.transformer.ApplyTransform(ctx, readMessage)
+		writeMessages, err := df.opts.transformer.ApplyTransform(ctx, readMessage)
 		if err != nil {
 			df.opts.logger.Errorw("Transformer.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.
