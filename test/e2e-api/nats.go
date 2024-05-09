@@ -26,64 +26,69 @@ import (
 	natslib "github.com/nats-io/nats.go"
 )
 
-func init() {
-	url := "nats"
-	testingToken := "testingtoken"
+type NatsController struct {
+	client *natslib.Conn
+}
 
-	http.HandleFunc("/nats/pump-subject", func(w http.ResponseWriter, r *http.Request) {
-		subject := r.URL.Query().Get("subject")
-		msg := r.URL.Query().Get("msg")
-		size, err := strconv.Atoi(r.URL.Query().Get("size"))
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
+func NewNatsController(url string, token string) *NatsController {
+	opts := []natslib.Option{natslib.Token(token)}
+	nc, err := natslib.Connect(url, opts...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return &NatsController{
+		client: nc,
+	}
+}
+
+func (n *NatsController) PumpSubject(w http.ResponseWriter, r *http.Request) {
+	subject := r.URL.Query().Get("subject")
+	msg := r.URL.Query().Get("msg")
+	size, err := strconv.Atoi(r.URL.Query().Get("size"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ns := r.URL.Query().Get("n")
+	if ns == "" {
+		ns = "-1"
+	}
+	nCount, err := strconv.Atoi(ns)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(200)
+
+	start := time.Now()
+	_, _ = fmt.Fprintf(w, "sending %d messages of size %d to %q\n", nCount, size, subject)
+
+	for i := 0; i < nCount || nCount < 0; i++ {
+		select {
+		case <-r.Context().Done():
 			return
-		}
-		duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		ns := r.URL.Query().Get("n")
-		if ns == "" {
-			ns = "-1"
-		}
-		n, err := strconv.Atoi(ns)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.WriteHeader(200)
-
-		opts := []natslib.Option{natslib.Token(testingToken)}
-		nc, err := natslib.Connect(url, opts...)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer nc.Close()
-
-		start := time.Now()
-		_, _ = fmt.Fprintf(w, "sending %d messages of size %d to %q\n", n, size, subject)
-
-		for i := 0; i < n || n < 0; i++ {
-			select {
-			case <-r.Context().Done():
-				return
-			default:
-				err := nc.Publish(subject, []byte(msg))
-				if err != nil {
-					_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
-				}
-				time.Sleep(duration)
+		default:
+			err := n.client.Publish(subject, []byte(msg))
+			if err != nil {
+				_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
 			}
+			time.Sleep(duration)
 		}
-		_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", n, size, float64(n)/time.Since(start).Seconds(), subject)
-	})
+	}
+	_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", nCount, size, float64(nCount)/time.Since(start).Seconds(), subject)
+}
+
+func (n *NatsController) Close() {
+	n.client.Close()
 }
