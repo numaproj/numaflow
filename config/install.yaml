@@ -2663,6 +2663,17 @@ spec:
             type: object
           spec:
             properties:
+              callback:
+                properties:
+                  callbackInEachVertex:
+                    type: boolean
+                  callbackURLHeaderKey:
+                    type: string
+                  enabled:
+                    type: boolean
+                  fallbackURLHeaderKey:
+                    type: string
+                type: object
               edges:
                 items:
                   properties:

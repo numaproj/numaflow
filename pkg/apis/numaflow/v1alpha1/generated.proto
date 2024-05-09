@@ -222,6 +222,25 @@ message BufferServiceConfig {
   optional JetStreamConfig jetstream = 2;
 }
 
+message Callback {
+  // Enabled indicates whether callback is enabled for the pipeline
+  // +optional
+  optional bool enabled = 1;
+
+  // CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved
+  // +optional
+  optional string callbackURLHeaderKey = 2;
+
+  // FallbackURLHeaderKey is the message header key from which the fallback URL will be retrieved in case the callback is not successful
+  // +optional
+  optional string fallbackURLHeaderKey = 3;
+
+  // CallbackInEachVertex indicates whether the callback should be called for each vertex.
+  // If not set, the callback will be called only in the sink vertex.
+  // +optional
+  optional bool callbackInEachVertex = 10;
+}
+
 // CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.
 // It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod,
 // it knows the properties of the connected vertices, for example, how many partitioned buffers I should write
@@ -978,6 +997,11 @@ message PipelineSpec {
   // SideInputs defines the Side Inputs of a pipeline.
   // +optional
   repeated SideInput sideInputs = 8;
+
+  // Callback defines the callback configuration for the messages processed by the pipeline.
+  // can be used for tracking the message processing status.
+  // +optional
+  optional Callback callback = 9;
 }
 
 message PipelineStatus {

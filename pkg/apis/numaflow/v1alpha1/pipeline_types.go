@@ -464,6 +464,10 @@ type PipelineSpec struct {
 	// SideInputs defines the Side Inputs of a pipeline.
 	// +optional
 	SideInputs []SideInput `json:"sideInputs,omitempty" protobuf:"bytes,8,rep,name=sideInputs"`
+	// Callback defines the callback configuration for the messages processed by the pipeline.
+	// can be used for tracking the message processing status.
+	// +optional
+	Callback Callback `json:"callback,omitempty" protobuf:"bytes,9,opt,name=callback"`
 }
 
 func (pipeline PipelineSpec) GetMatchingVertices(f func(AbstractVertex) bool) map[string]*AbstractVertex {
@@ -493,6 +497,22 @@ func (pipeline PipelineSpec) GetSinksByName() map[string]*AbstractVertex {
 	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
 		return v.IsASink()
 	})
+}
+
+type Callback struct {
+	// Enabled indicates whether callback is enabled for the pipeline
+	// +optional
+	Enabled bool `json:"enabled,omitempty" protobuf:"varint,1,opt,name=enabled"`
+	// CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved
+	// +optional
+	CallbackURLHeaderKey string `json:"callbackURLHeaderKey,omitempty" protobuf:"bytes,2,opt,name=callbackURLHeaderKey"`
+	// FallbackURLHeaderKey is the message header key from which the fallback URL will be retrieved in case the callback is not successful
+	// +optional
+	FallbackURLHeaderKey string `json:"fallbackURLHeaderKey,omitempty" protobuf:"bytes,3,opt,name=fallbackURLHeaderKey"`
+	// CallbackInEachVertex indicates whether the callback should be called for each vertex.
+	// If not set, the callback will be called only in the sink vertex.
+	// +optional
+	CallbackInEachVertex bool `json:"callbackInEachVertex,omitempty" protobuf:"varint,10,opt,name=callbackInEachVertex"`
 }
 
 type Watermark struct {
