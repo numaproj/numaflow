@@ -21,11 +21,6 @@ Once "threshold" reached to 5s(configurable) and if source is found as idle, the
 3s(configurable) after waiting for stepInterval of 2s(configurable).
 */
 
-//go:generate kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
-//go:generate kubectl apply -k ../../config/apps/kafka -n numaflow-system
-// Wait for zookeeper to come up
-//go:generate sleep 60
-
 package idle_source_e2e
 
 import (
@@ -105,7 +100,9 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
+	// create kafka topic with 2 partitions
 	topic := "kafka-topic"
+	CreateKafkaTopic(topic, 2)
 
 	w := is.Given().Pipeline("@testdata/kafka-pipeline.yaml").When().CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
@@ -159,6 +156,6 @@ func generateMsg(msg string, t time.Time) string {
 	return string(jsonBytes)
 }
 
-func TestReduceSuite(t *testing.T) {
+func TestIdleSourceSuite(t *testing.T) {
 	suite.Run(t, new(IdleSourceSuite))
 }

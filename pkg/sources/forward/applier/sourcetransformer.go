@@ -35,12 +35,3 @@ type ApplySourceTransformFunc func(ctx context.Context, message *isb.ReadMessage
 func (f ApplySourceTransformFunc) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	return f(ctx, message)
 }
-
-var (
-	// Terminal Applier do not make any change to the message
-	Terminal = ApplySourceTransformFunc(func(ctx context.Context, msg *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-		return []*isb.WriteMessage{{
-			Message: msg.Message,
-		}}, nil
-	})
-)

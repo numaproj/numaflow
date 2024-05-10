@@ -26,17 +26,22 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 )
 
-func CreateKafkaTopic() string {
-	topic := fmt.Sprintf("e2e-topic-%s", rand.String(5))
-	log.Printf("create Kafka topic %q\n", topic)
-	InvokeE2EAPI("/kafka/create-topic?topic=%s", topic)
-	return topic
+func GenerateKafkaTopicName() string {
+	return fmt.Sprintf("e2e-topic-%s", rand.String(5))
 }
 
-func DeleteKafkaTopic(topic string) string {
+func CreateKafkaTopic(topicName string, partitions int32) {
+	log.Printf("create Kafka topic %q\n", topicName)
+	InvokeE2EAPI("/kafka/create-topic?topic=%s&partitions=%d", topicName, partitions)
+}
+
+func DeleteKafkaTopic(topic string) {
 	log.Printf("delete Kafka topic %q\n", topic)
 	InvokeE2EAPI("/kafka/delete-topic?topic=%s", topic)
-	return topic
+}
+
+func ListKafkaTopics() {
+	InvokeE2EAPI("/kafka/list-topics")
 }
 
 func PumpKafkaTopic(topic string, n int, opts ...interface{}) {
@@ -93,9 +98,4 @@ func GetKafkaCount(topic string, count int) int {
 
 func SendMessage(topic string, key string, message string, partition int) {
 	InvokeE2EAPIPOST("/kafka/produce-topic?topic=%s&key=%s&partition=%d", message, topic, key, partition)
-
-}
-
-func ValidateMessage(topic string, key string, position int) {
-
 }

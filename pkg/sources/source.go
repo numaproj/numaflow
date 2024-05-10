@@ -41,7 +41,6 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/shuffle"
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
@@ -147,7 +146,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 
 		// created watermark related components only if watermark is enabled
-		// otherwise no op will used
+		// otherwise no op will be used
 		if !sp.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			// build watermark stores for from vertex
 			sourceWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, sp.VertexInstance, natsClientPool.NextAvailableClient())
@@ -222,6 +221,14 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		healthCheckers = append(healthCheckers, udsGRPCClient)
 	}
 
+	var forwardOpts []sourceforward.Option
+
+	if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil {
+		if x.ReadBatchSize != nil {
+			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
+		}
+	}
+
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		// Wait for server info to be ready
 		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SourceTransformerServerInfoFile))
@@ -250,6 +257,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		}
 
 		healthCheckers = append(healthCheckers, srcTransformerGRPCClient)
+		forwardOpts = append(forwardOpts, sourceforward.WithTransformer(srcTransformerGRPCClient))
 	}
 
 	sourceReader, err := sp.createSourceReader(ctx, udsGRPCClient)
@@ -259,19 +267,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	// create a source watermark publisher
 	sourceWmPublisher := publish.NewSourcePublish(ctx, pipelineName, vertexName, sourcePublisherStores, publish.WithDelay(sp.VertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
-	var forwardOpts []sourceforward.Option
-	if x := sp.VertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
 
 	// create source data forwarder
 	var sourceForwarder *sourceforward.DataForward
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
-		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), srcTransformerGRPCClient, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
+		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getTransformerGoWhereDecider(shuffleFuncMap), fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
 	} else {
-		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), applier.Terminal, fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
+		sourceForwarder, err = sourceforward.NewDataForward(sp.VertexInstance, sourceReader, writersMap, sp.getSourceGoWhereDecider(shuffleFuncMap), fetchWatermark, sourceWmPublisher, toVertexWatermarkStores, idleManager, forwardOpts...)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to create source forwarder, error: %w", err)
