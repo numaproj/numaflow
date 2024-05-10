@@ -58,6 +58,8 @@ var (
 kind: InterStepBufferService
 metadata:
   name: default
+  labels:
+    numaflow-e2e: "true"
 spec:
   redis:
     native:
@@ -67,6 +69,8 @@ spec:
 kind: InterStepBufferService
 metadata:
   name: default
+  labels:
+    numaflow-e2e: "true"
 spec:
   jetstream:
     version: latest

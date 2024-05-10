@@ -28,51 +28,57 @@ import (
 	"github.com/numaproj/numaflow/test/fixtures"
 )
 
-var httpClient *http.Client
+type HttpController struct {
+	client *http.Client
+}
 
-func init() {
-	httpClient = &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+func NewHttpController() *HttpController {
+	return &HttpController{
+		client: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
 		},
 	}
+}
 
-	// send-message API is used to post data to a http source vertex pod.
-	// The API takes in two parameters(host and vertexName) and constructs the target url as
-	// https://{host}:8443/vertices/{vertexName}.
-	http.HandleFunc("/http/send-message", func(w http.ResponseWriter, r *http.Request) {
-		host := r.URL.Query().Get("host")
-		vertexName := r.URL.Query().Get("vertexName")
-		reqBytes, err := io.ReadAll(r.Body)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+func (h *HttpController) SendMessage(w http.ResponseWriter, r *http.Request) {
+	host := r.URL.Query().Get("host")
+	vertexName := r.URL.Query().Get("vertexName")
+	reqBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-		var req fixtures.HttpPostRequest
-		err = json.Unmarshal(reqBytes, &req)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+	var req fixtures.HttpPostRequest
+	err = json.Unmarshal(reqBytes, &req)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-		postReq, err := http.NewRequest("POST", fmt.Sprintf("https://%s:8443/vertices/%s", host, vertexName), bytes.NewBuffer(req.Body))
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	postReq, err := http.NewRequest("POST", fmt.Sprintf("https://%s:8443/vertices/%s", host, vertexName), bytes.NewBuffer(req.Body))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-		for k, v := range req.Header {
-			postReq.Header.Add(k, v)
-		}
-		_, err = httpClient.Do(postReq)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	})
+	for k, v := range req.Header {
+		postReq.Header.Add(k, v)
+	}
+	_, err = h.client.Do(postReq)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// Close closes the http client
+func (h *HttpController) Close() {
+	h.client.CloseIdleConnections()
 }

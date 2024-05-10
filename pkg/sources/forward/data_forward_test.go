@@ -165,7 +165,7 @@ func TestNewDataForward(t *testing.T) {
 			fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(toSteps)
 			noOpStores := buildNoOpToVertexStores(toSteps)
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, noOpStores, idleManager, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, fetchWatermark, TestSourceWatermarkPublisher{}, noOpStores, idleManager, WithReadBatchSize(batchSize), WithTransformer(myForwardTest{}))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -265,7 +265,7 @@ func TestNewDataForward(t *testing.T) {
 			toVertexStores := buildToVertexWatermarkStores(toSteps)
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &myForwardToAllTest{}, &myForwardToAllTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &myForwardToAllTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize), WithTransformer(&myForwardToAllTest{}))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -418,7 +418,7 @@ func TestNewDataForward(t *testing.T) {
 			toVertexStores := buildToVertexWatermarkStores(toSteps)
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardDropTest{}, myForwardDropTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardDropTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize), WithTransformer(myForwardDropTest{}))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -583,7 +583,7 @@ func TestNewDataForward(t *testing.T) {
 			toVertexStores := buildToVertexWatermarkStores(toSteps)
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize), WithTransformer(myForwardTest{}))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -720,7 +720,7 @@ func TestNewDataForward(t *testing.T) {
 			toVertexStores := buildNoOpToVertexStores(toSteps)
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardApplyTransformerErrTest{}, myForwardApplyTransformerErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardApplyTransformerErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize), WithTransformer(myForwardApplyTransformerErrTest{}))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -766,7 +766,7 @@ func TestNewDataForward(t *testing.T) {
 			toVertexStores := buildNoOpToVertexStores(toSteps)
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardApplyWhereToErrTest{}, myForwardApplyWhereToErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardApplyWhereToErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize), WithTransformer(myForwardApplyWhereToErrTest{}))
 
 			assert.NoError(t, err)
 			assert.True(t, to1.IsEmpty())
@@ -810,7 +810,7 @@ func TestNewDataForward(t *testing.T) {
 			toVertexStores := buildNoOpToVertexStores(toSteps)
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardInternalErrTest{}, myForwardInternalErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardInternalErrTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(batchSize), WithTransformer(myForwardInternalErrTest{}))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
@@ -921,7 +921,7 @@ func TestDataForwardSinglePartition(t *testing.T) {
 	toVertexStores := buildNoOpToVertexStores(toSteps)
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-	f, err := NewDataForward(vertexInstance, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(5))
+	f, err := NewDataForward(vertexInstance, fromStep, toSteps, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(5), WithTransformer(mySourceForwardTest{}))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -976,7 +976,7 @@ func TestDataForwardMultiplePartition(t *testing.T) {
 	toVertexStores := buildNoOpToVertexStores(toSteps)
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-	f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(5))
+	f, err := NewDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(5), WithTransformer(mySourceForwardTest{}))
 	assert.NoError(t, err)
 	assert.False(t, to11.IsFull())
 	assert.False(t, to12.IsFull())
@@ -1085,7 +1085,7 @@ func TestWriteToBuffer(t *testing.T) {
 			toVertexStores := buildNoOpToVertexStores(toSteps)
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(value.batchSize))
+			f, err := NewDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, fetchWatermark, TestSourceWatermarkPublisher{}, toVertexStores, idleManager, WithReadBatchSize(value.batchSize), WithTransformer(myForwardTest{}))
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
 			assert.True(t, buffer.IsEmpty())
