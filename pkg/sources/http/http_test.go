@@ -61,6 +61,7 @@ func Test_NewHTTP(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
+
 	h, err := NewHttpSource(ctx, vi)
 	assert.NoError(t, err)
 	assert.NotNil(t, h.(*httpSource).shutdown)
