@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -35,6 +36,8 @@ type options struct {
 	retryInterval time.Duration
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
+	// cbPublisher is the callback publisher for the vertex.
+	cbPublisher *callback.Publisher
 }
 
 type Option func(*options) error
@@ -76,6 +79,14 @@ func WithTransformerConcurrency(f int) Option {
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *options) error {
 		o.logger = l
+		return nil
+	}
+}
+
+// WithCallbackPublisher sets the callback publisher for the vertex
+func WithCallbackPublisher(cp *callback.Publisher) Option {
+	return func(o *options) error {
+		o.cbPublisher = cp
 		return nil
 	}
 }

@@ -104,3 +104,12 @@ type WriteMessage struct {
 	Message
 	Tags []string
 }
+
+// ReadWriteMessagePair is a pair of ReadMessage and a list of WriteMessage which will be used
+// to map the read message to a list of write messages that the udf returns.
+// The error field is used to capture any error that occurs during the processing of the message.
+type ReadWriteMessagePair struct {
+	ReadMessage   *ReadMessage
+	WriteMessages []*WriteMessage
+	Err           error
+}
