@@ -18745,7 +18745,6 @@
       "type": "object",
       "required": [
         "url",
-        "subject",
         "stream"
       ],
       "properties": {
@@ -18755,10 +18754,6 @@
         },
         "stream": {
           "description": "Stream represents the name of the stream.",
-          "type": "string"
-        },
-        "subject": {
-          "description": "Subject holds the name of the subject onto which messages are published.",
           "type": "string"
         },
         "tls": {

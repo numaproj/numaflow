@@ -10402,8 +10402,6 @@ spec:
                               type: object
                             stream:
                               type: string
-                            subject:
-                              type: string
                             tls:
                               properties:
                                 caCertSecret:
@@ -10446,7 +10444,6 @@ spec:
                               type: string
                           required:
                           - stream
-                          - subject
                           - url
                           type: object
                         kafka:
@@ -15781,8 +15778,6 @@ spec:
                         type: object
                       stream:
                         type: string
-                      subject:
-                        type: string
                       tls:
                         properties:
                           caCertSecret:
@@ -15825,7 +15820,6 @@ spec:
                         type: string
                     required:
                     - stream
-                    - subject
                     - url
                     type: object
                   kafka:

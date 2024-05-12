@@ -2342,14 +2342,6 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
-					"subject": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Subject holds the name of the subject onto which messages are published.",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 					"stream": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Stream represents the name of the stream.",
@@ -2371,7 +2363,7 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"url", "subject", "stream"},
+				Required: []string{"url", "stream"},
 			},
 		},
 		Dependencies: []string{

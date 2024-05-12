@@ -701,19 +701,16 @@ message JetStreamSource {
   // URL to connect to NATS cluster, multiple urls could be separated by comma.
   optional string url = 1;
 
-  // Subject holds the name of the subject onto which messages are published.
-  optional string subject = 2;
-
   // Stream represents the name of the stream.
-  optional string stream = 3;
+  optional string stream = 2;
 
   // TLS configuration for the nats client.
   // +optional
-  optional TLS tls = 4;
+  optional TLS tls = 3;
 
   // Auth information
   // +optional
-  optional NatsAuth auth = 5;
+  optional NatsAuth auth = 4;
 }
 
 message JobTemplate {

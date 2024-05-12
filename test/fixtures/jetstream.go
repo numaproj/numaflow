@@ -14,17 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package fixtures
 
-type JetStreamSource struct {
-	// URL to connect to NATS cluster, multiple urls could be separated by comma.
-	URL string `json:"url" protobuf:"bytes,1,opt,name=url"`
-	// Stream represents the name of the stream.
-	Stream string `json:"stream" protobuf:"bytes,2,opt,name=stream"`
-	// TLS configuration for the nats client.
-	// +optional
-	TLS *TLS `json:"tls" protobuf:"bytes,3,opt,name=tls"`
-	// Auth information
-	// +optional
-	Auth *NatsAuth `json:"auth,omitempty" protobuf:"bytes,4,opt,name=auth"`
+import (
+	"log"
+)
+
+func PumpJetstream(streamName string, payload string, count int) {
+	log.Printf("Pumping Jetstream stream. stream=%q num_messages=%d", streamName, count)
+	InvokeE2EAPI("/nats/pump-jetstream?stream=%s&n=%d&msg=%s", streamName, count, payload)
 }

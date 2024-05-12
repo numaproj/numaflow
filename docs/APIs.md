@@ -2651,16 +2651,6 @@ comma.
 </tr>
 <tr>
 <td>
-<code>subject</code></br> <em> string </em>
-</td>
-<td>
-<p>
-Subject holds the name of the subject onto which messages are published.
-</p>
-</td>
-</tr>
-<tr>
-<td>
 <code>stream</code></br> <em> string </em>
 </td>
 <td>

@@ -18756,10 +18756,6 @@
           "description": "Stream represents the name of the stream.",
           "type": "string"
         },
-        "subject": {
-          "description": "Subject holds the name of the subject onto which messages are published.",
-          "type": "string"
-        },
         "tls": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
           "description": "TLS configuration for the nats client."
@@ -18771,7 +18767,6 @@
       },
       "required": [
         "url",
-        "subject",
         "stream"
       ],
       "type": "object"
