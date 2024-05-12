@@ -18,7 +18,9 @@ package jetstream
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	natslib "github.com/nats-io/nats.go"
@@ -44,17 +46,26 @@ type jsSource struct {
 	bufferSize     int
 	messages       chan *isb.ReadMessage
 	readTimeout    time.Duration
+	// latestErr stores the latest error that occurred when consuming messages from Jetstream
+	// This is used to return error to the caller of the `Read` method. This value is reset in the consume handler.
+	// If the last consume operation was successful, we can ignore previous errors.
+	latestErr atomic.Value
 }
 
 var _ sourcer.SourceReader = (*jsSource)(nil)
 
+var errNil = errors.New("Nil")
+
 func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Option) (sourcer.SourceReader, error) {
+	var latestErr atomic.Value
+	latestErr.Store(errNil)
 	n := &jsSource{
 		vertexName:    vertexInstance.Vertex.Spec.Name,
 		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
 		vertexReplica: vertexInstance.Replica,
 		bufferSize:    1000,            // default size
 		readTimeout:   1 * time.Second, // default timeout
+		latestErr:     latestErr,
 	}
 	for _, o := range opts {
 		if err := o(n); err != nil {
@@ -143,7 +154,9 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 		return nil, fmt.Errorf("creating jetstream consumer for stream %q: %w", source.Stream, err)
 	}
 
-	consumeCtx, err := consumer.Consume(func(msg jetstreamlib.Msg) {
+	msgHandler := func(msg jetstreamlib.Msg) {
+		// Reset the error to nil since the recent consume call was successful
+		n.latestErr.Store(errNil)
 		metadata, err := msg.Metadata()
 		if err != nil {
 			n.logger.Errorw("Getting metadata for the message", zap.Error(err))
@@ -161,8 +174,18 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 			ReadOffset: newOffset(msg, metadata, vertexInstance.Replica),
 		}
 		n.messages <- m
-	})
+	}
 
+	consumeErrHandler := func(consumeCtx jetstreamlib.ConsumeContext, err error) {
+		if errors.Is(err, jetstreamlib.ErrNoMessages) || errors.Is(err, jetstreamlib.ErrNoHeartbeat) {
+			n.logger.Infow("Ignoring the error", zap.Error(err))
+			return
+		}
+		n.latestErr.Store(err)
+		n.logger.Errorw("Consuming messages", zap.Error(err))
+	}
+
+	consumeCtx, err := consumer.Consume(msgHandler, jetstreamlib.ConsumeErrHandler(consumeErrHandler))
 	if err != nil {
 		n.natsConn.Close()
 		return nil, fmt.Errorf("registering jetstream consumer handler: %w", err)
@@ -224,7 +247,12 @@ loop:
 		}
 	}
 	ns.logger.Debugf("Read %d messages.", len(msgs))
-	return msgs, nil
+
+	err := ns.latestErr.Load().(error)
+	if errors.Is(err, errNil) {
+		err = nil
+	}
+	return msgs, err
 }
 
 func (ns *jsSource) Pending(ctx context.Context) (int64, error) {
