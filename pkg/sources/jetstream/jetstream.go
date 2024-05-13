@@ -67,14 +67,12 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 		bufferSize:    1000,            // default size
 		readTimeout:   1 * time.Second, // default timeout
 		latestErr:     latestErr,
+		logger:        logging.FromContext(ctx),
 	}
 	for _, o := range opts {
 		if err := o(n); err != nil {
 			return nil, err
 		}
-	}
-	if n.logger == nil {
-		n.logger = logging.NewLogger()
 	}
 	n.messages = make(chan *isb.ReadMessage, n.bufferSize)
 
