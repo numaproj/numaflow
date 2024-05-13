@@ -17,42 +17,84 @@ limitations under the License.
 package jetstream
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	jetstreamlib "github.com/nats-io/nats.go/jetstream"
+	"go.uber.org/zap"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
+// offset represents a message offset in a jetstream.
+// The implementation is same as `pkg/isb/stores/jetstream/reader.go` except for the type of `msg` field.
+// Once the ISB implementation starts using the new Jetstream client APIs, we can merge both.
 type offset struct {
 	msg         jetstreamlib.Msg
-	metadata    *jetstreamlib.MsgMetadata
+	seq         uint64
 	partitionID int32
+	cancelFunc  context.CancelFunc
 }
 
 var _ isb.Offset = (*offset)(nil)
 
-func newOffset(msg jetstreamlib.Msg, metadata *jetstreamlib.MsgMetadata, partitionID int32) isb.Offset {
-	return &offset{
+func newOffset(msg jetstreamlib.Msg, seqNum uint64, partitionID int32, tickDuration time.Duration, log *zap.SugaredLogger) isb.Offset {
+	o := &offset{
 		msg:         msg,
-		metadata:    metadata,
+		seq:         seqNum,
 		partitionID: partitionID,
+	}
+	// If tickDuration is 1s, which means ackWait is 1s or 2s, it does not make much sense to do it, instead, increasing ackWait is recommended.
+	if tickDuration.Seconds() > 1 {
+		ctx, cancel := context.WithCancel(context.Background())
+		go o.workInProgress(ctx, msg, tickDuration, log)
+		o.cancelFunc = cancel
+	}
+	return o
+}
+
+// workInProgress tells the jetstream server that this message is being worked on
+// and resets the redelivery timer on the server, every tickDuration.
+func (o *offset) workInProgress(ctx context.Context, msg jetstreamlib.Msg, tickDuration time.Duration, log *zap.SugaredLogger) {
+	ticker := time.NewTicker(tickDuration)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			log.Debugw("Setting message processing is in progress", zap.Uint64("stream_sequence_number", o.seq))
+			if err := msg.InProgress(); err != nil && !errors.Is(err, jetstreamlib.ErrMsgAlreadyAckd) && !errors.Is(err, jetstreamlib.ErrMsgNotFound) {
+				log.Errorw("Failed to set JetStream message as in progress", zap.Error(err))
+			}
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
 func (o *offset) String() string {
-	return fmt.Sprintf("%s:%d", o.metadata.Stream, o.metadata.Sequence.Stream)
+	return fmt.Sprintf("%d-%d", o.seq, o.partitionID)
 }
 
 func (o *offset) Sequence() (int64, error) {
-	return int64(o.metadata.Sequence.Stream), nil
+	return int64(o.seq), nil
 }
 
 func (o *offset) AckIt() error {
-	return o.msg.Ack()
+	if o.cancelFunc != nil {
+		o.cancelFunc()
+	}
+	if err := o.msg.Ack(); err != nil && !errors.Is(err, jetstreamlib.ErrMsgAlreadyAckd) && !errors.Is(err, jetstreamlib.ErrMsgNotFound) {
+		return err
+	}
+	return nil
 }
 
 func (o *offset) NoAck() error {
+	if o.cancelFunc != nil {
+		o.cancelFunc()
+	}
 	return o.msg.Nak()
 }
 

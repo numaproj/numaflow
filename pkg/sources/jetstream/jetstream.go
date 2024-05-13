@@ -56,6 +56,7 @@ var _ sourcer.SourceReader = (*jsSource)(nil)
 
 var errNil = errors.New("Nil")
 
+// New creates a Jetstream source reader. When the passed context is cancelled, this source reader will disconnect from the server.
 func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Option) (sourcer.SourceReader, error) {
 	var latestErr atomic.Value
 	latestErr.Store(errNil)
@@ -147,13 +148,26 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 		DeliverPolicy: jetstreamlib.DeliverAllPolicy,
 		AckPolicy:     jetstreamlib.AckExplicitPolicy,
 	})
-	n.consumer = consumer
-
 	if err != nil {
 		n.natsConn.Close()
 		return nil, fmt.Errorf("creating jetstream consumer for stream %q: %w", source.Stream, err)
 	}
+	n.consumer = consumer
 
+	consumerInfo, err := consumer.Info(ctx)
+	if err != nil {
+		n.natsConn.Close()
+		return nil, fmt.Errorf("fetching consumer info: %w", err)
+	}
+	ackWaitTime := consumerInfo.Config.AckWait
+	// If ackWait is 3s, ticks every 2s.
+	inProgressTickSeconds := int64(ackWaitTime.Seconds() * 2 / 3)
+	if inProgressTickSeconds < 1 {
+		inProgressTickSeconds = 1
+	}
+	inProgressTickDuration := time.Duration(inProgressTickSeconds * int64(time.Second))
+
+	// Callback function to process a message
 	msgHandler := func(msg jetstreamlib.Msg) {
 		// Reset the error to nil since the recent consume call was successful
 		n.latestErr.Store(errNil)
@@ -171,14 +185,18 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 					Payload: msg.Data(),
 				},
 			},
-			ReadOffset: newOffset(msg, metadata, vertexInstance.Replica),
+			ReadOffset: newOffset(msg, metadata.Sequence.Stream, vertexInstance.Replica, inProgressTickDuration, n.logger),
 		}
 		n.messages <- m
 	}
 
+	// callback for error handling
 	consumeErrHandler := func(consumeCtx jetstreamlib.ConsumeContext, err error) {
-		if errors.Is(err, jetstreamlib.ErrNoMessages) || errors.Is(err, jetstreamlib.ErrNoHeartbeat) {
-			n.logger.Infow("Ignoring the error", zap.Error(err))
+		if errors.Is(err, jetstreamlib.ErrNoMessages) {
+			return
+		}
+		if errors.Is(err, jetstreamlib.ErrNoHeartbeat) {
+			n.logger.Warnw("Ignoring the error", zap.Error(err))
 			return
 		}
 		n.latestErr.Store(err)
@@ -191,6 +209,17 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 		return nil, fmt.Errorf("registering jetstream consumer handler: %w", err)
 	}
 	n.consumerHandle = consumeCtx
+
+	// Start a background goroutine to stop the consumer when the context is cancelled (eg. upon receiving SIGINT or SIGTERM)
+	go func() {
+		<-ctx.Done()
+		n.logger.Warnw("Initiating shutdown of Jetstream source due to context cancellation", zap.Error(ctx.Err()))
+		if err := n.Close(); err != nil {
+			n.logger.Errorw("Stopping Jetstream source", zap.Error(err))
+			return
+		}
+		n.logger.Info("Stopped Jetstream source")
+	}()
 
 	return n, nil
 }
@@ -275,7 +304,8 @@ func (ns *jsSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 
 func (ns *jsSource) Close() error {
 	ns.logger.Info("Shutting down Jetstream source server...")
-	ns.consumerHandle.Drain()
+	// Using Stop instead of Drain to discard all messages in the buffer, since SourceReader.Read won't be called after invoking SourceReader.Close
+	ns.consumerHandle.Stop()
 	ns.natsConn.Close()
 	ns.logger.Info("Jetstream source server shutdown")
 	return nil
