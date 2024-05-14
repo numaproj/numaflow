@@ -664,7 +664,8 @@ Callback
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
 </p>
 <p>
 </p>
@@ -687,7 +688,7 @@ Description
 <td>
 <em>(Optional)</em>
 <p>
-Enabled indicates whether callback is enabled for the pipeline
+Enabled indicates whether callback is enabled for the pipeline.
 </p>
 </td>
 </tr>
@@ -699,32 +700,21 @@ Enabled indicates whether callback is enabled for the pipeline
 <em>(Optional)</em>
 <p>
 CallbackURLHeaderKey is the message header key from which the callback
-URL will be retrieved
+URL will be retrieved.
 </p>
 </td>
 </tr>
 <tr>
 <td>
-<code>fallbackURLHeaderKey</code></br> <em> string </em>
+<code>callbackURL</code></br> <em> string </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>
-FallbackURLHeaderKey is the message header key from which the fallback
-URL will be retrieved in case the callback is not successful
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>callbackInEachVertex</code></br> <em> bool </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-CallbackInEachVertex indicates whether the callback should be called for
-each vertex. If not set, the callback will be called only in the sink
-vertex.
+CallbackURL is the URL to which the callback will be made if the
+callback key is not present in the message headers or if the callback
+fails when the call back is made to the URL present in the message
+headers.
 </p>
 </td>
 </tr>
@@ -5383,6 +5373,19 @@ from the pipeline watermark settings.
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>callback</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Callback"> Callback </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Callback defines the callback settings for the vertex. It’s populated
+from the pipeline callback settings.
+</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -5615,6 +5618,19 @@ Description
 <p>
 Watermark indicates watermark progression in the vertex, it’s populated
 from the pipeline watermark settings.
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>callback</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Callback"> Callback </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Callback defines the callback settings for the vertex. It’s populated
+from the pipeline callback settings.
 </p>
 </td>
 </tr>

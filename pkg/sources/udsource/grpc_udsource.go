@@ -148,7 +148,7 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 				Message: isb.Message{
 					Header: isb.Header{
 						MessageInfo: isb.MessageInfo{EventTime: r.GetEventTime().AsTime()},
-						ID:          constructMessageID(offset.String(), r.GetOffset().GetPartitionId()),
+						ID:          constructMessageID(u.vertexName, offset.String(), r.GetOffset().GetPartitionId()),
 						Keys:        r.GetKeys(),
 						Headers:     r.GetHeaders(),
 					},
@@ -194,7 +194,11 @@ func (u *GRPCBasedUDSource) ApplyPartitionFn(ctx context.Context) ([]int32, erro
 	return resp.GetResult().GetPartitions(), nil
 }
 
-func constructMessageID(offset string, partitionIdx int32) string {
+func constructMessageID(vertexName string, offset string, partitionIdx int32) isb.MessageID {
 	// For a user-defined source, the partition ID plus the offset should be able to uniquely identify a message
-	return fmt.Sprintf("%d-%s", partitionIdx, offset)
+	return isb.MessageID{
+		VertexName: vertexName,
+		Offset:     offset,
+		Index:      partitionIdx,
+	}
 }

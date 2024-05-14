@@ -155,12 +155,12 @@ func TestNewDataForward(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
-		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil, "testVertex")
 
 		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 		fetchWatermark := &testForwardFetcher{}
 		idleManager, _ := wmb.NewIdleManager(1, 1)
-		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], idleManager, nil)
+		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], idleManager)
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -173,7 +173,8 @@ func TestNewDataForward(t *testing.T) {
 
 		testReadBatchSize := int(batchSize / 2)
 		msgs := to1.GetMessages(testReadBatchSize)
-		for ; msgs[testReadBatchSize-1].ID == ""; msgs = to1.GetMessages(testReadBatchSize) {
+		emptyId := isb.MessageID{}
+		for ; msgs[testReadBatchSize-1].ID == emptyId; msgs = to1.GetMessages(testReadBatchSize) {
 			select {
 			case <-ctx.Done():
 				if ctx.Err() == context.DeadlineExceeded {
@@ -245,7 +246,7 @@ func TestNewDataForward(t *testing.T) {
 			testVertexName: &testForwarderPublisher{},
 		}
 		idleManager, _ := wmb.NewIdleManager(1, 1)
-		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], idleManager, nil)
+		f, err := NewDataForward(vertexInstance, fromStep, to1, fetchWatermark, publishWatermark[testVertexName], idleManager)
 
 		assert.NoError(t, err)
 		assert.False(t, to1.IsFull())
@@ -315,7 +316,7 @@ func TestWriteToBuffer(t *testing.T) {
 				"to1": &testForwarderPublisher{},
 			}
 			idleManager, _ := wmb.NewIdleManager(1, 1)
-			f, err := NewDataForward(vertexInstance, fromStep, buffer, fetchWatermark, publishWatermark["to1"], idleManager, nil)
+			f, err := NewDataForward(vertexInstance, fromStep, buffer, fetchWatermark, publishWatermark["to1"], idleManager)
 
 			assert.NoError(t, err)
 			assert.False(t, buffer.IsFull())
@@ -337,7 +338,7 @@ func TestWriteToBuffer(t *testing.T) {
 
 			// try to write to buffer after it is full.
 			var messageToStep []isb.Message
-			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil)
+			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil, "testVertex")
 			messageToStep = append(messageToStep, writeMessages[0:value.batchSize+1]...)
 			_, _, err = f.writeToSink(ctx, buffer, messageToStep, false)
 

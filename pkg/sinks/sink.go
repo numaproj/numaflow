@@ -33,6 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -66,6 +67,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		sinkHandler        *udsink.UDSgRPCBasedUDSink
 		fbSinkHandler      *udsink.UDSgRPCBasedUDSink
 		healthCheckers     = make([]metrics.HealthChecker, 0)
+		vertexName         = u.VertexInstance.Vertex.Name
+		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
 	)
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
@@ -74,7 +77,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	// For sinks, the buffer name is the vertex name
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{u.VertexInstance.Vertex.Spec.Name})
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertexName})
 	idleManager = wmb.NewNoOpIdleManager()
 
 	switch u.ISBSvcType {
@@ -87,7 +90,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		// create reader for each partition. Each partition is a group in redis
 		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
 			fromGroup := bufferPartition + "-group"
-			consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
+			consumer := fmt.Sprintf("%s-%v", vertexName, u.VertexInstance.Replica)
 
 			reader := redisisb.NewBufferRead(ctx, redisClient, bufferPartition, fromGroup, consumer, int32(index), readOptions...)
 			readers = append(readers, reader)
@@ -236,7 +239,21 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			forwardOpts = append(forwardOpts, sinkforward.WithFbSinkWriter(fbSinkWriter))
 		}
 
-		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[u.VertexInstance.Vertex.Spec.Name], idleManager, forwardOpts...)
+		// if callback is enabled for the vertex, create a callback publisher
+		cb := u.VertexInstance.Vertex.Spec.Callback
+		if cb.Enabled {
+			opts := make([]callback.OptionFunc, 0)
+			if cb.CallbackURLHeaderKey != "" {
+				opts = append(opts, callback.WithCallbackHeaderKey(cb.CallbackURLHeaderKey))
+			}
+			if cb.CallbackURL != "" {
+				opts = append(opts, callback.WithCallbackURL(cb.CallbackURL))
+			}
+			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, opts...)
+			forwardOpts = append(forwardOpts, sinkforward.WithCallbackPublisher(cbPublisher))
+		}
+
+		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[vertexName], idleManager, forwardOpts...)
 		if err != nil {
 			return fmt.Errorf("failed to create data forward, error: %w", err)
 		}

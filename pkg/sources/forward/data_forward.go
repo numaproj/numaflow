@@ -184,13 +184,6 @@ func (df *DataForward) Start() <-chan struct{} {
 	return stopped
 }
 
-// readWriteMessagePair represents a read message and its processed (via transformer) write messages.
-type readWriteMessagePair struct {
-	readMessage      *isb.ReadMessage
-	writeMessages    []*isb.WriteMessage
-	transformerError error
-}
-
 // forwardAChunk forwards a chunk of message from the reader to the toBuffers. It does the Read -> Process -> Forward -> Ack chain
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
@@ -288,12 +281,12 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		messageToStep[toVertex] = make([][]isb.Message, len(df.toBuffers[toVertex]))
 	}
 
-	readWriteMessagePairs := make([]readWriteMessagePair, len(readMessages))
+	readWriteMessagePairs := make([]isb.ReadWriteMessagePair, len(readMessages))
 
 	// If a user-defined transformer exists, apply it
 	if df.opts.transformer != nil {
 		// user-defined transformer concurrent processing request channel
-		transformerCh := make(chan *readWriteMessagePair)
+		transformerCh := make(chan *isb.ReadWriteMessagePair)
 
 		// create a pool of Transformer Processors
 		var wg sync.WaitGroup
@@ -316,7 +309,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
-			readWriteMessagePairs[idx].readMessage = m
+			readWriteMessagePairs[idx].ReadMessage = m
 			// send transformer processing work to the channel. Thus, the results of the transformer
 			// application on a read message will be stored as the corresponding writeMessage in readWriteMessagePairs
 			transformerCh <- &readWriteMessagePairs[idx]
@@ -349,10 +342,10 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
-			readWriteMessagePairs[idx].readMessage = m
+			readWriteMessagePairs[idx].ReadMessage = m
 			// if no user-defined transformer exists, then the messages to write will be identical to the message read from source
 			// thus, the unmodified read message will be stored as the corresponding writeMessage in readWriteMessagePairs
-			readWriteMessagePairs[idx].writeMessages = []*isb.WriteMessage{{Message: m.Message}}
+			readWriteMessagePairs[idx].WriteMessages = []*isb.WriteMessage{{Message: m.Message}}
 		}
 	}
 
@@ -362,17 +355,17 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	latestEtMap := make(map[int32]int64)
 
 	for _, m := range readWriteMessagePairs {
-		writeMessages = append(writeMessages, m.writeMessages...)
-		for _, message := range m.writeMessages {
-			message.Headers = m.readMessage.Headers
+		writeMessages = append(writeMessages, m.WriteMessages...)
+		for _, message := range m.WriteMessages {
+			message.Headers = m.ReadMessage.Headers
 			// we convert each writeMessage to isb.ReadMessage by providing its parent ReadMessage's ReadOffset.
 			// since we use message event time instead of the watermark to determine and publish source watermarks,
 			// time.UnixMilli(-1) is assigned to the message watermark. transformedReadMessages are immediately
 			// used below for publishing source watermarks.
-			if latestEt, ok := latestEtMap[m.readMessage.ReadOffset.PartitionIdx()]; !ok || message.EventTime.UnixNano() < latestEt {
-				latestEtMap[m.readMessage.ReadOffset.PartitionIdx()] = message.EventTime.UnixNano()
+			if latestEt, ok := latestEtMap[m.ReadMessage.ReadOffset.PartitionIdx()]; !ok || message.EventTime.UnixNano() < latestEt {
+				latestEtMap[m.ReadMessage.ReadOffset.PartitionIdx()] = message.EventTime.UnixNano()
 			}
-			transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.readMessage.ReadOffset, time.UnixMilli(-1)))
+			transformedReadMessages = append(transformedReadMessages, message.ToReadMessage(m.ReadMessage.ReadOffset, time.UnixMilli(-1)))
 		}
 	}
 
@@ -395,7 +388,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	for _, m := range readWriteMessagePairs {
 		// Look for errors in transformer processing if we see even 1 error we return.
 		// Handling partial retrying is not worth ATM.
-		if m.transformerError != nil {
+		if m.Err != nil {
 			metrics.SourceTransformerError.With(map[string]string{
 				metrics.LabelVertex:             df.vertexName,
 				metrics.LabelPipeline:           df.pipelineName,
@@ -403,18 +396,18 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				metrics.LabelPartitionName:      df.reader.GetName(),
 			}).Inc()
 
-			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(m.transformerError))
+			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(m.Err))
 			return
 		}
 		// update toBuffers
-		for _, message := range m.writeMessages {
-			if err := df.whereToStep(message, messageToStep, m.readMessage); err != nil {
+		for _, message := range m.WriteMessages {
+			if err = df.whereToStep(message, messageToStep, m.ReadMessage); err != nil {
 				df.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
 				return
 			}
 		}
 		// get the list of source partitions for which we have read messages, we will use this to publish watermarks to toVertices
-		sourcePartitionsIndices[m.readMessage.ReadOffset.PartitionIdx()] = true
+		sourcePartitionsIndices[m.ReadMessage.ReadOffset.PartitionIdx()] = true
 	}
 
 	// forward the messages to the edge buffer (could be multiple edges)
@@ -502,6 +495,12 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      df.reader.GetName(),
 	}).Add(float64(len(readOffsets)))
+
+	if df.opts.cbPublisher != nil {
+		if err := df.opts.cbPublisher.NonSinkVertexCallback(ctx, readWriteMessagePairs); err != nil {
+			df.opts.logger.Errorw("failed to publish callback", zap.Error(err))
+		}
+	}
 
 	// ProcessingTimes of the entire forwardAChunk
 	metrics.ForwardAChunkProcessingTime.With(map[string]string{
@@ -656,7 +655,7 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 }
 
 // concurrentApplyTransformer applies the transformer based on the request from the channel
-func (df *DataForward) concurrentApplyTransformer(ctx context.Context, readMessagePair <-chan *readWriteMessagePair) {
+func (df *DataForward) concurrentApplyTransformer(ctx context.Context, readMessagePair <-chan *isb.ReadWriteMessagePair) {
 	for message := range readMessagePair {
 		start := time.Now()
 		metrics.SourceTransformerReadMessagesCount.With(map[string]string{
@@ -666,7 +665,7 @@ func (df *DataForward) concurrentApplyTransformer(ctx context.Context, readMessa
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Inc()
 
-		writeMessages, err := df.applyTransformer(ctx, message.readMessage)
+		writeMessages, err := df.applyTransformer(ctx, message.ReadMessage)
 		metrics.SourceTransformerWriteMessagesCount.With(map[string]string{
 			metrics.LabelVertex:             df.vertexName,
 			metrics.LabelPipeline:           df.pipelineName,
@@ -674,8 +673,8 @@ func (df *DataForward) concurrentApplyTransformer(ctx context.Context, readMessa
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Add(float64(len(writeMessages)))
 
-		message.writeMessages = append(message.writeMessages, writeMessages...)
-		message.transformerError = err
+		message.WriteMessages = append(message.WriteMessages, writeMessages...)
+		message.Err = err
 		metrics.SourceTransformerProcessingTime.With(map[string]string{
 			metrics.LabelVertex:             df.vertexName,
 			metrics.LabelPipeline:           df.pipelineName,
@@ -710,19 +709,15 @@ func (df *DataForward) applyTransformer(ctx context.Context, readMessage *isb.Re
 				return nil, err
 			}
 			continue
-		} else {
-			for index, m := range writeMessages {
-				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), df.vertexName, index)
-			}
-			return writeMessages, nil
 		}
+		return writeMessages, nil
 	}
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
 func (df *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-	to, err := df.toWhichStepDecider.WhereTo(writeMessage.Keys, writeMessage.Tags, writeMessage.ID)
+	to, err := df.toWhichStepDecider.WhereTo(writeMessage.Keys, writeMessage.Tags, writeMessage.ID.String())
 	if err != nil {
 		df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{
 			Name:    df.reader.GetName(),

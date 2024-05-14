@@ -391,7 +391,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	if isdf.opts.cbPublisher != nil {
 		// Publish the callback for the vertex
-		if err = isdf.opts.cbPublisher.NonSinkVertexCallback(udfResults); err != nil {
+		if err = isdf.opts.cbPublisher.NonSinkVertexCallback(ctx, udfResults); err != nil {
 			isdf.opts.logger.Errorw("Failed to publish callback", zap.Error(err))
 		}
 	}
@@ -444,8 +444,6 @@ func (isdf *InterStepDataForward) streamMessage(
 		msgIndex := 0
 		for writeMessage := range writeMessageCh {
 			writeMessage.Headers = dataMessages[0].Headers
-			// add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
-			writeMessage.ID = fmt.Sprintf("%s-%s-%d", dataMessages[0].ReadOffset.String(), isdf.vertexName, msgIndex)
 			msgIndex += 1
 			metrics.UDFWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(1))
 
@@ -684,20 +682,15 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb
 				return nil, err
 			}
 			continue
-		} else {
-			for index, m := range writeMessages {
-				// add vertex name to the ID, since multiple vertices can publish to the same vertex and we need uniqueness across them
-				m.ID = fmt.Sprintf("%s-%s-%d", readMessage.ReadOffset.String(), isdf.vertexName, index)
-			}
-			return writeMessages, nil
 		}
+		return writeMessages, nil
 	}
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
 func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-	to, err := isdf.FSD.WhereTo(writeMessage.Keys, writeMessage.Tags, writeMessage.ID)
+	to, err := isdf.FSD.WhereTo(writeMessage.Keys, writeMessage.Tags, writeMessage.ID.String())
 	if err != nil {
 		isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.fromBufferPartition.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
 		// a shutdown can break the blocking loop caused due to InternalErr

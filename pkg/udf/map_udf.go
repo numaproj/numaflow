@@ -31,6 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
 	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -67,6 +68,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		mapHandler         *rpc.GRPCBasedMap
 		mapStreamHandler   *rpc.GRPCBasedMapStream
 		idleManager        wmb.IdleManager
+		vertexName         = u.VertexInstance.Vertex.Name
+		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
 	)
 
 	// watermark variables
@@ -142,7 +145,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create map stream client, %w", err)
 		}
-		mapStreamHandler = rpc.NewUDSgRPCBasedMapStream(mapStreamClient)
+		mapStreamHandler = rpc.NewUDSgRPCBasedMapStream(vertexName, mapStreamClient)
 
 		// Readiness check
 		if err := mapStreamHandler.WaitUntilReady(ctx); err != nil {
@@ -166,7 +169,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to create map client, %w", err)
 		}
-		mapHandler = rpc.NewUDSgRPCBasedMap(mapClient)
+		mapHandler = rpc.NewUDSgRPCBasedMap(vertexName, mapClient)
 
 		// Readiness check
 		if err := mapHandler.WaitUntilReady(ctx); err != nil {
@@ -236,6 +239,21 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				opts = append(opts, forward.WithUDFConcurrency(int(*x.ReadBatchSize)))
 			}
 		}
+
+		// if callback is enabled for the vertex, create a callback publisher
+		cb := u.VertexInstance.Vertex.Spec.Callback
+		if cb.Enabled {
+			cbOpts := make([]callback.OptionFunc, 0)
+			if cb.CallbackURLHeaderKey != "" {
+				cbOpts = append(cbOpts, callback.WithCallbackHeaderKey(cb.CallbackURLHeaderKey))
+			}
+			if cb.CallbackURL != "" {
+				cbOpts = append(cbOpts, callback.WithCallbackURL(cb.CallbackURL))
+			}
+			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
+			opts = append(opts, forward.WithCallbackPublisher(cbPublisher))
+		}
+
 		// create a forwarder for each partition
 		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, idleManager, opts...)
 		if err != nil {

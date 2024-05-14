@@ -54,7 +54,7 @@ func (f *forwardTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.Ver
 // TestWriteToBuffer tests two BufferFullWritingStrategies: 1. discarding the latest message and 2. retrying writing until context is cancelled.
 func TestWriteToBuffer(t *testing.T) {
 	testStartTime := time.Unix(1636470000, 0).UTC()
-	windowResponse := testutils.BuildTestWriteMessages(int64(15), testStartTime, nil)
+	windowResponse := testutils.BuildTestWriteMessages(int64(15), testStartTime, nil, "testVertex")
 
 	tests := []struct {
 		name          string

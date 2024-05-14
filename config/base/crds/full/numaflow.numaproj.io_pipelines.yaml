@@ -56,14 +56,12 @@ spec:
             properties:
               callback:
                 properties:
-                  callbackInEachVertex:
-                    type: boolean
+                  callbackURL:
+                    type: string
                   callbackURLHeaderKey:
                     type: string
                   enabled:
                     type: boolean
-                  fallbackURLHeaderKey:
-                    type: string
                 type: object
               edges:
                 items:

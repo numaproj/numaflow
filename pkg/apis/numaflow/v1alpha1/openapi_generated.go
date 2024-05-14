@@ -629,29 +629,22 @@ func schema_pkg_apis_numaflow_v1alpha1_Callback(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"enabled": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Enabled indicates whether callback is enabled for the pipeline",
+							Description: "Enabled indicates whether callback is enabled for the pipeline.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
 					"callbackURLHeaderKey": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved",
+							Description: "CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"fallbackURLHeaderKey": {
+					"callbackURL": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FallbackURLHeaderKey is the message header key from which the fallback URL will be retrieved in case the callback is not successful",
+							Description: "CallbackURL is the URL to which the callback will be made if the callback key is not present in the message headers or if the callback fails when the call back is made to the URL present in the message headers.",
 							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"callbackInEachVertex": {
-						SchemaProps: spec.SchemaProps{
-							Description: "CallbackInEachVertex indicates whether the callback should be called for each vertex. If not set, the callback will be called only in the sink vertex.",
-							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
@@ -4773,12 +4766,19 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"),
 						},
 					},
+					"callback": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Callback defines the callback settings for the vertex. It's populated from the pipeline callback settings.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Callback"),
+						},
+					},
 				},
 				Required: []string{"name", "pipelineName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Callback", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 

@@ -223,22 +223,18 @@ message BufferServiceConfig {
 }
 
 message Callback {
-  // Enabled indicates whether callback is enabled for the pipeline
+  // Enabled indicates whether callback is enabled for the pipeline.
   // +optional
   optional bool enabled = 1;
 
-  // CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved
+  // CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved.
   // +optional
   optional string callbackURLHeaderKey = 2;
 
-  // FallbackURLHeaderKey is the message header key from which the fallback URL will be retrieved in case the callback is not successful
+  // CallbackURL is the URL to which the callback will be made if the callback key is not present in the message headers
+  // or if the callback fails when the call back is made to the URL present in the message headers.
   // +optional
-  optional string fallbackURLHeaderKey = 3;
-
-  // CallbackInEachVertex indicates whether the callback should be called for each vertex.
-  // If not set, the callback will be called only in the sink vertex.
-  // +optional
-  optional bool callbackInEachVertex = 10;
+  optional string callbackURL = 3;
 }
 
 // CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.
@@ -1422,6 +1418,10 @@ message VertexSpec {
   // +kubebuilder:default={"disabled": false}
   // +optional
   optional Watermark watermark = 7;
+
+  // Callback defines the callback settings for the vertex. It's populated from the pipeline callback settings.
+  // +optional
+  optional Callback callback = 8;
 }
 
 message VertexStatus {

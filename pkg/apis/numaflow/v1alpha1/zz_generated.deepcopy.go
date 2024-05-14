@@ -2412,6 +2412,7 @@ func (in *VertexSpec) DeepCopyInto(out *VertexSpec) {
 		}
 	}
 	in.Watermark.DeepCopyInto(&out.Watermark)
+	out.Callback = in.Callback
 	return
 }
 

@@ -17,6 +17,7 @@ limitations under the License.
 package isb
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -63,14 +64,29 @@ type Header struct {
 	MessageInfo
 	// Kind indicates the kind of Message
 	Kind MessageKind
-	// ID is used for exactly-once-semantics. ID is usually populated from the offset, if offset is available.
-	ID string
+	// ID is used for exactly-once-semantics. ID is a combination of vertex name, offset and index of the message.
+	ID MessageID
 	// Keys is (key,value) in the map-reduce paradigm will be used for reduce operation, last key in the list
 	// will be used for conditional forwarding
 	Keys []string
 	// Headers is the headers of the message which can be used to store and propagate source headers like kafka headers,
 	// http headers and Numaflow platform headers like tracing headers etc.
 	Headers map[string]string
+}
+
+// MessageID is the message ID
+type MessageID struct {
+	// VertexName is the name of the vertex
+	VertexName string
+	// Offset is the offset of the message
+	Offset string
+	// Index is the index of the message
+	Index int32
+}
+
+// String returns the string representation of the MessageID
+func (id *MessageID) String() string {
+	return fmt.Sprintf("%s-%s-%d", id.VertexName, id.Offset, id.Index)
 }
 
 // Body is the body of the message

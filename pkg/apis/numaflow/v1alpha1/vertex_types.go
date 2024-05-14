@@ -437,6 +437,9 @@ type VertexSpec struct {
 	// +kubebuilder:default={"disabled": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,7,opt,name=watermark"`
+	// Callback defines the callback settings for the vertex. It's populated from the pipeline callback settings.
+	// +optional
+	Callback Callback `json:"callback" protobuf:"bytes,8,opt,name=callback"`
 }
 
 type AbstractVertex struct {

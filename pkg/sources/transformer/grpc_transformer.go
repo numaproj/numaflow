@@ -35,12 +35,16 @@ import (
 
 // GRPCBasedTransformer applies user-defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
 type GRPCBasedTransformer struct {
-	client sourcetransformer.Client
+	vertexName string
+	client     sourcetransformer.Client
 }
 
 // NewGRPCBasedTransformer returns a new gRPCBasedTransformer object.
-func NewGRPCBasedTransformer(client sourcetransformer.Client) *GRPCBasedTransformer {
-	return &GRPCBasedTransformer{client: client}
+func NewGRPCBasedTransformer(vertexName string, client sourcetransformer.Client) *GRPCBasedTransformer {
+	return &GRPCBasedTransformer{
+		vertexName: vertexName,
+		client:     client,
+	}
 }
 
 // IsHealthy checks if the transformer container is healthy.
@@ -154,8 +158,12 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, readMessage *
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: parentMessageInfo,
-					ID:          fmt.Sprintf("%s-%d", offset.String(), i),
-					Keys:        keys,
+					ID: isb.MessageID{
+						VertexName: u.vertexName,
+						Offset:     offset.String(),
+						Index:      int32(i),
+					},
+					Keys: keys,
 				},
 				Body: isb.Body{
 					Payload: result.Value,

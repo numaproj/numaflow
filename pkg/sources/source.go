@@ -35,6 +35,7 @@ import (
 	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -241,7 +242,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to create transformer gRPC client, %w", err)
 		}
 
-		srcTransformerGRPCClient = transformer.NewGRPCBasedTransformer(srcTransformerClient)
+		srcTransformerGRPCClient = transformer.NewGRPCBasedTransformer(vertexName, srcTransformerClient)
 
 		// Close the connection when we are done
 		defer func() {
@@ -267,6 +268,20 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	// create a source watermark publisher
 	sourceWmPublisher := publish.NewSourcePublish(ctx, pipelineName, vertexName, sourcePublisherStores, publish.WithDelay(sp.VertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+
+	// if callback is enabled for the vertex, create a callback publisher
+	cb := sp.VertexInstance.Vertex.Spec.Callback
+	if cb.Enabled {
+		opts := make([]callback.OptionFunc, 0)
+		if cb.CallbackURLHeaderKey != "" {
+			opts = append(opts, callback.WithCallbackHeaderKey(cb.CallbackURLHeaderKey))
+		}
+		if cb.CallbackURL != "" {
+			opts = append(opts, callback.WithCallbackURL(cb.CallbackURL))
+		}
+		cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, opts...)
+		forwardOpts = append(forwardOpts, sourceforward.WithCallbackPublisher(cbPublisher))
+	}
 
 	// create source data forwarder
 	var sourceForwarder *sourceforward.DataForward

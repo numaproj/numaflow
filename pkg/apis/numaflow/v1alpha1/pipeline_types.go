@@ -500,19 +500,20 @@ func (pipeline PipelineSpec) GetSinksByName() map[string]*AbstractVertex {
 }
 
 type Callback struct {
-	// Enabled indicates whether callback is enabled for the pipeline
+	// Enabled indicates whether callback is enabled for the pipeline.
 	// +optional
 	Enabled bool `json:"enabled,omitempty" protobuf:"varint,1,opt,name=enabled"`
-	// CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved
+	// CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved.
 	// +optional
 	CallbackURLHeaderKey string `json:"callbackURLHeaderKey,omitempty" protobuf:"bytes,2,opt,name=callbackURLHeaderKey"`
-	// FallbackURLHeaderKey is the message header key from which the fallback URL will be retrieved in case the callback is not successful
+	// CallbackURL is the URL to which the callback will be made if the callback key is not present in the message headers
+	// or if the callback fails when the call back is made to the URL present in the message headers.
 	// +optional
-	FallbackURLHeaderKey string `json:"fallbackURLHeaderKey,omitempty" protobuf:"bytes,3,opt,name=fallbackURLHeaderKey"`
-	// CallbackInEachVertex indicates whether the callback should be called for each vertex.
-	// If not set, the callback will be called only in the sink vertex.
-	// +optional
-	CallbackInEachVertex bool `json:"callbackInEachVertex,omitempty" protobuf:"varint,10,opt,name=callbackInEachVertex"`
+	CallbackURL string `json:"callbackURL,omitempty" protobuf:"bytes,3,opt,name=callbackURL"`
+}
+
+func (c Callback) IsEnabled() bool {
+	return c.Enabled && (c.CallbackURLHeaderKey != "" || c.CallbackURL != "")
 }
 
 type Watermark struct {

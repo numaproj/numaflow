@@ -38,7 +38,7 @@ type PayloadForTest struct {
 }
 
 // BuildTestWriteMessages builds test isb.Message which can be used for testing.
-func BuildTestWriteMessages(count int64, startTime time.Time, keys []string) []isb.Message {
+func BuildTestWriteMessages(count int64, startTime time.Time, keys []string, vertexName string) []isb.Message {
 	var messages = make([]isb.Message, 0, count)
 	for i := int64(0); i < count; i++ {
 		tmpTime := startTime.Add(time.Duration(i) * time.Second)
@@ -52,7 +52,11 @@ func BuildTestWriteMessages(count int64, startTime time.Time, keys []string) []i
 					MessageInfo: isb.MessageInfo{
 						EventTime: tmpTime,
 					},
-					ID:   fmt.Sprintf("%d-testVertex-0-0", i), // TODO: hard coded ID suffix ATM, make configurable if needed
+					ID: isb.MessageID{
+						VertexName: vertexName,
+						Offset:     "0-0",
+						Index:      int32(i),
+					}, // TODO: hard coded ID suffix ATM, make configurable if needed
 					Keys: keys,
 					Headers: map[string]string{
 						"key1": "value1",
@@ -82,7 +86,7 @@ func BuildTestWindowRequests(count int64, startTime time.Time, windowOp window.O
 
 // BuildTestReadMessages builds test isb.ReadMessage which can be used for testing.
 func BuildTestReadMessages(count int64, startTime time.Time, keys []string) []isb.ReadMessage {
-	writeMessages := BuildTestWriteMessages(count, startTime, keys)
+	writeMessages := BuildTestWriteMessages(count, startTime, keys, "testVertex")
 	var readMessages = make([]isb.ReadMessage, count)
 
 	for idx, writeMessage := range writeMessages {
@@ -97,12 +101,12 @@ func BuildTestReadMessages(count int64, startTime time.Time, keys []string) []is
 
 // BuildTestReadMessagesIntOffset builds test isb.ReadMessage which can be used for testing.
 func BuildTestReadMessagesIntOffset(count int64, startTime time.Time, keys []string) []isb.ReadMessage {
-	writeMessages := BuildTestWriteMessages(count, startTime, keys)
+	writeMessages := BuildTestWriteMessages(count, startTime, keys, "testVertex")
 	var readMessages = make([]isb.ReadMessage, count)
 
 	for idx, writeMessage := range writeMessages {
-		splitStr := strings.Split(writeMessage.Header.ID, "-")
-		offset, _ := strconv.Atoi(splitStr[0])
+		splitStr := strings.Split(writeMessage.Header.ID.String(), "-")
+		offset, _ := strconv.Atoi(splitStr[len(splitStr)-1])
 		readMessages[idx] = isb.ReadMessage{
 			Message:    writeMessage,
 			ReadOffset: isb.NewSimpleIntPartitionOffset(int64(offset), 0),
