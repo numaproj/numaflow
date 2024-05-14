@@ -697,6 +697,22 @@ message JetStreamConfig {
   optional bool tlsEnabled = 4;
 }
 
+message JetStreamSource {
+  // URL to connect to NATS cluster, multiple urls could be separated by comma.
+  optional string url = 1;
+
+  // Stream represents the name of the stream.
+  optional string stream = 2;
+
+  // TLS configuration for the nats client.
+  // +optional
+  optional TLS tls = 3;
+
+  // Auth information
+  // +optional
+  optional NatsAuth auth = 4;
+}
+
 message JobTemplate {
   // +optional
   optional AbstractPodTemplate abstractPodTemplate = 1;
@@ -1221,6 +1237,9 @@ message Source {
 
   // +optional
   optional UDSource udSource = 6;
+
+  // +optional
+  optional JetStreamSource jetstream = 7;
 }
 
 // Status is a common structure which can be used for Status field.

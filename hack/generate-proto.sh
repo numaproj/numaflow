@@ -27,9 +27,7 @@ if [ "`command -v protoc-gen-grpc-gateway`" = "" ]; then
 fi
 
 if [ "`command -v goimports`" = "" ]; then
-  export GO111MODULE="off"
-  go get golang.org/x/tools/cmd/goimports
-  export GO111MODULE="on"
+  go install -mod=vendor ./vendor/golang.org/x/tools/cmd/goimports
 fi
 
 export PATH="$(go env GOPATH)/bin:${PATH}"

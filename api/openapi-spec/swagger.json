@@ -18741,6 +18741,31 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.JetStreamSource": {
+      "type": "object",
+      "required": [
+        "url",
+        "stream"
+      ],
+      "properties": {
+        "auth": {
+          "description": "Auth information",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsAuth"
+        },
+        "stream": {
+          "description": "Stream represents the name of the stream.",
+          "type": "string"
+        },
+        "tls": {
+          "description": "TLS configuration for the nats client.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS"
+        },
+        "url": {
+          "description": "URL to connect to NATS cluster, multiple urls could be separated by comma.",
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.JobTemplate": {
       "type": "object",
       "properties": {
@@ -19617,6 +19642,9 @@
         },
         "http": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.HTTPSource"
+        },
+        "jetstream": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.JetStreamSource"
         },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSource"
