@@ -224,7 +224,6 @@ func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Re
 	// send the partition and offset as response
 	w.WriteHeader(200)
 	_, _ = w.Write([]byte(fmt.Sprintf("Partition - %d: Offset - %d", p, of)))
-	log.Printf("Produced message to topic %s partition %d offset %d\n", topic, p, of)
 }
 
 func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Request) {

@@ -55,7 +55,7 @@ func (t *Expect) SinkContains(sinkName string, targetStr string, opts ...SinkChe
 func (t *Expect) SinkNotContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	notContains := RedisNotContains(ctx, t.pipeline.Name, sinkName, targetStr)
+	notContains := RedisNotContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...)
 	if !notContains {
 		t.t.Fatalf("Not expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
 	}

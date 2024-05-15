@@ -20,7 +20,9 @@ package reduce_two_e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,7 +46,9 @@ func (r *ReduceSuite) TestReduceStreamJava() {
 func (r *ReduceSuite) testReduceStream(lang string) {
 
 	// the reduce feature is not supported with redis ISBSVC
-	r.T().SkipNow()
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -88,7 +92,9 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 func (r *ReduceSuite) TestSimpleSessionPipeline() {
 
 	// the reduce feature is not supported with redis ISBSVC
-	r.T().SkipNow()
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -141,7 +147,9 @@ func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
 func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 
 	// the reduce feature is not supported with redis ISBSVC
-	r.T().SkipNow()
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -193,7 +201,9 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 
 	// the reduce feature is not supported with redis ISBSVC
-	r.T().SkipNow()
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -209,6 +219,7 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=simple-session-counter-go,numaflow.numaproj.io/vertex-name=compute-count"
 
+	defer w.StreamVertexPodlogs("compute-count", "numa").TerminateAllPodLogs()
 	// Kill the reducer pods before processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	done := make(chan struct{})
@@ -233,6 +244,8 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 					// Kill the reducer pods during processing to trigger failover.
 					w.Expect().VertexPodsRunning()
 					w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
+					w.Expect().VertexPodsRunning()
+					w.StreamVertexPodlogs("compute-sum", "numa")
 				}
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))

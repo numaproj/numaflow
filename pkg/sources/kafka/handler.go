@@ -17,7 +17,6 @@ limitations under the License.
 package kafka
 
 import (
-	"log"
 	"sync"
 
 	"github.com/IBM/sarama"
@@ -83,7 +82,6 @@ func (consumer *ConsumerHandler) ConsumeClaim(session sarama.ConsumerGroupSessio
 			if !ok {
 				return nil
 			}
-			log.Println("Received messages: ", string(msg.Value), " offset - ", msg.Offset, " partition - ", msg.Partition)
 			consumer.messages <- msg
 		case <-session.Context().Done():
 			consumer.logger.Info("context was canceled, stopping consumer claim")

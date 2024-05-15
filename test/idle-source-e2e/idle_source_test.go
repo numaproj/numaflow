@@ -106,7 +106,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-	defer w.StreamVertexPodlogs("kafka-in", "numa").TerminateAllPodLogs()
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	defer DeleteKafkaTopic(topic)
 

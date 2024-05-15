@@ -223,7 +223,6 @@ func (w *When) TerminateAllPodPortForwards() *When {
 }
 
 func (w *When) StreamVertexPodlogs(vertexName, containerName string) *When {
-	fmt.Printf("stream logs for vertex %s container %s\n", vertexName, containerName)
 	w.t.Helper()
 	ctx := context.Background()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, w.pipeline.Name, dfv1.KeyVertexName, vertexName)
@@ -232,7 +231,6 @@ func (w *When) StreamVertexPodlogs(vertexName, containerName string) *When {
 		w.t.Fatalf("Error getting vertex pods: %v", err)
 	}
 	for _, pod := range podList.Items {
-		fmt.Printf("stream logs for pod %s container %s\n", pod.Name, containerName)
 		stopCh := make(chan struct{}, 1)
 		streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, containerName, stopCh)
 		if w.streamLogsStopChannels == nil {

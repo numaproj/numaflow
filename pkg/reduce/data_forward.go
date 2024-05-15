@@ -31,7 +31,6 @@ import (
 	"context"
 	"math"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -435,20 +434,14 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage) {
 	var dataMessages = make([]*isb.ReadMessage, 0, len(messages))
 	var ctrlMessages = make([]*isb.ReadMessage, 0) // for a high TPS pipeline, 0 is the most optimal value
-	var strBlr strings.Builder
-
-	strBlr.WriteString("Read messages: ")
 
 	for _, message := range messages {
 		if message.Kind == isb.Data {
 			dataMessages = append(dataMessages, message)
-			strBlr.WriteString(message.ReadOffset.String())
-			strBlr.WriteString(" ")
 		} else {
 			ctrlMessages = append(ctrlMessages, message)
 		}
 	}
-	df.log.Info(strBlr.String())
 
 	metrics.ReadDataMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
@@ -689,15 +682,11 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 		Factor:   1.5,
 		Jitter:   0.1,
 	}
-	var wg sync.WaitGroup
-	var strBlr strings.Builder
-	strBlr.WriteString("Acking messages: ")
 
+	var wg sync.WaitGroup
 	// Ack the message to ISB
 	for _, m := range messages {
 		wg.Add(1)
-		strBlr.WriteString(m.ReadOffset.String())
-		strBlr.WriteString(" ")
 		go func(o isb.Offset) {
 			defer wg.Done()
 			attempt := 0
@@ -743,7 +732,6 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 
 	}
 	wg.Wait()
-	df.log.Info(strBlr.String())
 }
 
 // noAckMessages no-acks all the read offsets of failed messages.
