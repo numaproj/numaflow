@@ -129,15 +129,16 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 				if i < 2000 {
 					SendMessage(topic, "data", generateMsg("2", startTime), 1)
 				}
+				time.Sleep(100 * time.Millisecond)
 				startTime = startTime.Add(1 * time.Second)
 			}
 		}
 	}()
 
 	// since the window duration is 10 second, so the count of event will be 20, when sending data to both partitions.
-	w.Expect().SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second))
+	w.Expect().SinkContains("sink", "20")
 	// since the window duration is 10 second, so the count of event will be 10, when sending data to only one partition.
-	w.Expect().SinkContains("sink", "10", SinkCheckWithTimeout(300*time.Second))
+	w.Expect().SinkContains("sink", "10")
 
 	done <- struct{}{}
 }
