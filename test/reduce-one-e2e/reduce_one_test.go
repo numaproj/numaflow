@@ -190,7 +190,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 
 	w.Expect().VertexPodsRunning()
 
-	w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 	defer w.StreamVertexPodlogs("compute-sum", "numa").TerminateAllPodLogs()
 	go func() {
 		startTime := int(time.Unix(1000, 0).UnixMilli())
