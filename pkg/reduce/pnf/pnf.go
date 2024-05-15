@@ -294,7 +294,7 @@ func (pf *ProcessAndForward) handleEOFResponse(ctx context.Context, response *wi
 		if err != nil {
 			return err
 		}
-		pf.log.Infow("Finished GC", zap.String("partitionID", pid.String()))
+		pf.log.Infow("Partition Closed", zap.String("partitionID", pid.String()))
 	}
 	return nil
 }

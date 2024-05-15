@@ -115,7 +115,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 
 	done := make(chan struct{})
 	go func() {
-		startTime := time.Now().Add(-10000 * time.Hour)
+		startTime := time.UnixMilli(60000)
 		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():
@@ -134,7 +134,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 		}
 	}()
 
-	// since the window duration is 10 second, so the count of event will be 20, when sending data to only both partition.
+	// since the window duration is 10 second, so the count of event will be 20, when sending data to both partitions.
 	w.Expect().SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second))
 	// since the window duration is 10 second, so the count of event will be 10, when sending data to only one partition.
 	w.Expect().SinkContains("sink", "10", SinkCheckWithTimeout(300*time.Second))

@@ -216,9 +216,12 @@ func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Re
 		Key:       sarama.ByteEncoder(key),
 		Partition: int32(partition),
 	}
-	if _, _, err := kh.producer.SendMessage(message); err != nil {
-		_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
+	p, of, err := kh.producer.SendMessage(message)
+	if err != nil {
+		log.Printf("Failed to produce message to topic %s: %s\n", topic, err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+	log.Printf("Produced message to topic %s partition %d offset %d\n", topic, p, of)
 }
 
 func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Request) {
