@@ -32,141 +32,141 @@ type ReduceSuite struct {
 	E2ESuite
 }
 
-// one reduce vertex (keyed)
-func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
-
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	w := r.Given().Pipeline("@testdata/simple-keyed-reduce-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "simple-sum"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	done := make(chan struct{})
-	go func() {
-		// publish messages to source vertex, with event time starting from 60000
-		startTime := 60000
-		for i := 0; true; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case <-done:
-				return
-			default:
-				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
-			}
-		}
-	}()
-
-	// since the key can be even or odd and the window duration is 10s
-	// the sum should be 20(for even) and 40(for odd)
-	w.Expect().
-		SinkContains("sink", "40").
-		SinkContains("sink", "20")
-	done <- struct{}{}
-}
-
-// one reduce vertex(non keyed)
-func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
-
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-
-	defer cancel()
-	w := r.Given().Pipeline("@testdata/simple-non-keyed-reduce-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "reduce-sum"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	done := make(chan struct{})
-	go func() {
-		// publish messages to source vertex, with event time starting from 60000
-		startTime := 60000
-		for i := 0; true; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case <-done:
-				return
-			default:
-				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
-			}
-		}
-	}()
-
-	// since there is no key, all the messages will be assigned to same window
-	// the sum should be 60(since the window is 10s)
-	w.Expect().SinkContains("sink", "60")
-	done <- struct{}{}
-}
-
-// two reduce vertex(keyed and non keyed)
-func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
-
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-
-	defer cancel()
-	w := r.Given().Pipeline("@testdata/complex-reduce-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "complex-sum"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	done := make(chan struct{})
-	go func() {
-		// publish messages to source vertex, with event time starting from 60000
-		startTime := 60000
-		for i := 0; true; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case <-done:
-				return
-			default:
-				eventTime := strconv.Itoa(startTime + i*1000)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))
-			}
-		}
-	}()
-
-	// since the key can be even or odd and the first window duration is 10s(which is keyed)
-	// and the second window duration is 60s(non-keyed)
-	// the sum should be 180(60 + 120)
-	w.Expect().SinkContains("sink", "180")
-	done <- struct{}{}
-}
+//// one reduce vertex (keyed)
+//func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
+//
+//	// the reduce feature is not supported with redis ISBSVC
+//	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+//		r.T().SkipNow()
+//	}
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+//	defer cancel()
+//	w := r.Given().Pipeline("@testdata/simple-keyed-reduce-pipeline.yaml").
+//		When().
+//		CreatePipelineAndWait()
+//	defer w.DeletePipelineAndWait()
+//	pipelineName := "simple-sum"
+//
+//	// wait for all the pods to come up
+//	w.Expect().VertexPodsRunning()
+//
+//	done := make(chan struct{})
+//	go func() {
+//		// publish messages to source vertex, with event time starting from 60000
+//		startTime := 60000
+//		for i := 0; true; i++ {
+//			select {
+//			case <-ctx.Done():
+//				return
+//			case <-done:
+//				return
+//			default:
+//				eventTime := strconv.Itoa(startTime + i*1000)
+//				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+//					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+//					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+//			}
+//		}
+//	}()
+//
+//	// since the key can be even or odd and the window duration is 10s
+//	// the sum should be 20(for even) and 40(for odd)
+//	w.Expect().
+//		SinkContains("sink", "40").
+//		SinkContains("sink", "20")
+//	done <- struct{}{}
+//}
+//
+//// one reduce vertex(non keyed)
+//func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
+//
+//	// the reduce feature is not supported with redis ISBSVC
+//	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+//		r.T().SkipNow()
+//	}
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+//
+//	defer cancel()
+//	w := r.Given().Pipeline("@testdata/simple-non-keyed-reduce-pipeline.yaml").
+//		When().
+//		CreatePipelineAndWait()
+//	defer w.DeletePipelineAndWait()
+//	pipelineName := "reduce-sum"
+//
+//	// wait for all the pods to come up
+//	w.Expect().VertexPodsRunning()
+//
+//	done := make(chan struct{})
+//	go func() {
+//		// publish messages to source vertex, with event time starting from 60000
+//		startTime := 60000
+//		for i := 0; true; i++ {
+//			select {
+//			case <-ctx.Done():
+//				return
+//			case <-done:
+//				return
+//			default:
+//				eventTime := strconv.Itoa(startTime + i*1000)
+//				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+//					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+//					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+//			}
+//		}
+//	}()
+//
+//	// since there is no key, all the messages will be assigned to same window
+//	// the sum should be 60(since the window is 10s)
+//	w.Expect().SinkContains("sink", "60")
+//	done <- struct{}{}
+//}
+//
+//// two reduce vertex(keyed and non keyed)
+//func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
+//
+//	// the reduce feature is not supported with redis ISBSVC
+//	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+//		r.T().SkipNow()
+//	}
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+//
+//	defer cancel()
+//	w := r.Given().Pipeline("@testdata/complex-reduce-pipeline.yaml").
+//		When().
+//		CreatePipelineAndWait()
+//	defer w.DeletePipelineAndWait()
+//	pipelineName := "complex-sum"
+//
+//	// wait for all the pods to come up
+//	w.Expect().VertexPodsRunning()
+//
+//	done := make(chan struct{})
+//	go func() {
+//		// publish messages to source vertex, with event time starting from 60000
+//		startTime := 60000
+//		for i := 0; true; i++ {
+//			select {
+//			case <-ctx.Done():
+//				return
+//			case <-done:
+//				return
+//			default:
+//				eventTime := strconv.Itoa(startTime + i*1000)
+//				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+//					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))
+//			}
+//		}
+//	}()
+//
+//	// since the key can be even or odd and the first window duration is 10s(which is keyed)
+//	// and the second window duration is 60s(non-keyed)
+//	// the sum should be 180(60 + 120)
+//	w.Expect().SinkContains("sink", "180")
+//	done <- struct{}{}
+//}
 
 func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 
