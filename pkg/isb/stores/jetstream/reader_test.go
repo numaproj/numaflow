@@ -51,7 +51,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 
 	streamName := "testJetStreamBufferReader"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
@@ -144,7 +144,7 @@ func TestGetName(t *testing.T) {
 
 	streamName := "getName"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
@@ -169,7 +169,7 @@ func TestClose(t *testing.T) {
 
 	streamName := "close"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
@@ -180,6 +180,7 @@ func TestClose(t *testing.T) {
 }
 
 func addStream(t *testing.T, js nats.JetStreamContext, streamName string) {
+	t.Helper()
 
 	_, err := js.AddStream(&nats.StreamConfig{
 		Name:       streamName,
@@ -203,7 +204,8 @@ func addStream(t *testing.T, js nats.JetStreamContext, streamName string) {
 
 }
 
-func deleteStream(js nats.JetStreamContext, streamName string) {
+func deleteStream(t *testing.T, js nats.JetStreamContext, streamName string) {
+	t.Helper()
 	_ = js.DeleteConsumer(streamName, streamName)
 	_ = js.DeleteStream(streamName)
 }
