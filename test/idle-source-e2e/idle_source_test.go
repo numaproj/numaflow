@@ -120,13 +120,13 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 			case <-done:
 				return
 			default:
-				// send message to both partition for first 100 messages for overcome the kafka source lazy loading wm publisher.
+				// send message to both partition for first 600 messages for overcome the kafka source lazy loading wm publisher.
 				// after that send message to only one partition. so that idle source will be detected and wm will be progressed.
 				SendMessage(topic, "data", generateMsg("1", startTime), 0)
-				if i < 2000 {
+				if i < 600 {
 					SendMessage(topic, "data", generateMsg("2", startTime), 1)
 				}
-				//time.Sleep(100 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 				startTime = startTime.Add(1 * time.Second)
 			}
 		}
