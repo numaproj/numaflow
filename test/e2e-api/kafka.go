@@ -221,6 +221,9 @@ func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Re
 		log.Printf("Failed to produce message to topic %s: %s\n", topic, err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+	// send the partition and offset as response
+	w.WriteHeader(200)
+	_, _ = w.Write([]byte(fmt.Sprintf("Partition - %d: Offset - %d", p, of)))
 	log.Printf("Produced message to topic %s partition %d offset %d\n", topic, p, of)
 }
 
