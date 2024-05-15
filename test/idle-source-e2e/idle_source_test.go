@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,53 +42,50 @@ type IdleSourceSuite struct {
 	E2ESuite
 }
 
-//func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
-//
-//	// the reduce feature is not supported with redis ISBSVC
-//	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-//		is.T().SkipNow()
-//	}
-//
-//	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-//	defer cancel()
-//	w := is.Given().Pipeline("@testdata/idle-source-reduce-pipeline.yaml").
-//		When().
-//		CreatePipelineAndWait()
-//	defer w.DeletePipelineAndWait()
-//	pipelineName := "http-idle-source"
-//
-//	// wait for all the pods to come up
-//	w.Expect().VertexPodsRunning()
-//
-//	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
-//
-//	done := make(chan struct{})
-//	go func() {
-//		// publish messages to source vertex, with event time starting from 0
-//		startTime := 0
-//		for i := 0; true; i++ {
-//			select {
-//			case <-ctx.Done():
-//				return
-//			case <-done:
-//				return
-//			default:
-//				startTime = startTime + 1000
-//				eventTime := strconv.Itoa(startTime)
-//				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-//					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
-//					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
-//			}
-//		}
-//	}()
-//
-//	// since the key can be even or odd and the window duration is 10s
-//	// the sum should be 20(for even) and 40(for odd)
-//	w.Expect().
-//		SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second)).
-//		SinkContains("sink", "40", SinkCheckWithTimeout(300*time.Second))
-//	done <- struct{}{}
-//}
+func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
+
+	is.T().SkipNow()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	w := is.Given().Pipeline("@testdata/idle-source-reduce-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "http-idle-source"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
+
+	done := make(chan struct{})
+	go func() {
+		// publish messages to source vertex, with event time starting from 0
+		startTime := 0
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				startTime = startTime + 1000
+				eventTime := strconv.Itoa(startTime)
+				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
+					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")).WithHeader("X-Numaflow-Event-Time", eventTime))
+			}
+		}
+	}()
+
+	// since the key can be even or odd and the window duration is 10s
+	// the sum should be 20(for even) and 40(for odd)
+	w.Expect().
+		SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second)).
+		SinkContains("sink", "40", SinkCheckWithTimeout(300*time.Second))
+	done <- struct{}{}
+}
 
 func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 

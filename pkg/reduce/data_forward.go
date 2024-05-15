@@ -31,6 +31,7 @@ import (
 	"context"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -434,14 +435,21 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage) {
 	var dataMessages = make([]*isb.ReadMessage, 0, len(messages))
 	var ctrlMessages = make([]*isb.ReadMessage, 0) // for a high TPS pipeline, 0 is the most optimal value
+	var strBlr strings.Builder
+
+	strBlr.WriteString("Read messages: ")
 
 	for _, message := range messages {
 		if message.Kind == isb.Data {
 			dataMessages = append(dataMessages, message)
+			strBlr.WriteString(message.ReadOffset.String())
+			strBlr.WriteString(" ")
 		} else {
 			ctrlMessages = append(ctrlMessages, message)
 		}
 	}
+	df.log.Info(strBlr.String())
+
 	metrics.ReadDataMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
@@ -682,11 +690,14 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 		Jitter:   0.1,
 	}
 	var wg sync.WaitGroup
+	var strBlr strings.Builder
+	strBlr.WriteString("Acking messages: ")
 
 	// Ack the message to ISB
 	for _, m := range messages {
 		wg.Add(1)
-
+		strBlr.WriteString(m.ReadOffset.String())
+		strBlr.WriteString(" ")
 		go func(o isb.Offset) {
 			defer wg.Done()
 			attempt := 0
@@ -732,13 +743,14 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 
 	}
 	wg.Wait()
+	df.log.Info(strBlr.String())
 }
 
 // noAckMessages no-acks all the read offsets of failed messages.
 func (df *DataForward) noAckMessages(ctx context.Context, failedMessages []*isb.ReadMessage) {
 	var readOffsets []isb.Offset
 	for _, m := range failedMessages {
-		df.log.Infow("No-ack message", zap.String("msgOffSet", m.ReadOffset.String()))
+		df.log.Infow("No-ack message", zap.String("msgOffSet", m.ReadOffset.String()), zap.Int64("eventTime", m.EventTime.UnixMilli()), zap.Int64("watermark", m.Watermark.UnixMilli()), zap.Strings("keys", m.Keys), zap.Any("message", m.Message))
 		readOffsets = append(readOffsets, m.ReadOffset)
 	}
 	df.fromBufferPartition.NoAck(ctx, readOffsets)
