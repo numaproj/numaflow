@@ -108,7 +108,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
+	defer w.StreamVertexPodlogs("kafka-in", "numa").TerminateAllPodLogs()
 
 	defer DeleteKafkaTopic(topic)
 
@@ -125,10 +125,10 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 				// send message to both partition for first 100 messages for overcome the kafka source lazy loading wm publisher.
 				// after that send message to only one partition. so that idle source will be detected and wm will be progressed.
 				SendMessage(topic, "data", generateMsg("1", startTime), 0)
-				if i < 100 {
+				if i < 2000 {
 					SendMessage(topic, "data", generateMsg("2", startTime), 1)
 				}
-				time.Sleep(100 * time.Millisecond)
+				//time.Sleep(100 * time.Millisecond)
 				startTime = startTime.Add(1 * time.Second)
 			}
 		}
