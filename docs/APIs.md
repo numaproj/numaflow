@@ -1435,6 +1435,21 @@ result in the message being out of order by 0 to 10s
 </p>
 </td>
 </tr>
+<tr>
+<td>
+<code>valueBlob</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+ValueBlob is an optional string which is the base64 encoding of direct
+payload to send. This is useful for attaching a GeneratorSource to a
+true pipeline to test load behavior with true messages without requiring
+additional work to generate messages through the external source if
+present, the Value and MsgSize fields will be ignored.
+</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="numaflow.numaproj.io/v1alpha1.GetDaemonDeploymentReq">

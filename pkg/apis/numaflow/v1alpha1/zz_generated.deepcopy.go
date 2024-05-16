@@ -639,6 +639,11 @@ func (in *GeneratorSource) DeepCopyInto(out *GeneratorSource) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
+	if in.ValueBlob != nil {
+		in, out := &in.ValueBlob, &out.ValueBlob
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 

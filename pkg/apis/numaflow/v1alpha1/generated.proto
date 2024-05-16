@@ -412,6 +412,14 @@ message GeneratorSource {
   // +kubebuilder:default="0s"
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration jitter = 6;
+
+  // ValueBlob is an optional string which is the base64 encoding of direct payload to send.
+  // This is useful for attaching a GeneratorSource to a true pipeline to test load behavior
+  // with true messages without requiring additional work to generate messages through
+  // the external source
+  // if present, the Value and MsgSize fields will be ignored.
+  // +optional
+  optional string valueBlob = 7;
 }
 
 message GetDaemonDeploymentReq {
