@@ -147,6 +147,7 @@ jobs:
             case: kafka-e2e
           - driver: redis
             case: api-e2e
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
