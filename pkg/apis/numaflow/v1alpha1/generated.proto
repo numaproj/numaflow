@@ -227,10 +227,6 @@ message Callback {
   // +optional
   optional bool enabled = 1;
 
-  // CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved.
-  // +optional
-  optional string callbackURLHeaderKey = 2;
-
   // CallbackURL is the URL to which the callback will be made if the callback key is not present in the message headers
   // or if the callback fails when the call back is made to the URL present in the message headers.
   // +optional

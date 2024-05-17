@@ -2,20 +2,21 @@ package callback
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 func TestEndToEnd(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		// get request body and convert it to the text
-		bodyBytes, _ := ioutil.ReadAll(req.Body)
+		bodyBytes, _ := io.ReadAll(req.Body)
 		bodyString := string(bodyBytes)
 		println(bodyString)
 		// send 204 response
@@ -25,7 +26,7 @@ func TestEndToEnd(t *testing.T) {
 	defer server.Close()
 
 	ctx := context.Background()
-	cp := NewPublisher(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL), WithCallbackHeaderKey("cb_url"))
+	cp := NewPublisher(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL))
 
 	messagePairs := []isb.ReadWriteMessagePair{
 		{
@@ -33,8 +34,8 @@ func TestEndToEnd(t *testing.T) {
 				Message: isb.Message{
 					Header: isb.Header{
 						Headers: map[string]string{
-							"cb_url": server.URL,
-							"uuid":   "XXXX",
+							dfv1.KeyMetaCallbackURL: server.URL,
+							dfv1.KeyMetaID:          "XXXX",
 						},
 					},
 				},
@@ -44,8 +45,8 @@ func TestEndToEnd(t *testing.T) {
 					Message: isb.Message{
 						Header: isb.Header{
 							Headers: map[string]string{
-								"cb_url": server.URL,
-								"uuid":   "XXXX",
+								dfv1.KeyMetaCallbackURL: server.URL,
+								dfv1.KeyMetaID:          "XXXX",
 							},
 						},
 					},

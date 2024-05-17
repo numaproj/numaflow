@@ -68,7 +68,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		mapHandler         *rpc.GRPCBasedMap
 		mapStreamHandler   *rpc.GRPCBasedMapStream
 		idleManager        wmb.IdleManager
-		vertexName         = u.VertexInstance.Vertex.Name
+		vertexName         = u.VertexInstance.Vertex.Spec.Name
 		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
 	)
 
@@ -244,9 +244,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		cb := u.VertexInstance.Vertex.Spec.Callback
 		if cb.Enabled {
 			cbOpts := make([]callback.OptionFunc, 0)
-			if cb.CallbackURLHeaderKey != "" {
-				cbOpts = append(cbOpts, callback.WithCallbackHeaderKey(cb.CallbackURLHeaderKey))
-			}
 			if cb.CallbackURL != "" {
 				cbOpts = append(cbOpts, callback.WithCallbackURL(cb.CallbackURL))
 			}

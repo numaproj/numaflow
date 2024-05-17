@@ -74,7 +74,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		healthCheckers           []metrics.HealthChecker
 		idleManager              wmb.IdleManager
 		pipelineName             = sp.VertexInstance.Vertex.Spec.PipelineName
-		vertexName               = sp.VertexInstance.Vertex.Name
+		vertexName               = sp.VertexInstance.Vertex.Spec.Name
 	)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -273,9 +273,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	cb := sp.VertexInstance.Vertex.Spec.Callback
 	if cb.Enabled {
 		opts := make([]callback.OptionFunc, 0)
-		if cb.CallbackURLHeaderKey != "" {
-			opts = append(opts, callback.WithCallbackHeaderKey(cb.CallbackURLHeaderKey))
-		}
 		if cb.CallbackURL != "" {
 			opts = append(opts, callback.WithCallbackURL(cb.CallbackURL))
 		}

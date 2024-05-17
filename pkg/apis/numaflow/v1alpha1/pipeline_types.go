@@ -503,17 +503,15 @@ type Callback struct {
 	// Enabled indicates whether callback is enabled for the pipeline.
 	// +optional
 	Enabled bool `json:"enabled,omitempty" protobuf:"varint,1,opt,name=enabled"`
-	// CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved.
+	// CallbackURL is the URL to which the callback request will be sent.
 	// +optional
-	CallbackURLHeaderKey string `json:"callbackURLHeaderKey,omitempty" protobuf:"bytes,2,opt,name=callbackURLHeaderKey"`
-	// CallbackURL is the URL to which the callback will be made if the callback key is not present in the message headers
-	// or if the callback fails when the call back is made to the URL present in the message headers.
-	// +optional
+	// NOTE: If the "x-numaflow-callback-url" header is set in the message, that will take precedence over this field.
+	// If the header is not set, the message will be sent to this URL or during failure, the message will be sent to this URL.
 	CallbackURL string `json:"callbackURL,omitempty" protobuf:"bytes,3,opt,name=callbackURL"`
 }
 
 func (c Callback) IsEnabled() bool {
-	return c.Enabled && (c.CallbackURLHeaderKey != "" || c.CallbackURL != "")
+	return c.Enabled
 }
 
 type Watermark struct {

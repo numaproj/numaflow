@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -27,9 +28,10 @@ type Options struct {
 // DefaultOptions returns the default options.
 func DefaultOptions(ctx context.Context) *Options {
 	return &Options{
-		httpTimeout: 10 * time.Second,
-		cacheSize:   50,
-		logger:      logging.FromContext(ctx),
+		httpTimeout:       10 * time.Second,
+		cacheSize:         50,
+		logger:            logging.FromContext(ctx),
+		callbackHeaderKey: dfv1.KeyMetaCallbackURL,
 	}
 }
 
@@ -47,13 +49,6 @@ func WithHTTPTimeout(timeout time.Duration) OptionFunc {
 func WithLRUCacheSize(size int) OptionFunc {
 	return func(o *Options) {
 		o.cacheSize = size
-	}
-}
-
-// WithCallbackHeaderKey sets the key for the callback URL.
-func WithCallbackHeaderKey(key string) OptionFunc {
-	return func(o *Options) {
-		o.callbackHeaderKey = key
 	}
 }
 

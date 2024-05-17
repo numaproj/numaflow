@@ -694,18 +694,6 @@ Enabled indicates whether callback is enabled for the pipeline.
 </tr>
 <tr>
 <td>
-<code>callbackURLHeaderKey</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-CallbackURLHeaderKey is the message header key from which the callback
-URL will be retrieved.
-</p>
-</td>
-</tr>
-<tr>
-<td>
 <code>callbackURL</code></br> <em> string </em>
 </td>
 <td>

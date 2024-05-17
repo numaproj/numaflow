@@ -2667,8 +2667,6 @@ spec:
                 properties:
                   callbackURL:
                     type: string
-                  callbackURLHeaderKey:
-                    type: string
                   enabled:
                     type: boolean
                 type: object
@@ -12688,8 +12686,6 @@ spec:
               callback:
                 properties:
                   callbackURL:
-                    type: string
-                  callbackURLHeaderKey:
                     type: string
                   enabled:
                     type: boolean

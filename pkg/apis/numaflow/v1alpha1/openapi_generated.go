@@ -634,13 +634,6 @@ func schema_pkg_apis_numaflow_v1alpha1_Callback(ref common.ReferenceCallback) co
 							Format:      "",
 						},
 					},
-					"callbackURLHeaderKey": {
-						SchemaProps: spec.SchemaProps{
-							Description: "CallbackURLHeaderKey is the message header key from which the callback URL will be retrieved.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 					"callbackURL": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CallbackURL is the URL to which the callback will be made if the callback key is not present in the message headers or if the callback fails when the call back is made to the URL present in the message headers.",

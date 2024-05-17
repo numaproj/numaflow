@@ -42,8 +42,9 @@ const (
 	RemovePauseTimestampPatch = `[{"op": "remove", "path": "/metadata/annotations/numaflow.numaproj.io~1pause-timestamp"}]`
 
 	// ID key in the header of sources like http
-	KeyMetaID        = "x-numaflow-id"
-	KeyMetaEventTime = "x-numaflow-event-time"
+	KeyMetaID          = "X-Numaflow-Id"
+	KeyMetaEventTime   = "X-Numaflow-Event-Time"
+	KeyMetaCallbackURL = "X-Numaflow-Callback-Url"
 
 	DefaultISBSvcName = "default"
 

@@ -67,7 +67,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		sinkHandler        *udsink.UDSgRPCBasedUDSink
 		fbSinkHandler      *udsink.UDSgRPCBasedUDSink
 		healthCheckers     = make([]metrics.HealthChecker, 0)
-		vertexName         = u.VertexInstance.Vertex.Name
+		vertexName         = u.VertexInstance.Vertex.Spec.Name
 		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
 	)
 	log := logging.FromContext(ctx)
@@ -243,9 +243,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		cb := u.VertexInstance.Vertex.Spec.Callback
 		if cb.Enabled {
 			opts := make([]callback.OptionFunc, 0)
-			if cb.CallbackURLHeaderKey != "" {
-				opts = append(opts, callback.WithCallbackHeaderKey(cb.CallbackURLHeaderKey))
-			}
 			if cb.CallbackURL != "" {
 				opts = append(opts, callback.WithCallbackURL(cb.CallbackURL))
 			}

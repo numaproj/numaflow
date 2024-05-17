@@ -13,10 +13,11 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/zap"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// Publisher is the callback publisher which sends POST requests to callback URLs.
+// Publisher is the callback publisher which publishes the callback messages.
 type Publisher struct {
 	vertexName   string
 	pipelineName string
@@ -64,10 +65,8 @@ type Request struct {
 	Pipeline string `json:"pipeline"`
 	// UUID is the unique identifier of the message
 	ID string `json:"id"`
-	// EventTime is the time when the message was created
-	EventTime int64 `json:"event_time"`
-	// CallbackTime is the time when the callback was made
-	CallbackTime int64 `json:"callback_time"`
+	// CbTime is the time when the callback was made
+	CbTime int64 `json:"cb_time"`
 	// Tags is the list of tags associated with the message
 	Tags []string `json:"tags,omitempty"` // Add 'omitempty' here
 	// FromVertex is the name of the vertex from which the message was sent
@@ -85,35 +84,30 @@ func (cp *Publisher) NonSinkVertexCallback(ctx context.Context, messagePairs []i
 	for _, pair := range messagePairs {
 
 		for _, msg := range pair.WriteMessages {
-			var callbackURL string
 
-			if cp.opts.callbackHeaderKey == "" {
+			// Extract Callback URL from message headers or use the default callback URL
+			var callbackURL string
+			if cbURL, ok := msg.Headers[cp.opts.callbackHeaderKey]; !ok {
 				callbackURL = cp.opts.callbackURL
 			} else {
-				// Extract Callback URL from read message headers
-				var ok bool
-				callbackURL, ok = pair.ReadMessage.Headers[cp.opts.callbackHeaderKey]
-				if !ok {
-					// Return an error if Callback URL is not found in pair headers
-					return errors.New(fmt.Sprintf("Callback URL not found in message headers for key: %s", cp.opts.callbackHeaderKey))
-				}
+				callbackURL = cbURL
 			}
 
 			// Extract UUID from pair headers
-			uuid, ok := pair.ReadMessage.Headers["uuid"]
+			uuid, ok := msg.Headers[dfv1.KeyMetaID]
 			if !ok {
 				// Return an error if UUID is not found in pair headers
-				return errors.New(fmt.Sprintf("UUID not found in message headers"))
+				return errors.New(fmt.Sprintf("ID not found in message headers"))
 			}
+
 			// Create a new CallbackResponse
 			callbackTime := time.Now().UnixMilli()
 			newObject := Request{
-				Vertex:       cp.vertexName,
-				Pipeline:     cp.pipelineName,
-				ID:           uuid,
-				EventTime:    msg.EventTime.UnixMilli(),
-				CallbackTime: callbackTime,
-				Tags:         msg.Tags,
+				Vertex:   cp.vertexName,
+				Pipeline: cp.pipelineName,
+				ID:       uuid,
+				CbTime:   callbackTime,
+				Tags:     msg.Tags,
 				// the read message id has the vertex name of the vertex that sent the message
 				FromVertex: pair.ReadMessage.ID.VertexName,
 			}
@@ -134,44 +128,41 @@ func (cp *Publisher) NonSinkVertexCallback(ctx context.Context, messagePairs []i
 	return nil
 }
 
-// SinkVertexCallback groups messages based on their callback URL and sends a POST request for each group
-// for sink vertices. If the callbackHeaderKey is set, it writes all the callback requests to the callbackURL.
+// SinkVertexCallback groups messages based on their callback URL present in the headers and sends a POST request for
+// each group for sink vertices. If the callback header is not set, it writes all the callback requests to the callbackURL.
 // In case of failure while writing the url from the headers, it writes all the callback requests to the callbackURL.
 func (cp *Publisher) SinkVertexCallback(ctx context.Context, messages []isb.Message) error {
 	// Create a map to hold groups of messagePairs for each callback URL
 	callbackUrlMap := make(map[string][]Request)
 
 	for _, msg := range messages {
-		var callbackURL string
 
-		if cp.opts.callbackHeaderKey == "" {
+		// Extract Callback URL from message headers or use the default callback URL
+		var callbackURL string
+		if cbURL, ok := msg.Headers[cp.opts.callbackHeaderKey]; !ok {
+			if cp.opts.callbackURL == "" {
+				return fmt.Errorf("callback URL not found in headers and default callback URL is not set")
+			}
 			callbackURL = cp.opts.callbackURL
 		} else {
-			// Extract Callback URL from read message headers
-			var ok bool
-			callbackURL, ok = msg.Headers[cp.opts.callbackHeaderKey]
-			if !ok {
-				// Return an error if Callback URL is not found in pair headers
-				return errors.New(fmt.Sprintf("Callback URL not found in message headers for key: %s", cp.opts.callbackHeaderKey))
-			}
+			callbackURL = cbURL
 		}
 
 		// Extract UUID from pair headers
-		uuid, ok := msg.Headers["uuid"]
+		uuid, ok := msg.Headers[dfv1.KeyMetaID]
 		if !ok {
 			// Return an error if UUID is not found in pair headers
-			return errors.New(fmt.Sprintf("UUID not found in message headers"))
+			return errors.New(fmt.Sprintf("ID not found in message headers"))
 		}
 
 		// Create a new CallbackResponse
 		callbackTime := time.Now().UnixMilli()
 		newObject := Request{
-			Vertex:       cp.vertexName,
-			Pipeline:     cp.pipelineName,
-			ID:           uuid,
-			EventTime:    msg.EventTime.UnixMilli(),
-			CallbackTime: callbackTime,
-			FromVertex:   msg.ID.VertexName,
+			Vertex:     cp.vertexName,
+			Pipeline:   cp.pipelineName,
+			ID:         uuid,
+			CbTime:     callbackTime,
+			FromVertex: msg.ID.VertexName,
 		}
 
 		// if the callback URL is not present in the map, create a new slice
@@ -210,7 +201,7 @@ func (cp *Publisher) executeCallback(ctx context.Context, callbackUrlMap map[str
 	if len(failedRequests) > 0 {
 		err := cp.sendRequest(ctx, cp.opts.callbackURL, failedRequests)
 		if err != nil {
-			cp.opts.logger.Errorw("Failed to send request to fallback URL",
+			cp.opts.logger.Errorw("Failed to send request to callback URL, skipping the callback requests",
 				zap.String("url", cp.opts.callbackURL),
 				zap.Error(err),
 			)
@@ -242,7 +233,7 @@ func (cp *Publisher) sendRequest(ctx context.Context, url string, requests []Req
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode > 299 {
 		return fmt.Errorf("received non-OK response status: %s", resp.Status)
 	}
 
@@ -251,7 +242,7 @@ func (cp *Publisher) sendRequest(ctx context.Context, url string, requests []Req
 }
 
 // GetClient returns a client for the given URL from the cache
-// If the client is not in the cache, a new one is created
+// If the client is not in the cache, a new one is created.
 func (cp *Publisher) GetClient(url string) *http.Client {
 	// Check if the client is in the cache
 	if client, ok := cp.clientsCache.Get(url); ok {
@@ -276,7 +267,6 @@ func (cp *Publisher) GetClient(url string) *http.Client {
 
 // Close closes all clients in the cache
 func (cp *Publisher) Close() {
-	for _, client := range cp.clientsCache.Values() {
-		client.CloseIdleConnections()
-	}
+	// clear the cache, which will call the onEvicted callback for each client
+	cp.clientsCache.Purge()
 }
