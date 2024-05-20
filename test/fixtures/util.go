@@ -529,7 +529,8 @@ func streamPodLogs(ctx context.Context, client kubernetes.Interface, namespace, 
 				return
 			default:
 				if !s.Scan() {
-					log.Fatalf("Error streaming pod %q logs: %v", podName, s.Err())
+					fmt.Printf("Error streaming pod %q logs: %v", podName, s.Err())
+					return
 				}
 				data := s.Bytes()
 				if containerName != "" {

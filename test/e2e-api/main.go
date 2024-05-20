@@ -42,6 +42,7 @@ func main() {
 	// initialize NATS handler
 	natsController := NewNatsController("nats", "testingtoken")
 	http.HandleFunc("/nats/pump-subject", natsController.PumpSubject)
+	http.HandleFunc("/nats/pump-jetstream", natsController.PumpJetstream)
 
 	if err := http.ListenAndServe(":8378", nil); err != nil {
 		panic(err)

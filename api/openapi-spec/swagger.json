@@ -17815,7 +17815,7 @@
       "type": "object",
       "properties": {
         "callbackURL": {
-          "description": "CallbackURL is the URL to which the callback will be made if the callback key is not present in the message headers or if the callback fails when the call back is made to the URL present in the message headers.",
+          "description": "CallbackURL is the URL to which the callback request will be sent. NOTE: If the \"x-numaflow-callback-url\" header is set in the message, that will take precedence over this field. If the header is not set, the message will be sent to this URL or during failure, the message will be sent to this URL.",
           "type": "string"
         },
         "enabled": {
@@ -18171,6 +18171,10 @@
           "description": "Value is an optional uint64 value to be written in to the payload",
           "type": "integer",
           "format": "int64"
+        },
+        "valueBlob": {
+          "description": "ValueBlob is an optional string which is the base64 encoding of direct payload to send. This is useful for attaching a GeneratorSource to a true pipeline to test load behavior with true messages without requiring additional work to generate messages through the external source if present, the Value and MsgSize fields will be ignored.",
+          "type": "string"
         }
       }
     },
@@ -18750,6 +18754,31 @@
         },
         "url": {
           "description": "JetStream (NATS) URL",
+          "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.JetStreamSource": {
+      "type": "object",
+      "required": [
+        "url",
+        "stream"
+      ],
+      "properties": {
+        "auth": {
+          "description": "Auth information",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsAuth"
+        },
+        "stream": {
+          "description": "Stream represents the name of the stream.",
+          "type": "string"
+        },
+        "tls": {
+          "description": "TLS configuration for the nats client.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS"
+        },
+        "url": {
+          "description": "URL to connect to NATS cluster, multiple urls could be separated by comma.",
           "type": "string"
         }
       }
@@ -19634,6 +19663,9 @@
         },
         "http": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.HTTPSource"
+        },
+        "jetstream": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.JetStreamSource"
         },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSource"

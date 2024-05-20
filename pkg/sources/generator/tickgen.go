@@ -21,6 +21,7 @@ package generator
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	rand2 "math/rand"
@@ -105,6 +106,8 @@ func WithReadTimeout(timeout time.Duration) Option {
 // NewMemGen function creates an instance of generator source reader.
 func NewMemGen(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Option) (sourcer.SourceReader, error) {
 
+	logger := logging.FromContext(ctx)
+
 	// minimal CRDs don't have defaults
 	rpu := 5
 	if vertexInstance.Vertex.Spec.Source.Generator.RPU != nil {
@@ -132,6 +135,22 @@ func NewMemGen(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ..
 		jitter = vertexInstance.Vertex.Spec.Source.Generator.Jitter.Duration
 	}
 
+	var genFunction = recordGenerator
+	if vertexInstance.Vertex.Spec.Source.Generator.ValueBlob != nil {
+		logger.Info("ValueBlob was set, using provided value instead of randomly generated data")
+		emitBytes, err := base64.StdEncoding.DecodeString(*vertexInstance.Vertex.Spec.Source.Generator.ValueBlob)
+		if err != nil {
+			retErr := fmt.Errorf("error decoding provided ValueBlob as base64, cannot initialize generator. Decode error: %w", err)
+			return nil, retErr
+		}
+
+		// Custom generator function to return provided value. Input arguments are not used, but are preserved
+		// to maintain consistent interface with recordGenerator
+		genFunction = func(size int32, value *uint64, createdTS int64) ([]byte, error) {
+			return emitBytes, nil
+		}
+	}
+
 	genSrc := &memGen{
 		rpu:            rpu,
 		keyCount:       keyCount,
@@ -140,12 +159,12 @@ func NewMemGen(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ..
 		timeunit:       timeunit,
 		vertexName:     vertexInstance.Vertex.Spec.Name,
 		pipelineName:   vertexInstance.Vertex.Spec.PipelineName,
-		genFn:          recordGenerator,
+		genFn:          genFunction,
 		vertexInstance: vertexInstance,
 		srcChan:        make(chan record, rpu*int(keyCount)*5),
 		readTimeout:    3 * time.Second, // default timeout
 		jitter:         jitter,
-		logger:         logging.FromContext(ctx),
+		logger:         logger,
 	}
 
 	for _, o := range opts {

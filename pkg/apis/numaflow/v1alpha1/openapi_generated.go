@@ -64,6 +64,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceStatus":   schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceStatus(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamBufferService":         schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamConfig":                schema_pkg_apis_numaflow_v1alpha1_JetStreamConfig(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource":                schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JobTemplate":                    schema_pkg_apis_numaflow_v1alpha1_JobTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink":                      schema_pkg_apis_numaflow_v1alpha1_KafkaSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource":                    schema_pkg_apis_numaflow_v1alpha1_KafkaSource(ref),
@@ -636,7 +637,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Callback(ref common.ReferenceCallback) co
 					},
 					"callbackURL": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CallbackURL is the URL to which the callback will be made if the callback key is not present in the message headers or if the callback fails when the call back is made to the URL present in the message headers.",
+							Description: "CallbackURL is the URL to which the callback request will be sent. NOTE: If the \"x-numaflow-callback-url\" header is set in the message, that will take precedence over this field. If the header is not set, the message will be sent to this URL or during failure, the message will be sent to this URL.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -1285,6 +1286,13 @@ func schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref common.ReferenceCallb
 						SchemaProps: spec.SchemaProps{
 							Description: "Jitter is the jitter for the message generation, used to simulate out of order messages for example if the jitter is 10s, then the message's event time will be delayed by a random time between 0 and 10s which will result in the message being out of order by 0 to 10s",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"valueBlob": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ValueBlob is an optional string which is the base64 encoding of direct payload to send. This is useful for attaching a GeneratorSource to a true pipeline to test load behavior with true messages without requiring additional work to generate messages through the external source if present, the Value and MsgSize fields will be ignored.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
@@ -2351,6 +2359,49 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamConfig(ref common.ReferenceCallb
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "URL to connect to NATS cluster, multiple urls could be separated by comma.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"stream": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Stream represents the name of the stream.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"tls": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLS configuration for the nats client.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
+						},
+					},
+					"auth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Auth information",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth"),
+						},
+					},
+				},
+				Required: []string{"url", "stream"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
 	}
 }
 
@@ -3997,11 +4048,16 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource"),
 						},
 					},
+					"jetstream": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
 	}
 }
 

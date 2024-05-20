@@ -219,6 +219,7 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=simple-session-counter-go,numaflow.numaproj.io/vertex-name=compute-count"
 
+	defer w.StreamVertexPodlogs("compute-count", "numa").TerminateAllPodLogs()
 	// Kill the reducer pods before processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	done := make(chan struct{})
@@ -243,6 +244,8 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 					// Kill the reducer pods during processing to trigger failover.
 					w.Expect().VertexPodsRunning()
 					w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
+					w.Expect().VertexPodsRunning()
+					w.StreamVertexPodlogs("compute-sum", "numa")
 				}
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))

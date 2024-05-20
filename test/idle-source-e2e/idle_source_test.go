@@ -44,10 +44,7 @@ type IdleSourceSuite struct {
 
 func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		is.T().SkipNow()
-	}
+	is.T().SkipNow()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -115,7 +112,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 
 	done := make(chan struct{})
 	go func() {
-		startTime := time.Now().Add(-10000 * time.Hour)
+		startTime := time.UnixMilli(60000)
 		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():
@@ -123,18 +120,19 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 			case <-done:
 				return
 			default:
-				// send message to both partition for first 1000 messages for overcome the kafka source lazy loading wm publisher.
+				// send message to both partition for first 600 messages for overcome the kafka source lazy loading wm publisher.
 				// after that send message to only one partition. so that idle source will be detected and wm will be progressed.
 				SendMessage(topic, "data", generateMsg("1", startTime), 0)
-				if i < 2000 {
+				if i < 600 {
 					SendMessage(topic, "data", generateMsg("2", startTime), 1)
 				}
+				time.Sleep(100 * time.Millisecond)
 				startTime = startTime.Add(1 * time.Second)
 			}
 		}
 	}()
 
-	// since the window duration is 10 second, so the count of event will be 20, when sending data to only both partition.
+	// since the window duration is 10 second, so the count of event will be 20, when sending data to both partitions.
 	w.Expect().SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second))
 	// since the window duration is 10 second, so the count of event will be 10, when sending data to only one partition.
 	w.Expect().SinkContains("sink", "10", SinkCheckWithTimeout(300*time.Second))

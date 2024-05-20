@@ -227,9 +227,10 @@ message Callback {
   // +optional
   optional bool enabled = 1;
 
-  // CallbackURL is the URL to which the callback will be made if the callback key is not present in the message headers
-  // or if the callback fails when the call back is made to the URL present in the message headers.
+  // CallbackURL is the URL to which the callback request will be sent.
   // +optional
+  // NOTE: If the "x-numaflow-callback-url" header is set in the message, that will take precedence over this field.
+  // If the header is not set, the message will be sent to this URL or during failure, the message will be sent to this URL.
   optional string callbackURL = 3;
 }
 
@@ -423,6 +424,14 @@ message GeneratorSource {
   // +kubebuilder:default="0s"
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration jitter = 6;
+
+  // ValueBlob is an optional string which is the base64 encoding of direct payload to send.
+  // This is useful for attaching a GeneratorSource to a true pipeline to test load behavior
+  // with true messages without requiring additional work to generate messages through
+  // the external source
+  // if present, the Value and MsgSize fields will be ignored.
+  // +optional
+  optional string valueBlob = 7;
 }
 
 message GetDaemonDeploymentReq {
@@ -706,6 +715,22 @@ message JetStreamConfig {
 
   // TLS enabled or not
   optional bool tlsEnabled = 4;
+}
+
+message JetStreamSource {
+  // URL to connect to NATS cluster, multiple urls could be separated by comma.
+  optional string url = 1;
+
+  // Stream represents the name of the stream.
+  optional string stream = 2;
+
+  // TLS configuration for the nats client.
+  // +optional
+  optional TLS tls = 3;
+
+  // Auth information
+  // +optional
+  optional NatsAuth auth = 4;
 }
 
 message JobTemplate {
@@ -1237,6 +1262,9 @@ message Source {
 
   // +optional
   optional UDSource udSource = 6;
+
+  // +optional
+  optional JetStreamSource jetstream = 7;
 }
 
 // Status is a common structure which can be used for Status field.
