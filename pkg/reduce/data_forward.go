@@ -423,7 +423,7 @@ func (df *DataForward) associatePBQAndPnF(ctx context.Context, partitionID *part
 		// we should create and attach the read side of the loop (PnF) to the partition and then
 		// start process-and-forward (pnf) loop
 		df.of.AsyncSchedulePnF(ctx, partitionID, q)
-		df.log.Infow("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
+		df.log.Debugw("Successfully Created/Found pbq and started PnF", zap.String("partitionID", partitionID.String()))
 	}
 
 	return q, nil
@@ -442,6 +442,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 			ctrlMessages = append(ctrlMessages, message)
 		}
 	}
+
 	metrics.ReadDataMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
@@ -566,18 +567,19 @@ func (df *DataForward) handleLateMessage(message *isb.ReadMessage) []*window.Tim
 	// for sliding windows, we cannot accept late messages because a message can be part of multiple windows
 	// and some windows might have already been closed.
 	if df.windower.Strategy() != window.Fixed {
+		df.log.Infow("Dropping the late message", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()))
 		return lateMessageWindowRequests
 	}
 
 	nextWinAsSeenByWriter := df.windower.NextWindowToBeClosed()
 	// if there is no window open, drop the message.
 	if nextWinAsSeenByWriter == nil {
-		df.log.Infow("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark))
+		df.log.Infow("Dropping the late message", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()))
 		return lateMessageWindowRequests
 	}
 	// if the message doesn't fall in the next window that is about to be closed drop it.
 	if message.EventTime.Before(nextWinAsSeenByWriter.StartTime()) {
-		df.log.Infow("Dropping the late message", zap.Time("eventTime", message.EventTime), zap.Time("watermark", message.Watermark), zap.Time("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime()))
+		df.log.Infow("Dropping the late message", zap.Int64("eventTime", message.EventTime.UnixMilli()), zap.Int64("watermark", message.Watermark.UnixMilli()), zap.Int64("nextWindowToBeClosed", nextWinAsSeenByWriter.StartTime().UnixMilli()))
 		return lateMessageWindowRequests
 	}
 
@@ -680,12 +682,11 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 		Factor:   1.5,
 		Jitter:   0.1,
 	}
-	var wg sync.WaitGroup
 
+	var wg sync.WaitGroup
 	// Ack the message to ISB
 	for _, m := range messages {
 		wg.Add(1)
-
 		go func(o isb.Offset) {
 			defer wg.Done()
 			attempt := 0
@@ -737,7 +738,7 @@ func (df *DataForward) ackMessages(ctx context.Context, messages []*isb.ReadMess
 func (df *DataForward) noAckMessages(ctx context.Context, failedMessages []*isb.ReadMessage) {
 	var readOffsets []isb.Offset
 	for _, m := range failedMessages {
-		df.log.Infow("No-ack message", zap.String("msgOffSet", m.ReadOffset.String()))
+		df.log.Infow("No-ack message", zap.String("msgOffSet", m.ReadOffset.String()), zap.Int64("eventTime", m.EventTime.UnixMilli()), zap.Int64("watermark", m.Watermark.UnixMilli()), zap.Strings("keys", m.Keys), zap.Any("message", m.Message))
 		readOffsets = append(readOffsets, m.ReadOffset)
 	}
 	df.fromBufferPartition.NoAck(ctx, readOffsets)

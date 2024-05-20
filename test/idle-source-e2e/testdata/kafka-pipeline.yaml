@@ -14,10 +14,14 @@ spec:
     - name: kafka-in
       source:
         kafka:
+          config: |
+            Consumer:
+              Offsets:
+                Initial: -2 # Start consuming from the earliest offset
           brokers:
             - kafka-broker:9092
           topic: kafka-topic
-          consumerGroup: test-group
+          consumerGroup: test-idle-source
         transformer:
           builtin:
             name: eventTimeExtractor

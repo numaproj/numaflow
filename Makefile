@@ -110,6 +110,7 @@ test-e2e:
 test-kafka-e2e:
 test-http-e2e:
 test-nats-e2e:
+test-jetstream-e2e:
 test-sdks-e2e:
 test-reduce-one-e2e:
 test-reduce-two-e2e:

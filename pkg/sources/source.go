@@ -43,6 +43,7 @@ import (
 	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
 	"github.com/numaproj/numaflow/pkg/sources/generator"
 	"github.com/numaproj/numaflow/pkg/sources/http"
+	jetstreamsrc "github.com/numaproj/numaflow/pkg/sources/jetstream"
 	"github.com/numaproj/numaflow/pkg/sources/kafka"
 	"github.com/numaproj/numaflow/pkg/sources/nats"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
@@ -339,6 +340,8 @@ func (sp *SourceProcessor) createSourceReader(ctx context.Context, udsGRPCClient
 		return http.NewHttpSource(ctx, sp.VertexInstance, http.WithReadTimeout(readTimeout))
 	} else if x := src.Nats; x != nil {
 		return nats.New(ctx, sp.VertexInstance, nats.WithReadTimeout(readTimeout))
+	} else if x := src.JetStream; x != nil {
+		return jetstreamsrc.New(ctx, sp.VertexInstance, jetstreamsrc.WithReadTimeout(readTimeout))
 	}
 	return nil, fmt.Errorf("invalid source spec")
 }

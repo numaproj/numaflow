@@ -43,4 +43,11 @@ type GeneratorSource struct {
 	// +kubebuilder:default="0s"
 	// +optional
 	Jitter *metav1.Duration `json:"jitter,omitempty" protobuf:"bytes,6,opt,name=jitter"`
+	// ValueBlob is an optional string which is the base64 encoding of direct payload to send.
+	// This is useful for attaching a GeneratorSource to a true pipeline to test load behavior
+	// with true messages without requiring additional work to generate messages through
+	// the external source
+	// if present, the Value and MsgSize fields will be ignored.
+	// +optional
+	ValueBlob *string `json:"valueBlob,omitempty" protobuf:"bytes,7,opt,name=valueBlob"`
 }
