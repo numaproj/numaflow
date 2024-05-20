@@ -592,9 +592,40 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Generator Source
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         Generator Source
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#user-defined-data" class="md-nav__link">
+    User Defined Data
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -2192,6 +2223,21 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#user-defined-data" class="md-nav__link">
+    User Defined Data
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2237,6 +2283,19 @@ The load generated is per replica.</p>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">p1</span>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+</code></pre></div>
+<h2 id="user-defined-data">User Defined Data<a class="headerlink" href="#user-defined-data" title="Permanent link">&para;</a></h2>
+<p>The default data created by the generator is not likely to be useful in testing user pipelines with specific business logic. To allow this to help with user testing, a user defined value can be provided which will be emitted for each of the generator.</p>
+<div class="highlight"><pre><span></span><code>- name: in
+  source:
+    generator:
+      # How many messages to generate in the duration.
+      rpu: 100
+      duration: 1s
+      # Base64 encoding of data to send. Can be example serialized packet to
+      # run through user pipeline to exercise particular capability or path through pipeline
+      valueBlob: &quot;InlvdXIgc3BlY2lmaWMgZGF0YSI=&quot;
+      # Note: msgSize and value will be ignored if valueBlob is set
 </code></pre></div>
 
               
