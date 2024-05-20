@@ -70,8 +70,17 @@ func (s *server) Start(ctx context.Context) {
 	log := logging.FromContext(ctx)
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
+	allowedOrigins := make([]string, 0)
 	if s.options.CorsAllowedOrigins != "" {
-		allowedOrigins := strings.Split(s.options.CorsAllowedOrigins, ",")
+		for _, o := range strings.Split(s.options.CorsAllowedOrigins, ",") {
+			s := strings.TrimSpace(o)
+			s = strings.TrimRight(s, "/") // Remove trailing slash if any
+			if len(s) > 0 {
+				allowedOrigins = append(allowedOrigins, s)
+			}
+		}
+	}
+	if len(allowedOrigins) > 0 {
 		router.Use(cors.New(cors.Config{
 			AllowOrigins:     allowedOrigins,
 			AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
