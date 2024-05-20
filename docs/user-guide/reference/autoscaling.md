@@ -85,6 +85,8 @@ Numaflow autoscaling does not apply to reduce vertices, and the source vertices 
 - HTTP
 - Nats
 
+For User-defined Sources, if the function `Pending()` returns a negative value, autoscaling will not be applied.
+
 ### Kubernetes HPA
 
 [Kubernetes HPA](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) is supported in Numaflow for any type of Vertex. To use HPA, remember to point the `scaleTargetRef` to the vertex as below, and disable Numaflow autoscaling in your Pipeline spec.
