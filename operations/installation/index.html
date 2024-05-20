@@ -2329,7 +2329,7 @@
 <div class="highlight"><pre><span></span><code><span class="c1"># Minimal CRD</span>
 kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/config/advanced-install/minimal-crds.yaml
 <span class="c1"># Controller in namespaced scope</span>
-kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span class="w"> </span>-f<span class="w"> </span>https://github.com/numaproj/numaflow/blob/main/config/advanced-install/namespaced-controller-wo-crds.yaml
+kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/config/advanced-install/namespaced-controller-wo-crds.yaml
 </code></pre></div>
 <p>If you use <a href="https://kustomize.io/">kustomize</a>, <code>kustomization.yaml</code> looks like below.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kustomize.config.k8s.io/v1beta1</span>
