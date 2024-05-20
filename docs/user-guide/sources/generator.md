@@ -31,3 +31,19 @@ spec:
     - from: p1
       to: out
 ```
+
+## User Defined Data
+The default data created by the generator is not likely to be useful in testing user pipelines with specific business logic. To allow this to help with user testing, a user defined value can be provided which will be emitted for each of the generator.
+
+```
+- name: in
+  source:
+    generator:
+      # How many messages to generate in the duration.
+      rpu: 100
+      duration: 1s
+      # Base64 encoding of data to send. Can be example serialized packet to
+      # run through user pipeline to exercise particular capability or path through pipeline
+      valueBlob: "InlvdXIgc3BlY2lmaWMgZGF0YSI="
+      # Note: msgSize and value will be ignored if valueBlob is set
+```

@@ -3371,6 +3371,8 @@ spec:
                       value:
                         format: int64
                         type: integer
+                      valueBlob:
+                        type: string
                     type: object
                   http:
                     properties:

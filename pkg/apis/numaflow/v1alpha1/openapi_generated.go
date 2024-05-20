@@ -1261,6 +1261,13 @@ func schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref common.ReferenceCallb
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"valueBlob": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ValueBlob is an optional string which is the base64 encoding of direct payload to send. This is useful for attaching a GeneratorSource to a true pipeline to test load behavior with true messages without requiring additional work to generate messages through the external source if present, the Value and MsgSize fields will be ignored.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},

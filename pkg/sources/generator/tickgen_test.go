@@ -18,6 +18,7 @@ package generator
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -66,4 +67,45 @@ func TestTimeForInvalidTime(t *testing.T) {
 	nanotime := int64(-1)
 	parsedtime := timeFromNanos(nanotime, 0)
 	assert.True(t, parsedtime.UnixNano() > 0)
+}
+
+// Demonstrates testing when provided an explicit message in ValueBlob
+func TestReadProvidedMessageBlob(t *testing.T) {
+	ctx := context.Background()
+
+	testVal := []byte("HelloNumaWorld")
+	blobStr := base64.StdEncoding.EncodeToString(testVal)
+
+	vertex := &dfv1.Vertex{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "memGen",
+		},
+		Spec: dfv1.VertexSpec{
+			PipelineName: "testPipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "testVertex",
+				Source: &dfv1.Source{
+					Generator: &dfv1.GeneratorSource{
+						ValueBlob: &blobStr,
+					},
+				},
+			},
+		},
+	}
+	m := &dfv1.VertexInstance{
+		Vertex:   vertex,
+		Hostname: "TestRead",
+		Replica:  0,
+	}
+
+	mGen, err := NewMemGen(ctx, m, WithReadTimeout(3*time.Second))
+	assert.NoError(t, err)
+	messages, err := mGen.Read(ctx, 5)
+	assert.NoError(t, err)
+	assert.Equal(t, 5, len(messages))
+
+	// All messages should have same payload of provided message blob
+	for _, msg := range messages {
+		assert.Equal(t, testVal, msg.Body.Payload)
+	}
 }
