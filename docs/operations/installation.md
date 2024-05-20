@@ -53,7 +53,7 @@ If there are multiple namespace scoped installations in one cluster, potentially
 # Minimal CRD
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/config/advanced-install/minimal-crds.yaml
 # Controller in namespaced scope
-kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/main/config/advanced-install/namespaced-controller-wo-crds.yaml
+kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/advanced-install/namespaced-controller-wo-crds.yaml
 ```
 
 If you use [kustomize](https://kustomize.io/), `kustomization.yaml` looks like below.
