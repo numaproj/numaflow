@@ -53,7 +53,7 @@ spec:
   start processing, because the autoscaling algorithm will divide the TPS by the number of pods even if the pod is not `Running`.
 - `scaleDownCooldownSeconds` - After a scaling operation, how many seconds to wait for the same vertex, if the follow-up
   operation is a scaling down, defaults to `90`.
-- `zeroReplicaSleepSeconds` - How many seconds to wait after scaling a source vertex replicas down to `0`, defaults to `120`.
+- `zeroReplicaSleepSeconds` - After scaling a source vertex replicas down to `0`, how many seconds to wait before scaling up to 1 replica to peek, defaults to `120`.
   Numaflow autoscaler periodically scales up a source vertex pod to "peek" the incoming data, this is the period of time to wait before peeking.
 - `targetProcessingSeconds` - It is used to tune the aggressiveness of autoscaling for source vertices, it measures how
   fast you want the vertex to process all the pending messages, defaults to `20`. It is only effective for the `Source` vertices that
