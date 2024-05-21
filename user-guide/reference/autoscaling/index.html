@@ -2362,18 +2362,18 @@ the <a href="../../sources/overview/"><code>Source</code></a> vertices (please c
 <li><code>lookbackSeconds</code> - How many seconds to lookback for vertex average processing rate (tps) and pending messages calculation,
   defaults to <code>120</code>. Rate and pending messages metrics are critical for autoscaling, you might need to tune this parameter
   a bit to see better results. For example, your data source only have 1 minute data input in every 5 minutes, and you
-  don't want the vertices to be scaled down to <code>0</code>. In this case, you need to increase <code>lookbackSeconds</code> to cover all the
-  5 minutes, so that the calculated average rate and pending messages won't be <code>0</code> during the silent period, to prevent
-  scaling down to 0 from happening.</li>
+  don't want the vertices to be scaled down to <code>0</code>. In this case, you need to increase <code>lookbackSeconds</code> to overlap
+  5 minutes, so that the calculated average rate and pending messages won't be <code>0</code> during the silent period, in order to prevent from
+  scaling down to 0.</li>
 <li><code>scaleUpCooldownSeconds</code> - After a scaling operation, how many seconds to wait for the same vertex, if the follow-up
-  operation is a scaling up, defaults to <code>90</code>. Please make sure that the time is greater that the pod to be <code>Running</code> and
+  operation is a scaling up, defaults to <code>90</code>. Please make sure that the time is greater than the pod to be <code>Running</code> and
   start processing, because the autoscaling algorithm will divide the TPS by the number of pods even if the pod is not <code>Running</code>.</li>
 <li><code>scaleDownCooldownSeconds</code> - After a scaling operation, how many seconds to wait for the same vertex, if the follow-up
   operation is a scaling down, defaults to <code>90</code>.</li>
-<li><code>zeroReplicaSleepSeconds</code> - How many seconds it will wait after scaling a source vertex replicas down to <code>0</code>, defaults to <code>120</code>.
+<li><code>zeroReplicaSleepSeconds</code> - After scaling a source vertex replicas down to <code>0</code>, how many seconds to wait before scaling up to 1 replica to peek, defaults to <code>120</code>.
   Numaflow autoscaler periodically scales up a source vertex pod to "peek" the incoming data, this is the period of time to wait before peeking.</li>
 <li><code>targetProcessingSeconds</code> - It is used to tune the aggressiveness of autoscaling for source vertices, it measures how
-  fast you want the vertex to process all the pending messages, defaults to <code>20</code>. It is only effective for the <code>Source</code> vertices which
+  fast you want the vertex to process all the pending messages, defaults to <code>20</code>. It is only effective for the <code>Source</code> vertices that
   support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.</li>
 <li><code>targetBufferAvailability</code> - Targeted buffer availability in percentage, defaults to <code>50</code>. It is only effective for <code>UDF</code>
   and <code>Sink</code> vertices, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.</li>
@@ -2392,12 +2392,13 @@ the <a href="../../sources/overview/"><code>Source</code></a> vertices (please c
 <span class="w">        </span><span class="nt">disabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
 <p><strong>Notes</strong></p>
-<p>Numaflow autoscaling does not apply to reduce vertices, and following source vertices which do not have a way to calculate their pending messages.</p>
+<p>Numaflow autoscaling does not apply to reduce vertices, and the source vertices which do not have a way to calculate their pending messages.</p>
 <ul>
 <li>Generator</li>
 <li>HTTP</li>
 <li>Nats</li>
 </ul>
+<p>For User-defined Sources, if the function <code>Pending()</code> returns a negative value, autoscaling will not be applied.</p>
 <h3 id="kubernetes-hpa">Kubernetes HPA<a class="headerlink" href="#kubernetes-hpa" title="Permanent link">&para;</a></h3>
 <p><a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Kubernetes HPA</a> is supported in Numaflow for any type of Vertex. To use HPA, remember to point the <code>scaleTargetRef</code> to the vertex as below, and disable Numaflow autoscaling in your Pipeline spec.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">autoscaling/v2</span>
