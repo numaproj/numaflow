@@ -10,16 +10,20 @@ import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Route, useLocation, useHistory, Switch } from "react-router-dom";
+import { isEqual } from "lodash";
 import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
 import { Routes } from "../Routes/Routes";
 import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "../../../utils/error";
 import {
+  SidebarType,
   SlidingSidebar,
   SlidingSidebarProps,
 } from "../../common/SlidingSidebar";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { AppError, AppProps, UserInfo } from "../../../types/declarations/app";
+import { VersionDetailsProps } from "../../common/SlidingSidebar/partials/VersionDetails";
+
 import { AppContext } from "../../../App";
 
 import "./App.css";
@@ -47,6 +51,9 @@ function App(props: AppProps) {
   >();
   const [errors, setErrors] = useState<AppError[]>([]);
   const [userInfo, setUserInfo] = useState<UserInfo | undefined>();
+  const [versionDetails, setVersionDetails] = useState<
+    VersionDetailsProps | undefined
+  >(undefined);
   const {
     systemInfo,
     error: systemInfoError,
@@ -64,6 +71,20 @@ function App(props: AppProps) {
       history.push(`?namespace=${namespace}`);
     }
   }, [location, history, namespace]);
+
+  useEffect(() => {
+    if (systemInfo?.version) {
+      const parts = systemInfo?.version.split(", ");
+      const kv_pairs: any = {};
+      for (const part of parts) {
+        const [key, value] = part.split(": ");
+        kv_pairs[key.trim()] = value.trim() === "" ? "unknown" : value.trim();
+      }
+      if (!isEqual(versionDetails, kv_pairs)) {
+        setVersionDetails(kv_pairs);
+      }
+    }
+  }, [systemInfo]);
 
   useEffect(() => {
     // Route changed
@@ -113,6 +134,24 @@ function App(props: AppProps) {
   const handleClearErrors = useCallback(() => {
     setErrors([]);
   }, []);
+
+  const handleVersionDetails = useCallback(() => {
+    setSidebarProps({
+      type: SidebarType.VERSION_DETAILS,
+      slide: false,
+      pageWidth,
+      versionDetailsProps: {
+        Version: versionDetails?.Version,
+        BuildDate: versionDetails?.BuildDate,
+        GitCommit: versionDetails?.GitCommit,
+        GitTag: versionDetails?.GitTag,
+        GitTreeState: versionDetails?.GitTreeState,
+        GoVersion: versionDetails?.GoVersion,
+        Compiler: versionDetails?.Compiler,
+        Platform: versionDetails?.Platform,
+      },
+    });
+  }, [versionDetails, pageWidth]);
 
   const routes = useMemo(() => {
     if (loading) {
@@ -202,6 +241,12 @@ function App(props: AppProps) {
               height: "100%",
             }}
           >
+            <Box
+              sx={{ cursor: "pointer", ml: "2rem" }}
+              onClick={handleVersionDetails}
+            >
+              {versionDetails?.Version}
+            </Box>
             <Box
               sx={{
                 display: "flex",
