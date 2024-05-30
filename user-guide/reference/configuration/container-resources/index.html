@@ -1460,6 +1460,20 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#udsource-container" class="md-nav__link">
+    UDSource Container
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-transformer-container" class="md-nav__link">
+    Source Transformer Container
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#udsink-container" class="md-nav__link">
     UDSink Container
   </a>
@@ -2267,6 +2281,20 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#udsource-container" class="md-nav__link">
+    UDSource Container
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-transformer-container" class="md-nav__link">
+    Source Transformer Container
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#udsink-container" class="md-nav__link">
     UDSink Container
   </a>
@@ -2337,6 +2365,46 @@
 <span class="w">            </span><span class="nt">requests</span><span class="p">:</span>
 <span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span>
 <span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4Gi</span>
+</code></pre></div>
+<h2 id="udsource-container">UDSource Container<a class="headerlink" href="#udsource-container" title="Permanent link">&para;</a></h2>
+<p>To specify <code>resources</code> for <code>udsource</code> container of a source vertex pods:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">udsource</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3&quot;</span>
+<span class="w">                </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6Gi</span>
+<span class="w">              </span><span class="nt">requests</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span>
+<span class="w">                </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4Gi</span>
+</code></pre></div>
+<h2 id="source-transformer-container">Source Transformer Container<a class="headerlink" href="#source-transformer-container" title="Permanent link">&para;</a></h2>
+<p>To specify <code>resources</code> for <code>transformer</code> container of a source vertex pods:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">transformer</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3&quot;</span>
+<span class="w">                </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6Gi</span>
+<span class="w">              </span><span class="nt">requests</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span>
+<span class="w">                </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4Gi</span>
 </code></pre></div>
 <h2 id="udsink-container">UDSink Container<a class="headerlink" href="#udsink-container" title="Permanent link">&para;</a></h2>
 <p>To specify <code>resources</code> for <code>udsink</code> container of vertex pods:</p>
