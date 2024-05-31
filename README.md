@@ -37,7 +37,7 @@ full-featured stream processing platforms.
 
 ## Roadmap
 
-- Session Window (1.2)
+- Map Streaming (1.3)
 
 ## Demo
 
