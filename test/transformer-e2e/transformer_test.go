@@ -108,7 +108,7 @@ func (s *TransformerSuite) TestBuiltinEventTimeExtractor() {
 		TerminateAllPodPortForwards()
 
 	// Use the daemon client to verify watermark propagation.
-	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1234")
 	assert.NoError(s.T(), err)
 	defer func() {
 		_ = client.Close()

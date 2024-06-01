@@ -99,7 +99,7 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 			TerminateAllPodPortForwards()
 
 		// verify the processing rate match between source and sink
-		client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+		client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1234")
 		assert.NoError(s.T(), err)
 		defer func() {
 			_ = client.Close()

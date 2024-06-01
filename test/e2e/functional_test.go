@@ -94,7 +94,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Status(204)
 
 	// Test Daemon service with gRPC
-	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1234")
 	assert.NoError(s.T(), err)
 	defer func() {
 		_ = client.Close()
@@ -282,7 +282,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 		TerminateAllPodPortForwards()
 
 	// Test Daemon service with gRPC
-	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1234")
 	assert.NoError(s.T(), err)
 	defer func() {
 		_ = client.Close()
@@ -302,7 +302,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 
 // isWatermarkProgressing checks whether the watermark for each edge in a pipeline is progressing monotonically.
 // progressCount is the number of progressions the watermark value should undertake within the timeout deadline for it
-func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClient, pipelineName string, edgeList []string, progressCount int) (bool, error) {
+func isWatermarkProgressing(ctx context.Context, client daemonclient.DaemonClient, pipelineName string, edgeList []string, progressCount int) (bool, error) {
 	prevWatermark := make([]int64, len(edgeList))
 	for i := 0; i < len(edgeList); i++ {
 		prevWatermark[i] = -1

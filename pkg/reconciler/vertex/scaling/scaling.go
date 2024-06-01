@@ -48,7 +48,7 @@ type Scaler struct {
 	options    *options
 	// Cache to store the vertex metrics such as pending message number
 	vertexMetricsCache *lru.Cache[string, int64]
-	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
+	daemonClientsCache *lru.Cache[string, daemonclient.DaemonClient]
 }
 
 // NewScaler returns a Scaler instance.
@@ -67,7 +67,7 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 		lock:       new(sync.RWMutex),
 	}
 	// cache daemon clients
-	s.daemonClientsCache, _ = lru.NewWithEvict[string, *daemonclient.DaemonClient](s.options.clientsCacheSize, func(key string, value *daemonclient.DaemonClient) {
+	s.daemonClientsCache, _ = lru.NewWithEvict[string, daemonclient.DaemonClient](s.options.clientsCacheSize, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
 	})
 	vertexMetricsCache, _ := lru.New[string, int64](10000)
@@ -208,7 +208,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	var err error
 	daemonClient, _ := s.daemonClientsCache.Get(pl.GetDaemonServiceURL())
 	if daemonClient == nil {
-		daemonClient, err = daemonclient.NewDaemonServiceClient(pl.GetDaemonServiceURL())
+		daemonClient, err = daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
 		if err != nil {
 			return fmt.Errorf("failed to get daemon service client for pipeline %s, %w", pl.Name, err)
 		}
@@ -507,7 +507,7 @@ func KeyOfVertex(vertex dfv1.Vertex) string {
 
 func getBufferInfos(
 	ctx context.Context,
-	d *daemonclient.DaemonClient,
+	d daemonclient.DaemonClient,
 	pl *dfv1.Pipeline,
 	vertex *dfv1.Vertex,
 ) (

@@ -62,7 +62,7 @@ type handler struct {
 	kubeClient           kubernetes.Interface
 	metricsClient        *metricsversiond.Clientset
 	numaflowClient       dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache   *lru.Cache[string, *daemonclient.DaemonClient]
+	daemonClientsCache   *lru.Cache[string, daemonclient.DaemonClient]
 	dexObj               *DexObject
 	localUsersAuthObject *LocalUsersAuthObject
 	isReadOnly           bool
@@ -85,7 +85,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	}
 	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
-	daemonClientsCache, _ := lru.NewWithEvict[string, *daemonclient.DaemonClient](500, func(key string, value *daemonclient.DaemonClient) {
+	daemonClientsCache, _ := lru.NewWithEvict[string, daemonclient.DaemonClient](500, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
 	})
 	return &handler{
@@ -1146,9 +1146,9 @@ func daemonSvcAddress(ns, pipeline string) string {
 	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
 }
 
-func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClient, error) {
+func (h *handler) getDaemonClient(ns, pipeline string) (daemonclient.DaemonClient, error) {
 	if dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline)); !ok {
-		c, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		c, err := daemonclient.NewGRPCDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 		if err != nil {
 			return nil, err
 		}
