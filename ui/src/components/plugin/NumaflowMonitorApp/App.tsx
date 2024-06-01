@@ -242,7 +242,7 @@ function App(props: AppProps) {
             }}
           >
             <Box
-              sx={{ cursor: "pointer", ml: "2rem" }}
+              sx={{ cursor: "pointer", ml: "2rem", color: "#A9A9A9" }}
               onClick={handleVersionDetails}
             >
               {versionDetails?.Version}

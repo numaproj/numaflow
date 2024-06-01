@@ -48,7 +48,7 @@ export function VersionDetails(props: VersionDetailsProps) {
         height: "100%",
       }}
     >
-      <span className="version-header-text">Numaflow Version</span>
+      <span className="version-header-text">Numaflow Server Version</span>
       <Grid
         container
         spacing={2}

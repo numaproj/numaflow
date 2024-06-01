@@ -334,7 +334,11 @@ function App(props: AppProps) {
                         className={"text-logo"}
                       />
                       <Box
-                        sx={{ cursor: "pointer", ml: "1.296rem" }}
+                        sx={{
+                          cursor: "pointer",
+                          ml: "1.296rem",
+                          color: "#A9A9A9",
+                        }}
                         onClick={handleVersionDetails}
                       >
                         {versionDetails?.Version}
