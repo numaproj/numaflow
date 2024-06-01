@@ -80,9 +80,9 @@ spec:
             - name: ALLOW_PLAINTEXT_LISTENER
               value: "yes"
             - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
-              value: "true"
+              value: !!str true
             - name: KAFKA_CFG_DELETE_TOPIC_ENABLE
-              value: "true"
+              value: !!str true
             - name: KAFKA_CFG_NUM_PARTITIONS
               value: "2"
           readinessProbe:

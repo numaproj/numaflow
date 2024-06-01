@@ -15,7 +15,7 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
+            value: !!str true # DO NOT forget the double quotes!!!
     - name: cat1
       partitions: 2
       udf:
@@ -24,7 +24,7 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
+            value: !!str true # DO NOT forget the double quotes!!!
     - name: cat2
       udf:
         builtin:
@@ -32,7 +32,7 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
+            value: !!str true # DO NOT forget the double quotes!!!
     - name: cat3
       partitions: 3
       udf:
@@ -41,7 +41,7 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
+            value: !!str true # DO NOT forget the double quotes!!!
     - name: output1
       sink:
         # A simple log printing sink
