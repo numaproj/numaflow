@@ -85,7 +85,7 @@ func (u *GRPCBasedFlatmap) ApplyMap(ctx context.Context, messageStream []*isb.Re
 					continue
 				}
 				responseCh <- resp
-				log.Println("MYDEBUG: sending to writeCH", resp.Uid)
+				log.Println("MYDEBUG: sending to writeCh", resp.Uid)
 			case err := <-reduceErrCh:
 				// ctx.Done() event will be handled by the AsyncReduceFn method
 				// so we don't need a separate case for ctx.Done() here
