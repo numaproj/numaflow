@@ -421,6 +421,15 @@ func (v Vertex) MapUdfStreamEnabled() (bool, error) {
 	return false, nil
 }
 
+func (v Vertex) FlatmapUdfStreamEnabled() (bool, error) {
+	if v.Spec.Metadata != nil && v.Spec.Metadata.Annotations != nil {
+		if flatmapUdfStream, existing := v.Spec.Metadata.Annotations[FlatmapUdfStreamKey]; existing {
+			return strconv.ParseBool(flatmapUdfStream)
+		}
+	}
+	return false, nil
+}
+
 type VertexSpec struct {
 	AbstractVertex `json:",inline" protobuf:"bytes,1,opt,name=abstractVertex"`
 	PipelineName   string `json:"pipelineName" protobuf:"bytes,2,opt,name=pipelineName"`

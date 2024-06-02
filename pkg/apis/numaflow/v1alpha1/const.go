@@ -200,6 +200,9 @@ const (
 
 	// UDF map streaming
 	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
+	// FlatmapUdfStreamKey is used to annotate a vertex to use the
+	// bidirectional streaming gRPC for flatmap
+	FlatmapUdfStreamKey = "numaflow.numaproj.io/flat-map"
 
 	// Pipeline health status
 	PipelineStatusHealthy   = "healthy"

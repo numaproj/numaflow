@@ -34,8 +34,10 @@ const (
 	SourceAddr            = "/var/run/numaflow/source.sock"
 	SourceTransformerAddr = "/var/run/numaflow/sourcetransform.sock"
 	MultiProcAddr         = "/var/run/numaflow/multiproc"
+	FlatmapAddr           = "/var/run/numaflow/flatmap.sock"
 
 	// Server information file configs
+	FlatmapServerInfoFile           = "/var/run/numaflow/flatmapper-server-info"
 	MapServerInfoFile               = "/var/run/numaflow/mapper-server-info"
 	MapStreamServerInfoFile         = "/var/run/numaflow/mapstreamer-server-info"
 	ReduceServerInfoFile            = "/var/run/numaflow/reducer-server-info"

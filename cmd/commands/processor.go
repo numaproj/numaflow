@@ -28,6 +28,7 @@ import (
 
 	"github.com/numaproj/numaflow"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/flatmap"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sinks"
 	"github.com/numaproj/numaflow/pkg/sources"
@@ -94,6 +95,18 @@ func NewProcessorCommand() *cobra.Command {
 				p := &udf.MapUDFProcessor{
 					ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
 					VertexInstance: vertexInstance,
+				}
+
+				enableFlatMapUdfStream, err := vertexInstance.Vertex.FlatmapUdfStreamEnabled()
+				if err != nil {
+					return fmt.Errorf("failed to parse Flatmap streaming UDF metadata, %w", err)
+				}
+				if enableFlatMapUdfStream {
+					flatMapProcessor := &flatmap.FlatmapUDFProcessor{
+						ISBSvcType:     dfv1.ISBSvcType(isbSvcType),
+						VertexInstance: vertexInstance,
+					}
+					return flatMapProcessor.Start(ctx)
 				}
 				return p.Start(ctx)
 			case dfv1.VertexTypeReduceUDF:
