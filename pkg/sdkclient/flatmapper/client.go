@@ -38,71 +38,91 @@ type client struct {
 	grpcClt flatmappb.FlatmapClient
 }
 
+// MapFn is the RPC handler for the gRPC client (Numa container)
+// It takes in a stream of input Requests, sends them to the gRPC server(UDF) and then streams the
+// responses received back on a channel asynchronously.
+// We spawn 2 goroutines here, one for sending the requests over the stream
+// and the other one for reciving the responses
 func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRequest) (<-chan *flatmappb.MapResponse, <-chan error) {
 	var (
-		errCh      = make(chan error)
+		// errCh is used to track and propagate any errors that might occur during the rpc lifecyle, these could include
+		// errors in sending, UDF errors etc
+		// These are propagated to the applier for further handling
+		errCh = make(chan error)
+		// TODO(stream): Should we keep this buffered? Might help with error scenario to drain any
+		//  messages already processed
 		responseCh = make(chan *flatmappb.MapResponse)
 	)
 
-	log.Println("MYDEBUG: WHATS HAPPENING", len(datumStreamCh), datumStreamCh)
-
-	// stream the messages to server
+	// MapFn is a bidirectional RPC
+	// We get a Flatmap_MapFnClient interface over which we can send the requests,
+	// receive the responses asynchronously.
 	stream, err := c.grpcClt.MapFn(ctx)
 
+	// If any initial error, send it to the error channel
+	if err != nil {
+		go func(sErr error) {
+			errCh <- sdkerr.ToUDFErr("c.grpcClt.MapFn", sErr)
+		}(err)
+	}
+
+	// Response routine:
 	// read the response from the server stream and send it to responseCh channel
 	// any error is sent to errCh channel
 	go func() {
+		// close this channel to indicate that no more elements left to receive from grpc
 		defer close(responseCh)
 		for {
 			select {
+			// In case of the context done, return the error and stop further processing
 			case <-ctx.Done():
 				errCh <- ctx.Err()
 				return
 			default:
 				var resp *flatmappb.MapResponse
 				resp, err = stream.Recv()
-				//if err == io.EOF {
-				//	return
-				//}
+				// check if this is EOF error, which indicates that no more messages left to process on the
+				// stream, in such a case we return without any error
 				if errors.Is(err, io.EOF) {
+					log.Println("MYDEBUG: ERROR GOT EOF", err)
 					// skip selection on nil channel
 					//errCh = nil
 					//close(responseCh)
 					return
 				}
+				// If this is some other error, propagate it to error channel,
+				// also close the response channel to indicate no more messages being read
 				errSDK := sdkerr.ToUDFErr("c.grpcClt.MapStreamFn", err)
 				if errSDK != nil {
 					log.Println("MYDEBUG: ERROR in recv", err, errSDK)
 					errCh <- errSDK
 					return
 				}
-				log.Println("MYDEBUG: GOT IT FROM GRPC", resp.Result.Uuid)
+				//log.Println("MYDEBUG: GOT IT FROM GRPC", resp.Result.Uuid)
 				responseCh <- resp
 			}
 		}
 	}()
-	// Read from the inputStream and send messages
-	for inputMsg := range datumStreamCh {
-		log.Println("MYDEBUG: Sending to grpc", inputMsg.Uuid)
-		err = stream.Send(inputMsg)
-		if err != nil {
-			go func(sErr error) {
-				errCh <- sdkerr.ToUDFErr("c.grpcClt.MapFn", sErr)
-			}(err)
-			break
+	// Read from the read messages and send them individually to the bi-di stream for processing
+	// in case there is an error in sending, send it to the error channel for handling
+	go func() {
+		for inputMsg := range datumStreamCh {
+			err = stream.Send(inputMsg)
+			if err != nil {
+				go func(sErr error) {
+					errCh <- sdkerr.ToUDFErr("c.grpcClt.MapFn", sErr)
+				}(err)
+				break
+			}
+			//log.Println("MYDEBUG: SENT TO GRPC", inputMsg.GetUuid())
 		}
-		//if err != nil {
-		//	errCh <- sdkerr.ToUDFErr("MapFn stream.Send()", sendErr)
-		//	return
-		//}
-	}
-	sendErr := stream.CloseSend()
-	if sendErr != nil && !errors.Is(sendErr, io.EOF) {
-		go func(sErr error) {
-			errCh <- sdkerr.ToUDFErr("c.grpcClt.MapFn stream.CloseSend()", sErr)
-		}(sendErr)
-	}
-
+		sendErr := stream.CloseSend()
+		if sendErr != nil && !errors.Is(sendErr, io.EOF) {
+			go func(sErr error) {
+				errCh <- sdkerr.ToUDFErr("c.grpcClt.MapFn stream.CloseSend()", sErr)
+			}(sendErr)
+		}
+	}()
 	return responseCh, errCh
 }
 

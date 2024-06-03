@@ -71,6 +71,7 @@ func (t *Tracker) RemoveRequest(id string) {
 
 func (t *Tracker) PrintAll() {
 	t.lock.RLock()
+	defer t.lock.RUnlock()
 	for k, v := range t.m {
 		log.Println("MYDEBUG: MAP VALS", k, " ", v)
 	}

@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	flatmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/flatmap/v1"
@@ -59,63 +58,99 @@ func (u *GRPCBasedFlatmap) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
+// ApplyMap applies the map udf on the stream of read messages and streams the responses back on the responseCh
+// Internally, it spawns two go-routines, one for sending the requests to the client and the other to listen to the
+// responses back from it.
 func (u *GRPCBasedFlatmap) ApplyMap(ctx context.Context, messageStream []*isb.ReadMessage, responseCh chan<- *types.ResponseFlatmap) <-chan error {
-	var (
-		errCh = make(chan error)
-	)
-	flatmapRequests := make(chan *flatmappb.MapRequest)
-	defer close(flatmapRequests)
+	// errCh is used to propagate any errors recieved from the grpc client upstream so that they can be handled
+	// accordingly.
+	errCh := make(chan error)
 
-	// invoke the AsyncReduceFn method with requestCh channel and send the result to responseCh channel
-	// and any error to errCh channel
+	// flatmapRequests is a channel on which the input requests are streamed, this is then consumed by the grpc client
+	//TODO(stream): do we need to keep this buffered?
+	flatmapRequests := make(chan *flatmappb.MapRequest)
+
+	// Response routine:
+	// This routine would invoke the MapFn from the client and then keep listening to the response and errorCh
+	// from the same.
+	// On getting a response, it would parse it to check whether this is the last response for a given request,
+	// in such a case we will remove it from the tracker.
+	// It would also look for any errors received from the client, and then propagate them.
+	// TODO(stream): should we move this tracking mechanism on a higher layer, and track a request till the
+	//  end of lifetime ie ack
 	go func() {
-		// TODO(stream): check this close here
+		// TODO(stream): Instead of closing the channel here, return a done and close this upstream?
+		// close the responseCh while exiting to indicate downstream that no more responses expected from
+		// gRPC
 		defer close(responseCh)
+		// invoke the MapFn from the gRPC client for a stream of input requests
+		// resultCh -> chan to read responses streamed back
+		// reduceErrCh -> chan for reading any errors encountered during gRPC
 		resultCh, reduceErrCh := u.client.MapFn(ctx, flatmapRequests)
+		// Keep running forever until explicit return
 		for {
+			// See if we got a response from the client, could be on the response or the error channel
 			select {
+			// Got a response on the resultCh
 			case result, ok := <-resultCh:
+				// If there are no more messages to read on the stream, or a nil message we can safely assume that
+				// gRPC has no more messages to send. Hence, we can return from here
 				if !ok || result == nil {
-					//// if the resultCh channel is closed, close the responseCh
 					return
 				}
-				resp, remove := u.parseMapResponse(result)
+				resp, remove, uid := u.parseMapResponse(result)
+				// If this was the last response for a request, let's remove from the tracker
+				// As this is a special message with no data field (only EOR = true), we do not
+				// need to send it forward to the responseCh.
 				if remove {
-					u.tracker.RemoveRequest(resp.Uid)
+					u.tracker.RemoveRequest(uid)
 					continue
 				}
+				// Forward the received response to the channel
 				responseCh <- resp
-				log.Println("MYDEBUG: sending to writeCh", resp.Uid)
 			case err := <-reduceErrCh:
-				// ctx.Done() event will be handled by the AsyncReduceFn method
-				// so we don't need a separate case for ctx.Done() here
+				// We got a context done while processing the gRPC, hence stop processing
+				// The specific case for ctx.Done() is already checked in MapFn
 				if err == ctx.Err() {
 					errCh <- err
 					return
 				}
+				// If we got any other type of error
 				if err != nil {
+					// TODO(stream): graceful handling of error, so that we can drain all the
+					//  unprocessed messaged and retry them again. Once way could be to just restart the NUMA container
+					//  in such a case, which would force a reread of the messages which have not been acked.
 					errCh <- convertToUdfError(err)
-					// TODO(stream): check error here
+					// TODO(stream): Should we stop processing further in this case then
+					//return
 				}
 			}
 		}
 	}()
 
-	for _, req := range messageStream {
-		d := u.createMapRequest(req)
-		log.Print("MYDEBUG: TRYING TO SEND HERE", d.Uuid)
-		flatmapRequests <- d
-	}
-
+	// Read routine: this goroutine reads on the messageStream slice and sends each
+	// of the read messages to the grpc client
+	// after transforming it to a MapRequest. Once all messages are sent, it closes the input channel
+	// to indicate that all requests have been read.
+	// On creating a new request, we add it to a tracker map so that the responses on the stream
+	// can be mapped backed to the given parent request
+	go func() {
+		defer close(flatmapRequests)
+		for _, req := range messageStream {
+			d := u.createMapRequest(req)
+			flatmapRequests <- d
+		}
+	}()
 	return errCh
 }
 
+// createMapRequest takes a isb.ReadMessage and returns proto MapRequest
 func (u *GRPCBasedFlatmap) createMapRequest(msg *isb.ReadMessage) *flatmappb.MapRequest {
 	keys := msg.Keys
 	payload := msg.Body.Payload
-
+	// Add the request to the tracker, and get the unique UUID corresponding to it
 	uid := u.tracker.AddRequest(msg)
-
+	// Create the MapRequest, with the required fields.
 	var d = &flatmappb.MapRequest{
 		Keys:      keys,
 		Value:     payload,
@@ -126,32 +161,33 @@ func (u *GRPCBasedFlatmap) createMapRequest(msg *isb.ReadMessage) *flatmappb.Map
 	}
 	return d
 }
-func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsedResp *types.ResponseFlatmap, requestDone bool) {
+
+// parseMapResponse takes a proto response from the gRPC and converts this into a ResponseFlatmap type,
+// this also checks if this was a special EOR response, in such a case we indicate that the request corresponding
+// to the response can be safely removed from the tracker.
+func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsedResp *types.ResponseFlatmap, requestDone bool, uid string) {
 	result := resp.Result
 	eor := result.GetEOR()
-	uid := result.GetUuid()
+	uid = result.GetUuid()
 	parentRequest, ok := u.tracker.GetRequest(uid)
-	// TODO(stream): check what should be path for !ok
+	// TODO(stream): check what should be path for !ok, which means that we got a UUID
+	// which has already been deleted from the tracker/ or never added in the first place
+	// can this even happen though if messages are ordered and we only have a single routine processing it?
 	if !ok {
-		//	u.tracker.NewResponse(uid)
-		//	idx = 1
 	}
 	// Request has completed remove from the tracker module
 	if eor == true {
-		return nil, true
+		return nil, true, uid
 	}
-	//idx, present := u.tracker.GetIdx(uid)
-	//if !present {
-
-	//}
 	keys := result.GetKeys()
 	taggedMessage := &isb.WriteMessage{
 		Message: isb.Message{
 			Header: isb.Header{
 				MessageInfo: parentRequest.MessageInfo,
-				// TODO(stream): Check what will be the unique ID to use here
-				//msgId := fmt.Sprintf("%s-%d-%s-%d", u.vertexName, u.vertexReplica, partitionID.String(), index)
-				//ID: fmt.Sprintf("%s-%s-%d", dataMessages[0].ReadOffset.String(), isdf.vertexName, msgIndex)
+				// TODO(stream): IMPORTANT Check what will be the unique ID to use here
+				//  we need this to be unique so that the ISB can execute its Dedup logic
+				//  this ID should be such that even when the same response is processed and received
+				//  again from the UDF, we still assign it the same ID.
 				ID:   fmt.Sprintf("%s-%d", parentRequest.ReadOffset.String(), u.idx),
 				Keys: keys,
 			},
@@ -159,30 +195,25 @@ func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsed
 				Payload: result.GetValue(),
 			},
 		},
-
 		Tags: result.GetTags(),
 	}
-
 	u.idx += 1
-	//u.tracker.IncrementRespIdx(uid)
 	return &types.ResponseFlatmap{
 		ParentMessage: parentRequest,
 		Uid:           uid,
 		RespMessage:   taggedMessage,
-	}, false
+	}, false, uid
 }
 
-// convertToUdfError converts the error returned by the reduceFn to ApplyUDFErr
+// convertToUdfError converts the error returned by the MapFn to ApplyUDFErr
 func convertToUdfError(err error) error {
-	// if any error happens in reduce
-	// will exit and restart the numa container
 	udfErr, _ := sdkerr.FromError(err)
 	switch udfErr.ErrorKind() {
 	case sdkerr.Retryable:
-		// TODO: currently we don't handle retryable errors for reduce
+		// TODO: currently we don't handle retryable errors yet
 		return &ApplyUDFErr{
 			UserUDFErr: false,
-			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 			InternalErr: InternalErr{
 				Flag:        true,
 				MainCarDown: false,
@@ -191,7 +222,7 @@ func convertToUdfError(err error) error {
 	case sdkerr.NonRetryable:
 		return &ApplyUDFErr{
 			UserUDFErr: false,
-			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 			InternalErr: InternalErr{
 				Flag:        true,
 				MainCarDown: false,
@@ -209,7 +240,7 @@ func convertToUdfError(err error) error {
 	default:
 		return &ApplyUDFErr{
 			UserUDFErr: false,
-			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
+			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 			InternalErr: InternalErr{
 				Flag:        true,
 				MainCarDown: false,

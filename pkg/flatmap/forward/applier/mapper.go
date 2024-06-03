@@ -23,9 +23,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// FlatmapApplier applies the map UDF on the read message and gives back a new message. Any UserError will be retried here, while
-// InternalErr can be returned and could be retried by the callee.
+// FlatmapApplier applies the GRPCBasedMapUDF on the stream of read messages and gives back a new message.
 type FlatmapApplier interface {
+	// ApplyMap applies the Map UDF on a batch of N requests and streams the ResponseFlatmap response.
+	// It doesn't wait for the response for all the requests, before starting to send the responses back.
+	// It returns a channel on which any errors occurring during the processing can be propagated
 	ApplyMap(ctx context.Context, messageStream []*isb.ReadMessage, writeChan chan<- *types.ResponseFlatmap) <-chan error
 }
 
