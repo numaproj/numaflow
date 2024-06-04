@@ -11,7 +11,7 @@ import (
 
 type Tracker struct {
 	requestMap sync.Map
-	// TODO(stream): check if this will be inefficient, and there is a better way for this
+	// TODO(stream): check perf between sync.map and mutex+map
 	responseIdx sync.Map
 	lock        sync.RWMutex
 	m           map[string]*isb.ReadMessage
@@ -19,9 +19,9 @@ type Tracker struct {
 
 func NewTracker() *Tracker {
 	return &Tracker{
-		requestMap:  sync.Map{},
-		responseIdx: sync.Map{},
-		m:           make(map[string]*isb.ReadMessage),
+		//requestMap:  sync.Map{},
+		//responseIdx: sync.Map{},
+		m: make(map[string]*isb.ReadMessage),
 	}
 }
 
@@ -31,6 +31,7 @@ func GetNewId() string {
 }
 
 func (t *Tracker) AddRequest(msg *isb.ReadMessage) string {
+	// TODO(stream): we could use read offset as the ID now instead of UUID?
 	id := GetNewId()
 	//t.requestMap.Store(id, msg)
 	t.Set(id, msg)

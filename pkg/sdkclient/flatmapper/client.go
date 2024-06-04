@@ -86,7 +86,7 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 				if errors.Is(err, io.EOF) {
 					log.Println("MYDEBUG: ERROR GOT EOF", err)
 					// skip selection on nil channel
-					//errCh = nil
+					errCh = nil
 					//close(responseCh)
 					return
 				}

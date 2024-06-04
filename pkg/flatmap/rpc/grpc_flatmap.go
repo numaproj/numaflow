@@ -100,11 +100,10 @@ func (u *GRPCBasedFlatmap) ApplyMap(ctx context.Context, messageStream []*isb.Re
 				}
 				resp, remove, uid := u.parseMapResponse(result)
 				// If this was the last response for a request, let's remove from the tracker
-				// As this is a special message with no data field (only EOR = true), we do not
-				// need to send it forward to the responseCh.
+				// As this is a special message indicates that all responses for a request have been
+				// received, the ackIt field is enabled to indicate that the parent request can be acked now.
 				if remove {
 					u.tracker.RemoveRequest(uid)
-					continue
 				}
 				// Forward the received response to the channel
 				responseCh <- resp
@@ -177,7 +176,12 @@ func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsed
 	}
 	// Request has completed remove from the tracker module
 	if eor == true {
-		return nil, true, uid
+		return &types.ResponseFlatmap{
+			ParentMessage: parentRequest,
+			Uid:           uid,
+			RespMessage:   nil,
+			AckIt:         true,
+		}, true, uid
 	}
 	keys := result.GetKeys()
 	taggedMessage := &isb.WriteMessage{
@@ -202,6 +206,7 @@ func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsed
 		ParentMessage: parentRequest,
 		Uid:           uid,
 		RespMessage:   taggedMessage,
+		AckIt:         false,
 	}, false, uid
 }
 

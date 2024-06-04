@@ -268,72 +268,90 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// For facilitating this, we use a bi-directional grpc stream connection, on which we keep sending the requests
 	// and then wait for the responses concurrently.
 	// The responses are then sent to the writer for writing to the toBuffers.
-	// writeChan is the channel on which the responses from the UDF are sent, and then this is consumed by
-	// the writer
+	// udfRespCh is the channel on which the responses from the UDF are sent, and then this is consumed by
+	// the writer.
 	// These responses are then sent to the writer for writing to the toBuffers.
 	// This channel is closed when the UDF processing is done, to indicate that no further processing is required.
-	// TODO(stream): on an error, we should close the writeChan, so that the writer can stop processing.
+	// TODO(stream): on an error, we should close the udfRespCh, so that the writer can stop processing.
 	// TODO(stream): should we keep this buffered so that on shutdown we can drain whatever is completed,
 	// either as ack/no ack, also to check the responsibility for close
-	writeChan := make(chan *types.ResponseFlatmap)
+	udfRespCh := make(chan *types.ResponseFlatmap)
 
 	// send the input messages for processing
 	// The error channel is used to signal any errors that might have occurred during the UDF processing.
-	// TODO(stream): add the error handler for graceful handling
-	udfErrorCh := isdf.flatmapUDF.ApplyMap(ctx, dataMessages, writeChan)
+	// TODO(stream): add the error handler for graceful handling, check where should this be consumed
+	udfErrorCh := isdf.flatmapUDF.ApplyMap(ctx, dataMessages, udfRespCh)
+	// TODO(stream): got a error from the UDF, handle this gracefully.
+	go func() {
+		select {
+		case udfErr := <-udfErrorCh:
+			// TODO(stream): when context is cancelled, do we want to do some different handling
+			if errors.Is(udfErr, context.Canceled) || ctx.Err() != nil {
+				isdf.opts.logger.Infow("Context is canceled", zap.Error(udfErr))
+				return
+			}
+			if udfErr != nil {
+				isdf.opts.logger.Error("MYDEBUG: error during UDF processing", zap.Error(udfErr))
+				// TODO(stream): got a error from the UDF
+				//isdf.opts.logger.Panic("Got an error while invoking ApplyMap", zap.Error(udfErr))
+			}
+		}
+	}()
 
 	// TODO(stream): Publish the watermark for these writers
-	ackChan := isdf.invokeWriter(ctx, writeChan, udfErrorCh)
 
-	done := isdf.invokeAck(ctx, ackChan)
+	// Step 3: Forward to next buffer
+	// We keep reading on the udfRespCh to consume the messages and then forward them to the next buffer
+	// Further, after forwarding the messages to the buffer, the corresponding requests are streamed on the
+	// toAckChan so that they can be consumed for Acking to the previous buffer.
+	toAckChan := isdf.invokeWriter(ctx, udfRespCh)
 
+	// Step 4: Ack the request messages to prev buffer
+	// We keep reading on the toAckChan to consume the messages and then ack them to the prev buffer
+	done := isdf.invokeAck(ctx, toAckChan)
+
+	// Wait until the acking has been completed
 	<-done
+	//TODO(stream): we should ack the non data messages as well?
 
-	// when we apply udf, we don't handle partial errors (it's either non or all, non will return early),
-	// so we should be able to ack all the readOffsets including data messages and control messages
-	//err = isdf.ackFromBuffer(ctx, readOffsets)
-	//// implicit return for posterity :-)
-	//if err != nil {
-	//	isdf.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
-	//	metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
-	//	return
-	//}
-	//metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
+	//TODO(stream): once processing has been completed, should we reset the tracker
+	//  or check if any messages are left in that which have not been processed?
 
-	// ProcessingTimes of the entire forwardAChunk
-	//metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
-	isdf.opts.logger.Debugw("concurrent applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(start)))
+	isdf.opts.logger.Debugw("forwardAChunk completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(start)))
 }
 
-//
-//// invokeUDF reads requests from the supplied PBQ, invokes the UDF to gets the response and writes the response to the
-//// main channel.
-//func (isdf *InterStepDataForward) invokeUDF(ctx context.Context, dataMessages []*isb.ReadMessage) (<-chan *types.ResponseFlatmap, <-chan error) {
-//
-//}
-
+// ackRoutine is a worker routine used to ack messages to the prev buffer.
+// It keeps reading constantly on the ackMsgChan for any new messages, and then acks them
+// Once, there are no more messages left to read on the channel, the routine exits.
 func (isdf *InterStepDataForward) ackRoutine(ctx context.Context, ackMsgChan <-chan *isb.ReadMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
-forwardLoop:
+ackLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			break forwardLoop
-
+			break ackLoop
 		case response, ok := <-ackMsgChan:
 			if !ok {
-				break forwardLoop
+				break ackLoop
 			}
 			ackMessages := []isb.Offset{response.ReadOffset}
 			if err := isdf.ackFromBuffer(ctx, ackMessages); err != nil {
 				isdf.opts.logger.Error("MYDEBUG: ERROR IN ACK ", zap.Error(err))
-				// TODO(stream): we have retried in the ackFromBuffer, should we trigger
-				// shutdown here then?
+				// TODO(stream): we have retried in the ackFromBuffer, should we trigger drain here then?
+				metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
+				return
 			}
-			//isdf.opts.logger.Info("MYDEBUG: NEW GOT TO ACK THIS ", response.ReadOffset)
+			metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
 		}
 	}
 }
+
+// invokeAck is the function used to ack the requests to the prev buffer.
+// it orchestrates a ack routine pool, consumes the responses from the writer and then sends it to the pool for
+// acking. Each worker in the pool keeps reading on the input channel for any new message, and then acks it.
+// Once all the pool workers exit, we consider the acking jobs to be completed and then close the done to indicate
+// this.
+// TODO(stream): check if the ack path can be optimised as now we are writing one message per worker, instead of sending a batch for writing.
 func (isdf *InterStepDataForward) invokeAck(ctx context.Context, ackMsgChan <-chan *isb.ReadMessage) (doneChan chan struct{}) {
 	logger := isdf.opts.logger
 	logger.Info("MYDEBUG: NO WG ACK ROUTINE ", isdf.opts.readBatchSize)
@@ -350,70 +368,78 @@ func (isdf *InterStepDataForward) invokeAck(ctx context.Context, ackMsgChan <-ch
 	return doneChan
 }
 
-func (isdf *InterStepDataForward) writeRoutine(ctx context.Context, writeMessageCh <-chan *types.ResponseFlatmap, errCh <-chan error, ackChan chan<- *isb.ReadMessage, wg *sync.WaitGroup) {
+// writeRoutine is a worker routine used to forward messages to the next buffer.
+// It keeps reading constantly on the udfRespCh for any new messages, and then forwards it to the correct
+// next buffer according to the conditional logic.
+// Once, there are no more messages left to read on the channel, the routine exits.
+// If there is an error in the UDF processing the udfRespCh is closed, so the workers should exit
+func (isdf *InterStepDataForward) writeRoutine(ctx context.Context, udfRespCh <-chan *types.ResponseFlatmap, ackChan chan<- *isb.ReadMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
 outerLoop:
 	for {
 		select {
-		case err := <-errCh:
-			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-				isdf.opts.logger.Infow("Context is canceled, stopping the writer", zap.Error(err))
-				return
-			}
-			if err != nil {
-				isdf.opts.logger.Error("MYDEBUG: NEW ERROR IN ERROR CH WRITE", zap.Error(err))
-				// TODO(stream): got a error from the UDF, time to start the shutdown then or retry
-				//isdf.opts.logger.Panic("Got an error while invoking ApplyMap", zap.Error(err))
-			}
-		case response, ok := <-writeMessageCh:
+		case response, ok := <-udfRespCh:
+			// if the channel is closed, exit from the routine
 			if !ok {
 				break outerLoop
 			}
-			//isdf.opts.logger.Info("MYDEBUG: NEW SENDING TO ACK ", response.ParentMessage.ReadOffset, " ", response.Uid)
+			// if the response has the AckIt field = true, that indicates the end of the processing for
+			// a given message. In this case send the parent request for acking and continue
+			if response.AckIt {
+				ackChan <- response.ParentMessage
+				continue
+			}
+			// If AckIt is not set, it is a data response, hence forward it to the next buffer
 			var messageToStep = make(map[string][]isb.Message)
 			for toVertex := range isdf.toBuffers {
 				// over allocating to have a predictable pattern
 				messageToStep[toVertex] = make([]isb.Message, len(isdf.toBuffers[toVertex]))
 			}
 			writeMessage := response.RespMessage
-			writeMessages := []*isb.WriteMessage{writeMessage}
-			if err := isdf.forwardToBuffers(ctx, &writeMessages, response.ParentMessage, messageToStep); err != nil {
-				//	// TODO(stream): mark as no ack directly or retry
+			if err := isdf.forwardToBuffers(ctx, writeMessage, response.ParentMessage, messageToStep); err != nil {
+				// TODO(stream): mark as no ack directly or retry
 				isdf.opts.logger.Error("MYDEBUG: NEW ERROR IN WRITE", zap.Error(err))
 			}
-
 			metrics.UDFWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(1))
-			ackChan <- response.ParentMessage
 		}
 	}
 
 }
 
-func (isdf *InterStepDataForward) invokeWriter(ctx context.Context, writeMessageCh <-chan *types.ResponseFlatmap, errCh <-chan error) <-chan *isb.ReadMessage {
+// invokeWriter is the function to forward the responses to the next buffer.
+// it orchestrates a writer routine pool, consumes the responses from the UDF and then sends it to the pool for
+// forwarding. Each worker in the pool keeps reading on the input channel for any new message, and then forwards it.
+// After forwarding the message we send the corresponding parent request for Acking via the ackChan
+// Once all the pool workers exit, we consider the writing jobs to be completed and then close the ackChan to indicate
+// this further.
+// TODO(stream): check if the write path can be optimised as now we are writing one message per worker, instead of sending a batch for writing.
+func (isdf *InterStepDataForward) invokeWriter(ctx context.Context, writeMessageCh <-chan *types.ResponseFlatmap) <-chan *isb.ReadMessage {
+	// ackChan is used to stream the ReadMessage which need to be Acked
+	// TODO(stream):  if we want to send something for noAck explicitly, might want to use types.AckMsgFlatmap
 	ackChan := make(chan *isb.ReadMessage)
 	go func() {
+		// close to indicate that no further messages left to ack
 		defer close(ackChan)
 		group := sync.WaitGroup{}
+		// start the pool
 		for i := 0; i < int(isdf.opts.readBatchSize); i++ {
 			group.Add(1)
-			go isdf.writeRoutine(ctx, writeMessageCh, errCh, ackChan, &group)
+			go isdf.writeRoutine(ctx, writeMessageCh, ackChan, &group)
 		}
+		// wait untill all the writeRoutines are done
 		group.Wait()
 	}()
 	return ackChan
 }
 
-func (isdf *InterStepDataForward) forwardToBuffers(ctx context.Context, writeMessages *[]*isb.WriteMessage, readMessage *isb.ReadMessage, messageToStep map[string][]isb.Message) error {
-	if len(*writeMessages) == 0 {
+func (isdf *InterStepDataForward) forwardToBuffers(ctx context.Context, writeMessages *isb.WriteMessage, readMessage *isb.ReadMessage, messageToStep map[string][]isb.Message) error {
+	if writeMessages == nil {
 		return nil
 	}
-	for _, message := range *writeMessages {
-		if err := isdf.whereToStep(message, messageToStep, readMessage); err != nil {
-			isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
-			return err
-		}
+	if err := isdf.whereToStep(writeMessages, messageToStep, readMessage); err != nil {
+		isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
+		return err
 	}
-
 	// forward the messages to the edge buffer (could be multiple edges)
 	_, err := isdf.writeToBuffers(ctx, messageToStep)
 	if err != nil {
