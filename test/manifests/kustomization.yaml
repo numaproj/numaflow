@@ -19,7 +19,7 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: NUMAFLOW_DEBUG
-          value: !!str true
+          value: !!str "true"
     target:
       kind: Deployment
       name: numaflow-controller

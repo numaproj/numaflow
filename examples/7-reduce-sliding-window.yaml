@@ -10,14 +10,14 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: !!str true # DO NOT forget the double quotes!!!
+            value: !!str "true"
       source:
         http: {}
     - name: map
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: !!str true # DO NOT forget the double quotes!!!
+            value: !!str "true"
       scale:
         min: 1
         max: 1
@@ -44,7 +44,7 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: !!str true # DO NOT forget the double quotes!!!
+            value: !!str "true"
     - name: sink
       scale:
         min: 1
