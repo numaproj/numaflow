@@ -134,7 +134,7 @@ func (u *FlatmapUDFProcessor) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create map client, %w", err)
 	}
-	flatmapHandler = rpc.NewUDSgRPCBasedFlatmap(flatmapClient, int(*u.VertexInstance.Vertex.Spec.Limits.ReadBatchSize))
+	flatmapHandler = rpc.NewUDSgRPCBasedFlatmap(flatmapClient, u.VertexInstance.Vertex.Spec.Name)
 
 	// Readiness check
 	if err := flatmapHandler.WaitUntilReady(ctx); err != nil {

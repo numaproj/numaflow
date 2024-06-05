@@ -167,13 +167,6 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 	return stopped
 }
 
-// readWriteMessagePair represents a read message and its processed (via map UDF) write messages.
-type readWriteMessagePair struct {
-	readMessage   *isb.ReadMessage
-	writeMessages []*isb.WriteMessage
-	udfError      error
-}
-
 // forwardAChunk forwards a chunk of messages from the fromBufferPartition to the toBuffers.
 // It does the Read -> Process -> Forward -> Ack chain for a chunk of messages returned by the first Read call.
 // It will return only if it was able to process all the message read after forwarding, barring any platform errors.

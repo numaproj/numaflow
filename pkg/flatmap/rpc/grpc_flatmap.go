@@ -20,14 +20,13 @@ import (
 // GRPCBasedFlatmap is a flat map applier that uses gRPC client to invoke the flat map UDF.
 // It implements the applier.FlatmapApplier interface.
 type GRPCBasedFlatmap struct {
-	client        flatmapper.Client
-	tracker       *tracker.Tracker
-	readBatchSize int
-	idx           int
+	client     flatmapper.Client
+	tracker    *tracker.Tracker
+	vertexName string
 }
 
-func NewUDSgRPCBasedFlatmap(client flatmapper.Client, batchSize int) *GRPCBasedFlatmap {
-	return &GRPCBasedFlatmap{client: client, tracker: tracker.NewTracker(), readBatchSize: batchSize}
+func NewUDSgRPCBasedFlatmap(client flatmapper.Client, vertexName string) *GRPCBasedFlatmap {
+	return &GRPCBasedFlatmap{client: client, tracker: tracker.NewTracker(), vertexName: vertexName}
 }
 
 // IsHealthy checks if the map udf is healthy.
@@ -189,11 +188,22 @@ func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsed
 		Message: isb.Message{
 			Header: isb.Header{
 				MessageInfo: parentRequest.MessageInfo,
-				// TODO(stream): IMPORTANT Check what will be the unique ID to use here
-				//  we need this to be unique so that the ISB can execute its Dedup logic
-				//  this ID should be such that even when the same response is processed and received
-				//  again from the UDF, we still assign it the same ID.
-				ID:   fmt.Sprintf("%s-%d", parentRequest.ReadOffset.String(), u.idx),
+				// We need this to be unique so that the ISB can execute its Dedup logic
+				// this ID should be such that even when the same response is processed and received
+				// again from the UDF, we still assign it the same ID.
+				// The ID here will be a concat of the three values
+				// parentRequest.ReadOffset - vertexName - result.Index
+				//
+				// ReadOffset - Will be the read offset of the request which corresponds to this response.
+				// We have this stored in our tracker.
+				//
+				// VertexName - the name of the vertex from which this response is generated, this is
+				// important to ensure that we can differentiate between messages emitted from 2 map vertices
+				//
+				// Result Index - This parameter is added on the SDK side.
+				// We add the index of the message from the messages slice to the individual response.
+				//TODO(stream): explore if there can be more robust ways to do this
+				ID:   fmt.Sprintf("%s-%s-%s", parentRequest.ReadOffset.String(), u.vertexName, result.GetIndex()),
 				Keys: keys,
 			},
 			Body: isb.Body{
@@ -202,7 +212,6 @@ func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsed
 		},
 		Tags: result.GetTags(),
 	}
-	u.idx += 1
 	return &types.ResponseFlatmap{
 		ParentMessage: parentRequest,
 		Uid:           uid,
