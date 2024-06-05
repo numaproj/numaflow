@@ -273,7 +273,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// Send the input messages for processing
 	// The error channel returned is used to signal any errors that might have occurred during the UDF processing.
 	udfErrorCh := isdf.flatmapUDF.ApplyMap(ctx, dataMessages, udfRespCh)
-	// TODO(stream): got a error from the UDF, handle this gracefully.
+	// TODO(stream): got an error from the UDF, handle this gracefully.
 	go func() {
 		select {
 		case udfErr := <-udfErrorCh:
@@ -287,13 +287,12 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			// In such a scenario to handle this we would need to replay the messages in the batch which have not been
 			// acked yet. So the easy way is to restart the numa container and force a reread from the ISB in the
 			// next cycle.
-			// TODO(stream): no-ack the messages which haven't been acked yet and then panic
+			// TODO(stream): no-ack the messages which haven't been acked yet and then panic, might save
+			//  on the replay timeout
 			// TODO(stream): see if there is a more graceful way in which we trigger a drain and let the
 			//  messages which have already been processed from the UDF to complete, if that gives us a better
 			//  performance in some way
 			if udfErr != nil {
-				isdf.opts.logger.Error("MYDEBUG: error during UDF processing", zap.Error(udfErr))
-				// TODO(stream): got a error from the UDF
 				isdf.opts.logger.Panic("Got an error while invoking ApplyMap", zap.Error(udfErr))
 			}
 		}

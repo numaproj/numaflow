@@ -202,7 +202,7 @@ func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsed
 				//
 				// Result Index - This parameter is added on the SDK side.
 				// We add the index of the message from the messages slice to the individual response.
-				//TODO(stream): explore if there can be more robust ways to do this
+				// TODO(stream): explore if there can be more robust ways to do this
 				ID:   fmt.Sprintf("%s-%s-%s", parentRequest.ReadOffset.String(), u.vertexName, result.GetIndex()),
 				Keys: keys,
 			},
