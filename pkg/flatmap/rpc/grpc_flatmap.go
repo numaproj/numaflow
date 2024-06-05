@@ -121,7 +121,7 @@ func (u *GRPCBasedFlatmap) ApplyMap(ctx context.Context, messageStream []*isb.Re
 					//  in such a case, which would force a reread of the messages which have not been acked.
 					errCh <- convertToUdfError(err)
 					// TODO(stream): Should we stop processing further in this case then
-					//return
+					return
 				}
 			}
 		}

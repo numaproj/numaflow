@@ -56,6 +56,9 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 	// MapFn is a bidirectional RPC
 	// We get a Flatmap_MapFnClient interface over which we can send the requests,
 	// receive the responses asynchronously.
+	// TODO(stream): this creates a new gRPC stream for every batch,
+	// it might be useful to see the performance difference between this approach
+	// and a long running RPC
 	stream, err := c.grpcClt.MapFn(ctx)
 
 	// If any initial error, send it to the error channel
