@@ -95,6 +95,7 @@ func (u *GRPCBasedFlatmap) ApplyMap(ctx context.Context, messageStream []*isb.Re
 			case result, ok := <-resultCh:
 				// If there are no more messages to read on the stream, or a nil message we can safely assume that
 				// gRPC has no more messages to send. Hence, we can return from here
+				// gRPC has no more messages to send. Hence, we can return from here
 				if !ok || result == nil {
 					return
 				}
@@ -252,4 +253,9 @@ func convertToUdfError(err error) error {
 			},
 		}
 	}
+}
+
+func (u *GRPCBasedFlatmap) RemoveFromTracker(uid string) {
+	u.tracker.RemoveRequest(uid)
+
 }

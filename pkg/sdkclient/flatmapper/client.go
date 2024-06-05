@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 
 	flatmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/flatmap/v1"
 	"github.com/numaproj/numaflow-go/pkg/info"
@@ -42,7 +41,7 @@ type client struct {
 // It takes in a stream of input Requests, sends them to the gRPC server(UDF) and then streams the
 // responses received back on a channel asynchronously.
 // We spawn 2 goroutines here, one for sending the requests over the stream
-// and the other one for reciving the responses
+// and the other one for receiving the responses
 func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRequest) (<-chan *flatmappb.MapResponse, <-chan error) {
 	var (
 		// errCh is used to track and propagate any errors that might occur during the rpc lifecyle, these could include
@@ -71,6 +70,9 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 	// any error is sent to errCh channel
 	go func() {
 		// close this channel to indicate that no more elements left to receive from grpc
+		// We do defer here on the whole go-routine as even during a error scenario, we
+		// want to close the channel and stop forwarding any more responses from the UDF
+		// as we would be replaying the current ones.
 		defer close(responseCh)
 		for {
 			select {
@@ -80,21 +82,16 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 				return
 			default:
 				var resp *flatmappb.MapResponse
-				resp, err = stream.Recv()
-				// check if this is EOF error, which indicates that no more messages left to process on the
-				// stream, in such a case we return without any error
+				resp, err := stream.Recv()
+				// check if this is EOF error, which indicates that no more responses left to process on the
+				// stream from the UDF, in such a case we return without any error to indicate this
 				if errors.Is(err, io.EOF) {
-					log.Println("MYDEBUG: ERROR GOT EOF", err)
-					// skip selection on nil channel
-					errCh = nil
-					//close(responseCh)
 					return
 				}
 				// If this is some other error, propagate it to error channel,
 				// also close the response channel to indicate no more messages being read
-				errSDK := sdkerr.ToUDFErr("c.grpcClt.MapStreamFn", err)
+				errSDK := sdkerr.ToUDFErr("flatmap c.grpcClt.MapFn", err)
 				if errSDK != nil {
-					log.Println("MYDEBUG: ERROR in recv", err, errSDK)
 					errCh <- errSDK
 					return
 				}
@@ -107,19 +104,21 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 	// in case there is an error in sending, send it to the error channel for handling
 	go func() {
 		for inputMsg := range datumStreamCh {
-			err = stream.Send(inputMsg)
+			err := stream.Send(inputMsg)
 			if err != nil {
 				go func(sErr error) {
 					errCh <- sdkerr.ToUDFErr("c.grpcClt.MapFn", sErr)
 				}(err)
 				break
 			}
-			//log.Println("MYDEBUG: SENT TO GRPC", inputMsg.GetUuid())
 		}
+		// CloseSend closes the send direction of the stream. This indicates to the
+		// UDF that we have sent all requests from the client, and it can safely
+		// stop listening on the stream
 		sendErr := stream.CloseSend()
 		if sendErr != nil && !errors.Is(sendErr, io.EOF) {
 			go func(sErr error) {
-				errCh <- sdkerr.ToUDFErr("c.grpcClt.MapFn stream.CloseSend()", sErr)
+				errCh <- sdkerr.ToUDFErr("flatmap c.grpcClt.MapFn stream.CloseSend()", sErr)
 			}(sendErr)
 		}
 	}()

@@ -277,23 +277,31 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// either as ack/no ack, also to check the responsibility for close
 	udfRespCh := make(chan *types.ResponseFlatmap)
 
-	// send the input messages for processing
-	// The error channel is used to signal any errors that might have occurred during the UDF processing.
-	// TODO(stream): add the error handler for graceful handling, check where should this be consumed
+	// Send the input messages for processing
+	// The error channel returned is used to signal any errors that might have occurred during the UDF processing.
 	udfErrorCh := isdf.flatmapUDF.ApplyMap(ctx, dataMessages, udfRespCh)
 	// TODO(stream): got a error from the UDF, handle this gracefully.
 	go func() {
 		select {
 		case udfErr := <-udfErrorCh:
-			// TODO(stream): when context is cancelled, do we want to do some different handling
+			// TODO(stream): when context is cancelled, do we want to do some different handling?
 			if errors.Is(udfErr, context.Canceled) || ctx.Err() != nil {
 				isdf.opts.logger.Infow("Context is canceled", zap.Error(udfErr))
 				return
 			}
+			// We got an error while processing the UDF messages, at this point because of the nature of gRPC being
+			// a stream, we do not have a way to single out which request was the culprit which caused the error.
+			// In such a scenario to handle this we would need to replay the messages in the batch which have not been
+			// acked yet. So the easy way is to restart the numa container and force a reread from the ISB in the
+			// next cycle.
+			// TODO(stream): no-ack the messages which haven't been acked yet and then panic
+			// TODO(stream): see if there is a more graceful way in which we trigger a drain and let the
+			//  messages which have already been processed from the UDF to complete, if that gives us a better
+			//  performance in some way
 			if udfErr != nil {
 				isdf.opts.logger.Error("MYDEBUG: error during UDF processing", zap.Error(udfErr))
 				// TODO(stream): got a error from the UDF
-				//isdf.opts.logger.Panic("Got an error while invoking ApplyMap", zap.Error(udfErr))
+				isdf.opts.logger.Panic("Got an error while invoking ApplyMap", zap.Error(udfErr))
 			}
 		}
 	}()
@@ -310,7 +318,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// We keep reading on the toAckChan to consume the messages and then ack them to the prev buffer
 	done := isdf.invokeAck(ctx, toAckChan)
 
-	// Wait until the acking has been completed
+	// Wait until the Acking has been completed
 	<-done
 	//TODO(stream): we should ack the non data messages as well?
 
