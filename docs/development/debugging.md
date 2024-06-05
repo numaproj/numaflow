@@ -21,7 +21,7 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
+            value: !!str "true"
     - name: out
       sink:
         log: {}
@@ -46,7 +46,7 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
+            value: !!str "true"
 ```
 
 ## Profiling
