@@ -254,8 +254,3 @@ func convertToUdfError(err error) error {
 		}
 	}
 }
-
-func (u *GRPCBasedFlatmap) RemoveFromTracker(uid string) {
-	u.tracker.RemoveRequest(uid)
-
-}

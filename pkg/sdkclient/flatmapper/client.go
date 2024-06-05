@@ -89,13 +89,12 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 					return
 				}
 				// If this is some other error, propagate it to error channel,
-				// also close the response channel to indicate no more messages being read
+				// also close the response channel(done using the defer close) to indicate no more messages being read
 				errSDK := sdkerr.ToUDFErr("flatmap c.grpcClt.MapFn", err)
 				if errSDK != nil {
 					errCh <- errSDK
 					return
 				}
-				//log.Println("MYDEBUG: GOT IT FROM GRPC", resp.Result.Uuid)
 				responseCh <- resp
 			}
 		}
