@@ -26,6 +26,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -66,6 +67,7 @@ type InterStepDataForward struct {
 	idleManager wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid when the len(readMessage) is 0.
 	wmbChecker wmb.WMBChecker
+	counters   *sync.Map
 	Shutdown
 }
 
@@ -99,7 +101,8 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
-		opts: *options,
+		opts:     *options,
+		counters: new(sync.Map),
 	}
 
 	// Add logger from parent ctx to child context.
@@ -323,6 +326,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
+	isdf.counters = new(sync.Map)
+
 	//TODO(stream): once processing has been completed, should we reset the tracker
 	//  or check if any messages are left in that which have not been processed and those can be noAcked?
 
@@ -394,7 +399,7 @@ outerLoop:
 			}
 			// if the response has the AckIt field = true, that indicates the end of the processing for
 			// a given message. In this case send the parent request for Acking and continue
-			if response.AckIt {
+			if response.AckIt && response.Total == 0 {
 				ackChan <- response.ParentMessage
 				continue
 			}
@@ -410,10 +415,24 @@ outerLoop:
 				// But what if we
 				isdf.opts.logger.Error("MYDEBUG: NEW ERROR IN WRITE", zap.Error(err))
 			}
+			// Updat the response counter for the given UUID (request)
+			idxNum := isdf.updateCounter(response.Uid)
+			// If the counter has reached the total number of responses expected, we can safely
+			// send the parent request for Acking
+			if idxNum == response.Total {
+				ackChan <- response.ParentMessage
+			}
 			metrics.UDFWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(1))
 		}
 	}
 
+}
+
+func (isdf *InterStepDataForward) updateCounter(key string) int64 {
+	val, _ := isdf.counters.LoadOrStore(key, new(int64))
+	ptr := val.(*int64)
+	newVal := atomic.AddInt64(ptr, 1)
+	return newVal
 }
 
 // invokeWriter is the function to forward the responses to the next buffer.

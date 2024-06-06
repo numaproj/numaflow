@@ -181,6 +181,7 @@ func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsed
 			Uid:           uid,
 			RespMessage:   nil,
 			AckIt:         true,
+			Total:         int64(resp.Result.Total),
 		}, true, uid
 	}
 	keys := result.GetKeys()
@@ -217,6 +218,7 @@ func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsed
 		Uid:           uid,
 		RespMessage:   taggedMessage,
 		AckIt:         false,
+		Total:         int64(resp.Result.Total),
 	}, false, uid
 }
 

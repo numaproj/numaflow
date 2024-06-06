@@ -9,6 +9,7 @@ type ResponseFlatmap struct {
 	Uid           string
 	RespMessage   *isb.WriteMessage
 	AckIt         bool
+	Total         int64
 }
 
 type WriteMsgFlatmap struct {
