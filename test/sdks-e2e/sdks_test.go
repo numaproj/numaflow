@@ -154,6 +154,10 @@ func (s *SDKsSuite) TestSourceTransformer() {
 		defer wg.Done()
 		s.testSourceTransformer("go")
 	}()
+	go func() {
+		defer wg.Done()
+		s.testSourceTransformer("rust")
+	}()
 	wg.Wait()
 }
 
