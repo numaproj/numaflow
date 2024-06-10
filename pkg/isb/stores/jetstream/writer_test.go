@@ -83,11 +83,11 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 
 			streamName := "TestForwarderJetStreamBuffer"
 			addStream(t, js, streamName)
-			defer deleteStream(js, streamName)
+			defer deleteStream(t, js, streamName)
 
 			toStreamName := "TestForwarderJetStreamBuffer-to"
 			addStream(t, js, toStreamName)
-			defer deleteStream(js, toStreamName)
+			defer deleteStream(t, js, toStreamName)
 
 			bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx, WithMaxLength(10))
 			assert.NoError(t, err)
@@ -206,7 +206,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 
 	streamName := "TestJetStreamBufferWriterBufferFull"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx, WithMaxLength(10), WithBufferUsageLimit(0.2))
 	assert.NoError(t, err)
@@ -263,7 +263,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 
 	streamName := "TestJetStreamBufferWriterBufferFull"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx, WithMaxLength(10), WithBufferUsageLimit(0.2), WithBufferFullWritingStrategy(dfv1.DiscardLatest))
 	assert.NoError(t, err)
@@ -319,7 +319,7 @@ func TestWriteGetName(t *testing.T) {
 
 	streamName := "TestWriteGetName"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bufferWriter, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
@@ -345,7 +345,7 @@ func TestWriteClose(t *testing.T) {
 
 	streamName := "TestWriteClose"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bufferWriter, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)

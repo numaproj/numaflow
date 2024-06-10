@@ -13,6 +13,7 @@ import {
   GeneratorDetails,
   GeneratorDetailsProps,
 } from "./partials/GeneratorDetails";
+import { VersionDetails, VersionDetailsProps } from "./partials/VersionDetails";
 import { Errors } from "./partials/Errors";
 import { PipelineCreate } from "./partials/PipelineCreate";
 import { PipelineUpdate } from "./partials/PipelineUpdate";
@@ -40,6 +41,7 @@ export enum SidebarType {
   EDGE_DETAILS,
   GENERATOR_DETAILS,
   ERRORS,
+  VERSION_DETAILS,
 }
 
 const MIN_WIDTH_BY_TYPE = {
@@ -53,6 +55,7 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.EDGE_DETAILS]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,
   [SidebarType.ERRORS]: 350,
+  [SidebarType.VERSION_DETAILS]: 350,
 };
 
 export interface SpecEditorModalProps {
@@ -79,6 +82,7 @@ export interface SlidingSidebarProps {
   vertexDetailsProps?: VertexDetailsProps;
   edgeDetailsProps?: EdgeDetailsProps;
   generatorDetailsProps?: GeneratorDetailsProps;
+  versionDetailsProps?: VersionDetailsProps;
   specEditorProps?: SpecEditorSidebarProps;
   parentCloseIndicator?: string;
 }
@@ -91,6 +95,7 @@ export function SlidingSidebar({
   vertexDetailsProps,
   edgeDetailsProps,
   generatorDetailsProps,
+  versionDetailsProps,
   specEditorProps,
   parentCloseIndicator,
 }: SlidingSidebarProps) {
@@ -98,6 +103,8 @@ export function SlidingSidebar({
   const [width, setWidth] = useState<number>(
     type === SidebarType.ERRORS
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
+      : type === SidebarType.VERSION_DETAILS
+      ? MIN_WIDTH_BY_TYPE[SidebarType.VERSION_DETAILS]
       : pageWidth * 0.75
   );
   const [minWidth] = useState<number>(0);
@@ -242,6 +249,11 @@ export function SlidingSidebar({
         return <GeneratorDetails {...generatorDetailsProps} />;
       case SidebarType.ERRORS:
         return <Errors />;
+      case SidebarType.VERSION_DETAILS:
+        if (!versionDetailsProps) {
+          break;
+        }
+        return <VersionDetails {...versionDetailsProps} />;
       default:
         break;
     }
