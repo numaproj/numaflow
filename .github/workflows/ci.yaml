@@ -109,7 +109,7 @@ jobs:
       - name: Get dependencies
         run: go mod download
       - name: Test
-        run: make test-code
+        run: make test-coverage-with-isb
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
