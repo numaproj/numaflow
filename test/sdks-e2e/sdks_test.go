@@ -141,7 +141,7 @@ func (s *SDKsSuite) TestSourceTransformer() {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 	go func() {
 		defer wg.Done()
 		s.testSourceTransformer("python")
