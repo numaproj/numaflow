@@ -29,11 +29,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	flatmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/flatmap/v1"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/flatmap/forward/applier"
+	"github.com/numaproj/numaflow/pkg/flatmap/tracker"
 	"github.com/numaproj/numaflow/pkg/flatmap/types"
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -66,8 +68,9 @@ type InterStepDataForward struct {
 	// idleManager manages the idle watermark status.
 	idleManager wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid when the len(readMessage) is 0.
-	wmbChecker wmb.WMBChecker
-	counters   *sync.Map
+	wmbChecker      wmb.WMBChecker
+	responseTracker *sync.Map
+	requestTracker  *tracker.Tracker
 	Shutdown
 }
 
@@ -101,8 +104,9 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
-		opts:     *options,
-		counters: new(sync.Map),
+		opts:            *options,
+		responseTracker: new(sync.Map),
+		requestTracker:  tracker.NewTracker(),
 	}
 
 	// Add logger from parent ctx to child context.
@@ -235,14 +239,17 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// TODO(stream): see if that can be optimised by not duplicating the data slice, and passing
 	// We send only the dataMessages to the UDF for processing, for the non data messages,
 	// we just need to ack?
-	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
+	var dataMessages = make([]*types.RequestFlatmap, 0, len(readMessages))
 	var ctrlMessageOffsets = make([]isb.Offset, 0) // for a high TPS pipeline, 0 is the most optimal value
 	// the readMessages itself store the offsets of the messages we read from ISB
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
 		readOffsets[idx] = m.ReadOffset
 		if m.Kind == isb.Data {
-			dataMessages = append(dataMessages, m)
+			newRequest := isdf.createNewRequest(m)
+			//isdf.opts.logger.Info("MYDEBUG NEW REQUEST ", newRequest.Uid)
+			dataMessages = append(dataMessages, newRequest)
+
 		} else {
 			ctrlMessageOffsets = append(ctrlMessageOffsets, m.ReadOffset)
 		}
@@ -272,14 +279,19 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// This channel is closed when the UDF processing is ackDone, to indicate that no further processing is required.
 	// TODO(stream): should we keep this buffered so that on shutdown we can drain whatever is completed,
 	// either as ack/no ack, also to check the responsibility for close
-	udfRespCh := make(chan *types.ResponseFlatmap)
+	udfRespCh := make(chan *flatmappb.MapResponse)
 
 	// Send the input messages for processing
 	// The error channel returned is used to signal any errors that might have occurred during the UDF processing.
-	udfErrorCh := isdf.flatmapUDF.ApplyMap(ctx, dataMessages, udfRespCh)
+	udfDoneChan, udfErrorCh := isdf.flatmapUDF.ApplyMap(ctx, dataMessages, udfRespCh)
 	// TODO(stream): got an error from the UDF, handle this gracefully.
 	go func() {
+		defer close(udfRespCh)
 		select {
+		// udfDoneChan indicates that we are done processing from the UDF side and do not expect any more inputs
+		case <-udfDoneChan:
+			return
+
 		case udfErr := <-udfErrorCh:
 			// TODO(stream): when context is cancelled, do we want to do some different handling?
 			if errors.Is(udfErr, context.Canceled) || ctx.Err() != nil {
@@ -326,7 +338,14 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	isdf.counters = new(sync.Map)
+	requestNotProcessed := isdf.requestTracker.GetItems()
+	// if we have requests left to process NoAck all of them
+	if len(requestNotProcessed) > 0 {
+		isdf.opts.logger.Debugw("MYDEBUG: requests left to process ", len(requestNotProcessed))
+		isdf.fromBufferPartition.NoAck(ctx, readOffsets)
+	}
+
+	isdf.responseTracker = new(sync.Map)
 
 	//TODO(stream): once processing has been completed, should we reset the tracker
 	//  or check if any messages are left in that which have not been processed and those can be noAcked?
@@ -337,7 +356,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 // ackRoutine is a worker routine used to ack messages to the prev buffer.
 // It keeps reading constantly on the ackMsgChan for any new messages, and then acks them
 // Once, there are no more messages left to read on the channel, the routine exits.
-func (isdf *InterStepDataForward) ackRoutine(ctx context.Context, ackMsgChan <-chan *isb.ReadMessage, wg *sync.WaitGroup) {
+func (isdf *InterStepDataForward) ackRoutine(ctx context.Context, ackMsgChan <-chan *types.RequestFlatmap, wg *sync.WaitGroup) {
 	defer wg.Done()
 ackLoop:
 	for {
@@ -348,13 +367,17 @@ ackLoop:
 			if !ok {
 				break ackLoop
 			}
-			ackMessages := []isb.Offset{response.ReadOffset}
+			//isdf.opts.logger.Info("MYDEBUG: GOT TO ACK ", response.Uid)
+			ackMessages := []isb.Offset{response.Request.ReadOffset}
 			if err := isdf.ackFromBuffer(ctx, ackMessages); err != nil {
 				isdf.opts.logger.Error("MYDEBUG: ERROR IN ACK ", zap.Error(err))
 				// TODO(stream): we have retried in the ackFromBuffer, should we trigger drain here then?
+				isdf.requestTracker.RemoveRequest(response.Uid)
 				metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
 				return
 			}
+			isdf.requestTracker.RemoveRequest(response.Uid)
+			//isdf.opts.logger.Info("MYDEBUG: DONE ACK ", response.Uid)
 			metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
 		}
 	}
@@ -366,7 +389,7 @@ ackLoop:
 // Once all the pool workers exit, we consider the acking jobs to be completed and then close the done to indicate
 // this.
 // TODO(stream): check if the ack path can be optimised as now we are writing one message per worker, instead of sending a batch for writing.
-func (isdf *InterStepDataForward) invokeAck(ctx context.Context, ackMsgChan <-chan *isb.ReadMessage) (doneChan chan struct{}) {
+func (isdf *InterStepDataForward) invokeAck(ctx context.Context, ackMsgChan <-chan *types.RequestFlatmap) (doneChan chan struct{}) {
 	logger := isdf.opts.logger
 	logger.Info("MYDEBUG: NO WG ACK ROUTINE ", isdf.opts.readBatchSize)
 	doneChan = make(chan struct{})
@@ -387,7 +410,7 @@ func (isdf *InterStepDataForward) invokeAck(ctx context.Context, ackMsgChan <-ch
 // next buffer according to the conditional logic.
 // Once, there are no more messages left to read on the channel, the routine exits.
 // If there is an error in the UDF processing the udfRespCh is closed, so the workers should exit
-func (isdf *InterStepDataForward) writeRoutine(ctx context.Context, udfRespCh <-chan *types.ResponseFlatmap, ackChan chan<- *isb.ReadMessage, wg *sync.WaitGroup) {
+func (isdf *InterStepDataForward) writeRoutine(ctx context.Context, udfRespCh <-chan *flatmappb.MapResponse, ackChan chan<- *types.RequestFlatmap, wg *sync.WaitGroup) {
 	defer wg.Done()
 outerLoop:
 	for {
@@ -397,10 +420,21 @@ outerLoop:
 			if !ok {
 				break outerLoop
 			}
+			uid := response.Result.GetUuid()
+			trackedRequest, ok := isdf.requestTracker.GetRequest(uid)
+			// TODO(stream): check what should be path for !ok, which means that we got a UUID
+			// which has already been deleted from the tracker/ or never added in the first place
+			// can this even happen though if messages are ordered and we only have a single routine processing it?
+			if !ok {
+				isdf.opts.logger.Error("MYDEBUG: MESSAGE NOT IN TRACKER ", response.Result.GetTotal(), uid)
+			}
+			parsedResp, requestDone, total := isdf.parseMapResponse(response, trackedRequest)
 			// if the response has the AckIt field = true, that indicates the end of the processing for
 			// a given message. In this case send the parent request for Acking and continue
-			if response.AckIt && response.Total == 0 {
-				ackChan <- response.ParentMessage
+			// if requestDone (EOR == true) and total == 0 it means there were no responses
+			// expected for this request, hence we can directly ackIt, no need to write
+			if requestDone && total == 0 {
+				ackChan <- trackedRequest
 				continue
 			}
 			// If AckIt is not set, it is a data response, hence forward it to the next buffer
@@ -409,18 +443,19 @@ outerLoop:
 				// over allocating to have a predictable pattern
 				messageToStep[toVertex] = make([]isb.Message, len(isdf.toBuffers[toVertex]))
 			}
-			writeMessage := response.RespMessage
-			if err := isdf.forwardToBuffers(ctx, writeMessage, response.ParentMessage, messageToStep); err != nil {
+			writeMessage := parsedResp
+			if err := isdf.forwardToBuffers(ctx, writeMessage, trackedRequest.Request, messageToStep); err != nil {
 				// As we have re-tried already to forward to the buffer, we should not be trying it again.
 				// But what if we
 				isdf.opts.logger.Error("MYDEBUG: NEW ERROR IN WRITE", zap.Error(err))
 			}
-			// Updat the response counter for the given UUID (request)
-			idxNum := isdf.updateCounter(response.Uid)
+			// Update the response counter for the given UUID (request)
+			idxNum := isdf.updateCounter(uid)
 			// If the counter has reached the total number of responses expected, we can safely
 			// send the parent request for Acking
-			if idxNum == response.Total {
-				ackChan <- response.ParentMessage
+			if idxNum == int64(total) {
+				//isdf.opts.logger.Info("MYDEBUG: SENDING TO ACK ", response.Result.GetTotal())
+				ackChan <- trackedRequest
 			}
 			metrics.UDFWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(1))
 		}
@@ -429,7 +464,7 @@ outerLoop:
 }
 
 func (isdf *InterStepDataForward) updateCounter(key string) int64 {
-	val, _ := isdf.counters.LoadOrStore(key, new(int64))
+	val, _ := isdf.responseTracker.LoadOrStore(key, new(int64))
 	ptr := val.(*int64)
 	newVal := atomic.AddInt64(ptr, 1)
 	return newVal
@@ -442,10 +477,10 @@ func (isdf *InterStepDataForward) updateCounter(key string) int64 {
 // Once all the pool workers exit, we consider the writing jobs to be completed and then close the ackChan to indicate
 // this further.
 // TODO(stream): check if the write path can be optimised as now we are writing one message per worker, instead of sending a batch for writing.
-func (isdf *InterStepDataForward) invokeWriter(ctx context.Context, writeMessageCh <-chan *types.ResponseFlatmap) <-chan *isb.ReadMessage {
+func (isdf *InterStepDataForward) invokeWriter(ctx context.Context, writeMessageCh <-chan *flatmappb.MapResponse) <-chan *types.RequestFlatmap {
 	// ackChan is used to stream the ReadMessage which need to be Acked
 	// TODO(stream):  if we want to send something for noAck explicitly, might want to use types.AckMsgFlatmap
-	ackChan := make(chan *isb.ReadMessage)
+	ackChan := make(chan *types.RequestFlatmap)
 	go func() {
 		// close to indicate that no further messages left to ack
 		defer close(ackChan)
@@ -670,4 +705,61 @@ func errorArrayToMap(errs []error) map[string]int64 {
 		}
 	}
 	return result
+}
+
+func (isdf *InterStepDataForward) createNewRequest(msg *isb.ReadMessage) *types.RequestFlatmap {
+	// Add the request to the tracker, and get the unique UUID corresponding to it
+	return isdf.requestTracker.AddRequest(msg)
+}
+
+// parseMapResponse takes a proto response from the gRPC and converts this into a ResponseFlatmap type,
+// this also checks if this was a special EOR response, in such a case we indicate that the request corresponding
+// to the response can be safely removed from the tracker.
+func (isdf *InterStepDataForward) parseMapResponse(resp *flatmappb.MapResponse, trackedRequest *types.RequestFlatmap) (*isb.WriteMessage, bool, int32) {
+	result := resp.Result
+	eor := result.GetEOR()
+	total := result.GetTotal()
+
+	parentRequest := trackedRequest.Request
+	// Request has completed remove from the tracker module
+	if eor == true {
+		return nil, true, total
+		//return &types.ResponseFlatmap{
+		//	//ParentMessage: parentRequest,
+		//	Uid:         uid,
+		//	RespMessage: nil,
+		//	AckIt:       true,
+		//	Total:       int64(resp.Result.Total),
+		//}, true, uid
+	}
+	keys := result.GetKeys()
+	taggedMessage := &isb.WriteMessage{
+		Message: isb.Message{
+			Header: isb.Header{
+				MessageInfo: parentRequest.MessageInfo,
+				// We need this to be unique so that the ISB can execute its Dedup logic
+				// this ID should be such that even when the same response is processed and received
+				// again from the UDF, we still assign it the same ID.
+				// The ID here will be a concat of the three values
+				// parentRequest.ReadOffset - vertexName - result.Index
+				//
+				// ReadOffset - Will be the read offset of the request which corresponds to this response.
+				// We have this stored in our tracker.
+				//
+				// VertexName - the name of the vertex from which this response is generated, this is
+				// important to ensure that we can differentiate between messages emitted from 2 map vertices
+				//
+				// Result Index - This parameter is added on the SDK side.
+				// We add the index of the message from the messages slice to the individual response.
+				// TODO(stream): explore if there can be more robust ways to do this
+				ID:   fmt.Sprintf("%s-%s-%s", parentRequest.ReadOffset.String(), isdf.vertexName, result.GetIndex()),
+				Keys: keys,
+			},
+			Body: isb.Body{
+				Payload: result.GetValue(),
+			},
+		},
+		Tags: result.GetTags(),
+	}
+	return taggedMessage, false, total
 }

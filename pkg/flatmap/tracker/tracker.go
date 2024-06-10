@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/numaproj/numaflow/pkg/flatmap/types"
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
@@ -14,14 +15,14 @@ type Tracker struct {
 	// TODO(stream): check perf between sync.map and mutex+map
 	responseIdx sync.Map
 	lock        sync.RWMutex
-	m           map[string]*isb.ReadMessage
+	m           map[string]*types.RequestFlatmap
 }
 
 func NewTracker() *Tracker {
 	return &Tracker{
 		//requestMap:  sync.Map{},
 		//responseIdx: sync.Map{},
-		m: make(map[string]*isb.ReadMessage),
+		m: make(map[string]*types.RequestFlatmap),
 	}
 }
 
@@ -30,15 +31,27 @@ func GetNewId() string {
 	return id.String()
 }
 
-func (t *Tracker) AddRequest(msg *isb.ReadMessage) string {
+//func (t *Tracker) AddRequest(msg *isb.ReadMessage) string {
+//	// TODO(stream): we could use read offset as the ID now instead of UUID?
+//	id := GetNewId()
+//	//t.requestMap.Store(id, msg)
+//	t.Set(id, msg)
+//	return id
+//}
+
+func (t *Tracker) AddRequest(msg *isb.ReadMessage) *types.RequestFlatmap {
 	// TODO(stream): we could use read offset as the ID now instead of UUID?
 	id := GetNewId()
+	flatmapRequest := &types.RequestFlatmap{
+		Request: msg,
+		Uid:     id,
+	}
 	//t.requestMap.Store(id, msg)
-	t.Set(id, msg)
-	return id
+	t.Set(id, flatmapRequest)
+	return flatmapRequest
 }
 
-func (t *Tracker) GetRequest(id string) (*isb.ReadMessage, bool) {
+func (t *Tracker) GetRequest(id string) (*types.RequestFlatmap, bool) {
 	return t.Get(id)
 }
 
@@ -78,14 +91,14 @@ func (t *Tracker) PrintAll() {
 	}
 }
 
-func (t *Tracker) Get(key string) (*isb.ReadMessage, bool) {
+func (t *Tracker) Get(key string) (*types.RequestFlatmap, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	item, ok := t.m[key]
 	return item, ok
 }
 
-func (t *Tracker) Set(key string, value *isb.ReadMessage) {
+func (t *Tracker) Set(key string, value *types.RequestFlatmap) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.m[key] = value
@@ -95,4 +108,14 @@ func (t *Tracker) Delete(key string) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	delete(t.m, key)
+}
+
+func (t *Tracker) GetItems() []*isb.ReadMessage {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	items := make([]*isb.ReadMessage, 0, len(t.m))
+	for _, vals := range t.m {
+		items = append(items, vals.Request)
+	}
+	return items
 }

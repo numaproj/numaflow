@@ -98,6 +98,7 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 					errCh <- errSDK
 					return
 				}
+				//log.Print("MYDEBUG GOT FROM grpc ", resp.Result.GetUuid())
 				responseCh <- resp
 			}
 		}
@@ -106,6 +107,7 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 	// in case there is an error in sending, send it to the error channel for handling
 	go func() {
 		for inputMsg := range datumStreamCh {
+			//log.Print("MYDEBUG Sending to grpc ", inputMsg.GetUuid())
 			err := stream.Send(inputMsg)
 			if err != nil {
 				go func(sErr error) {

@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	context2 "context"
 	"fmt"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/flatmap/tracker"
 	"github.com/numaproj/numaflow/pkg/flatmap/types"
-	"github.com/numaproj/numaflow/pkg/isb"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/flatmapper"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -60,10 +60,11 @@ func (u *GRPCBasedFlatmap) WaitUntilReady(ctx context.Context) error {
 // ApplyMap applies the map udf on the stream of read messages and streams the responses back on the responseCh
 // Internally, it spawns two go-routines, one for sending the requests to the client and the other to listen to the
 // responses back from it.
-func (u *GRPCBasedFlatmap) ApplyMap(ctx context.Context, messageStream []*isb.ReadMessage, responseCh chan<- *types.ResponseFlatmap) <-chan error {
+func (u *GRPCBasedFlatmap) ApplyMap(ctx context2.Context, messageStream []*types.RequestFlatmap, responseCh chan<- *flatmappb.MapResponse) (chan struct{}, <-chan error) {
 	// errCh is used to propagate any errors recieved from the grpc client upstream so that they can be handled
 	// accordingly.
 	errCh := make(chan error)
+	doneChan := make(chan struct{})
 
 	// flatmapRequests is a channel on which the input requests are streamed, this is then consumed by the grpc client
 	//TODO(stream): do we need to keep this buffered?
@@ -81,7 +82,7 @@ func (u *GRPCBasedFlatmap) ApplyMap(ctx context.Context, messageStream []*isb.Re
 		// TODO(stream): Instead of closing the channel here, return a done and close this upstream?
 		// close the responseCh while exiting to indicate downstream that no more responses expected from
 		// gRPC
-		defer close(responseCh)
+		defer close(doneChan)
 		// invoke the MapFn from the gRPC client for a stream of input requests
 		// resultCh -> chan to read responses streamed back
 		// reduceErrCh -> chan for reading any errors encountered during gRPC
@@ -94,19 +95,19 @@ func (u *GRPCBasedFlatmap) ApplyMap(ctx context.Context, messageStream []*isb.Re
 			case result, ok := <-resultCh:
 				// If there are no more messages to read on the stream, or a nil message we can safely assume that
 				// gRPC has no more messages to send. Hence, we can return from here
-				// gRPC has no more messages to send. Hence, we can return from here
 				if !ok || result == nil {
 					return
 				}
-				resp, remove, uid := u.parseMapResponse(result)
-				// If this was the last response for a request, let's remove from the tracker
-				// As this is a special message indicates that all responses for a request have been
-				// received, the ackIt field is enabled to indicate that the parent request can be acked now.
-				if remove {
-					u.tracker.RemoveRequest(uid)
-				}
+				//resp, remove, uid := u.parseMapResponse(result)
+				//// If this was the last response for a request, let's remove from the tracker
+				//// As this is a special message indicates that all responses for a request have been
+				//// received, the ackIt field is enabled to indicate that the parent request can be acked now.
+				//if remove {
+				//	u.tracker.RemoveRequest(uid)
+				//}
 				// Forward the received response to the channel
-				responseCh <- resp
+				//log.Print("MYDEBUG SENDING TO WRITER ", result.Result.GetUuid())
+				responseCh <- result
 			case err := <-reduceErrCh:
 				// We got a context done while processing the gRPC, hence stop processing
 				// The specific case for ctx.Done() is already checked in MapFn
@@ -137,18 +138,20 @@ func (u *GRPCBasedFlatmap) ApplyMap(ctx context.Context, messageStream []*isb.Re
 		defer close(flatmapRequests)
 		for _, req := range messageStream {
 			d := u.createMapRequest(req)
+			//log.Print("MYDEBUG SENDING TO client ", d.GetUuid())
 			flatmapRequests <- d
 		}
 	}()
-	return errCh
+	return doneChan, errCh
 }
 
-// createMapRequest takes a isb.ReadMessage and returns proto MapRequest
-func (u *GRPCBasedFlatmap) createMapRequest(msg *isb.ReadMessage) *flatmappb.MapRequest {
+// createMapRequest takes an isb.ReadMessage and returns proto MapRequest
+func (u *GRPCBasedFlatmap) createMapRequest(reqMsg *types.RequestFlatmap) *flatmappb.MapRequest {
+	msg := reqMsg.Request
 	keys := msg.Keys
 	payload := msg.Body.Payload
-	// Add the request to the tracker, and get the unique UUID corresponding to it
-	uid := u.tracker.AddRequest(msg)
+	//// Add the request to the tracker, and get the unique UUID corresponding to it
+	//uid := u.tracker.AddRequest(msg)
 	// Create the MapRequest, with the required fields.
 	var d = &flatmappb.MapRequest{
 		Keys:      keys,
@@ -156,7 +159,7 @@ func (u *GRPCBasedFlatmap) createMapRequest(msg *isb.ReadMessage) *flatmappb.Map
 		EventTime: timestamppb.New(msg.EventTime),
 		Watermark: timestamppb.New(msg.Watermark),
 		Headers:   msg.Headers,
-		Uuid:      uid,
+		Uuid:      reqMsg.Uid,
 	}
 	return d
 }
@@ -168,57 +171,57 @@ func (u *GRPCBasedFlatmap) parseMapResponse(resp *flatmappb.MapResponse) (parsed
 	result := resp.Result
 	eor := result.GetEOR()
 	uid = result.GetUuid()
-	parentRequest, ok := u.tracker.GetRequest(uid)
+	//parentRequest, ok := u.tracker.GetRequest(uid)
 	// TODO(stream): check what should be path for !ok, which means that we got a UUID
 	// which has already been deleted from the tracker/ or never added in the first place
 	// can this even happen though if messages are ordered and we only have a single routine processing it?
-	if !ok {
-	}
+	//if !ok {
+	//}
 	// Request has completed remove from the tracker module
 	if eor == true {
 		return &types.ResponseFlatmap{
-			ParentMessage: parentRequest,
-			Uid:           uid,
-			RespMessage:   nil,
-			AckIt:         true,
-			Total:         int64(resp.Result.Total),
+			//ParentMessage: parentRequest,
+			Uid:         uid,
+			RespMessage: nil,
+			AckIt:       true,
+			Total:       int64(resp.Result.Total),
 		}, true, uid
 	}
-	keys := result.GetKeys()
-	taggedMessage := &isb.WriteMessage{
-		Message: isb.Message{
-			Header: isb.Header{
-				MessageInfo: parentRequest.MessageInfo,
-				// We need this to be unique so that the ISB can execute its Dedup logic
-				// this ID should be such that even when the same response is processed and received
-				// again from the UDF, we still assign it the same ID.
-				// The ID here will be a concat of the three values
-				// parentRequest.ReadOffset - vertexName - result.Index
-				//
-				// ReadOffset - Will be the read offset of the request which corresponds to this response.
-				// We have this stored in our tracker.
-				//
-				// VertexName - the name of the vertex from which this response is generated, this is
-				// important to ensure that we can differentiate between messages emitted from 2 map vertices
-				//
-				// Result Index - This parameter is added on the SDK side.
-				// We add the index of the message from the messages slice to the individual response.
-				// TODO(stream): explore if there can be more robust ways to do this
-				ID:   fmt.Sprintf("%s-%s-%s", parentRequest.ReadOffset.String(), u.vertexName, result.GetIndex()),
-				Keys: keys,
-			},
-			Body: isb.Body{
-				Payload: result.GetValue(),
-			},
-		},
-		Tags: result.GetTags(),
-	}
+	//keys := result.GetKeys()
+	//taggedMessage := &isb.WriteMessage{
+	//	Message: isb.Message{
+	//		Header: isb.Header{
+	//			MessageInfo: parentRequest.MessageInfo,
+	//			// We need this to be unique so that the ISB can execute its Dedup logic
+	//			// this ID should be such that even when the same response is processed and received
+	//			// again from the UDF, we still assign it the same ID.
+	//			// The ID here will be a concat of the three values
+	//			// parentRequest.ReadOffset - vertexName - result.Index
+	//			//
+	//			// ReadOffset - Will be the read offset of the request which corresponds to this response.
+	//			// We have this stored in our tracker.
+	//			//
+	//			// VertexName - the name of the vertex from which this response is generated, this is
+	//			// important to ensure that we can differentiate between messages emitted from 2 map vertices
+	//			//
+	//			// Result Index - This parameter is added on the SDK side.
+	//			// We add the index of the message from the messages slice to the individual response.
+	//			// TODO(stream): explore if there can be more robust ways to do this
+	//			ID:   fmt.Sprintf("%s-%s-%s", parentRequest.ReadOffset.String(), u.vertexName, result.GetIndex()),
+	//			Keys: keys,
+	//		},
+	//		Body: isb.Body{
+	//			Payload: result.GetValue(),
+	//		},
+	//	},
+	//	Tags: result.GetTags(),
+	//}
 	return &types.ResponseFlatmap{
-		ParentMessage: parentRequest,
-		Uid:           uid,
-		RespMessage:   taggedMessage,
-		AckIt:         false,
-		Total:         int64(resp.Result.Total),
+		//ParentMessage: parentRequest,
+		Uid: uid,
+		//RespMessage: result,
+		AckIt: false,
+		Total: int64(resp.Result.Total),
 	}, false, uid
 }
 
