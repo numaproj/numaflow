@@ -97,7 +97,7 @@ func (cp *Publisher) NonSinkVertexCallback(ctx context.Context, messagePairs []i
 			uuid, ok := msg.Headers[dfv1.KeyMetaID]
 			if !ok {
 				// Return an error if UUID is not found in pair headers
-				return errors.New(fmt.Sprintf("ID not found in message headers"))
+				return errors.New("ID not found in message headers")
 			}
 
 			// Create a new CallbackResponse
@@ -152,7 +152,7 @@ func (cp *Publisher) SinkVertexCallback(ctx context.Context, messages []isb.Mess
 		uuid, ok := msg.Headers[dfv1.KeyMetaID]
 		if !ok {
 			// Return an error if UUID is not found in pair headers
-			return errors.New(fmt.Sprintf("ID not found in message headers"))
+			return errors.New("ID not found in message headers")
 		}
 
 		// Create a new CallbackResponse
@@ -198,7 +198,7 @@ func (cp *Publisher) executeCallback(ctx context.Context, callbackUrlMap map[str
 		}
 	}
 
-	if len(failedRequests) > 0 {
+	if len(failedRequests) > 0 && cp.opts.callbackURL != "" {
 		err := cp.sendRequest(ctx, cp.opts.callbackURL, failedRequests)
 		if err != nil {
 			cp.opts.logger.Errorw("Failed to send request to callback URL, skipping the callback requests",

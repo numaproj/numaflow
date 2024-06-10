@@ -239,7 +239,7 @@ func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) 
 func TestLua(t *testing.T) {
 	ctx := context.Background()
 	client := redis.NewUniversalClient(redisOptions)
-	message := isb.Message{Header: isb.Header{ID: isb.MessageID{VertexName: "test-vertex", Offset: "0"}, MessageInfo: isb.MessageInfo{EventTime: testStartTime}}, Body: isb.Body{Payload: []byte("foo")}}
+	message := isb.Message{Header: isb.Header{ID: isb.MessageID{VertexName: "testVertex", Offset: "0"}, MessageInfo: isb.MessageInfo{EventTime: testStartTime}}, Body: isb.Body{Payload: []byte("foo")}}
 	script := redis.NewScript(exactlyOnceInsertLuaScript)
 
 	var hashName = "{step-1}:1234567890:hash-foo"
