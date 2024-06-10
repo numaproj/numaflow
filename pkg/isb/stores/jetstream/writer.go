@@ -256,10 +256,45 @@ func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message,
 	return writeOffsets, errs
 }
 
+func (jw *jetStreamWriter) writeRoutine(message isb.Message, metricsLabels map[string]string) (isb.Offset, error) {
+	payload, err := message.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	m := &nats.Msg{
+		Subject: jw.subject,
+		Data:    payload,
+	}
+	pubOpts := []nats.PubOpt{nats.AckWait(2 * time.Second)}
+	// nats.MsgId() is for exactly-once writing
+	// we don't need to set MsgId for control message
+	if message.Header.Kind != isb.WMB {
+		pubOpts = append(pubOpts, nats.MsgId(message.Header.ID))
+	}
+	if pubAck, err := jw.js.PublishMsg(m, pubOpts...); err != nil {
+		isbWriteErrors.With(metricsLabels).Inc()
+		return nil, err
+	} else {
+		if pubAck.Duplicate {
+			// If a message gets repeated, it will have the same offset number as the one before it.
+			// We shouldn't try to publish watermark on these repeated messages. Doing so would
+			// violate the principle of publishing watermarks to monotonically increasing offsets.
+			return nil, isb.NonRetryableBufferWriteErr{Name: jw.name, Message: isb.DuplicateIDMessage}
+		} else {
+			jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("msgID", message.Header.ID), zap.String("domain", pubAck.Domain))
+			return &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}, nil
+		}
+	}
+}
+
 func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, errs []error, metricsLabels map[string]string) ([]isb.Offset, []error) {
 	defer func(t time.Time) {
 		isbWriteTime.With(metricsLabels).Observe(float64(time.Since(t).Microseconds()))
 	}(time.Now())
+	if len(messages) == 1 {
+		routine, err := jw.writeRoutine(messages[0], metricsLabels)
+		return []isb.Offset{routine}, []error{err}
+	}
 	var writeOffsets = make([]isb.Offset, len(messages))
 	wg := new(sync.WaitGroup)
 	for index, msg := range messages {

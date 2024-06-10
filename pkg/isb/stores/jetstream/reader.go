@@ -152,6 +152,18 @@ func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error 
 	defer func(t time.Time) {
 		isbAckTime.With(labels).Observe(float64(time.Since(t).Microseconds()))
 	}(time.Now())
+
+	if len(offsets) == 1 {
+		if err := offsets[0].AckIt(); err != nil {
+			jr.log.Errorw("Failed to ack message", zap.Error(err))
+			// If the error is related to nats/jetstream, we skip it because it might end up with infinite ack retries.
+			// Skipping those errors to let the whole read/write/ack for loop to restart from reading, to pick up those
+			// redelivered messages.
+			if !strings.HasPrefix(err.Error(), "nats:") {
+				return []error{err}
+			}
+		}
+	}
 	errs := make([]error, len(offsets))
 	done := make(chan struct{})
 	wg := &sync.WaitGroup{}
