@@ -10,16 +10,24 @@ header "generating proto files"
 ensure_protobuf
 ensure_vendor
 
-if [ "`command -v protoc-gen-gogo`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogo
+#if [ "`command -v protoc-gen-gogo`" = "" ]; then
+#  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogo
+#fi
+
+#if [ "`command -v protoc-gen-gogofast`" = "" ]; then
+#  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogofast
+#fi
+
+#if [ "`command -v gogoproto`" = "" ]; then
+#  go install -mod=vendor ./vendor/github.com/gogo/protobuf/gogoproto
+#fi
+
+if [ "`command -v protoc-gen-go`" = "" ]; then
+  go install -mod=vendor ./vendor/google.golang.org/protobuf/cmd/protoc-gen-go
 fi
 
-if [ "`command -v protoc-gen-gogofast`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogofast
-fi
-
-if [ "`command -v gogoproto`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/gogo/protobuf/gogoproto
+if [ "`command -v protoc-gen-go-grpc`" = "" ]; then
+  go install -mod=vendor ./vendor/google.golang.org/grpc/cmd/protoc-gen-go-grpc
 fi
 
 if [ "`command -v protoc-gen-grpc-gateway`" = "" ]; then

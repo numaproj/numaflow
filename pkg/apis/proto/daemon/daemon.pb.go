@@ -7,13 +7,13 @@ import (
 	context "context"
 	encoding_binary "encoding/binary"
 	fmt "fmt"
-	github_com_gogo_protobuf_proto "github.com/gogo/protobuf/proto"
 	proto "github.com/gogo/protobuf/proto"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	_ "google.golang.org/protobuf/types/known/emptypb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 	io "io"
 	math "math"
 	math_bits "math/bits"
@@ -33,16 +33,16 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 // BufferInfo is used to provide information about the buffer including
 // pending messages count, if it has unprocessed data etc which helps in pipeline/buffer deletion etc
 type BufferInfo struct {
-	Pipeline        *string `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
-	BufferName      *string `protobuf:"bytes,2,req,name=bufferName" json:"bufferName,omitempty"`
-	PendingCount    *int64  `protobuf:"varint,3,req,name=pendingCount" json:"pendingCount,omitempty"`
-	AckPendingCount *int64  `protobuf:"varint,4,req,name=ackPendingCount" json:"ackPendingCount,omitempty"`
+	Pipeline        string                 `protobuf:"bytes,1,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
+	BufferName      string                 `protobuf:"bytes,2,opt,name=bufferName,proto3" json:"bufferName,omitempty"`
+	PendingCount    *wrapperspb.Int64Value `protobuf:"bytes,3,opt,name=pendingCount,proto3" json:"pendingCount,omitempty"`
+	AckPendingCount int64                  `protobuf:"varint,4,opt,name=ackPendingCount,proto3" json:"ackPendingCount,omitempty"`
 	// Total messages existing in the buffer, including pending, ackPending and acked.
-	TotalMessages        *int64   `protobuf:"varint,5,req,name=totalMessages" json:"totalMessages,omitempty"`
-	BufferLength         *int64   `protobuf:"varint,6,req,name=bufferLength" json:"bufferLength,omitempty"`
-	BufferUsageLimit     *float64 `protobuf:"fixed64,7,req,name=bufferUsageLimit" json:"bufferUsageLimit,omitempty"`
-	BufferUsage          *float64 `protobuf:"fixed64,8,req,name=bufferUsage" json:"bufferUsage,omitempty"`
-	IsFull               *bool    `protobuf:"varint,9,req,name=isFull" json:"isFull,omitempty"`
+	TotalMessages        int64    `protobuf:"varint,5,opt,name=totalMessages,proto3" json:"totalMessages,omitempty"`
+	BufferLength         int64    `protobuf:"varint,6,opt,name=bufferLength,proto3" json:"bufferLength,omitempty"`
+	BufferUsageLimit     float64  `protobuf:"fixed64,7,opt,name=bufferUsageLimit,proto3" json:"bufferUsageLimit,omitempty"`
+	BufferUsage          float64  `protobuf:"fixed64,8,opt,name=bufferUsage,proto3" json:"bufferUsage,omitempty"`
+	IsFull               bool     `protobuf:"varint,9,opt,name=isFull,proto3" json:"isFull,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -82,74 +82,74 @@ func (m *BufferInfo) XXX_DiscardUnknown() {
 var xxx_messageInfo_BufferInfo proto.InternalMessageInfo
 
 func (m *BufferInfo) GetPipeline() string {
-	if m != nil && m.Pipeline != nil {
-		return *m.Pipeline
+	if m != nil {
+		return m.Pipeline
 	}
 	return ""
 }
 
 func (m *BufferInfo) GetBufferName() string {
-	if m != nil && m.BufferName != nil {
-		return *m.BufferName
+	if m != nil {
+		return m.BufferName
 	}
 	return ""
 }
 
-func (m *BufferInfo) GetPendingCount() int64 {
-	if m != nil && m.PendingCount != nil {
-		return *m.PendingCount
+func (m *BufferInfo) GetPendingCount() *wrapperspb.Int64Value {
+	if m != nil {
+		return m.PendingCount
 	}
-	return 0
+	return nil
 }
 
 func (m *BufferInfo) GetAckPendingCount() int64 {
-	if m != nil && m.AckPendingCount != nil {
-		return *m.AckPendingCount
+	if m != nil {
+		return m.AckPendingCount
 	}
 	return 0
 }
 
 func (m *BufferInfo) GetTotalMessages() int64 {
-	if m != nil && m.TotalMessages != nil {
-		return *m.TotalMessages
+	if m != nil {
+		return m.TotalMessages
 	}
 	return 0
 }
 
 func (m *BufferInfo) GetBufferLength() int64 {
-	if m != nil && m.BufferLength != nil {
-		return *m.BufferLength
+	if m != nil {
+		return m.BufferLength
 	}
 	return 0
 }
 
 func (m *BufferInfo) GetBufferUsageLimit() float64 {
-	if m != nil && m.BufferUsageLimit != nil {
-		return *m.BufferUsageLimit
+	if m != nil {
+		return m.BufferUsageLimit
 	}
 	return 0
 }
 
 func (m *BufferInfo) GetBufferUsage() float64 {
-	if m != nil && m.BufferUsage != nil {
-		return *m.BufferUsage
+	if m != nil {
+		return m.BufferUsage
 	}
 	return 0
 }
 
 func (m *BufferInfo) GetIsFull() bool {
-	if m != nil && m.IsFull != nil {
-		return *m.IsFull
+	if m != nil {
+		return m.IsFull
 	}
 	return false
 }
 
 // VertexMetrics is used to provide information about the vertex including processing rate.
 type VertexMetrics struct {
-	Pipeline             *string            `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
-	Vertex               *string            `protobuf:"bytes,2,req,name=vertex" json:"vertex,omitempty"`
-	ProcessingRates      map[string]float64 `protobuf:"bytes,3,rep,name=processingRates" json:"processingRates,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	Pendings             map[string]int64   `protobuf:"bytes,4,rep,name=pendings" json:"pendings,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	Pipeline             string             `protobuf:"bytes,1,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
+	Vertex               string             `protobuf:"bytes,2,opt,name=vertex,proto3" json:"vertex,omitempty"`
+	ProcessingRates      map[string]float64 `protobuf:"bytes,3,rep,name=processingRates,proto3" json:"processingRates,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"fixed64,2,opt,name=value,proto3"`
+	Pendings             map[string]int64   `protobuf:"bytes,4,rep,name=pendings,proto3" json:"pendings,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -189,15 +189,15 @@ func (m *VertexMetrics) XXX_DiscardUnknown() {
 var xxx_messageInfo_VertexMetrics proto.InternalMessageInfo
 
 func (m *VertexMetrics) GetPipeline() string {
-	if m != nil && m.Pipeline != nil {
-		return *m.Pipeline
+	if m != nil {
+		return m.Pipeline
 	}
 	return ""
 }
 
 func (m *VertexMetrics) GetVertex() string {
-	if m != nil && m.Vertex != nil {
-		return *m.Vertex
+	if m != nil {
+		return m.Vertex
 	}
 	return ""
 }
@@ -218,9 +218,9 @@ func (m *VertexMetrics) GetPendings() map[string]int64 {
 
 // PipelineStatus
 type PipelineStatus struct {
-	Status               *string  `protobuf:"bytes,1,req,name=status" json:"status,omitempty"`
-	Message              *string  `protobuf:"bytes,2,req,name=message" json:"message,omitempty"`
-	Code                 *string  `protobuf:"bytes,3,req,name=code" json:"code,omitempty"`
+	Status               string   `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Message              string   `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Code                 string   `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -260,28 +260,28 @@ func (m *PipelineStatus) XXX_DiscardUnknown() {
 var xxx_messageInfo_PipelineStatus proto.InternalMessageInfo
 
 func (m *PipelineStatus) GetStatus() string {
-	if m != nil && m.Status != nil {
-		return *m.Status
+	if m != nil {
+		return m.Status
 	}
 	return ""
 }
 
 func (m *PipelineStatus) GetMessage() string {
-	if m != nil && m.Message != nil {
-		return *m.Message
+	if m != nil {
+		return m.Message
 	}
 	return ""
 }
 
 func (m *PipelineStatus) GetCode() string {
-	if m != nil && m.Code != nil {
-		return *m.Code
+	if m != nil {
+		return m.Code
 	}
 	return ""
 }
 
 type ListBuffersRequest struct {
-	Pipeline             *string  `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
+	Pipeline             string   `protobuf:"bytes,1,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -321,14 +321,14 @@ func (m *ListBuffersRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_ListBuffersRequest proto.InternalMessageInfo
 
 func (m *ListBuffersRequest) GetPipeline() string {
-	if m != nil && m.Pipeline != nil {
-		return *m.Pipeline
+	if m != nil {
+		return m.Pipeline
 	}
 	return ""
 }
 
 type ListBuffersResponse struct {
-	Buffers              []*BufferInfo `protobuf:"bytes,1,rep,name=buffers" json:"buffers,omitempty"`
+	Buffers              []*BufferInfo `protobuf:"bytes,1,rep,name=buffers,proto3" json:"buffers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
 	XXX_unrecognized     []byte        `json:"-"`
 	XXX_sizecache        int32         `json:"-"`
@@ -375,8 +375,8 @@ func (m *ListBuffersResponse) GetBuffers() []*BufferInfo {
 }
 
 type GetBufferRequest struct {
-	Pipeline             *string  `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
-	Buffer               *string  `protobuf:"bytes,2,req,name=buffer" json:"buffer,omitempty"`
+	Pipeline             string   `protobuf:"bytes,1,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
+	Buffer               string   `protobuf:"bytes,2,opt,name=buffer,proto3" json:"buffer,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -416,21 +416,21 @@ func (m *GetBufferRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetBufferRequest proto.InternalMessageInfo
 
 func (m *GetBufferRequest) GetPipeline() string {
-	if m != nil && m.Pipeline != nil {
-		return *m.Pipeline
+	if m != nil {
+		return m.Pipeline
 	}
 	return ""
 }
 
 func (m *GetBufferRequest) GetBuffer() string {
-	if m != nil && m.Buffer != nil {
-		return *m.Buffer
+	if m != nil {
+		return m.Buffer
 	}
 	return ""
 }
 
 type GetBufferResponse struct {
-	Buffer               *BufferInfo `protobuf:"bytes,1,req,name=buffer" json:"buffer,omitempty"`
+	Buffer               *BufferInfo `protobuf:"bytes,1,opt,name=buffer,proto3" json:"buffer,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
 	XXX_unrecognized     []byte      `json:"-"`
 	XXX_sizecache        int32       `json:"-"`
@@ -477,7 +477,7 @@ func (m *GetBufferResponse) GetBuffer() *BufferInfo {
 }
 
 type GetPipelineStatusRequest struct {
-	Pipeline             *string  `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
+	Pipeline             string   `protobuf:"bytes,1,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -517,14 +517,14 @@ func (m *GetPipelineStatusRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetPipelineStatusRequest proto.InternalMessageInfo
 
 func (m *GetPipelineStatusRequest) GetPipeline() string {
-	if m != nil && m.Pipeline != nil {
-		return *m.Pipeline
+	if m != nil {
+		return m.Pipeline
 	}
 	return ""
 }
 
 type GetPipelineStatusResponse struct {
-	Status               *PipelineStatus `protobuf:"bytes,1,req,name=status" json:"status,omitempty"`
+	Status               *PipelineStatus `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -571,8 +571,8 @@ func (m *GetPipelineStatusResponse) GetStatus() *PipelineStatus {
 }
 
 type GetVertexMetricsRequest struct {
-	Pipeline             *string  `protobuf:"bytes,2,req,name=pipeline" json:"pipeline,omitempty"`
-	Vertex               *string  `protobuf:"bytes,3,req,name=vertex" json:"vertex,omitempty"`
+	Pipeline             string   `protobuf:"bytes,2,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
+	Vertex               string   `protobuf:"bytes,3,opt,name=vertex,proto3" json:"vertex,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -612,21 +612,21 @@ func (m *GetVertexMetricsRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetVertexMetricsRequest proto.InternalMessageInfo
 
 func (m *GetVertexMetricsRequest) GetPipeline() string {
-	if m != nil && m.Pipeline != nil {
-		return *m.Pipeline
+	if m != nil {
+		return m.Pipeline
 	}
 	return ""
 }
 
 func (m *GetVertexMetricsRequest) GetVertex() string {
-	if m != nil && m.Vertex != nil {
-		return *m.Vertex
+	if m != nil {
+		return m.Vertex
 	}
 	return ""
 }
 
 type GetVertexMetricsResponse struct {
-	VertexMetrics        []*VertexMetrics `protobuf:"bytes,1,rep,name=vertexMetrics" json:"vertexMetrics,omitempty"`
+	VertexMetrics        []*VertexMetrics `protobuf:"bytes,1,rep,name=vertexMetrics,proto3" json:"vertexMetrics,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
 	XXX_unrecognized     []byte           `json:"-"`
 	XXX_sizecache        int32            `json:"-"`
@@ -674,12 +674,12 @@ func (m *GetVertexMetricsResponse) GetVertexMetrics() []*VertexMetrics {
 
 // EdgeWatermark has edge to watermark mapping.
 type EdgeWatermark struct {
-	Pipeline             *string  `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
-	Edge                 *string  `protobuf:"bytes,2,req,name=edge" json:"edge,omitempty"`
-	Watermarks           []int64  `protobuf:"varint,3,rep,name=watermarks" json:"watermarks,omitempty"`
-	IsWatermarkEnabled   *bool    `protobuf:"varint,4,req,name=isWatermarkEnabled" json:"isWatermarkEnabled,omitempty"`
-	From                 *string  `protobuf:"bytes,5,req,name=from" json:"from,omitempty"`
-	To                   *string  `protobuf:"bytes,6,req,name=to" json:"to,omitempty"`
+	Pipeline             string   `protobuf:"bytes,1,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
+	Edge                 string   `protobuf:"bytes,2,opt,name=edge,proto3" json:"edge,omitempty"`
+	Watermarks           []int64  `protobuf:"varint,3,rep,packed,name=watermarks,proto3" json:"watermarks,omitempty"`
+	IsWatermarkEnabled   bool     `protobuf:"varint,4,opt,name=isWatermarkEnabled,proto3" json:"isWatermarkEnabled,omitempty"`
+	From                 string   `protobuf:"bytes,5,opt,name=from,proto3" json:"from,omitempty"`
+	To                   string   `protobuf:"bytes,6,opt,name=to,proto3" json:"to,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -719,15 +719,15 @@ func (m *EdgeWatermark) XXX_DiscardUnknown() {
 var xxx_messageInfo_EdgeWatermark proto.InternalMessageInfo
 
 func (m *EdgeWatermark) GetPipeline() string {
-	if m != nil && m.Pipeline != nil {
-		return *m.Pipeline
+	if m != nil {
+		return m.Pipeline
 	}
 	return ""
 }
 
 func (m *EdgeWatermark) GetEdge() string {
-	if m != nil && m.Edge != nil {
-		return *m.Edge
+	if m != nil {
+		return m.Edge
 	}
 	return ""
 }
@@ -740,28 +740,28 @@ func (m *EdgeWatermark) GetWatermarks() []int64 {
 }
 
 func (m *EdgeWatermark) GetIsWatermarkEnabled() bool {
-	if m != nil && m.IsWatermarkEnabled != nil {
-		return *m.IsWatermarkEnabled
+	if m != nil {
+		return m.IsWatermarkEnabled
 	}
 	return false
 }
 
 func (m *EdgeWatermark) GetFrom() string {
-	if m != nil && m.From != nil {
-		return *m.From
+	if m != nil {
+		return m.From
 	}
 	return ""
 }
 
 func (m *EdgeWatermark) GetTo() string {
-	if m != nil && m.To != nil {
-		return *m.To
+	if m != nil {
+		return m.To
 	}
 	return ""
 }
 
 type GetPipelineWatermarksResponse struct {
-	PipelineWatermarks   []*EdgeWatermark `protobuf:"bytes,1,rep,name=pipelineWatermarks" json:"pipelineWatermarks,omitempty"`
+	PipelineWatermarks   []*EdgeWatermark `protobuf:"bytes,1,rep,name=pipelineWatermarks,proto3" json:"pipelineWatermarks,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
 	XXX_unrecognized     []byte           `json:"-"`
 	XXX_sizecache        int32            `json:"-"`
@@ -809,7 +809,7 @@ func (m *GetPipelineWatermarksResponse) GetPipelineWatermarks() []*EdgeWatermark
 
 // GetPipelineWatermarksRequest requests for the watermark for a pipeline.
 type GetPipelineWatermarksRequest struct {
-	Pipeline             *string  `protobuf:"bytes,1,req,name=pipeline" json:"pipeline,omitempty"`
+	Pipeline             string   `protobuf:"bytes,1,opt,name=pipeline,proto3" json:"pipeline,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -849,8 +849,8 @@ func (m *GetPipelineWatermarksRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetPipelineWatermarksRequest proto.InternalMessageInfo
 
 func (m *GetPipelineWatermarksRequest) GetPipeline() string {
-	if m != nil && m.Pipeline != nil {
-		return *m.Pipeline
+	if m != nil {
+		return m.Pipeline
 	}
 	return ""
 }
@@ -879,66 +879,68 @@ func init() {
 }
 
 var fileDescriptor_93e327fd0d673221 = []byte{
-	// 937 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x56, 0x5f, 0x6f, 0xdc, 0x44,
-	0x10, 0x97, 0x7d, 0xf9, 0x73, 0x37, 0xe1, 0xda, 0x30, 0xb4, 0xc1, 0x75, 0x4b, 0x30, 0x6e, 0x0a,
-	0x47, 0x28, 0x67, 0x88, 0x44, 0x55, 0xb5, 0x12, 0x45, 0x29, 0x69, 0x84, 0x48, 0x50, 0xb4, 0x85,
-	0x56, 0xe2, 0xcd, 0xb9, 0xdb, 0x73, 0x4d, 0x6c, 0xaf, 0xf1, 0xae, 0x2f, 0x44, 0x55, 0x5e, 0x90,
-	0xf8, 0x04, 0xa8, 0x9f, 0x04, 0x89, 0x8f, 0x80, 0x78, 0x44, 0xe2, 0x91, 0x17, 0x14, 0xf1, 0x41,
-	0x90, 0x77, 0xd7, 0x57, 0xfb, 0xe2, 0xbb, 0xe4, 0xe9, 0x76, 0x66, 0x7f, 0x33, 0xf3, 0xdb, 0xf9,
-	0xe7, 0x03, 0x37, 0x3d, 0x0a, 0x3c, 0x3f, 0x0d, 0xb9, 0x97, 0x66, 0x4c, 0x30, 0x6f, 0xe8, 0xd3,
-	0x98, 0x25, 0xfa, 0xa7, 0x2f, 0x75, 0xb8, 0xa4, 0x24, 0xfb, 0x56, 0xc0, 0x58, 0x10, 0xd1, 0x02,
-	0xee, 0xf9, 0x49, 0xc2, 0x84, 0x2f, 0x42, 0x96, 0x70, 0x85, 0xb2, 0x6f, 0xea, 0x5b, 0x29, 0x1d,
-	0xe6, 0x23, 0x8f, 0xc6, 0xa9, 0x38, 0x51, 0x97, 0xee, 0x1f, 0x26, 0xc0, 0x76, 0x3e, 0x1a, 0xd1,
-	0xec, 0xab, 0x64, 0xc4, 0xd0, 0x86, 0x76, 0x1a, 0xa6, 0x34, 0x0a, 0x13, 0x6a, 0x19, 0x8e, 0xd9,
-	0xeb, 0x90, 0x89, 0x8c, 0xeb, 0x00, 0x87, 0x12, 0xf9, 0x8d, 0x1f, 0x53, 0xcb, 0x94, 0xb7, 0x15,
-	0x0d, 0xba, 0xf0, 0x46, 0x4a, 0x93, 0x61, 0x98, 0x04, 0x8f, 0x59, 0x9e, 0x08, 0xab, 0xe5, 0x98,
-	0xbd, 0x16, 0xa9, 0xe9, 0xb0, 0x07, 0x57, 0xfd, 0xc1, 0xd1, 0x41, 0x15, 0xb6, 0x20, 0x61, 0xd3,
-	0x6a, 0xdc, 0x80, 0xae, 0x60, 0xc2, 0x8f, 0xf6, 0x29, 0xe7, 0x7e, 0x40, 0xb9, 0xb5, 0x28, 0x71,
-	0x75, 0x65, 0x11, 0x53, 0x31, 0xd8, 0xa3, 0x49, 0x20, 0x5e, 0x58, 0x4b, 0x2a, 0x66, 0x55, 0x87,
-	0x9b, 0xb0, 0xaa, 0xe4, 0xef, 0x0a, 0x9b, 0xbd, 0x30, 0x0e, 0x85, 0xb5, 0xec, 0x98, 0x3d, 0x83,
-	0x9c, 0xd3, 0xa3, 0x03, 0x2b, 0x15, 0x9d, 0xd5, 0x96, 0xb0, 0xaa, 0x0a, 0xd7, 0x60, 0x29, 0xe4,
-	0x4f, 0xf2, 0x28, 0xb2, 0x3a, 0x8e, 0xd9, 0x6b, 0x13, 0x2d, 0xb9, 0xff, 0x98, 0xd0, 0x7d, 0x46,
-	0x33, 0x41, 0x7f, 0xda, 0xa7, 0x22, 0x0b, 0x07, 0x7c, 0x6e, 0x2e, 0xd7, 0x60, 0x69, 0x2c, 0xc1,
-	0x3a, 0x8f, 0x5a, 0xc2, 0x6f, 0xe1, 0x6a, 0x9a, 0xb1, 0x01, 0xe5, 0x3c, 0x4c, 0x02, 0xe2, 0x0b,
-	0xca, 0xad, 0x96, 0xd3, 0xea, 0xad, 0x6c, 0x6d, 0xf6, 0x75, 0xe5, 0x6b, 0x31, 0xfa, 0x07, 0x75,
-	0xf0, 0x4e, 0x22, 0xb2, 0x13, 0x32, 0xed, 0x02, 0x1f, 0x41, 0x5b, 0x57, 0x81, 0x5b, 0x0b, 0xd2,
-	0xdd, 0xed, 0x19, 0xee, 0x34, 0x4a, 0xf9, 0x99, 0x18, 0xd9, 0xdb, 0x70, 0xad, 0x29, 0x12, 0xae,
-	0x42, 0xeb, 0x88, 0x9e, 0x58, 0x86, 0x63, 0xf4, 0x3a, 0xa4, 0x38, 0xe2, 0x35, 0x58, 0x1c, 0xfb,
-	0x51, 0x5e, 0xf4, 0x87, 0xd1, 0x33, 0x88, 0x12, 0x1e, 0x98, 0xf7, 0x0d, 0xfb, 0x21, 0x74, 0x6b,
-	0xee, 0x2f, 0x32, 0x6e, 0x55, 0x8c, 0xdd, 0x67, 0x70, 0xe5, 0x40, 0xe7, 0xee, 0xa9, 0xf0, 0x45,
-	0xce, 0x8b, 0x0c, 0x72, 0x79, 0xd2, 0xb9, 0xd5, 0x12, 0x5a, 0xb0, 0x1c, 0xab, 0xee, 0xd0, 0xa9,
-	0x2d, 0x45, 0x44, 0x58, 0x18, 0xb0, 0x21, 0x95, 0x7d, 0xd9, 0x21, 0xf2, 0xec, 0x7e, 0x02, 0xb8,
-	0x17, 0x72, 0xa1, 0x26, 0x80, 0x13, 0xfa, 0x63, 0x4e, 0xb9, 0x98, 0x57, 0x39, 0xf7, 0x31, 0xbc,
-	0x55, 0xb3, 0xe0, 0x29, 0x4b, 0x38, 0xc5, 0xbb, 0xb0, 0xac, 0xba, 0xa4, 0xe0, 0x53, 0x64, 0x18,
-	0xcb, 0x0c, 0xbf, 0x9e, 0x2e, 0x52, 0x42, 0xdc, 0x27, 0xb0, 0xba, 0x4b, 0xb5, 0x8f, 0x4b, 0x04,
-	0x2d, 0x1e, 0xab, 0x4c, 0xcb, 0x76, 0x51, 0x92, 0xfb, 0x08, 0xde, 0xac, 0xf8, 0xd1, 0x54, 0x36,
-	0x27, 0xe0, 0xc2, 0x4d, 0x33, 0x93, 0xd2, 0xc1, 0x3d, 0xb0, 0x76, 0xa9, 0xa8, 0xa7, 0xf6, 0x32,
-	0x59, 0xf8, 0x1a, 0x6e, 0x34, 0xd8, 0x69, 0x02, 0xfd, 0x5a, 0x69, 0x56, 0xb6, 0xd6, 0x4a, 0x02,
-	0x53, 0x78, 0x8d, 0x72, 0xf7, 0xe1, 0xed, 0x5d, 0x2a, 0x6a, 0x9d, 0xd8, 0xc4, 0xc1, 0x9c, 0x39,
-	0x43, 0xad, 0xea, 0x0c, 0xb9, 0xcf, 0xe5, 0x9b, 0xa6, 0xdc, 0x69, 0x6a, 0x0f, 0xa1, 0x3b, 0xae,
-	0x5e, 0xe8, 0x62, 0x5d, 0x6f, 0x1c, 0x07, 0x52, 0xc7, 0xba, 0xbf, 0x19, 0xd0, 0xdd, 0x19, 0x06,
-	0xf4, 0xb9, 0x2f, 0x68, 0x16, 0xfb, 0xd9, 0xd1, 0xdc, 0x9a, 0x21, 0x2c, 0xd0, 0xe1, 0xa4, 0x0b,
-	0xe5, 0xb9, 0x58, 0xa1, 0xc7, 0xa5, 0xb1, 0x9a, 0xec, 0x16, 0xa9, 0x68, 0xb0, 0x0f, 0x18, 0xf2,
-	0x89, 0xfb, 0x9d, 0xc4, 0x3f, 0x8c, 0xe8, 0x50, 0x6e, 0xc8, 0x36, 0x69, 0xb8, 0x29, 0x62, 0x8c,
-	0x32, 0x16, 0xcb, 0xdd, 0xd8, 0x21, 0xf2, 0x8c, 0x57, 0xc0, 0x14, 0x4c, 0x2e, 0xc2, 0x0e, 0x31,
-	0x05, 0x73, 0x47, 0xf0, 0x4e, 0xa5, 0x54, 0x13, 0x17, 0xaf, 0x73, 0xb2, 0x03, 0x98, 0x9e, 0xbb,
-	0x9d, 0x4e, 0x4c, 0xed, 0xdd, 0xa4, 0xc1, 0xc0, 0x7d, 0x00, 0xb7, 0x66, 0xc4, 0xb9, 0xb0, 0x9d,
-	0xb6, 0x7e, 0x5f, 0x84, 0xee, 0x97, 0x32, 0xd0, 0x53, 0x9a, 0x8d, 0xc3, 0x01, 0x45, 0x01, 0x2b,
-	0x95, 0x31, 0x43, 0xbb, 0xe4, 0x71, 0x7e, 0x5a, 0xed, 0x9b, 0x8d, 0x77, 0xea, 0x71, 0xee, 0xdd,
-	0x9f, 0xff, 0xfe, 0xef, 0x57, 0xf3, 0x7d, 0xdc, 0x90, 0x1f, 0xc7, 0xf1, 0xa7, 0x5e, 0x19, 0x93,
-	0x7b, 0x2f, 0xcb, 0xe3, 0xa9, 0xa7, 0xe7, 0x12, 0x8f, 0xa1, 0x33, 0x99, 0x27, 0xb4, 0x4a, 0xbf,
-	0xd3, 0xa3, 0x6a, 0xdf, 0x68, 0xb8, 0xd1, 0xf1, 0x3e, 0x93, 0xf1, 0x3c, 0xfc, 0xf8, 0x32, 0xf1,
-	0xbc, 0x97, 0xea, 0x70, 0x8a, 0xaf, 0x0c, 0xb9, 0x11, 0xea, 0x1f, 0x90, 0x77, 0x2b, 0x61, 0x9a,
-	0xa6, 0xc3, 0x76, 0x66, 0x03, 0x34, 0x9d, 0xcf, 0x25, 0x9d, 0xfb, 0x78, 0x6f, 0x2e, 0x9d, 0xa2,
-	0xcd, 0xc3, 0x41, 0xa1, 0x53, 0x0d, 0x7f, 0xea, 0xc5, 0x9a, 0xc2, 0x2b, 0x03, 0xae, 0x37, 0x56,
-	0x15, 0x37, 0x2a, 0xb1, 0x67, 0x16, 0xdd, 0xbe, 0x73, 0x01, 0x4a, 0xd3, 0xf4, 0x24, 0xcd, 0x0f,
-	0xf1, 0x83, 0xb9, 0x34, 0x2b, 0x83, 0xf2, 0x8b, 0x21, 0x37, 0xdf, 0xd4, 0x37, 0xc1, 0x69, 0x88,
-	0x56, 0xdb, 0x69, 0xf6, 0x7b, 0x73, 0x10, 0x9a, 0xcb, 0x47, 0x92, 0xcb, 0x1d, 0xbc, 0x3d, 0x97,
-	0x8b, 0x5a, 0x5d, 0xdb, 0x5f, 0xfc, 0x79, 0xb6, 0x6e, 0xfc, 0x75, 0xb6, 0x6e, 0xfc, 0x7b, 0xb6,
-	0x6e, 0x7c, 0xbf, 0x15, 0x84, 0xe2, 0x45, 0x7e, 0xd8, 0x1f, 0xb0, 0xd8, 0x4b, 0xf2, 0xd8, 0x4f,
-	0x33, 0xf6, 0x83, 0x3c, 0x8c, 0x22, 0x76, 0xec, 0x35, 0xfe, 0xa1, 0xfb, 0x3f, 0x00, 0x00, 0xff,
-	0xff, 0x85, 0xa5, 0xb2, 0x62, 0xe8, 0x09, 0x00, 0x00,
+	// 968 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x56, 0x5f, 0x6f, 0xdb, 0x54,
+	0x14, 0x97, 0x93, 0x36, 0x4d, 0x4e, 0x96, 0xad, 0x1c, 0xb6, 0xe2, 0xb9, 0x23, 0x04, 0xaf, 0x83,
+	0x50, 0x86, 0x0d, 0x01, 0xaa, 0x69, 0x93, 0x28, 0xea, 0xe8, 0xaa, 0x89, 0x16, 0x55, 0x1e, 0x74,
+	0x12, 0x6f, 0x4e, 0x72, 0xe3, 0x99, 0xc6, 0xbe, 0xc6, 0xf7, 0x3a, 0xa5, 0x9a, 0xfa, 0x82, 0xc4,
+	0x27, 0x40, 0xfb, 0x24, 0x48, 0x7c, 0x06, 0x1e, 0x91, 0x78, 0xe4, 0x05, 0x15, 0x3e, 0x08, 0xf2,
+	0xbd, 0xd7, 0x99, 0x9d, 0x3a, 0x69, 0x9f, 0x72, 0xcf, 0x39, 0xbf, 0x73, 0xce, 0xef, 0x9e, 0x3f,
+	0xd7, 0x01, 0x33, 0x3a, 0xf6, 0x6c, 0x37, 0xf2, 0x99, 0x1d, 0xc5, 0x94, 0x53, 0x7b, 0xe8, 0x92,
+	0x80, 0x86, 0xea, 0xc7, 0x12, 0x3a, 0xac, 0x49, 0xc9, 0xb8, 0xe3, 0x51, 0xea, 0x8d, 0x49, 0x0a,
+	0xb7, 0xdd, 0x30, 0xa4, 0xdc, 0xe5, 0x3e, 0x0d, 0x99, 0x44, 0x19, 0xeb, 0xca, 0x2a, 0xa4, 0x7e,
+	0x32, 0xb2, 0x49, 0x10, 0xf1, 0x53, 0x65, 0x6c, 0xcf, 0x1a, 0x4f, 0x62, 0x37, 0x8a, 0x48, 0xac,
+	0x9c, 0xcd, 0x7f, 0x2b, 0x00, 0x3b, 0xc9, 0x68, 0x44, 0xe2, 0xa7, 0xe1, 0x88, 0xa2, 0x01, 0xf5,
+	0xc8, 0x8f, 0xc8, 0xd8, 0x0f, 0x89, 0xae, 0x75, 0xb4, 0x6e, 0xc3, 0x99, 0xca, 0xd8, 0x06, 0xe8,
+	0x0b, 0xe4, 0x37, 0x6e, 0x40, 0xf4, 0x8a, 0xb0, 0xe6, 0x34, 0xb8, 0x0d, 0xd7, 0x22, 0x12, 0x0e,
+	0xfd, 0xd0, 0x7b, 0x4c, 0x93, 0x90, 0xeb, 0xd5, 0x8e, 0xd6, 0x6d, 0xf6, 0xd6, 0x2d, 0xc9, 0xc0,
+	0xca, 0x18, 0x58, 0x4f, 0x43, 0xbe, 0xf5, 0xd9, 0x91, 0x3b, 0x4e, 0x88, 0x53, 0x70, 0xc0, 0x2e,
+	0xdc, 0x70, 0x07, 0xc7, 0x87, 0xf9, 0x18, 0x4b, 0x1d, 0xad, 0x5b, 0x75, 0x66, 0xd5, 0xb8, 0x01,
+	0x2d, 0x4e, 0xb9, 0x3b, 0x3e, 0x20, 0x8c, 0xb9, 0x1e, 0x61, 0xfa, 0xb2, 0xc0, 0x15, 0x95, 0x68,
+	0xc2, 0x35, 0x49, 0x6f, 0x9f, 0x84, 0x1e, 0x7f, 0xa1, 0xd7, 0x04, 0xa8, 0xa0, 0xc3, 0x4d, 0x58,
+	0x95, 0xf2, 0x77, 0xa9, 0xcf, 0xbe, 0x1f, 0xf8, 0x5c, 0x5f, 0xe9, 0x68, 0x5d, 0xcd, 0xb9, 0xa0,
+	0xc7, 0x0e, 0x34, 0x73, 0x3a, 0xbd, 0x2e, 0x60, 0x79, 0x15, 0xae, 0x41, 0xcd, 0x67, 0x4f, 0x92,
+	0xf1, 0x58, 0x6f, 0x74, 0xb4, 0x6e, 0xdd, 0x51, 0x92, 0xf9, 0x77, 0x05, 0x5a, 0x47, 0x24, 0xe6,
+	0xe4, 0xa7, 0x03, 0xc2, 0x63, 0x7f, 0xc0, 0x16, 0x16, 0x7a, 0x0d, 0x6a, 0x13, 0x01, 0x56, 0x45,
+	0x56, 0x12, 0x7e, 0x0b, 0x37, 0xa2, 0x98, 0x0e, 0x08, 0x63, 0x7e, 0xe8, 0x39, 0x2e, 0x27, 0x4c,
+	0xaf, 0x76, 0xaa, 0xdd, 0x66, 0x6f, 0xd3, 0x52, 0x63, 0x53, 0xc8, 0x61, 0x1d, 0x16, 0xc1, 0xbb,
+	0x21, 0x8f, 0x4f, 0x9d, 0xd9, 0x10, 0xb8, 0x0d, 0x75, 0xd5, 0x05, 0xa6, 0x2f, 0x89, 0x70, 0x77,
+	0xe7, 0x84, 0x53, 0x28, 0x19, 0x67, 0xea, 0x64, 0xec, 0xc0, 0xcd, 0xb2, 0x4c, 0xb8, 0x0a, 0xd5,
+	0x63, 0x72, 0xaa, 0x6e, 0x97, 0x1e, 0xf1, 0x26, 0x2c, 0x4f, 0xd2, 0xbe, 0x8b, 0x7b, 0x69, 0x8e,
+	0x14, 0x1e, 0x56, 0x1e, 0x68, 0xc6, 0x23, 0x68, 0x15, 0xc2, 0x5f, 0xe6, 0x5c, 0xcd, 0x39, 0x9b,
+	0x47, 0x70, 0xfd, 0x50, 0xd5, 0xee, 0x19, 0x77, 0x79, 0xc2, 0xd2, 0x0a, 0x32, 0x71, 0x52, 0x01,
+	0x94, 0x84, 0x3a, 0xac, 0x04, 0x72, 0x3a, 0x54, 0x69, 0x33, 0x11, 0x11, 0x96, 0x06, 0x74, 0x48,
+	0xc4, 0xd0, 0x36, 0x1c, 0x71, 0x36, 0x3f, 0x06, 0xdc, 0xf7, 0x19, 0x97, 0xeb, 0xc1, 0x1c, 0xf2,
+	0x63, 0x42, 0x18, 0x5f, 0xd4, 0x39, 0xf3, 0x31, 0xbc, 0x59, 0xf0, 0x60, 0x11, 0x0d, 0x19, 0xc1,
+	0xfb, 0xb0, 0x22, 0xa7, 0x24, 0xe5, 0x93, 0x56, 0x18, 0xb3, 0x0a, 0xbf, 0x5e, 0x3d, 0x27, 0x83,
+	0x98, 0x4f, 0x60, 0x75, 0x8f, 0xa8, 0x18, 0x57, 0x48, 0x9a, 0x5e, 0x56, 0xba, 0x66, 0xe3, 0x22,
+	0x25, 0x73, 0x1b, 0xde, 0xc8, 0xc5, 0x51, 0x54, 0x36, 0xa7, 0x60, 0x4d, 0xac, 0x67, 0x19, 0x93,
+	0x2c, 0xc0, 0x16, 0xe8, 0x7b, 0x84, 0x17, 0x4b, 0x7b, 0x95, 0x2a, 0x7c, 0x0d, 0xb7, 0x4b, 0xfc,
+	0x14, 0x01, 0xab, 0xd0, 0x9a, 0x66, 0x6f, 0x2d, 0x23, 0x30, 0x83, 0x57, 0x28, 0xf3, 0x00, 0xde,
+	0xda, 0x23, 0xbc, 0x30, 0x89, 0x65, 0x1c, 0x2a, 0x73, 0x77, 0xa8, 0x9a, 0xdf, 0x21, 0xf3, 0xb9,
+	0xb8, 0xd3, 0x4c, 0x38, 0x45, 0xed, 0x11, 0xb4, 0x26, 0x79, 0x83, 0x6a, 0xd6, 0xad, 0xd2, 0x75,
+	0x70, 0x8a, 0x58, 0xf3, 0x37, 0x0d, 0x5a, 0xbb, 0x43, 0x8f, 0x3c, 0x77, 0x39, 0x89, 0x03, 0x37,
+	0x3e, 0x5e, 0xd8, 0x33, 0x84, 0x25, 0x32, 0x9c, 0x4e, 0xa1, 0x38, 0xa7, 0xef, 0xeb, 0x49, 0xe6,
+	0x2c, 0x37, 0xbb, 0xea, 0xe4, 0x34, 0x68, 0x01, 0xfa, 0x6c, 0x1a, 0x7e, 0x37, 0x74, 0xfb, 0x63,
+	0x32, 0x14, 0x2f, 0x64, 0xdd, 0x29, 0xb1, 0xa4, 0x39, 0x46, 0x31, 0x0d, 0xc4, 0xdb, 0xd8, 0x70,
+	0xc4, 0x19, 0xaf, 0x43, 0x85, 0x53, 0xf1, 0x10, 0x36, 0x9c, 0x0a, 0xa7, 0xe6, 0x08, 0xde, 0xce,
+	0xb5, 0x6a, 0x1a, 0xe2, 0x75, 0x4d, 0x76, 0x01, 0xa3, 0x0b, 0xd6, 0xd9, 0xc2, 0x14, 0xee, 0xed,
+	0x94, 0x38, 0x98, 0x0f, 0xe1, 0xce, 0x9c, 0x3c, 0x97, 0x8e, 0x53, 0xef, 0xf7, 0x65, 0x68, 0x7d,
+	0x25, 0x12, 0x3d, 0x23, 0xf1, 0xc4, 0x1f, 0x10, 0xe4, 0xd0, 0xcc, 0xad, 0x19, 0x1a, 0x19, 0x8f,
+	0x8b, 0xdb, 0x6a, 0xac, 0x97, 0xda, 0xe4, 0xe5, 0xcc, 0xfb, 0x3f, 0xff, 0xf5, 0xdf, 0xaf, 0x95,
+	0xf7, 0x70, 0x43, 0x7c, 0x59, 0x27, 0x9f, 0xd8, 0x59, 0x4e, 0x66, 0xbf, 0xcc, 0x8e, 0x67, 0xb6,
+	0xda, 0x4b, 0x3c, 0x81, 0xc6, 0x74, 0x9f, 0x50, 0xcf, 0xe2, 0xce, 0xae, 0xaa, 0x71, 0xbb, 0xc4,
+	0xa2, 0xf2, 0x7d, 0x2e, 0xf2, 0xd9, 0xf8, 0xd1, 0x55, 0xf2, 0xd9, 0x2f, 0xe5, 0xe1, 0x0c, 0x5f,
+	0x69, 0xe2, 0x45, 0x28, 0x7e, 0x40, 0xde, 0xc9, 0xa5, 0x29, 0xdb, 0x0e, 0xa3, 0x33, 0x1f, 0xa0,
+	0xe8, 0x7c, 0x21, 0xe8, 0x3c, 0xc0, 0xad, 0x85, 0x74, 0xd2, 0x31, 0xf7, 0x07, 0xa9, 0x4e, 0x0e,
+	0xfc, 0x99, 0x1d, 0x28, 0x0a, 0xaf, 0x34, 0xb8, 0x55, 0xda, 0x55, 0xdc, 0xc8, 0xe5, 0x9e, 0xdb,
+	0x74, 0xe3, 0xde, 0x25, 0x28, 0x45, 0xd3, 0x16, 0x34, 0x3f, 0xc0, 0xf7, 0x17, 0xd2, 0xcc, 0x2d,
+	0xca, 0x2f, 0x9a, 0x78, 0xf9, 0x66, 0xbe, 0x09, 0x9d, 0x92, 0x6c, 0x85, 0x37, 0xcd, 0x78, 0x77,
+	0x01, 0x42, 0x71, 0xf9, 0x50, 0x70, 0xb9, 0x87, 0x77, 0x17, 0x72, 0x91, 0x4f, 0xd7, 0xce, 0x97,
+	0x7f, 0x9c, 0xb7, 0xb5, 0x3f, 0xcf, 0xdb, 0xda, 0x3f, 0xe7, 0x6d, 0xed, 0xfb, 0x9e, 0xe7, 0xf3,
+	0x17, 0x49, 0xdf, 0x1a, 0xd0, 0xc0, 0x0e, 0x93, 0xc0, 0x8d, 0x62, 0xfa, 0x83, 0x38, 0x8c, 0xc6,
+	0xf4, 0xc4, 0x2e, 0xfd, 0x37, 0xd8, 0xaf, 0x09, 0xe9, 0xd3, 0xff, 0x03, 0x00, 0x00, 0xff, 0xff,
+	0x0a, 0x2c, 0x11, 0xb3, 0x2d, 0x0a, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1191,11 +1193,9 @@ func (m *BufferInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.IsFull == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("isFull")
-	} else {
+	if m.IsFull {
 		i--
-		if *m.IsFull {
+		if m.IsFull {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -1203,65 +1203,56 @@ func (m *BufferInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x48
 	}
-	if m.BufferUsage == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("bufferUsage")
-	} else {
+	if m.BufferUsage != 0 {
 		i -= 8
-		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(*m.BufferUsage))))
+		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.BufferUsage))))
 		i--
 		dAtA[i] = 0x41
 	}
-	if m.BufferUsageLimit == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("bufferUsageLimit")
-	} else {
+	if m.BufferUsageLimit != 0 {
 		i -= 8
-		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(*m.BufferUsageLimit))))
+		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.BufferUsageLimit))))
 		i--
 		dAtA[i] = 0x39
 	}
-	if m.BufferLength == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("bufferLength")
-	} else {
-		i = encodeVarintDaemon(dAtA, i, uint64(*m.BufferLength))
+	if m.BufferLength != 0 {
+		i = encodeVarintDaemon(dAtA, i, uint64(m.BufferLength))
 		i--
 		dAtA[i] = 0x30
 	}
-	if m.TotalMessages == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("totalMessages")
-	} else {
-		i = encodeVarintDaemon(dAtA, i, uint64(*m.TotalMessages))
+	if m.TotalMessages != 0 {
+		i = encodeVarintDaemon(dAtA, i, uint64(m.TotalMessages))
 		i--
 		dAtA[i] = 0x28
 	}
-	if m.AckPendingCount == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("ackPendingCount")
-	} else {
-		i = encodeVarintDaemon(dAtA, i, uint64(*m.AckPendingCount))
+	if m.AckPendingCount != 0 {
+		i = encodeVarintDaemon(dAtA, i, uint64(m.AckPendingCount))
 		i--
 		dAtA[i] = 0x20
 	}
-	if m.PendingCount == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pendingCount")
-	} else {
-		i = encodeVarintDaemon(dAtA, i, uint64(*m.PendingCount))
+	if m.PendingCount != nil {
+		{
+			size, err := m.PendingCount.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDaemon(dAtA, i, uint64(size))
+		}
 		i--
-		dAtA[i] = 0x18
+		dAtA[i] = 0x1a
 	}
-	if m.BufferName == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("bufferName")
-	} else {
-		i -= len(*m.BufferName)
-		copy(dAtA[i:], *m.BufferName)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.BufferName)))
+	if len(m.BufferName) > 0 {
+		i -= len(m.BufferName)
+		copy(dAtA[i:], m.BufferName)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.BufferName)))
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.Pipeline == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	} else {
-		i -= len(*m.Pipeline)
-		copy(dAtA[i:], *m.Pipeline)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Pipeline)))
+	if len(m.Pipeline) > 0 {
+		i -= len(m.Pipeline)
+		copy(dAtA[i:], m.Pipeline)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Pipeline)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1327,21 +1318,17 @@ func (m *VertexMetrics) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			dAtA[i] = 0x1a
 		}
 	}
-	if m.Vertex == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertex")
-	} else {
-		i -= len(*m.Vertex)
-		copy(dAtA[i:], *m.Vertex)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Vertex)))
+	if len(m.Vertex) > 0 {
+		i -= len(m.Vertex)
+		copy(dAtA[i:], m.Vertex)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Vertex)))
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.Pipeline == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	} else {
-		i -= len(*m.Pipeline)
-		copy(dAtA[i:], *m.Pipeline)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Pipeline)))
+	if len(m.Pipeline) > 0 {
+		i -= len(m.Pipeline)
+		copy(dAtA[i:], m.Pipeline)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Pipeline)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1372,30 +1359,24 @@ func (m *PipelineStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Code == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("code")
-	} else {
-		i -= len(*m.Code)
-		copy(dAtA[i:], *m.Code)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Code)))
+	if len(m.Code) > 0 {
+		i -= len(m.Code)
+		copy(dAtA[i:], m.Code)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Code)))
 		i--
 		dAtA[i] = 0x1a
 	}
-	if m.Message == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("message")
-	} else {
-		i -= len(*m.Message)
-		copy(dAtA[i:], *m.Message)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Message)))
+	if len(m.Message) > 0 {
+		i -= len(m.Message)
+		copy(dAtA[i:], m.Message)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Message)))
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.Status == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("status")
-	} else {
-		i -= len(*m.Status)
-		copy(dAtA[i:], *m.Status)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Status)))
+	if len(m.Status) > 0 {
+		i -= len(m.Status)
+		copy(dAtA[i:], m.Status)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Status)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1426,12 +1407,10 @@ func (m *ListBuffersRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Pipeline == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	} else {
-		i -= len(*m.Pipeline)
-		copy(dAtA[i:], *m.Pipeline)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Pipeline)))
+	if len(m.Pipeline) > 0 {
+		i -= len(m.Pipeline)
+		copy(dAtA[i:], m.Pipeline)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Pipeline)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1503,21 +1482,17 @@ func (m *GetBufferRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Buffer == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("buffer")
-	} else {
-		i -= len(*m.Buffer)
-		copy(dAtA[i:], *m.Buffer)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Buffer)))
+	if len(m.Buffer) > 0 {
+		i -= len(m.Buffer)
+		copy(dAtA[i:], m.Buffer)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Buffer)))
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.Pipeline == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	} else {
-		i -= len(*m.Pipeline)
-		copy(dAtA[i:], *m.Pipeline)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Pipeline)))
+	if len(m.Pipeline) > 0 {
+		i -= len(m.Pipeline)
+		copy(dAtA[i:], m.Pipeline)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Pipeline)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1548,9 +1523,7 @@ func (m *GetBufferResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Buffer == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("buffer")
-	} else {
+	if m.Buffer != nil {
 		{
 			size, err := m.Buffer.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
@@ -1589,12 +1562,10 @@ func (m *GetPipelineStatusRequest) MarshalToSizedBuffer(dAtA []byte) (int, error
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Pipeline == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	} else {
-		i -= len(*m.Pipeline)
-		copy(dAtA[i:], *m.Pipeline)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Pipeline)))
+	if len(m.Pipeline) > 0 {
+		i -= len(m.Pipeline)
+		copy(dAtA[i:], m.Pipeline)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Pipeline)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1625,9 +1596,7 @@ func (m *GetPipelineStatusResponse) MarshalToSizedBuffer(dAtA []byte) (int, erro
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Status == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("status")
-	} else {
+	if m.Status != nil {
 		{
 			size, err := m.Status.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
@@ -1666,21 +1635,17 @@ func (m *GetVertexMetricsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error)
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Vertex == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertex")
-	} else {
-		i -= len(*m.Vertex)
-		copy(dAtA[i:], *m.Vertex)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Vertex)))
+	if len(m.Vertex) > 0 {
+		i -= len(m.Vertex)
+		copy(dAtA[i:], m.Vertex)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Vertex)))
 		i--
 		dAtA[i] = 0x1a
 	}
-	if m.Pipeline == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	} else {
-		i -= len(*m.Pipeline)
-		copy(dAtA[i:], *m.Pipeline)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Pipeline)))
+	if len(m.Pipeline) > 0 {
+		i -= len(m.Pipeline)
+		copy(dAtA[i:], m.Pipeline)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Pipeline)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -1752,29 +1717,23 @@ func (m *EdgeWatermark) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.To == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("to")
-	} else {
-		i -= len(*m.To)
-		copy(dAtA[i:], *m.To)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.To)))
+	if len(m.To) > 0 {
+		i -= len(m.To)
+		copy(dAtA[i:], m.To)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.To)))
 		i--
 		dAtA[i] = 0x32
 	}
-	if m.From == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("from")
-	} else {
-		i -= len(*m.From)
-		copy(dAtA[i:], *m.From)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.From)))
+	if len(m.From) > 0 {
+		i -= len(m.From)
+		copy(dAtA[i:], m.From)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.From)))
 		i--
 		dAtA[i] = 0x2a
 	}
-	if m.IsWatermarkEnabled == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("isWatermarkEnabled")
-	} else {
+	if m.IsWatermarkEnabled {
 		i--
-		if *m.IsWatermarkEnabled {
+		if m.IsWatermarkEnabled {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -1783,27 +1742,35 @@ func (m *EdgeWatermark) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		dAtA[i] = 0x20
 	}
 	if len(m.Watermarks) > 0 {
-		for iNdEx := len(m.Watermarks) - 1; iNdEx >= 0; iNdEx-- {
-			i = encodeVarintDaemon(dAtA, i, uint64(m.Watermarks[iNdEx]))
-			i--
-			dAtA[i] = 0x18
+		dAtA5 := make([]byte, len(m.Watermarks)*10)
+		var j4 int
+		for _, num1 := range m.Watermarks {
+			num := uint64(num1)
+			for num >= 1<<7 {
+				dAtA5[j4] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j4++
+			}
+			dAtA5[j4] = uint8(num)
+			j4++
 		}
+		i -= j4
+		copy(dAtA[i:], dAtA5[:j4])
+		i = encodeVarintDaemon(dAtA, i, uint64(j4))
+		i--
+		dAtA[i] = 0x1a
 	}
-	if m.Edge == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("edge")
-	} else {
-		i -= len(*m.Edge)
-		copy(dAtA[i:], *m.Edge)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Edge)))
+	if len(m.Edge) > 0 {
+		i -= len(m.Edge)
+		copy(dAtA[i:], m.Edge)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Edge)))
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.Pipeline == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	} else {
-		i -= len(*m.Pipeline)
-		copy(dAtA[i:], *m.Pipeline)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Pipeline)))
+	if len(m.Pipeline) > 0 {
+		i -= len(m.Pipeline)
+		copy(dAtA[i:], m.Pipeline)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Pipeline)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1875,12 +1842,10 @@ func (m *GetPipelineWatermarksRequest) MarshalToSizedBuffer(dAtA []byte) (int, e
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if m.Pipeline == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	} else {
-		i -= len(*m.Pipeline)
-		copy(dAtA[i:], *m.Pipeline)
-		i = encodeVarintDaemon(dAtA, i, uint64(len(*m.Pipeline)))
+	if len(m.Pipeline) > 0 {
+		i -= len(m.Pipeline)
+		copy(dAtA[i:], m.Pipeline)
+		i = encodeVarintDaemon(dAtA, i, uint64(len(m.Pipeline)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1904,33 +1869,34 @@ func (m *BufferInfo) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Pipeline != nil {
-		l = len(*m.Pipeline)
+	l = len(m.Pipeline)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.BufferName != nil {
-		l = len(*m.BufferName)
+	l = len(m.BufferName)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if m.PendingCount != nil {
-		n += 1 + sovDaemon(uint64(*m.PendingCount))
+		l = m.PendingCount.Size()
+		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.AckPendingCount != nil {
-		n += 1 + sovDaemon(uint64(*m.AckPendingCount))
+	if m.AckPendingCount != 0 {
+		n += 1 + sovDaemon(uint64(m.AckPendingCount))
 	}
-	if m.TotalMessages != nil {
-		n += 1 + sovDaemon(uint64(*m.TotalMessages))
+	if m.TotalMessages != 0 {
+		n += 1 + sovDaemon(uint64(m.TotalMessages))
 	}
-	if m.BufferLength != nil {
-		n += 1 + sovDaemon(uint64(*m.BufferLength))
+	if m.BufferLength != 0 {
+		n += 1 + sovDaemon(uint64(m.BufferLength))
 	}
-	if m.BufferUsageLimit != nil {
+	if m.BufferUsageLimit != 0 {
 		n += 9
 	}
-	if m.BufferUsage != nil {
+	if m.BufferUsage != 0 {
 		n += 9
 	}
-	if m.IsFull != nil {
+	if m.IsFull {
 		n += 2
 	}
 	if m.XXX_unrecognized != nil {
@@ -1945,12 +1911,12 @@ func (m *VertexMetrics) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Pipeline != nil {
-		l = len(*m.Pipeline)
+	l = len(m.Pipeline)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.Vertex != nil {
-		l = len(*m.Vertex)
+	l = len(m.Vertex)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if len(m.ProcessingRates) > 0 {
@@ -1981,16 +1947,16 @@ func (m *PipelineStatus) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Status != nil {
-		l = len(*m.Status)
+	l = len(m.Status)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.Message != nil {
-		l = len(*m.Message)
+	l = len(m.Message)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.Code != nil {
-		l = len(*m.Code)
+	l = len(m.Code)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -2005,8 +1971,8 @@ func (m *ListBuffersRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Pipeline != nil {
-		l = len(*m.Pipeline)
+	l = len(m.Pipeline)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -2039,12 +2005,12 @@ func (m *GetBufferRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Pipeline != nil {
-		l = len(*m.Pipeline)
+	l = len(m.Pipeline)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.Buffer != nil {
-		l = len(*m.Buffer)
+	l = len(m.Buffer)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -2075,8 +2041,8 @@ func (m *GetPipelineStatusRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Pipeline != nil {
-		l = len(*m.Pipeline)
+	l = len(m.Pipeline)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -2107,12 +2073,12 @@ func (m *GetVertexMetricsRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Pipeline != nil {
-		l = len(*m.Pipeline)
+	l = len(m.Pipeline)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.Vertex != nil {
-		l = len(*m.Vertex)
+	l = len(m.Vertex)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -2145,28 +2111,30 @@ func (m *EdgeWatermark) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Pipeline != nil {
-		l = len(*m.Pipeline)
+	l = len(m.Pipeline)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.Edge != nil {
-		l = len(*m.Edge)
+	l = len(m.Edge)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if len(m.Watermarks) > 0 {
+		l = 0
 		for _, e := range m.Watermarks {
-			n += 1 + sovDaemon(uint64(e))
+			l += sovDaemon(uint64(e))
 		}
+		n += 1 + sovDaemon(uint64(l)) + l
 	}
-	if m.IsWatermarkEnabled != nil {
+	if m.IsWatermarkEnabled {
 		n += 2
 	}
-	if m.From != nil {
-		l = len(*m.From)
+	l = len(m.From)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
-	if m.To != nil {
-		l = len(*m.To)
+	l = len(m.To)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -2199,8 +2167,8 @@ func (m *GetPipelineWatermarksRequest) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Pipeline != nil {
-		l = len(*m.Pipeline)
+	l = len(m.Pipeline)
+	if l > 0 {
 		n += 1 + l + sovDaemon(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -2216,7 +2184,6 @@ func sozDaemon(x uint64) (n int) {
 	return sovDaemon(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
 func (m *BufferInfo) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2275,10 +2242,8 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Pipeline = &s
+			m.Pipeline = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field BufferName", wireType)
@@ -2309,15 +2274,13 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.BufferName = &s
+			m.BufferName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000002)
 		case 3:
-			if wireType != 0 {
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field PendingCount", wireType)
 			}
-			var v int64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowDaemon
@@ -2327,18 +2290,33 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.PendingCount = &v
-			hasFields[0] |= uint64(0x00000004)
+			if msglen < 0 {
+				return ErrInvalidLengthDaemon
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDaemon
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.PendingCount == nil {
+				m.PendingCount = &wrapperspb.Int64Value{}
+			}
+			if err := m.PendingCount.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field AckPendingCount", wireType)
 			}
-			var v int64
+			m.AckPendingCount = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowDaemon
@@ -2348,18 +2326,16 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int64(b&0x7F) << shift
+				m.AckPendingCount |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.AckPendingCount = &v
-			hasFields[0] |= uint64(0x00000008)
 		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TotalMessages", wireType)
 			}
-			var v int64
+			m.TotalMessages = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowDaemon
@@ -2369,18 +2345,16 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int64(b&0x7F) << shift
+				m.TotalMessages |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.TotalMessages = &v
-			hasFields[0] |= uint64(0x00000010)
 		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field BufferLength", wireType)
 			}
-			var v int64
+			m.BufferLength = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowDaemon
@@ -2390,13 +2364,11 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int64(b&0x7F) << shift
+				m.BufferLength |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.BufferLength = &v
-			hasFields[0] |= uint64(0x00000020)
 		case 7:
 			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field BufferUsageLimit", wireType)
@@ -2407,9 +2379,7 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 			}
 			v = uint64(encoding_binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
-			v2 := float64(math.Float64frombits(v))
-			m.BufferUsageLimit = &v2
-			hasFields[0] |= uint64(0x00000040)
+			m.BufferUsageLimit = float64(math.Float64frombits(v))
 		case 8:
 			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field BufferUsage", wireType)
@@ -2420,9 +2390,7 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 			}
 			v = uint64(encoding_binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
-			v2 := float64(math.Float64frombits(v))
-			m.BufferUsage = &v2
-			hasFields[0] |= uint64(0x00000080)
+			m.BufferUsage = float64(math.Float64frombits(v))
 		case 9:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field IsFull", wireType)
@@ -2442,9 +2410,7 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-			b := bool(v != 0)
-			m.IsFull = &b
-			hasFields[0] |= uint64(0x00000100)
+			m.IsFull = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -2461,33 +2427,6 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 			iNdEx += skippy
 		}
 	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	}
-	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("bufferName")
-	}
-	if hasFields[0]&uint64(0x00000004) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pendingCount")
-	}
-	if hasFields[0]&uint64(0x00000008) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("ackPendingCount")
-	}
-	if hasFields[0]&uint64(0x00000010) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("totalMessages")
-	}
-	if hasFields[0]&uint64(0x00000020) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("bufferLength")
-	}
-	if hasFields[0]&uint64(0x00000040) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("bufferUsageLimit")
-	}
-	if hasFields[0]&uint64(0x00000080) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("bufferUsage")
-	}
-	if hasFields[0]&uint64(0x00000100) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("isFull")
-	}
 
 	if iNdEx > l {
 		return io.ErrUnexpectedEOF
@@ -2495,7 +2434,6 @@ func (m *BufferInfo) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *VertexMetrics) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2554,10 +2492,8 @@ func (m *VertexMetrics) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Pipeline = &s
+			m.Pipeline = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Vertex", wireType)
@@ -2588,10 +2524,8 @@ func (m *VertexMetrics) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Vertex = &s
+			m.Vertex = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000002)
 		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ProcessingRates", wireType)
@@ -2827,12 +2761,6 @@ func (m *VertexMetrics) Unmarshal(dAtA []byte) error {
 			iNdEx += skippy
 		}
 	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	}
-	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertex")
-	}
 
 	if iNdEx > l {
 		return io.ErrUnexpectedEOF
@@ -2840,7 +2768,6 @@ func (m *VertexMetrics) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *PipelineStatus) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2899,10 +2826,8 @@ func (m *PipelineStatus) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Status = &s
+			m.Status = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Message", wireType)
@@ -2933,10 +2858,8 @@ func (m *PipelineStatus) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Message = &s
+			m.Message = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000002)
 		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Code", wireType)
@@ -2967,10 +2890,8 @@ func (m *PipelineStatus) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Code = &s
+			m.Code = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000004)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -2987,15 +2908,6 @@ func (m *PipelineStatus) Unmarshal(dAtA []byte) error {
 			iNdEx += skippy
 		}
 	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("status")
-	}
-	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("message")
-	}
-	if hasFields[0]&uint64(0x00000004) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("code")
-	}
 
 	if iNdEx > l {
 		return io.ErrUnexpectedEOF
@@ -3003,7 +2915,6 @@ func (m *PipelineStatus) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *ListBuffersRequest) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -3062,10 +2973,8 @@ func (m *ListBuffersRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Pipeline = &s
+			m.Pipeline = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -3081,9 +2990,6 @@ func (m *ListBuffersRequest) Unmarshal(dAtA []byte) error {
 			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
-	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
 	}
 
 	if iNdEx > l {
@@ -3177,7 +3083,6 @@ func (m *ListBuffersResponse) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *GetBufferRequest) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -3236,10 +3141,8 @@ func (m *GetBufferRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Pipeline = &s
+			m.Pipeline = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Buffer", wireType)
@@ -3270,10 +3173,8 @@ func (m *GetBufferRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Buffer = &s
+			m.Buffer = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000002)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -3290,12 +3191,6 @@ func (m *GetBufferRequest) Unmarshal(dAtA []byte) error {
 			iNdEx += skippy
 		}
 	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	}
-	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("buffer")
-	}
 
 	if iNdEx > l {
 		return io.ErrUnexpectedEOF
@@ -3303,7 +3198,6 @@ func (m *GetBufferRequest) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *GetBufferResponse) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -3368,7 +3262,6 @@ func (m *GetBufferResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -3385,9 +3278,6 @@ func (m *GetBufferResponse) Unmarshal(dAtA []byte) error {
 			iNdEx += skippy
 		}
 	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("buffer")
-	}
 
 	if iNdEx > l {
 		return io.ErrUnexpectedEOF
@@ -3395,7 +3285,6 @@ func (m *GetBufferResponse) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *GetPipelineStatusRequest) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -3454,10 +3343,8 @@ func (m *GetPipelineStatusRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Pipeline = &s
+			m.Pipeline = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -3474,9 +3361,6 @@ func (m *GetPipelineStatusRequest) Unmarshal(dAtA []byte) error {
 			iNdEx += skippy
 		}
 	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	}
 
 	if iNdEx > l {
 		return io.ErrUnexpectedEOF
@@ -3484,7 +3368,6 @@ func (m *GetPipelineStatusRequest) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *GetPipelineStatusResponse) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -3549,7 +3432,6 @@ func (m *GetPipelineStatusResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -3566,9 +3448,6 @@ func (m *GetPipelineStatusResponse) Unmarshal(dAtA []byte) error {
 			iNdEx += skippy
 		}
 	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("status")
-	}
 
 	if iNdEx > l {
 		return io.ErrUnexpectedEOF
@@ -3576,7 +3455,6 @@ func (m *GetPipelineStatusResponse) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *GetVertexMetricsRequest) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -3635,10 +3513,8 @@ func (m *GetVertexMetricsRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Pipeline = &s
+			m.Pipeline = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Vertex", wireType)
@@ -3669,10 +3545,8 @@ func (m *GetVertexMetricsRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Vertex = &s
+			m.Vertex = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000002)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -3688,12 +3562,6 @@ func (m *GetVertexMetricsRequest) Unmarshal(dAtA []byte) error {
 			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
-	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	}
-	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("vertex")
 	}
 
 	if iNdEx > l {
@@ -3787,7 +3655,6 @@ func (m *GetVertexMetricsResponse) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *EdgeWatermark) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -3846,10 +3713,8 @@ func (m *EdgeWatermark) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Pipeline = &s
+			m.Pipeline = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Edge", wireType)
@@ -3880,10 +3745,8 @@ func (m *EdgeWatermark) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Edge = &s
+			m.Edge = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000002)
 		case 3:
 			if wireType == 0 {
 				var v int64
@@ -3979,9 +3842,7 @@ func (m *EdgeWatermark) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-			b := bool(v != 0)
-			m.IsWatermarkEnabled = &b
-			hasFields[0] |= uint64(0x00000004)
+			m.IsWatermarkEnabled = bool(v != 0)
 		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field From", wireType)
@@ -4012,10 +3873,8 @@ func (m *EdgeWatermark) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.From = &s
+			m.From = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000008)
 		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field To", wireType)
@@ -4046,10 +3905,8 @@ func (m *EdgeWatermark) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.To = &s
+			m.To = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000010)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -4065,21 +3922,6 @@ func (m *EdgeWatermark) Unmarshal(dAtA []byte) error {
 			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
-	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
-	}
-	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("edge")
-	}
-	if hasFields[0]&uint64(0x00000004) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("isWatermarkEnabled")
-	}
-	if hasFields[0]&uint64(0x00000008) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("from")
-	}
-	if hasFields[0]&uint64(0x00000010) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("to")
 	}
 
 	if iNdEx > l {
@@ -4173,7 +4015,6 @@ func (m *GetPipelineWatermarksResponse) Unmarshal(dAtA []byte) error {
 	return nil
 }
 func (m *GetPipelineWatermarksRequest) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -4232,10 +4073,8 @@ func (m *GetPipelineWatermarksRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Pipeline = &s
+			m.Pipeline = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDaemon(dAtA[iNdEx:])
@@ -4251,9 +4090,6 @@ func (m *GetPipelineWatermarksRequest) Unmarshal(dAtA []byte) error {
 			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
-	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("pipeline")
 	}
 
 	if iNdEx > l {

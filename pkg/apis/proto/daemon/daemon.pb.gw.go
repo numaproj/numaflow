@@ -49,7 +49,7 @@ func request_DaemonService_ListBuffers_0(ctx context.Context, marshaler runtime.
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
@@ -76,7 +76,7 @@ func local_request_DaemonService_ListBuffers_0(ctx context.Context, marshaler ru
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
@@ -103,7 +103,7 @@ func request_DaemonService_GetBuffer_0(ctx context.Context, marshaler runtime.Ma
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
@@ -114,7 +114,7 @@ func request_DaemonService_GetBuffer_0(ctx context.Context, marshaler runtime.Ma
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "buffer")
 	}
 
-	protoReq.Buffer, err = runtime.StringP(val)
+	protoReq.Buffer, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "buffer", err)
@@ -141,7 +141,7 @@ func local_request_DaemonService_GetBuffer_0(ctx context.Context, marshaler runt
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
@@ -152,7 +152,7 @@ func local_request_DaemonService_GetBuffer_0(ctx context.Context, marshaler runt
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "buffer")
 	}
 
-	protoReq.Buffer, err = runtime.StringP(val)
+	protoReq.Buffer, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "buffer", err)
@@ -179,7 +179,7 @@ func request_DaemonService_GetVertexMetrics_0(ctx context.Context, marshaler run
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
@@ -190,7 +190,7 @@ func request_DaemonService_GetVertexMetrics_0(ctx context.Context, marshaler run
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "vertex")
 	}
 
-	protoReq.Vertex, err = runtime.StringP(val)
+	protoReq.Vertex, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "vertex", err)
@@ -217,7 +217,7 @@ func local_request_DaemonService_GetVertexMetrics_0(ctx context.Context, marshal
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
@@ -228,7 +228,7 @@ func local_request_DaemonService_GetVertexMetrics_0(ctx context.Context, marshal
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "vertex")
 	}
 
-	protoReq.Vertex, err = runtime.StringP(val)
+	protoReq.Vertex, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "vertex", err)
@@ -255,7 +255,7 @@ func request_DaemonService_GetPipelineWatermarks_0(ctx context.Context, marshale
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
@@ -282,7 +282,7 @@ func local_request_DaemonService_GetPipelineWatermarks_0(ctx context.Context, ma
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
@@ -309,7 +309,7 @@ func request_DaemonService_GetPipelineStatus_0(ctx context.Context, marshaler ru
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
@@ -336,7 +336,7 @@ func local_request_DaemonService_GetPipelineStatus_0(ctx context.Context, marsha
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "pipeline")
 	}
 
-	protoReq.Pipeline, err = runtime.StringP(val)
+	protoReq.Pipeline, err = runtime.String(val)
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "pipeline", err)
