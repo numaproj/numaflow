@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/gavv/httpexpect/v2"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/utils/ptr"
 
@@ -50,7 +51,8 @@ func Test_StartMetricsServer(t *testing.T) {
 	err = s(context.TODO())
 	assert.NoError(t, err)
 }
-func TestMetricsServer_WithLagReaders(t *testing.T) {
+
+func Test_MetricsServer_WithLagReaders(t *testing.T) {
 	mockReader := &mockLagReader{name: "test-reader"}
 	ms := NewMetricsServer(&dfv1.Vertex{}, WithLagReaders(map[string]isb.LagReader{
 		"test-reader": mockReader,
@@ -59,19 +61,19 @@ func TestMetricsServer_WithLagReaders(t *testing.T) {
 	assert.Equal(t, mockReader, ms.lagReaders["test-reader"])
 }
 
-func TestMetricsServer_WithRefreshInterval(t *testing.T) {
+func Test_MetricsServer_WithRefreshInterval(t *testing.T) {
 	interval := 10 * time.Second
 	ms := NewMetricsServer(&dfv1.Vertex{}, WithRefreshInterval(interval))
 	assert.Equal(t, interval, ms.refreshInterval)
 }
 
-func TestMetricsServer_WithLookbackSeconds(t *testing.T) {
+func Test_MetricsServer_WithLookbackSeconds(t *testing.T) {
 	seconds := int64(300)
 	ms := NewMetricsServer(&dfv1.Vertex{}, WithLookbackSeconds(seconds))
 	assert.Equal(t, seconds, ms.lookbackSeconds)
 }
 
-func TestMetricsServer_WithHealthCheckExecutor(t *testing.T) {
+func Test_MetricsServer_WithHealthCheckExecutor(t *testing.T) {
 	executed := false
 	executor := func() error {
 		executed = true
@@ -114,11 +116,69 @@ func (m *mockLagReader) GetName() string {
 }
 
 func (m *mockLagReader) Pending(ctx context.Context) (int64, error) {
-	return 0, nil
+	return 200, nil
 }
 
 type mockHealthChecker struct{}
 
 func (m *mockHealthChecker) IsHealthy(ctx context.Context) error {
 	return nil
+}
+
+func Test_MetricsServer_BuildAndExposePendingMetrics(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vtx := &dfv1.Vertex{
+		Spec: dfv1.VertexSpec{
+			PipelineName: "test-pipeline",
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "test-vertex",
+			},
+		},
+	}
+	mockReader := &mockLagReader{name: "test-reader"}
+	ms := NewMetricsServer(vtx, WithLagReaders(map[string]isb.LagReader{"test-reader": mockReader}), WithRefreshInterval(10*time.Millisecond))
+	ms.lagCheckingInterval = 10 * time.Millisecond
+
+	go ms.buildupPendingInfo(ctx)
+	go ms.exposePendingMetrics(ctx)
+
+	// Wait for a few ticks to expose metrics
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify that metrics are exposed
+	assert.NotEmpty(t, ms.partitionPendingInfo["test-reader"].Items())
+	g, err := pending.GetMetricWithLabelValues("test-pipeline", "test-vertex", "1m", "test-reader")
+	assert.NoError(t, err)
+	m := &dto.Metric{}
+	err = g.Write(m)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(200), *m.GetGauge().Value)
+}
+
+func TestMetricsServer_CalculatePending(t *testing.T) {
+	mockReader := &mockLagReader{name: "test-reader"}
+	ms := NewMetricsServer(&dfv1.Vertex{}, WithLagReaders(map[string]isb.LagReader{"test-reader": mockReader}))
+
+	// Test with no items
+	pending := ms.calculatePending(60, "test-reader")
+	assert.Equal(t, isb.PendingNotAvailable, pending)
+
+	// Test with items within lookback window
+	now := time.Now().Unix()
+	ms.partitionPendingInfo["test-reader"].Append(timestampedPending{pending: 30, timestamp: now - 120})
+	ms.partitionPendingInfo["test-reader"].Append(timestampedPending{pending: 10, timestamp: now - 30})
+	ms.partitionPendingInfo["test-reader"].Append(timestampedPending{pending: 20, timestamp: now - 40})
+
+	// Test with items in lookback window
+	pending = ms.calculatePending(200, "test-reader")
+	assert.Equal(t, int64(20), pending)
+
+	pending = ms.calculatePending(60, "test-reader")
+	assert.Equal(t, int64(15), pending)
+
+	// Test with items within lookback window but no data points
+	pending = ms.calculatePending(10, "test-reader")
+	assert.Equal(t, isb.PendingNotAvailable, pending)
 }
