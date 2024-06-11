@@ -90,7 +90,7 @@ test:
 .PHONY: test-coverage
 test-coverage:
 	go test -covermode=atomic -coverprofile=test/profile.cov.tmp $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
-	cat test/profile.cov.tmp | grep -v v1alpha1/zz_generated | grep -v v1alpha1/generated > test/profile.cov
+	cat test/profile.cov.tmp | grep -v v1alpha1/zz_generated | grep -v v1alpha1/generated | grep -v v1alpha1/openapi_generated > test/profile.cov
 	rm test/profile.cov.tmp
 	go tool cover -func=test/profile.cov
 
@@ -98,7 +98,7 @@ test-coverage:
 .PHONY: test-coverage-with-isb
 test-coverage-with-isb:
 	go test -covermode=atomic -coverprofile=test/profile.cov.tmp -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
-	cat test/profile.cov.tmp | grep -v v1alpha1/zz_generated | grep -v v1alpha1/generated > test/profile.cov
+	cat test/profile.cov.tmp | grep -v v1alpha1/zz_generated | grep -v v1alpha1/generated | grep -v v1alpha1/openapi_generated > test/profile.cov
 	rm test/profile.cov.tmp
 	go tool cover -func=test/profile.cov
 
