@@ -26,8 +26,10 @@ import (
 
 	"github.com/gavv/httpexpect/v2"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 func Test_StartMetricsServer(t *testing.T) {
@@ -47,4 +49,76 @@ func Test_StartMetricsServer(t *testing.T) {
 	e.GET("/metrics").WithMaxRetries(3).WithRetryDelay(time.Second, 3*time.Second).Expect().Status(200)
 	err = s(context.TODO())
 	assert.NoError(t, err)
+}
+func TestMetricsServer_WithLagReaders(t *testing.T) {
+	mockReader := &mockLagReader{name: "test-reader"}
+	ms := NewMetricsServer(&dfv1.Vertex{}, WithLagReaders(map[string]isb.LagReader{
+		"test-reader": mockReader,
+	}))
+	assert.Equal(t, 1, len(ms.lagReaders))
+	assert.Equal(t, mockReader, ms.lagReaders["test-reader"])
+}
+
+func TestMetricsServer_WithRefreshInterval(t *testing.T) {
+	interval := 10 * time.Second
+	ms := NewMetricsServer(&dfv1.Vertex{}, WithRefreshInterval(interval))
+	assert.Equal(t, interval, ms.refreshInterval)
+}
+
+func TestMetricsServer_WithLookbackSeconds(t *testing.T) {
+	seconds := int64(300)
+	ms := NewMetricsServer(&dfv1.Vertex{}, WithLookbackSeconds(seconds))
+	assert.Equal(t, seconds, ms.lookbackSeconds)
+}
+
+func TestMetricsServer_WithHealthCheckExecutor(t *testing.T) {
+	executed := false
+	executor := func() error {
+		executed = true
+		return nil
+	}
+	ms := NewMetricsServer(&dfv1.Vertex{}, WithHealthCheckExecutor(executor))
+	assert.Equal(t, 1, len(ms.healthCheckExecutors))
+	err := ms.healthCheckExecutors[0]()
+	assert.NoError(t, err)
+	assert.True(t, executed)
+}
+
+func Test_MetricsServer_NewMetricsOptions(t *testing.T) {
+	vertex := &dfv1.Vertex{
+		Spec: dfv1.VertexSpec{
+			AbstractVertex: dfv1.AbstractVertex{
+				Name: "test-vertex",
+				Scale: dfv1.Scale{
+					LookbackSeconds: ptr.To[uint32](120),
+				},
+			},
+		},
+	}
+	healthChecker := &mockHealthChecker{}
+	reader := &mockLagReader{name: "test-reader"}
+	opts := NewMetricsOptions(context.Background(), vertex, []HealthChecker{healthChecker}, []isb.LagReader{reader})
+	assert.Equal(t, 3, len(opts))
+	m := NewMetricsServer(vertex, opts...)
+	assert.Equal(t, int64(120), m.lookbackSeconds)
+	assert.Equal(t, 1, len(m.lagReaders))
+	assert.Equal(t, reader, m.lagReaders["test-reader"])
+}
+
+type mockLagReader struct {
+	name string
+}
+
+func (m *mockLagReader) GetName() string {
+	return m.name
+}
+
+func (m *mockLagReader) Pending(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
+type mockHealthChecker struct{}
+
+func (m *mockHealthChecker) IsHealthy(ctx context.Context) error {
+	return nil
 }
