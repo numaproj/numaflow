@@ -23,7 +23,7 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-func TestEdgeBufferFullWritingStrategy(t *testing.T) {
+func Test_EdgeBufferFullWritingStrategy(t *testing.T) {
 	tests := []struct {
 		name     string
 		edge     Edge
@@ -58,7 +58,7 @@ func TestEdgeBufferFullWritingStrategy(t *testing.T) {
 	}
 }
 
-func TestGenerateEdgeBucketName(t *testing.T) {
+func Test_GenerateEdgeBucketName(t *testing.T) {
 	tests := []struct {
 		name      string
 		namespace string
@@ -92,7 +92,7 @@ func TestGenerateEdgeBucketName(t *testing.T) {
 	}
 }
 
-func TestCombinedEdgeGetFromVertexPartitions(t *testing.T) {
+func Test_CombinedEdgeGetFromVertexPartitions(t *testing.T) {
 	tests := []struct {
 		name     string
 		combined CombinedEdge
@@ -122,7 +122,7 @@ func TestCombinedEdgeGetFromVertexPartitions(t *testing.T) {
 	}
 }
 
-func TestCombinedEdgeGetToVertexPartitionCount(t *testing.T) {
+func Test_CombinedEdgeGetToVertexPartitionCount(t *testing.T) {
 	tests := []struct {
 		name     string
 		combined CombinedEdge
@@ -148,6 +148,80 @@ func TestCombinedEdgeGetToVertexPartitionCount(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			assert.Equal(t, test.expected, test.combined.GetToVertexPartitionCount())
+		})
+	}
+}
+
+func Test_EdgeGetEdgeName(t *testing.T) {
+	tests := []struct {
+		name     string
+		edge     Edge
+		expected string
+	}{
+		{
+			name:     "valid edge",
+			edge:     Edge{From: "source", To: "sink"},
+			expected: "source-sink",
+		},
+		{
+			name:     "empty from",
+			edge:     Edge{From: "", To: "sink"},
+			expected: "-sink",
+		},
+		{
+			name:     "empty to",
+			edge:     Edge{From: "source", To: ""},
+			expected: "source-",
+		},
+		{
+			name:     "empty from and to",
+			edge:     Edge{From: "", To: ""},
+			expected: "-",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.edge.GetEdgeName())
+		})
+	}
+}
+func TestTagConditionsGetOperator(t *testing.T) {
+	tests := []struct {
+		name     string
+		tc       TagConditions
+		expected LogicOperator
+	}{
+		{
+			name:     "nil operator",
+			tc:       TagConditions{},
+			expected: LogicOperatorOr,
+		},
+		{
+			name:     "or operator",
+			tc:       TagConditions{Operator: ptr.To[LogicOperator](LogicOperatorOr)},
+			expected: LogicOperatorOr,
+		},
+		{
+			name:     "not operator",
+			tc:       TagConditions{Operator: ptr.To[LogicOperator](LogicOperatorNot)},
+			expected: LogicOperatorNot,
+		},
+		{
+			name:     "and operator",
+			tc:       TagConditions{Operator: ptr.To[LogicOperator](LogicOperatorAnd)},
+			expected: LogicOperatorAnd,
+		},
+		{
+			name:     "invalid operator",
+			tc:       TagConditions{Operator: ptr.To[LogicOperator]("invalid")},
+			expected: LogicOperatorOr,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.tc.GetOperator())
 		})
 	}
 }
