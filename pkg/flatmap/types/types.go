@@ -27,6 +27,7 @@ type AckMsgFlatmap struct {
 }
 
 type RequestFlatmap struct {
-	Request *isb.ReadMessage
-	Uid     string
+	Request    *isb.ReadMessage
+	Uid        string
+	ReadOffset isb.Offset
 }

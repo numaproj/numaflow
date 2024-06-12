@@ -163,6 +163,7 @@ func (jr *jetStreamReader) Ack(_ context.Context, offsets []isb.Offset) []error 
 				return []error{err}
 			}
 		}
+		return nil
 	}
 	errs := make([]error, len(offsets))
 	done := make(chan struct{})

@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
+	"strings"
 
 	flatmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/flatmap/v1"
 	"github.com/numaproj/numaflow-go/pkg/info"
@@ -53,12 +55,12 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 		responseCh = make(chan *flatmappb.MapResponse)
 	)
 
-	// MapFn is a bidirectional RPC
-	// We get a Flatmap_MapFnClient interface over which we can send the requests,
-	// receive the responses asynchronously.
-	// TODO(stream): this creates a new gRPC stream for every batch,
-	// it might be useful to see the performance difference between this approach
-	// and a long running RPC
+	//MapFn is a bidirectional RPC
+	//We get a Flatmap_MapFnClient interface over which we can send the requests,
+	//receive the responses asynchronously.
+	//TODO(stream): this creates a new gRPC stream for every batch,
+	//it might be useful to see the performance difference between this approach
+	//and a long-running RPC
 	stream, err := c.grpcClt.MapFn(ctx)
 
 	// If any initial error, send it to the error channel
@@ -107,7 +109,6 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 	// in case there is an error in sending, send it to the error channel for handling
 	go func() {
 		for inputMsg := range datumStreamCh {
-			//log.Print("MYDEBUG Sending to grpc ", inputMsg.GetUuid())
 			err := stream.Send(inputMsg)
 			if err != nil {
 				go func(sErr error) {
@@ -127,6 +128,28 @@ func (c client) MapFn(ctx context.Context, datumStreamCh <-chan *flatmappb.MapRe
 		}
 	}()
 	return responseCh, errCh
+
+	// FOR BYPASSING GRPC
+	// Read from the read messages and send them individually to the bi-di stream for processing
+	// in case there is an error in sending, send it to the error channel for handling
+	//go func() {
+	//	defer close(responseCh)
+	//	//var wg sync.WaitGroup
+	//	//for i := 0; i < 1000; i++ {
+	//	//	wg.Add(1)
+	//	//	go func() {
+	//	//		go TestMap(ctx, datumStreamCh, responseCh, &wg)
+	//	//	}()
+	//	//}
+	//	//wg.Wait()
+	//	for inputMsg := range datumStreamCh {
+	//		mapResp := TestMap(ctx, inputMsg)
+	//		for _, resp := range mapResp {
+	//			responseCh <- resp
+	//		}
+	//	}
+	//}()
+	//return responseCh, errCh
 }
 
 func (c client) CloseConn(ctx context.Context) error {
@@ -159,4 +182,54 @@ func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client,
 	c.conn = conn
 	c.grpcClt = flatmappb.NewFlatmapClient(conn)
 	return c, nil
+}
+
+func TestMap(ctx context.Context, msg *flatmappb.MapRequest) []*flatmappb.MapResponse {
+	val := msg.GetValue()
+	var elements []*flatmappb.MapResponse
+	strs := strings.Split(string(val), ",")
+	for idx, x := range strs {
+		elements = append(elements, &flatmappb.MapResponse{
+			Result: &flatmappb.MapResponse_Result{
+				Keys:  msg.GetKeys(),
+				Value: []byte(x),
+				Tags:  msg.GetKeys(),
+				EOR:   false,
+				Uuid:  msg.GetUuid(),
+				Index: strconv.Itoa(idx),
+				Total: int32(len(strs)),
+			},
+		})
+		//element := &flatmappb.MapResponse{
+		//	Result: &flatmappb.MapResponse_Result{
+		//		Keys:  msg.GetKeys(),
+		//		Value: []byte(x),
+		//		Tags:  msg.GetKeys(),
+		//		EOR:   false,
+		//		Uuid:  msg.GetUuid(),
+		//		Index: strconv.Itoa(idx),
+		//		Total: int32(len(strs)),
+		//	},
+		//}
+		//responseChan <- element
+	}
+	if len(strs) == 0 {
+		// Append the EOR to indicate that the processing for the given request has completed
+		elements = append(elements, &flatmappb.MapResponse{
+			Result: &flatmappb.MapResponse_Result{
+				EOR:   true,
+				Uuid:  msg.GetUuid(),
+				Total: int32(len(strs)),
+			},
+		})
+		//element := &flatmappb.MapResponse{
+		//	Result: &flatmappb.MapResponse_Result{
+		//		EOR:   true,
+		//		Uuid:  msg.GetUuid(),
+		//		Total: int32(len(strs)),
+		//	},
+		//}
+		//responseChan <- element
+	}
+	return elements
 }

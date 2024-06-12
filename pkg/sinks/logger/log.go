@@ -37,6 +37,11 @@ type ToLog struct {
 	logger       *zap.SugaredLogger
 }
 
+func (t *ToLog) WriteNew(ctx context.Context, message isb.Message) (isb.Offset, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // NewToLog returns ToLog type.
 func NewToLog(ctx context.Context, vertexInstance *dfv1.VertexInstance) (*ToLog, error) {
 	return &ToLog{

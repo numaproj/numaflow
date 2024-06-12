@@ -151,6 +151,34 @@ func (jw *jetStreamWriter) Close() error {
 	return nil
 }
 
+func (jw *jetStreamWriter) WriteNew(ctx context.Context, message isb.Message) (isb.Offset, error) {
+	labels := map[string]string{"buffer": jw.GetName()}
+	errs := fmt.Errorf("unknown error")
+	if jw.isFull.Load() {
+		jw.log.Debugw("Is full")
+		isbFull.With(labels).Inc()
+		// when buffer is full, we need to decide whether to discard the message or not.
+		switch jw.opts.bufferFullWritingStrategy {
+		case v1alpha1.DiscardLatest:
+			// user explicitly wants to discard the message when buffer if full.
+			// return no retryable error as a callback to let caller know that the message is discarded.
+			errs = isb.NonRetryableBufferWriteErr{Name: jw.name, Message: isb.BufferFullMessage}
+		default:
+			// Default behavior is to return a BufferWriteErr.
+			errs = isb.BufferWriteErr{Name: jw.name, Full: true, Message: isb.BufferFullMessage}
+		}
+		isbWriteErrors.With(labels).Inc()
+		return nil, errs
+	}
+	//// TODO: temp env flag for sync/async writing, revisit this later.
+	//if sharedutil.LookupEnvStringOr("ISB_ASYNC_WRITE", "false") == "true" {
+	//	return jw.asyncWrite(ctx, messages, errs, labels)
+	//}
+
+	routine, err := jw.WriteRoutine(message, labels)
+	return routine, err
+}
+
 func (jw *jetStreamWriter) Write(ctx context.Context, messages []isb.Message) ([]isb.Offset, []error) {
 	labels := map[string]string{"buffer": jw.GetName()}
 	var errs = make([]error, len(messages))
@@ -256,7 +284,10 @@ func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message,
 	return writeOffsets, errs
 }
 
-func (jw *jetStreamWriter) writeRoutine(message isb.Message, metricsLabels map[string]string) (isb.Offset, error) {
+func (jw *jetStreamWriter) WriteRoutine(message isb.Message, metricsLabels map[string]string) (isb.Offset, error) {
+	defer func(t time.Time) {
+		isbWriteTime.With(metricsLabels).Observe(float64(time.Since(t).Microseconds()))
+	}(time.Now())
 	payload, err := message.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -292,7 +323,7 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 		isbWriteTime.With(metricsLabels).Observe(float64(time.Since(t).Microseconds()))
 	}(time.Now())
 	if len(messages) == 1 {
-		routine, err := jw.writeRoutine(messages[0], metricsLabels)
+		routine, err := jw.WriteRoutine(messages[0], metricsLabels)
 		return []isb.Offset{routine}, []error{err}
 	}
 	var writeOffsets = make([]isb.Offset, len(messages))

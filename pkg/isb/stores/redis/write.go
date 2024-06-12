@@ -51,6 +51,11 @@ type BufferWrite struct {
 	log *zap.SugaredLogger
 }
 
+func (bw *BufferWrite) WriteNew(ctx context.Context, message isb.Message) (isb.Offset, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // BufferWriteInfo will contain the buffer infoRefreshInterval from the writer point of view.
 type BufferWriteInfo struct {
 	isFull           *atomic.Bool

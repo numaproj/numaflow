@@ -166,8 +166,14 @@ func (u *FlatmapUDFProcessor) Start(ctx context.Context) error {
 				return result, nil
 			}
 
+			//var idString strings.Builder
 			// Iterate through the edges
 			for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
+				//idString.Reset()
+				//idString.WriteString(edge.From)
+				//idString.WriteString(":")
+				//idString.WriteString(edge.To)
+				//edgeKey := idString.String()
 				edgeKey := fmt.Sprintf("%s:%s", edge.From, edge.To)
 
 				// Condition to proceed for forwarding message: No conditions on edge, or message tags match edge conditions

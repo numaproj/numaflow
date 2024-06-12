@@ -297,7 +297,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// wait till the processing is done. this will not be an infinite wait because the map UDF processing will exit if
 		// context.Done() is closed.
 		wg.Wait()
-		isdf.opts.logger.Debugw("concurrent applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
+		isdf.opts.logger.Debugw("MYDEBUG: concurrent no udf completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
 		metrics.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
 		// map UDF processing is done.
 
@@ -398,6 +398,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	// ProcessingTimes of the entire forwardAChunk
 	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
+	isdf.opts.logger.Debugw("MYDEBUG: total with udf time", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(start)))
+
 }
 
 // streamMessage streams the data messages to the next step.

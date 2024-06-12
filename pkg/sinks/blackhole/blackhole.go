@@ -34,6 +34,11 @@ type Blackhole struct {
 	logger       *zap.SugaredLogger
 }
 
+func (b *Blackhole) WriteNew(ctx context.Context, message isb.Message) (isb.Offset, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // NewBlackhole returns a new Blackhole sink.
 func NewBlackhole(ctx context.Context, vertexInstance *dfv1.VertexInstance) (*Blackhole, error) {
 	return &Blackhole{

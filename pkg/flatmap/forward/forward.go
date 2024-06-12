@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -235,6 +236,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	if len(readMessages) == 0 {
 		return
 	}
+	logger := isdf.opts.logger
+	logger.Info("MYDEBUG: NO concur Bi-di ", len(readMessages))
 
 	// TODO(stream): see if that can be optimised by not duplicating the data slice, and passing
 	// We send only the dataMessages to the UDF for processing, for the non data messages,
@@ -338,19 +341,23 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
+	//TODO(stream): once processing has been completed, should we reset the tracker
+	//  or check if any messages are left in that which have not been processed and those can be noAcked?
 	requestNotProcessed := isdf.requestTracker.GetItems()
 	// if we have requests left to process NoAck all of them
 	if len(requestNotProcessed) > 0 {
 		isdf.opts.logger.Debugw("MYDEBUG: requests left to process ", len(requestNotProcessed))
 		isdf.fromBufferPartition.NoAck(ctx, readOffsets)
+		isdf.requestTracker.Clear()
 	}
+	metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(dataMessages) - len(requestNotProcessed) + len(ctrlMessageOffsets)))
 
+	// reset response tracker
 	isdf.responseTracker = new(sync.Map)
 
-	//TODO(stream): once processing has been completed, should we reset the tracker
-	//  or check if any messages are left in that which have not been processed and those can be noAcked?
+	// reset request tracker
 
-	isdf.opts.logger.Debugw("forwardAChunk completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(start)))
+	isdf.opts.logger.Debugw("forwardAChunk with UDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(start)))
 }
 
 // ackRoutine is a worker routine used to ack messages to the prev buffer.
@@ -358,28 +365,17 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 // Once, there are no more messages left to read on the channel, the routine exits.
 func (isdf *InterStepDataForward) ackRoutine(ctx context.Context, ackMsgChan <-chan *types.RequestFlatmap, wg *sync.WaitGroup) {
 	defer wg.Done()
-ackLoop:
-	for {
-		select {
-		case <-ctx.Done():
-			break ackLoop
-		case response, ok := <-ackMsgChan:
-			if !ok {
-				break ackLoop
-			}
-			//isdf.opts.logger.Info("MYDEBUG: GOT TO ACK ", response.Uid)
-			ackMessages := []isb.Offset{response.Request.ReadOffset}
-			if err := isdf.ackFromBuffer(ctx, ackMessages); err != nil {
-				isdf.opts.logger.Error("MYDEBUG: ERROR IN ACK ", zap.Error(err))
-				// TODO(stream): we have retried in the ackFromBuffer, should we trigger drain here then?
-				isdf.requestTracker.RemoveRequest(response.Uid)
-				metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
-				return
-			}
+	for response := range ackMsgChan {
+		//isdf.opts.logger.Info("MYDEBUG: GOT TO ACK ", response.Uid)
+		if err := isdf.ackFromBufferSingle(ctx, response.Request.ReadOffset); err != nil {
+			isdf.opts.logger.Error("MYDEBUG: ERROR IN ACK ", zap.Error(err))
+			// TODO(stream): we have retried in the ackFromBuffer, should we trigger drain here then?
 			isdf.requestTracker.RemoveRequest(response.Uid)
-			//isdf.opts.logger.Info("MYDEBUG: DONE ACK ", response.Uid)
-			metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
+			metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
+			return
 		}
+		isdf.requestTracker.RemoveRequest(response.Uid)
+		//isdf.opts.logger.Info("MYDEBUG: DONE ACK ", response.Uid)
 	}
 }
 
@@ -390,8 +386,6 @@ ackLoop:
 // this.
 // TODO(stream): check if the ack path can be optimised as now we are writing one message per worker, instead of sending a batch for writing.
 func (isdf *InterStepDataForward) invokeAck(ctx context.Context, ackMsgChan <-chan *types.RequestFlatmap) (doneChan chan struct{}) {
-	logger := isdf.opts.logger
-	logger.Info("MYDEBUG: NO WG ACK ROUTINE ", isdf.opts.readBatchSize)
 	doneChan = make(chan struct{})
 	go func() {
 		defer close(doneChan)
@@ -411,56 +405,50 @@ func (isdf *InterStepDataForward) invokeAck(ctx context.Context, ackMsgChan <-ch
 // Once, there are no more messages left to read on the channel, the routine exits.
 // If there is an error in the UDF processing the udfRespCh is closed, so the workers should exit
 func (isdf *InterStepDataForward) writeRoutine(ctx context.Context, udfRespCh <-chan *flatmappb.MapResponse, ackChan chan<- *types.RequestFlatmap, wg *sync.WaitGroup) {
-	defer wg.Done()
-outerLoop:
-	for {
-		select {
-		case response, ok := <-udfRespCh:
-			// if the channel is closed, exit from the routine
-			if !ok {
-				break outerLoop
-			}
-			uid := response.Result.GetUuid()
-			trackedRequest, ok := isdf.requestTracker.GetRequest(uid)
-			// TODO(stream): check what should be path for !ok, which means that we got a UUID
-			// which has already been deleted from the tracker/ or never added in the first place
-			// can this even happen though if messages are ordered and we only have a single routine processing it?
-			if !ok {
-				isdf.opts.logger.Error("MYDEBUG: MESSAGE NOT IN TRACKER ", response.Result.GetTotal(), uid)
-			}
-			parsedResp, requestDone, total := isdf.parseMapResponse(response, trackedRequest)
-			// if the response has the AckIt field = true, that indicates the end of the processing for
-			// a given message. In this case send the parent request for Acking and continue
-			// if requestDone (EOR == true) and total == 0 it means there were no responses
-			// expected for this request, hence we can directly ackIt, no need to write
-			if requestDone && total == 0 {
-				ackChan <- trackedRequest
-				continue
-			}
-			// If AckIt is not set, it is a data response, hence forward it to the next buffer
-			var messageToStep = make(map[string][]isb.Message)
-			for toVertex := range isdf.toBuffers {
-				// over allocating to have a predictable pattern
-				messageToStep[toVertex] = make([]isb.Message, len(isdf.toBuffers[toVertex]))
-			}
-			writeMessage := parsedResp
-			if err := isdf.forwardToBuffers(ctx, writeMessage, trackedRequest.Request, messageToStep); err != nil {
-				// As we have re-tried already to forward to the buffer, we should not be trying it again.
-				// But what if we
-				isdf.opts.logger.Error("MYDEBUG: NEW ERROR IN WRITE", zap.Error(err))
-			}
-			// Update the response counter for the given UUID (request)
-			idxNum := isdf.updateCounter(uid)
-			// If the counter has reached the total number of responses expected, we can safely
-			// send the parent request for Acking
-			if idxNum == int64(total) {
-				//isdf.opts.logger.Info("MYDEBUG: SENDING TO ACK ", response.Result.GetTotal())
-				ackChan <- trackedRequest
-			}
-			metrics.UDFWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(1))
+	addCount := 0
+	defer func(int) {
+		metrics.UDFWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(addCount))
+		wg.Done()
+	}(addCount)
+	for response := range udfRespCh {
+		uid := response.Result.GetUuid()
+		trackedRequest, ok := isdf.requestTracker.GetRequest(uid)
+		// TODO(stream): check what should be path for !ok, which means that we got a UUID
+		// which has already been deleted from the tracker/ or never added in the first place
+		// can this even happen though if messages are ordered and we only have a single routine processing it?
+		if !ok {
+			isdf.opts.logger.Error("MYDEBUG: MESSAGE NOT IN TRACKER ", response.Result.GetTotal(), uid)
+		}
+		parsedResp, requestDone, total := isdf.parseMapResponse(response, trackedRequest)
+		// if the response has the AckIt field = true, that indicates the end of the processing for
+		// a given message. In this case send the parent request for Acking and continue
+		// if requestDone (EOR == true) and total == 0 it means there were no responses
+		// expected for this request, hence we can directly ackIt, no need to write
+		if requestDone && total == 0 {
+			ackChan <- trackedRequest
+			continue
+		}
+		// If AckIt is not set, it is a data response, hence forward it to the next buffer
+		var messageToStep = make(map[string][]isb.Message)
+		for toVertex := range isdf.toBuffers {
+			// over allocating to have a predictable pattern
+			messageToStep[toVertex] = make([]isb.Message, len(isdf.toBuffers[toVertex]))
+		}
+		writeMessage := parsedResp
+		if err := isdf.forwardToBuffers(ctx, writeMessage, trackedRequest.Request, messageToStep); err != nil {
+			// As we have re-tried already to forward to the buffer, we should not be trying it again.
+			// TODO(stream): so we should just exit and send this for no-ack? or exit
+			isdf.opts.logger.Error("MYDEBUG: NEW ERROR IN WRITE", zap.Error(err))
+		}
+		addCount++
+		// Update the response counter for the given UUID (request)
+		idxNum := isdf.updateCounter(uid)
+		// If the counter has reached the total number of responses expected, we can safely
+		// send the parent request for Acking
+		if idxNum == int64(total) {
+			ackChan <- trackedRequest
 		}
 	}
-
 }
 
 func (isdf *InterStepDataForward) updateCounter(key string) int64 {
@@ -513,7 +501,75 @@ func (isdf *InterStepDataForward) forwardToBuffers(ctx context.Context, writeMes
 	return nil
 }
 
-// ackFromBuffer acknowledges an array of offsets back to fromBufferPartition and is a blocking call or until shutdown has been initiated.
+// ackFromBufferSingle acknowledges an array of offsets back to fromBufferPartition and is a blocking call or until shutdown has been initiated.
+func (isdf *InterStepDataForward) ackFromBufferSingle(ctx context.Context, offset isb.Offset) error {
+	//for {
+	//	select {
+	//	case <-ctx.Done():
+	//		return ctx.Err()
+	//	default:
+	//		if ok, _ := isdf.IsShuttingDown(); ok {
+	//			ackErr := fmt.Errorf("AckFromBuffer, Stop called while stuck on an internal error")
+	//			return ackErr
+	//		}
+	//		err := offset.AckIt()
+	//		if err != nil {
+	//			// TODO(stream): add metrics here
+	//			isdf.opts.logger.Errorw("Failed to ack message", zap.Error(err))
+	//			// If the error is related to nats/jetstream, we skip it because it might end up with infinite ack retries.
+	//			// Skipping those errors to let the whole read/write/ack for loop to restart from reading, to pick up those
+	//			// redelivered messages.
+	//			if !strings.HasPrefix(err.Error(), "nats:") {
+	//				return err
+	//			}
+	//			continue
+	//		} else {
+	//			return nil
+	//		}
+	//	}
+	//}
+
+	var ackRetryBackOff = wait.Backoff{
+		Factor:   1,
+		Jitter:   0.1,
+		Steps:    math.MaxInt,
+		Duration: time.Millisecond * 10,
+	}
+	//var ackOffsets = []isb.Offset{offset}
+	attempt := 0
+	ctxClosedErr := wait.ExponentialBackoff(ackRetryBackOff, func() (done bool, err error) {
+		//errs := isdf.fromBufferPartition.Ack(ctx, ackOffsets)
+		errs := offset.AckIt()
+		attempt += 1
+		//if errs != nil && errs[0] != nil {
+		if errs != nil {
+			// TODO(stream): add metrics here
+			//var summarizedErr = errs[0].Error()
+			var summarizedErr = errs.Error()
+			isdf.opts.logger.Errorw("Failed to ack from buffer, retrying", zap.Any("errors", summarizedErr), zap.Int("attempt", attempt))
+			// no point retrying if ctx.Done has been invoked
+			select {
+			case <-ctx.Done():
+				// no point in retrying after we have been asked to stop.
+				return false, ctx.Err()
+			default:
+				if ok, _ := isdf.IsShuttingDown(); ok {
+					ackErr := fmt.Errorf("AckFromBuffer, Stop called while stuck on an internal error, %v", summarizedErr)
+					return false, ackErr
+				}
+				return false, nil
+			}
+		} else {
+			return true, nil
+		}
+	})
+
+	if ctxClosedErr != nil {
+		isdf.opts.logger.Errorw("Context closed while waiting to ack messages inside forward", zap.Error(ctxClosedErr))
+	}
+	return ctxClosedErr
+}
+
 func (isdf *InterStepDataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) error {
 	var ackRetryBackOff = wait.Backoff{
 		Factor:   1,
@@ -569,23 +625,25 @@ func (isdf *InterStepDataForward) writeToBuffers(
 ) (writeOffsets map[string][][]isb.Offset, err error) {
 	// messageToStep contains all the to buffers, so the messages could be empty (conditional forwarding).
 	// So writeOffsets also contains all the to buffers, but the returned offsets might be empty.
-	writeOffsets = make(map[string][][]isb.Offset)
-	for toVertexName, toVertexMessages := range messageToStep {
-		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexMessages))
-	}
+
+	//writeOffsets = make(map[string][][]isb.Offset)
+	//for toVertexName, toVertexMessages := range messageToStep {
+	//	writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexMessages))
+	//}
+
 	for toVertexName, toVertexBuffer := range isdf.toBuffers {
 		for index, partition := range toVertexBuffer {
-			writeOffsets[toVertexName][index], err = isdf.writeToBuffer(ctx, partition, messageToStep[toVertexName][index])
+			_, err = isdf.writeToBuffer(ctx, partition, messageToStep[toVertexName][index])
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
-	return writeOffsets, nil
+	return nil, nil
 }
 
 // writeToBuffer forwards an array of messages to a single buffer and is a blocking call or until shutdown has been initiated.
-func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.BufferWriter, msg isb.Message) (writeOffsets []isb.Offset, err error) {
+func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.BufferWriter, msg isb.Message) (writeOffsets isb.Offset, err error) {
 	var (
 		//totalCount int
 		writeCount int
@@ -598,14 +656,14 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 		// EXTRA
 		//var _writeOffsets []isb.Offset = nil
 		//var errs []error = nil
-		_writeOffsets, errs := toBufferPartition.Write(ctx, []isb.Message{msg})
+		_writeOffsets, errs := toBufferPartition.WriteNew(ctx, msg)
 		// Note: this is an unwanted memory allocation during a happy path. We want only minimal allocation since using failedMessages is an unlikely path.
 		var failedMessages isb.Message
 		needRetry := false
 		//for idx, msg := range messages {
 		// EXTRA
 		//if err != nil {
-		if err = errs[0]; err != nil {
+		if err != nil {
 			// ATM there are no user-defined errors during write, all are InternalErrors.
 			// Non retryable error, drop the message. Non retryable errors are only returned
 			// when the buffer is full and the user has set the buffer full strategy to
@@ -653,7 +711,7 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 
 		if needRetry {
 			isdf.opts.logger.Errorw("Retrying failed messages",
-				zap.Any("errors", errorArrayToMap(errs)),
+				zap.Any("errors", errs.Error()),
 				zap.String(metrics.LabelPipeline, isdf.pipelineName),
 				zap.String(metrics.LabelVertex, isdf.vertexName),
 				zap.String(metrics.LabelPartitionName, toBufferPartition.GetName()),
@@ -667,8 +725,8 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 		}
 	}
 
-	metrics.WriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(writeCount))
-	metrics.WriteBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(writeBytes)
+	//metrics.WriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(float64(writeCount))
+	//metrics.WriteBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: toBufferPartition.GetName()}).Add(writeBytes)
 	return writeOffsets, nil
 }
 
@@ -752,7 +810,7 @@ func (isdf *InterStepDataForward) parseMapResponse(resp *flatmappb.MapResponse, 
 				// Result Index - This parameter is added on the SDK side.
 				// We add the index of the message from the messages slice to the individual response.
 				// TODO(stream): explore if there can be more robust ways to do this
-				ID:   fmt.Sprintf("%s-%s-%s", parentRequest.ReadOffset.String(), isdf.vertexName, result.GetIndex()),
+				ID:   getMessageId(trackedRequest.ReadOffset.String(), isdf.vertexName, result.GetIndex()),
 				Keys: keys,
 			},
 			Body: isb.Body{
@@ -762,4 +820,14 @@ func (isdf *InterStepDataForward) parseMapResponse(resp *flatmappb.MapResponse, 
 		Tags: result.GetTags(),
 	}
 	return taggedMessage, false, total
+}
+
+func getMessageId(offset string, vertexName string, index string) string {
+	var idString strings.Builder
+	idString.WriteString(offset)
+	idString.WriteString("-")
+	idString.WriteString(vertexName)
+	idString.WriteString("-")
+	idString.WriteString(index)
+	return idString.String()
 }

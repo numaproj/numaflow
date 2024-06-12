@@ -42,6 +42,11 @@ type ToKafka struct {
 	log          *zap.SugaredLogger
 }
 
+func (tk *ToKafka) WriteNew(ctx context.Context, message isb.Message) (isb.Offset, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // NewToKafka returns ToKafka type.
 func NewToKafka(ctx context.Context, vertexInstance *dfv1.VertexInstance) (*ToKafka, error) {
 

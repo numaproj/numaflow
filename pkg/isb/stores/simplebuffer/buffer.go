@@ -45,6 +45,11 @@ type InMemoryBuffer struct {
 	rwlock       *sync.RWMutex
 }
 
+func (b *InMemoryBuffer) WriteNew(ctx context.Context, message isb.Message) (isb.Offset, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 var _ isb.BufferReader = (*InMemoryBuffer)(nil)
 var _ isb.BufferWriter = (*InMemoryBuffer)(nil)
 

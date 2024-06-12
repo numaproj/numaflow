@@ -43,8 +43,9 @@ func (t *Tracker) AddRequest(msg *isb.ReadMessage) *types.RequestFlatmap {
 	// TODO(stream): we could use read offset as the ID now instead of UUID?
 	id := GetNewId()
 	flatmapRequest := &types.RequestFlatmap{
-		Request: msg,
-		Uid:     id,
+		Request:    msg,
+		Uid:        id,
+		ReadOffset: msg.ReadOffset,
 	}
 	//t.requestMap.Store(id, msg)
 	t.Set(id, flatmapRequest)
@@ -118,4 +119,10 @@ func (t *Tracker) GetItems() []*isb.ReadMessage {
 		items = append(items, vals.Request)
 	}
 	return items
+}
+
+func (t *Tracker) Clear() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.m = make(map[string]*types.RequestFlatmap)
 }

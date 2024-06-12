@@ -36,6 +36,11 @@ type UserDefinedSink struct {
 	udsink       SinkApplier
 }
 
+func (s *UserDefinedSink) WriteNew(ctx context.Context, message isb.Message) (isb.Offset, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // NewUserDefinedSink returns genericSink type.
 func NewUserDefinedSink(ctx context.Context, vertexInstance *dfv1.VertexInstance, udsink SinkApplier) (*UserDefinedSink, error) {
 	return &UserDefinedSink{

@@ -35,6 +35,7 @@ type BufferWriter interface {
 	BufferWriterInformation
 	io.Closer
 	Write(context.Context, []Message) ([]Offset, []error)
+	WriteNew(context.Context, Message) (Offset, error)
 }
 
 // BufferReader is the buffer from which we are reading.
