@@ -56,7 +56,7 @@ var isbSoftUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Help:      "percentage of buffer soft usage",
 }, []string{"buffer"})
 
-// isbSolidUsage is used to indicate of buffer that is used up, it is calculated based on the messages remain in the stream (if it's not Limits retention policy)
+// isbSolidUsage is used to indicate buffer usage, it is calculated based on the messages remaining in the stream.
 var isbSolidUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_jetstream",
 	Name:      "buffer_solid_usage",

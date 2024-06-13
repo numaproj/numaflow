@@ -58,7 +58,7 @@ type JetStreamBufferService struct {
 	StartArgs []string `json:"startArgs,omitempty" protobuf:"bytes,9,rep,name=startArgs"`
 	// Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config.
 	// It accepts a YAML format configuration, it may include 4 sections, "stream", "consumer", "otBucket" and "procBucket".
-	// Available fields under "stream" include "retention" (e.g. interest, limits, workerQueue), "maxMsgs", "maxAge" (e.g. 72h), "replicas" (1, 3, 5), "duplicates" (e.g. 5m).
+	// Available fields under "stream" include "maxMsgs", "maxAge" (e.g. 72h), "replicas" (1, 3, 5), "duplicates" (e.g. 5m).
 	// Available fields under "consumer" include "ackWait" (e.g. 60s)
 	// Available fields under "otBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).
 	// Available fields under "procBucket" include "maxValueSize", "history", "ttl" (e.g. 72h), "maxBytes", "replicas" (1, 3, 5).

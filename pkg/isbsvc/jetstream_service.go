@@ -113,8 +113,8 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			if _, err := js.AddStream(&nats.StreamConfig{
 				Name:       streamName,
 				Subjects:   []string{streamName}, // Use the stream name as the only subject
-				Retention:  nats.RetentionPolicy(v.GetInt("stream.retention")),
-				Discard:    nats.DiscardOld,
+				Retention:  nats.WorkQueuePolicy,
+				Discard:    nats.DiscardNew,
 				MaxMsgs:    v.GetInt64("stream.maxMsgs"),
 				MaxAge:     v.GetDuration("stream.maxAge"),
 				MaxBytes:   v.GetInt64("stream.maxBytes"),
@@ -298,9 +298,6 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 		return nil, fmt.Errorf("failed to get consumer information of stream %q", streamName)
 	}
 	totalMessages := int64(stream.State.Msgs)
-	if stream.Config.Retention == nats.LimitsPolicy {
-		totalMessages = int64(consumer.NumPending) + int64(consumer.NumAckPending)
-	}
 	bufferInfo := &BufferInfo{
 		Name:            buffer,
 		PendingCount:    int64(consumer.NumPending),
