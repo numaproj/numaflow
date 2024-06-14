@@ -271,13 +271,21 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	sourceWmPublisher := publish.NewSourcePublish(ctx, pipelineName, vertexName, sourcePublisherStores, publish.WithDelay(sp.VertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
 	// if callback is enabled for the vertex, create a callback publisher
-	cb := sp.VertexInstance.Vertex.Spec.Callback
-	if cb.Enabled {
-		opts := make([]callback.OptionFunc, 0)
-		if cb.CallbackURL != "" {
-			opts = append(opts, callback.WithCallbackURL(cb.CallbackURL))
+	cbEnabled, err := sp.VertexInstance.Vertex.CallbackEnabled()
+	if err != nil {
+		return fmt.Errorf("failed to parse callback enabled metadata, %w", err)
+	}
+
+	if cbEnabled {
+		cbOpts := make([]callback.OptionFunc, 0)
+		cbUrl, err := sp.VertexInstance.Vertex.CallbackURL()
+		if err != nil {
+			return fmt.Errorf("failed to parse callback url metadata, %w", err)
 		}
-		cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, opts...)
+		if cbUrl != "" {
+			cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
+		}
+		cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
 		forwardOpts = append(forwardOpts, sourceforward.WithCallbackPublisher(cbPublisher))
 	}
 

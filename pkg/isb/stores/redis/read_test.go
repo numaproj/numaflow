@@ -513,7 +513,7 @@ func generateLatencySlice(xMessages []redis.XMessage, suite *ReadWritePerformanc
 			suite.NoError(err)
 		}
 		id, err := splitId(xMessage.ID)
-		offset, err := splitId(m.ID.String())
+		offset, err := splitId(m.ID.Offset)
 		suite.NoError(err)
 
 		// We store a difference of the id and the offset in the to stream.

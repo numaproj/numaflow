@@ -182,7 +182,7 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 			headers[header] = value[len(value)-1]
 		}
 
-		readOffset := newOffset(msg, metadata.Sequence.Stream, vertexInstance.Replica, inProgressTickDuration, n.logger)
+		readOffset := newOffset(msg, metadata.Sequence.Stream, inProgressTickDuration, n.logger)
 
 		m := &isb.ReadMessage{
 			Message: isb.Message{

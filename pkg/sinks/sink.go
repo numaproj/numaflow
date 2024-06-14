@@ -160,9 +160,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		sinkHandler = udsink.NewUDSgRPCBasedUDSink(sdkClient)
-		if err != nil {
-			return fmt.Errorf("failed to create gRPC client, %w", err)
-		}
 		// Readiness check
 		if err := sinkHandler.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on UDSink readiness check, %w", err)
@@ -192,9 +189,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		fbSinkHandler = udsink.NewUDSgRPCBasedUDSink(sdkClient)
-		if err != nil {
-			return fmt.Errorf("failed to create gRPC client, %w", err)
-		}
 		// Readiness check
 		if err = fbSinkHandler.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on UDSink readiness check, %w", err)
@@ -240,13 +234,21 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		// if callback is enabled for the vertex, create a callback publisher
-		cb := u.VertexInstance.Vertex.Spec.Callback
-		if cb.Enabled {
-			opts := make([]callback.OptionFunc, 0)
-			if cb.CallbackURL != "" {
-				opts = append(opts, callback.WithCallbackURL(cb.CallbackURL))
+		cbEnabled, err := u.VertexInstance.Vertex.CallbackEnabled()
+		if err != nil {
+			return fmt.Errorf("failed to parse callback enabled metadata, %w", err)
+		}
+
+		if cbEnabled {
+			cbOpts := make([]callback.OptionFunc, 0)
+			cbUrl, err := u.VertexInstance.Vertex.CallbackURL()
+			if err != nil {
+				return fmt.Errorf("failed to parse callback url metadata, %w", err)
 			}
-			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, opts...)
+			if cbUrl != "" {
+				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
+			}
+			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
 			forwardOpts = append(forwardOpts, sinkforward.WithCallbackPublisher(cbPublisher))
 		}
 

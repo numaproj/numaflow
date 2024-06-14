@@ -17807,19 +17807,6 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.Callback": {
-      "properties": {
-        "callbackURL": {
-          "description": "CallbackURL is the URL to which the callback request will be sent. NOTE: If the \"x-numaflow-callback-url\" header is set in the message, that will take precedence over this field. If the header is not set, the message will be sent to this URL or during failure, the message will be sent to this URL.",
-          "type": "string"
-        },
-        "enabled": {
-          "description": "Enabled indicates whether callback is enabled for the pipeline.",
-          "type": "boolean"
-        }
-      },
-      "type": "object"
-    },
     "io.numaproj.numaflow.v1alpha1.CombinedEdge": {
       "description": "CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits. It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod, it knows the properties of the connected vertices, for example, how many partitioned buffers I should write to, what is the write buffer length, etc.",
       "properties": {
@@ -19238,10 +19225,6 @@
     },
     "io.numaproj.numaflow.v1alpha1.PipelineSpec": {
       "properties": {
-        "callback": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Callback",
-          "description": "Callback defines the callback configuration for the messages processed by the pipeline. can be used for tracking the message processing status."
-        },
         "edges": {
           "description": "Edges define the relationships between vertices",
           "items": {
@@ -19948,10 +19931,6 @@
         "automountServiceAccountToken": {
           "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
           "type": "boolean"
-        },
-        "callback": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Callback",
-          "description": "Callback defines the callback settings for the vertex. It's populated from the pipeline callback settings."
         },
         "containerTemplate": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate",

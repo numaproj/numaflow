@@ -5,21 +5,63 @@ metadata:
 spec:
   vertices:
     - name: in
+      scale:
+        min: 20
+        max: 20
       source:
         # A self data generating source
         generator:
-          rpu: 5
+          msgSize: 2000
+          rpu: 5000
           duration: 1s
-          keyCount: 5
-          value: 5
+          value: 100
+      containerTemplate:
+        resources:
+          limits:
+            cpu: "4"
+            memory: 8Gi
+          requests:
+            cpu: "2"
+            memory: 4Gi
     - name: cat
+      partitions: 12
+      scale:
+        min: 30
+        max: 30
       udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-forward-message:stable
+        resources:
+          limits:
+            cpu: "4"
+            memory: 16Gi
+          requests:
+            cpu: "2"
+            memory: 8Gi
+      containerTemplate:
+        resources:
+          limits:
+            cpu: "4"
+            memory: 8Gi
+          requests:
+            cpu: "2"
+            memory: 4Gi
     - name: out
+      partitions: 12
+      scale:
+        min: 10
+        max: 10
       sink:
         # A simple log printing sink
-        log: {}
+        blackhole: {}
+      containerTemplate:
+        resources:
+          limits:
+            cpu: "4"
+            memory: 8Gi
+          requests:
+            cpu: "2"
+            memory: 4Gi
   edges:
     - from: in
       to: cat

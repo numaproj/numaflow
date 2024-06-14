@@ -2663,13 +2663,6 @@ spec:
             type: object
           spec:
             properties:
-              callback:
-                properties:
-                  callbackURL:
-                    type: string
-                  enabled:
-                    type: boolean
-                type: object
               edges:
                 items:
                   properties:
@@ -12783,13 +12776,6 @@ spec:
                 type: object
               automountServiceAccountToken:
                 type: boolean
-              callback:
-                properties:
-                  callbackURL:
-                    type: string
-                  enabled:
-                    type: boolean
-                type: object
               containerTemplate:
                 properties:
                   env:

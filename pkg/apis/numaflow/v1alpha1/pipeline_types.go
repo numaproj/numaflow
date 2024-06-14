@@ -464,10 +464,6 @@ type PipelineSpec struct {
 	// SideInputs defines the Side Inputs of a pipeline.
 	// +optional
 	SideInputs []SideInput `json:"sideInputs,omitempty" protobuf:"bytes,8,rep,name=sideInputs"`
-	// Callback defines the callback configuration for the messages processed by the pipeline.
-	// can be used for tracking the message processing status.
-	// +optional
-	Callback Callback `json:"callback,omitempty" protobuf:"bytes,9,opt,name=callback"`
 }
 
 func (pipeline PipelineSpec) GetMatchingVertices(f func(AbstractVertex) bool) map[string]*AbstractVertex {
@@ -497,21 +493,6 @@ func (pipeline PipelineSpec) GetSinksByName() map[string]*AbstractVertex {
 	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
 		return v.IsASink()
 	})
-}
-
-type Callback struct {
-	// Enabled indicates whether callback is enabled for the pipeline.
-	// +optional
-	Enabled bool `json:"enabled,omitempty" protobuf:"varint,1,opt,name=enabled"`
-	// CallbackURL is the URL to which the callback request will be sent.
-	// +optional
-	// NOTE: If the "x-numaflow-callback-url" header is set in the message, that will take precedence over this field.
-	// If the header is not set, the message will be sent to this URL or during failure, the message will be sent to this URL.
-	CallbackURL string `json:"callbackURL,omitempty" protobuf:"bytes,3,opt,name=callbackURL"`
-}
-
-func (c Callback) IsEnabled() bool {
-	return c.Enabled
 }
 
 type Watermark struct {

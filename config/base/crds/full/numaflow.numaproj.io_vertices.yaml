@@ -441,13 +441,6 @@ spec:
                 type: object
               automountServiceAccountToken:
                 type: boolean
-              callback:
-                properties:
-                  callbackURL:
-                    type: string
-                  enabled:
-                    type: boolean
-                type: object
               containerTemplate:
                 properties:
                   env:

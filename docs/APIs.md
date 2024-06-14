@@ -659,56 +659,6 @@ JetStreamConfig </a> </em>
 </tr>
 </tbody>
 </table>
-<h3 id="numaflow.numaproj.io/v1alpha1.Callback">
-Callback
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
-</p>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>
-Field
-</th>
-<th>
-Description
-</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>enabled</code></br> <em> bool </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-Enabled indicates whether callback is enabled for the pipeline.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>callbackURL</code></br> <em> string </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-CallbackURL is the URL to which the callback request will be sent. NOTE:
-If the “x-numaflow-callback-url” header is set in the message, that will
-take precedence over this field. If the header is not set, the message
-will be sent to this URL or during failure, the message will be sent to
-this URL.
-</p>
-</td>
-</tr>
-</tbody>
-</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.CombinedEdge">
 CombinedEdge
 </h3>
@@ -3645,19 +3595,6 @@ SideInputs defines the Side Inputs of a pipeline.
 </p>
 </td>
 </tr>
-<tr>
-<td>
-<code>callback</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Callback"> Callback </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-Callback defines the callback configuration for the messages processed
-by the pipeline. can be used for tracking the message processing status.
-</p>
-</td>
-</tr>
 </table>
 </td>
 </tr>
@@ -3871,19 +3808,6 @@ for the Pipeline
 <em>(Optional)</em>
 <p>
 SideInputs defines the Side Inputs of a pipeline.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>callback</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Callback"> Callback </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-Callback defines the callback configuration for the messages processed
-by the pipeline. can be used for tracking the message processing status.
 </p>
 </td>
 </tr>
@@ -5457,19 +5381,6 @@ from the pipeline watermark settings.
 </p>
 </td>
 </tr>
-<tr>
-<td>
-<code>callback</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Callback"> Callback </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-Callback defines the callback settings for the vertex. It’s populated
-from the pipeline callback settings.
-</p>
-</td>
-</tr>
 </table>
 </td>
 </tr>
@@ -5702,19 +5613,6 @@ Description
 <p>
 Watermark indicates watermark progression in the vertex, it’s populated
 from the pipeline watermark settings.
-</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>callback</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Callback"> Callback </a> </em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>
-Callback defines the callback settings for the vertex. It’s populated
-from the pipeline callback settings.
 </p>
 </td>
 </tr>

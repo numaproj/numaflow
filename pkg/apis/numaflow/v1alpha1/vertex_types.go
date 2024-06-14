@@ -421,6 +421,24 @@ func (v Vertex) MapUdfStreamEnabled() (bool, error) {
 	return false, nil
 }
 
+func (v Vertex) CallbackEnabled() (bool, error) {
+	if v.Spec.Metadata != nil && v.Spec.Metadata.Annotations != nil {
+		if callback, existing := v.Spec.Metadata.Annotations[CallbackEnabledKey]; existing {
+			return strconv.ParseBool(callback)
+		}
+	}
+	return false, nil
+}
+
+func (v Vertex) CallbackURL() (string, error) {
+	if v.Spec.Metadata != nil && v.Spec.Metadata.Annotations != nil {
+		if callbackURL, existing := v.Spec.Metadata.Annotations[CallbackURLKey]; existing {
+			return callbackURL, nil
+		}
+	}
+	return "", nil
+}
+
 type VertexSpec struct {
 	AbstractVertex `json:",inline" protobuf:"bytes,1,opt,name=abstractVertex"`
 	PipelineName   string `json:"pipelineName" protobuf:"bytes,2,opt,name=pipelineName"`
@@ -437,9 +455,6 @@ type VertexSpec struct {
 	// +kubebuilder:default={"disabled": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,7,opt,name=watermark"`
-	// Callback defines the callback settings for the vertex. It's populated from the pipeline callback settings.
-	// +optional
-	Callback Callback `json:"callback" protobuf:"bytes,8,opt,name=callback"`
 }
 
 type AbstractVertex struct {

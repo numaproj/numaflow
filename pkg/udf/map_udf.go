@@ -241,11 +241,19 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// if callback is enabled for the vertex, create a callback publisher
-		cb := u.VertexInstance.Vertex.Spec.Callback
-		if cb.Enabled {
+		cbEnabled, err := u.VertexInstance.Vertex.CallbackEnabled()
+		if err != nil {
+			return fmt.Errorf("failed to parse callback enabled metadata, %w", err)
+		}
+
+		if cbEnabled {
 			cbOpts := make([]callback.OptionFunc, 0)
-			if cb.CallbackURL != "" {
-				cbOpts = append(cbOpts, callback.WithCallbackURL(cb.CallbackURL))
+			cbUrl, err := u.VertexInstance.Vertex.CallbackURL()
+			if err != nil {
+				return fmt.Errorf("failed to parse callback url metadata, %w", err)
+			}
+			if cbUrl != "" {
+				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
 			}
 			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
 			opts = append(opts, forward.WithCallbackPublisher(cbPublisher))

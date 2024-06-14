@@ -210,6 +210,10 @@ const (
 	PipelineStatusInactive  = "inactive"
 	PipelineStatusDeleting  = "deleting"
 	PipelineStatusUnhealthy = "unhealthy"
+
+	// Callback annotation keys
+	CallbackEnabledKey = "numaflow.numaproj.io/callback-enabled"
+	CallbackURLKey     = "numaflow.numaproj.io/callback-url"
 )
 
 var (

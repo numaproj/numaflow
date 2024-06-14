@@ -602,7 +602,6 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			ToEdges:                    toEdges,
 			Watermark:                  pl.Spec.Watermark,
 			Replicas:                   &replicas,
-			Callback:                   pl.Spec.Callback,
 		}
 		hash := sharedutil.MustHash(spec.WithOutReplicas())
 		obj := dfv1.Vertex{
