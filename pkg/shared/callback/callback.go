@@ -88,6 +88,9 @@ func (cp *Publisher) NonSinkVertexCallback(ctx context.Context, messagePairs []i
 			// Extract Callback URL from message headers or use the default callback URL
 			var callbackURL string
 			if cbURL, ok := msg.Headers[cp.opts.callbackHeaderKey]; !ok {
+				if cp.opts.callbackURL == "" {
+					return fmt.Errorf("callback URL not found in headers and default callback URL is not set")
+				}
 				callbackURL = cp.opts.callbackURL
 			} else {
 				callbackURL = cbURL
