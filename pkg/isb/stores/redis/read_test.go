@@ -308,11 +308,11 @@ func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string, _ string) (
 }
 
 func (f forwardReadWritePerformance) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+	return testutils.CopyUDFTestApply(ctx, "testVertex", message)
 }
 
 func (f forwardReadWritePerformance) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, "test-vertex", writeMessageCh, message)
+	return testutils.CopyUDFTestApplyStream(ctx, "testVertex", writeMessageCh, message)
 }
 
 func (suite *ReadWritePerformance) SetupSuite() {

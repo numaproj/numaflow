@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/numaproj/numaflow/test/fixtures"
 	"github.com/stretchr/testify/suite"
+
+	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
 //go:generate kubectl apply -f testdata/http-auth-fake-secret.yaml -n numaflow-system
@@ -43,8 +44,8 @@ func (s *HTTPSuite) TestHTTPSourcePipeline() {
 	cmd := fmt.Sprintf("kubectl -n %s get svc -lnumaflow.numaproj.io/pipeline-name=%s,numaflow.numaproj.io/vertex-name=%s | grep -v CLUSTER-IP | grep -v headless", Namespace, "http-source", "in")
 	w.Exec("sh", []string{"-c", cmd}, OutputRegexp("http-source-in"))
 
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-id")))
-	SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-id")))
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-id"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-id")))
 	// No x-numaflow-id, expect 2 outputs
 	w.Expect().SinkContains("out", "no-id", SinkCheckWithContainCount(2))
 

@@ -74,18 +74,20 @@ type Header struct {
 	Headers map[string]string
 }
 
-// MessageID is the message ID
+// MessageID is the message ID of the message which is used for exactly-once-semantics.
 type MessageID struct {
 	// VertexName is the name of the vertex
 	VertexName string
 	// Offset is the offset of the message
+	// NOTE: should be unique across the replicas of the vertex, that is the
+	// reason we don't have a separate replica field in the MessageID
 	Offset string
 	// Index is the index of the message
 	Index int32
 }
 
 // String returns the string representation of the MessageID
-func (id *MessageID) String() string {
+func (id MessageID) String() string {
 	return fmt.Sprintf("%s-%s-%d", id.VertexName, id.Offset, id.Index)
 }
 

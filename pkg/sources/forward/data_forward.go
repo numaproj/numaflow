@@ -399,9 +399,9 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(m.Err))
 			return
 		}
-		// update toBuffers
+		// for each message, we will determine where to send the message.
 		for _, message := range m.WriteMessages {
-			if err = df.whereToStep(message, messageToStep, m.ReadMessage); err != nil {
+			if err = df.whereToStep(message, messageToStep); err != nil {
 				df.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
 				return
 			}
@@ -715,14 +715,14 @@ func (df *DataForward) applyTransformer(ctx context.Context, readMessage *isb.Re
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
-func (df *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
+func (df *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message) error {
 	// call WhereTo and drop it on errors
 	to, err := df.toWhichStepDecider.WhereTo(writeMessage.Keys, writeMessage.Tags, writeMessage.ID.String())
 	if err != nil {
 		df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{
 			Name:    df.reader.GetName(),
-			Header:  readMessage.Header,
-			Body:    readMessage.Body,
+			Header:  writeMessage.Header,
+			Body:    writeMessage.Body,
 			Message: fmt.Sprintf("WhereTo failed, %s", err),
 		}))
 
@@ -745,8 +745,8 @@ func (df *DataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep
 		if _, ok := messageToStep[t.ToVertexName]; !ok {
 			df.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{
 				Name:    df.reader.GetName(),
-				Header:  readMessage.Header,
-				Body:    readMessage.Body,
+				Header:  writeMessage.Header,
+				Body:    writeMessage.Body,
 				Message: fmt.Sprintf("no such destination (%s)", t.ToVertexName),
 			}))
 		}
