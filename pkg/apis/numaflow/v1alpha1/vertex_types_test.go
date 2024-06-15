@@ -606,3 +606,101 @@ func Test_Scale_Parameters(t *testing.T) {
 	s.Max = ptr.To[int32](500)
 	assert.Equal(t, int32(500), s.GetMaxReplicas())
 }
+func Test_GetVertexType(t *testing.T) {
+	t.Run("source vertex", func(t *testing.T) {
+		v := Vertex{
+			Spec: VertexSpec{
+				AbstractVertex: AbstractVertex{
+					Source: &Source{},
+				},
+			},
+		}
+		assert.Equal(t, VertexTypeSource, v.GetVertexType())
+	})
+
+	t.Run("sink vertex", func(t *testing.T) {
+		v := Vertex{
+			Spec: VertexSpec{
+				AbstractVertex: AbstractVertex{
+					Sink: &Sink{},
+				},
+			},
+		}
+		assert.Equal(t, VertexTypeSink, v.GetVertexType())
+	})
+
+	t.Run("udf vertex", func(t *testing.T) {
+		v := Vertex{
+			Spec: VertexSpec{
+				AbstractVertex: AbstractVertex{
+					UDF: &UDF{},
+				},
+			},
+		}
+		assert.Equal(t, VertexTypeMapUDF, v.GetVertexType())
+	})
+
+	t.Run("vertex with no type", func(t *testing.T) {
+		v := Vertex{
+			Spec: VertexSpec{},
+		}
+		assert.Equal(t, VertexType(""), v.GetVertexType())
+	})
+}
+func Test_GetToBuckets(t *testing.T) {
+	t.Run("sink vertex", func(t *testing.T) {
+		v := Vertex{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "test-ns",
+			},
+			Spec: VertexSpec{
+				PipelineName: "test-pipeline",
+				AbstractVertex: AbstractVertex{
+					Name: "test-vertex",
+					Sink: &Sink{},
+				},
+			},
+		}
+		buckets := v.GetToBuckets()
+		assert.Len(t, buckets, 1)
+		assert.Equal(t, "test-ns-test-pipeline-test-vertex_SINK", buckets[0])
+	})
+
+	t.Run("non-sink vertex with edges", func(t *testing.T) {
+		v := Vertex{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "test-ns",
+			},
+			Spec: VertexSpec{
+				PipelineName: "test-pipeline",
+				AbstractVertex: AbstractVertex{
+					Name: "test-vertex",
+				},
+				ToEdges: []CombinedEdge{
+					{Edge: Edge{From: "test-vertex", To: "output1"}},
+					{Edge: Edge{From: "test-vertex", To: "output2"}},
+				},
+			},
+		}
+		buckets := v.GetToBuckets()
+		assert.Len(t, buckets, 2)
+		assert.Contains(t, buckets, "test-ns-test-pipeline-test-vertex-output1")
+		assert.Contains(t, buckets, "test-ns-test-pipeline-test-vertex-output2")
+	})
+
+	t.Run("non-sink vertex without edges", func(t *testing.T) {
+		v := Vertex{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "test-ns",
+			},
+			Spec: VertexSpec{
+				PipelineName: "test-pipeline",
+				AbstractVertex: AbstractVertex{
+					Name: "test-vertex",
+				},
+			},
+		}
+		buckets := v.GetToBuckets()
+		assert.Len(t, buckets, 0)
+	})
+}
