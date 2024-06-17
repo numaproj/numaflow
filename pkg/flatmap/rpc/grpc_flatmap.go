@@ -85,8 +85,8 @@ func (u *GRPCBasedFlatmap) ApplyMap(ctx context2.Context, messageStream []*types
 		defer close(doneChan)
 		// invoke the MapFn from the gRPC client for a stream of input requests
 		// resultCh -> chan to read responses streamed back
-		// reduceErrCh -> chan for reading any errors encountered during gRPC
-		resultCh, reduceErrCh := u.client.MapFn(ctx, flatmapRequests)
+		// mapErrCh -> chan for reading any errors encountered during gRPC
+		resultCh, mapErrCh := u.client.MapFn(ctx, flatmapRequests)
 		// Keep running forever until explicit return
 		for {
 			// See if we got a response from the client, could be on the response or the error channel
@@ -108,7 +108,7 @@ func (u *GRPCBasedFlatmap) ApplyMap(ctx context2.Context, messageStream []*types
 				// Forward the received response to the channel
 				//log.Print("MYDEBUG SENDING TO WRITER ", result.Result.GetUuid())
 				responseCh <- result
-			case err := <-reduceErrCh:
+			case err := <-mapErrCh:
 				// We got a context done while processing the gRPC, hence stop processing
 				// The specific case for ctx.Done() is already checked in MapFn
 				if err == ctx.Err() {

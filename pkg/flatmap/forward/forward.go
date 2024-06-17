@@ -333,7 +333,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	<-ackDone
 
 	//TODO(stream): is it fine if we ack the ctrlMessageOffsets in the end?
-	// ack the control messages, also based on some error do
+	// ack the control messages, also based on some error do not ack them
 	if len(ctrlMessageOffsets) != 0 {
 		err := isdf.ackFromBuffer(ctx, ctrlMessageOffsets)
 		if err != nil {
@@ -348,14 +348,13 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	if len(requestNotProcessed) > 0 {
 		isdf.opts.logger.Debugw("MYDEBUG: requests left to process ", len(requestNotProcessed))
 		isdf.fromBufferPartition.NoAck(ctx, readOffsets)
+		// reset the request tracker
 		isdf.requestTracker.Clear()
 	}
 	metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(dataMessages) - len(requestNotProcessed) + len(ctrlMessageOffsets)))
 
 	// reset response tracker
 	isdf.responseTracker = new(sync.Map)
-
-	// reset request tracker
 
 	isdf.opts.logger.Debugw("forwardAChunk with UDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(start)))
 }
