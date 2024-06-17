@@ -30,9 +30,7 @@ type RedisController struct {
 	client *redis.Client
 }
 
-func NewRedisController() *RedisController {
-	// When we use this API to validate e2e test result, we always assume a redis UDSink is used
-	// to persist data to a redis instance listening on port 6379.
+func initNewReddis() *RedisController {
 	return &RedisController{
 		client: redis.NewClient(&redis.Options{
 			Addr: "redis:6379",
@@ -40,7 +38,21 @@ func NewRedisController() *RedisController {
 	}
 }
 
+func NewRedisController() *RedisController {
+	// When we use this API to validate e2e test result, we always assume a redis UDSink is used
+	// to persist data to a redis instance listening on port 6379.
+	return &RedisController{
+		client: nil,
+	}
+}
+
 func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Request) {
+	m.Lock()
+	if h.client == nil {
+		h = initNewReddis()
+	}
+	m.Unlock()
+
 	pipelineName := r.URL.Query().Get("pipelineName")
 	sinkName := r.URL.Query().Get("sinkName")
 	targetStr, err := url.QueryUnescape(r.URL.Query().Get("targetStr"))

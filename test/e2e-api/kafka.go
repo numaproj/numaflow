@@ -30,6 +30,8 @@ import (
 
 const bootstrapServers = "kafka-broker:9092"
 
+var m sync.Mutex
+
 type KafkaController struct {
 	brokers     []string
 	adminClient sarama.ClusterAdmin
@@ -37,14 +39,11 @@ type KafkaController struct {
 	consumer    sarama.Consumer
 }
 
-func NewKafkaController() *KafkaController {
-	// initialize Kafka handlers
-	var brokers = []string{bootstrapServers}
+func initNewKafka(brokers []string) *KafkaController {
 
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
 
-	// if partition is specified, use manual partitioner
 	config.Producer.Partitioner = sarama.NewManualPartitioner
 
 	producer, err := sarama.NewSyncProducer(brokers, config)
@@ -61,6 +60,7 @@ func NewKafkaController() *KafkaController {
 	if err != nil {
 		log.Fatalf("Failed to start Kafka admin client: %v", err)
 	}
+
 	return &KafkaController{
 		brokers:     brokers,
 		adminClient: adminClient,
@@ -69,7 +69,31 @@ func NewKafkaController() *KafkaController {
 	}
 }
 
+func NewKafkaController() *KafkaController {
+	// initialize Kafka handlers
+	//start := time.Now()
+	var brokers = []string{bootstrapServers}
+
+	// if partition is specified, use manual partitioner
+	//duration := time.Since(start)
+	//log.Fatalf("Initialized KafkaController in %v\n", duration)
+
+	return &KafkaController{
+		brokers:     brokers,
+		adminClient: nil,
+		producer:    nil,
+		consumer:    nil,
+	}
+}
+
 func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Request) {
+
+	m.Lock()
+	if kh.adminClient == nil {
+		kh = initNewKafka(kh.brokers)
+	}
+	m.Unlock()
+
 	topic := r.URL.Query().Get("topic")
 	partitions, err := strconv.Atoi(r.URL.Query().Get("partitions"))
 	if err != nil {
@@ -86,6 +110,12 @@ func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (kh *KafkaController) DeleteTopicHandler(w http.ResponseWriter, r *http.Request) {
+	m.Lock()
+	if kh.adminClient == nil {
+		kh = initNewKafka(kh.brokers)
+	}
+	m.Unlock()
+
 	topic := r.URL.Query().Get("topic")
 	if err := kh.adminClient.DeleteTopic(topic); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -95,6 +125,12 @@ func (kh *KafkaController) DeleteTopicHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (kh *KafkaController) ListTopicsHandler(w http.ResponseWriter, r *http.Request) {
+	m.Lock()
+	if kh.adminClient == nil {
+		kh = initNewKafka(kh.brokers)
+	}
+	m.Unlock()
+
 	topics, err := kh.adminClient.ListTopics()
 	if err != nil {
 		log.Println(err)
@@ -108,6 +144,12 @@ func (kh *KafkaController) ListTopicsHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (kh *KafkaController) CountTopicHandler(w http.ResponseWriter, r *http.Request) {
+	m.Lock()
+	if kh.adminClient == nil {
+		kh = initNewKafka(kh.brokers)
+	}
+	m.Unlock()
+
 	topic := r.URL.Query().Get("topic")
 	count, err := strconv.Atoi(r.URL.Query().Get("count"))
 	if err != nil {
@@ -185,6 +227,12 @@ readLoop:
 }
 
 func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Request) {
+	m.Lock()
+	if kh.adminClient == nil {
+		kh = initNewKafka(kh.brokers)
+	}
+	m.Unlock()
+
 	var (
 		partition int
 		err       error
@@ -227,6 +275,12 @@ func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Request) {
+	m.Lock()
+	if kh.adminClient == nil {
+		kh = initNewKafka(kh.brokers)
+	}
+	m.Unlock()
+
 	topic := r.URL.Query().Get("topic")
 	mf := newMessageFactory(r.URL.Query())
 	duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))

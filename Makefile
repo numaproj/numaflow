@@ -121,9 +121,6 @@ test-diamond-e2e:
 test-sideinputs-e2e:
 test-%:
 	$(MAKE) cleanup-e2e
-	$(MAKE) deploy-nats
-	$(MAKE) deploy-kafka
-	$(MAKE) deploy-redis
 	$(MAKE) image e2eapi-image
 	$(MAKE) restart-control-plane-components
 	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -

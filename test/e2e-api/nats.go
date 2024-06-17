@@ -30,9 +30,11 @@ import (
 
 type NatsController struct {
 	client *natslib.Conn
+	newUrl string
+	token  string
 }
 
-func NewNatsController(url string, token string) *NatsController {
+func initNewNats(url string, token string) *NatsController {
 	opts := []natslib.Option{natslib.Token(token)}
 	nc, err := natslib.Connect(url, opts...)
 	if err != nil {
@@ -40,10 +42,26 @@ func NewNatsController(url string, token string) *NatsController {
 	}
 	return &NatsController{
 		client: nc,
+		newUrl: url,
+		token:  token,
+	}
+}
+
+func NewNatsController(url string, token string) *NatsController {
+	return &NatsController{
+		client: nil,
+		newUrl: url,
+		token:  token,
 	}
 }
 
 func (n *NatsController) PumpSubject(w http.ResponseWriter, r *http.Request) {
+	m.Lock()
+	if n.client == nil {
+		n = initNewNats(n.newUrl, n.token)
+	}
+	m.Unlock()
+
 	subject := r.URL.Query().Get("subject")
 	msg := r.URL.Query().Get("msg")
 	size, err := strconv.Atoi(r.URL.Query().Get("size"))
@@ -92,6 +110,12 @@ func (n *NatsController) PumpSubject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (n *NatsController) PumpJetstream(w http.ResponseWriter, r *http.Request) {
+	m.Lock()
+	if n.client == nil {
+		n = initNewNats(n.newUrl, n.token)
+	}
+	m.Unlock()
+
 	streamName := r.URL.Query().Get("stream")
 	msg := r.URL.Query().Get("msg")
 
