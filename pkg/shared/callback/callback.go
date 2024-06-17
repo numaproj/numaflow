@@ -37,18 +37,6 @@ func NewPublisher(ctx context.Context, vertexName string, pipelineName string, o
 		value.CloseIdleConnections()
 	})
 
-	if dOpts.callbackURL != "" {
-		client := &http.Client{
-			Timeout: dOpts.httpTimeout,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true, // Set InsecureSkipVerify to true
-				},
-			},
-		}
-		clientCache.Add(dOpts.callbackURL, client)
-	}
-
 	return &Publisher{
 		vertexName:   vertexName,
 		pipelineName: pipelineName,
@@ -236,11 +224,12 @@ func (cp *Publisher) sendRequest(ctx context.Context, url string, requests []Req
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode > 299 {
 		return fmt.Errorf("received non-OK response status: %s", resp.Status)
 	}
 
-	_ = resp.Body.Close()
 	return nil
 }
 

@@ -212,7 +212,7 @@ const (
 	PipelineStatusUnhealthy = "unhealthy"
 
 	// Callback annotation keys
-	CallbackEnabledKey = "numaflow.numaproj.io/callback-enabled"
+	CallbackEnabledKey = "numaflow.numaproj.io/callback"
 	CallbackURLKey     = "numaflow.numaproj.io/callback-url"
 )
 
