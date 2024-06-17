@@ -27,7 +27,7 @@ import (
 
 //go:generate kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
 //go:generate kubectl apply -k ../../config/apps/nats -n numaflow-system
-//go:generate kubectl apply -f testdata/jetstream-source-pipeline.yaml -n numaflow-system
+//go:generate kubectl apply -f testdata/nats-auth-fake-token.yaml -n numaflow-system
 
 type JetstreamSuite struct {
 	fixtures.E2ESuite
