@@ -82,7 +82,7 @@ type MessageID struct {
 	// NOTE: should be unique across the replicas of the vertex, that is the
 	// reason we don't have a separate replica field in the MessageID
 	Offset string
-	// Index is the index of the message
+	// Index is the index of a flatmap message, otherwise use 0
 	Index int32
 }
 
