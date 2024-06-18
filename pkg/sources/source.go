@@ -19,6 +19,8 @@ package sources
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -270,23 +272,23 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	// create a source watermark publisher
 	sourceWmPublisher := publish.NewSourcePublish(ctx, pipelineName, vertexName, sourcePublisherStores, publish.WithDelay(sp.VertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
 
-	// if callback is enabled for the vertex, create a callback publisher
-	cbEnabled, err := sp.VertexInstance.Vertex.CallbackEnabled()
-	if err != nil {
-		return fmt.Errorf("failed to parse callback enabled metadata, %w", err)
-	}
-
-	if cbEnabled {
-		cbOpts := make([]callback.OptionFunc, 0)
-		cbUrl, err := sp.VertexInstance.Vertex.CallbackURL()
+	// if the callback is enabled, create a callback publisher
+	cbEnabledStr := os.Getenv(dfv1.EnvCallbackEnabled)
+	cbEnabled := false
+	if cbEnabledStr != "" {
+		cbEnabled, err = strconv.ParseBool(cbEnabledStr)
 		if err != nil {
-			return fmt.Errorf("failed to parse callback url metadata, %w", err)
+			return fmt.Errorf("failed to parse %s, %w", dfv1.CallbackEnabledKey, err)
 		}
-		if cbUrl != "" {
-			cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
+		if cbEnabled {
+			cbOpts := make([]callback.OptionFunc, 0)
+			cbUrl := os.Getenv(dfv1.EnvCallbackURL)
+			if cbUrl != "" {
+				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
+			}
+			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
+			forwardOpts = append(forwardOpts, sourceforward.WithCallbackPublisher(cbPublisher))
 		}
-		cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
-		forwardOpts = append(forwardOpts, sourceforward.WithCallbackPublisher(cbPublisher))
 	}
 
 	// create source data forwarder

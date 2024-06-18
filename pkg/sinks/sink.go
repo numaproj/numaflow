@@ -19,6 +19,8 @@ package sinks
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 
 	"go.uber.org/zap"
@@ -233,23 +235,23 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			forwardOpts = append(forwardOpts, sinkforward.WithFbSinkWriter(fbSinkWriter))
 		}
 
-		// if callback is enabled for the vertex, create a callback publisher
-		cbEnabled, err := u.VertexInstance.Vertex.CallbackEnabled()
-		if err != nil {
-			return fmt.Errorf("failed to parse callback enabled metadata, %w", err)
-		}
-
-		if cbEnabled {
-			cbOpts := make([]callback.OptionFunc, 0)
-			cbUrl, err := u.VertexInstance.Vertex.CallbackURL()
+		// if the callback is enabled, create a callback publisher
+		cbEnabledStr := os.Getenv(dfv1.EnvCallbackEnabled)
+		cbEnabled := false
+		if cbEnabledStr != "" {
+			cbEnabled, err = strconv.ParseBool(cbEnabledStr)
 			if err != nil {
-				return fmt.Errorf("failed to parse callback url metadata, %w", err)
+				return fmt.Errorf("failed to parse %s, %w", dfv1.CallbackEnabledKey, err)
 			}
-			if cbUrl != "" {
-				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
+			if cbEnabled {
+				cbOpts := make([]callback.OptionFunc, 0)
+				cbUrl := os.Getenv(dfv1.EnvCallbackURL)
+				if cbUrl != "" {
+					cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
+				}
+				cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
+				forwardOpts = append(forwardOpts, sinkforward.WithCallbackPublisher(cbPublisher))
 			}
-			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
-			forwardOpts = append(forwardOpts, sinkforward.WithCallbackPublisher(cbPublisher))
 		}
 
 		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[vertexName], idleManager, forwardOpts...)

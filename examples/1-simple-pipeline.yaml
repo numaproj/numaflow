@@ -3,8 +3,6 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
-  callback:
-    enabled: true
   vertices:
     - name: in
       scale:
