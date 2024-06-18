@@ -32,7 +32,7 @@ type HttpController struct {
 	client *http.Client
 }
 
-func NewHttpController() *HttpController {
+func initNewHttp() *HttpController {
 	return &HttpController{
 		client: &http.Client{
 			Transport: &http.Transport{
@@ -42,7 +42,20 @@ func NewHttpController() *HttpController {
 	}
 }
 
+func NewHttpController() *HttpController {
+	return &HttpController{
+		client: nil,
+	}
+}
+
 func (h *HttpController) SendMessage(w http.ResponseWriter, r *http.Request) {
+
+	m.Lock()
+	if h.client == nil {
+		h = initNewHttp()
+	}
+	m.Unlock()
+
 	host := r.URL.Query().Get("host")
 	vertexName := r.URL.Query().Get("vertexName")
 	reqBytes, err := io.ReadAll(r.Body)
