@@ -40,7 +40,7 @@ type options struct {
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
 	// cbPublisher is the callback publisher for the vertex.
-	cbPublisher *callback.Publisher
+	cbPublisher *callback.Uploader
 }
 
 type Option func(*options) error
@@ -95,7 +95,7 @@ func WithFbSinkWriter(sinkWriter sinker.SinkWriter) Option {
 }
 
 // WithCallbackPublisher sets the callback publisher for the vertex
-func WithCallbackPublisher(cp *callback.Publisher) Option {
+func WithCallbackPublisher(cp *callback.Uploader) Option {
 	return func(o *options) error {
 		o.cbPublisher = cp
 		return nil

@@ -62,7 +62,7 @@ func TestNonSinkVertexCallback(t *testing.T) {
 	defer server.Close()
 
 	ctx := context.Background()
-	cp := NewPublisher(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL))
+	cp := NewUploader(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL))
 
 	messagePairs := []isb.ReadWriteMessagePair{
 		{
@@ -100,7 +100,7 @@ func TestNonSinkVertexCallback(t *testing.T) {
 
 func TestNonSinkVertexCallback_NoCallbackURL(t *testing.T) {
 	ctx := context.Background()
-	cp := NewPublisher(ctx, "testVertex", "testPipeline")
+	cp := NewUploader(ctx, "testVertex", "testPipeline")
 
 	messagePairs := []isb.ReadWriteMessagePair{
 		{
@@ -162,7 +162,7 @@ func TestNonSinkVertexCallback_CallbackURLSet(t *testing.T) {
 	defer server.Close()
 
 	ctx := context.Background()
-	cp := NewPublisher(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL))
+	cp := NewUploader(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL))
 
 	messagePairs := []isb.ReadWriteMessagePair{
 		{
@@ -228,7 +228,7 @@ func TestSinkVertexCallback(t *testing.T) {
 	defer server.Close()
 
 	ctx := context.Background()
-	cp := NewPublisher(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL))
+	cp := NewUploader(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL))
 
 	messages := []isb.Message{
 		{
@@ -275,7 +275,7 @@ func TestSinkVertexCallback_CallbackURLSet(t *testing.T) {
 	defer server.Close()
 
 	ctx := context.Background()
-	cp := NewPublisher(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL))
+	cp := NewUploader(ctx, "testVertex", "testPipeline", WithCallbackURL(server.URL))
 
 	messages := []isb.Message{
 		{
@@ -296,7 +296,7 @@ func TestSinkVertexCallback_CallbackURLSet(t *testing.T) {
 
 func TestSinkVertexCallback_NoCallbackURL(t *testing.T) {
 	ctx := context.Background()
-	cp := NewPublisher(ctx, "testVertex", "testPipeline")
+	cp := NewUploader(ctx, "testVertex", "testPipeline")
 
 	messages := []isb.Message{
 		{

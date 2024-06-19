@@ -246,7 +246,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			if cbUrl != "" {
 				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
 			}
-			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
+			cbPublisher := callback.NewUploader(ctx, vertexName, pipelineName, cbOpts...)
 			opts = append(opts, forward.WithCallbackPublisher(cbPublisher))
 		}
 

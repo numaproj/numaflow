@@ -26,7 +26,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// Options holds optional parameters for the Publisher.
+// Options holds optional parameters for the Uploader.
 type Options struct {
 	// httpTimeout specifies the timeout for HTTP requests.
 	httpTimeout time.Duration
@@ -51,7 +51,7 @@ func DefaultOptions(ctx context.Context) *Options {
 	}
 }
 
-// OptionFunc is a function that applies an option to the Publisher.
+// OptionFunc is a function that applies an option to the Uploader.
 type OptionFunc func(*Options)
 
 // WithHTTPTimeout sets the HTTP timeout.

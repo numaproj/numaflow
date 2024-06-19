@@ -39,7 +39,7 @@ type options struct {
 	// enableMapUdfStream indicates whether the message streaming is enabled or not for map UDF processing
 	enableMapUdfStream bool
 	// cbPublisher is the callback publisher for the vertex.
-	cbPublisher *callback.Publisher
+	cbPublisher *callback.Uploader
 }
 
 type Option func(*options) error
@@ -95,7 +95,7 @@ func WithUDFStreaming(f bool) Option {
 }
 
 // WithCallbackPublisher sets the callback publisher for the vertex
-func WithCallbackPublisher(cp *callback.Publisher) Option {
+func WithCallbackPublisher(cp *callback.Uploader) Option {
 	return func(o *options) error {
 		o.cbPublisher = cp
 		return nil
