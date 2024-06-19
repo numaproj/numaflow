@@ -77,11 +77,11 @@ type Request struct {
 	FromVertex string `json:"from_vertex"`
 }
 
-// NonSinkVertexCallback groups messages based on their callback URL and sends a POST request for each group
+// NonSinkVertexCallback groups callbacks based on their callback URL and makes a POST request for each callback group
 // for non-sink vertices. If the callbackHeaderKey is set, it writes all the callback requests to the callbackURL.
 // In case of failure while writing the url from the headers, it writes all the callback requests to the callbackURL.
 func (cp *Publisher) NonSinkVertexCallback(ctx context.Context, messagePairs []isb.ReadWriteMessagePair) error {
-	// Create a map to hold groups of messagePairs for each callback URL
+	// Create a map to hold set of callback requests for each callback URL
 	callbackUrlMap := make(map[string][]Request)
 
 	// Iterate through each pair
@@ -123,7 +123,7 @@ func (cp *Publisher) NonSinkVertexCallback(ctx context.Context, messagePairs []i
 				callbackUrlMap[callbackURL] = make([]Request, 0)
 			}
 
-			// Add new CallbackResponse to map, grouped by the Callback URL
+			// append the new callback response to the map grouped by the callback URL
 			callbackUrlMap[callbackURL] = append(callbackUrlMap[callbackURL], newObject)
 		}
 	}
@@ -135,15 +135,14 @@ func (cp *Publisher) NonSinkVertexCallback(ctx context.Context, messagePairs []i
 	return nil
 }
 
-// SinkVertexCallback groups messages based on their callback URL present in the headers and sends a POST request for
-// each group for sink vertices. If the callback header is not set, it writes all the callback requests to the callbackURL.
+// SinkVertexCallback groups callbacks based on their callback URL present in the headers and sends a POST request for
+// each callback group for sink vertices. If the callback header is not set, it writes all the callback requests to the callbackURL.
 // In case of failure while writing the url from the headers, it writes all the callback requests to the callbackURL.
 func (cp *Publisher) SinkVertexCallback(ctx context.Context, messages []isb.Message) error {
-	// Create a map to hold groups of messagePairs for each callback URL
+	// Create a map to hold set of callback requests for each callback URL
 	callbackUrlMap := make(map[string][]Request)
 
 	for _, msg := range messages {
-
 		// Extract Callback URL from message headers or use the default callback URL
 		var callbackURL string
 		if cbURL, ok := msg.Headers[cp.opts.callbackHeaderKey]; !ok {
@@ -155,7 +154,7 @@ func (cp *Publisher) SinkVertexCallback(ctx context.Context, messages []isb.Mess
 			callbackURL = cbURL
 		}
 
-		// Extract UUID from pair headers
+		// Extract UUID from message headers
 		uuid, ok := msg.Headers[dfv1.KeyMetaID]
 		if !ok {
 			// Return an error if UUID is not found in pair headers
@@ -163,6 +162,9 @@ func (cp *Publisher) SinkVertexCallback(ctx context.Context, messages []isb.Mess
 		}
 
 		// Create a new CallbackResponse
+		// for sink vertex since the message is not paired(terminal vertex). The from_vertex can be
+		// extracted from the message itself unlike the non-sink vertex where it is extracted from the
+		// read message.
 		callbackTime := time.Now().UnixMilli()
 		newObject := Request{
 			Vertex:     cp.vertexName,
@@ -201,7 +203,6 @@ func (cp *Publisher) executeCallback(ctx context.Context, callbackUrlMap map[str
 				zap.Error(err),
 			)
 			failedRequests = append(failedRequests, requests...)
-			continue
 		}
 	}
 
@@ -261,8 +262,9 @@ func (cp *Publisher) GetClient(url string) *http.Client {
 	client := &http.Client{
 		Timeout: cp.opts.httpTimeout,
 		Transport: &http.Transport{
+			// we don't need authentication for the callback, since we expect it to be a local service.
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, // Set InsecureSkipVerify to true
+				InsecureSkipVerify: true,
 			},
 		},
 	}
@@ -275,6 +277,6 @@ func (cp *Publisher) GetClient(url string) *http.Client {
 
 // Close closes all clients in the cache
 func (cp *Publisher) Close() {
-	// clear the cache, which will call the onEvicted callback for each client
+	// clear the cache, which will call the onEvicted method for each client
 	cp.clientsCache.Purge()
 }
