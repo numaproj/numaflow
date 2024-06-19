@@ -94,8 +94,8 @@ func WithFbSinkWriter(sinkWriter sinker.SinkWriter) Option {
 	}
 }
 
-// WithCallbackPublisher sets the callback publisher for the vertex
-func WithCallbackPublisher(cp *callback.Uploader) Option {
+// WithCallbackUploader sets the callback uploader for the vertex
+func WithCallbackUploader(cp *callback.Uploader) Option {
 	return func(o *options) error {
 		o.cbPublisher = cp
 		return nil

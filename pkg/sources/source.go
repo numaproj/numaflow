@@ -280,7 +280,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
 		}
 		cbPublisher := callback.NewUploader(ctx, vertexName, pipelineName, cbOpts...)
-		forwardOpts = append(forwardOpts, sourceforward.WithCallbackPublisher(cbPublisher))
+		forwardOpts = append(forwardOpts, sourceforward.WithCallbackUploader(cbPublisher))
 	}
 
 	// create source data forwarder

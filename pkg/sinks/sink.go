@@ -243,7 +243,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
 			}
 			cbPublisher := callback.NewUploader(ctx, vertexName, pipelineName, cbOpts...)
-			forwardOpts = append(forwardOpts, sinkforward.WithCallbackPublisher(cbPublisher))
+			forwardOpts = append(forwardOpts, sinkforward.WithCallbackUploader(cbPublisher))
 		}
 
 		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[vertexName], idleManager, forwardOpts...)

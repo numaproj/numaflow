@@ -97,5 +97,6 @@ func (o *offset) NoAck() error {
 }
 
 func (o *offset) PartitionIdx() int32 {
+	// we only read from one stream/partition for a given JS Reader.
 	return 0
 }

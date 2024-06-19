@@ -247,7 +247,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
 			}
 			cbPublisher := callback.NewUploader(ctx, vertexName, pipelineName, cbOpts...)
-			opts = append(opts, forward.WithCallbackPublisher(cbPublisher))
+			opts = append(opts, forward.WithCallbackUploader(cbPublisher))
 		}
 
 		// create a forwarder for each partition
