@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 
 	"go.uber.org/zap"
@@ -92,7 +91,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		// create reader for each partition. Each partition is a group in redis
 		for index, bufferPartition := range u.VertexInstance.Vertex.OwnedBuffers() {
 			fromGroup := bufferPartition + "-group"
-			consumer := fmt.Sprintf("%s-%v", vertexName, u.VertexInstance.Replica)
+			consumer := fmt.Sprintf("%s-%v", u.VertexInstance.Vertex.Name, u.VertexInstance.Replica)
 
 			reader := redisisb.NewBufferRead(ctx, redisClient, bufferPartition, fromGroup, consumer, int32(index), readOptions...)
 			readers = append(readers, reader)
@@ -236,22 +235,15 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		// if the callback is enabled, create a callback publisher
-		cbEnabledStr := os.Getenv(dfv1.EnvCallbackEnabled)
-		cbEnabled := false
-		if cbEnabledStr != "" {
-			cbEnabled, err = strconv.ParseBool(cbEnabledStr)
-			if err != nil {
-				return fmt.Errorf("failed to parse %s, %w", dfv1.CallbackEnabledKey, err)
+		cbEnabled := sharedutil.LookupEnvBoolOr(dfv1.EnvCallbackEnabled, false)
+		if cbEnabled {
+			cbOpts := make([]callback.OptionFunc, 0)
+			cbUrl := os.Getenv(dfv1.EnvCallbackURL)
+			if cbUrl != "" {
+				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
 			}
-			if cbEnabled {
-				cbOpts := make([]callback.OptionFunc, 0)
-				cbUrl := os.Getenv(dfv1.EnvCallbackURL)
-				if cbUrl != "" {
-					cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
-				}
-				cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
-				forwardOpts = append(forwardOpts, sinkforward.WithCallbackPublisher(cbPublisher))
-			}
+			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
+			forwardOpts = append(forwardOpts, sinkforward.WithCallbackPublisher(cbPublisher))
 		}
 
 		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[vertexName], idleManager, forwardOpts...)
