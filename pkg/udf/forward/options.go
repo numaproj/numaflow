@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -37,6 +38,8 @@ type options struct {
 	logger *zap.SugaredLogger
 	// enableMapUdfStream indicates whether the message streaming is enabled or not for map UDF processing
 	enableMapUdfStream bool
+	// cbPublisher is the callback publisher for the vertex.
+	cbPublisher *callback.Uploader
 }
 
 type Option func(*options) error
@@ -54,7 +57,7 @@ func DefaultOptions() *options {
 // WithRetryInterval sets the retry interval
 func WithRetryInterval(f time.Duration) Option {
 	return func(o *options) error {
-		o.retryInterval = time.Duration(f)
+		o.retryInterval = f
 		return nil
 	}
 }
@@ -87,6 +90,14 @@ func WithLogger(l *zap.SugaredLogger) Option {
 func WithUDFStreaming(f bool) Option {
 	return func(o *options) error {
 		o.enableMapUdfStream = f
+		return nil
+	}
+}
+
+// WithCallbackUploader sets the callback uploader for the vertex
+func WithCallbackUploader(cp *callback.Uploader) Option {
+	return func(o *options) error {
+		o.cbPublisher = cp
 		return nil
 	}
 }

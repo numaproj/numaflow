@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -176,6 +175,9 @@ func (v Vertex) commonEnvs() []corev1.EnvVar {
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
 		{Name: EnvVertexName, Value: v.Spec.Name},
+		{Name: EnvMapStreaming, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + MapUdfStreamKey + "']"}}},
+		{Name: EnvCallbackEnabled, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackEnabledKey + "']"}}},
+		{Name: EnvCallbackURL, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackURLKey + "']"}}},
 	}
 }
 
@@ -410,15 +412,6 @@ func (v Vertex) GetReplicas() int {
 		return 1
 	}
 	return int(*v.Spec.Replicas)
-}
-
-func (v Vertex) MapUdfStreamEnabled() (bool, error) {
-	if v.Spec.Metadata != nil && v.Spec.Metadata.Annotations != nil {
-		if mapUdfStream, existing := v.Spec.Metadata.Annotations[MapUdfStreamKey]; existing {
-			return strconv.ParseBool(mapUdfStream)
-		}
-	}
-	return false, nil
 }
 
 type VertexSpec struct {

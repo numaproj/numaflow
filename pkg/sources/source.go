@@ -19,6 +19,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -74,7 +76,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		healthCheckers           []metrics.HealthChecker
 		idleManager              wmb.IdleManager
 		pipelineName             = sp.VertexInstance.Vertex.Spec.PipelineName
-		vertexName               = sp.VertexInstance.Vertex.Name
+		vertexName               = sp.VertexInstance.Vertex.Spec.Name
 	)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -242,7 +244,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to create transformer gRPC client, %w", err)
 		}
 
-		srcTransformerGRPCClient = transformer.NewGRPCBasedTransformer(srcTransformerClient)
+		srcTransformerGRPCClient = transformer.NewGRPCBasedTransformer(vertexName, srcTransformerClient)
 
 		// Close the connection when we are done
 		defer func() {
@@ -268,6 +270,18 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	// create a source watermark publisher
 	sourceWmPublisher := publish.NewSourcePublish(ctx, pipelineName, vertexName, sourcePublisherStores, publish.WithDelay(sp.VertexInstance.Vertex.Spec.Watermark.GetMaxDelay()))
+
+	// if the callback is enabled, create a callback publisher
+	cbEnabled := sharedutil.LookupEnvBoolOr(dfv1.EnvCallbackEnabled, false)
+	if cbEnabled {
+		cbOpts := make([]callback.OptionFunc, 0)
+		cbUrl := os.Getenv(dfv1.EnvCallbackURL)
+		if cbUrl != "" {
+			cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
+		}
+		cbPublisher := callback.NewUploader(ctx, vertexName, pipelineName, cbOpts...)
+		forwardOpts = append(forwardOpts, sourceforward.WithCallbackUploader(cbPublisher))
+	}
 
 	// create source data forwarder
 	var sourceForwarder *sourceforward.DataForward

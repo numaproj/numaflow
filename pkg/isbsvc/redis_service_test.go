@@ -51,7 +51,7 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	// Verify
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil, "testVertex")
 	// Add 10 messages
 	for _, msg := range messages {
 		err := redisClient.Client.XAdd(ctx, &goredis.XAddArgs{

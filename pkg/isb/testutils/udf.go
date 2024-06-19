@@ -23,7 +23,7 @@ import (
 )
 
 // CopyUDFTestApply applies a copy UDF that simply copies the input to output.
-func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func CopyUDFTestApply(ctx context.Context, vertexName string, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	_ = ctx
 	offset := readMessage.ReadOffset
 	payload := readMessage.Body.Payload
@@ -38,8 +38,11 @@ func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb
 	writeMessage := isb.Message{
 		Header: isb.Header{
 			MessageInfo: parentPaneInfo,
-			ID:          offset.String(),
-			Keys:        keys,
+			ID: isb.MessageID{
+				VertexName: vertexName,
+				Offset:     offset.String(),
+			},
+			Keys: keys,
 		},
 		Body: isb.Body{
 			Payload: result,
@@ -48,7 +51,7 @@ func CopyUDFTestApply(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb
 	return []*isb.WriteMessage{{Message: writeMessage}}, nil
 }
 
-func CopyUDFTestApplyStream(ctx context.Context, readMessage *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+func CopyUDFTestApplyStream(ctx context.Context, vertexName string, writeMessageCh chan<- isb.WriteMessage, readMessage *isb.ReadMessage) error {
 	defer close(writeMessageCh)
 	_ = ctx
 	offset := readMessage.ReadOffset
@@ -64,7 +67,7 @@ func CopyUDFTestApplyStream(ctx context.Context, readMessage *isb.ReadMessage, w
 	writeMessage := isb.Message{
 		Header: isb.Header{
 			MessageInfo: parentPaneInfo,
-			ID:          offset.String(),
+			ID:          isb.MessageID{VertexName: vertexName, Offset: offset.String()},
 			Keys:        keys,
 		},
 		Body: isb.Body{

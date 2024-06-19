@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -38,12 +39,14 @@ import (
 
 // GRPCBasedUnalignedReduce is a reduce applier that uses gRPC client to invoke the session reduce UDF. It implements the applier.ReduceApplier interface.
 type GRPCBasedUnalignedReduce struct {
+	vertexName string
 	client     sessionreducer.Client
 	resultsMap map[string]int
 }
 
-func NewGRPCBasedUnalignedReduce(client sessionreducer.Client) *GRPCBasedUnalignedReduce {
+func NewGRPCBasedUnalignedReduce(vertexName string, client sessionreducer.Client) *GRPCBasedUnalignedReduce {
 	return &GRPCBasedUnalignedReduce{
+		vertexName: vertexName,
 		client:     client,
 		resultsMap: make(map[string]int),
 	}
@@ -110,7 +113,7 @@ func (u *GRPCBasedUnalignedReduce) ApplyReduce(ctx context.Context, partitionID 
 			case err := <-reduceErrCh:
 				// ctx.Done() event will be handled by the AsyncReduceFn method
 				// so we don't need a separate case for ctx.Done() here
-				if err == ctx.Err() {
+				if errors.Is(err, ctx.Err()) {
 					errCh <- err
 					return
 				}
@@ -254,9 +257,13 @@ func (u *GRPCBasedUnalignedReduce) parseSessionReduceResponse(response *sessionr
 }
 
 // updateMessageIDCount updates the message count in resultsMap and returns the updated message ID
-func (u *GRPCBasedUnalignedReduce) updateAndGetMsgId(baseMsgId string) string {
+func (u *GRPCBasedUnalignedReduce) updateAndGetMsgId(baseMsgId string) isb.MessageID {
 	val := u.resultsMap[baseMsgId]
 	val++
 	u.resultsMap[baseMsgId] = val
-	return fmt.Sprintf("%s:%d", baseMsgId, val)
+	return isb.MessageID{
+		VertexName: u.vertexName,
+		Offset:     baseMsgId,
+		Index:      int32(val),
+	}
 }

@@ -223,7 +223,7 @@ func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) 
 	var messages = make([]isb.Message, 0, count)
 	var internalHashKeysMap map[string]bool
 	var internalHashKeys = make([]string, 0)
-	messages = append(messages, testutils.BuildTestWriteMessages(count, startTime, nil)...)
+	messages = append(messages, testutils.BuildTestWriteMessages(count, startTime, nil, "testVertex")...)
 	for i := int64(0); i < count; i++ {
 		tmpTime := startTime.Add(time.Duration(i) * time.Minute)
 		messages[i].EventTime = tmpTime
@@ -239,7 +239,7 @@ func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) 
 func TestLua(t *testing.T) {
 	ctx := context.Background()
 	client := redis.NewUniversalClient(redisOptions)
-	message := isb.Message{Header: isb.Header{ID: "0", MessageInfo: isb.MessageInfo{EventTime: testStartTime}}, Body: isb.Body{Payload: []byte("foo")}}
+	message := isb.Message{Header: isb.Header{ID: isb.MessageID{VertexName: "testVertex", Offset: "0"}, MessageInfo: isb.MessageInfo{EventTime: testStartTime}}, Body: isb.Body{Payload: []byte("foo")}}
 	script := redis.NewScript(exactlyOnceInsertLuaScript)
 
 	var hashName = "{step-1}:1234567890:hash-foo"
@@ -352,11 +352,11 @@ func (f myForwardRedisTest) WhereTo(_ []string, _ []string, _ string) ([]forward
 }
 
 func (f myForwardRedisTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, message)
+	return testutils.CopyUDFTestApply(ctx, "", message)
 }
 
 func (f myForwardRedisTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
+	return testutils.CopyUDFTestApplyStream(ctx, "", writeMessageCh, message)
 }
 
 // TestNewInterStepDataForwardRedis is used to read data from one step to another using redis as the Inter-Step Buffer
@@ -487,7 +487,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil, "testVertex")
 	// Add 10 messages
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
@@ -552,7 +552,7 @@ func TestSetWriteInfo(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil, "testVertex")
 	// Add 10 messages
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{

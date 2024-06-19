@@ -3,6 +3,7 @@ package api_e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -58,7 +59,7 @@ func (s *APISuite) TestISBSVC() {
 	for !strings.Contains(getISBSVCBody, `"status":"healthy"`) {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				s.T().Fatalf("failed to get namespaces/isb-services: %v", ctx.Err())
 			}
 		default:
@@ -102,7 +103,7 @@ func (s *APISuite) TestISBSVCReplica1() {
 	for !strings.Contains(getISBSVCBody, `"status":"healthy"`) {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				s.T().Fatalf("failed to get namespaces/isb-services: %v", ctx.Err())
 			}
 		default:
@@ -206,7 +207,7 @@ func (s *APISuite) TestPipeline1() {
 	for strings.Contains(getPipelineISBsBody, "errMsg") {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				s.T().Fatalf("failed to get piplines/isbs: %v", ctx.Err())
 			}
 		default:
