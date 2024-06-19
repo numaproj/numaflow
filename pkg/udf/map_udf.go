@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 
 	"go.uber.org/zap"
@@ -130,16 +129,9 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
-	enableMapStreamStr := os.Getenv(dfv1.EnvMapStreaming)
-	enableMapUdfStream := false
-	if enableMapStreamStr != "" {
-		enableMapUdfStream, err = strconv.ParseBool(enableMapStreamStr)
-		if err != nil {
-			return fmt.Errorf("failed to parse %s, %w", dfv1.MapUdfStreamKey, err)
-		}
-	}
-
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
+
+	enableMapUdfStream := sharedutil.LookupEnvBoolOr(dfv1.EnvMapStreaming, false)
 	if enableMapUdfStream {
 		// Wait for server info to be ready
 		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapStreamServerInfoFile))
@@ -247,22 +239,15 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// if the callback is enabled, create a callback publisher
-		cbEnabledStr := os.Getenv(dfv1.EnvCallbackEnabled)
-		cbEnabled := false
-		if cbEnabledStr != "" {
-			cbEnabled, err = strconv.ParseBool(cbEnabledStr)
-			if err != nil {
-				return fmt.Errorf("failed to parse %s, %w", dfv1.CallbackEnabledKey, err)
+		cbEnabled := sharedutil.LookupEnvBoolOr(dfv1.EnvCallbackEnabled, false)
+		if cbEnabled {
+			cbOpts := make([]callback.OptionFunc, 0)
+			cbUrl := os.Getenv(dfv1.EnvCallbackURL)
+			if cbUrl != "" {
+				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
 			}
-			if cbEnabled {
-				cbOpts := make([]callback.OptionFunc, 0)
-				cbUrl := os.Getenv(dfv1.EnvCallbackURL)
-				if cbUrl != "" {
-					cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
-				}
-				cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
-				opts = append(opts, forward.WithCallbackPublisher(cbPublisher))
-			}
+			cbPublisher := callback.NewPublisher(ctx, vertexName, pipelineName, cbOpts...)
+			opts = append(opts, forward.WithCallbackPublisher(cbPublisher))
 		}
 
 		// create a forwarder for each partition
