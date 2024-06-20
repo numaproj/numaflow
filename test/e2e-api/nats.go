@@ -36,18 +36,21 @@ type NatsController struct {
 	mLock  sync.RWMutex
 }
 
+// getter method for lazy loading. creates and returns nats client only when required
 func (n *NatsController) getNatsClient() *natslib.Conn {
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.client != nil {
+		log.Println("nats client already existed")
 		return n.client
 	}
 	opts := []natslib.Option{natslib.Token(n.token)}
-	nc, err := natslib.Connect(n.newUrl, opts...)
+	var err error
+	n.client, err = natslib.Connect(n.newUrl, opts...)
 	if err != nil {
 		log.Fatal(err)
 	}
-	n.client = nc
+	log.Println("new nats client created")
 	return n.client
 }
 

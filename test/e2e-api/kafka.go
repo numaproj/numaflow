@@ -38,31 +38,38 @@ type KafkaController struct {
 	mLock       sync.RWMutex
 }
 
+// getter method for lazy loading. create and return the admin client only when required
+
 func (n *KafkaController) getKafkaClient() sarama.ClusterAdmin {
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.adminClient != nil {
+		log.Println("kafka client already existed")
 		return n.adminClient
+
 	}
 
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
 	config.Producer.Partitioner = sarama.NewManualPartitioner
 
-	adminClient, err := sarama.NewClusterAdmin(n.brokers, config)
+	var err error
+	n.adminClient, err = sarama.NewClusterAdmin(n.brokers, config)
 	if err != nil {
 		log.Fatalf("Failed to start Kafka admin client: %v", err)
 	}
-
-	n.adminClient = adminClient
+	log.Println("new kafka client created")
 	return n.adminClient
 
 }
+
+// getter method for lazy loading. creates and returns the kafka consumer only when required
 
 func (n *KafkaController) getKafkaConsumer() sarama.Consumer {
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.consumer != nil {
+		log.Println("consumer already existed")
 		return n.consumer
 	}
 
@@ -70,20 +77,22 @@ func (n *KafkaController) getKafkaConsumer() sarama.Consumer {
 	config.Producer.Return.Successes = true
 	config.Producer.Partitioner = sarama.NewManualPartitioner
 
-	consumer, err := sarama.NewConsumer(n.brokers, config)
+	var err error
+	n.consumer, err = sarama.NewConsumer(n.brokers, config)
 	if err != nil {
 		log.Fatalf("Failed to start Kafka consumer: %v", err)
 	}
-
-	n.consumer = consumer
+	log.Println("new consumer created")
 	return n.consumer
 
 }
 
+// getter method for lazy loading. Creates and returns kafka producer only when required
 func (n *KafkaController) getKafkaProducer() sarama.SyncProducer {
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.producer != nil {
+		log.Println("producer already existed")
 		return n.producer
 	}
 
@@ -91,61 +100,20 @@ func (n *KafkaController) getKafkaProducer() sarama.SyncProducer {
 	config.Producer.Return.Successes = true
 	config.Producer.Partitioner = sarama.NewManualPartitioner
 
-	producer, err := sarama.NewSyncProducer(n.brokers, config)
+	var err error
+	n.producer, err = sarama.NewSyncProducer(n.brokers, config)
 	if err != nil {
 		log.Fatalf("Failed to start Kafka producer: %v", err)
 	}
 
-	n.producer = producer
+	log.Println("new producer created")
 	return n.producer
 
 }
 
-// func initNewKafka(n *KafkaController) *KafkaController {
-
-// 	if n.adminClient != nil {
-// 		return n
-// 	}
-
-// 	m.Lock()
-// 	defer m.Unlock()
-
-// 	config := sarama.NewConfig()
-// 	config.Producer.Return.Successes = true
-
-// 	config.Producer.Partitioner = sarama.NewManualPartitioner
-
-// 	producer, err := sarama.NewSyncProducer(n.brokers, config)
-// 	if err != nil {
-// 		log.Fatalf("Failed to start Kafka producer: %v", err)
-// 	}
-
-// 	consumer, err := sarama.NewConsumer(n.brokers, config)
-// 	if err != nil {
-// 		log.Fatalf("Failed to start Kafka consumer: %v", err)
-// 	}
-
-// 	adminClient, err := sarama.NewClusterAdmin(n.brokers, config)
-// 	if err != nil {
-// 		log.Fatalf("Failed to start Kafka admin client: %v", err)
-// 	}
-
-// 	return &KafkaController{
-// 		brokers:     n.brokers,
-// 		adminClient: adminClient,
-// 		producer:    producer,
-// 		consumer:    consumer,
-// 	}
-// }
-
 func NewKafkaController() *KafkaController {
-	// initialize Kafka handlers
-	//start := time.Now()
-	var brokers = []string{bootstrapServers}
 
-	// if partition is specified, use manual partitioner
-	//duration := time.Since(start)
-	//log.Fatalf("Initialized KafkaController in %v\n", duration)
+	var brokers = []string{bootstrapServers}
 
 	return &KafkaController{
 		brokers:     brokers,

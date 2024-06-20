@@ -32,17 +32,19 @@ type RedisController struct {
 	mLock  sync.RWMutex
 }
 
+// getter method for lazy loading. creates and returns redis client only when required
 func (h *RedisController) getRedisClient() *redis.Client {
 	h.mLock.Lock()
 	defer h.mLock.Unlock()
 	if h.client != nil {
+		log.Println("redis client already existed")
 		return h.client
 	}
-	client := redis.NewClient(&redis.Options{
+	h.client = redis.NewClient(&redis.Options{
 		Addr: "redis:6379",
 	})
 
-	h.client = client
+	log.Println("new redis client created")
 	return h.client
 }
 
