@@ -34,16 +34,21 @@ type NatsController struct {
 	token  string
 }
 
-func initNewNats(url string, token string) *NatsController {
-	opts := []natslib.Option{natslib.Token(token)}
-	nc, err := natslib.Connect(url, opts...)
+func initNewNats(n *NatsController) *NatsController {
+	if n.client != nil {
+		return n
+	}
+	m.Lock()
+	defer m.Unlock()
+	opts := []natslib.Option{natslib.Token(n.token)}
+	nc, err := natslib.Connect(n.newUrl, opts...)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return &NatsController{
 		client: nc,
-		newUrl: url,
-		token:  token,
+		newUrl: n.newUrl,
+		token:  n.token,
 	}
 }
 
@@ -56,11 +61,8 @@ func NewNatsController(url string, token string) *NatsController {
 }
 
 func (n *NatsController) PumpSubject(w http.ResponseWriter, r *http.Request) {
-	m.Lock()
-	if n.client == nil {
-		n = initNewNats(n.newUrl, n.token)
-	}
-	m.Unlock()
+
+	n = initNewNats(n)
 
 	subject := r.URL.Query().Get("subject")
 	msg := r.URL.Query().Get("msg")
@@ -110,11 +112,7 @@ func (n *NatsController) PumpSubject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (n *NatsController) PumpJetstream(w http.ResponseWriter, r *http.Request) {
-	m.Lock()
-	if n.client == nil {
-		n = initNewNats(n.newUrl, n.token)
-	}
-	m.Unlock()
+	n = initNewNats(n)
 
 	streamName := r.URL.Query().Get("stream")
 	msg := r.URL.Query().Get("msg")

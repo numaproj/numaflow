@@ -30,7 +30,12 @@ type RedisController struct {
 	client *redis.Client
 }
 
-func initNewReddis() *RedisController {
+func initNewReddis(n *RedisController) *RedisController {
+	if n.client != nil {
+		return n
+	}
+	m.Lock()
+	defer m.Unlock()
 	return &RedisController{
 		client: redis.NewClient(&redis.Options{
 			Addr: "redis:6379",
@@ -47,11 +52,8 @@ func NewRedisController() *RedisController {
 }
 
 func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Request) {
-	m.Lock()
-	if h.client == nil {
-		h = initNewReddis()
-	}
-	m.Unlock()
+
+	h = initNewReddis(h)
 
 	pipelineName := r.URL.Query().Get("pipelineName")
 	sinkName := r.URL.Query().Get("sinkName")
