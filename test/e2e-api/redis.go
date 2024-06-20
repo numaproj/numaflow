@@ -22,25 +22,28 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/redis/go-redis/v9"
 )
 
 type RedisController struct {
 	client *redis.Client
+	mLock  sync.RWMutex
 }
 
-func initNewReddis(n *RedisController) *RedisController {
-	if n.client != nil {
-		return n
+func (h *RedisController) getRedisClient() *redis.Client {
+	h.mLock.Lock()
+	defer h.mLock.Unlock()
+	if h.client != nil {
+		return h.client
 	}
-	m.Lock()
-	defer m.Unlock()
-	return &RedisController{
-		client: redis.NewClient(&redis.Options{
-			Addr: "redis:6379",
-		}),
-	}
+	client := redis.NewClient(&redis.Options{
+		Addr: "redis:6379",
+	})
+
+	h.client = client
+	return h.client
 }
 
 func NewRedisController() *RedisController {
@@ -53,7 +56,7 @@ func NewRedisController() *RedisController {
 
 func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Request) {
 
-	h = initNewReddis(h)
+	redisClient := h.getRedisClient()
 
 	pipelineName := r.URL.Query().Get("pipelineName")
 	sinkName := r.URL.Query().Get("sinkName")
@@ -64,7 +67,7 @@ func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	count, err := h.client.HGet(context.Background(), fmt.Sprintf("%s:%s", pipelineName, sinkName), targetStr).Result()
+	count, err := redisClient.HGet(context.Background(), fmt.Sprintf("%s:%s", pipelineName, sinkName), targetStr).Result()
 
 	if err != nil {
 		log.Println(err)
@@ -80,7 +83,12 @@ func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Req
 
 // Close closes the Redis client.
 func (h *RedisController) Close() {
-	if err := h.client.Close(); err != nil {
-		log.Println(err)
+	h.mLock.Lock()
+	defer h.mLock.Unlock()
+	if h.client != nil {
+		if err := h.client.Close(); err != nil {
+			log.Println(err)
+		}
 	}
+
 }

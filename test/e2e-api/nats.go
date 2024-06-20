@@ -22,6 +22,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	natslib "github.com/nats-io/nats.go"
@@ -32,24 +33,22 @@ type NatsController struct {
 	client *natslib.Conn
 	newUrl string
 	token  string
+	mLock  sync.RWMutex
 }
 
-func initNewNats(n *NatsController) *NatsController {
+func (n *NatsController) getNatsClient() *natslib.Conn {
+	n.mLock.Lock()
+	defer n.mLock.Unlock()
 	if n.client != nil {
-		return n
+		return n.client
 	}
-	m.Lock()
-	defer m.Unlock()
 	opts := []natslib.Option{natslib.Token(n.token)}
 	nc, err := natslib.Connect(n.newUrl, opts...)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &NatsController{
-		client: nc,
-		newUrl: n.newUrl,
-		token:  n.token,
-	}
+	n.client = nc
+	return n.client
 }
 
 func NewNatsController(url string, token string) *NatsController {
@@ -57,13 +56,12 @@ func NewNatsController(url string, token string) *NatsController {
 		client: nil,
 		newUrl: url,
 		token:  token,
+		mLock:  sync.RWMutex{},
 	}
 }
 
 func (n *NatsController) PumpSubject(w http.ResponseWriter, r *http.Request) {
-
-	n = initNewNats(n)
-
+	natsClient := n.getNatsClient()
 	subject := r.URL.Query().Get("subject")
 	msg := r.URL.Query().Get("msg")
 	size, err := strconv.Atoi(r.URL.Query().Get("size"))
@@ -101,7 +99,7 @@ func (n *NatsController) PumpSubject(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		default:
-			err := n.client.Publish(subject, []byte(msg))
+			err := natsClient.Publish(subject, []byte(msg))
 			if err != nil {
 				_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
 			}
@@ -112,7 +110,7 @@ func (n *NatsController) PumpSubject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (n *NatsController) PumpJetstream(w http.ResponseWriter, r *http.Request) {
-	n = initNewNats(n)
+	natsClient := n.getNatsClient()
 
 	streamName := r.URL.Query().Get("stream")
 	msg := r.URL.Query().Get("msg")
@@ -128,7 +126,7 @@ func (n *NatsController) PumpJetstream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	js, err := jetstream.New(n.client)
+	js, err := jetstream.New(natsClient)
 	if err != nil {
 		log.Println("Creating jetstream instance:", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -171,5 +169,6 @@ func (n *NatsController) PumpJetstream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (n *NatsController) Close() {
+	// no lazy clozing required becuase they check if nc is not null before they close
 	n.client.Close()
 }
