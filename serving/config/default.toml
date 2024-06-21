@@ -1,0 +1,15 @@
+tid_header = "ID"
+app_listen_port = 3000
+metrics_server_listen_port = 3001
+upstream_addr = "localhost:8888"
+drain_timeout_secs = 10
+host_ip = "localhost"
+pipeline_spec_path = "./config/pipeline_spec.json"
+
+[jetstream]
+stream = "default"
+addr = "localhost:4222"
+
+[redis]
+addr = "redis://127.0.0.1/"
+max_tasks = 50

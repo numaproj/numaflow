@@ -1,0 +1,22 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-numaserve-sink
+spec:
+  vertices:
+    - name: in
+      source:
+        # A self data generating source
+        generator:
+          rpu: 300
+          duration: 1s
+          keyCount: 5
+          value: 5
+    - name: out
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaserve/serversink:v1
+  edges:
+    - from: in
+      to: out

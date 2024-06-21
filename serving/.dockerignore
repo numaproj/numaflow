@@ -1,0 +1,5 @@
+Dockerfile
+coverage.out
+.gitignore
+.git
+target/
