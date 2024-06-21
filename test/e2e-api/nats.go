@@ -41,7 +41,6 @@ func (n *NatsController) getNatsClient() *natslib.Conn {
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.client != nil {
-		log.Println("nats client already existed")
 		return n.client
 	}
 	opts := []natslib.Option{natslib.Token(n.token)}
@@ -172,6 +171,6 @@ func (n *NatsController) PumpJetstream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (n *NatsController) Close() {
-	// no lazy clozing required becuase they check if nc is not null before they close
+	// no lazy closing is required here because the client.Close() function does a nil check before closing.
 	n.client.Close()
 }

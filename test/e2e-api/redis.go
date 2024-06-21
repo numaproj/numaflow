@@ -37,7 +37,6 @@ func (h *RedisController) getRedisClient() *redis.Client {
 	h.mLock.Lock()
 	defer h.mLock.Unlock()
 	if h.client != nil {
-		log.Println("redis client already existed")
 		return h.client
 	}
 	h.client = redis.NewClient(&redis.Options{

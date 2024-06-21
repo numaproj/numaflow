@@ -38,13 +38,16 @@ type KafkaController struct {
 	mLock       sync.RWMutex
 }
 
-// getter method for lazy loading. create and return the admin client only when required
+/*
+  getKafkaClient is used for getting a Kafka admin client for the given controller config. It is implemented with a lazy loading mechanism:
+  1) A new client is created only for the first request
+  2) Returning the current client if it exists
+*/
 
 func (n *KafkaController) getKafkaClient() sarama.ClusterAdmin {
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.adminClient != nil {
-		log.Println("kafka client already existed")
 		return n.adminClient
 
 	}
@@ -63,13 +66,16 @@ func (n *KafkaController) getKafkaClient() sarama.ClusterAdmin {
 
 }
 
-// getter method for lazy loading. creates and returns the kafka consumer only when required
+/*
+  getKafkaConsumer is used for getting a Kafka consumer for the given controller config. It is implemented with a lazy loading mechanism:
+  1) A new consumer is created only for the first request
+  2) Returning the current consumer if it exists
+*/
 
 func (n *KafkaController) getKafkaConsumer() sarama.Consumer {
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.consumer != nil {
-		log.Println("consumer already existed")
 		return n.consumer
 	}
 
@@ -87,12 +93,15 @@ func (n *KafkaController) getKafkaConsumer() sarama.Consumer {
 
 }
 
-// getter method for lazy loading. Creates and returns kafka producer only when required
+/*
+getKafkaConsumer is used for getting a Kafka producer for the given controller config. It is implemented with a lazy loading mechanism:
+1) A new producer is created only for the first request
+2) Returning the current producer if it exists
+*/
 func (n *KafkaController) getKafkaProducer() sarama.SyncProducer {
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.producer != nil {
-		log.Println("producer already existed")
 		return n.producer
 	}
 
@@ -111,6 +120,7 @@ func (n *KafkaController) getKafkaProducer() sarama.SyncProducer {
 
 }
 
+// adminClient, producer and consumer fields set to nil when initialized for lazy loading. Only created when needed using getter methods.
 func NewKafkaController() *KafkaController {
 
 	var brokers = []string{bootstrapServers}
