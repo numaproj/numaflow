@@ -1,0 +1,2 @@
+edition = "2021"
+indent_style = "Block"
