@@ -52,12 +52,13 @@ async fn write_to_redis(
         {
             Ok(_) => return Ok(()),
             Err(err) => {
-                retries -= 1;
-                if retries < config().redis.retries {
+                // return if we are out of retries of if the error is unrecoverable
+                if retries < config().redis.retries || err.is_unrecoverable_error() {
                     return Err(Error::StoreWrite(
                         format!("Saving to redis: {}", err).to_string(),
                     ));
                 } else {
+                    retries -= 1;
                     sleep(Duration::from_millis(
                         config().redis.retries_duration_millis.into(),
                     ))
