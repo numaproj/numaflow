@@ -13,3 +13,5 @@ addr = "localhost:4222"
 [redis]
 addr = "redis://127.0.0.1/"
 max_tasks = 50
+retries = 5
+retries_duration_millis = 100

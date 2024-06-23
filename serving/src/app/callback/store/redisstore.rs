@@ -1,41 +1,70 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use redis::aio::ConnectionManager;
 use tokio::sync::Semaphore;
+use tokio::time::sleep;
 
 use crate::app::callback::CallbackRequest;
 use crate::consts::SAVED;
-use crate::Error;
+use crate::{config, Error};
 
 use super::PayloadToSave;
 
 const LPUSH: &str = "LPUSH";
 const LRANGE: &str = "LRANGE";
 
-async fn handle_write_requests(
-    mut conn: ConnectionManager,
-    msg: PayloadToSave,
-) -> crate::Result<()> {
+async fn handle_write_requests(conn: ConnectionManager, msg: PayloadToSave) -> crate::Result<()> {
     match msg {
         PayloadToSave::Callback { key, value } => {
             // Convert the CallbackRequest to a byte array
-            let bytes = serde_json::to_vec(&*value)
+            let value = serde_json::to_vec(&*value)
                 .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
 
-            // Write the byte array to Redis
-            conn.send_packed_command(redis::cmd(LPUSH).arg(key).arg(bytes))
-                .await
-                .map(|_| ())
-                .map_err(|e| Error::StoreWrite(format!("Saving to redis: {}", e).to_string()))
+            write_to_redis(conn, &key, &value).await
         }
+
+        // Write the byte array to Redis
         PayloadToSave::DatumFromPipeline { key, value } => {
             // we have to differentiate between the saved responses and the callback requests
             // saved responses are stored in "id_SAVED", callback requests are stored in "id"
             let key = format!("{}_{}", key, SAVED);
-            conn.send_packed_command(redis::cmd(LPUSH).arg(key).arg::<Vec<u8>>(value.into()))
-                .await
-                .map(|_| ())
-                .map_err(|e| Error::StoreWrite(format!("Saving to redis: {}", e)))
+            let value: Vec<u8> = value.into();
+
+            write_to_redis(conn, &key, &value).await
+        }
+    }
+}
+
+// write to Redis with retries
+async fn write_to_redis(
+    mut conn: ConnectionManager,
+    key: &str,
+    value: &Vec<u8>,
+) -> crate::Result<()> {
+    let mut retries = 0;
+    loop {
+        // Write the byte array to Redis
+        match conn
+            .send_packed_command(redis::cmd(LPUSH).arg(key).arg(value))
+            .await
+            .map(|_| ())
+        {
+            Ok(_) => return Ok(()),
+            Err(err) => {
+                retries -= 1;
+                if retries < config().redis.retries {
+                    return Err(Error::StoreWrite(
+                        format!("Saving to redis: {}", err).to_string(),
+                    ));
+                } else {
+                    sleep(Duration::from_millis(
+                        config().redis.retries_duration_millis.into(),
+                    ))
+                    .await;
+                    continue;
+                }
+            }
         }
     }
 }
