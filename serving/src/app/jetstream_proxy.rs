@@ -38,6 +38,9 @@ use super::callback::{state::State as CallbackState, store::Store};
 const ID_HEADER_KEY: &str = "X-Numaflow-Id";
 const CALLBACK_URL_KEY: &str = "X-Numaflow-Callback-Url";
 
+const NUMAFLOW_RESP_ARRAY_LEN: &'static str = "Numaflow-Array-Len";
+const NUMAFLOW_RESP_ARRAY_IDX_LEN: &'static str = "Numaflow-Array-Index-Len";
+
 #[derive(Clone)]
 struct ProxyState<T> {
     context: Context,
@@ -115,15 +118,18 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
         }
     };
 
+    // The reponse can be a binary array of elements as single chunk. For the user to process the blob, we return the array len and
+    // length of each element in the array. This will help the user to decomponse the binary response chunk into individual
+    // elements.
     let mut header_map = HeaderMap::new();
     let response_arr_len: String = result
         .iter()
         .map(|x| x.len().to_string())
         .collect::<Vec<_>>()
         .join(",");
-    header_map.insert("numaflow-response-len", result.len().into());
+    header_map.insert(NUMAFLOW_RESP_ARRAY_LEN, result.len().into());
     header_map.insert(
-        "numaflow-array-len",
+        NUMAFLOW_RESP_ARRAY_IDX_LEN,
         HeaderValue::from_str(response_arr_len.as_str()).map_err(|e| {
             ApiError::InternalServerError(format!("Encoding response array len failed: {}", e))
         })?,
@@ -519,10 +525,10 @@ mod tests {
         let content_len = response.headers().get(CONTENT_LENGTH).unwrap();
         assert_eq!(content_len.as_bytes(), b"36");
 
-        let hval_response_len = response.headers().get("numaflow-response-len").unwrap();
+        let hval_response_len = response.headers().get(NUMAFLOW_RESP_ARRAY_LEN).unwrap();
         assert_eq!(hval_response_len.as_bytes(), b"2");
 
-        let hval_response_array_len = response.headers().get("numaflow-array-len").unwrap();
+        let hval_response_array_len = response.headers().get(NUMAFLOW_RESP_ARRAY_IDX_LEN).unwrap();
         assert_eq!(hval_response_array_len.as_bytes(), b"14,22");
 
         let result = to_bytes(response.into_body(), usize::MAX).await.unwrap();

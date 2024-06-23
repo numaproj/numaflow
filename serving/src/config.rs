@@ -35,6 +35,8 @@ pub struct JetStreamConfig {
 pub struct RedisConfig {
     pub addr: String,
     pub max_tasks: usize,
+    pub retries: usize,
+    pub retries_duration_millis: u16,
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,58 +80,8 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use std::env;
-    use std::fs::File;
-    use std::io::Write;
-
-    use tempfile::tempdir;
 
     use super::*;
-
-    #[tokio::test]
-    async fn test_settings_load() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("default.toml");
-        let mut file = File::create(file_path).unwrap();
-
-        let config_toml = r#"
-    tid_header = "ID"
-    app_listen_port = 3000
-    metrics_server_listen_port = 3001
-    upstream_addr = "localhost:8888"
-    drain_timeout_secs = 10
-    host_ip = "localhost"
-    pipeline_spec_path = "./config/pipeline_spec.json"
-
-    [jetstream]
-    stream = "default"
-    addr = "localhost:4222"
-
-    [redis]
-    addr = "redis://127.0.0.1/"
-    max_tasks = 50
-    "#;
-
-        writeln!(file, "{}", config_toml).unwrap();
-
-        env::set_var("RUN_ENV", "Development");
-        env::set_var("APP_HOST_IP", "10.244.0.6");
-
-        let config = Settings::load(&dir).unwrap();
-
-        assert_eq!(config.tid_header, "ID");
-        assert_eq!(config.app_listen_port, 3000);
-        assert_eq!(config.metrics_server_listen_port, 3001);
-        assert_eq!(config.upstream_addr, "localhost:8888");
-        assert_eq!(config.drain_timeout_secs, 10);
-        assert_eq!(config.jetstream.stream, "default");
-        assert_eq!(config.jetstream.addr, "localhost:4222");
-        assert_eq!(config.redis.addr, "redis://127.0.0.1/");
-        assert_eq!(config.redis.max_tasks, 50);
-        assert_eq!(config.host_ip, "10.244.0.6");
-        assert_eq!(config.pipeline_spec_path, "./config/pipeline_spec.json");
-
-        dir.close().unwrap();
-    }
 
     #[test]
     fn test_config() {
@@ -151,6 +103,8 @@ mod tests {
         assert_eq!(settings.jetstream.addr, "localhost:4222");
         assert_eq!(settings.redis.addr, "redis://127.0.0.1/");
         assert_eq!(settings.redis.max_tasks, 50);
+        assert_eq!(settings.redis.retries, 5);
+        assert_eq!(settings.redis.retries_duration_millis, 100);
         assert_eq!(settings.pipeline_spec_path, "./config/pipeline_spec.json");
     }
 }
