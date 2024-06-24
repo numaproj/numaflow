@@ -122,7 +122,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   rust-unit-tests:
-   name: Unit Tests Go
+   name: Unit Tests Rust
    runs-on: ubuntu-latest
    timeout-minutes: 10
    services:
