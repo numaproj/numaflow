@@ -278,6 +278,11 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}
 	metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
 
+	if df.opts.cbPublisher != nil {
+		if err = df.opts.cbPublisher.SinkVertexCallback(ctx, writeMessages); err != nil {
+			df.opts.logger.Error("Failed to execute callback", zap.Error(err))
+		}
+	}
 	// ProcessingTimes of the entire forwardAChunk
 	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
 }

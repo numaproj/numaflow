@@ -308,8 +308,12 @@ func (mg *memGen) newReadMessage(key string, payload []byte, offset int64, et in
 		Header: isb.Header{
 			// TODO: insert the right time based on the generator
 			MessageInfo: isb.MessageInfo{EventTime: timeFromNanos(et, mg.jitter)},
-			ID:          readOffset.String(),
-			Keys:        []string{key},
+			ID: isb.MessageID{
+				VertexName: mg.vertexName,
+				Offset:     readOffset.String(),
+				Index:      mg.vertexInstance.Replica,
+			},
+			Keys: []string{key},
 		},
 		Body: isb.Body{Payload: payload},
 	}

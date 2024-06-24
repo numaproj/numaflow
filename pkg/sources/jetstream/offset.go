@@ -32,19 +32,17 @@ import (
 // The implementation is same as `pkg/isb/stores/jetstream/reader.go` except for the type of `msg` field.
 // Once the ISB implementation starts using the new Jetstream client APIs, we can merge both.
 type offset struct {
-	msg         jetstreamlib.Msg
-	seq         uint64
-	partitionID int32
-	cancelFunc  context.CancelFunc
+	msg        jetstreamlib.Msg
+	seq        uint64
+	cancelFunc context.CancelFunc
 }
 
 var _ isb.Offset = (*offset)(nil)
 
-func newOffset(msg jetstreamlib.Msg, seqNum uint64, partitionID int32, tickDuration time.Duration, log *zap.SugaredLogger) isb.Offset {
+func newOffset(msg jetstreamlib.Msg, seqNum uint64, tickDuration time.Duration, log *zap.SugaredLogger) isb.Offset {
 	o := &offset{
-		msg:         msg,
-		seq:         seqNum,
-		partitionID: partitionID,
+		msg: msg,
+		seq: seqNum,
 	}
 	// If tickDuration is 1s, which means ackWait is 1s or 2s, it does not make much sense to do it, instead, increasing ackWait is recommended.
 	if tickDuration.Seconds() > 1 {
@@ -74,7 +72,7 @@ func (o *offset) workInProgress(ctx context.Context, msg jetstreamlib.Msg, tickD
 }
 
 func (o *offset) String() string {
-	return fmt.Sprintf("%d-%d", o.seq, o.partitionID)
+	return fmt.Sprintf("%d", o.seq)
 }
 
 func (o *offset) Sequence() (int64, error) {
@@ -99,5 +97,6 @@ func (o *offset) NoAck() error {
 }
 
 func (o *offset) PartitionIdx() int32 {
-	return o.partitionID
+	// we only read from one stream/partition for a given JS Reader.
+	return 0
 }

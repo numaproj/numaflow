@@ -156,7 +156,10 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 			MessageInfo: isb.MessageInfo{
 				EventTime: partitionID.End.Add(-1 * time.Millisecond),
 			},
-			ID:   "msgID",
+			ID: isb.MessageID{
+				VertexName: "test-vertex",
+				Offset:     "test-offset",
+			},
 			Keys: []string{"result"},
 		},
 		Body: isb.Body{Payload: b},
@@ -213,7 +216,10 @@ func (s SessionSumReduceTest) ApplyReduce(ctx context.Context, partitionID *part
 								MessageInfo: isb.MessageInfo{
 									EventTime: partitionID.End.Add(-1 * time.Millisecond),
 								},
-								ID:   "msgID",
+								ID: isb.MessageID{
+									VertexName: "test-vertex",
+									Offset:     "test-offset",
+								},
 								Keys: []string{win.Keys()[0]},
 							},
 							Body: isb.Body{Payload: b},
@@ -275,7 +281,10 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 					MessageInfo: isb.MessageInfo{
 						EventTime: partitionID.End.Add(-1 * time.Millisecond),
 					},
-					ID:   "msgID",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{k},
 				},
 				Body: isb.Body{Payload: b},
@@ -333,7 +342,10 @@ func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 					MessageInfo: isb.MessageInfo{
 						EventTime: partitionID.End.Add(-1 * time.Millisecond),
 					},
-					ID:   "msgID",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{k},
 				},
 				Body: isb.Body{Payload: b},
@@ -620,7 +632,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		assert.Equal(t, isb.Header{
 			MessageInfo: isb.MessageInfo{},
 			Kind:        0,
-			ID:          "",
+			ID:          isb.MessageID{},
 		}, msgs[i].Header)
 	}
 
@@ -648,7 +660,10 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	}
 	assert.Equal(t, isb.Data, msgs[1].Kind)
 	// in the test ApplyUDF above we've set the final message to have ID="msgID"
-	assert.Equal(t, "msgID", msgs[1].ID)
+	assert.Equal(t, isb.MessageID{
+		VertexName: "test-vertex",
+		Offset:     "test-offset",
+	}, msgs[1].ID)
 	// in the test ApplyUDF above we've set the final message to have eventTime = partitionID.End-1ms
 	assert.Equal(t, int64(1679961604999), msgs[1].EventTime.UnixMilli())
 	var result PayloadForTest
@@ -663,7 +678,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		assert.Equal(t, isb.Header{
 			MessageInfo: isb.MessageInfo{},
 			Kind:        0,
-			ID:          "",
+			ID:          isb.MessageID{},
 		}, msgs[i].Header)
 	}
 
@@ -1628,7 +1643,11 @@ func buildMessagesForReduce(count int, key string, publishTime time.Time) []isb.
 				MessageInfo: isb.MessageInfo{
 					EventTime: publishTime,
 				},
-				ID:   fmt.Sprintf("%d", i),
+				ID: isb.MessageID{
+					VertexName: "test-vertex",
+					Offset:     "test-offset",
+					Index:      int32(i),
+				},
 				Keys: []string{key},
 			},
 			Body: isb.Body{Payload: result},
@@ -1764,7 +1783,10 @@ func buildIsbMessage(messageValue int, eventTime time.Time) isb.Message {
 			MessageInfo: isb.MessageInfo{
 				EventTime: eventTime,
 			},
-			ID:   fmt.Sprintf("%d", messageValue),
+			ID: isb.MessageID{
+				VertexName: "test-vertex",
+				Offset:     "test-offset",
+			},
 			Keys: messageKey,
 		},
 		Body: isb.Body{Payload: result},
@@ -1851,7 +1873,10 @@ func buildIsbMessageAllowedLatency(messageValue int, eventTime time.Time) isb.Me
 				EventTime: eventTime,
 				IsLate:    true,
 			},
-			ID:   fmt.Sprintf("%d", messageValue),
+			ID: isb.MessageID{
+				VertexName: "test-vertex",
+				Offset:     "test-offset",
+			},
 			Keys: messageKey,
 		},
 		Body: isb.Body{Payload: result},

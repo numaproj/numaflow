@@ -40,11 +40,11 @@ func (s myShutdownTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.V
 }
 
 func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, message)
+	return testutils.CopyUDFTestApply(ctx, "", message)
 }
 
 func (s myShutdownTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
+	return testutils.CopyUDFTestApplyStream(ctx, "", writeMessageCh, message)
 }
 
 func TestInterStepDataForward(t *testing.T) {
@@ -76,7 +76,7 @@ func TestInterStepDataForward(t *testing.T) {
 			defer cancel()
 
 			startTime := time.Unix(1636470000, 0)
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime, nil)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime, nil, "testVertex")
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",
@@ -116,7 +116,7 @@ func TestInterStepDataForward(t *testing.T) {
 			defer cancel()
 
 			startTime := time.Unix(1636470000, 0)
-			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime, nil)
+			writeMessages := testutils.BuildTestWriteMessages(4*batchSize, startTime, nil, "testVertex")
 
 			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 				PipelineName: "testPipeline",

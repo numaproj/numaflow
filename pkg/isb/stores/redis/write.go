@@ -180,7 +180,7 @@ func (bw *BufferWrite) Write(_ context.Context, messages []isb.Message) ([]isb.O
 		for idx, message := range messages {
 			// Reference the Payload in Body directly when writing to Redis ISB to avoid extra marshaling.
 			// TODO: revisit directly Payload reference when Body structure changes
-			errs[idx] = script.Run(ctx, bw.Client, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID, message.Header, message.Body.Payload, bw.BufferWriteInfo.minId.String()).Err()
+			errs[idx] = script.Run(ctx, bw.Client, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID.String(), message.Header, message.Body.Payload, bw.BufferWriteInfo.minId.String()).Err()
 		}
 	} else {
 		var scriptMissing bool

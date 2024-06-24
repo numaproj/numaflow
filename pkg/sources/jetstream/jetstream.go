@@ -174,16 +174,32 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 			n.logger.Errorw("Getting metadata for the message", zap.Error(err))
 			return
 		}
+
+		// Headers are supposed to be map[string][]string. However isb.Message.Header.Headers is map[string]string.
+		// So we only use the last header value in the slice.
+		headers := make(map[string]string, len(msg.Headers()))
+		for header, value := range msg.Headers() {
+			headers[header] = value[len(value)-1]
+		}
+
+		readOffset := newOffset(msg, metadata.Sequence.Stream, inProgressTickDuration, n.logger)
+
 		m := &isb.ReadMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{EventTime: metadata.Timestamp},
+					ID: isb.MessageID{
+						VertexName: n.vertexName,
+						Offset:     readOffset.String(),
+						Index:      readOffset.PartitionIdx(),
+					},
+					Headers: headers,
 				},
 				Body: isb.Body{
 					Payload: msg.Data(),
 				},
 			},
-			ReadOffset: newOffset(msg, metadata.Sequence.Stream, vertexInstance.Replica, inProgressTickDuration, n.logger),
+			ReadOffset: readOffset,
 		}
 		n.messages <- m
 	}
@@ -291,10 +307,10 @@ func (ns *jsSource) Pending(ctx context.Context) (int64, error) {
 }
 
 func (ns *jsSource) Ack(_ context.Context, offsets []isb.Offset) []error {
-	var errs []error
-	for _, o := range offsets {
+	errs := make([]error, len(offsets))
+	for i, o := range offsets {
 		if err := o.AckIt(); err != nil {
-			errs = append(errs, err)
+			errs[i] = err
 		}
 	}
 	return errs

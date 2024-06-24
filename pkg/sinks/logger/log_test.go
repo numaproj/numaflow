@@ -32,7 +32,7 @@ func TestToLog_Start(t *testing.T) {
 	defer cancel()
 
 	startTime := time.Unix(1636470000, 0)
-	writeMessages := testutils.BuildTestWriteMessages(int64(20), startTime, nil)
+	writeMessages := testutils.BuildTestWriteMessages(int64(20), startTime, nil, "testVertex")
 
 	vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
 		AbstractVertex: dfv1.AbstractVertex{

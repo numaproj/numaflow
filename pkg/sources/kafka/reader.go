@@ -330,9 +330,13 @@ func (ks *kafkaSource) toReadMessage(m *sarama.ConsumerMessage) *isb.ReadMessage
 	msg := isb.Message{
 		Header: isb.Header{
 			MessageInfo: isb.MessageInfo{EventTime: m.Timestamp},
-			ID:          readOffset.String(),
-			Keys:        []string{string(m.Key)},
-			Headers:     headers,
+			ID: isb.MessageID{
+				VertexName: ks.vertexName,
+				Offset:     readOffset.String(),
+				Index:      readOffset.PartitionIdx(),
+			},
+			Keys:    []string{string(m.Key)},
+			Headers: headers,
 		},
 		Body: body,
 	}

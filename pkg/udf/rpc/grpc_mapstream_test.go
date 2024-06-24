@@ -36,7 +36,7 @@ import (
 
 func NewMockUDSGRPCBasedMapStream(mockClient *mapstreammock.MockMapStreamClient) *GRPCBasedMapStream {
 	c, _ := mapstreamer.NewFromClient(mockClient)
-	return &GRPCBasedMapStream{c}
+	return &GRPCBasedMapStream{"test-vertex", c}
 }
 
 func TestGRPCBasedMapStream_WaitUntilReadyWithMockClient(t *testing.T) {
@@ -104,7 +104,10 @@ func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {
 						MessageInfo: isb.MessageInfo{
 							EventTime: time.Unix(1661169600, 0),
 						},
-						ID:   "test_id",
+						ID: isb.MessageID{
+							VertexName: "test-vertex",
+							Offset:     "test-offset",
+						},
 						Keys: []string{"test_success_key"},
 					},
 					Body: isb.Body{
@@ -167,7 +170,10 @@ func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{

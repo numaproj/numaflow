@@ -54,6 +54,53 @@ func (p *MessageInfo) UnmarshalBinary(data []byte) (err error) {
 	return nil
 }
 
+type messageIDPreamble struct {
+	VertexNameLen int16
+	OffsetLen     int32
+	Index         int32
+}
+
+// MarshalBinary encodes MessageID to the binary format
+func (id MessageID) MarshalBinary() (data []byte, err error) {
+	var buf = new(bytes.Buffer)
+	var preamble = messageIDPreamble{
+		VertexNameLen: int16(len(id.VertexName)),
+		OffsetLen:     int32(len(id.Offset)),
+		Index:         id.Index,
+	}
+	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
+		return nil, err
+	}
+	if err = binary.Write(buf, binary.LittleEndian, []byte(id.VertexName)); err != nil {
+		return nil, err
+	}
+	if err = binary.Write(buf, binary.LittleEndian, []byte(id.Offset)); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// UnmarshalBinary decodes MessageID from the binary format
+func (id *MessageID) UnmarshalBinary(data []byte) (err error) {
+	var r = bytes.NewReader(data)
+	var preamble = new(messageIDPreamble)
+	if err = binary.Read(r, binary.LittleEndian, preamble); err != nil {
+		return err
+	}
+	var vertexName = make([]byte, preamble.VertexNameLen)
+	if err = binary.Read(r, binary.LittleEndian, vertexName); err != nil {
+		return err
+	}
+	var offset = make([]byte, preamble.OffsetLen)
+	if err = binary.Read(r, binary.LittleEndian, offset); err != nil {
+		return err
+	}
+	id.VertexName = string(vertexName)
+	id.Offset = string(offset)
+	id.Index = preamble.Index
+	return nil
+}
+
 type headerPreamble struct {
 	// message length
 	MLen    int32
@@ -73,10 +120,14 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
+	id, err := h.ID.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
 	var preamble = headerPreamble{
 		MLen:       int32(len(msgInfo)),
 		MsgKind:    h.Kind,
-		IDLen:      int16(len(h.ID)),
+		IDLen:      int16(len(id)),
 		KeysLen:    int16(len(h.Keys)),
 		HeadersLen: int16(len(h.Headers)),
 	}
@@ -89,8 +140,11 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 	} else if n != int(preamble.MLen) {
 		return nil, fmt.Errorf("expected to write msgInfo size of %d but got %d", preamble.MLen, n)
 	}
-	if err = binary.Write(buf, binary.LittleEndian, []byte(h.ID)); err != nil {
+	n, err = buf.Write(id)
+	if err != nil {
 		return nil, err
+	} else if n != int(preamble.IDLen) {
+		return nil, fmt.Errorf("expected to write id size of %d but got %d", preamble.IDLen, n)
 	}
 	for i := 0; i < len(h.Keys); i++ {
 		if err = binary.Write(buf, binary.LittleEndian, int16(len(h.Keys[i]))); err != nil {
@@ -136,8 +190,15 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 	if err = msgInfo.UnmarshalBinary(msgInfoByte); err != nil {
 		return err
 	}
-	var id = make([]byte, preamble.IDLen)
-	if err = binary.Read(r, binary.LittleEndian, id); err != nil {
+	var idByte = make([]byte, preamble.IDLen)
+	n, err = r.Read(idByte)
+	if err != nil {
+		return err
+	} else if n != int(preamble.IDLen) {
+		return fmt.Errorf("expected to read id size of %d but got %d", preamble.IDLen, n)
+	}
+	var id = new(MessageID)
+	if err = id.UnmarshalBinary(idByte); err != nil {
 		return err
 	}
 	keys := make([]string, 0)
@@ -182,7 +243,7 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 	}
 	h.MessageInfo = *msgInfo
 	h.Kind = preamble.MsgKind
-	h.ID = string(id)
+	h.ID = *id
 
 	return err
 }

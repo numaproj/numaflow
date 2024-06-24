@@ -19,6 +19,7 @@ package sinks
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	"go.uber.org/zap"
@@ -33,6 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -66,6 +68,8 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		sinkHandler        *udsink.UDSgRPCBasedUDSink
 		fbSinkHandler      *udsink.UDSgRPCBasedUDSink
 		healthCheckers     = make([]metrics.HealthChecker, 0)
+		vertexName         = u.VertexInstance.Vertex.Spec.Name
+		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
 	)
 	log := logging.FromContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
@@ -74,7 +78,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	// watermark variables no-op initialization
 	// publishWatermark is a map representing a progressor per edge, we are initializing them to a no-op progressor
 	// For sinks, the buffer name is the vertex name
-	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{u.VertexInstance.Vertex.Spec.Name})
+	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferList([]string{vertexName})
 	idleManager = wmb.NewNoOpIdleManager()
 
 	switch u.ISBSvcType {
@@ -157,9 +161,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		sinkHandler = udsink.NewUDSgRPCBasedUDSink(sdkClient)
-		if err != nil {
-			return fmt.Errorf("failed to create gRPC client, %w", err)
-		}
 		// Readiness check
 		if err := sinkHandler.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on UDSink readiness check, %w", err)
@@ -189,9 +190,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		fbSinkHandler = udsink.NewUDSgRPCBasedUDSink(sdkClient)
-		if err != nil {
-			return fmt.Errorf("failed to create gRPC client, %w", err)
-		}
 		// Readiness check
 		if err = fbSinkHandler.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on UDSink readiness check, %w", err)
@@ -236,7 +234,19 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			forwardOpts = append(forwardOpts, sinkforward.WithFbSinkWriter(fbSinkWriter))
 		}
 
-		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[u.VertexInstance.Vertex.Spec.Name], idleManager, forwardOpts...)
+		// if the callback is enabled, create a callback publisher
+		cbEnabled := sharedutil.LookupEnvBoolOr(dfv1.EnvCallbackEnabled, false)
+		if cbEnabled {
+			cbOpts := make([]callback.OptionFunc, 0)
+			cbUrl := os.Getenv(dfv1.EnvCallbackURL)
+			if cbUrl != "" {
+				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
+			}
+			cbPublisher := callback.NewUploader(ctx, vertexName, pipelineName, cbOpts...)
+			forwardOpts = append(forwardOpts, sinkforward.WithCallbackUploader(cbPublisher))
+		}
+
+		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[vertexName], idleManager, forwardOpts...)
 		if err != nil {
 			return fmt.Errorf("failed to create data forward, error: %w", err)
 		}

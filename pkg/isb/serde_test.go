@@ -91,7 +91,7 @@ func TestHeader(t *testing.T) {
 	type fields struct {
 		MessageInfo MessageInfo
 		Kind        MessageKind
-		ID          string
+		ID          MessageID
 		Key         []string
 		Headers     map[string]string
 	}
@@ -110,8 +110,12 @@ func TestHeader(t *testing.T) {
 					IsLate:    true,
 				},
 				Kind: Data,
-				ID:   "TestID",
-				Key:  []string{"TestKey", "TestKey2"},
+				ID: MessageID{
+					VertexName: "test-vertex",
+					Offset:     "test-offset",
+					Index:      0,
+				},
+				Key: []string{"TestKey", "TestKey2"},
 			},
 			wantData: Header{
 				MessageInfo: MessageInfo{
@@ -119,7 +123,11 @@ func TestHeader(t *testing.T) {
 					IsLate:    true,
 				},
 				Kind: Data,
-				ID:   "TestID",
+				ID: MessageID{
+					VertexName: "test-vertex",
+					Offset:     "test-offset",
+					Index:      0,
+				},
 				Keys: []string{"TestKey", "TestKey2"},
 			},
 			wantMarshalError:   false,
@@ -133,8 +141,12 @@ func TestHeader(t *testing.T) {
 					IsLate:    true,
 				},
 				Kind: Data,
-				ID:   "TestID",
-				Key:  []string{"TestKey", "TestKey2"},
+				ID: MessageID{
+					VertexName: "test-vertex",
+					Offset:     "test-offset",
+					Index:      0,
+				},
+				Key: []string{"TestKey", "TestKey2"},
 				Headers: map[string]string{
 					"key1": "value1",
 					"key2": "value2",
@@ -146,7 +158,11 @@ func TestHeader(t *testing.T) {
 					IsLate:    true,
 				},
 				Kind: Data,
-				ID:   "TestID",
+				ID: MessageID{
+					VertexName: "test-vertex",
+					Offset:     "test-offset",
+					Index:      0,
+				},
 				Keys: []string{"TestKey", "TestKey2"},
 				Headers: map[string]string{
 					"key1": "value1",
@@ -260,7 +276,11 @@ func TestMessage(t *testing.T) {
 						IsLate:    true,
 					},
 					Kind: Data,
-					ID:   "TestID",
+					ID: MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+						Index:      0,
+					},
 					Keys: []string{"TestKey"},
 				},
 				Body: Body{
@@ -274,7 +294,11 @@ func TestMessage(t *testing.T) {
 						IsLate:    true,
 					},
 					Kind: Data,
-					ID:   "TestID",
+					ID: MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+						Index:      0,
+					},
 					Keys: []string{"TestKey"},
 				},
 				Body: Body{
@@ -300,7 +324,11 @@ func TestMessage(t *testing.T) {
 						IsLate:    true,
 					},
 					Kind: Data,
-					ID:   "TestID",
+					ID: MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+						Index:      0,
+					},
 					Keys: []string{"TestKey"},
 					Headers: map[string]string{
 						"key1": "value1",
@@ -318,7 +346,11 @@ func TestMessage(t *testing.T) {
 						IsLate:    true,
 					},
 					Kind: Data,
-					ID:   "TestID",
+					ID: MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+						Index:      0,
+					},
 					Keys: []string{"TestKey"},
 					Headers: map[string]string{
 						"key1": "value1",
@@ -381,7 +413,11 @@ func TestReadMessage(t *testing.T) {
 							IsLate:    true,
 						},
 						Kind: Data,
-						ID:   "TestID",
+						ID: MessageID{
+							VertexName: "test-vertex",
+							Offset:     "test-offset",
+							Index:      0,
+						},
 						Keys: []string{"TestKey"},
 						Headers: map[string]string{
 							"key1": "value1",
@@ -408,7 +444,11 @@ func TestReadMessage(t *testing.T) {
 							IsLate:    true,
 						},
 						Kind: Data,
-						ID:   "TestID",
+						ID: MessageID{
+							VertexName: "test-vertex",
+							Offset:     "test-offset",
+							Index:      0,
+						},
 						Keys: []string{"TestKey"},
 						Headers: map[string]string{
 							"key1": "value1",
