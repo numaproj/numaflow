@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -120,7 +121,7 @@ func (u *GRPCBasedAlignedReduce) ApplyReduce(ctx context.Context, partitionID *p
 			case err := <-reduceErrCh:
 				// ctx.Done() event will be handled by the AsyncReduceFn method
 				// so we don't need a separate case for ctx.Done() here
-				if err == ctx.Err() {
+				if errors.Is(err, ctx.Err()) {
 					errCh <- err
 					return
 				}

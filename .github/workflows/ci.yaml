@@ -79,8 +79,8 @@ jobs:
       - name: Ensure nothing changed
         run: git diff --exit-code
 
-  unit-tests:
-    name: Unit Tests
+  go-unit-tests:
+    name: Unit Tests Go
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -99,22 +99,75 @@ jobs:
         with:
           go-version: '1.21'
         id: go
+
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+
       - name: Restore Go build cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
+
       - name: Get dependencies
         run: go mod download
+
       - name: Test
         run: make test-coverage-with-isb
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
           files: ./test/profile.cov
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  rust-unit-tests:
+   name: Unit Tests Rust
+   runs-on: ubuntu-latest
+   timeout-minutes: 10
+   services:
+     redis:
+       image: redis:6.2
+       ports:
+         - 6379:6379
+       options: >-
+         --health-cmd "redis-cli ping"
+         --health-interval 10s
+         --health-timeout 5s
+         --health-retries 5
+     nats:
+       image: 'bitnami/nats:latest'
+       ports:
+         - 4222:4222
+       env:
+         NATS_EXTRA_ARGS: -js
+   steps:
+     - name: Checkout code
+       uses: actions/checkout@v4
+
+     - name: Install Rust
+       uses: actions-rs/toolchain@v1
+       with:
+         toolchain: nightly
+         override: true
+         components: llvm-tools-preview
+
+     - name: Install grcov
+       run: cargo install grcov
+
+     - name: Run cargo test with coverage
+       working-directory: ./serving
+       run: |
+         CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test --all-features
+         mkdir -p ./target/debug/coverage/
+         grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o lcov.info
+         find . -name "*.profraw" -type f -delete
+
+     - name: Upload Rust coverage reports to Codecov
+       uses: codecov/codecov-action@v4.0.1
+       with:
+         files: ./serving/lcov.info
+         token: ${{ secrets.CODECOV_TOKEN }}
 
   lint:
     name: Lint
