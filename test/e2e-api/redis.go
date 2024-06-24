@@ -22,25 +22,46 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/redis/go-redis/v9"
 )
 
 type RedisController struct {
 	client *redis.Client
+	mLock  sync.RWMutex
+}
+
+// getter method for lazy loading. creates and returns redis client only when required
+func (h *RedisController) getRedisClient() *redis.Client {
+	if h.client != nil {
+		return h.client
+	}
+	h.mLock.Lock()
+	defer h.mLock.Unlock()
+	if h.client != nil {
+		return h.client
+	}
+	h.client = redis.NewClient(&redis.Options{
+		Addr: "redis:6379",
+	})
+
+	log.Println("new redis client created")
+	return h.client
 }
 
 func NewRedisController() *RedisController {
 	// When we use this API to validate e2e test result, we always assume a redis UDSink is used
 	// to persist data to a redis instance listening on port 6379.
 	return &RedisController{
-		client: redis.NewClient(&redis.Options{
-			Addr: "redis:6379",
-		}),
+		client: nil,
 	}
 }
 
 func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Request) {
+
+	redisClient := h.getRedisClient()
+
 	pipelineName := r.URL.Query().Get("pipelineName")
 	sinkName := r.URL.Query().Get("sinkName")
 	targetStr, err := url.QueryUnescape(r.URL.Query().Get("targetStr"))
@@ -50,7 +71,7 @@ func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	count, err := h.client.HGet(context.Background(), fmt.Sprintf("%s:%s", pipelineName, sinkName), targetStr).Result()
+	count, err := redisClient.HGet(context.Background(), fmt.Sprintf("%s:%s", pipelineName, sinkName), targetStr).Result()
 
 	if err != nil {
 		log.Println(err)
@@ -66,7 +87,12 @@ func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Req
 
 // Close closes the Redis client.
 func (h *RedisController) Close() {
-	if err := h.client.Close(); err != nil {
-		log.Println(err)
+	h.mLock.Lock()
+	defer h.mLock.Unlock()
+	if h.client != nil {
+		if err := h.client.Close(); err != nil {
+			log.Println(err)
+		}
 	}
+
 }

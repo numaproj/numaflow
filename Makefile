@@ -117,9 +117,6 @@ test-diamond-e2e:
 test-sideinputs-e2e:
 test-%:
 	$(MAKE) cleanup-e2e
-	$(MAKE) deploy-nats
-	$(MAKE) deploy-kafka
-	$(MAKE) deploy-redis
 	$(MAKE) image e2eapi-image
 	$(MAKE) restart-control-plane-components
 	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
@@ -136,25 +133,6 @@ restart-control-plane-components:
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=numaflow-ux,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=numaflow-webhook,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
 
-.PHONY: deploy-nats
-deploy-nats:
-	kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
-	kubectl -n numaflow-system apply -k config/apps/nats
-	kubectl wait --for=condition=ready pod -l app=nats -n numaflow-system --timeout=120s
-
-.PHONY: deploy-kafka
-deploy-kafka:
-	kubectl -n numaflow-system delete statefulset zookeeper kafka-broker --ignore-not-found=true
-	kubectl -n numaflow-system apply -k config/apps/kafka
-	kubectl wait --for=condition=ready pod -l app=kafka-broker -n numaflow-system --timeout=120s
-	kubectl wait --for=condition=ready pod -l app=zookeeper -n numaflow-system --timeout=120s
-
-.PHONY: deploy-redis
-deploy-redis:
-	kubectl -n numaflow-system delete statefulset redis --ignore-not-found=true
-	kubectl apply -k config/apps/redis -n numaflow-system
-	kubectl wait --for=condition=ready pod -l app=redis -n numaflow-system --timeout=120s
-
 .PHONY: cleanup-e2e
 cleanup-e2e:
 	kubectl -n numaflow-system delete svc -lnumaflow-e2e=true --ignore-not-found=true
@@ -167,12 +145,10 @@ cleanup-e2e:
 # To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
 Test%:
 	$(MAKE) cleanup-e2e
-	$(MAKE) deploy-nats
-	$(MAKE) deploy-kafka
-	$(MAKE) deploy-redis
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
+	go generate $(shell find $(shell grep -rl $(*) ./test/*-e2e/*.go))
 	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	-go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$(shell grep $(*) -R ./test | head -1 | awk -F\/ '{print $$3}' ) -run='.*/$*'
 	$(MAKE) cleanup-e2e
@@ -347,4 +323,3 @@ update-manifests-version:
 	mv /tmp/tmp_kustomization.yaml config/extensions/webhook/kustomization.yaml
 	cat Makefile | sed 's/^VERSION?=.*/VERSION?=$(VERSION)/' | sed 's/^BASE_VERSION:=.*/BASE_VERSION:=$(VERSION)/' > /tmp/ae_makefile
 	mv /tmp/ae_makefile Makefile
-

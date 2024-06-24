@@ -35,41 +35,65 @@ type KafkaController struct {
 	adminClient sarama.ClusterAdmin
 	producer    sarama.SyncProducer
 	consumer    sarama.Consumer
+	mLock       sync.RWMutex
 }
 
-func NewKafkaController() *KafkaController {
-	// initialize Kafka handlers
-	var brokers = []string{bootstrapServers}
+/*
+  getProducerAndConsumer is used for getting a Kafka consumer, producer and client for the given controller config. It is implemented with a lazy loading mechanism:
+  1) new fields are created only for the first request
+  2) Returning the current ones if it exists
+*/
+
+func (n *KafkaController) getProducerAndConsumer() (sarama.ClusterAdmin, sarama.SyncProducer, sarama.Consumer) {
+	if n.consumer != nil && n.producer != nil && n.adminClient != nil {
+		return n.adminClient, n.producer, n.consumer
+	}
+	n.mLock.Lock()
+	defer n.mLock.Unlock()
+	if n.consumer != nil && n.producer != nil && n.adminClient != nil {
+		return n.adminClient, n.producer, n.consumer
+	}
 
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
-
-	// if partition is specified, use manual partitioner
 	config.Producer.Partitioner = sarama.NewManualPartitioner
 
-	producer, err := sarama.NewSyncProducer(brokers, config)
+	var err error
+	n.consumer, err = sarama.NewConsumer(n.brokers, config)
+	if err != nil {
+		log.Fatalf("Failed to start Kafka consumer: %v", err)
+	}
+	n.adminClient, err = sarama.NewClusterAdmin(n.brokers, config)
+	if err != nil {
+		log.Fatalf("Failed to start Kafka admin client: %v", err)
+	}
+	n.producer, err = sarama.NewSyncProducer(n.brokers, config)
 	if err != nil {
 		log.Fatalf("Failed to start Kafka producer: %v", err)
 	}
 
-	consumer, err := sarama.NewConsumer(brokers, config)
-	if err != nil {
-		log.Fatalf("Failed to start Kafka consumer: %v", err)
-	}
+	log.Println("new kafka client, producer and consumer created")
+	return n.adminClient, n.producer, n.consumer
 
-	adminClient, err := sarama.NewClusterAdmin(brokers, config)
-	if err != nil {
-		log.Fatalf("Failed to start Kafka admin client: %v", err)
-	}
+}
+
+// adminClient, producer and consumer fields set to nil when initialized for lazy loading. Only created when needed using getter methods.
+func NewKafkaController() *KafkaController {
+
+	var brokers = []string{bootstrapServers}
+
 	return &KafkaController{
 		brokers:     brokers,
-		adminClient: adminClient,
-		producer:    producer,
-		consumer:    consumer,
+		adminClient: nil,
+		producer:    nil,
+		consumer:    nil,
 	}
 }
 
 func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Request) {
+
+	kafkaAdminClient, _, _ := kh.getProducerAndConsumer()
+
 	topic := r.URL.Query().Get("topic")
 	partitions, err := strconv.Atoi(r.URL.Query().Get("partitions"))
 	if err != nil {
@@ -77,7 +101,7 @@ func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Invalid number of partitions", http.StatusBadRequest)
 		return
 	}
-	if err = kh.adminClient.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: int32(partitions), ReplicationFactor: 1}, true); err != nil {
+	if err = kafkaAdminClient.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: int32(partitions), ReplicationFactor: 1}, true); err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -86,8 +110,10 @@ func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (kh *KafkaController) DeleteTopicHandler(w http.ResponseWriter, r *http.Request) {
+	kafkaAdminClient, _, _ := kh.getProducerAndConsumer()
+
 	topic := r.URL.Query().Get("topic")
-	if err := kh.adminClient.DeleteTopic(topic); err != nil {
+	if err := kafkaAdminClient.DeleteTopic(topic); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -95,7 +121,9 @@ func (kh *KafkaController) DeleteTopicHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (kh *KafkaController) ListTopicsHandler(w http.ResponseWriter, r *http.Request) {
-	topics, err := kh.adminClient.ListTopics()
+	kafkaAdminClient, _, _ := kh.getProducerAndConsumer()
+
+	topics, err := kafkaAdminClient.ListTopics()
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -108,6 +136,8 @@ func (kh *KafkaController) ListTopicsHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (kh *KafkaController) CountTopicHandler(w http.ResponseWriter, r *http.Request) {
+	_, _, kafkaConsumer := kh.getProducerAndConsumer()
+
 	topic := r.URL.Query().Get("topic")
 	count, err := strconv.Atoi(r.URL.Query().Get("count"))
 	if err != nil {
@@ -116,7 +146,7 @@ func (kh *KafkaController) CountTopicHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	partitions, err := kh.consumer.Partitions(topic)
+	partitions, err := kafkaConsumer.Partitions(topic)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -132,7 +162,7 @@ func (kh *KafkaController) CountTopicHandler(w http.ResponseWriter, r *http.Requ
 	var consumers []sarama.PartitionConsumer
 
 	for _, partition := range partitions {
-		pConsumer, err := kh.consumer.ConsumePartition(topic, partition, sarama.OffsetOldest)
+		pConsumer, err := kafkaConsumer.ConsumePartition(topic, partition, sarama.OffsetOldest)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -185,6 +215,8 @@ readLoop:
 }
 
 func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Request) {
+	_, kafkaProducer, _ := kh.getProducerAndConsumer()
+
 	var (
 		partition int
 		err       error
@@ -216,7 +248,7 @@ func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Re
 		Key:       sarama.ByteEncoder(key),
 		Partition: int32(partition),
 	}
-	p, of, err := kh.producer.SendMessage(message)
+	p, of, err := kafkaProducer.SendMessage(message)
 	if err != nil {
 		log.Printf("Failed to produce message to topic %s: %s\n", topic, err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -227,6 +259,8 @@ func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Request) {
+	_, kafkaProducer, _ := kh.getProducerAndConsumer()
+
 	topic := r.URL.Query().Get("topic")
 	mf := newMessageFactory(r.URL.Query())
 	duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
@@ -263,7 +297,7 @@ func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Reque
 				Key:       sarama.ByteEncoder(strconv.Itoa(i)),
 				Partition: int32(0),
 			}
-			_, _, err := kh.producer.SendMessage(message)
+			_, _, err := kafkaProducer.SendMessage(message)
 			if err != nil {
 				_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
 			}
@@ -274,7 +308,18 @@ func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (kh *KafkaController) Close() {
-	_ = kh.producer.Close()
-	_ = kh.consumer.Close()
-	_ = kh.adminClient.Close()
+	kh.mLock.Lock()
+	defer kh.mLock.Unlock()
+
+	if kh.producer != nil {
+		_ = kh.producer.Close()
+	}
+
+	if kh.consumer != nil {
+		_ = kh.consumer.Close()
+	}
+
+	if kh.adminClient != nil {
+		_ = kh.adminClient.Close()
+	}
 }
