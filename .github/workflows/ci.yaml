@@ -105,40 +105,50 @@ jobs:
         with:
           go-version: '1.21'
         id: go
+
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
+
       - name: Restore Go build cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
+
       - name: Get dependencies
         run: go mod download
+
       - name: Test
         run: make test-coverage-with-isb
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
           files: ./test/profile.cov
           token: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
           components: llvm-tools-preview
+
       - name: Install grcov
         run: cargo install grcov
+
       - name: Run cargo test with coverage
         working-directory: ./serving
         run: |
           export RUSTFLAGS="-Zinstrument-coverage"
           cargo +nightly test --all-features
+
       - name: Generate coverage report
         working-directory: ./serving
         run: |
           zip -0 ccov.zip `find . \( -name "*.gc*" \) -print`
           grcov ccov.zip -s . -t lcov --llvm --branch --ignore-not-existing --ignore-dir "/*" -o lcov.info
+
       - name: Upload Rust coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
