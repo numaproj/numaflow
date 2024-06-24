@@ -160,7 +160,7 @@ jobs:
        run: |
          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test --all-features
          mkdir -p ./target/debug/coverage/
-         grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o lcov.info
+         grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing --ignore "*/error.rs" -o lcov.info
          find . -name "*.profraw" -type f -delete
 
      - name: Upload Rust coverage reports to Codecov
