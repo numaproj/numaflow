@@ -140,12 +140,6 @@ jobs:
       - name: Run cargo test with coverage
         working-directory: ./serving
         run: |
-          export RUSTFLAGS="-Zinstrument-coverage"
-          cargo +nightly test --all-features
-
-      - name: Generate coverage report
-        working-directory: ./serving
-        run: |
           CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test --all-features
           mkdir -p ./target/debug/coverage/
           grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o lcov.info
