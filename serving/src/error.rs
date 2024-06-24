@@ -44,3 +44,42 @@ where
         Error::Other(value.into())
     }
 }
+
+// code coverage tests.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_display() {
+        let e = Error::ConfigMissingEnv("TEST_ENV");
+        assert_eq!(format!("{}", e), "ConfigMissingEnv(\"TEST_ENV\")");
+
+        let e = Error::IDNotFound("ID");
+        assert_eq!(format!("{}", e), "IDNotFound(\"ID\")");
+
+        let e = Error::SubGraphGeneratorError("Error message".into());
+        assert_eq!(format!("{}", e), "SubGraphGeneratorError(\"Error message\")");
+
+        let e = Error::StoreWrite("Error message".into());
+        assert_eq!(format!("{}", e), "StoreWrite(\"Error message\")");
+
+        let e = Error::SubGraphNotFound("SubGraph");
+        assert_eq!(format!("{}", e), "SubGraphNotFound(\"SubGraph\")");
+
+        let e = Error::SubGraphInvalidInput("Invalid input".into());
+        assert_eq!(format!("{}", e), "SubGraphInvalidInput(\"Invalid input\")");
+
+        let e = Error::StoreRead("Error message".into());
+        assert_eq!(format!("{}", e), "StoreRead(\"Error message\")");
+
+        let e = Error::Other("Other error".into());
+        assert_eq!(format!("{}", e), "Other(\"Other error\")");
+    }
+
+    #[test]
+    fn test_error_from_string() {
+        let e: Error = "Error message".into();
+        assert_eq!(format!("{}", e), "Other(\"Error message\")");
+    }
+}
