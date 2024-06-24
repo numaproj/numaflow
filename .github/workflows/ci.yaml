@@ -116,19 +116,33 @@ jobs:
         run: go mod download
       - name: Test
         run: make test-coverage-with-isb
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        with:
+          files: ./test/profile.cov
+          token: ${{ secrets.CODECOV_TOKEN }}
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      - name: Run cargo test
+          components: llvm-tools-preview
+      - name: Install grcov
+        run: cargo install grcov
+      - name: Run cargo test with coverage
         working-directory: ./serving
         run: |
-          cargo test --all-features
-      - name: Upload coverage reports to Codecov
+          export RUSTFLAGS="-Zinstrument-coverage"
+          cargo +nightly test --all-features
+      - name: Generate coverage report
+        working-directory: ./serving
+        run: |
+          zip -0 ccov.zip `find . \( -name "*.gc*" \) -print`
+          grcov ccov.zip -s . -t lcov --llvm --branch --ignore-not-existing --ignore-dir "/*" -o lcov.info
+      - name: Upload Rust coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
-          files: ./test/profile.cov
+          files: ./serving/lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
 
   lint:
