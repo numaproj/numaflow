@@ -39,44 +39,19 @@ type KafkaController struct {
 }
 
 /*
-  getKafkaClient is used for getting a Kafka admin client for the given controller config. It is implemented with a lazy loading mechanism:
-  1) A new client is created only for the first request
-  2) Returning the current client if it exists
+  getProducerAndConsumer is used for getting a Kafka consumer, producer and client for the given controller config. It is implemented with a lazy loading mechanism:
+  1) new fields are created only for the first request
+  2) Returning the current ones if it exists
 */
 
-func (n *KafkaController) getKafkaClient() sarama.ClusterAdmin {
+func (n *KafkaController) getProducerAndConsumer() (sarama.ClusterAdmin, sarama.SyncProducer, sarama.Consumer) {
+	if n.consumer != nil && n.producer != nil && n.adminClient != nil {
+		return n.adminClient, n.producer, n.consumer
+	}
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
-	if n.adminClient != nil {
-		return n.adminClient
-
-	}
-
-	config := sarama.NewConfig()
-	config.Producer.Return.Successes = true
-	config.Producer.Partitioner = sarama.NewManualPartitioner
-
-	var err error
-	n.adminClient, err = sarama.NewClusterAdmin(n.brokers, config)
-	if err != nil {
-		log.Fatalf("Failed to start Kafka admin client: %v", err)
-	}
-	log.Println("new kafka client created")
-	return n.adminClient
-
-}
-
-/*
-  getKafkaConsumer is used for getting a Kafka consumer for the given controller config. It is implemented with a lazy loading mechanism:
-  1) A new consumer is created only for the first request
-  2) Returning the current consumer if it exists
-*/
-
-func (n *KafkaController) getKafkaConsumer() sarama.Consumer {
-	n.mLock.Lock()
-	defer n.mLock.Unlock()
-	if n.consumer != nil {
-		return n.consumer
+	if n.consumer != nil && n.producer != nil && n.adminClient != nil {
+		return n.adminClient, n.producer, n.consumer
 	}
 
 	config := sarama.NewConfig()
@@ -88,35 +63,17 @@ func (n *KafkaController) getKafkaConsumer() sarama.Consumer {
 	if err != nil {
 		log.Fatalf("Failed to start Kafka consumer: %v", err)
 	}
-	log.Println("new consumer created")
-	return n.consumer
-
-}
-
-/*
-getKafkaConsumer is used for getting a Kafka producer for the given controller config. It is implemented with a lazy loading mechanism:
-1) A new producer is created only for the first request
-2) Returning the current producer if it exists
-*/
-func (n *KafkaController) getKafkaProducer() sarama.SyncProducer {
-	n.mLock.Lock()
-	defer n.mLock.Unlock()
-	if n.producer != nil {
-		return n.producer
+	n.adminClient, err = sarama.NewClusterAdmin(n.brokers, config)
+	if err != nil {
+		log.Fatalf("Failed to start Kafka admin client: %v", err)
 	}
-
-	config := sarama.NewConfig()
-	config.Producer.Return.Successes = true
-	config.Producer.Partitioner = sarama.NewManualPartitioner
-
-	var err error
 	n.producer, err = sarama.NewSyncProducer(n.brokers, config)
 	if err != nil {
 		log.Fatalf("Failed to start Kafka producer: %v", err)
 	}
 
-	log.Println("new producer created")
-	return n.producer
+	log.Println("new consumer created")
+	return n.adminClient, n.producer, n.consumer
 
 }
 
@@ -135,7 +92,7 @@ func NewKafkaController() *KafkaController {
 
 func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Request) {
 
-	kafkaAdminClient := kh.getKafkaClient()
+	kafkaAdminClient, _, _ := kh.getProducerAndConsumer()
 
 	topic := r.URL.Query().Get("topic")
 	partitions, err := strconv.Atoi(r.URL.Query().Get("partitions"))
@@ -153,7 +110,7 @@ func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (kh *KafkaController) DeleteTopicHandler(w http.ResponseWriter, r *http.Request) {
-	kafkaAdminClient := kh.getKafkaClient()
+	kafkaAdminClient, _, _ := kh.getProducerAndConsumer()
 
 	topic := r.URL.Query().Get("topic")
 	if err := kafkaAdminClient.DeleteTopic(topic); err != nil {
@@ -164,7 +121,7 @@ func (kh *KafkaController) DeleteTopicHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (kh *KafkaController) ListTopicsHandler(w http.ResponseWriter, r *http.Request) {
-	kafkaAdminClient := kh.getKafkaClient()
+	kafkaAdminClient, _, _ := kh.getProducerAndConsumer()
 
 	topics, err := kafkaAdminClient.ListTopics()
 	if err != nil {
@@ -179,7 +136,7 @@ func (kh *KafkaController) ListTopicsHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (kh *KafkaController) CountTopicHandler(w http.ResponseWriter, r *http.Request) {
-	kafkaConsumer := kh.getKafkaConsumer()
+	_, _, kafkaConsumer := kh.getProducerAndConsumer()
 
 	topic := r.URL.Query().Get("topic")
 	count, err := strconv.Atoi(r.URL.Query().Get("count"))
@@ -258,7 +215,7 @@ readLoop:
 }
 
 func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Request) {
-	kafkaProducer := kh.getKafkaProducer()
+	_, kafkaProducer, _ := kh.getProducerAndConsumer()
 
 	var (
 		partition int
@@ -302,7 +259,7 @@ func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Request) {
-	kafkaProducer := kh.getKafkaProducer()
+	_, kafkaProducer, _ := kh.getProducerAndConsumer()
 
 	topic := r.URL.Query().Get("topic")
 	mf := newMessageFactory(r.URL.Query())

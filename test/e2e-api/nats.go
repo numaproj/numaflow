@@ -38,6 +38,9 @@ type NatsController struct {
 
 // getter method for lazy loading. creates and returns nats client only when required
 func (n *NatsController) getNatsClient() *natslib.Conn {
+	if n.client != nil {
+		return n.client
+	}
 	n.mLock.Lock()
 	defer n.mLock.Unlock()
 	if n.client != nil {

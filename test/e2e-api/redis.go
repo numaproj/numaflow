@@ -34,6 +34,9 @@ type RedisController struct {
 
 // getter method for lazy loading. creates and returns redis client only when required
 func (h *RedisController) getRedisClient() *redis.Client {
+	if h.client != nil {
+		return h.client
+	}
 	h.mLock.Lock()
 	defer h.mLock.Unlock()
 	if h.client != nil {
