@@ -142,6 +142,9 @@ jobs:
        env:
          NATS_EXTRA_ARGS: -js
    steps:
+     - name: Checkout code
+       uses: actions/checkout@v4
+
      - name: Install Rust
        uses: actions-rs/toolchain@v1
        with:
