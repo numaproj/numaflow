@@ -8,7 +8,7 @@ pipeline_spec_path = "./config/pipeline_spec.json"
 
 [jetstream]
 stream = "default"
-addr = "localhost:4222"
+addr = "jetstream:4222"
 
 [redis]
 addr = "redis://127.0.0.1/"
