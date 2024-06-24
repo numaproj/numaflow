@@ -11,7 +11,3 @@ async processing platform.
  
  * Response with the status of completion (ability to say whether the processing is complete)
  * Response with output of a complex computation over the DCG directly to the callee (say, something like [kserve](https://kserve.github.io/website/latest/)).
- 
-## Demo
-
-Please try out [our example](./example/README.md)
