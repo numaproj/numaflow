@@ -72,7 +72,7 @@ func (n *KafkaController) getProducerAndConsumer() (sarama.ClusterAdmin, sarama.
 		log.Fatalf("Failed to start Kafka producer: %v", err)
 	}
 
-	log.Println("new consumer created")
+	log.Println("new kafka client, producer and consumer created")
 	return n.adminClient, n.producer, n.consumer
 
 }
