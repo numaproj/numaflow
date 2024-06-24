@@ -146,8 +146,10 @@ jobs:
       - name: Generate coverage report
         working-directory: ./serving
         run: |
-          zip -0 ccov.zip `find . \( -name "*.gc*" \) -print`
-          grcov ccov.zip -s . -t lcov --llvm --branch --ignore-not-existing --ignore-dir "/*" -o lcov.info
+          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test --all-features
+          mkdir -p ./target/debug/coverage/
+          grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o lcov.info
+          find . -name "*.profraw" -type f -delete
 
       - name: Upload Rust coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
