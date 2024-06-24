@@ -93,6 +93,10 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      jetstream:
+        image: nats:latest
+        ports:
+          - 4222:4222
     steps:
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
@@ -110,6 +114,15 @@ jobs:
         run: go mod download
       - name: Test
         run: make test-coverage-with-isb
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Run cargo test
+        working-directory: ./serving
+        run: |
+          cargo test --all-features
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
