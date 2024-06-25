@@ -42,8 +42,9 @@ const (
 	RemovePauseTimestampPatch = `[{"op": "remove", "path": "/metadata/annotations/numaflow.numaproj.io~1pause-timestamp"}]`
 
 	// ID key in the header of sources like http
-	KeyMetaID        = "x-numaflow-id"
-	KeyMetaEventTime = "x-numaflow-event-time"
+	KeyMetaID          = "X-Numaflow-Id"
+	KeyMetaEventTime   = "X-Numaflow-Event-Time"
+	KeyMetaCallbackURL = "X-Numaflow-Callback-Url"
 
 	DefaultISBSvcName = "default"
 
@@ -99,6 +100,9 @@ const (
 	EnvNamespace                        = "NUMAFLOW_NAMESPACE"
 	EnvPipelineName                     = "NUMAFLOW_PIPELINE_NAME"
 	EnvVertexName                       = "NUMAFLOW_VERTEX_NAME"
+	EnvMapStreaming                     = "NUMAFLOW_MAP_STREAMING"
+	EnvCallbackEnabled                  = "NUMAFLOW_CALLBACK_ENABLED"
+	EnvCallbackURL                      = "NUMAFLOW_CALLBACK_URL"
 	EnvPod                              = "NUMAFLOW_POD"
 	EnvReplica                          = "NUMAFLOW_REPLICA"
 	EnvVertexObject                     = "NUMAFLOW_VERTEX_OBJECT"
@@ -209,6 +213,10 @@ const (
 	PipelineStatusInactive  = "inactive"
 	PipelineStatusDeleting  = "deleting"
 	PipelineStatusUnhealthy = "unhealthy"
+
+	// Callback annotation keys
+	CallbackEnabledKey = "numaflow.numaproj.io/callback"
+	CallbackURLKey     = "numaflow.numaproj.io/callback-url"
 )
 
 var (

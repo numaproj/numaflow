@@ -59,7 +59,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	defer jw.Close()
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(20), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(20), startTime, nil, "testVertex")
 	// Verify if buffer is full.
 	for jw.isFull.Load() {
 		select {

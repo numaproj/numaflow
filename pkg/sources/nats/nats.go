@@ -127,7 +127,11 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 				Header: isb.Header{
 					// TODO: Be able to specify event time.
 					MessageInfo: isb.MessageInfo{EventTime: time.Now()},
-					ID:          readOffset.String(),
+					ID: isb.MessageID{
+						VertexName: n.vertexName,
+						Offset:     readOffset.String(),
+						Index:      readOffset.PartitionIdx(),
+					},
 				},
 				Body: isb.Body{
 					Payload: msg.Data,

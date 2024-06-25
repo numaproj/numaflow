@@ -27,6 +27,9 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
+//go:generate kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
+//go:generate kubectl apply -k ../../config/apps/nats -n numaflow-system
+
 type NatsSuite struct {
 	E2ESuite
 }

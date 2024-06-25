@@ -65,7 +65,7 @@ func (s *UserDefinedSink) Write(ctx context.Context, messages []isb.Message) ([]
 	msgs := make([]*sinkpb.SinkRequest, len(messages))
 	for i, m := range messages {
 		msgs[i] = &sinkpb.SinkRequest{
-			Id:        m.ID,
+			Id:        m.ID.String(),
 			Value:     m.Payload,
 			Keys:      m.Keys,
 			EventTime: timestamppb.New(m.EventTime),

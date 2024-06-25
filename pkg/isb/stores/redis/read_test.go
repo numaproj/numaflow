@@ -68,7 +68,7 @@ func TestRedisQRead_Read(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(count, startTime, nil)
+	messages := testutils.BuildTestWriteMessages(count, startTime, nil, "testVertex")
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
 			Stream: rqr.GetStreamName(),
@@ -100,7 +100,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(count, startTime, nil)
+	messages := testutils.BuildTestWriteMessages(count, startTime, nil, "testVertex")
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
 			Stream: rqr.GetStreamName(),
@@ -308,11 +308,11 @@ func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string, _ string) (
 }
 
 func (f forwardReadWritePerformance) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, message)
+	return testutils.CopyUDFTestApply(ctx, "testVertex", message)
 }
 
 func (f forwardReadWritePerformance) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
+	return testutils.CopyUDFTestApplyStream(ctx, "testVertex", writeMessageCh, message)
 }
 
 func (suite *ReadWritePerformance) SetupSuite() {
@@ -392,7 +392,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatency() {
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)
 
-	writeMessages = append(writeMessages, testutils.BuildTestWriteMessages(suite.count, testStartTime, nil)...)
+	writeMessages = append(writeMessages, testutils.BuildTestWriteMessages(suite.count, testStartTime, nil, "testVertex")...)
 
 	stopped := suite.isdf.Start()
 
@@ -443,7 +443,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)
 
-	writeMessages = append(writeMessages, testutils.BuildTestWriteMessages(suite.count, testStartTime, nil)...)
+	writeMessages = append(writeMessages, testutils.BuildTestWriteMessages(suite.count, testStartTime, nil, "testVertex")...)
 
 	stopped := suite.isdf.Start()
 
@@ -513,7 +513,7 @@ func generateLatencySlice(xMessages []redis.XMessage, suite *ReadWritePerformanc
 			suite.NoError(err)
 		}
 		id, err := splitId(xMessage.ID)
-		offset, err := splitId(m.ID)
+		offset, err := splitId(m.ID.Offset)
 		suite.NoError(err)
 
 		// We store a difference of the id and the offset in the to stream.

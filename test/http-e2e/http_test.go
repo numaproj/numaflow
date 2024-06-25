@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -22,8 +20,9 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/numaproj/numaflow/test/fixtures"
 	"github.com/stretchr/testify/suite"
+
+	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
 //go:generate kubectl apply -f testdata/http-auth-fake-secret.yaml -n numaflow-system

@@ -25,6 +25,9 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+//go:generate kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
+//go:generate kubectl apply -k ../../config/apps/nats -n numaflow-system
+
 type JetstreamSuite struct {
 	fixtures.E2ESuite
 }

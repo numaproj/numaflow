@@ -33,11 +33,15 @@ import (
 
 // GRPCBasedMapStream is a map stream applier that uses gRPC client to invoke the map stream UDF. It implements the applier.MapStreamApplier interface.
 type GRPCBasedMapStream struct {
-	client mapstreamer.Client
+	vertexName string
+	client     mapstreamer.Client
 }
 
-func NewUDSgRPCBasedMapStream(client mapstreamer.Client) *GRPCBasedMapStream {
-	return &GRPCBasedMapStream{client: client}
+func NewUDSgRPCBasedMapStream(vertexName string, client mapstreamer.Client) *GRPCBasedMapStream {
+	return &GRPCBasedMapStream{
+		vertexName: vertexName,
+		client:     client,
+	}
 }
 
 // CloseConn closes the gRPC client connection.
@@ -111,8 +115,12 @@ func (u *GRPCBasedMapStream) ApplyMapStream(ctx context.Context, message *isb.Re
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: parentMessageInfo,
-					ID:          fmt.Sprintf("%s-%d", offset.String(), i),
-					Keys:        keys,
+					ID: isb.MessageID{
+						VertexName: u.vertexName,
+						Offset:     offset.String(),
+						Index:      int32(i),
+					},
+					Keys: keys,
 				},
 				Body: isb.Body{
 					Payload: result.GetValue(),

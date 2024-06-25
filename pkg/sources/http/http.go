@@ -157,8 +157,12 @@ func NewHttpSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, opt
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{EventTime: eventTime},
-					ID:          id,
-					Headers:     headers,
+					ID: isb.MessageID{
+						VertexName: h.vertexName,
+						Offset:     id,
+						Index:      h.vertexReplica,
+					},
+					Headers: headers,
 				},
 				Body: isb.Body{
 					Payload: msg,

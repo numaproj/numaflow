@@ -41,7 +41,7 @@ import (
 
 func NewMockGRPCBasedTransformer(mockClient *transformermock.MockSourceTransformClient) *GRPCBasedTransformer {
 	c, _ := sourcetransformer.NewFromClient(mockClient)
-	return &GRPCBasedTransformer{c}
+	return &GRPCBasedTransformer{"test-vertex", c}
 }
 
 func TestGRPCBasedTransformer_WaitUntilReadyWithMockClient(t *testing.T) {
@@ -119,7 +119,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169600, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "0-0",
+					},
 					Keys: []string{"test_success_key"},
 				},
 				Body: isb.Body{
@@ -163,7 +166,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "0-0",
+					},
 					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{
@@ -217,7 +223,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "0-0",
+					},
 					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{
@@ -267,7 +276,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "0-0",
+					},
 					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{
@@ -324,7 +336,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169720, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "0-0",
+					},
 					Keys: []string{"test_success_key"},
 				},
 				Body: isb.Body{
@@ -367,7 +382,10 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "0-0",
+					},
 					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{

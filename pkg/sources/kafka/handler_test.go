@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -33,7 +34,7 @@ func TestMessageHandling(t *testing.T) {
 	ctx := context.Background()
 	topic := "testtopic"
 	partition := int32(1)
-	offset := int64(1)
+	offset := fmt.Sprintf("%s:%d:%d", topic, partition, 1)
 	value := "testvalue"
 	keys := []string{"testkey"}
 
@@ -67,12 +68,16 @@ func TestMessageHandling(t *testing.T) {
 	msg := &sarama.ConsumerMessage{
 		Topic:     topic,
 		Partition: partition,
-		Offset:    offset,
+		Offset:    1,
 		Key:       []byte(keys[0]),
 		Value:     []byte(value),
 	}
 
-	expectedoffset := fmt.Sprintf("%s:%v:%v", topic, partition, offset)
+	expectedID := isb.MessageID{
+		VertexName: vi.Vertex.Name,
+		Offset:     fmt.Sprintf("%v", offset),
+		Index:      partition,
+	}
 	// push one message
 	ks.handler.messages <- msg
 
@@ -83,8 +88,8 @@ func TestMessageHandling(t *testing.T) {
 	assert.Equal(t, 1, len(readmsgs))
 
 	readmsg := readmsgs[0]
-	assert.Equal(t, expectedoffset, readmsg.ID)
+	assert.Equal(t, expectedID, readmsg.ID)
 	assert.Equal(t, []byte(value), readmsg.Body.Payload)
 	assert.Equal(t, keys, readmsg.Header.Keys)
-	assert.Equal(t, expectedoffset, readmsg.ReadOffset.String())
+	assert.Equal(t, expectedID.Offset, readmsg.ReadOffset.String())
 }
