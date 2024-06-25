@@ -200,7 +200,7 @@ func (e *encoder) encodeWALMessageHeader(message *isb.ReadMessage, bodyLen int64
 // encodeWALMessageBody uses ReadMessage.Message field as the body of the unalignedWAL message, encodes the
 // ReadMessage.Message, and returns.
 func (e *encoder) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
-	msgBinary, err := readMsg.Message.MarshalBinary()
+	msgBinary, err := readMsg.Message.MarshalProto()
 	if err != nil {
 		return nil, fmt.Errorf("encodeWALMessageBody encountered encode err: %w", err)
 	}

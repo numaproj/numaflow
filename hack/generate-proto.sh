@@ -64,3 +64,5 @@ gen-protoc(){
 }
 
 gen-protoc pkg/apis/proto/daemon/daemon.proto
+
+gen-protoc pkg/apis/proto/isb/message.proto

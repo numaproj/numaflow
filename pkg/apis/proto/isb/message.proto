@@ -1,0 +1,97 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/isb";
+import "google/protobuf/timestamp.proto";
+
+package isb;
+
+// MessageKind represents the message type of the payload.
+enum MessageKind {
+  DATA = 0; // Data payload
+  WMB = 1;  // Watermark Barrier
+}
+
+// MessageInfo is the message information window of the payload.
+message MessageInfo {
+  // EventTime represents the event time of the message
+  google.protobuf.Timestamp event_time = 1;
+  // IsLate is used to indicate if the message is a late data
+  bool is_late = 2;
+}
+
+// MessageMetadata is the metadata of the message
+message MessageMetadata {
+  // NumDelivered is the number of times the message has been delivered.
+  uint64 num_delivered = 1;
+}
+
+// Header is the header of the message
+message Header {
+  // MessageInfo contains the information window of the payload.
+  MessageInfo message_info = 1;
+  // Kind indicates the kind of Message
+  MessageKind kind = 2;
+  // ID is used for exactly-once-semantics. ID is a combination of vertex name, offset and index of the message.
+  MessageID id = 3;
+  // Keys is (key,value) in the map-reduce paradigm will be used for reduce operation
+  repeated string keys = 4;
+  // Headers is the headers of the message which can be used to store and propagate source headers
+  map<string, string> headers = 5;
+}
+
+// MessageID is the message ID of the message which is used for exactly-once-semantics.
+message MessageID {
+  // VertexName is the name of the vertex
+  string vertex_name = 1;
+  // Offset is the offset of the message
+  string offset = 2;
+  // Index is the index of a flatmap message.
+  int32 index = 3;
+}
+
+// Body is the body of the message
+message Body {
+  // Payload is the actual data of the message
+  bytes payload = 1;
+}
+
+// Message is inter step message
+message Message {
+  Header header = 1;
+  Body body = 2;
+}
+
+// ReadMessage is the message read from the buffer.
+message ReadMessage {
+  // Message is the actual message read from the buffer
+  Message message = 1;
+  // ReadOffset is the offset at which the message was read
+  string read_offset = 2;
+  // Watermark is the watermark timestamp
+  google.protobuf.Timestamp watermark = 3;
+  // Metadata is the metadata of the message after a message is read from the buffer.
+  MessageMetadata metadata = 4;
+}
+
+// WriteMessage is a wrapper for an isb message with tag information which will be used for conditional forwarding.
+message WriteMessage {
+  // Message is the actual message to be written
+  Message message = 1;
+  // Tags are the tags associated with the message
+  repeated string tags = 2;
+}
