@@ -28,9 +28,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -58,6 +57,7 @@ type InterStepDataForward struct {
 	FSD          forwarder.ToWhichStepDecider
 	mapUDF       applier.MapApplier
 	mapStreamUDF applier.MapStreamApplier
+	batchMapUDF  applier.BatchMapApplier
 	wmFetcher    fetch.Fetcher
 	// wmPublishers stores the vertex to publisher mapping
 	wmPublishers  map[string]publish.Publisher
@@ -73,17 +73,7 @@ type InterStepDataForward struct {
 }
 
 // NewInterStepDataForward creates an inter-step forwarder.
-func NewInterStepDataForward(
-	vertexInstance *dfv1.VertexInstance,
-	fromStep isb.BufferReader,
-	toSteps map[string][]isb.BufferWriter,
-	fsd forwarder.ToWhichStepDecider,
-	applyUDF applier.MapApplier,
-	applyUDFStream applier.MapStreamApplier,
-	fetchWatermark fetch.Fetcher,
-	publishWatermark map[string]publish.Publisher,
-	idleManager wmb.IdleManager,
-	opts ...Option) (*InterStepDataForward, error) {
+func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.BufferReader, toSteps map[string][]isb.BufferWriter, fsd forwarder.ToWhichStepDecider, applyUDF applier.MapApplier, applyUDFStream applier.MapStreamApplier, applyUDFBatchMap applier.BatchMapApplier, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, idleManager wmb.IdleManager, opts ...Option) (*InterStepDataForward, error) {
 
 	options := DefaultOptions()
 	for _, o := range opts {
@@ -102,6 +92,7 @@ func NewInterStepDataForward(
 		FSD:                 fsd,
 		mapUDF:              applyUDF,
 		mapStreamUDF:        applyUDFStream,
+		batchMapUDF:         applyUDFBatchMap,
 		wmFetcher:           fetchWatermark,
 		wmPublishers:        publishWatermark,
 		// should we do a check here for the values not being null?
@@ -240,7 +231,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(dataMessages)))
 	metrics.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
-	udfResults := make([]isb.ReadWriteMessagePair, len(dataMessages))
 
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
@@ -248,50 +238,37 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
 	// we fetch the watermark for the partition from which we read the message.
 	processorWM := isdf.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, isdf.fromBufferPartition.GetPartitionIdx())
-
+	var udfResults []isb.ReadWriteMessagePair
 	var writeOffsets map[string][][]isb.Offset
-	if !isdf.opts.enableMapUdfStream {
+	// Check if map streaming mode is enabled
+	if isdf.opts.enableMapUdfStream {
+		writeOffsets, err = isdf.streamMessage(ctx, dataMessages, processorWM)
+		if err != nil {
+			isdf.opts.logger.Errorw("failed to streamMessage", zap.Error(err))
+			// As there's no partial failure, non-ack all the readOffsets
+			isdf.fromBufferPartition.NoAck(ctx, readOffsets)
+			return
+		}
+	} else if isdf.opts.enableBatchMapUdf {
+		// Check if batch map mode is enabled
+
+	} else {
+		// else we would go ahead with simple mapper
+
 		// create space for writeMessages specific to each step as we could forward to all the steps too.
 		var messageToStep = make(map[string][][]isb.Message)
 		for toVertex := range isdf.toBuffers {
 			// over allocating to have a predictable pattern
 			messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
 		}
+		isdf.opts.logger.Info("MYDEBUG: Trying modular function")
+		if isdf.opts.enableBatchMapUdf {
+			udfResults = isdf.processBatchMessages(ctx, dataMessages, processorWM)
 
-		// udf concurrent processing request channel
-		udfCh := make(chan *isb.ReadWriteMessagePair)
-		// udfResults stores the results after map UDF processing for all read messages. It indexes
-		// a read message to the corresponding write message
-		// applyUDF, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
-
-		// create a pool of map UDF Processors
-		var wg sync.WaitGroup
-		for i := 0; i < isdf.opts.udfConcurrency; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				isdf.concurrentApplyUDF(ctx, udfCh)
-			}()
+		} else {
+			udfResults = isdf.processConcurrentMap(ctx, dataMessages, processorWM)
 		}
-		concurrentUDFProcessingStart := time.Now()
 
-		// send to map UDF only the data messages
-		for idx, m := range dataMessages {
-			// emit message size metric
-			metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(m.Payload)))
-			// assign watermark to the message
-			m.Watermark = time.Time(processorWM)
-			// send map UDF processing work to the channel
-			udfResults[idx].ReadMessage = m
-			udfCh <- &udfResults[idx]
-		}
-		// let the go routines know that there is no more work
-		close(udfCh)
-		// wait till the processing is done. this will not be an infinite wait because the map UDF processing will exit if
-		// context.Done() is closed.
-		wg.Wait()
-		isdf.opts.logger.Debugw("concurrent applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
-		metrics.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
 		// map UDF processing is done.
 
 		// let's figure out which vertex to send the results to.
@@ -324,14 +301,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			return
 		}
 		isdf.opts.logger.Debugw("writeToBuffers completed")
-	} else {
-		writeOffsets, err = isdf.streamMessage(ctx, dataMessages, processorWM)
-		if err != nil {
-			isdf.opts.logger.Errorw("failed to streamMessage", zap.Error(err))
-			// As there's no partial failure, non-ack all the readOffsets
-			isdf.fromBufferPartition.NoAck(ctx, readOffsets)
-			return
-		}
 	}
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
@@ -397,6 +366,51 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	// ProcessingTimes of the entire forwardAChunk
 	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
+}
+
+func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, dataMessages []*isb.ReadMessage, processorWM wmb.Watermark) []isb.ReadWriteMessagePair {
+	udfResults := make([]isb.ReadWriteMessagePair, len(dataMessages))
+	// udf concurrent processing request channel
+	udfCh := make(chan *isb.ReadWriteMessagePair)
+	// udfResults stores the results after map UDF processing for all read messages. It indexes
+	// a read message to the corresponding write message
+	// applyUDF, if there is an Internal error it is a blocking call and will return only if shutdown has been initiated.
+
+	// create a pool of map UDF Processors
+	var wg sync.WaitGroup
+	for i := 0; i < isdf.opts.udfConcurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			isdf.concurrentApplyUDF(ctx, udfCh)
+		}()
+	}
+	concurrentUDFProcessingStart := time.Now()
+
+	// send to map UDF only the data messages
+	for idx, m := range dataMessages {
+		// emit message size metric
+		metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(m.Payload)))
+		// assign watermark to the message
+		m.Watermark = time.Time(processorWM)
+		// send map UDF processing work to the channel
+		udfResults[idx].ReadMessage = m
+		udfCh <- &udfResults[idx]
+	}
+	// let the go routines know that there is no more work
+	close(udfCh)
+	// wait till the processing is done. this will not be an infinite wait because the map UDF processing will exit if
+	// context.Done() is closed.
+	wg.Wait()
+	isdf.opts.logger.Debugw("concurrent applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
+	metrics.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
+	return udfResults
+}
+
+// streamMessage streams the data messages to the next step.
+func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, dataMessages []*isb.ReadMessage, processorWM wmb.Watermark) []isb.ReadWriteMessagePair {
+	_, _ = isdf.batchMapUDF.ApplyBatchMap(ctx, dataMessages)
+	return nil
 }
 
 // streamMessage streams the data messages to the next step.

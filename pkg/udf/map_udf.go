@@ -68,6 +68,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		toVertexWmStores   map[string]store.WatermarkStore
 		mapHandler         *rpc.GRPCBasedMap
 		mapStreamHandler   *rpc.GRPCBasedMapStream
+		batchMapHandler    *rpc.GRPCBasedBatchMap
 		idleManager        wmb.IdleManager
 		vertexName         = u.VertexInstance.Vertex.Spec.Name
 		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
@@ -229,8 +230,13 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			return result, nil
 		})
 
+		// check if the batch mode for map udf is enabled
+		enableBatchMap := sharedutil.LookupEnvBoolOr(dfv1.EnvBatchMap, false)
+
+		// add the options to check which mode for the map UDF is enabled
 		opts := []forward.Option{forward.WithLogger(log),
-			forward.WithUDFStreaming(enableMapUdfStream)}
+			forward.WithUDFStreaming(enableMapUdfStream),
+			forward.WithUDFBatchMap(enableBatchMap)}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 			if x.ReadBatchSize != nil {
 				opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -251,7 +257,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// create a forwarder for each partition
-		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, idleManager, opts...)
+		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, batchMapHandler, fetchWatermark, publishWatermark, idleManager, opts...)
 		if err != nil {
 			return err
 		}

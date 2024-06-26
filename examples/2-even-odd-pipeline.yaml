@@ -5,53 +5,31 @@ metadata:
 spec:
   vertices:
     - name: in
+      scale:
+        min: 1
       source:
-        http: {}
+        # A self data generating source
+        generator:
+          rpu: 600
+          duration: 1s
+#    - name: in
+#      source:
+#        http: {}
     - name: even-or-odd
       scale:
         min: 1
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:stable
+          image: quay.io/numaio/numaflow-go/map-flatmap:stable
     - name: even-sink
       scale:
         min: 1
       sink:
         # A simple log printing sink
         log: {}
-    - name: odd-sink
-      scale:
-        min: 1
-      sink:
-        log: {}
-    - name: number-sink
-      scale:
-        min: 1
-      sink:
-        log: {}
   edges:
     - from: in
       to: even-or-odd
     - from: even-or-odd
       to: even-sink
-      conditions:
-        tags:
-          operator: or
-          values:
-            - even-tag
-    - from: even-or-odd
-      to: odd-sink
-      conditions:
-        tags:
-          operator: or
-          values:
-            - odd-tag
-    - from: even-or-odd
-      to: number-sink
-      conditions:
-        tags:
-          operator: or
-          values:
-            - odd-tag
-            - even-tag

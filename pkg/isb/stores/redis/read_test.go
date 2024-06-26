@@ -140,7 +140,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithReadBatchSize(10))
+	f, err := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithReadBatchSize(10))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -344,7 +344,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	isdf, _ := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	isdf, _ := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -438,7 +438,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	suite.isdf, _ = forward.NewInterStepDataForward(vertexInstance, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	suite.isdf, _ = forward.NewInterStepDataForward(vertexInstance, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)

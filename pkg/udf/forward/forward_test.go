@@ -949,7 +949,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	}()
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, nil, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1128,7 +1128,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 	}()
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(2))
+	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, myForwardTest{}, myForwardTest{}, nil, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(2))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1362,7 +1362,7 @@ func TestInterStepDataForwardSinglePartition(t *testing.T) {
 
 	// create a forwarder
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(5))
+	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, mySourceForwardTest{}, mySourceForwardTest{}, mySourceForwardTest{}, nil, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 	assert.True(t, to1.IsEmpty())
@@ -1427,7 +1427,7 @@ func TestInterStepDataForwardMultiplePartition(t *testing.T) {
 	// create a forwarder
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, mySourceForwardTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(5))
+	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, mySourceForwardTest{}, mySourceForwardTest{}, nil, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(5))
 	assert.NoError(t, err)
 	assert.False(t, to11.IsFull())
 	assert.False(t, to12.IsFull())
