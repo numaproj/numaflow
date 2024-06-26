@@ -246,7 +246,7 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 				}
 			}
 			if partitionName == "" {
-				r.log.Warnf("[vertex name %s, pod name %s] Partition name is not found for metric %s", vertexName, podName, readTotalMetricName)
+				r.log.Warnf("[vertex name %s, pod name %s]: Partition name is not found for metric %s", vertexName, podName, readTotalMetricName)
 			} else {
 				partitionReadCount[partitionName] = ele.Counter.GetValue()
 			}
