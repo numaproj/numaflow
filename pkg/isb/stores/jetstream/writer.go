@@ -188,7 +188,7 @@ func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message,
 	var writeOffsets = make([]isb.Offset, len(messages))
 	var futures = make([]nats.PubAckFuture, len(messages))
 	for index, message := range messages {
-		payload, err := message.Marshal()
+		payload, err := message.MarshalBinary()
 		if err != nil {
 			errs[index] = err
 			continue
@@ -266,7 +266,7 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 		wg.Add(1)
 		go func(message isb.Message, idx int) {
 			defer wg.Done()
-			payload, err := message.Marshal()
+			payload, err := message.MarshalBinary()
 			if err != nil {
 				errs[idx] = err
 				return

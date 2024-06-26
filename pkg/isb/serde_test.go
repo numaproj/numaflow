@@ -117,13 +117,13 @@ func TestHeader(t *testing.T) {
 				Keys:        tt.fields.Key,
 				Headers:     tt.fields.Headers,
 			}
-			gotData, err := h.Marshal()
+			gotData, err := h.MarshalBinary()
 			if (err != nil) != tt.wantMarshalError {
 				t.Errorf("MarshalBinary() error = %v, wantMarshalError %v", err, tt.wantMarshalError)
 				return
 			}
 			var newH = new(Header)
-			err = newH.Unmarshal(gotData)
+			err = newH.UnmarshalBinary(gotData)
 			if (err != nil) != tt.wantUnmarshalError {
 				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
 				return
@@ -251,13 +251,13 @@ func TestMessage(t *testing.T) {
 				Header: tt.fields.Header,
 				Body:   tt.fields.Body,
 			}
-			gotData, err := m.Marshal()
+			gotData, err := m.MarshalBinary()
 			if (err != nil) != tt.wantMarshalError {
 				t.Errorf("MarshalBinary() error = %v, wantMarshalError %v", err, tt.wantMarshalError)
 				return
 			}
 			var newM = new(Message)
-			err = newM.Unmarshal(gotData)
+			err = newM.UnmarshalBinary(gotData)
 			if (err != nil) != tt.wantUnmarshalError {
 				t.Errorf("UnmarshalBinary() error = %v, wantUnmarshalError %v", err, tt.wantMarshalError)
 				return

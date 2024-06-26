@@ -2,18 +2,21 @@ package isb
 
 import (
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/golang/protobuf/ptypes/timestamp"
 
 	"github.com/numaproj/numaflow/pkg/apis/proto/isb"
 )
 
-// Marshal encodes Message to the protobuf format
-func (m Message) Marshal() ([]byte, error) {
+// MarshalBinary encodes Message to the protobuf format
+func (m Message) MarshalBinary() ([]byte, error) {
 	pb := &isb.Message{
 		Header: &isb.Header{
 			MessageInfo: &isb.MessageInfo{
-				EventTime: timestamppb.New(m.Header.MessageInfo.EventTime),
-				IsLate:    m.Header.MessageInfo.IsLate,
+				EventTime: &timestamp.Timestamp{
+					Seconds: int64(m.Header.MessageInfo.EventTime.Unix()),
+					Nanos:   int32(m.Header.MessageInfo.EventTime.Nanosecond()),
+				},
+				IsLate: m.Header.MessageInfo.IsLate,
 			},
 			Kind: isb.MessageKind(m.Header.Kind),
 			Id: &isb.MessageID{
@@ -31,8 +34,8 @@ func (m Message) Marshal() ([]byte, error) {
 	return proto.Marshal(pb)
 }
 
-// Unmarshal decodes Message from the protobuf format
-func (m *Message) Unmarshal(data []byte) error {
+// UnmarshalBinary decodes Message from the protobuf format
+func (m *Message) UnmarshalBinary(data []byte) error {
 	pb := &isb.Message{}
 	if err := proto.Unmarshal(data, pb); err != nil {
 		return err
@@ -66,12 +69,15 @@ func (m *Message) Unmarshal(data []byte) error {
 	return nil
 }
 
-// Marshal encodes Header to the protobuf binary format
-func (h Header) Marshal() ([]byte, error) {
+// MarshalBinary encodes Header to the protobuf binary format
+func (h Header) MarshalBinary() ([]byte, error) {
 	pb := &isb.Header{
 		MessageInfo: &isb.MessageInfo{
-			EventTime: timestamppb.New(h.MessageInfo.EventTime),
-			IsLate:    h.MessageInfo.IsLate,
+			EventTime: &timestamp.Timestamp{
+				Seconds: h.MessageInfo.EventTime.Unix(),
+				Nanos:   int32(h.MessageInfo.EventTime.Nanosecond()),
+			},
+			IsLate: h.MessageInfo.IsLate,
 		},
 		Kind:    isb.MessageKind(h.Kind),
 		Id:      &isb.MessageID{VertexName: h.ID.VertexName, Offset: h.ID.Offset, Index: h.ID.Index},
@@ -81,8 +87,8 @@ func (h Header) Marshal() ([]byte, error) {
 	return proto.Marshal(pb)
 }
 
-// Unmarshal decodes Header from the protobuf binary format
-func (h *Header) Unmarshal(data []byte) error {
+// UnmarshalBinary decodes Header from the protobuf binary format
+func (h *Header) UnmarshalBinary(data []byte) error {
 	pb := &isb.Header{}
 	if err := proto.Unmarshal(data, pb); err != nil {
 		return err

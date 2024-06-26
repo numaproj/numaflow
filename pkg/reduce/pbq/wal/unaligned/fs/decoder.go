@@ -171,7 +171,7 @@ func (d *decoder) decodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPre
 	}
 
 	var message = new(isb.Message)
-	err = message.Unmarshal(body)
+	err = message.UnmarshalBinary(body)
 	if err != nil {
 		return nil, err
 	}

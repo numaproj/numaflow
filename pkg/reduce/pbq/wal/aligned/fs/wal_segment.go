@@ -320,7 +320,7 @@ func (w *alignedWAL) encodeWALMessageHeader(message *isb.ReadMessage, messageLen
 // encodeWALMessageBody uses ReadMessage.Message field as the body of the alignedWAL message, encodes the
 // ReadMessage.Message, and returns.
 func (w *alignedWAL) encodeWALMessageBody(readMsg *isb.ReadMessage) ([]byte, error) {
-	msgBinary, err := readMsg.Message.Marshal()
+	msgBinary, err := readMsg.Message.MarshalBinary()
 	if err != nil {
 		walErrors.With(map[string]string{
 			metrics.LabelPipeline:           w.pipelineName,

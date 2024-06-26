@@ -163,7 +163,7 @@ func NewBufferRead(ctx context.Context, client *redisclient.RedisClient, name st
 }
 
 func getHeaderAndBody(field string, value interface{}) (msg isb.Message, err error) {
-	err = msg.Header.Unmarshal([]byte(field))
+	err = msg.Header.UnmarshalBinary([]byte(field))
 	if err != nil {
 		return msg, fmt.Errorf("header unmarshal error %w", err)
 	}
