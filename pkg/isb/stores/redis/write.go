@@ -217,7 +217,12 @@ func (bw *BufferWrite) pipelinedWrite(ctx context.Context, script *redis.Script,
 	for idx, message := range messages {
 		// Reference the Payload in Body directly when writing to Redis ISB to avoid extra marshaling.
 		// TODO: revisit directly Payload reference when Body structure changes
-		cmds[idx] = script.Run(ctx, pipe, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID, message.Header, message.Body.Payload, bw.BufferWriteInfo.minId.String())
+		headerBytes, err := message.Header.Marshal()
+		if err != nil {
+			errs[idx] = err
+			continue
+		}
+		cmds[idx] = script.Run(ctx, pipe, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID, headerBytes, message.Body.Payload, bw.BufferWriteInfo.minId.String())
 	}
 
 	scriptMissing := false

@@ -176,7 +176,7 @@ func decodeWALBody(buf io.Reader, entryHeader *readMessageHeaderPreamble) (*isb.
 	}
 
 	var message = new(isb.Message)
-	err = message.UnmarshalProto(body)
+	err = message.Unmarshal(body)
 	if err != nil {
 		return nil, err
 	}

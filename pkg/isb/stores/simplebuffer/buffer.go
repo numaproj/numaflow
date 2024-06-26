@@ -136,7 +136,7 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 			// access buffer via lock
 			b.rwlock.Lock()
 			currentIdx := b.writeIdx
-			b.buffer[currentIdx].payload, err = message.MarshalProto()
+			b.buffer[currentIdx].payload, err = message.Marshal()
 			if err != nil {
 				errs = append(errs, isb.MessageWriteErr{Name: b.name, Header: message.Header, Body: message.Body, Message: fmt.Sprintf("payload:(%s)", err)})
 			}
@@ -222,7 +222,7 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 }
 
 func buildMessage(payload []byte) (msg isb.Message, err error) {
-	err = msg.UnmarshalProto(payload)
+	err = msg.Unmarshal(payload)
 	if err != nil {
 		return msg, err
 	}

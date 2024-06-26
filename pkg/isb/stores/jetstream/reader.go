@@ -127,7 +127,7 @@ func (jr *jetStreamReader) Read(_ context.Context, count int64) ([]*isb.ReadMess
 	for _, msg := range msgs {
 		var m = new(isb.Message)
 		// err should be nil as we have our own marshaller/unmarshaller
-		err = m.UnmarshalProto(msg.Data)
+		err = m.Unmarshal(msg.Data)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal the message into isb.Message, %w", err)
 		}
