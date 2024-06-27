@@ -661,15 +661,21 @@ func getEvents(t *testing.T, reconciler *pipelineReconciler) []string {
 	}
 	return events
 }
-func Test_CopyVertexMetadata(t *testing.T) {
-	t.Run("no template metadata", func(t *testing.T) {
+
+func Test_copyVertexTemplate(t *testing.T) {
+	t.Run("no template", func(t *testing.T) {
 		pl := &dfv1.Pipeline{}
 		vtx := &dfv1.AbstractVertex{}
-		copyVertexMetadata(pl, vtx)
+		copyVertexTemplate(pl, vtx)
 		assert.Nil(t, vtx.Metadata)
+		assert.Nil(t, vtx.AbstractPodTemplate.Affinity)
+		assert.Nil(t, vtx.AbstractPodTemplate.Tolerations)
+		assert.Nil(t, vtx.AbstractPodTemplate.Priority)
+		assert.Nil(t, vtx.AbstractPodTemplate.DNSConfig)
+		assert.Nil(t, vtx.AbstractPodTemplate.SecurityContext)
 	})
 
-	t.Run("template metadata with labels and annotations", func(t *testing.T) {
+	t.Run("template defined with no vertex customization", func(t *testing.T) {
 		pl := &dfv1.Pipeline{
 			Spec: dfv1.PipelineSpec{
 				Templates: &dfv1.Templates{
@@ -685,13 +691,34 @@ func Test_CopyVertexMetadata(t *testing.T) {
 									"annotation2": "value2",
 								},
 							},
+							PriorityClassName: "test",
+							DNSConfig: &corev1.PodDNSConfig{
+								Nameservers: []string{"1.1.1.1", "8.8.8.8"},
+							},
+							SecurityContext: &corev1.PodSecurityContext{
+								RunAsUser: ptr.To[int64](1000),
+							},
+						},
+						ContainerTemplate: &dfv1.ContainerTemplate{
+							ImagePullPolicy: corev1.PullNever,
+							Env: []corev1.EnvVar{
+								{Name: "ENV1", Value: "VALUE1"},
+								{Name: "ENV2", Value: "VALUE2"},
+							},
+						},
+						InitContainerTemplate: &dfv1.ContainerTemplate{
+							ImagePullPolicy: corev1.PullNever,
+							Env: []corev1.EnvVar{
+								{Name: "ENV3", Value: "VALUE3"},
+								{Name: "ENV4", Value: "VALUE4"},
+							},
 						},
 					},
 				},
 			},
 		}
 		vtx := &dfv1.AbstractVertex{}
-		copyVertexMetadata(pl, vtx)
+		copyVertexTemplate(pl, vtx)
 		assert.NotNil(t, vtx.Metadata)
 		assert.Equal(t, 2, len(vtx.Metadata.Labels))
 		assert.Equal(t, "value1", vtx.Metadata.Labels["label1"])
@@ -699,9 +726,22 @@ func Test_CopyVertexMetadata(t *testing.T) {
 		assert.Equal(t, 2, len(vtx.Metadata.Annotations))
 		assert.Equal(t, "value1", vtx.Metadata.Annotations["annotation1"])
 		assert.Equal(t, "value2", vtx.Metadata.Annotations["annotation2"])
+		assert.Equal(t, "test", vtx.PriorityClassName)
+		assert.Equal(t, 2, len(vtx.DNSConfig.Nameservers))
+		assert.Equal(t, "1.1.1.1", vtx.DNSConfig.Nameservers[0])
+		assert.Equal(t, "8.8.8.8", vtx.DNSConfig.Nameservers[1])
+		assert.Equal(t, int64(1000), *vtx.SecurityContext.RunAsUser)
+		assert.Equal(t, corev1.PullNever, vtx.ContainerTemplate.ImagePullPolicy)
+		assert.Equal(t, 2, len(vtx.ContainerTemplate.Env))
+		assert.Equal(t, "ENV1", vtx.ContainerTemplate.Env[0].Name)
+		assert.Equal(t, "VALUE1", vtx.ContainerTemplate.Env[0].Value)
+		assert.Equal(t, corev1.PullNever, vtx.InitContainerTemplate.ImagePullPolicy)
+		assert.Equal(t, 2, len(vtx.InitContainerTemplate.Env))
+		assert.Equal(t, "ENV3", vtx.InitContainerTemplate.Env[0].Name)
+		assert.Equal(t, "VALUE3", vtx.InitContainerTemplate.Env[0].Value)
 	})
 
-	t.Run("template metadata with labels and annotations, vertex has existing metadata", func(t *testing.T) {
+	t.Run("template with vertex override", func(t *testing.T) {
 		pl := &dfv1.Pipeline{
 			Spec: dfv1.PipelineSpec{
 				Templates: &dfv1.Templates{
@@ -716,6 +756,30 @@ func Test_CopyVertexMetadata(t *testing.T) {
 									"annotation1": "value1",
 									"annotation2": "value2",
 								},
+							},
+							PriorityClassName: "test",
+							DNSConfig: &corev1.PodDNSConfig{
+								Nameservers: []string{"1.1.1.1", "8.8.8.8", "4.4.4.4"},
+							},
+							SecurityContext: &corev1.PodSecurityContext{
+								RunAsUser: ptr.To[int64](1000),
+							},
+						},
+						ContainerTemplate: &dfv1.ContainerTemplate{
+							ImagePullPolicy: corev1.PullNever,
+							Env: []corev1.EnvVar{
+								{Name: "ENV1", Value: "VALUE1"},
+								{Name: "ENV2", Value: "VALUE2"},
+							},
+						},
+						InitContainerTemplate: &dfv1.ContainerTemplate{
+							ImagePullPolicy: corev1.PullNever,
+							Env: []corev1.EnvVar{
+								{Name: "ENV3", Value: "VALUE3"},
+								{Name: "ENV4", Value: "VALUE4"},
+							},
+							EnvFrom: []corev1.EnvFromSource{
+								{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "test"}}},
 							},
 						},
 					},
@@ -734,9 +798,35 @@ func Test_CopyVertexMetadata(t *testing.T) {
 						"annotation2":         "value22",
 					},
 				},
+				PriorityClassName: "test2",
+				DNSConfig: &corev1.PodDNSConfig{
+					Nameservers: []string{"1.1.1.1", "8.8.8.8", "9.9.9.9"},
+				},
+				SecurityContext: &corev1.PodSecurityContext{
+					RunAsUser: ptr.To[int64](2000),
+				},
+			},
+			ContainerTemplate: &dfv1.ContainerTemplate{
+				ImagePullPolicy: corev1.PullAlways,
+				Env: []corev1.EnvVar{
+					{Name: "ENV1", Value: "VALUE11"},
+					{Name: "ENV3", Value: "VALUE33"},
+				},
+			},
+			InitContainerTemplate: &dfv1.ContainerTemplate{
+				Env: []corev1.EnvVar{
+					{Name: "ENV3", Value: "VALUE33"},
+					{Name: "ENV4", Value: "VALUE44"},
+				},
+				SecurityContext: &corev1.SecurityContext{
+					Capabilities: &corev1.Capabilities{
+						Add: []corev1.Capability{"NET_ADMIN"},
+					},
+				},
+				EnvFrom: []corev1.EnvFromSource{},
 			},
 		}
-		copyVertexMetadata(pl, vtx)
+		copyVertexTemplate(pl, vtx)
 		assert.NotNil(t, vtx.Metadata)
 		assert.Equal(t, 3, len(vtx.Metadata.Labels))
 		assert.Equal(t, "existing-value", vtx.Metadata.Labels["existing-label"])
@@ -746,5 +836,29 @@ func Test_CopyVertexMetadata(t *testing.T) {
 		assert.Equal(t, "existing-value", vtx.Metadata.Annotations["existing-annotation"])
 		assert.Equal(t, "value1", vtx.Metadata.Annotations["annotation1"])
 		assert.Equal(t, "value22", vtx.Metadata.Annotations["annotation2"])
+		assert.Equal(t, "test2", vtx.PriorityClassName)
+		assert.Equal(t, 3, len(vtx.DNSConfig.Nameservers))
+		assert.Equal(t, "1.1.1.1", vtx.DNSConfig.Nameservers[0])
+		assert.Equal(t, "8.8.8.8", vtx.DNSConfig.Nameservers[1])
+		assert.Equal(t, "9.9.9.9", vtx.DNSConfig.Nameservers[2])
+		assert.Equal(t, int64(2000), *vtx.SecurityContext.RunAsUser)
+		assert.Equal(t, corev1.PullAlways, vtx.ContainerTemplate.ImagePullPolicy)
+		assert.Equal(t, 2, len(vtx.ContainerTemplate.Env))
+		assert.Equal(t, "ENV1", vtx.ContainerTemplate.Env[0].Name)
+		assert.Equal(t, "VALUE11", vtx.ContainerTemplate.Env[0].Value)
+		assert.Equal(t, "ENV3", vtx.ContainerTemplate.Env[1].Name)
+		assert.Equal(t, "VALUE33", vtx.ContainerTemplate.Env[1].Value)
+		assert.Nil(t, vtx.ContainerTemplate.SecurityContext)
+		assert.Equal(t, corev1.PullNever, vtx.InitContainerTemplate.ImagePullPolicy)
+		assert.Equal(t, 2, len(vtx.InitContainerTemplate.Env))
+		assert.Equal(t, "ENV3", vtx.InitContainerTemplate.Env[0].Name)
+		assert.Equal(t, "VALUE33", vtx.InitContainerTemplate.Env[0].Value)
+		assert.Equal(t, "ENV4", vtx.InitContainerTemplate.Env[1].Name)
+		assert.Equal(t, "VALUE44", vtx.InitContainerTemplate.Env[1].Value)
+		assert.NotNil(t, vtx.InitContainerTemplate.SecurityContext)
+		assert.Equal(t, 1, len(vtx.InitContainerTemplate.SecurityContext.Capabilities.Add))
+		assert.Equal(t, 1, len(vtx.InitContainerTemplate.EnvFrom))
+		assert.NotNil(t, vtx.InitContainerTemplate.EnvFrom[0].SecretRef)
+		assert.Equal(t, "test", vtx.InitContainerTemplate.EnvFrom[0].SecretRef.Name)
 	})
 }

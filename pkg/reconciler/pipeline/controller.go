@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/imdario/mergo"
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -577,8 +578,8 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		fromEdges := copyEdges(pl, pl.GetFromEdges(v.Name))
 		toEdges := copyEdges(pl, pl.GetToEdges(v.Name))
 		vCopy := v.DeepCopy()
+		copyVertexTemplate(pl, vCopy)
 		copyVertexLimits(pl, vCopy)
-		copyVertexMetadata(pl, vCopy)
 		replicas := int32(1)
 		if pl.Status.Phase == dfv1.PipelinePhasePaused {
 			replicas = int32(0)
@@ -652,35 +653,26 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 	return result
 }
 
-// Copy any metadata defined in the template to the vertex
-func copyVertexMetadata(pl *dfv1.Pipeline, vtx *dfv1.AbstractVertex) {
-	if pl.Spec.Templates == nil || pl.Spec.Templates.VertexTemplate == nil || pl.Spec.Templates.VertexTemplate.Metadata == nil {
+// Copy everything defined in the vertex template to the vertex object
+// Be aware Maps will be merge copy, slices will be ignored if the destination is not empty
+func copyVertexTemplate(pl *dfv1.Pipeline, vtx *dfv1.AbstractVertex) {
+	if pl.Spec.Templates == nil || pl.Spec.Templates.VertexTemplate == nil {
 		return
 	}
-	templateMetadata := pl.Spec.Templates.VertexTemplate.Metadata
-	if len(templateMetadata.Labels) == 0 && len(templateMetadata.Annotations) == 0 {
-		return
-	}
-	if vtx.Metadata == nil {
-		vtx.Metadata = &dfv1.Metadata{}
-	}
-	if len(templateMetadata.Labels) > 0 && vtx.Metadata.Labels == nil {
-		vtx.Metadata.Labels = map[string]string{}
-	}
-	if len(templateMetadata.Annotations) > 0 && vtx.Metadata.Annotations == nil {
-		vtx.Metadata.Annotations = map[string]string{}
+	_ = mergo.Merge(&vtx.AbstractPodTemplate, pl.Spec.Templates.VertexTemplate.AbstractPodTemplate)
+
+	if pl.Spec.Templates.VertexTemplate.ContainerTemplate != nil {
+		if vtx.ContainerTemplate == nil {
+			vtx.ContainerTemplate = &dfv1.ContainerTemplate{}
+		}
+		_ = mergo.Merge(vtx.ContainerTemplate, *pl.Spec.Templates.VertexTemplate.ContainerTemplate)
 	}
 
-	for k, v := range templateMetadata.Labels {
-		if _, ok := vtx.Metadata.Labels[k]; !ok {
-			vtx.Metadata.Labels[k] = v
+	if pl.Spec.Templates.VertexTemplate.InitContainerTemplate != nil {
+		if vtx.InitContainerTemplate == nil {
+			vtx.InitContainerTemplate = &dfv1.ContainerTemplate{}
 		}
-	}
-
-	for k, v := range templateMetadata.Annotations {
-		if _, ok := vtx.Metadata.Annotations[k]; !ok {
-			vtx.Metadata.Annotations[k] = v
-		}
+		_ = mergo.Merge(vtx.InitContainerTemplate, *pl.Spec.Templates.VertexTemplate.InitContainerTemplate)
 	}
 }
 

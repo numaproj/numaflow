@@ -249,10 +249,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			}
 		}
 		if needToCreate {
-			if pipeline.Spec.Templates != nil && pipeline.Spec.Templates.VertexTemplate != nil {
-				apt := pipeline.Spec.Templates.VertexTemplate.AbstractPodTemplate
-				apt.ApplyToPodSpec(podSpec)
-			}
 			labels := map[string]string{}
 			annotations := map[string]string{}
 			if x := vertex.Spec.Metadata; x != nil {
@@ -354,14 +350,6 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate pod spec, error: %w", err)
-	}
-
-	if pl.Spec.Templates != nil && pl.Spec.Templates.VertexTemplate != nil && pl.Spec.Templates.VertexTemplate.ContainerTemplate != nil {
-		pl.Spec.Templates.VertexTemplate.ContainerTemplate.ApplyToNumaflowContainers(podSpec.Containers)
-	}
-
-	if pl.Spec.Templates != nil && pl.Spec.Templates.VertexTemplate != nil && pl.Spec.Templates.VertexTemplate.InitContainerTemplate != nil {
-		pl.Spec.Templates.VertexTemplate.InitContainerTemplate.ApplyToNumaflowContainers(podSpec.InitContainers)
 	}
 
 	// Attach secret or configmap volumes if any
