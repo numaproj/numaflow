@@ -1,8 +1,8 @@
 package isb
 
 import (
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/timestamp"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/apis/proto/isb"
 )
@@ -12,11 +12,8 @@ func (m Message) MarshalBinary() ([]byte, error) {
 	pb := &isb.Message{
 		Header: &isb.Header{
 			MessageInfo: &isb.MessageInfo{
-				EventTime: &timestamp.Timestamp{
-					Seconds: int64(m.Header.MessageInfo.EventTime.Unix()),
-					Nanos:   int32(m.Header.MessageInfo.EventTime.Nanosecond()),
-				},
-				IsLate: m.Header.MessageInfo.IsLate,
+				EventTime: timestamppb.New(m.Header.MessageInfo.EventTime),
+				IsLate:    m.Header.MessageInfo.IsLate,
 			},
 			Kind: isb.MessageKind(m.Header.Kind),
 			Id: &isb.MessageID{
@@ -73,11 +70,8 @@ func (m *Message) UnmarshalBinary(data []byte) error {
 func (h Header) MarshalBinary() ([]byte, error) {
 	pb := &isb.Header{
 		MessageInfo: &isb.MessageInfo{
-			EventTime: &timestamp.Timestamp{
-				Seconds: h.MessageInfo.EventTime.Unix(),
-				Nanos:   int32(h.MessageInfo.EventTime.Nanosecond()),
-			},
-			IsLate: h.MessageInfo.IsLate,
+			EventTime: timestamppb.New(h.MessageInfo.EventTime),
+			IsLate:    h.MessageInfo.IsLate,
 		},
 		Kind:    isb.MessageKind(h.Kind),
 		Id:      &isb.MessageID{VertexName: h.ID.VertexName, Offset: h.ID.Offset, Index: h.ID.Index},
