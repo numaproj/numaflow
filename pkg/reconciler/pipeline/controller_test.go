@@ -170,7 +170,7 @@ func Test_reconcileEvents(t *testing.T) {
 		testObj.Name = "very-very-very-loooooooooooooooooooooooooooooooooooong"
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
-		events := getEvents(r)
+		events := getEvents(t, r)
 		assert.Contains(t, events, "Normal UpdatePipelinePhase Updated pipeline phase from Paused to Running")
 		assert.Contains(t, events, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]")
 	})
@@ -197,7 +197,7 @@ func Test_reconcileEvents(t *testing.T) {
 		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input", Source: &dfv1.Source{}})
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
-		events := getEvents(r)
+		events := getEvents(t, r)
 		assert.Contains(t, events, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: duplicate vertex name \"input\"")
 	})
 }
@@ -651,7 +651,8 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 	})
 }
 
-func getEvents(reconciler *pipelineReconciler) []string {
+func getEvents(t *testing.T, reconciler *pipelineReconciler) []string {
+	t.Helper()
 	c := reconciler.recorder.(*record.FakeRecorder).Events
 	close(c)
 	events := make([]string, len(c))
@@ -659,4 +660,91 @@ func getEvents(reconciler *pipelineReconciler) []string {
 		events = append(events, msg)
 	}
 	return events
+}
+func Test_CopyVertexMetadata(t *testing.T) {
+	t.Run("no template metadata", func(t *testing.T) {
+		pl := &dfv1.Pipeline{}
+		vtx := &dfv1.AbstractVertex{}
+		copyVertexMetadata(pl, vtx)
+		assert.Nil(t, vtx.Metadata)
+	})
+
+	t.Run("template metadata with labels and annotations", func(t *testing.T) {
+		pl := &dfv1.Pipeline{
+			Spec: dfv1.PipelineSpec{
+				Templates: &dfv1.Templates{
+					VertexTemplate: &dfv1.VertexTemplate{
+						AbstractPodTemplate: dfv1.AbstractPodTemplate{
+							Metadata: &dfv1.Metadata{
+								Labels: map[string]string{
+									"label1": "value1",
+									"label2": "value2",
+								},
+								Annotations: map[string]string{
+									"annotation1": "value1",
+									"annotation2": "value2",
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		vtx := &dfv1.AbstractVertex{}
+		copyVertexMetadata(pl, vtx)
+		assert.NotNil(t, vtx.Metadata)
+		assert.Equal(t, 2, len(vtx.Metadata.Labels))
+		assert.Equal(t, "value1", vtx.Metadata.Labels["label1"])
+		assert.Equal(t, "value2", vtx.Metadata.Labels["label2"])
+		assert.Equal(t, 2, len(vtx.Metadata.Annotations))
+		assert.Equal(t, "value1", vtx.Metadata.Annotations["annotation1"])
+		assert.Equal(t, "value2", vtx.Metadata.Annotations["annotation2"])
+	})
+
+	t.Run("template metadata with labels and annotations, vertex has existing metadata", func(t *testing.T) {
+		pl := &dfv1.Pipeline{
+			Spec: dfv1.PipelineSpec{
+				Templates: &dfv1.Templates{
+					VertexTemplate: &dfv1.VertexTemplate{
+						AbstractPodTemplate: dfv1.AbstractPodTemplate{
+							Metadata: &dfv1.Metadata{
+								Labels: map[string]string{
+									"label1": "value1",
+									"label2": "value2",
+								},
+								Annotations: map[string]string{
+									"annotation1": "value1",
+									"annotation2": "value2",
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		vtx := &dfv1.AbstractVertex{
+			AbstractPodTemplate: dfv1.AbstractPodTemplate{
+				Metadata: &dfv1.Metadata{
+					Labels: map[string]string{
+						"existing-label": "existing-value",
+						"label2":         "value22",
+					},
+					Annotations: map[string]string{
+						"existing-annotation": "existing-value",
+						"annotation2":         "value22",
+					},
+				},
+			},
+		}
+		copyVertexMetadata(pl, vtx)
+		assert.NotNil(t, vtx.Metadata)
+		assert.Equal(t, 3, len(vtx.Metadata.Labels))
+		assert.Equal(t, "existing-value", vtx.Metadata.Labels["existing-label"])
+		assert.Equal(t, "value1", vtx.Metadata.Labels["label1"])
+		assert.Equal(t, "value22", vtx.Metadata.Labels["label2"])
+		assert.Equal(t, 3, len(vtx.Metadata.Annotations))
+		assert.Equal(t, "existing-value", vtx.Metadata.Annotations["existing-annotation"])
+		assert.Equal(t, "value1", vtx.Metadata.Annotations["annotation1"])
+		assert.Equal(t, "value22", vtx.Metadata.Annotations["annotation2"])
+	})
 }

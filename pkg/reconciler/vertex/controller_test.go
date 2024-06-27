@@ -557,11 +557,7 @@ func Test_reconcile(t *testing.T) {
 		testPl.Spec.Templates = &dfv1.Templates{
 			VertexTemplate: &dfv1.VertexTemplate{
 				AbstractPodTemplate: dfv1.AbstractPodTemplate{
-					Metadata: &dfv1.Metadata{
-						Labels: map[string]string{
-							"numaflow.numaproj.io/prometheus": "test",
-						},
-					},
+					PriorityClassName: "test",
 				},
 			},
 		}
@@ -581,12 +577,13 @@ func Test_reconcile(t *testing.T) {
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
 		pods := &corev1.PodList{}
-		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testPipelineName + "," + dfv1.KeyVertexName + "=" + testVertexSpecName + "," + "numaflow.numaproj.io/prometheus=test")
+		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testPipelineName + "," + dfv1.KeyVertexName + "=" + testVertexSpecName)
 		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
 		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, "test", pods.Items[0].Spec.PriorityClassName)
 	})
 
 	t.Run("test reconcile udf with side inputs", func(t *testing.T) {

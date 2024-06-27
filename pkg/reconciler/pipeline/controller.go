@@ -578,6 +578,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		toEdges := copyEdges(pl, pl.GetToEdges(v.Name))
 		vCopy := v.DeepCopy()
 		copyVertexLimits(pl, vCopy)
+		copyVertexMetadata(pl, vCopy)
 		replicas := int32(1)
 		if pl.Status.Phase == dfv1.PipelinePhasePaused {
 			replicas = int32(0)
@@ -649,6 +650,38 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 		result.BufferUsageLimit = plLimits.BufferUsageLimit
 	}
 	return result
+}
+
+// Copy any metadata defined in the template to the vertex
+func copyVertexMetadata(pl *dfv1.Pipeline, vtx *dfv1.AbstractVertex) {
+	if pl.Spec.Templates == nil || pl.Spec.Templates.VertexTemplate == nil || pl.Spec.Templates.VertexTemplate.Metadata == nil {
+		return
+	}
+	templateMetadata := pl.Spec.Templates.VertexTemplate.Metadata
+	if len(templateMetadata.Labels) == 0 && len(templateMetadata.Annotations) == 0 {
+		return
+	}
+	if vtx.Metadata == nil {
+		vtx.Metadata = &dfv1.Metadata{}
+	}
+	if len(templateMetadata.Labels) > 0 && vtx.Metadata.Labels == nil {
+		vtx.Metadata.Labels = map[string]string{}
+	}
+	if len(templateMetadata.Annotations) > 0 && vtx.Metadata.Annotations == nil {
+		vtx.Metadata.Annotations = map[string]string{}
+	}
+
+	for k, v := range templateMetadata.Labels {
+		if _, ok := vtx.Metadata.Labels[k]; !ok {
+			vtx.Metadata.Labels[k] = v
+		}
+	}
+
+	for k, v := range templateMetadata.Annotations {
+		if _, ok := vtx.Metadata.Annotations[k]; !ok {
+			vtx.Metadata.Annotations[k] = v
+		}
+	}
 }
 
 func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
