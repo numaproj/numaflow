@@ -187,8 +187,7 @@ api/json-schema/schema.json: api/openapi-spec/swagger.json hack/json-schema/main
 
 .PHONY: codegen
 codegen:
-	./hack/generate-proto2.sh
-	./hack/generate-proto3.sh
+	./hack/generate-proto.sh
 	./hack/update-codegen.sh
 	./hack/openapi-gen.sh
 	$(MAKE) swagger

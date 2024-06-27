@@ -116,3 +116,27 @@ func (h *Header) UnmarshalBinary(data []byte) error {
 
 	return nil
 }
+
+// MarshalBinary encodes MessageID to the protobuf binary format
+func (id MessageID) MarshalBinary() ([]byte, error) {
+	pb := &isb.MessageID{
+		VertexName: id.VertexName,
+		Offset:     id.Offset,
+		Index:      id.Index,
+	}
+	return proto.Marshal(pb)
+}
+
+// UnmarshalBinary decodes MessageID from the protobuf binary format
+func (id *MessageID) UnmarshalBinary(data []byte) error {
+	pb := &isb.MessageID{}
+	if err := proto.Unmarshal(data, pb); err != nil {
+		return err
+	}
+
+	id.VertexName = pb.VertexName
+	id.Offset = pb.Offset
+	id.Index = pb.Index
+
+	return nil
+}

@@ -10,8 +10,7 @@ spec:
       source:
         # A self data generating source
         generator:
-          msgSize: 500
-          rpu: 100
+          rpu: 5
           duration: 1s
     - name: cat
       scale:
