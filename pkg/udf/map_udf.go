@@ -160,12 +160,14 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}()
 
 	} else {
+		// As a vertex can be either Map mode or Batch mode we reuse the same server-info file and socket file for both
 		// Wait for server info to be ready
 		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapServerInfoFile))
 		if err != nil {
 			return err
 		}
 
+		// if Batch Map mode is enabled create the client and handler for that accordingly
 		if enableBatchMapUdf {
 			batchMapClient, err := batchmapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 			if err != nil {
@@ -183,6 +185,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				}
 			}()
 		} else {
+			// create the client and handler for map interface
 			mapClient, err := mapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 			if err != nil {
 				return fmt.Errorf("failed to create map client, %w", err)
@@ -311,6 +314,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	}
 
 	var metricsOpts []metrics.Option
+	// Add the correct client handler for the metrics server, based on the mode being used.
 	if enableMapUdfStream {
 		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapStreamHandler}, lagReaders)
 	} else if enableBatchMapUdf {

@@ -22,13 +22,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-// BatchMapApplier applies the map UDF on the read message and gives back a new message. Any UserError will be retried here, while
-// InternalErr can be returned and could be retried by the callee.
+// BatchMapApplier applies the batch map UDF on the read messages and gives back the responses for the whole
+// batch
 type BatchMapApplier interface {
 	ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error)
 }
 
-// BatchMapFunc utility function used to create a MapApplier implementation
+// BatchMapFunc utility function used to create a BatchMapApplier implementation
 type BatchMapFunc func(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error)
 
 func (f BatchMapFunc) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {

@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -79,10 +78,27 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 	return resp.GetReady(), nil
 }
 
-// BatchMapFn
+// BatchMapFn is the handler for the gRPC client (Numa container)
+// It takes in a stream of input Requests, sends them to the gRPC server(UDF) and then streams the
+// responses received back on a channel asynchronously.
+// We spawn 2 goroutines here, one for sending the requests over the stream
+// and the other one for receiving the responses
 func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapRequest) (<-chan *batchmappb.BatchMapResponse, <-chan error) {
+	// errCh is used to track and propagate any errors that might occur during the rpc lifecyle, these could include
+	// errors in sending, UDF errors etc
+	// These are propagated to the applier for further handling
 	errCh := make(chan error)
+
+	// response channel for streaming back the results received from the gRPC server
+	// TODO(map-batch): Should we keep try to keep this buffered?
 	responseCh := make(chan *batchmappb.BatchMapResponse)
+
+	// BatchMapFn is a bidirectional streaming RPC
+	// We get a Map_BatchMapFnClient object over which we can send the requests,
+	// receive the responses asynchronously.
+	// TODO(map-batch): this creates a new gRPC stream for every batch,
+	// it might be useful to see the performance difference between this approach
+	// and a long-running RPC
 	stream, err := c.grpcClt.BatchMapFn(ctx)
 	if err != nil {
 		go func() {
@@ -112,7 +128,6 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapR
 				// check if this is EOF error, which indicates that no more responses left to process on the
 				// stream from the UDF, in such a case we return without any error to indicate this
 				if errors.Is(recvErr, io.EOF) {
-					log.Println("MYDEBUG: GOT EOF FROM STREAM ", index)
 					return
 				}
 				// If this is some other error, propagate it to error channel,
@@ -138,7 +153,12 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapR
 				go func(sErr error) {
 					errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", sErr)
 				}(err)
-				break
+				// TODO(map-batch): Check if we should still do a CloseSend on the stream even if we have
+				// received an error. Ideally on an error we would be stopping any
+				// further processing and go for a replay so this should not be required.
+				// but would be good to verify.
+				// Otherwise this would be a break
+				return
 			}
 		}
 		// CloseSend closes the send direction of the stream. This indicates to the

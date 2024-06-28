@@ -71,14 +71,30 @@ func (u *GRPCBasedBatchMap) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
+// ApplyBatchMap is used to invoke the BatchMapFn RPC using the client.
+// It applies the batch map udf on an array read messages and sends the responses for the whole batch.
 func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	logger := logging.FromContext(ctx)
+	// udfResults is structure used to store the results corresponding to the read messages.
 	udfResults := make([]isb.ReadWriteMessagePair, len(messages))
+
+	// inputChan is used to stream messages to the grpc client
 	inputChan := make(chan *batchmappb.MapRequest)
+
+	// requestTracker is used to store the read messages in a key, value manner where
+	// key is the read offset and the reference to read message as the value.
+	// Once the results are received from the UDF, we map the responses to the corresponding request
+	// using a lookup on this tracker.
 	requestTracker := NewTracker()
+
+	// Invoke the RPC from the client
 	respCh, errCh := u.client.BatchMapFn(ctx, inputChan)
 
-	// Read routine
+	// Read routine: this goroutine iterates over the input messages and sends each
+	// of the read messages to the grpc client after transforming it to a MapRequest.
+	// Once all messages are sent, it closes the input channel to indicate that all requests have been read.
+	// On creating a new request, we add it to a tracker map so that the responses on the stream
+	// can be mapped backed to the given parent request
 	go func() {
 		defer close(inputChan)
 		for _, msg := range messages {
@@ -87,25 +103,42 @@ func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.R
 		}
 	}()
 
-	//var wg sync.WaitGroup
-	// Wait for all responses to be received
+	// Process the responses received on the response channel:
+	// This is an infinite loop which would exit
+	// 1. Once there are no more responses left to read from the channel
+	// 2. There is an error received on the error channel
+	// We have not added a case for context.Done as there is a handler for that in the client, and it should
+	// propagate it on the error channel itself.
+	//
+	// On getting a response, it would parse them and create a new ReadWriteMessagePair entry in the udfResults
+	// Any errors received from the client, are propagated back to the caller.
 	idx := 0
 loop:
 	for {
 		select {
+		// got an error on the error channel, so return immediately
 		case err := <-errCh:
-			// convertToSDK()
 			return nil, err
 		case grpcResp, ok := <-respCh:
+			// if there are no more messages to read on the channel we can break
 			if !ok {
 				break loop
 			}
+			// Get the unique request ID for which these responses are meant for.
 			msgId := grpcResp.GetId()
+			// Fetch the request value for the given ID from the tracker
 			parentMessage, ok := requestTracker.GetRequest(msgId)
 			if !ok {
-				logger.Info("MYDEBUG: Request missing from tracker")
+				// this case is when the given request ID was not present in the tracker.
+				// This means that either the UDF added an incorrect ID
+				// This cannot be processed further and should result in an error
+				// Can there be another case for this?
+				logger.Error("Request missing from tracker")
+				return nil, fmt.Errorf("incorrect ID found during batch map processing")
 			}
-			//wg.Add(1)
+			// parse the responses received
+			// TODO(map-batch): should we make this concurrent by using multiple goroutines, instead of sequential.
+			// Try and see if any perf improvements from this.
 			parsedResp := u.parseResponse(grpcResp, parentMessage)
 			udfResults[idx].WriteMessages = parsedResp
 			udfResults[idx].ReadMessage = parentMessage
@@ -113,7 +146,6 @@ loop:
 			idx += 1
 		}
 	}
-	//wg.Wait()
 	return udfResults, nil
 }
 
@@ -138,6 +170,8 @@ func (u *GRPCBasedBatchMap) parseResponse(response *batchmappb.BatchMapResponse,
 			},
 			Tags: result.Tags,
 		}
+		// set the headers for the write messages
+		taggedMessage.Headers = parentMessage.Headers
 		writeMessages = append(writeMessages, taggedMessage)
 	}
 	return writeMessages
