@@ -7,7 +7,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/isb"
 )
 
-// MarshalBinary encodes Message to the protobuf format
+// MarshalBinary encodes Message to proto bytes.
 func (m Message) MarshalBinary() ([]byte, error) {
 	pb := &isb.Message{
 		Header: &isb.Header{
@@ -31,42 +31,36 @@ func (m Message) MarshalBinary() ([]byte, error) {
 	return proto.Marshal(pb)
 }
 
-// UnmarshalBinary decodes Message from the protobuf format
+// UnmarshalBinary decodes Message from the proto bytes.
+// Even though the header and body are pointers in the proto, we don't need
+// nil checks because while marshalling, we always set the default values.
 func (m *Message) UnmarshalBinary(data []byte) error {
 	pb := &isb.Message{}
 	if err := proto.Unmarshal(data, pb); err != nil {
 		return err
 	}
 
-	if pb.Header != nil {
-		m.Header = Header{}
-
-		if pb.Header.MessageInfo != nil {
-			m.Header.MessageInfo = MessageInfo{
-				EventTime: pb.Header.MessageInfo.EventTime.AsTime(),
-				IsLate:    pb.Header.MessageInfo.IsLate,
-			}
-		}
-
-		m.Header.Kind = MessageKind(pb.Header.Kind)
-
-		if pb.Header.Id != nil {
-			m.Header.ID = MessageID{
-				VertexName: pb.Header.Id.VertexName,
-				Offset:     pb.Header.Id.Offset,
-				Index:      pb.Header.Id.Index,
-			}
-		}
-
-		m.Header.Keys = pb.Header.Keys
-		m.Header.Headers = pb.Header.Headers
-		m.Body.Payload = pb.Body.Payload
+	m.Header = Header{
+		MessageInfo: MessageInfo{
+			EventTime: pb.Header.MessageInfo.EventTime.AsTime(),
+			IsLate:    pb.Header.MessageInfo.IsLate,
+		},
+		Kind: MessageKind(pb.Header.Kind),
+		ID: MessageID{
+			VertexName: pb.Header.Id.VertexName,
+			Offset:     pb.Header.Id.Offset,
+			Index:      pb.Header.Id.Index,
+		},
+		Keys:    pb.Header.Keys,
+		Headers: pb.Header.Headers,
 	}
+
+	m.Body.Payload = pb.Body.Payload
 
 	return nil
 }
 
-// MarshalBinary encodes Header to the protobuf binary format
+// MarshalBinary encodes Header to proto bytes.
 func (h Header) MarshalBinary() ([]byte, error) {
 	pb := &isb.Header{
 		MessageInfo: &isb.MessageInfo{
@@ -81,28 +75,24 @@ func (h Header) MarshalBinary() ([]byte, error) {
 	return proto.Marshal(pb)
 }
 
-// UnmarshalBinary decodes Header from the protobuf binary format
+// UnmarshalBinary decodes Header from the proto bytes.
 func (h *Header) UnmarshalBinary(data []byte) error {
 	pb := &isb.Header{}
 	if err := proto.Unmarshal(data, pb); err != nil {
 		return err
 	}
 
-	if pb.MessageInfo != nil {
-		h.MessageInfo = MessageInfo{
-			EventTime: pb.MessageInfo.EventTime.AsTime(),
-			IsLate:    pb.MessageInfo.IsLate,
-		}
+	h.MessageInfo = MessageInfo{
+		EventTime: pb.MessageInfo.EventTime.AsTime(),
+		IsLate:    pb.MessageInfo.IsLate,
 	}
 
 	h.Kind = MessageKind(pb.Kind)
 
-	if pb.Id != nil {
-		h.ID = MessageID{
-			VertexName: pb.Id.VertexName,
-			Offset:     pb.Id.Offset,
-			Index:      pb.Id.Index,
-		}
+	h.ID = MessageID{
+		VertexName: pb.Id.VertexName,
+		Offset:     pb.Id.Offset,
+		Index:      pb.Id.Index,
 	}
 
 	h.Keys = pb.Keys
@@ -111,7 +101,7 @@ func (h *Header) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// MarshalBinary encodes MessageID to the protobuf binary format
+// MarshalBinary encodes MessageID to proto bytes.
 func (id MessageID) MarshalBinary() ([]byte, error) {
 	pb := &isb.MessageID{
 		VertexName: id.VertexName,
@@ -121,7 +111,7 @@ func (id MessageID) MarshalBinary() ([]byte, error) {
 	return proto.Marshal(pb)
 }
 
-// UnmarshalBinary decodes MessageID from the protobuf binary format
+// UnmarshalBinary decodes MessageID from proto bytes.
 func (id *MessageID) UnmarshalBinary(data []byte) error {
 	pb := &isb.MessageID{}
 	if err := proto.Unmarshal(data, pb); err != nil {

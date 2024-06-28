@@ -196,6 +196,7 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 		b.rwlock.Lock()
 
 		currentIdx := b.readIdx
+
 		// mark it as pending
 		b.buffer[currentIdx].pending = true
 		b.readIdx = (currentIdx + 1) % b.size
@@ -265,7 +266,7 @@ func (b *InMemoryBuffer) GetMessages(num int) []*isb.Message {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
 	var msgs = make([]*isb.Message, 0, num)
-	for i := 0; i < num && i < len(b.buffer); i++ {
+	for i := b.readIdx; i < int64(num) && i < b.writeIdx; i++ {
 		msg, _ := buildMessage(b.buffer[i].payload)
 		msgs = append(msgs, &msg)
 	}

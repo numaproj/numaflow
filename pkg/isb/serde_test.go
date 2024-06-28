@@ -268,3 +268,21 @@ func TestMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestEmptyMessage(t *testing.T) {
+	m := Message{}
+	data, err := m.MarshalBinary()
+	if err != nil {
+		t.Errorf("MarshalBinary() error = %v, want nil", err)
+		return
+	}
+	newM := new(Message)
+	err = newM.UnmarshalBinary(data)
+	if err != nil {
+		t.Errorf("UnmarshalBinary() error = %v, want nil", err)
+		return
+	}
+	if !reflect.DeepEqual(*newM, m) {
+		t.Errorf("MarshalBinary() gotData = %v, want %v", newM, m)
+	}
+}
