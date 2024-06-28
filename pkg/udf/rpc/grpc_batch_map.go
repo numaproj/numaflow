@@ -23,6 +23,7 @@ import (
 
 	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/sdkclient/batchmapper"
@@ -70,23 +71,89 @@ func (u *GRPCBasedBatchMap) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	logger := logging.FromContext(ctx)
+	udfResults := make([]isb.ReadWriteMessagePair, len(messages))
 	inputChan := make(chan *batchmappb.MapRequest)
+	requestTracker := NewTracker()
 	respCh, errCh := u.client.BatchMapFn(ctx, inputChan)
-	// error routine
-	go func() {
-
-	}()
 
 	// Read routine
 	go func() {
-
+		defer close(inputChan)
+		for _, msg := range messages {
+			requestTracker.AddRequest(msg)
+			inputChan <- u.parseInputRequest(msg)
+		}
 	}()
 
+	//var wg sync.WaitGroup
 	// Wait for all responses to be received
-	for resp := range respCh {
-		print(resp)
-
+	idx := 0
+loop:
+	for {
+		select {
+		case err := <-errCh:
+			// convertToSDK()
+			return nil, err
+		case grpcResp, ok := <-respCh:
+			if !ok {
+				break loop
+			}
+			msgId := grpcResp.GetId()
+			parentMessage, ok := requestTracker.GetRequest(msgId)
+			if !ok {
+				logger.Info("MYDEBUG: Request missing from tracker")
+			}
+			//wg.Add(1)
+			parsedResp := u.parseResponse(grpcResp, parentMessage)
+			udfResults[idx].WriteMessages = parsedResp
+			udfResults[idx].ReadMessage = parentMessage
+			requestTracker.RemoveRequest(msgId)
+			idx += 1
+		}
 	}
-	return nil, nil
+	//wg.Wait()
+	return udfResults, nil
+}
+
+func (u *GRPCBasedBatchMap) parseResponse(response *batchmappb.BatchMapResponse, parentMessage *isb.ReadMessage) []*isb.WriteMessage {
+	writeMessages := make([]*isb.WriteMessage, 0)
+	for index, result := range response.GetResults() {
+		keys := result.Keys
+		taggedMessage := &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					MessageInfo: parentMessage.MessageInfo,
+					Keys:        keys,
+					ID: isb.MessageID{
+						VertexName: u.vertexName,
+						Offset:     parentMessage.ReadOffset.String(),
+						Index:      int32(index),
+					},
+				},
+				Body: isb.Body{
+					Payload: result.Value,
+				},
+			},
+			Tags: result.Tags,
+		}
+		writeMessages = append(writeMessages, taggedMessage)
+	}
+	return writeMessages
+}
+
+func (u *GRPCBasedBatchMap) parseInputRequest(inputMsg *isb.ReadMessage) *batchmappb.MapRequest {
+	keys := inputMsg.Keys
+	payload := inputMsg.Body.Payload
+	parentMessageInfo := inputMsg.MessageInfo
+	var req = &batchmappb.MapRequest{
+		Id:        inputMsg.ReadOffset.String(),
+		Keys:      keys,
+		Value:     payload,
+		EventTime: timestamppb.New(parentMessageInfo.EventTime),
+		Watermark: timestamppb.New(inputMsg.Watermark),
+		Headers:   inputMsg.Headers,
+	}
+	return req
 }

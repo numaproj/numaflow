@@ -18,8 +18,9 @@ package batchmapper
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
+	"log"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -28,7 +29,7 @@ import (
 	"github.com/numaproj/numaflow-go/pkg/info"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	sdkerror "github.com/numaproj/numaflow/pkg/sdkclient/error"
+	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
 )
 
@@ -80,32 +81,76 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 
 // BatchMapFn
 func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapRequest) (<-chan *batchmappb.BatchMapResponse, <-chan error) {
+	errCh := make(chan error)
+	responseCh := make(chan *batchmappb.BatchMapResponse)
 	stream, err := c.grpcClt.BatchMapFn(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute c.grpcClt.MapStreamFn(): %w", err)
+		go func() {
+			errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn stream", err)
+		}()
+		return responseCh, errCh
 	}
 
+	// read the response from the server stream and send it to responseCh channel
+	// any error is sent to errCh channel
 	go func() {
-		for req := range inputCh {
-
+		// close this channel to indicate that no more elements left to receive from grpc
+		// We do defer here on the whole go-routine as even during a error scenario, we
+		// want to close the channel and stop forwarding any more responses from the UDF
+		// as we would be replaying the current ones.
+		defer close(responseCh)
+		var resp *batchmappb.BatchMapResponse
+		var recvErr error
+		index := 0
+		for {
+			select {
+			case <-ctx.Done():
+				errCh <- ctx.Err()
+				return
+			default:
+				resp, recvErr = stream.Recv()
+				// check if this is EOF error, which indicates that no more responses left to process on the
+				// stream from the UDF, in such a case we return without any error to indicate this
+				if errors.Is(recvErr, io.EOF) {
+					log.Println("MYDEBUG: GOT EOF FROM STREAM ", index)
+					return
+				}
+				// If this is some other error, propagate it to error channel,
+				// also close the response channel(done using the defer close) to indicate no more messages being read
+				errSDK := sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", recvErr)
+				if errSDK != nil {
+					errCh <- errSDK
+					return
+				}
+				// send the response upstream
+				responseCh <- resp
+				index += 1
+			}
 		}
 	}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			var resp *batchmappb.BatchMapResponse
-			resp, err = stream.Recv()
-			if err == io.EOF {
-				return nil
-			}
-			err = sdkerror.ToUDFErr("c.grpcClt.MapStreamFn", err)
+	// Read from the read messages and send them individually to the bi-di stream for processing
+	// in case there is an error in sending, send it to the error channel for handling
+	go func() {
+		for inputMsg := range inputCh {
+			err = stream.Send(inputMsg)
 			if err != nil {
-				return err
+				go func(sErr error) {
+					errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", sErr)
+				}(err)
+				break
 			}
-			responseCh <- resp
 		}
-	}
+		// CloseSend closes the send direction of the stream. This indicates to the
+		// UDF that we have sent all requests from the client, and it can safely
+		// stop listening on the stream
+		sendErr := stream.CloseSend()
+		if sendErr != nil && !errors.Is(sendErr, io.EOF) {
+			go func(sErr error) {
+				errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn stream.CloseSend()", sErr)
+			}(sendErr)
+		}
+	}()
+	return responseCh, errCh
+
 }

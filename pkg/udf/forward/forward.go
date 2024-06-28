@@ -249,9 +249,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.fromBufferPartition.NoAck(ctx, readOffsets)
 			return
 		}
-	} else if isdf.opts.enableBatchMapUdf {
-		// Check if batch map mode is enabled
-
 	} else {
 		// else we would go ahead with simple mapper
 
@@ -261,7 +258,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			// over allocating to have a predictable pattern
 			messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
 		}
-		isdf.opts.logger.Info("MYDEBUG: Trying modular function")
 		if isdf.opts.enableBatchMapUdf {
 			udfResults = isdf.processBatchMessages(ctx, dataMessages, processorWM)
 
@@ -409,8 +405,16 @@ func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, data
 
 // streamMessage streams the data messages to the next step.
 func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, dataMessages []*isb.ReadMessage, processorWM wmb.Watermark) []isb.ReadWriteMessagePair {
-	_, _ = isdf.batchMapUDF.ApplyBatchMap(ctx, dataMessages)
-	return nil
+	udfResults, err := isdf.batchMapUDF.ApplyBatchMap(ctx, dataMessages)
+	if err != nil {
+		readOffsets := make([]isb.Offset, 0)
+		for _, msg := range dataMessages {
+			readOffsets = append(readOffsets, msg.ReadOffset)
+		}
+		isdf.fromBufferPartition.NoAck(ctx, readOffsets)
+		isdf.opts.logger.Panic("Got an error while processing UDF", zap.Error(err))
+	}
+	return udfResults
 }
 
 // streamMessage streams the data messages to the next step.

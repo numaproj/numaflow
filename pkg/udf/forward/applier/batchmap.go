@@ -25,12 +25,12 @@ import (
 // BatchMapApplier applies the map UDF on the read message and gives back a new message. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type BatchMapApplier interface {
-	ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]*isb.WriteMessage, error)
+	ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error)
 }
 
 // BatchMapFunc utility function used to create a MapApplier implementation
-type BatchMapFunc func(ctx context.Context, messages []*isb.ReadMessage) ([]*isb.WriteMessage, error)
+type BatchMapFunc func(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error)
 
-func (f BatchMapFunc) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f BatchMapFunc) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	return f(ctx, messages)
 }
