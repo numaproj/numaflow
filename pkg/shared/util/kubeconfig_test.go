@@ -9,6 +9,8 @@ import (
 
 func TestK8sRestConfig(t *testing.T) {
 	t.Run("K8sRestConfig returns rest.Config", func(t *testing.T) {
+		os.Setenv("KUBECONFIG", "")
+		defer os.Unsetenv("KUBECONFIG")
 		config, err := K8sRestConfig()
 		assert.Nil(t, err)
 		assert.NotNil(t, config)
@@ -20,7 +22,6 @@ func TestK8sRestConfig(t *testing.T) {
 		os.Setenv("KUBECONFIG", kubeconfig)
 		defer os.Unsetenv("KUBECONFIG")
 
-		// Mock the clientcmd and os packages if needed for different conditions
 		config, err := K8sRestConfig()
 		assert.NotNil(t, err)
 		assert.Nil(t, config)
