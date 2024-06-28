@@ -417,6 +417,7 @@ func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, data
 		// And then restart the numa container.
 		//TODO(map-batch) - We do not have any retry mechanism currently in place. Do we want to add any before
 		// restarting?
+		// Also check why we do not have a retry mechanism in no-ack similar to ackFromBuffer
 		readOffsets := make([]isb.Offset, 0)
 		for _, msg := range dataMessages {
 			readOffsets = append(readOffsets, msg.ReadOffset)

@@ -149,7 +149,7 @@ loop:
 	return udfResults, nil
 }
 
-func (u *GRPCBasedBatchMap) parseResponse(response *batchmappb.BatchMapResponse, parentMessage *isb.ReadMessage) []*isb.WriteMessage {
+func (u *GRPCBasedBatchMap) parseResponse(response *batchmappb.MapResponse, parentMessage *isb.ReadMessage) []*isb.WriteMessage {
 	writeMessages := make([]*isb.WriteMessage, 0)
 	for index, result := range response.GetResults() {
 		keys := result.Keys
@@ -160,7 +160,7 @@ func (u *GRPCBasedBatchMap) parseResponse(response *batchmappb.BatchMapResponse,
 					Keys:        keys,
 					ID: isb.MessageID{
 						VertexName: u.vertexName,
-						Offset:     parentMessage.ReadOffset.String(),
+						Offset:     response.GetId(),
 						Index:      int32(index),
 					},
 				},

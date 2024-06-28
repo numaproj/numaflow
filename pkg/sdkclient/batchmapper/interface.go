@@ -27,5 +27,5 @@ import (
 type Client interface {
 	CloseConn(ctx context.Context) error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
-	BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapRequest) (<-chan *batchmappb.BatchMapResponse, <-chan error)
+	BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapRequest) (<-chan *batchmappb.MapResponse, <-chan error)
 }
