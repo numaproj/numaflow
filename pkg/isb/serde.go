@@ -40,6 +40,10 @@ func (m *Message) UnmarshalBinary(data []byte) error {
 		return err
 	}
 
+	// no nil checks are performed because Marshalling and Unmarshalling
+	// are completely controlled by numaflow. It is best not to do nil checks
+	// and get panics so we can fix the root cause.
+	
 	m.Header = Header{
 		MessageInfo: MessageInfo{
 			EventTime: pb.Header.MessageInfo.EventTime.AsTime(),
@@ -82,6 +86,10 @@ func (h *Header) UnmarshalBinary(data []byte) error {
 		return err
 	}
 
+	// no nil checks are performed because Marshalling and Unmarshalling
+	// are completely controlled by numaflow. It is best not to do nil checks
+	// and get panics so we can fix the root cause.
+	
 	h.MessageInfo = MessageInfo{
 		EventTime: pb.MessageInfo.EventTime.AsTime(),
 		IsLate:    pb.MessageInfo.IsLate,
