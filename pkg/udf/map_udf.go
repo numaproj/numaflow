@@ -276,8 +276,14 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			opts = append(opts, forward.WithCallbackUploader(cbPublisher))
 		}
 
+		mapAppliers := forward.MapAppliers{
+			MapUDF:       mapHandler,
+			MapStreamUDF: mapStreamHandler,
+			BatchMapUDF:  batchMapHandler,
+		}
+
 		// create a forwarder for each partition
-		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, batchMapHandler, fetchWatermark, publishWatermark, idleManager, opts...)
+		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapAppliers, fetchWatermark, publishWatermark, idleManager, opts...)
 		if err != nil {
 			return err
 		}

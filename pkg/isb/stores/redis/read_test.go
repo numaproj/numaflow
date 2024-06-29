@@ -45,6 +45,11 @@ var (
 		// Addrs: []string{":7000", ":7001", ":7002", ":7003", ":7004", ":7005"}
 		Addrs: []string{":6379"},
 	}
+	appliers = forward.MapAppliers{
+		MapUDF:       forwardReadWritePerformance{},
+		MapStreamUDF: forwardReadWritePerformance{},
+		BatchMapUDF:  forwardReadWritePerformance{},
+	}
 
 	testStartTime = time.Unix(1636470000, 0).UTC()
 )
@@ -140,7 +145,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithReadBatchSize(10))
+	f, err := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, appliers, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithReadBatchSize(10))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -315,6 +320,10 @@ func (f forwardReadWritePerformance) ApplyMapStream(ctx context.Context, message
 	return testutils.CopyUDFTestApplyStream(ctx, "testVertex", writeMessageCh, message)
 }
 
+func (f forwardReadWritePerformance) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApplyBatchMap(ctx, "test-vertex", messages)
+}
+
 func (suite *ReadWritePerformance) SetupSuite() {
 	client := redisclient.NewRedisClient(redisOptions)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -344,7 +353,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	isdf, _ := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	isdf, _ := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, appliers, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -438,7 +447,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	suite.isdf, _ = forward.NewInterStepDataForward(vertexInstance, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, nil, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	suite.isdf, _ = forward.NewInterStepDataForward(vertexInstance, suite.rqr, toSteps, forwardReadWritePerformance{}, appliers, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)

@@ -44,6 +44,12 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
+type MapAppliers struct {
+	MapUDF       applier.MapApplier
+	MapStreamUDF applier.MapStreamApplier
+	BatchMapUDF  applier.BatchMapApplier
+}
+
 // InterStepDataForward forwards the data from previous step to the current step via inter-step buffer.
 type InterStepDataForward struct {
 	// I have my reasons for overriding the default principle https://github.com/golang/go/issues/22602
@@ -53,12 +59,10 @@ type InterStepDataForward struct {
 	cancelFn            context.CancelFunc
 	fromBufferPartition isb.BufferReader
 	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
-	toBuffers    map[string][]isb.BufferWriter
-	FSD          forwarder.ToWhichStepDecider
-	mapUDF       applier.MapApplier
-	mapStreamUDF applier.MapStreamApplier
-	batchMapUDF  applier.BatchMapApplier
-	wmFetcher    fetch.Fetcher
+	toBuffers   map[string][]isb.BufferWriter
+	FSD         forwarder.ToWhichStepDecider
+	mapAppliers MapAppliers
+	wmFetcher   fetch.Fetcher
 	// wmPublishers stores the vertex to publisher mapping
 	wmPublishers  map[string]publish.Publisher
 	opts          options
@@ -73,7 +77,7 @@ type InterStepDataForward struct {
 }
 
 // NewInterStepDataForward creates an inter-step forwarder.
-func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.BufferReader, toSteps map[string][]isb.BufferWriter, fsd forwarder.ToWhichStepDecider, applyUDF applier.MapApplier, applyUDFStream applier.MapStreamApplier, applyUDFBatchMap applier.BatchMapApplier, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, idleManager wmb.IdleManager, opts ...Option) (*InterStepDataForward, error) {
+func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.BufferReader, toSteps map[string][]isb.BufferWriter, fsd forwarder.ToWhichStepDecider, mapApplier MapAppliers, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, idleManager wmb.IdleManager, opts ...Option) (*InterStepDataForward, error) {
 
 	options := DefaultOptions()
 	for _, o := range opts {
@@ -90,9 +94,7 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 		fromBufferPartition: fromStep,
 		toBuffers:           toSteps,
 		FSD:                 fsd,
-		mapUDF:              applyUDF,
-		mapStreamUDF:        applyUDFStream,
-		batchMapUDF:         applyUDFBatchMap,
+		mapAppliers:         mapApplier,
 		wmFetcher:           fetchWatermark,
 		wmPublishers:        publishWatermark,
 		// should we do a check here for the values not being null?
@@ -263,7 +265,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
 		}
 		// Trigger the UDF processing based on the mode enabled for map
-		// ie Batch Map or Map
+		// ie Batch Map or unary map
 		// This will be a blocking call until the all the UDF results for the batch are received.
 		if isdf.opts.enableBatchMapUdf {
 			udfResults = isdf.processBatchMessages(ctx, dataMessages)
@@ -409,7 +411,7 @@ func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, data
 // processBatchMessages is used for processing the Batch Map mode UDF
 func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, dataMessages []*isb.ReadMessage) []isb.ReadWriteMessagePair {
 	concurrentUDFProcessingStart := time.Now()
-	udfResults, err := isdf.batchMapUDF.ApplyBatchMap(ctx, dataMessages)
+	udfResults, err := isdf.mapAppliers.BatchMapUDF.ApplyBatchMap(ctx, dataMessages)
 	if err != nil {
 		// In case of an error received while processing the UDF call, we would do not handle partial failures,
 		// and hence would want to replay the whole batch currently.
@@ -418,6 +420,10 @@ func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, data
 		//TODO(map-batch) - We do not have any retry mechanism currently in place. Do we want to add any before
 		// restarting?
 		// Also check why we do not have a retry mechanism in no-ack similar to ackFromBuffer
+		if ok, _ := isdf.IsShuttingDown(); ok {
+			isdf.opts.logger.Errorw("batchMapUDF.Apply, Stop called during udf processing", zap.Error(err))
+			metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
+		}
 		readOffsets := make([]isb.Offset, 0)
 		for _, msg := range dataMessages {
 			readOffsets = append(readOffsets, msg.ReadOffset)
@@ -461,7 +467,7 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 		writeMessageCh := make(chan isb.WriteMessage)
 		errs, ctx := errgroup.WithContext(ctx)
 		errs.Go(func() error {
-			return isdf.mapStreamUDF.ApplyMapStream(ctx, dataMessages[0], writeMessageCh)
+			return isdf.mapAppliers.MapStreamUDF.ApplyMapStream(ctx, dataMessages[0], writeMessageCh)
 		})
 
 		// Stream the message to the next vertex. First figure out which vertex
@@ -693,7 +699,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 // The UserError retry will be done on the ApplyUDF.
 func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
-		writeMessages, err := isdf.mapUDF.ApplyMap(ctx, readMessage)
+		writeMessages, err := isdf.mapAppliers.MapUDF.ApplyMap(ctx, readMessage)
 		if err != nil {
 			isdf.opts.logger.Errorw("mapUDF.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.
