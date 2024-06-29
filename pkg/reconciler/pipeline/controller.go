@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/imdario/mergo"
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -577,6 +578,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		fromEdges := copyEdges(pl, pl.GetFromEdges(v.Name))
 		toEdges := copyEdges(pl, pl.GetToEdges(v.Name))
 		vCopy := v.DeepCopy()
+		copyVertexTemplate(pl, vCopy)
 		copyVertexLimits(pl, vCopy)
 		replicas := int32(1)
 		if pl.Status.Phase == dfv1.PipelinePhasePaused {
@@ -649,6 +651,29 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 		result.BufferUsageLimit = plLimits.BufferUsageLimit
 	}
 	return result
+}
+
+// Copy everything defined in the vertex template to the vertex object
+// Be aware Maps will be merge copy, slices will be ignored if the destination is not empty
+func copyVertexTemplate(pl *dfv1.Pipeline, vtx *dfv1.AbstractVertex) {
+	if pl.Spec.Templates == nil || pl.Spec.Templates.VertexTemplate == nil {
+		return
+	}
+	_ = mergo.Merge(&vtx.AbstractPodTemplate, pl.Spec.Templates.VertexTemplate.AbstractPodTemplate)
+
+	if pl.Spec.Templates.VertexTemplate.ContainerTemplate != nil {
+		if vtx.ContainerTemplate == nil {
+			vtx.ContainerTemplate = &dfv1.ContainerTemplate{}
+		}
+		_ = mergo.Merge(vtx.ContainerTemplate, *pl.Spec.Templates.VertexTemplate.ContainerTemplate)
+	}
+
+	if pl.Spec.Templates.VertexTemplate.InitContainerTemplate != nil {
+		if vtx.InitContainerTemplate == nil {
+			vtx.InitContainerTemplate = &dfv1.ContainerTemplate{}
+		}
+		_ = mergo.Merge(vtx.InitContainerTemplate, *pl.Spec.Templates.VertexTemplate.InitContainerTemplate)
+	}
 }
 
 func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {

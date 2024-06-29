@@ -251,20 +251,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		if needToCreate {
 			labels := map[string]string{}
 			annotations := map[string]string{}
-			if pipeline.Spec.Templates != nil && pipeline.Spec.Templates.VertexTemplate != nil {
-				apt := pipeline.Spec.Templates.VertexTemplate.AbstractPodTemplate
-				apt.ApplyToPodSpec(podSpec)
-				if apt.Metadata != nil && len(apt.Metadata.Labels) > 0 {
-					for k, v := range apt.Metadata.Labels {
-						labels[k] = v
-					}
-				}
-				if apt.Metadata != nil && len(apt.Metadata.Annotations) > 0 {
-					for k, v := range apt.Metadata.Annotations {
-						annotations[k] = v
-					}
-				}
-			}
 			if x := vertex.Spec.Metadata; x != nil {
 				for k, v := range x.Annotations {
 					annotations[k] = v
@@ -364,14 +350,6 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate pod spec, error: %w", err)
-	}
-
-	if pl.Spec.Templates != nil && pl.Spec.Templates.VertexTemplate != nil && pl.Spec.Templates.VertexTemplate.ContainerTemplate != nil {
-		pl.Spec.Templates.VertexTemplate.ContainerTemplate.ApplyToNumaflowContainers(podSpec.Containers)
-	}
-
-	if pl.Spec.Templates != nil && pl.Spec.Templates.VertexTemplate != nil && pl.Spec.Templates.VertexTemplate.InitContainerTemplate != nil {
-		pl.Spec.Templates.VertexTemplate.InitContainerTemplate.ApplyToNumaflowContainers(podSpec.InitContainers)
 	}
 
 	// Attach secret or configmap volumes if any

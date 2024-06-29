@@ -93,13 +93,12 @@ func (e BufferReadErr) IsInternalErr() bool {
 // MessageReadErr is associated with message read errors.
 type MessageReadErr struct {
 	Name    string
-	Header  []byte
-	Body    []byte
+	Payload []byte
 	Message string
 }
 
 func (e MessageReadErr) Error() string {
-	return fmt.Sprintf("(%s) %s Header: %s Body:%s", e.Name, e.Message, string(e.Header), string(e.Body))
+	return fmt.Sprintf("(%s) %s Payload:%s", e.Name, e.Message, string(e.Payload))
 }
 
 // NonRetryableBufferWriteErr indicates that the buffer is full and the writer, based on user specification, decides to not retry.

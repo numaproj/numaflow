@@ -222,7 +222,7 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Errorf("failed reading the metrics endpoint, %v", err.Error())
+		r.log.Errorf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, %v", vertexName, podName, err.Error())
 		return nil
 	}
 	defer resp.Body.Close()
@@ -230,7 +230,7 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
-		r.log.Errorf("failed parsing to prometheus metric families, %v", err.Error())
+		r.log.Errorf("[vertex name %s, pod name %s]: failed parsing to prometheus metric families, %v", vertexName, podName, err.Error())
 		return nil
 	}
 
@@ -246,7 +246,7 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 				}
 			}
 			if partitionName == "" {
-				r.log.Warnf("Partition name is not found for metric %s", readTotalMetricName)
+				r.log.Warnf("[vertex name %s, pod name %s]: Partition name is not found for metric %s", vertexName, podName, readTotalMetricName)
 			} else {
 				partitionReadCount[partitionName] = ele.Counter.GetValue()
 			}
@@ -254,7 +254,7 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 		podReadCount := &PodReadCount{podName, partitionReadCount}
 		return podReadCount
 	} else {
-		r.log.Errorf("failed getting the read total metric, the metric is not available.")
+		r.log.Errorf("[vertex name %s, pod name %s]: failed getting the read total metric, the metric is not available.", vertexName, podName)
 		return nil
 	}
 }

@@ -18,6 +18,7 @@ package forward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -174,16 +175,19 @@ func TestNewDataForward(t *testing.T) {
 		testReadBatchSize := int(batchSize / 2)
 		msgs := to1.GetMessages(testReadBatchSize)
 		emptyId := isb.MessageID{}
-		for ; msgs[testReadBatchSize-1].ID == emptyId; msgs = to1.GetMessages(testReadBatchSize) {
+
+		for msgs == nil || len(msgs) != testReadBatchSize || msgs[testReadBatchSize-1].ID == emptyId {
 			select {
 			case <-ctx.Done():
-				if ctx.Err() == context.DeadlineExceeded {
+				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 					t.Fatal("expected to have messages in to buffer", ctx.Err())
 				}
 			default:
 				time.Sleep(1 * time.Millisecond)
+				msgs = to1.GetMessages(testReadBatchSize)
 			}
 		}
+
 		// read some data
 		readMessages, err := to1.Read(ctx, int64(testReadBatchSize))
 		assert.NoError(t, err, "expected no error")
