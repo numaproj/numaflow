@@ -50,8 +50,7 @@ var _ isb.BufferWriter = (*InMemoryBuffer)(nil)
 
 // elem is the element stored in the buffer
 type elem struct {
-	header  []byte
-	body    []byte
+	payload []byte
 	dirty   bool
 	ack     bool
 	pending bool
@@ -132,16 +131,14 @@ func (b *InMemoryBuffer) Write(_ context.Context, messages []isb.Message) ([]isb
 	writeOffsets := make([]isb.Offset, len(messages))
 	for idx, message := range messages {
 		if !b.IsFull() {
-			var err1 error
-			var err2 error
+			var err error
 
 			// access buffer via lock
 			b.rwlock.Lock()
 			currentIdx := b.writeIdx
-			b.buffer[currentIdx].header, err1 = message.Header.MarshalBinary()
-			b.buffer[currentIdx].body, err2 = message.Body.MarshalBinary()
-			if err1 != nil || err2 != nil {
-				errs = append(errs, isb.MessageWriteErr{Name: b.name, Header: message.Header, Body: message.Body, Message: fmt.Sprintf("header:(%s) body:(%s)", err1, err2)})
+			b.buffer[currentIdx].payload, err = message.MarshalBinary()
+			if err != nil {
+				errs = append(errs, isb.MessageWriteErr{Name: b.name, Header: message.Header, Body: message.Body, Message: fmt.Sprintf("payload:(%s)", err)})
 			}
 			errs[idx] = nil
 			b.buffer[currentIdx].dirty = true
@@ -199,21 +196,20 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 		b.rwlock.Lock()
 
 		currentIdx := b.readIdx
+
 		// mark it as pending
 		b.buffer[currentIdx].pending = true
 		b.readIdx = (currentIdx + 1) % b.size
 		// get header and body
-		header := b.buffer[currentIdx].header
-		body := b.buffer[currentIdx].body
+		payload := b.buffer[currentIdx].payload
 
 		b.rwlock.Unlock()
 
-		msg, err := buildMessage(header, body)
+		msg, err := buildMessage(payload)
 		if err != nil {
 			return readMessages, isb.MessageReadErr{
 				Name:    b.name,
-				Header:  header,
-				Body:    body,
+				Payload: payload,
 				Message: err.Error(),
 			}
 		}
@@ -226,17 +222,12 @@ func (b *InMemoryBuffer) Read(ctx context.Context, count int64) ([]*isb.ReadMess
 	return readMessages, nil
 }
 
-func buildMessage(header []byte, body []byte) (msg isb.Message, err error) {
-	err = msg.Header.UnmarshalBinary(header)
+func buildMessage(payload []byte) (msg isb.Message, err error) {
+	err = msg.UnmarshalBinary(payload)
 	if err != nil {
 		return msg, err
 	}
-
-	err = msg.Body.UnmarshalBinary(body)
-	if err != nil {
-		return msg, err
-	}
-	return msg, err
+	return msg, nil
 }
 
 // Ack acknowledges the given offsets
@@ -275,8 +266,8 @@ func (b *InMemoryBuffer) GetMessages(num int) []*isb.Message {
 	b.rwlock.RLock()
 	defer b.rwlock.RUnlock()
 	var msgs = make([]*isb.Message, 0, num)
-	for i := 0; i < num && i < len(b.buffer); i++ {
-		msg, _ := buildMessage(b.buffer[i].header, b.buffer[i].body)
+	for i := b.readIdx; i < int64(num) && i < b.writeIdx; i++ {
+		msg, _ := buildMessage(b.buffer[i].payload)
 		msgs = append(msgs, &msg)
 	}
 	return msgs
