@@ -647,7 +647,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	assert.Equal(t, isb.WMB, msgs[0].Kind)
 	// the second message should be the data message from the closed window above
 	// in the test ApplyUDF above we've set the final message to have key="result"
-	for len(msgs[1].Keys) == 0 {
+	for len(msgs) < 2 || len(msgs[1].Keys) == 0 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {

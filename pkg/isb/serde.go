@@ -1,431 +1,134 @@
-/*
-Copyright 2022 The Numaproj Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package isb
 
 import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
-	"time"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/numaproj/numaflow/pkg/apis/proto/isb"
 )
 
-type messageInfoPreamble struct {
-	EventEpoch int64
-	IsLate     bool
+// MarshalBinary encodes Message to proto bytes.
+func (m Message) MarshalBinary() ([]byte, error) {
+	pb := &isb.Message{
+		Header: &isb.Header{
+			MessageInfo: &isb.MessageInfo{
+				EventTime: timestamppb.New(m.Header.MessageInfo.EventTime),
+				IsLate:    m.Header.MessageInfo.IsLate,
+			},
+			Kind: isb.MessageKind(m.Header.Kind),
+			Id: &isb.MessageID{
+				VertexName: m.Header.ID.VertexName,
+				Offset:     m.Header.ID.Offset,
+				Index:      m.Header.ID.Index,
+			},
+			Keys:    m.Header.Keys,
+			Headers: m.Header.Headers,
+		},
+		Body: &isb.Body{
+			Payload: m.Body.Payload,
+		},
+	}
+	return proto.Marshal(pb)
 }
 
-// MarshalBinary encodes MessageInfo to the binary format
-func (p MessageInfo) MarshalBinary() (data []byte, err error) {
-	var buf = new(bytes.Buffer)
-	var preamble = messageInfoPreamble{
-		EventEpoch: p.EventTime.UnixMilli(),
-		IsLate:     p.IsLate,
-	}
-	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-// UnmarshalBinary decodes MessageInfo from the binary format
-func (p *MessageInfo) UnmarshalBinary(data []byte) (err error) {
-	var r = bytes.NewReader(data)
-	var preamble = new(messageInfoPreamble)
-	err = binary.Read(r, binary.LittleEndian, preamble)
-	if err != nil {
+// UnmarshalBinary decodes Message from the proto bytes.
+// Even though the header and body are pointers in the proto, we don't need
+// nil checks because while marshalling, we always set the default values.
+func (m *Message) UnmarshalBinary(data []byte) error {
+	pb := &isb.Message{}
+	if err := proto.Unmarshal(data, pb); err != nil {
 		return err
 	}
-	p.EventTime = time.UnixMilli(preamble.EventEpoch).UTC()
-	p.IsLate = preamble.IsLate
+
+	// no nil checks are performed because Marshalling and Unmarshalling
+	// are completely controlled by numaflow. It is best not to do nil checks
+	// and get panics so we can fix the root cause.
+
+	m.Header = Header{
+		MessageInfo: MessageInfo{
+			EventTime: pb.Header.MessageInfo.EventTime.AsTime(),
+			IsLate:    pb.Header.MessageInfo.IsLate,
+		},
+		Kind: MessageKind(pb.Header.Kind),
+		ID: MessageID{
+			VertexName: pb.Header.Id.VertexName,
+			Offset:     pb.Header.Id.Offset,
+			Index:      pb.Header.Id.Index,
+		},
+		Keys:    pb.Header.Keys,
+		Headers: pb.Header.Headers,
+	}
+
+	m.Body.Payload = pb.Body.Payload
+
 	return nil
 }
 
-type messageIDPreamble struct {
-	VertexNameLen int16
-	OffsetLen     int32
-	Index         int32
+// MarshalBinary encodes Header to proto bytes.
+func (h Header) MarshalBinary() ([]byte, error) {
+	pb := &isb.Header{
+		MessageInfo: &isb.MessageInfo{
+			EventTime: timestamppb.New(h.MessageInfo.EventTime),
+			IsLate:    h.MessageInfo.IsLate,
+		},
+		Kind:    isb.MessageKind(h.Kind),
+		Id:      &isb.MessageID{VertexName: h.ID.VertexName, Offset: h.ID.Offset, Index: h.ID.Index},
+		Keys:    h.Keys,
+		Headers: h.Headers,
+	}
+	return proto.Marshal(pb)
 }
 
-// MarshalBinary encodes MessageID to the binary format
-func (id MessageID) MarshalBinary() (data []byte, err error) {
-	var buf = new(bytes.Buffer)
-	var preamble = messageIDPreamble{
-		VertexNameLen: int16(len(id.VertexName)),
-		OffsetLen:     int32(len(id.Offset)),
-		Index:         id.Index,
+// UnmarshalBinary decodes Header from the proto bytes.
+func (h *Header) UnmarshalBinary(data []byte) error {
+	pb := &isb.Header{}
+	if err := proto.Unmarshal(data, pb); err != nil {
+		return err
 	}
-	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
-		return nil, err
-	}
-	if err = binary.Write(buf, binary.LittleEndian, []byte(id.VertexName)); err != nil {
-		return nil, err
-	}
-	if err = binary.Write(buf, binary.LittleEndian, []byte(id.Offset)); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
 
-// UnmarshalBinary decodes MessageID from the binary format
-func (id *MessageID) UnmarshalBinary(data []byte) (err error) {
-	var r = bytes.NewReader(data)
-	var preamble = new(messageIDPreamble)
-	if err = binary.Read(r, binary.LittleEndian, preamble); err != nil {
-		return err
+	// no nil checks are performed because Marshalling and Unmarshalling
+	// are completely controlled by numaflow. It is best not to do nil checks
+	// and get panics so we can fix the root cause.
+
+	h.MessageInfo = MessageInfo{
+		EventTime: pb.MessageInfo.EventTime.AsTime(),
+		IsLate:    pb.MessageInfo.IsLate,
 	}
-	var vertexName = make([]byte, preamble.VertexNameLen)
-	if err = binary.Read(r, binary.LittleEndian, vertexName); err != nil {
-		return err
+
+	h.Kind = MessageKind(pb.Kind)
+
+	h.ID = MessageID{
+		VertexName: pb.Id.VertexName,
+		Offset:     pb.Id.Offset,
+		Index:      pb.Id.Index,
 	}
-	var offset = make([]byte, preamble.OffsetLen)
-	if err = binary.Read(r, binary.LittleEndian, offset); err != nil {
-		return err
-	}
-	id.VertexName = string(vertexName)
-	id.Offset = string(offset)
-	id.Index = preamble.Index
+
+	h.Keys = pb.Keys
+	h.Headers = pb.Headers
+
 	return nil
 }
 
-type headerPreamble struct {
-	// message length
-	MLen    int32
-	MsgKind MessageKind
-	// message ID len
-	IDLen int16
-	// message keys length
-	KeysLen int16
-	// header length
-	HeadersLen int16
+// MarshalBinary encodes MessageID to proto bytes.
+func (id MessageID) MarshalBinary() ([]byte, error) {
+	pb := &isb.MessageID{
+		VertexName: id.VertexName,
+		Offset:     id.Offset,
+		Index:      id.Index,
+	}
+	return proto.Marshal(pb)
 }
 
-// MarshalBinary encodes Header to a binary format
-func (h Header) MarshalBinary() (data []byte, err error) {
-	var buf = new(bytes.Buffer)
-	msgInfo, err := h.MessageInfo.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-	id, err := h.ID.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-	var preamble = headerPreamble{
-		MLen:       int32(len(msgInfo)),
-		MsgKind:    h.Kind,
-		IDLen:      int16(len(id)),
-		KeysLen:    int16(len(h.Keys)),
-		HeadersLen: int16(len(h.Headers)),
-	}
-	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
-		return nil, err
-	}
-	n, err := buf.Write(msgInfo)
-	if err != nil {
-		return nil, err
-	} else if n != int(preamble.MLen) {
-		return nil, fmt.Errorf("expected to write msgInfo size of %d but got %d", preamble.MLen, n)
-	}
-	n, err = buf.Write(id)
-	if err != nil {
-		return nil, err
-	} else if n != int(preamble.IDLen) {
-		return nil, fmt.Errorf("expected to write id size of %d but got %d", preamble.IDLen, n)
-	}
-	for i := 0; i < len(h.Keys); i++ {
-		if err = binary.Write(buf, binary.LittleEndian, int16(len(h.Keys[i]))); err != nil {
-			return nil, err
-		}
-		if err = binary.Write(buf, binary.LittleEndian, []byte(h.Keys[i])); err != nil {
-			return nil, err
-		}
-	}
-
-	for k, v := range h.Headers {
-		if err = binary.Write(buf, binary.LittleEndian, int16(len(k))); err != nil {
-			return nil, err
-		}
-		if err = binary.Write(buf, binary.LittleEndian, []byte(k)); err != nil {
-			return nil, err
-		}
-		if err = binary.Write(buf, binary.LittleEndian, int16(len(v))); err != nil {
-			return nil, err
-		}
-		if err = binary.Write(buf, binary.LittleEndian, []byte(v)); err != nil {
-			return nil, err
-		}
-	}
-	return buf.Bytes(), nil
-}
-
-// UnmarshalBinary decodes Header from the binary format
-func (h *Header) UnmarshalBinary(data []byte) (err error) {
-	var r = bytes.NewReader(data)
-	var preamble = new(headerPreamble)
-	if err = binary.Read(r, binary.LittleEndian, preamble); err != nil {
-		return err
-	}
-	var msgInfoByte = make([]byte, preamble.MLen)
-	n, err := r.Read(msgInfoByte)
-	if err != nil {
-		return err
-	} else if n != int(preamble.MLen) {
-		return fmt.Errorf("expected to read msgInfo size of %d but got %d", preamble.MLen, n)
-	}
-	var msgInfo = new(MessageInfo)
-	if err = msgInfo.UnmarshalBinary(msgInfoByte); err != nil {
-		return err
-	}
-	var idByte = make([]byte, preamble.IDLen)
-	n, err = r.Read(idByte)
-	if err != nil {
-		return err
-	} else if n != int(preamble.IDLen) {
-		return fmt.Errorf("expected to read id size of %d but got %d", preamble.IDLen, n)
-	}
-	var id = new(MessageID)
-	if err = id.UnmarshalBinary(idByte); err != nil {
-		return err
-	}
-	keys := make([]string, 0)
-	for i := int16(0); i < preamble.KeysLen; i++ {
-		var kl int16
-		if err = binary.Read(r, binary.LittleEndian, &kl); err != nil {
-			return err
-		}
-		var k = make([]byte, kl)
-		if err = binary.Read(r, binary.LittleEndian, k); err != nil {
-			return err
-		}
-		keys = append(keys, string(k))
-	}
-	if len(keys) != 0 {
-		h.Keys = keys
-	}
-	headers := make(map[string]string, 0)
-	for i := int16(0); i < preamble.HeadersLen; i++ {
-		var kl int16
-		if err = binary.Read(r, binary.LittleEndian, &kl); err != nil {
-			return err
-		}
-		var k = make([]byte, kl)
-		if err = binary.Read(r, binary.LittleEndian, k); err != nil {
-			return err
-		}
-		var vl int16
-		if err = binary.Read(r, binary.LittleEndian, &vl); err != nil {
-			return err
-		}
-		var v = make([]byte, vl)
-		if err = binary.Read(r, binary.LittleEndian, v); err != nil {
-			return err
-		}
-		headers[string(k)] = string(v)
-	}
-
-	// deserialization will create empty map (nil map is different from empty map)
-	if len(headers) != 0 {
-		h.Headers = headers
-	}
-	h.MessageInfo = *msgInfo
-	h.Kind = preamble.MsgKind
-	h.ID = *id
-
-	return err
-}
-
-type bodyPreamble struct {
-	PLen int32
-}
-
-// MarshalBinary encodes Body to a binary format
-func (b Body) MarshalBinary() (data []byte, err error) {
-	var buf = new(bytes.Buffer)
-	var preamble = bodyPreamble{
-		PLen: int32(len(b.Payload)),
-	}
-	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
-		return nil, err
-	}
-	if err = binary.Write(buf, binary.LittleEndian, b.Payload); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-// UnmarshalBinary decodes Body from the binary format
-func (b *Body) UnmarshalBinary(data []byte) (err error) {
-	var r = bytes.NewReader(data)
-	var preamble = new(bodyPreamble)
-	if err = binary.Read(r, binary.LittleEndian, preamble); err != nil {
-		return err
-	}
-	if preamble.PLen != 0 {
-		var Payload = make([]byte, preamble.PLen)
-		if err = binary.Read(r, binary.LittleEndian, Payload); err != nil {
-			return err
-		}
-		b.Payload = Payload
-	}
-	return err
-}
-
-type messagePreamble struct {
-	HLen int32
-	BLen int32
-}
-
-// MarshalBinary encodes Message to the binary format
-func (m Message) MarshalBinary() (data []byte, err error) {
-	var buf = new(bytes.Buffer)
-	header, err := m.Header.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-	body, err := m.Body.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-	var preamble = messagePreamble{
-		HLen: int32(len(header)),
-		BLen: int32(len(body)),
-	}
-	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
-		return nil, err
-	}
-	n, err := buf.Write(header)
-	if err != nil {
-		return nil, err
-	} else if n != int(preamble.HLen) {
-		return nil, fmt.Errorf("expected to write header size of %d but got %d", preamble.HLen, n)
-	}
-	n, err = buf.Write(body)
-	if err != nil {
-		return nil, err
-	} else if n != int(preamble.BLen) {
-		return nil, fmt.Errorf("expected to write body size of %d but got %d", preamble.BLen, n)
-	}
-	return buf.Bytes(), nil
-}
-
-// UnmarshalBinary decodes Message from the binary format
-func (m *Message) UnmarshalBinary(data []byte) (err error) {
-	var r = bytes.NewReader(data)
-	var preamble = new(messagePreamble)
-	if err = binary.Read(r, binary.LittleEndian, preamble); err != nil {
-		return err
-	}
-	var headerByte = make([]byte, preamble.HLen)
-	n, err := r.Read(headerByte)
-	if err != nil {
-		return err
-	} else if n != int(preamble.HLen) {
-		return fmt.Errorf("expected to read header size of %d but got %d", preamble.HLen, n)
-	}
-	var header = new(Header)
-	if err = header.UnmarshalBinary(headerByte); err != nil {
-		return err
-	}
-	var bodyByte = make([]byte, preamble.BLen)
-	n, err = r.Read(bodyByte)
-	if err != nil {
-		return err
-	} else if n != int(preamble.BLen) {
-		return fmt.Errorf("expected to read body size of %d but got %d", preamble.BLen, n)
-	}
-	var body = new(Body)
-	if err = body.UnmarshalBinary(bodyByte); err != nil {
-		return err
-	}
-	m.Header = *header
-	m.Body = *body
-	return err
-}
-
-type readMessagePreamble struct {
-	MLen int32
-	// TODO: currently only support simple int offset
-	SimpleIntOffset int64
-	WMEpoch         int64
-	NumDelivered    uint64
-}
-
-// MarshalBinary encodes ReadMessage to the binary format
-func (rm ReadMessage) MarshalBinary() (data []byte, err error) {
-	var buf = new(bytes.Buffer)
-	message, err := rm.Message.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-	var offset int64
-	switch rm.ReadOffset.(type) {
-	case SimpleIntOffset:
-		offset, err = rm.ReadOffset.Sequence()
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("currently only support SimpleIntOffset")
-	}
-
-	var preamble = readMessagePreamble{
-		MLen:            int32(len(message)),
-		SimpleIntOffset: offset,
-		WMEpoch:         rm.Watermark.UnixMilli(),
-		NumDelivered:    rm.Metadata.NumDelivered,
-	}
-	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
-		return nil, err
-	}
-	n, err := buf.Write(message)
-	if err != nil {
-		return nil, err
-	} else if n != int(preamble.MLen) {
-		return nil, fmt.Errorf("expected to write message size of %d but got %d", preamble.MLen, n)
-	}
-	return buf.Bytes(), nil
-}
-
-// UnmarshalBinary decodes ReadMessage from the binary format
-func (rm *ReadMessage) UnmarshalBinary(data []byte) (err error) {
-	var r = bytes.NewReader(data)
-	var preamble = new(readMessagePreamble)
-	if err = binary.Read(r, binary.LittleEndian, preamble); err != nil {
-		return err
-	}
-	var messageByte = make([]byte, preamble.MLen)
-	n, err := r.Read(messageByte)
-	if err != nil {
-		return err
-	} else if n != int(preamble.MLen) {
-		return fmt.Errorf("expected to read message size of %d but got %d", preamble.MLen, n)
-	}
-	var message = new(Message)
-	if err = message.UnmarshalBinary(messageByte); err != nil {
+// UnmarshalBinary decodes MessageID from proto bytes.
+func (id *MessageID) UnmarshalBinary(data []byte) error {
+	pb := &isb.MessageID{}
+	if err := proto.Unmarshal(data, pb); err != nil {
 		return err
 	}
 
-	rm.Message = *message
-	rm.ReadOffset = SimpleIntOffset(func() int64 {
-		return preamble.SimpleIntOffset
-	})
-	rm.Watermark = time.UnixMilli(preamble.WMEpoch).UTC()
-	rm.Metadata = MessageMetadata{
-		NumDelivered: preamble.NumDelivered,
-	}
-	return err
+	id.VertexName = pb.VertexName
+	id.Offset = pb.Offset
+	id.Index = pb.Index
+
+	return nil
 }
