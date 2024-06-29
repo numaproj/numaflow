@@ -545,7 +545,7 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 2, len(pods.Items[0].Spec.Containers))
 	})
 
-	t.Run("test reconcile vertex with pipeline VertexTemplate set", func(t *testing.T) {
+	t.Run("test reconcile vertex with customization", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
 		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
@@ -554,17 +554,6 @@ func Test_reconcile(t *testing.T) {
 		err := cl.Create(ctx, testIsbSvc)
 		assert.Nil(t, err)
 		testPl := testPipeline.DeepCopy()
-		testPl.Spec.Templates = &dfv1.Templates{
-			VertexTemplate: &dfv1.VertexTemplate{
-				AbstractPodTemplate: dfv1.AbstractPodTemplate{
-					Metadata: &dfv1.Metadata{
-						Labels: map[string]string{
-							"numaflow.numaproj.io/prometheus": "test",
-						},
-					},
-				},
-			},
-		}
 		err = cl.Create(ctx, testPl)
 		assert.Nil(t, err)
 		r := &vertexReconciler{
@@ -578,15 +567,43 @@ func Test_reconcile(t *testing.T) {
 		}
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &dfv1.Sink{}
+		testObj.Spec.ContainerTemplate = &dfv1.ContainerTemplate{
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add: []corev1.Capability{"NET_ADMIN"},
+				},
+			},
+		}
+		testObj.Spec.InitContainerTemplate = &dfv1.ContainerTemplate{
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add: []corev1.Capability{"NET_ADMIN"},
+				},
+			},
+		}
+		testObj.Spec.Metadata = &dfv1.Metadata{
+			Annotations: map[string]string{"a": "a1"},
+			Labels:      map[string]string{"b": "b1"},
+		}
+		testObj.Spec.PriorityClassName = "test"
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
 		pods := &corev1.PodList{}
-		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testPipelineName + "," + dfv1.KeyVertexName + "=" + testVertexSpecName + "," + "numaflow.numaproj.io/prometheus=test")
+		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testPipelineName + "," + dfv1.KeyVertexName + "=" + testVertexSpecName)
 		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
 		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, "test", pods.Items[0].Spec.PriorityClassName)
+		assert.Equal(t, "a1", pods.Items[0].Annotations["a"])
+		assert.Equal(t, "b1", pods.Items[0].Labels["b"])
+		assert.NotNil(t, pods.Items[0].Spec.Containers[0].SecurityContext)
+		assert.NotNil(t, pods.Items[0].Spec.Containers[0].SecurityContext.Capabilities)
+		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers[0].SecurityContext.Capabilities.Add))
+		assert.NotNil(t, pods.Items[0].Spec.InitContainers[0].SecurityContext)
+		assert.NotNil(t, pods.Items[0].Spec.InitContainers[0].SecurityContext.Capabilities)
+		assert.Equal(t, 1, len(pods.Items[0].Spec.InitContainers[0].SecurityContext.Capabilities.Add))
 	})
 
 	t.Run("test reconcile udf with side inputs", func(t *testing.T) {
