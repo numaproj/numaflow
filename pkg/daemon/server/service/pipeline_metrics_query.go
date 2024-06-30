@@ -26,8 +26,8 @@ import (
 
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -46,6 +46,7 @@ type metricsHttpClient interface {
 
 // PipelineMetadataQuery has the metadata required for the pipeline queries
 type PipelineMetadataQuery struct {
+	daemon.UnimplementedDaemonServiceServer
 	isbSvcClient      isbsvc.ISBService
 	pipeline          *v1alpha1.Pipeline
 	httpClient        metricsHttpClient
@@ -87,13 +88,13 @@ func (ps *PipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.Li
 
 // GetBuffer is used to obtain one buffer information of a pipeline
 func (ps *PipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetBufferRequest) (*daemon.GetBufferResponse, error) {
-	bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, *req.Buffer)
+	bufferInfo, err := ps.isbSvcClient.GetBufferInfo(ctx, req.Buffer)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get information of buffer %q:%v", *req.Buffer, err)
+		return nil, fmt.Errorf("failed to get information of buffer %q:%v", req.Buffer, err)
 	}
-	v := ps.pipeline.FindVertexWithBuffer(*req.Buffer)
+	v := ps.pipeline.FindVertexWithBuffer(req.Buffer)
 	if v == nil {
-		return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", *req.Buffer)
+		return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", req.Buffer)
 	}
 	bufferLength, bufferUsageLimit := getBufferLimits(ps.pipeline, *v)
 	usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
@@ -101,15 +102,15 @@ func (ps *PipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 		usage = x
 	}
 	b := &daemon.BufferInfo{
-		Pipeline:         &ps.pipeline.Name,
+		Pipeline:         ps.pipeline.Name,
 		BufferName:       req.Buffer,
-		PendingCount:     &bufferInfo.PendingCount,
-		AckPendingCount:  &bufferInfo.AckPendingCount,
-		TotalMessages:    &bufferInfo.TotalMessages,
-		BufferLength:     &bufferLength,
-		BufferUsageLimit: &bufferUsageLimit,
-		BufferUsage:      &usage,
-		IsFull:           ptr.To[bool](usage >= bufferUsageLimit),
+		PendingCount:     wrapperspb.Int64(bufferInfo.PendingCount),
+		AckPendingCount:  wrapperspb.Int64(bufferInfo.AckPendingCount),
+		TotalMessages:    wrapperspb.Int64(bufferInfo.TotalMessages),
+		BufferLength:     wrapperspb.Int64(bufferLength),
+		BufferUsageLimit: bufferUsageLimit,
+		BufferUsage:      usage,
+		IsFull:           usage >= bufferUsageLimit,
 	}
 	resp := new(daemon.GetBufferResponse)
 	resp.Buffer = b
@@ -135,12 +136,13 @@ func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 
 	for idx, partitionName := range bufferList {
 		vm := &daemon.VertexMetrics{
-			Pipeline: &ps.pipeline.Name,
+			Pipeline: ps.pipeline.Name,
 			Vertex:   req.Vertex,
 		}
 		// get the processing rate for each partition
 		vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
-		vm.Pendings = partitionPendingInfo[partitionName]
+		partitionPending := partitionPendingInfo[partitionName]
+		vm.Pendings = partitionPending
 		metricsArr[idx] = vm
 	}
 
@@ -149,7 +151,7 @@ func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 }
 
 // getPending returns the pending count for each partition of the vertex
-func (ps *PipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]map[string]int64 {
+func (ps *PipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]map[string]*wrapperspb.Int64Value {
 	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
 	log := logging.FromContext(ctx)
 
@@ -165,7 +167,7 @@ func (ps *PipelineMetadataQuery) getPending(ctx context.Context, req *daemon.Get
 		metricsCount = abstractVertex.GetPartitionCount()
 	}
 	headlessServiceName := vertex.GetHeadlessServiceName()
-	totalPendingMap := make(map[string]map[string]int64)
+	totalPendingMap := make(map[string]map[string]*wrapperspb.Int64Value)
 	for idx := 0; idx < metricsCount; idx++ {
 		// Get the headless service name
 		// We can query the metrics endpoint of the (i)th pod to obtain this value.
@@ -200,9 +202,15 @@ func (ps *PipelineMetadataQuery) getPending(ctx context.Context, req *daemon.Get
 						}
 					}
 					if _, ok := totalPendingMap[partitionName]; !ok {
-						totalPendingMap[partitionName] = make(map[string]int64)
+						totalPendingMap[partitionName] = make(map[string]*wrapperspb.Int64Value)
+						totalPendingMap[partitionName][lookback] = wrapperspb.Int64(int64(metric.Gauge.GetValue()))
+					} else {
+						if v, ok := totalPendingMap[partitionName][lookback]; !ok {
+							totalPendingMap[partitionName][lookback] = wrapperspb.Int64(int64(metric.Gauge.GetValue()))
+						} else {
+							totalPendingMap[partitionName][lookback] = wrapperspb.Int64(v.GetValue() + int64(metric.Gauge.GetValue()))
+						}
 					}
-					totalPendingMap[partitionName][lookback] += int64(metric.Gauge.GetValue())
 				}
 			}
 		}
@@ -214,9 +222,9 @@ func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 	status := ps.healthChecker.getCurrentHealth()
 	resp := new(daemon.GetPipelineStatusResponse)
 	resp.Status = &daemon.PipelineStatus{
-		Status:  ptr.To[string](status.Status),
-		Message: ptr.To[string](status.Message),
-		Code:    ptr.To[string](status.Code),
+		Status:  status.Status,
+		Message: status.Message,
+		Code:    status.Code,
 	}
 	return resp, nil
 }
@@ -259,15 +267,15 @@ func listBuffers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient 
 			usage = x
 		}
 		b := &daemon.BufferInfo{
-			Pipeline:         &pipeline.Name,
-			BufferName:       ptr.To[string](fmt.Sprintf("%v", buffer)),
-			PendingCount:     &bufferInfo.PendingCount,
-			AckPendingCount:  &bufferInfo.AckPendingCount,
-			TotalMessages:    &bufferInfo.TotalMessages,
-			BufferLength:     &bufferLength,
-			BufferUsageLimit: &bufferUsageLimit,
-			BufferUsage:      &usage,
-			IsFull:           ptr.To[bool](usage >= bufferUsageLimit),
+			Pipeline:         pipeline.Name,
+			BufferName:       buffer,
+			PendingCount:     wrapperspb.Int64(bufferInfo.PendingCount),
+			AckPendingCount:  wrapperspb.Int64(bufferInfo.AckPendingCount),
+			TotalMessages:    wrapperspb.Int64(bufferInfo.TotalMessages),
+			BufferLength:     wrapperspb.Int64(bufferLength),
+			BufferUsageLimit: bufferUsageLimit,
+			BufferUsage:      usage,
+			IsFull:           usage >= bufferUsageLimit,
 		}
 		buffers = append(buffers, b)
 	}

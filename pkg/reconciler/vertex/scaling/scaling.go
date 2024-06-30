@@ -272,13 +272,13 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		totalRate += rate
 
 		pending, existing := m.Pendings["default"]
-		if !existing || pending < 0 || pending == isb.PendingNotAvailable {
+		if !existing || pending.GetValue() < 0 || pending.GetValue() == isb.PendingNotAvailable {
 			// Pending not available, we don't do anything
 			log.Debugf("Vertex %s has no pending messages information, skip scaling.", vertex.Name)
 			return nil
 		}
-		totalPending += pending
-		partitionPending = append(partitionPending, pending)
+		totalPending += pending.GetValue()
+		partitionPending = append(partitionPending, pending.GetValue())
 	}
 
 	// Add pending information to cache for back pressure calculation, if there is a backpressure it will impact all the partitions.
@@ -526,15 +526,15 @@ func getBufferInfos(
 			err = fmt.Errorf("failed to get the buffer information of vertex %q, %w", vertex.Name, err)
 			return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
 		} else {
-			if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == nil || bInfo.PendingCount == nil {
+			if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == 0 || bInfo.PendingCount == nil {
 				err = fmt.Errorf("invalid read buffer information of vertex %q, length, pendingCount or usage limit is missing", vertex.Name)
 				return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
 			}
 
-			partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength())*bInfo.GetBufferUsageLimit()))
-			partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
-			totalBufferLength += int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
-			totalCurrentPending += *bInfo.PendingCount
+			partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength().GetValue())*bInfo.GetBufferUsageLimit()))
+			partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength().GetValue())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
+			totalBufferLength += int64(float64(bInfo.BufferLength.GetValue()) * bInfo.BufferUsageLimit)
+			totalCurrentPending += bInfo.PendingCount.GetValue()
 		}
 	}
 

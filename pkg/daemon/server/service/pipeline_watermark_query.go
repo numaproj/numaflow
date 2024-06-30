@@ -27,6 +27,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // BuildUXEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
@@ -84,21 +85,17 @@ func (ps *PipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 		i := 0
 		for k := range ps.watermarkFetchers {
 			edgeName := k.GetEdgeName()
-			watermarks := make([]int64, len(ps.watermarkFetchers[k]))
+			watermarks := make([]*wrapperspb.Int64Value, len(ps.watermarkFetchers[k]))
 			for idx := range watermarks {
-				watermarks[idx] = timeZero
+				watermarks[idx] = wrapperspb.Int64(timeZero)
 			}
-			var (
-				from = k.From
-				to   = k.To
-			)
 			watermarkArr[i] = &daemon.EdgeWatermark{
-				Pipeline:           &ps.pipeline.Name,
-				Edge:               &edgeName,
+				Pipeline:           ps.pipeline.Name,
+				Edge:               edgeName,
 				Watermarks:         watermarks,
-				IsWatermarkEnabled: &isWatermarkEnabled,
-				From:               &from,
-				To:                 &to,
+				IsWatermarkEnabled: isWatermarkEnabled,
+				From:               k.From,
+				To:                 k.To,
 			}
 			i++
 		}
@@ -110,31 +107,27 @@ func (ps *PipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 	watermarkArr := make([]*daemon.EdgeWatermark, len(ps.watermarkFetchers))
 	i := 0
 	for k, edgeFetchers := range ps.watermarkFetchers {
-		var latestWatermarks []int64
+		var latestWatermarks []*wrapperspb.Int64Value
 		for _, fetcher := range edgeFetchers {
 			if ps.pipeline.GetVertex(k.To).IsReduceUDF() {
 				watermark := fetcher.ComputeHeadWatermark(0).UnixMilli()
-				latestWatermarks = append(latestWatermarks, watermark)
+				latestWatermarks = append(latestWatermarks, wrapperspb.Int64(watermark))
 			} else {
 				for idx := 0; idx < ps.pipeline.GetVertex(k.To).GetPartitionCount(); idx++ {
 					watermark := fetcher.ComputeHeadWatermark(int32(idx)).UnixMilli()
-					latestWatermarks = append(latestWatermarks, watermark)
+					latestWatermarks = append(latestWatermarks, wrapperspb.Int64(watermark))
 				}
 			}
 		}
 
-		var (
-			from = k.From
-			to   = k.To
-		)
 		edgeName := k.GetEdgeName()
 		watermarkArr[i] = &daemon.EdgeWatermark{
-			Pipeline:           &ps.pipeline.Name,
-			Edge:               &edgeName,
+			Pipeline:           ps.pipeline.Name,
+			Edge:               edgeName,
 			Watermarks:         latestWatermarks,
-			IsWatermarkEnabled: &isWatermarkEnabled,
-			From:               &from,
-			To:                 &to,
+			IsWatermarkEnabled: isWatermarkEnabled,
+			From:               k.From,
+			To:                 k.To,
 		}
 		i++
 	}

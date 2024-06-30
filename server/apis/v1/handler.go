@@ -388,18 +388,18 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	}
 	for _, watermark := range watermarks {
 		// find the largest source vertex watermark
-		if _, ok := source[*watermark.From]; ok {
+		if _, ok := source[watermark.From]; ok {
 			for _, wm := range watermark.Watermarks {
-				if wm > maxWM {
-					maxWM = wm
+				if wm.GetValue() > maxWM {
+					maxWM = wm.GetValue()
 				}
 			}
 		}
 		// find the smallest sink vertex watermark
-		if _, ok := sink[*watermark.To]; ok {
+		if _, ok := sink[watermark.To]; ok {
 			for _, wm := range watermark.Watermarks {
-				if wm < minWM {
-					minWM = wm
+				if wm.GetValue() < minWM {
+					minWM = wm.GetValue()
 				}
 			}
 		}

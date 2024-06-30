@@ -119,7 +119,7 @@ vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0"
 
 	vertex := "cat"
 
-	req := &daemon.GetVertexMetricsRequest{Vertex: &vertex}
+	req := &daemon.GetVertexMetricsRequest{Vertex: vertex}
 
 	resp, err := pipelineMetricsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)
@@ -169,11 +169,11 @@ func TestGetBuffer(t *testing.T) {
 
 	bufferName := "numaflow-system-simple-pipeline-cat-0"
 
-	req := &daemon.GetBufferRequest{Pipeline: &pipelineName, Buffer: &bufferName}
+	req := &daemon.GetBufferRequest{Pipeline: pipelineName, Buffer: bufferName}
 
 	resp, err := pipelineMetricsQueryService.GetBuffer(context.Background(), req)
 	assert.NoError(t, err)
-	assert.Equal(t, *resp.Buffer.BufferUsage, 0.0006666666666666666)
+	assert.Equal(t, resp.Buffer.BufferUsage, 0.0006666666666666666)
 }
 
 func TestListBuffers(t *testing.T) {
@@ -208,7 +208,7 @@ func TestListBuffers(t *testing.T) {
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil)
 	assert.NoError(t, err)
 
-	req := &daemon.ListBuffersRequest{Pipeline: &pipelineName}
+	req := &daemon.ListBuffersRequest{Pipeline: pipelineName}
 
 	resp, err := pipelineMetricsQueryService.ListBuffers(context.Background(), req)
 	assert.NoError(t, err)

@@ -55,13 +55,13 @@ func (dc *grpcDaemonClient) Close() error {
 
 func (dc *grpcDaemonClient) IsDrained(ctx context.Context, pipeline string) (bool, error) {
 	rspn, err := dc.client.ListBuffers(ctx, &daemon.ListBuffersRequest{
-		Pipeline: &pipeline,
+		Pipeline: pipeline,
 	})
 	if err != nil {
 		return false, err
 	}
 	for _, bufferInfo := range rspn.Buffers {
-		if *bufferInfo.PendingCount > 0 || *bufferInfo.AckPendingCount > 0 {
+		if bufferInfo.PendingCount.GetValue() > 0 || bufferInfo.AckPendingCount.GetValue() > 0 {
 			return false, nil
 		}
 	}
@@ -70,7 +70,7 @@ func (dc *grpcDaemonClient) IsDrained(ctx context.Context, pipeline string) (boo
 
 func (dc *grpcDaemonClient) ListPipelineBuffers(ctx context.Context, pipeline string) ([]*daemon.BufferInfo, error) {
 	if rspn, err := dc.client.ListBuffers(ctx, &daemon.ListBuffersRequest{
-		Pipeline: &pipeline,
+		Pipeline: pipeline,
 	}); err != nil {
 		return nil, err
 	} else {
@@ -80,8 +80,8 @@ func (dc *grpcDaemonClient) ListPipelineBuffers(ctx context.Context, pipeline st
 
 func (dc *grpcDaemonClient) GetPipelineBuffer(ctx context.Context, pipeline, buffer string) (*daemon.BufferInfo, error) {
 	if rspn, err := dc.client.GetBuffer(ctx, &daemon.GetBufferRequest{
-		Pipeline: &pipeline,
-		Buffer:   &buffer,
+		Pipeline: pipeline,
+		Buffer:   buffer,
 	}); err != nil {
 		return nil, err
 	} else {
@@ -91,8 +91,8 @@ func (dc *grpcDaemonClient) GetPipelineBuffer(ctx context.Context, pipeline, buf
 
 func (dc *grpcDaemonClient) GetVertexMetrics(ctx context.Context, pipeline, vertex string) ([]*daemon.VertexMetrics, error) {
 	if rspn, err := dc.client.GetVertexMetrics(ctx, &daemon.GetVertexMetricsRequest{
-		Pipeline: &pipeline,
-		Vertex:   &vertex,
+		Pipeline: pipeline,
+		Vertex:   vertex,
 	}); err != nil {
 		return nil, err
 	} else {
@@ -103,7 +103,7 @@ func (dc *grpcDaemonClient) GetVertexMetrics(ctx context.Context, pipeline, vert
 // GetPipelineWatermarks returns the []EdgeWatermark response instance for GetPipelineWatermarksRequest
 func (dc *grpcDaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.EdgeWatermark, error) {
 	if rspn, err := dc.client.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{
-		Pipeline: &pipeline,
+		Pipeline: pipeline,
 	}); err != nil {
 		return nil, err
 	} else {
@@ -113,7 +113,7 @@ func (dc *grpcDaemonClient) GetPipelineWatermarks(ctx context.Context, pipeline 
 
 func (dc *grpcDaemonClient) GetPipelineStatus(ctx context.Context, pipeline string) (*daemon.PipelineStatus, error) {
 	if rspn, err := dc.client.GetPipelineStatus(ctx, &daemon.GetPipelineStatusRequest{
-		Pipeline: &pipeline,
+		Pipeline: pipeline,
 	}); err != nil {
 		return nil, err
 	} else {

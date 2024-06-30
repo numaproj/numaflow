@@ -82,7 +82,7 @@ func (rc *restfulDaemonClient) IsDrained(ctx context.Context, pipeline string) (
 		return false, err
 	}
 	for _, bufferInfo := range res.Buffers {
-		if *bufferInfo.PendingCount > 0 || *bufferInfo.AckPendingCount > 0 {
+		if bufferInfo.PendingCount.GetValue() > 0 || bufferInfo.AckPendingCount.GetValue() > 0 {
 			return false, nil
 		}
 	}

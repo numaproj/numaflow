@@ -104,10 +104,10 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	assert.Equal(s.T(), 2, len(buffers))
 	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "p1", 0))
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), pipelineName, *bufferInfo.Pipeline)
+	assert.Equal(s.T(), pipelineName, bufferInfo.Pipeline)
 	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+	assert.Equal(s.T(), pipelineName, m[0].Pipeline)
 
 	// verify that the rate is calculated
 	timer := time.NewTimer(120 * time.Second)
@@ -122,7 +122,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 			for _, vertexName := range vertexNames {
 				m, err := client.GetVertexMetrics(context.Background(), pipelineName, vertexName)
 				assert.NoError(s.T(), err)
-				assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+				assert.Equal(s.T(), pipelineName, m[0].Pipeline)
 				oneMinRate := m[0].ProcessingRates["1m"]
 				// the rate should be around 5
 				if oneMinRate > 4 || oneMinRate < 6 {
@@ -292,7 +292,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	assert.Equal(s.T(), 8, len(buffers))
 	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "cat1", 0))
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), pipelineName, *bufferInfo.Pipeline)
+	assert.Equal(s.T(), pipelineName, bufferInfo.Pipeline)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	isProgressing, err := isWatermarkProgressing(ctx, client, pipelineName, edgeList, 3)
@@ -324,7 +324,7 @@ func isWatermarkProgressing(ctx context.Context, client daemonclient.DaemonClien
 			pipelineWatermarks := make([]int64, len(edgeList))
 			idx := 0
 			for _, e := range wm {
-				pipelineWatermarks[idx] = e.Watermarks[0]
+				pipelineWatermarks[idx] = e.Watermarks[0].GetValue()
 				idx++
 			}
 			currentWatermark = pipelineWatermarks

@@ -149,14 +149,14 @@ wmLoop:
 		default:
 			wm, err := client.GetPipelineWatermarks(ctx, pipelineName)
 			edgeWM := wm[0].Watermarks[0]
-			if wm[0].Watermarks[0] != -1 {
+			if wm[0].Watermarks[0].GetValue() != -1 {
 				assert.NoError(s.T(), err)
 				if err != nil {
 					assert.Fail(s.T(), err.Error())
 				}
 				// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark is greater than the event time of the first message
 				// and less than the current time.
-				assert.True(s.T(), edgeWM >= time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() && edgeWM < currentTime)
+				assert.True(s.T(), edgeWM.GetValue() >= time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() && edgeWM.GetValue() < currentTime)
 				break wmLoop
 			}
 			time.Sleep(time.Second)

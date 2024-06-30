@@ -10,17 +10,17 @@ header "generating proto files"
 ensure_protobuf
 ensure_vendor
 
-#if [ "`command -v protoc-gen-gogo`" = "" ]; then
-#  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogo
-#fi
+if [ "`command -v protoc-gen-gogo`" = "" ]; then
+  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogo
+fi
 
-#if [ "`command -v protoc-gen-gogofast`" = "" ]; then
-#  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogofast
-#fi
+if [ "`command -v protoc-gen-gogofast`" = "" ]; then
+  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogofast
+fi
 
-#if [ "`command -v gogoproto`" = "" ]; then
-#  go install -mod=vendor ./vendor/github.com/gogo/protobuf/gogoproto
-#fi
+if [ "`command -v gogoproto`" = "" ]; then
+  go install -mod=vendor ./vendor/github.com/gogo/protobuf/gogoproto
+fi
 
 if [ "`command -v protoc-gen-go`" = "" ]; then
   go install -mod=vendor ./vendor/google.golang.org/protobuf/cmd/protoc-gen-go
@@ -31,7 +31,11 @@ if [ "`command -v protoc-gen-go-grpc`" = "" ]; then
 fi
 
 if [ "`command -v protoc-gen-grpc-gateway`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+  go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway
+fi
+
+if [ "`command -v protoc-gen-openapiv2`" = "" ]; then
+  go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2
 fi
 
 if [ "`command -v goimports`" = "" ]; then
@@ -56,17 +60,29 @@ ${GOPATH}/bin/go-to-protobuf \
 
 # Following 2 proto files are needed
 mkdir -p ${GOPATH}/src/google/api
-curl -Ls https://raw.githubusercontent.com/grpc-ecosystem/grpc-gateway/v1.16.0/third_party/googleapis/google/api/annotations.proto -o ${GOPATH}/src/google/api/annotations.proto
-curl -Ls https://raw.githubusercontent.com/grpc-ecosystem/grpc-gateway/v1.16.0/third_party/googleapis/google/api/http.proto -o ${GOPATH}/src/google/api/http.proto
+curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/annotations.proto -o ${GOPATH}/src/google/api/annotations.proto
+curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/http.proto -o ${GOPATH}/src/google/api/http.proto
+
+#gen-protoc(){
+#    protoc \
+#      -I /usr/local/include \
+#      -I . \
+#      -I ./vendor \
+#      -I ${GOPATH}/src \
+      #-I ./vendor/github.com/gogo/protobuf/gogoproto \
+#      --go_out=paths=${GOPATH}/src \
+#      --go-grpc_out=paths=${GOPATH}/src \
+#      --grpc-gateway_out=logtostderr=true:${GOPATH}/src \
+#      $@
+#}
 
 gen-protoc2(){
     protoc \
       -I /usr/local/include \
       -I . \
-      -I ./vendor \
       -I ${GOPATH}/src \
-      -I ./vendor/github.com/gogo/protobuf/gogoproto \
-      --gogofast_out=plugins=grpc:${GOPATH}/src \
+      --go_out=paths=source_relative:. \
+      --go-grpc_out=paths=source_relative:. \
       --grpc-gateway_out=logtostderr=true:${GOPATH}/src \
       $@
 }
@@ -88,3 +104,4 @@ gen-protoc2 pkg/apis/proto/daemon/daemon.proto
 gen-protoc3 pkg/apis/proto/isb/message.proto
 
 gen-protoc3 pkg/apis/proto/wmb/wmb.proto
+
