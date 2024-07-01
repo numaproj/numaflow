@@ -429,7 +429,7 @@ func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, data
 			readOffsets = append(readOffsets, msg.ReadOffset)
 		}
 		isdf.fromBufferPartition.NoAck(ctx, readOffsets)
-		isdf.opts.logger.Panic("Got an error while processing UDF", zap.Error(err))
+		isdf.opts.logger.Panic("Got an error while processing Batch Map UDF", zap.Error(err))
 	}
 	isdf.opts.logger.Debugw("batch map applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
 	metrics.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))

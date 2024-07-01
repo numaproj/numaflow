@@ -106,37 +106,12 @@ func TestGRPCBasedBatchMap_BasicMapStreamFnWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedBatchMap(mockClient)
-		//requests := []*mappb.MapRequest{{
-		//	Keys:      []string{"client"},
-		//	Value:     []byte(`test1`),
-		//	EventTime: timestamppb.New(time.Time{}),
-		//	Watermark: timestamppb.New(time.Time{}),
-		//	Id:        "test1",
-		//}, {
-		//	Keys:      []string{"client"},
-		//	Value:     []byte(`test2`),
-		//	EventTime: timestamppb.New(time.Time{}),
-		//	Watermark: timestamppb.New(time.Time{}),
-		//	Id:        "test2",
-		//}}
-		//
-		//var wg sync.WaitGroup
-		//wg.Add(1)
-		//go func() {
-		//	defer wg.Done()
-		//	for index := range requests {
-		//		requestsCh <- requests[index]
-		//	}
-		//	close(requestsCh)
-		//}()
-
 		readMessages := testutils.BuildTestReadMessages(2, time.Unix(1661169600, 0), nil)
 
 		dataMessages := make([]*isb.ReadMessage, 0)
 		for _, x := range readMessages {
 			u.requestTracker.AddRequest(&x)
 		}
-
 		responseCh, _ := u.ApplyBatchMap(ctx, dataMessages)
 		idx := 1
 		for _, response := range responseCh {

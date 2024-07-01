@@ -90,6 +90,30 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
 }
 
+func (s *SDKsSuite) TestBatchMapUDFunctionAndSink() {
+	w := s.Given().Pipeline("@testdata/flatmap-batch.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "flatmap"
+
+	w.Expect().
+		VertexPodsRunning().
+		VertexPodLogContains("in", LogSourceVertexStarted).
+		VertexPodLogContains("go-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+	//VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+	//VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello"))).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
+
+	w.Expect().
+		VertexPodLogContains("go-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
+	//VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3)).
+	//VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
+}
+
 func (s *SDKsSuite) TestReduceSDK() {
 
 	// the reduce feature is not supported with redis ISBSVC
