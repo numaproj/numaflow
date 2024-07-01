@@ -100,3 +100,108 @@ func TestSaslConfiguration(t *testing.T) {
 		assert.Equal(t, "password", config.Password)
 	})
 }
+
+// func TestGetGSSAPIConfig(t *testing.T) {
+// 	t.Run("Basic case: Return GSSAPIConfig for valid input", func(t *testing.T) {
+// 		authType := dfv1.KRB5UserAuth
+// 		config := &dfv1.GSSAPI{
+// 			ServiceName: "kafka",
+// 			Realm:       "EXAMPLE.COM",
+// 			AuthType:    &authType,
+// 			UsernameSecret: &corev1.SecretKeySelector{
+// 				LocalObjectReference: corev1.LocalObjectReference{
+// 					Name: "myUsername",
+// 				},
+// 				Key: "user",
+// 			},
+// 			PasswordSecret: &corev1.SecretKeySelector{
+// 				LocalObjectReference: corev1.LocalObjectReference{
+// 					Name: "myPassword",
+// 				},
+// 				Key: "password",
+// 			},
+// 		}
+
+// 		result, err := GetGSSAPIConfig(config)
+// 		require.NoError(t, err)
+// 		assert.NotNil(t, result)
+// 		assert.Equal(t, "kafka", result.ServiceName)
+// 		assert.Equal(t, "EXAMPLE.COM", result.Realm)
+// 		assert.Equal(t, sarama.KRB5_USER_AUTH, result.AuthType)
+// 		assert.Equal(t, "myUsername", result.Username)
+// 		assert.Equal(t, "myPassword", result.Password)
+// 	})
+
+// 	t.Run("Error case: Invalid AuthType", func(t *testing.T) {
+// 		config := &dfv1.GSSAPI{
+// 			ServiceName: "kafka",
+// 			Realm:       "EXAMPLE.COM",
+// 			AuthType:    nil,
+// 		}
+
+// 		result, err := GetGSSAPIConfig(config)
+// 		assert.Nil(t, result)
+// 		assert.Error(t, err)
+// 		assert.Contains(t, err.Error(), "failed to parse GSSAPI AuthType")
+// 	})
+
+// 	t.Run("Error case: Fetching secret key failed", func(t *testing.T) {
+// 		authType := dfv1.KRB5UserAuth
+// 		config := &dfv1.GSSAPI{
+// 			ServiceName: "kafka",
+// 			Realm:       "EXAMPLE.COM",
+// 			AuthType:    &authType,
+// 			UsernameSecret: &corev1.SecretKeySelector{
+// 				LocalObjectReference: corev1.LocalObjectReference{
+// 					Name: "user-secret-name",
+// 				},
+// 				Key: "user",
+// 			},
+// 		}
+
+// 		result, err := GetGSSAPIConfig(config)
+// 		assert.Nil(t, result)
+// 		assert.Error(t, err)
+// 		assert.Contains(t, err.Error(), "secret not found")
+// 	})
+
+// 	t.Run("Error case: Reading keytab file fails", func(t *testing.T) {
+// 		authType := dfv1.KRB5KeytabAuth
+// 		config := &dfv1.GSSAPI{
+// 			ServiceName: "kafka",
+// 			Realm:       "EXAMPLE.COM",
+// 			AuthType:    &authType,
+// 			KeytabSecret: &corev1.SecretKeySelector{
+// 				LocalObjectReference: corev1.LocalObjectReference{
+// 					Name: "KeytabSecret",
+// 				},
+// 				Key: "keytab",
+// 			},
+// 		}
+
+// 		result, err := GetGSSAPIConfig(config)
+// 		assert.Nil(t, result)
+// 		assert.Error(t, err)
+// 		assert.Contains(t, err.Error(), "failed to read keytab file")
+// 	})
+
+// 	t.Run("Error case: Reading Kerberos config file fails", func(t *testing.T) {
+// 		authType := dfv1.KRB5UserAuth
+// 		config := &dfv1.GSSAPI{
+// 			ServiceName: "kafka",
+// 			Realm:       "EXAMPLE.COM",
+// 			AuthType:    &authType,
+// 			KerberosConfigSecret: &corev1.SecretKeySelector{
+// 				LocalObjectReference: corev1.LocalObjectReference{
+// 					Name: "ValidKerberosConfigSecret",
+// 				},
+// 				Key: "KerberosConfigSecret",
+// 			},
+// 		}
+
+// 		result, err := GetGSSAPIConfig(config)
+// 		assert.Nil(t, result)
+// 		assert.Error(t, err)
+// 		assert.Contains(t, err.Error(), "failed to read kerberos config file")
+// 	})
+// }
