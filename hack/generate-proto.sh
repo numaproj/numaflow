@@ -78,3 +78,5 @@ gen-protoc3(){
 gen-protoc2 pkg/apis/proto/daemon/daemon.proto
 
 gen-protoc3 pkg/apis/proto/isb/message.proto
+
+gen-protoc3 pkg/apis/proto/wmb/wmb.proto
