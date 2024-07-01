@@ -32,14 +32,20 @@ import (
 
 // GRPCBasedBatchMap is a map applier that uses gRPC client to invoke the map UDF. It implements the applier.MapApplier interface.
 type GRPCBasedBatchMap struct {
-	vertexName string
-	client     batchmapper.Client
+	vertexName     string
+	client         batchmapper.Client
+	requestTracker *Tracker
 }
 
 func NewUDSgRPCBasedBatchMap(vertexName string, client batchmapper.Client) *GRPCBasedBatchMap {
 	return &GRPCBasedBatchMap{
 		vertexName: vertexName,
 		client:     client,
+		// requestTracker is used to store the read messages in a key, value manner where
+		// key is the read offset and the reference to read message as the value.
+		// Once the results are received from the UDF, we map the responses to the corresponding request
+		// using a lookup on this tracker.
+		requestTracker: NewTracker(),
 	}
 }
 
@@ -76,16 +82,10 @@ func (u *GRPCBasedBatchMap) WaitUntilReady(ctx context.Context) error {
 func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	logger := logging.FromContext(ctx)
 	// udfResults is structure used to store the results corresponding to the read messages.
-	udfResults := make([]isb.ReadWriteMessagePair, len(messages))
+	udfResults := make([]isb.ReadWriteMessagePair, 0)
 
 	// inputChan is used to stream messages to the grpc client
 	inputChan := make(chan *batchmappb.MapRequest)
-
-	// requestTracker is used to store the read messages in a key, value manner where
-	// key is the read offset and the reference to read message as the value.
-	// Once the results are received from the UDF, we map the responses to the corresponding request
-	// using a lookup on this tracker.
-	requestTracker := NewTracker()
 
 	// Invoke the RPC from the client
 	respCh, errCh := u.client.BatchMapFn(ctx, inputChan)
@@ -98,7 +98,7 @@ func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.R
 	go func() {
 		defer close(inputChan)
 		for _, msg := range messages {
-			requestTracker.AddRequest(msg)
+			u.requestTracker.AddRequest(msg)
 			inputChan <- u.parseInputRequest(msg)
 		}
 	}()
@@ -112,12 +112,19 @@ func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.R
 	//
 	// On getting a response, it would parse them and create a new ReadWriteMessagePair entry in the udfResults
 	// Any errors received from the client, are propagated back to the caller.
-	idx := 0
 loop:
 	for {
 		select {
 		// got an error on the error channel, so return immediately
 		case err := <-errCh:
+			err = &ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.BatchMapFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
 			return nil, err
 		case grpcResp, ok := <-respCh:
 			// if there are no more messages to read on the channel we can break
@@ -127,25 +134,36 @@ loop:
 			// Get the unique request ID for which these responses are meant for.
 			msgId := grpcResp.GetId()
 			// Fetch the request value for the given ID from the tracker
-			parentMessage, ok := requestTracker.GetRequest(msgId)
+			parentMessage, ok := u.requestTracker.GetRequest(msgId)
 			if !ok {
 				// this case is when the given request ID was not present in the tracker.
 				// This means that either the UDF added an incorrect ID
 				// This cannot be processed further and should result in an error
 				// Can there be another case for this?
-				logger.Error("Request missing from tracker")
+				logger.Error("Request missing from tracker, ", msgId)
 				return nil, fmt.Errorf("incorrect ID found during batch map processing")
 			}
 			// parse the responses received
 			// TODO(map-batch): should we make this concurrent by using multiple goroutines, instead of sequential.
 			// Try and see if any perf improvements from this.
 			parsedResp := u.parseResponse(grpcResp, parentMessage)
-			udfResults[idx].WriteMessages = parsedResp
-			udfResults[idx].ReadMessage = parentMessage
-			requestTracker.RemoveRequest(msgId)
-			idx += 1
+			responsePair := isb.ReadWriteMessagePair{
+				ReadMessage:   parentMessage,
+				WriteMessages: parsedResp,
+				Err:           nil,
+			}
+			udfResults = append(udfResults, responsePair)
+			u.requestTracker.RemoveRequest(msgId)
 		}
 	}
+	// check if there are elements left in the tracker. This cannot be an acceptable case as we want the
+	// UDF to send responses for all elements.
+	leftRequest := u.requestTracker.GetItems()
+	if len(leftRequest) > 0 {
+		logger.Error("Response for %d requests not received from UDF ", len(leftRequest))
+		return nil, fmt.Errorf("response for %d requests not received from UDF ", len(leftRequest))
+	}
+	u.requestTracker.Clear()
 	return udfResults, nil
 }
 

@@ -147,6 +147,7 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapR
 	// Read from the read messages and send them individually to the bi-di stream for processing
 	// in case there is an error in sending, send it to the error channel for handling
 	go func() {
+		// TODO(map-batch): Should we check for ctx.Done here as well?
 		for inputMsg := range inputCh {
 			err = stream.Send(inputMsg)
 			if err != nil {

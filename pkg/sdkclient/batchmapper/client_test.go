@@ -21,6 +21,7 @@ import (
 	"io"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
@@ -28,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestClient_IsReady(t *testing.T) {
@@ -110,4 +112,86 @@ func TestClient_BatchMapFn(t *testing.T) {
 		}, response)
 		idx += 1
 	}
+}
+
+func TestClientContextClosed_BatchMapFn(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mapmock.NewMockMapClient(ctrl)
+	mockMapclient := mapmock.NewMockMap_MapStreamFnClient(ctrl)
+
+	mockMapclient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
+	mockMapclient.EXPECT().CloseSend().Return(nil).AnyTimes()
+	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
+		Results: []*mappb.MapResponse_Result{
+			{
+				Keys:  []string{"client_test"},
+				Value: []byte(`test1`),
+			},
+		},
+		Id: "test1",
+	}, nil).AnyTimes()
+	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
+		Results: []*mappb.MapResponse_Result{
+			{
+				Keys:  []string{"client_test"},
+				Value: []byte(`test2`),
+			},
+		},
+		Id: "test2",
+	}, io.EOF).AnyTimes()
+
+	mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
+
+	testClient, err := NewFromClient(mockClient)
+	assert.NoError(t, err)
+	reflect.DeepEqual(testClient, &client{
+		grpcClt: mockClient,
+	})
+
+	messageCh := make(chan *mappb.MapRequest)
+	responseCh, errCh := testClient.BatchMapFn(ctx, messageCh)
+	go func() {
+		defer close(messageCh)
+		requests := []*mappb.MapRequest{{
+			Keys:      []string{"client"},
+			Value:     []byte(`test1`),
+			EventTime: timestamppb.New(time.Time{}),
+			Watermark: timestamppb.New(time.Time{}),
+			Id:        "test1",
+		}, {
+			Keys:      []string{"client"},
+			Value:     []byte(`test2`),
+			EventTime: timestamppb.New(time.Time{}),
+			Watermark: timestamppb.New(time.Time{}),
+			Id:        "test2",
+		}}
+		for _, req := range requests {
+			messageCh <- req
+		}
+	}()
+
+	//idx := 1
+	caughtContextError := false
+readLoop:
+	for {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				caughtContextError = true
+				assert.Error(t, err, ctx.Err())
+				break readLoop
+			}
+		case _, ok := <-responseCh:
+			if !ok {
+
+			}
+		}
+		// explicitly cancel the context
+		cancel()
+	}
+	assert.True(t, caughtContextError)
 }
