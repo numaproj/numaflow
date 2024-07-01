@@ -18,8 +18,9 @@ limitations under the License.
 package wmb
 
 import (
-	"bytes"
-	"encoding/binary"
+	"google.golang.org/protobuf/proto"
+
+	wmbpb "github.com/numaproj/numaflow/pkg/apis/proto/wmb"
 )
 
 // WMB is used in the KV offset timeline bucket as the value for the given processor entity key.
@@ -40,23 +41,28 @@ type WMB struct {
 	Partition int32
 }
 
-// EncodeToBytes encodes a WMB object into byte array.
+// EncodeToBytes encodes a WMB object into byte array using protobuf.
 func (w WMB) EncodeToBytes() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.LittleEndian, w)
-	if err != nil {
-		return nil, err
+	pb := &wmbpb.WMB{
+		Idle:      w.Idle,
+		Offset:    w.Offset,
+		Watermark: w.Watermark,
+		Partition: w.Partition,
 	}
-	return buf.Bytes(), nil
+	return proto.Marshal(pb)
 }
 
-// DecodeToWMB decodes the given byte array into a WMB object.
+// DecodeToWMB decodes the given byte array into a WMB object using protobuf.
 func DecodeToWMB(b []byte) (WMB, error) {
-	var v WMB
-	buf := bytes.NewReader(b)
-	err := binary.Read(buf, binary.LittleEndian, &v)
-	if err != nil {
+	var pb wmbpb.WMB
+	if err := proto.Unmarshal(b, &pb); err != nil {
 		return WMB{}, err
 	}
-	return v, nil
+
+	return WMB{
+		Idle:      pb.Idle,
+		Offset:    pb.Offset,
+		Watermark: pb.Watermark,
+		Partition: pb.Partition,
+	}, nil
 }
