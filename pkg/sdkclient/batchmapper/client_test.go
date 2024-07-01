@@ -16,78 +16,98 @@ limitations under the License.
 
 package batchmapper
 
-//
-//func TestClient_IsReady(t *testing.T) {
-//	var ctx = context.Background()
-//
-//	ctrl := gomock.NewController(t)
-//	defer ctrl.Finish()
-//
-//	mockClient := mapstreammock.NewMockMapStreamClient(ctrl)
-//	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mapstreampb.ReadyResponse{Ready: true}, nil)
-//	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mapstreampb.ReadyResponse{Ready: false}, fmt.Errorf("mock connection refused"))
-//
-//	testClient, err := NewFromClient(mockClient)
-//	assert.NoError(t, err)
-//	reflect.DeepEqual(testClient, &client{
-//		grpcClt: mockClient,
-//	})
-//
-//	ready, err := testClient.IsReady(ctx, &emptypb.Empty{})
-//	assert.True(t, ready)
-//	assert.NoError(t, err)
-//
-//	ready, err = testClient.IsReady(ctx, &emptypb.Empty{})
-//	assert.False(t, ready)
-//	assert.EqualError(t, err, "mock connection refused")
-//}
-//
-//func TestClient_MapStreamFn(t *testing.T) {
-//	var ctx = context.Background()
-//
-//	ctrl := gomock.NewController(t)
-//	defer ctrl.Finish()
-//
-//	mockClient := mapstreammock.NewMockMapStreamClient(ctrl)
-//	mockStreamClient := mapstreammock.NewMockMapStream_MapStreamFnClient(ctrl)
-//
-//	mockStreamClient.EXPECT().Recv().Return(&mapstreampb.MapStreamResponse{Result: &mapstreampb.MapStreamResponse_Result{
-//		Keys:  []string{"temp-key"},
-//		Value: []byte("mock result"),
-//		Tags:  nil,
-//	}}, nil)
-//
-//	mockStreamClient.EXPECT().Recv().Return(&mapstreampb.MapStreamResponse{Result: &mapstreampb.MapStreamResponse_Result{
-//		Keys:  []string{"temp-key"},
-//		Value: []byte("mock result"),
-//		Tags:  nil,
-//	}}, io.EOF)
-//
-//	mockStreamClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-//
-//	mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockStreamClient, nil)
-//
-//	testClient, err := NewFromClient(mockClient)
-//	assert.NoError(t, err)
-//	reflect.DeepEqual(testClient, &client{
-//		grpcClt: mockClient,
-//	})
-//
-//	responseCh := make(chan *mapstreampb.MapStreamResponse)
-//
-//	go func() {
-//		select {
-//		case <-ctx.Done():
-//			return
-//		case resp := <-responseCh:
-//			assert.Equal(t, resp, &mapstreampb.MapStreamResponse{Result: &mapstreampb.MapStreamResponse_Result{
-//				Keys:  []string{"temp-key"},
-//				Value: []byte("mock result"),
-//				Tags:  nil,
-//			}})
-//		}
-//	}()
-//
-//	err = testClient.MapStreamFn(ctx, &mapstreampb.MapStreamRequest{}, responseCh)
-//	assert.NoError(t, err)
-//}
+import (
+	"fmt"
+	"io"
+	"reflect"
+	"testing"
+
+	"github.com/golang/mock/gomock"
+	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
+	"github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1/mapmock"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
+	"google.golang.org/protobuf/types/known/emptypb"
+)
+
+func TestClient_IsReady(t *testing.T) {
+	var ctx = context.Background()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mapmock.NewMockMapClient(ctrl)
+	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mappb.ReadyResponse{Ready: true}, nil)
+	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mappb.ReadyResponse{Ready: false}, fmt.Errorf("mock connection refused"))
+
+	testClient, err := NewFromClient(mockClient)
+	assert.NoError(t, err)
+	reflect.DeepEqual(testClient, &client{
+		grpcClt: mockClient,
+	})
+
+	ready, err := testClient.IsReady(ctx, &emptypb.Empty{})
+	assert.True(t, ready)
+	assert.NoError(t, err)
+
+	ready, err = testClient.IsReady(ctx, &emptypb.Empty{})
+	assert.False(t, ready)
+	assert.EqualError(t, err, "mock connection refused")
+}
+
+func TestClient_BatchMapFn(t *testing.T) {
+	var ctx = context.Background()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mapmock.NewMockMapClient(ctrl)
+	mockMapclient := mapmock.NewMockMap_MapStreamFnClient(ctrl)
+
+	mockMapclient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
+	mockMapclient.EXPECT().CloseSend().Return(nil).AnyTimes()
+	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
+		Results: []*mappb.MapResponse_Result{
+			{
+				Keys:  []string{"client_test"},
+				Value: []byte(`test1`),
+			},
+		},
+		Id: "test1",
+	}, nil)
+	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
+		Results: []*mappb.MapResponse_Result{
+			{
+				Keys:  []string{"client_test"},
+				Value: []byte(`test2`),
+			},
+		},
+		Id: "test2",
+	}, io.EOF)
+
+	mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
+
+	testClient, err := NewFromClient(mockClient)
+	assert.NoError(t, err)
+	reflect.DeepEqual(testClient, &client{
+		grpcClt: mockClient,
+	})
+
+	messageCh := make(chan *mappb.MapRequest)
+	close(messageCh)
+	responseCh, _ := testClient.BatchMapFn(ctx, messageCh)
+	idx := 1
+	for response := range responseCh {
+		id := fmt.Sprintf("test%d", idx)
+		assert.Equal(t, &mappb.MapResponse{
+			Results: []*mappb.MapResponse_Result{
+				{
+					Keys:  []string{"client_test"},
+					Value: []byte(id),
+				},
+			},
+			Id: id,
+		}, response)
+		idx += 1
+	}
+}
