@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -78,12 +79,12 @@ func (mr *mockRater_TestGetVertexMetrics) Start(ctx context.Context) error {
 	return nil
 }
 
-func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionName string) map[string]float64 {
-	res := make(map[string]float64)
-	res["default"] = 4.894736842105263
-	res["1m"] = 5.084745762711864
-	res["5m"] = 4.894736842105263
-	res["15m"] = 4.894736842105263
+func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionName string) map[string]*wrapperspb.DoubleValue {
+	res := make(map[string]*wrapperspb.DoubleValue)
+	res["default"] = wrapperspb.Double(4.894736842105263)
+	res["1m"] = wrapperspb.Double(5.084745762711864)
+	res["5m"] = wrapperspb.Double(4.894736842105263)
+	res["15m"] = wrapperspb.Double(4.894736842105263)
 	return res
 }
 
@@ -124,19 +125,19 @@ vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0"
 	resp, err := pipelineMetricsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)
 
-	processingRates := make(map[string]float64)
+	processingRates := make(map[string]*wrapperspb.DoubleValue)
 
-	processingRates["15m"] = 4.894736842105263
-	processingRates["1m"] = 5.084745762711864
-	processingRates["5m"] = 4.894736842105263
-	processingRates["default"] = 4.894736842105263
+	processingRates["15m"] = wrapperspb.Double(4.894736842105263)
+	processingRates["1m"] = wrapperspb.Double(5.084745762711864)
+	processingRates["5m"] = wrapperspb.Double(4.894736842105263)
+	processingRates["default"] = wrapperspb.Double(4.894736842105263)
 	assert.Equal(t, resp.VertexMetrics[0].GetProcessingRates(), processingRates)
 
-	pendings := make(map[string]int64)
-	pendings["15m"] = 4
-	pendings["1m"] = 5
-	pendings["5m"] = 6
-	pendings["default"] = 7
+	pendings := make(map[string]*wrapperspb.Int64Value)
+	pendings["15m"] = wrapperspb.Int64(4)
+	pendings["1m"] = wrapperspb.Int64(5)
+	pendings["5m"] = wrapperspb.Int64(6)
+	pendings["default"] = wrapperspb.Int64(7)
 	assert.Equal(t, resp.VertexMetrics[0].GetPendings(), pendings)
 }
 
@@ -173,7 +174,7 @@ func TestGetBuffer(t *testing.T) {
 
 	resp, err := pipelineMetricsQueryService.GetBuffer(context.Background(), req)
 	assert.NoError(t, err)
-	assert.Equal(t, resp.Buffer.BufferUsage, 0.0006666666666666666)
+	assert.Equal(t, resp.Buffer.BufferUsage.GetValue(), 0.0006666666666666666)
 }
 
 func TestListBuffers(t *testing.T) {

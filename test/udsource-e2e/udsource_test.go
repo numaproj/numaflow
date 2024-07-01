@@ -119,7 +119,7 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 					assert.NoError(s.T(), err)
 					assert.Equal(s.T(), pipelineName, m[0].Pipeline)
 					oneMinRate := m[0].ProcessingRates["1m"]
-					rates = append(rates, oneMinRate)
+					rates = append(rates, oneMinRate.GetValue())
 				}
 				if !ratesMatch(rates) {
 					time.Sleep(waitInterval)

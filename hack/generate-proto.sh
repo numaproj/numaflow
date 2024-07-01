@@ -63,20 +63,7 @@ mkdir -p ${GOPATH}/src/google/api
 curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/annotations.proto -o ${GOPATH}/src/google/api/annotations.proto
 curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/http.proto -o ${GOPATH}/src/google/api/http.proto
 
-#gen-protoc(){
-#    protoc \
-#      -I /usr/local/include \
-#      -I . \
-#      -I ./vendor \
-#      -I ${GOPATH}/src \
-      #-I ./vendor/github.com/gogo/protobuf/gogoproto \
-#      --go_out=paths=${GOPATH}/src \
-#      --go-grpc_out=paths=${GOPATH}/src \
-#      --grpc-gateway_out=logtostderr=true:${GOPATH}/src \
-#      $@
-#}
-
-gen-protoc2(){
+gen-protoc(){
     protoc \
       -I /usr/local/include \
       -I . \
@@ -87,21 +74,9 @@ gen-protoc2(){
       $@
 }
 
-gen-protoc3(){
-    protoc \
-      -I /usr/local/include \
-      -I . \
-      -I ./vendor \
-      -I ${GOPATH}/src \
-      --go_out=paths=source_relative:. \
-      --go-grpc_out=paths=source_relative:. \
-      --grpc-gateway_out=logtostderr=true:. \
-      $@
-}
+gen-protoc pkg/apis/proto/daemon/daemon.proto
 
-gen-protoc2 pkg/apis/proto/daemon/daemon.proto
+gen-protoc pkg/apis/proto/isb/message.proto
 
-gen-protoc3 pkg/apis/proto/isb/message.proto
-
-gen-protoc3 pkg/apis/proto/wmb/wmb.proto
+gen-protoc pkg/apis/proto/wmb/wmb.proto
 

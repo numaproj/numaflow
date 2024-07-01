@@ -264,12 +264,12 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	for _, m := range vMetrics {
 		rate, existing := m.ProcessingRates["default"]
 		// If rate is not available, we skip scaling.
-		if !existing || rate < 0 { // Rate not available
+		if !existing || rate.GetValue() < 0 { // Rate not available
 			log.Debugf("Vertex %s has no rate information, skip scaling.", vertex.Name)
 			return nil
 		}
-		partitionRates = append(partitionRates, rate)
-		totalRate += rate
+		partitionRates = append(partitionRates, rate.GetValue())
+		totalRate += rate.GetValue()
 
 		pending, existing := m.Pendings["default"]
 		if !existing || pending.GetValue() < 0 || pending.GetValue() == isb.PendingNotAvailable {
@@ -526,14 +526,14 @@ func getBufferInfos(
 			err = fmt.Errorf("failed to get the buffer information of vertex %q, %w", vertex.Name, err)
 			return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
 		} else {
-			if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == 0 || bInfo.PendingCount == nil {
+			if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == nil || bInfo.PendingCount == nil {
 				err = fmt.Errorf("invalid read buffer information of vertex %q, length, pendingCount or usage limit is missing", vertex.Name)
 				return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
 			}
 
-			partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength().GetValue())*bInfo.GetBufferUsageLimit()))
+			partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength().GetValue())*bInfo.GetBufferUsageLimit().GetValue()))
 			partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength().GetValue())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
-			totalBufferLength += int64(float64(bInfo.BufferLength.GetValue()) * bInfo.BufferUsageLimit)
+			totalBufferLength += int64(float64(bInfo.BufferLength.GetValue()) * bInfo.BufferUsageLimit.GetValue())
 			totalCurrentPending += bInfo.PendingCount.GetValue()
 		}
 	}

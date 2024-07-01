@@ -34,16 +34,16 @@ message BufferInfo {
   // Total messages existing in the buffer, including pending, ackPending and acked.
   google.protobuf.Int64Value totalMessages = 5;
   google.protobuf.Int64Value bufferLength = 6;
-  double bufferUsageLimit = 7;
-  double bufferUsage = 8;
-  bool isFull = 9;
+  google.protobuf.DoubleValue bufferUsageLimit = 7;
+  google.protobuf.DoubleValue bufferUsage = 8;
+  google.protobuf.BoolValue isFull = 9;
 }
 
 // VertexMetrics is used to provide information about the vertex including processing rate.
 message VertexMetrics {
   string pipeline = 1;
   string vertex = 2;
-  map<string, double> processingRates = 3;
+  map<string, google.protobuf.DoubleValue> processingRates = 3;
   map<string, google.protobuf.Int64Value> pendings = 4;
 }
 
@@ -94,7 +94,7 @@ message EdgeWatermark {
   string pipeline = 1;
   string edge = 2;
   repeated google.protobuf.Int64Value watermarks = 3;
-  bool isWatermarkEnabled = 4;
+  google.protobuf.BoolValue isWatermarkEnabled = 4;
   string from = 5;
   string to = 6;
 }

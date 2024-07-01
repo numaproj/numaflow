@@ -108,9 +108,9 @@ func (ps *PipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 		AckPendingCount:  wrapperspb.Int64(bufferInfo.AckPendingCount),
 		TotalMessages:    wrapperspb.Int64(bufferInfo.TotalMessages),
 		BufferLength:     wrapperspb.Int64(bufferLength),
-		BufferUsageLimit: bufferUsageLimit,
-		BufferUsage:      usage,
-		IsFull:           usage >= bufferUsageLimit,
+		BufferUsageLimit: wrapperspb.Double(bufferUsageLimit),
+		BufferUsage:      wrapperspb.Double(usage),
+		IsFull:           wrapperspb.Bool(usage >= bufferUsageLimit),
 	}
 	resp := new(daemon.GetBufferResponse)
 	resp.Buffer = b
@@ -273,9 +273,9 @@ func listBuffers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient 
 			AckPendingCount:  wrapperspb.Int64(bufferInfo.AckPendingCount),
 			TotalMessages:    wrapperspb.Int64(bufferInfo.TotalMessages),
 			BufferLength:     wrapperspb.Int64(bufferLength),
-			BufferUsageLimit: bufferUsageLimit,
-			BufferUsage:      usage,
-			IsFull:           usage >= bufferUsageLimit,
+			BufferUsageLimit: wrapperspb.Double(bufferUsageLimit),
+			BufferUsage:      wrapperspb.Double(usage),
+			IsFull:           wrapperspb.Bool(usage >= bufferUsageLimit),
 		}
 		buffers = append(buffers, b)
 	}

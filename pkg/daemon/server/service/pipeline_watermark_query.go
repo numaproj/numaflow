@@ -93,7 +93,7 @@ func (ps *PipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 				Pipeline:           ps.pipeline.Name,
 				Edge:               edgeName,
 				Watermarks:         watermarks,
-				IsWatermarkEnabled: isWatermarkEnabled,
+				IsWatermarkEnabled: wrapperspb.Bool(isWatermarkEnabled),
 				From:               k.From,
 				To:                 k.To,
 			}
@@ -125,7 +125,7 @@ func (ps *PipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 			Pipeline:           ps.pipeline.Name,
 			Edge:               edgeName,
 			Watermarks:         latestWatermarks,
-			IsWatermarkEnabled: isWatermarkEnabled,
+			IsWatermarkEnabled: wrapperspb.Bool(isWatermarkEnabled),
 			From:               k.From,
 			To:                 k.To,
 		}

@@ -706,7 +706,6 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the watermarks for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, watermarks))
 }
 

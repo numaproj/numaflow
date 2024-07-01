@@ -125,7 +125,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 				assert.Equal(s.T(), pipelineName, m[0].Pipeline)
 				oneMinRate := m[0].ProcessingRates["1m"]
 				// the rate should be around 5
-				if oneMinRate > 4 || oneMinRate < 6 {
+				if oneMinRate.GetValue() > 4 || oneMinRate.GetValue() < 6 {
 					accurateCount++
 				}
 			}
