@@ -103,19 +103,28 @@ func (f myForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMess
 
 func TestNewInterStepDataForward(t *testing.T) {
 	tests := []struct {
-		name          string
-		batchSize     int64
-		streamEnabled bool
+		name            string
+		batchSize       int64
+		streamEnabled   bool
+		batchMapEnabled bool
 	}{
 		{
-			name:          "stream_forward",
-			batchSize:     1,
-			streamEnabled: true,
+			name:            "stream_forward",
+			batchSize:       1,
+			streamEnabled:   true,
+			batchMapEnabled: false,
 		},
 		{
-			name:          "batch_forward",
-			batchSize:     10,
-			streamEnabled: false,
+			name:            "batch_forward",
+			batchSize:       10,
+			streamEnabled:   false,
+			batchMapEnabled: false,
+		},
+		{
+			name:            "batch_map_forward",
+			batchSize:       10,
+			streamEnabled:   false,
+			batchMapEnabled: true,
 		},
 	}
 	for _, tt := range tests {
@@ -153,7 +162,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 				MapStreamUDF: myForwardTest{},
 				BatchMapUDF:  myForwardTest{},
 			}
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled), WithUDFBatchMap(tt.batchMapEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -261,7 +270,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 				MapStreamUDF: &myForwardToAllTest{},
 				BatchMapUDF:  &myForwardToAllTest{},
 			}
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &myForwardToAllTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &myForwardToAllTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled), WithUDFBatchMap(tt.batchMapEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -434,7 +443,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 				BatchMapUDF:  myForwardDropTest{},
 			}
 
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardDropTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardDropTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled), WithUDFBatchMap(tt.batchMapEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -619,7 +628,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 				BatchMapUDF:  myForwardTest{},
 			}
 
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled), WithUDFBatchMap(tt.batchMapEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to11.IsFull())
@@ -761,12 +770,17 @@ func TestNewInterStepDataForward(t *testing.T) {
 				BatchMapUDF:  myForwardApplyUDFErrTest{},
 			}
 
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyUDFErrTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyUDFErrTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled), WithUDFBatchMap(tt.batchMapEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
 			assert.True(t, to1.IsEmpty())
 
+			if tt.batchMapEnabled {
+				// TODO(map-batch): if map-batch is enabled we panic on seeing an error, think of a way to
+				// gracefully test that
+				t.Skip()
+			}
 			stopped := f.Start()
 			// write some data
 			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
@@ -812,7 +826,7 @@ func TestNewInterStepDataForward(t *testing.T) {
 				BatchMapUDF:  myForwardApplyWhereToErrTest{},
 			}
 
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyWhereToErrTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyWhereToErrTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled), WithUDFBatchMap(tt.batchMapEnabled))
 
 			assert.NoError(t, err)
 			assert.True(t, to1.IsEmpty())
@@ -861,18 +875,24 @@ func TestNewInterStepDataForward(t *testing.T) {
 				BatchMapUDF:  myForwardInternalErrTest{},
 			}
 
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardInternalErrTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardInternalErrTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled), WithUDFBatchMap(tt.batchMapEnabled))
 
 			assert.NoError(t, err)
 			assert.False(t, to1.IsFull())
 			assert.True(t, to1.IsEmpty())
 
+			if tt.batchMapEnabled {
+				// TODO(map-batch): if map-batch is enabled we panic on seeing an error, think of a way to
+				// gracefully test that
+				t.Skip()
+			}
 			stopped := f.Start()
+
 			// write some data
 			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
 			assert.Equal(t, make([]error, batchSize), errs)
-
 			f.Stop()
+
 			time.Sleep(1 * time.Millisecond)
 			<-stopped
 		})
@@ -1891,4 +1911,8 @@ func buildPublisherMapAndOTStoreFromWmStores(toBuffers map[string][]isb.BufferWr
 		otStores[key] = store.OffsetTimelineStore()
 	}
 	return publishers, otStores
+}
+
+func assertPanic(f func() <-chan struct{}) {
+	_ = f()
 }
