@@ -99,7 +99,7 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapR
 	// TODO(map-batch): this creates a new gRPC stream for every batch,
 	// it might be useful to see the performance difference between this approach
 	// and a long-running RPC
-	stream, err := c.grpcClt.BatchMapFn(ctx)
+	stream, err := c.grpcClt.MapStreamFn(ctx)
 	if err != nil {
 		go func() {
 			errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn stream", err)
