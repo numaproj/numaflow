@@ -51,6 +51,10 @@ func (f myForwardJetStreamTest) ApplyMapStream(ctx context.Context, message *isb
 	return testutils.CopyUDFTestApplyStream(ctx, "", writeMessageCh, message)
 }
 
+func (f myForwardJetStreamTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApplyBatchMap(ctx, "test-vertex", messages)
+}
+
 // TestForwarderJetStreamBuffer is a test that is used to test forwarder with jetstream buffer
 func TestForwarderJetStreamBuffer(t *testing.T) {
 	tests := []struct {
@@ -148,7 +152,12 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			idleManager, err := wmb.NewIdleManager(1, len(toSteps))
 			assert.NoError(t, err)
-			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+			appliers := forward.MapAppliers{
+				MapUDF:       myForwardJetStreamTest{},
+				MapStreamUDF: myForwardJetStreamTest{},
+				BatchMapUDF:  myForwardJetStreamTest{},
+			}
+			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, appliers, fetchWatermark, publishWatermark, idleManager, forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 
 			stopped := f.Start()

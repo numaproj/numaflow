@@ -78,3 +78,42 @@ func CopyUDFTestApplyStream(ctx context.Context, vertexName string, writeMessage
 	writeMessageCh <- isb.WriteMessage{Message: writeMessage}
 	return nil
 }
+
+func CopyUDFTestApplyBatchMap(ctx context.Context, vertexName string, readMessages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	udfResults := make([]isb.ReadWriteMessagePair, len(readMessages))
+
+	_ = ctx
+
+	for idx, readMessage := range readMessages {
+
+		offset := readMessage.ReadOffset
+		payload := readMessage.Body.Payload
+		parentPaneInfo := readMessage.MessageInfo
+		// copy the payload
+		result := payload
+
+		writeMessage := isb.Message{
+			Header: isb.Header{
+				MessageInfo: parentPaneInfo,
+				ID: isb.MessageID{
+					VertexName: vertexName,
+					Offset:     offset.String(),
+					Index:      0,
+				},
+				Keys: readMessage.Keys,
+			},
+			Body: isb.Body{
+				Payload: result,
+			},
+		}
+		writeMessage.Headers = readMessage.Headers
+		taggedMessage := &isb.WriteMessage{
+			Message: writeMessage,
+			Tags:    nil,
+		}
+		udfResults[idx].WriteMessages = []*isb.WriteMessage{taggedMessage}
+		udfResults[idx].ReadMessage = readMessage
+	}
+
+	return udfResults, nil
+}

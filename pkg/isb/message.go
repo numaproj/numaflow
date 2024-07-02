@@ -71,6 +71,7 @@ type Header struct {
 	Keys []string
 	// Headers is the headers of the message which can be used to store and propagate source headers like kafka headers,
 	// http headers and Numaflow platform headers like tracing headers etc.
+	//TODO(map-batch): can we rename this? Gets confusing for understanding headers under header
 	Headers map[string]string
 }
 

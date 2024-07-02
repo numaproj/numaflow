@@ -43,6 +43,10 @@ func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) 
 	return testutils.CopyUDFTestApply(ctx, "", message)
 }
 
+func (s myShutdownTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApplyBatchMap(ctx, "", messages)
+}
+
 func (s myShutdownTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
 	return testutils.CopyUDFTestApplyStream(ctx, "", writeMessageCh, message)
 }
@@ -92,8 +96,14 @@ func TestInterStepDataForward(t *testing.T) {
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
+			appliers := MapAppliers{
+				MapUDF:       myShutdownTest{},
+				MapStreamUDF: myShutdownTest{},
+				BatchMapUDF:  myShutdownTest{},
+			}
+
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data but buffer is not full even though we are not reading
@@ -133,7 +143,14 @@ func TestInterStepDataForward(t *testing.T) {
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, myShutdownTest{}, myShutdownTest{}, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+
+			appliers := MapAppliers{
+				MapUDF:       myShutdownTest{},
+				MapStreamUDF: myShutdownTest{},
+				BatchMapUDF:  myShutdownTest{},
+			}
+
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data such that the fromBufferPartition can be empty, that is toBuffer gets full
