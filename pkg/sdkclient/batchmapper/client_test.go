@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
-	"github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1/mapmock"
+	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1"
+	"github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1/batchmapmock"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -40,9 +40,9 @@ func TestClient_IsReady(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := mapmock.NewMockMapClient(ctrl)
-	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mappb.ReadyResponse{Ready: true}, nil)
-	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mappb.ReadyResponse{Ready: false}, fmt.Errorf("mock connection refused"))
+	mockClient := batchmapmock.NewMockBatchMapClient(ctrl)
+	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&batchmappb.ReadyResponse{Ready: true}, nil)
+	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&batchmappb.ReadyResponse{Ready: false}, fmt.Errorf("mock connection refused"))
 
 	testClient, err := NewFromClient(mockClient)
 	assert.NoError(t, err)
@@ -65,13 +65,13 @@ func TestClient_BatchMapFn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := mapmock.NewMockMapClient(ctrl)
-	mockMapclient := mapmock.NewMockMap_MapStreamFnClient(ctrl)
+	mockClient := batchmapmock.NewMockBatchMapClient(ctrl)
+	mockMapclient := batchmapmock.NewMockBatchMap_BatchMapFnClient(ctrl)
 
 	mockMapclient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 	mockMapclient.EXPECT().CloseSend().Return(nil).AnyTimes()
-	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
-		Results: []*mappb.MapResponse_Result{
+	mockMapclient.EXPECT().Recv().Return(&batchmappb.BatchMapResponse{
+		Results: []*batchmappb.BatchMapResponse_Result{
 			{
 				Keys:  []string{"client_test"},
 				Value: []byte(`test1`),
@@ -79,8 +79,8 @@ func TestClient_BatchMapFn(t *testing.T) {
 		},
 		Id: "test1",
 	}, nil)
-	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
-		Results: []*mappb.MapResponse_Result{
+	mockMapclient.EXPECT().Recv().Return(&batchmappb.BatchMapResponse{
+		Results: []*batchmappb.BatchMapResponse_Result{
 			{
 				Keys:  []string{"client_test"},
 				Value: []byte(`test2`),
@@ -89,7 +89,7 @@ func TestClient_BatchMapFn(t *testing.T) {
 		Id: "test2",
 	}, io.EOF)
 
-	mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
+	mockClient.EXPECT().BatchMapFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
 
 	testClient, err := NewFromClient(mockClient)
 	assert.NoError(t, err)
@@ -97,14 +97,14 @@ func TestClient_BatchMapFn(t *testing.T) {
 		grpcClt: mockClient,
 	})
 
-	messageCh := make(chan *mappb.MapRequest)
+	messageCh := make(chan *batchmappb.BatchMapRequest)
 	close(messageCh)
 	responseCh, _ := testClient.BatchMapFn(ctx, messageCh)
 	idx := 1
 	for response := range responseCh {
 		id := fmt.Sprintf("test%d", idx)
-		assert.Equal(t, &mappb.MapResponse{
-			Results: []*mappb.MapResponse_Result{
+		assert.Equal(t, &batchmappb.BatchMapResponse{
+			Results: []*batchmappb.BatchMapResponse_Result{
 				{
 					Keys:  []string{"client_test"},
 					Value: []byte(id),
@@ -123,13 +123,13 @@ func TestClientStreamError_BatchMapFn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := mapmock.NewMockMapClient(ctrl)
-	mockMapclient := mapmock.NewMockMap_MapStreamFnClient(ctrl)
+	mockClient := batchmapmock.NewMockBatchMapClient(ctrl)
+	mockMapclient := batchmapmock.NewMockBatchMap_BatchMapFnClient(ctrl)
 
 	mockMapclient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 	mockMapclient.EXPECT().CloseSend().Return(nil).AnyTimes()
-	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
-		Results: []*mappb.MapResponse_Result{
+	mockMapclient.EXPECT().Recv().Return(&batchmappb.BatchMapResponse{
+		Results: []*batchmappb.BatchMapResponse_Result{
 			{
 				Keys:  []string{"client_test"},
 				Value: []byte(`test1`),
@@ -137,8 +137,8 @@ func TestClientStreamError_BatchMapFn(t *testing.T) {
 		},
 		Id: "test1",
 	}, fmt.Errorf("recv error")).AnyTimes()
-	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
-		Results: []*mappb.MapResponse_Result{
+	mockMapclient.EXPECT().Recv().Return(&batchmappb.BatchMapResponse{
+		Results: []*batchmappb.BatchMapResponse_Result{
 			{
 				Keys:  []string{"client_test"},
 				Value: []byte(`test2`),
@@ -147,7 +147,7 @@ func TestClientStreamError_BatchMapFn(t *testing.T) {
 		Id: "test2",
 	}, io.EOF).AnyTimes()
 
-	mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
+	mockClient.EXPECT().BatchMapFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
 
 	testClient, err := NewFromClient(mockClient)
 	assert.NoError(t, err)
@@ -155,11 +155,11 @@ func TestClientStreamError_BatchMapFn(t *testing.T) {
 		grpcClt: mockClient,
 	})
 
-	messageCh := make(chan *mappb.MapRequest)
+	messageCh := make(chan *batchmappb.BatchMapRequest)
 	responseCh, errCh := testClient.BatchMapFn(ctx, messageCh)
 	go func() {
 		defer close(messageCh)
-		requests := []*mappb.MapRequest{{
+		requests := []*batchmappb.BatchMapRequest{{
 			Keys:      []string{"client"},
 			Value:     []byte(`test1`),
 			EventTime: timestamppb.New(time.Time{}),
@@ -199,13 +199,13 @@ func TestClientContextClosed_BatchMapFn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := mapmock.NewMockMapClient(ctrl)
-	mockMapclient := mapmock.NewMockMap_MapStreamFnClient(ctrl)
+	mockClient := batchmapmock.NewMockBatchMapClient(ctrl)
+	mockMapclient := batchmapmock.NewMockBatchMap_BatchMapFnClient(ctrl)
 
 	mockMapclient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 	mockMapclient.EXPECT().CloseSend().Return(nil).AnyTimes()
-	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
-		Results: []*mappb.MapResponse_Result{
+	mockMapclient.EXPECT().Recv().Return(&batchmappb.BatchMapResponse{
+		Results: []*batchmappb.BatchMapResponse_Result{
 			{
 				Keys:  []string{"client_test"},
 				Value: []byte(`test1`),
@@ -213,8 +213,8 @@ func TestClientContextClosed_BatchMapFn(t *testing.T) {
 		},
 		Id: "test1",
 	}, nil).AnyTimes()
-	mockMapclient.EXPECT().Recv().Return(&mappb.MapResponse{
-		Results: []*mappb.MapResponse_Result{
+	mockMapclient.EXPECT().Recv().Return(&batchmappb.BatchMapResponse{
+		Results: []*batchmappb.BatchMapResponse_Result{
 			{
 				Keys:  []string{"client_test"},
 				Value: []byte(`test2`),
@@ -223,7 +223,7 @@ func TestClientContextClosed_BatchMapFn(t *testing.T) {
 		Id: "test2",
 	}, io.EOF).AnyTimes()
 
-	mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
+	mockClient.EXPECT().BatchMapFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
 
 	testClient, err := NewFromClient(mockClient)
 	assert.NoError(t, err)
@@ -231,11 +231,11 @@ func TestClientContextClosed_BatchMapFn(t *testing.T) {
 		grpcClt: mockClient,
 	})
 
-	messageCh := make(chan *mappb.MapRequest)
+	messageCh := make(chan *batchmappb.BatchMapRequest)
 	responseCh, errCh := testClient.BatchMapFn(ctx, messageCh)
 	go func() {
 		defer close(messageCh)
-		requests := []*mappb.MapRequest{{
+		requests := []*batchmappb.BatchMapRequest{{
 			Keys:      []string{"client"},
 			Value:     []byte(`test1`),
 			EventTime: timestamppb.New(time.Time{}),

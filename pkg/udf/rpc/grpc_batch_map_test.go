@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
-	"github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1/mapmock"
+	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1"
+	"github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1/batchmapmock"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -34,7 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/batchmapper"
 )
 
-func NewMockUDSGRPCBasedBatchMap(mockClient *mapmock.MockMapClient) *GRPCBasedBatchMap {
+func NewMockUDSGRPCBasedBatchMap(mockClient *batchmapmock.MockBatchMapClient) *GRPCBasedBatchMap {
 	c, _ := batchmapper.NewFromClient(mockClient)
 	return NewUDSgRPCBasedBatchMap("test-vertex", c)
 }
@@ -43,8 +43,8 @@ func TestGRPCBasedBatchMap_WaitUntilReady(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := mapmock.NewMockMapClient(ctrl)
-	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mappb.ReadyResponse{Ready: true}, nil)
+	mockClient := batchmapmock.NewMockBatchMapClient(ctrl)
+	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&batchmappb.ReadyResponse{Ready: true}, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -60,9 +60,9 @@ func TestGRPCBasedBatchMap_WaitUntilReady(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGRPCBasedBatchMap_BasicMapStreamFnWithMockClient(t *testing.T) {
-	mapResponses := []mappb.MapResponse{{
-		Results: []*mappb.MapResponse_Result{
+func TestGRPCBasedBatchMap_BasicBatchMapFnWithMockClient(t *testing.T) {
+	mapResponses := []batchmappb.BatchMapResponse{{
+		Results: []*batchmappb.BatchMapResponse_Result{
 			{
 				Keys:  []string{"client_test"},
 				Value: []byte(`test1`),
@@ -70,7 +70,7 @@ func TestGRPCBasedBatchMap_BasicMapStreamFnWithMockClient(t *testing.T) {
 		},
 		Id: "0-0",
 	}, {
-		Results: []*mappb.MapResponse_Result{
+		Results: []*batchmappb.BatchMapResponse_Result{
 			{
 				Keys:  []string{"client_test"},
 				Value: []byte(`test2`),
@@ -83,8 +83,8 @@ func TestGRPCBasedBatchMap_BasicMapStreamFnWithMockClient(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockClient := mapmock.NewMockMapClient(ctrl)
-		mockMapclient := mapmock.NewMockMap_MapStreamFnClient(ctrl)
+		mockClient := batchmapmock.NewMockBatchMapClient(ctrl)
+		mockMapclient := batchmapmock.NewMockBatchMap_BatchMapFnClient(ctrl)
 
 		mockMapclient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockMapclient.EXPECT().CloseSend().Return(nil).AnyTimes()
@@ -93,8 +93,8 @@ func TestGRPCBasedBatchMap_BasicMapStreamFnWithMockClient(t *testing.T) {
 		mockMapclient.EXPECT().Recv().Return(&mapResponses[1], nil).Times(1)
 		mockMapclient.EXPECT().Recv().Return(nil, io.EOF).Times(1)
 
-		//requestsCh := make(chan *mappb.MapRequest)
-		mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
+		//requestsCh := make(chan *batchmappb.MapRequest)
+		mockClient.EXPECT().BatchMapFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -129,13 +129,13 @@ func TestGRPCBasedBatchMap_BasicMapStreamFnWithMockClient(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockClient := mapmock.NewMockMapClient(ctrl)
-		mockBatchMapClient := mapmock.NewMockMap_MapStreamFnClient(ctrl)
+		mockClient := batchmapmock.NewMockBatchMapClient(ctrl)
+		mockBatchMapClient := batchmapmock.NewMockBatchMap_BatchMapFnClient(ctrl)
 		mockBatchMapClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockBatchMapClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockBatchMapClient.EXPECT().Recv().Return(nil, errors.New("mock error for map")).Times(1)
 
-		mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockBatchMapClient, nil)
+		mockClient.EXPECT().BatchMapFn(gomock.Any(), gomock.Any()).Return(mockBatchMapClient, nil)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -169,11 +169,11 @@ func TestGRPCBasedBatchMap_BasicMapStreamFnWithMockClient(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockClient := mapmock.NewMockMapClient(ctrl)
-		mockBatchMapClient := mapmock.NewMockMap_MapStreamFnClient(ctrl)
+		mockClient := batchmapmock.NewMockBatchMapClient(ctrl)
+		mockBatchMapClient := batchmapmock.NewMockBatchMap_BatchMapFnClient(ctrl)
 		mockBatchMapClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockBatchMapClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-		mockClient.EXPECT().MapStreamFn(gomock.Any(), gomock.Any()).Return(mockBatchMapClient, nil)
+		mockClient.EXPECT().BatchMapFn(gomock.Any(), gomock.Any()).Return(mockBatchMapClient, nil)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 

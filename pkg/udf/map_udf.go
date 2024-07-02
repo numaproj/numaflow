@@ -132,10 +132,11 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	}
 
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
-
 	enableMapUdfStream := sharedutil.LookupEnvBoolOr(dfv1.EnvMapStreaming, false)
 	enableBatchMapUdf := sharedutil.LookupEnvBoolOr(dfv1.EnvBatchMap, false)
+
 	if enableMapUdfStream {
+		// Map Stream mode
 		// Wait for server info to be ready
 		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapStreamServerInfoFile))
 		if err != nil {
@@ -159,6 +160,31 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}()
 
+	} else if enableBatchMapUdf {
+		// if Batch Map mode is enabled create the client and handler for that accordingly
+
+		// Wait for server info to be ready
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.BatchMapServerInfoFile))
+		if err != nil {
+			return err
+		}
+
+		// create the client and handler for batch map interface
+		batchMapClient, err := batchmapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		if err != nil {
+			return fmt.Errorf("failed to create batch map client, %w", err)
+		}
+		batchMapHandler = rpc.NewUDSgRPCBasedBatchMap(vertexName, batchMapClient)
+		// Readiness check
+		if err := batchMapHandler.WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on batch map UDF readiness check, %w", err)
+		}
+		defer func() {
+			err = batchMapHandler.CloseConn(ctx)
+			if err != nil {
+				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+			}
+		}()
 	} else {
 		// As a vertex can be either Map mode or Batch mode we reuse the same server-info file and socket file for both
 		// Wait for server info to be ready
@@ -167,42 +193,24 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		// if Batch Map mode is enabled create the client and handler for that accordingly
-		if enableBatchMapUdf {
-			batchMapClient, err := batchmapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
-			if err != nil {
-				return fmt.Errorf("failed to create batch map client, %w", err)
-			}
-			batchMapHandler = rpc.NewUDSgRPCBasedBatchMap(vertexName, batchMapClient)
-			// Readiness check
-			if err := batchMapHandler.WaitUntilReady(ctx); err != nil {
-				return fmt.Errorf("failed on batch map UDF readiness check, %w", err)
-			}
-			defer func() {
-				err = batchMapHandler.CloseConn(ctx)
-				if err != nil {
-					log.Warnw("Failed to close gRPC client conn", zap.Error(err))
-				}
-			}()
-		} else {
-			// create the client and handler for map interface
-			mapClient, err := mapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
-			if err != nil {
-				return fmt.Errorf("failed to create map client, %w", err)
-			}
-			mapHandler = rpc.NewUDSgRPCBasedMap(vertexName, mapClient)
-
-			// Readiness check
-			if err := mapHandler.WaitUntilReady(ctx); err != nil {
-				return fmt.Errorf("failed on map UDF readiness check, %w", err)
-			}
-			defer func() {
-				err = mapHandler.CloseConn(ctx)
-				if err != nil {
-					log.Warnw("Failed to close gRPC client conn", zap.Error(err))
-				}
-			}()
+		// create the client and handler for map interface
+		mapClient, err := mapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		if err != nil {
+			return fmt.Errorf("failed to create map client, %w", err)
 		}
+		mapHandler = rpc.NewUDSgRPCBasedMap(vertexName, mapClient)
+
+		// Readiness check
+		if err := mapHandler.WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on map UDF readiness check, %w", err)
+		}
+		defer func() {
+			err = mapHandler.CloseConn(ctx)
+			if err != nil {
+				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+			}
+		}()
+
 	}
 
 	for index, bufferPartition := range fromBuffer {

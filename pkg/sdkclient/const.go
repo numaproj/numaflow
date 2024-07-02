@@ -34,6 +34,7 @@ const (
 	SourceAddr            = "/var/run/numaflow/source.sock"
 	SourceTransformerAddr = "/var/run/numaflow/sourcetransform.sock"
 	MultiProcAddr         = "/var/run/numaflow/multiproc"
+	BatchMapAddr          = "/var/run/numaflow/batchmap.sock"
 
 	// Server information file configs
 	MapServerInfoFile               = "/var/run/numaflow/mapper-server-info"
@@ -46,4 +47,5 @@ const (
 	FbSinkServerInfoFile            = "/var/run/numaflow/fb-sinker-server-info"
 	SourceServerInfoFile            = "/var/run/numaflow/sourcer-server-info"
 	SourceTransformerServerInfoFile = "/var/run/numaflow/sourcetransformer-server-info"
+	BatchMapServerInfoFile          = "/var/run/numaflow/batchmapper-server-info"
 )

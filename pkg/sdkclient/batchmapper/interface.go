@@ -19,7 +19,7 @@ package batchmapper
 import (
 	"context"
 
-	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
+	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -27,5 +27,5 @@ import (
 type Client interface {
 	CloseConn(ctx context.Context) error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
-	BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapRequest) (<-chan *batchmappb.MapResponse, <-chan error)
+	BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.BatchMapRequest) (<-chan *batchmappb.BatchMapResponse, <-chan error)
 }

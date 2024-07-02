@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
+	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1"
 	"github.com/numaproj/numaflow-go/pkg/info"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
@@ -35,12 +35,12 @@ import (
 // client contains the grpc connection and the grpc client.
 type client struct {
 	conn    *grpc.ClientConn
-	grpcClt batchmappb.MapClient
+	grpcClt batchmappb.BatchMapClient
 }
 
 // New creates a new client object.
 func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
-	var opts = sdkclient.DefaultOptions(sdkclient.MapAddr)
+	var opts = sdkclient.DefaultOptions(sdkclient.BatchMapAddr)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
@@ -54,11 +54,11 @@ func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client,
 
 	c := new(client)
 	c.conn = conn
-	c.grpcClt = batchmappb.NewMapClient(conn)
+	c.grpcClt = batchmappb.NewBatchMapClient(conn)
 	return c, nil
 }
 
-func NewFromClient(c batchmappb.MapClient) (Client, error) {
+func NewFromClient(c batchmappb.BatchMapClient) (Client, error) {
 	return &client{
 		grpcClt: c,
 	}, nil
@@ -83,7 +83,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 // responses received back on a channel asynchronously.
 // We spawn 2 goroutines here, one for sending the requests over the stream
 // and the other one for receiving the responses
-func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapRequest) (<-chan *batchmappb.MapResponse, <-chan error) {
+func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.BatchMapRequest) (<-chan *batchmappb.BatchMapResponse, <-chan error) {
 	// errCh is used to track and propagate any errors that might occur during the rpc lifecyle, these could include
 	// errors in sending, UDF errors etc
 	// These are propagated to the applier for further handling
@@ -91,7 +91,7 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapR
 
 	// response channel for streaming back the results received from the gRPC server
 	// TODO(map-batch): Should we keep try to keep this buffered?
-	responseCh := make(chan *batchmappb.MapResponse)
+	responseCh := make(chan *batchmappb.BatchMapResponse)
 
 	// BatchMapFn is a bidirectional streaming RPC
 	// We get a Map_BatchMapFnClient object over which we can send the requests,
@@ -99,7 +99,7 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapR
 	// TODO(map-batch): this creates a new gRPC stream for every batch,
 	// it might be useful to see the performance difference between this approach
 	// and a long-running RPC
-	stream, err := c.grpcClt.MapStreamFn(ctx)
+	stream, err := c.grpcClt.BatchMapFn(ctx)
 	if err != nil {
 		go func() {
 			errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn stream", err)
@@ -115,11 +115,12 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.MapR
 		// want to close the channel and stop forwarding any more responses from the UDF
 		// as we would be replaying the current ones.
 		defer close(responseCh)
-		var resp *batchmappb.MapResponse
+		var resp *batchmappb.BatchMapResponse
 		var recvErr error
 		index := 0
 		for {
 			select {
+			// handle a context done
 			case <-ctx.Done():
 				errCh <- ctx.Err()
 				return

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
+	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -85,13 +85,13 @@ func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.R
 	udfResults := make([]isb.ReadWriteMessagePair, 0)
 
 	// inputChan is used to stream messages to the grpc client
-	inputChan := make(chan *batchmappb.MapRequest)
+	inputChan := make(chan *batchmappb.BatchMapRequest)
 
 	// Invoke the RPC from the client
 	respCh, errCh := u.client.BatchMapFn(ctx, inputChan)
 
 	// Read routine: this goroutine iterates over the input messages and sends each
-	// of the read messages to the grpc client after transforming it to a MapRequest.
+	// of the read messages to the grpc client after transforming it to a BatchMapRequest.
 	// Once all messages are sent, it closes the input channel to indicate that all requests have been read.
 	// On creating a new request, we add it to a tracker map so that the responses on the stream
 	// can be mapped backed to the given parent request
@@ -167,7 +167,7 @@ loop:
 	return udfResults, nil
 }
 
-func (u *GRPCBasedBatchMap) parseResponse(response *batchmappb.MapResponse, parentMessage *isb.ReadMessage) []*isb.WriteMessage {
+func (u *GRPCBasedBatchMap) parseResponse(response *batchmappb.BatchMapResponse, parentMessage *isb.ReadMessage) []*isb.WriteMessage {
 	writeMessages := make([]*isb.WriteMessage, 0)
 	for index, result := range response.GetResults() {
 		keys := result.Keys
@@ -195,11 +195,11 @@ func (u *GRPCBasedBatchMap) parseResponse(response *batchmappb.MapResponse, pare
 	return writeMessages
 }
 
-func (u *GRPCBasedBatchMap) parseInputRequest(inputMsg *isb.ReadMessage) *batchmappb.MapRequest {
+func (u *GRPCBasedBatchMap) parseInputRequest(inputMsg *isb.ReadMessage) *batchmappb.BatchMapRequest {
 	keys := inputMsg.Keys
 	payload := inputMsg.Body.Payload
 	parentMessageInfo := inputMsg.MessageInfo
-	var req = &batchmappb.MapRequest{
+	var req = &batchmappb.BatchMapRequest{
 		Id:        inputMsg.ReadOffset.String(),
 		Keys:      keys,
 		Value:     payload,
