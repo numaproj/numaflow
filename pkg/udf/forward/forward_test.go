@@ -1912,7 +1912,3 @@ func buildPublisherMapAndOTStoreFromWmStores(toBuffers map[string][]isb.BufferWr
 	}
 	return publishers, otStores
 }
-
-func assertPanic(f func() <-chan struct{}) {
-	_ = f()
-}
