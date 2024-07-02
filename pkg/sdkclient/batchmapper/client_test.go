@@ -176,7 +176,7 @@ func TestClientStreamError_BatchMapFn(t *testing.T) {
 			messageCh <- req
 		}
 	}()
-	//var caughtContextError error
+
 readLoop:
 	for {
 		select {

@@ -30,16 +30,6 @@ type testDatum struct {
 	watermark time.Time
 	metadata  testDatumMetadata
 	headers   map[string]string
-	id        string
-	keys      []string
-}
-
-func (h *testDatum) Id() string {
-	return h.id
-}
-
-func (h *testDatum) Keys() []string {
-	return h.keys
 }
 
 func (h *testDatum) Value() []byte {

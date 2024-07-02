@@ -44,6 +44,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
+// MapAppliers consolidates the appliers for different map modes together
 type MapAppliers struct {
 	MapUDF       applier.MapApplier
 	MapStreamUDF applier.MapStreamApplier
@@ -371,6 +372,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 }
 
 // processConcurrentMap is used for concurrently processing the inputs using the traditional map mode
+// here each input request is handled separately and the response for only request is received through one UDF call.
 func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, dataMessages []*isb.ReadMessage) []isb.ReadWriteMessagePair {
 	udfResults := make([]isb.ReadWriteMessagePair, len(dataMessages))
 	// udf concurrent processing request channel
@@ -409,6 +411,8 @@ func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, data
 }
 
 // processBatchMessages is used for processing the Batch Map mode UDF
+// batch map processing we send a list of N input requests together to the UDF and get the consolidated
+// response for all of them.
 func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, dataMessages []*isb.ReadMessage) []isb.ReadWriteMessagePair {
 	concurrentUDFProcessingStart := time.Now()
 	udfResults, err := isdf.mapAppliers.BatchMapUDF.ApplyBatchMap(ctx, dataMessages)
