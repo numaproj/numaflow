@@ -61,8 +61,6 @@ jobs:
           sudo find /usr/local/include -type d | xargs sudo chmod a+rx
           rm -f $PROTOC_ZIP
           ls /usr/local/include/google/protobuf/
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
       - name: Install pandoc
         run: |
           set -eux -o pipefail
