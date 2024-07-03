@@ -56,7 +56,7 @@ pub trait Operation {
     type Item;
     type Error;
     /// The [`Future`] returned when the Operation is called.
-    type Future: Future<Output=Result<Self::Item, Self::Error>>;
+    type Future: Future<Output = Result<Self::Item, Self::Error>>;
 
     // a good example https://github.com/tower-rs/tower/blob/master/tower-service/src/lib.rs#L311
     #[must_use = "futures do nothing unless you `.await` or poll them"]
@@ -67,7 +67,7 @@ pub trait Operation {
 /// is a [`Result`].
 impl<T, E, R, F> Operation for F
 where
-    R: Future<Output=Result<T, E>>,
+    R: Future<Output = Result<T, E>>,
     F: FnMut() -> R,
 {
     type Item = T;

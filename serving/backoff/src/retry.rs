@@ -3,9 +3,9 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use pin_project::pin_project;
-use tokio::time::{Instant, Sleep, sleep_until};
 use crate::{Condition, Operation};
+use pin_project::pin_project;
+use tokio::time::{sleep_until, Instant, Sleep};
 
 /// To retry a Future with backoff, we will have to maintain 2 states. These states track whether
 /// the [`Operation`] is [`RetryState::Running`] or it is sleeping as prescribed by the [`crate::strategy`].
@@ -53,11 +53,11 @@ where
 
 impl<I, O, C> Retry<I, O, C>
 where
-    I: Iterator<Item=Duration>,
+    I: Iterator<Item = Duration>,
     O: Operation,
     C: Condition<O::Error>,
 {
-    pub fn retry<II: IntoIterator<IntoIter=I, Item=I::Item>>(
+    pub fn retry<II: IntoIterator<IntoIter = I, Item = I::Item>>(
         backoff: II,
         mut operation: O,
         condition: C,
@@ -100,10 +100,9 @@ where
     }
 }
 
-
 impl<I, O, C> Future for Retry<I, O, C>
 where
-    I: Iterator<Item=Duration>,
+    I: Iterator<Item = Duration>,
     O: Operation,
     C: Condition<O::Error>,
 {
@@ -168,7 +167,6 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
     }
-
 
     #[tokio::test]
     async fn non_retriable_failure() {
