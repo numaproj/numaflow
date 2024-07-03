@@ -245,6 +245,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	// assign watermark to data messages
 	for _, msg := range dataMessages {
 		msg.Watermark = time.Time(processorWM)
+		// emit message size metric
+		metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(msg.Payload)))
 	}
 
 	var udfResults []isb.ReadWriteMessagePair
@@ -394,8 +396,6 @@ func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, data
 
 	// send to map UDF only the data messages
 	for idx, m := range dataMessages {
-		// emit message size metric
-		metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(m.Payload)))
 		// send map UDF processing work to the channel
 		udfResults[idx].ReadMessage = m
 		udfCh <- &udfResults[idx]
@@ -459,10 +459,6 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 		return nil, fmt.Errorf(errMsg)
 	} else if len(dataMessages) == 1 {
 		// send to map UDF only the data messages
-
-		// emit message size metric
-		metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).
-			Add(float64(len(dataMessages[0].Payload)))
 
 		// process the mapStreamUDF and get the result
 		start := time.Now()
