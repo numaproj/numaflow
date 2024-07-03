@@ -34,7 +34,7 @@ import (
 type GRPCBasedBatchMap struct {
 	vertexName     string
 	client         batchmapper.Client
-	requestTracker *Tracker
+	requestTracker *tracker
 }
 
 func NewUDSgRPCBasedBatchMap(vertexName string, client batchmapper.Client) *GRPCBasedBatchMap {
@@ -98,7 +98,7 @@ func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.R
 	go func() {
 		defer close(inputChan)
 		for _, msg := range messages {
-			u.requestTracker.AddRequest(msg)
+			u.requestTracker.addRequest(msg)
 			inputChan <- u.parseInputRequest(msg)
 		}
 	}()
@@ -134,7 +134,7 @@ loop:
 			// Get the unique request ID for which these responses are meant for.
 			msgId := grpcResp.GetId()
 			// Fetch the request value for the given ID from the tracker
-			parentMessage, ok := u.requestTracker.GetRequest(msgId)
+			parentMessage, ok := u.requestTracker.getRequest(msgId)
 			if !ok {
 				// this case is when the given request ID was not present in the tracker.
 				// This means that either the UDF added an incorrect ID
@@ -153,17 +153,17 @@ loop:
 				Err:           nil,
 			}
 			udfResults = append(udfResults, responsePair)
-			u.requestTracker.RemoveRequest(msgId)
+			u.requestTracker.removeRequest(msgId)
 		}
 	}
 	// check if there are elements left in the tracker. This cannot be an acceptable case as we want the
 	// UDF to send responses for all elements.
-	leftRequest := u.requestTracker.GetItems()
+	leftRequest := u.requestTracker.getItems()
 	if len(leftRequest) > 0 {
 		logger.Error("Response for %d requests not received from UDF ", len(leftRequest))
 		return nil, fmt.Errorf("response for %d requests not received from UDF ", len(leftRequest))
 	}
-	u.requestTracker.Clear()
+	u.requestTracker.clear()
 	return udfResults, nil
 }
 

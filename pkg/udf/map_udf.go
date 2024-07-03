@@ -135,6 +135,11 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	enableMapUdfStream := sharedutil.LookupEnvBoolOr(dfv1.EnvMapStreaming, false)
 	enableBatchMapUdf := sharedutil.LookupEnvBoolOr(dfv1.EnvBatchMap, false)
 
+	// We can have the vertex running only of the map modes
+	if enableMapUdfStream && enableBatchMapUdf {
+		return fmt.Errorf("vertex cannot have both map stream and batch map modes enabled")
+	}
+
 	if enableMapUdfStream {
 		// Map Stream mode
 		// Wait for server info to be ready
@@ -186,7 +191,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}()
 	} else {
-		// As a vertex can be either Map mode or Batch mode we reuse the same server-info file and socket file for both
 		// Wait for server info to be ready
 		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapServerInfoFile))
 		if err != nil {

@@ -110,7 +110,7 @@ func TestGRPCBasedBatchMap_BasicBatchMapFnWithMockClient(t *testing.T) {
 
 		dataMessages := make([]*isb.ReadMessage, 0)
 		for _, x := range readMessages {
-			u.requestTracker.AddRequest(&x)
+			u.requestTracker.addRequest(&x)
 		}
 		responseCh, _ := u.ApplyBatchMap(ctx, dataMessages)
 		idx := 1
@@ -152,7 +152,7 @@ func TestGRPCBasedBatchMap_BasicBatchMapFnWithMockClient(t *testing.T) {
 
 		dataMessages := make([]*isb.ReadMessage, 0)
 		for _, x := range readMessages {
-			u.requestTracker.AddRequest(&x)
+			u.requestTracker.addRequest(&x)
 		}
 		_, err := u.ApplyBatchMap(ctx, dataMessages)
 		assert.ErrorIs(t, err, &ApplyUDFErr{
@@ -182,7 +182,7 @@ func TestGRPCBasedBatchMap_BasicBatchMapFnWithMockClient(t *testing.T) {
 
 		dataMessages := make([]*isb.ReadMessage, 0)
 		for _, x := range readMessages {
-			u.requestTracker.AddRequest(&x)
+			u.requestTracker.addRequest(&x)
 		}
 		// explicit cancel the context, we should see that error
 		cancel()

@@ -1,64 +1,55 @@
 package rpc
 
 import (
-	"log"
 	"sync"
 
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
-type Tracker struct {
+type tracker struct {
 	lock sync.RWMutex
 	m    map[string]*isb.ReadMessage
 }
 
-func NewTracker() *Tracker {
-	return &Tracker{
+func NewTracker() *tracker {
+	return &tracker{
 		m: make(map[string]*isb.ReadMessage),
 	}
 }
 
-func (t *Tracker) AddRequest(msg *isb.ReadMessage) {
+func (t *tracker) addRequest(msg *isb.ReadMessage) {
 	id := msg.ReadOffset.String()
-	t.Set(id, msg)
+	t.set(id, msg)
 }
 
-func (t *Tracker) GetRequest(id string) (*isb.ReadMessage, bool) {
-	return t.Get(id)
+func (t *tracker) getRequest(id string) (*isb.ReadMessage, bool) {
+	return t.get(id)
 }
 
-func (t *Tracker) RemoveRequest(id string) {
-	t.Delete(id)
+func (t *tracker) removeRequest(id string) {
+	t.delete(id)
 }
 
-func (t *Tracker) PrintAll() {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	for k, v := range t.m {
-		log.Println("MYDEBUG: MAP VALS", k, " ", v)
-	}
-}
-
-func (t *Tracker) Get(key string) (*isb.ReadMessage, bool) {
+func (t *tracker) get(key string) (*isb.ReadMessage, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	item, ok := t.m[key]
 	return item, ok
 }
 
-func (t *Tracker) Set(key string, msg *isb.ReadMessage) {
+func (t *tracker) set(key string, msg *isb.ReadMessage) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.m[key] = msg
 }
 
-func (t *Tracker) Delete(key string) {
+func (t *tracker) delete(key string) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	delete(t.m, key)
 }
 
-func (t *Tracker) GetItems() []*isb.ReadMessage {
+func (t *tracker) getItems() []*isb.ReadMessage {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	items := make([]*isb.ReadMessage, 0, len(t.m))
@@ -68,7 +59,7 @@ func (t *Tracker) GetItems() []*isb.ReadMessage {
 	return items
 }
 
-func (t *Tracker) Clear() {
+func (t *tracker) clear() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.m = make(map[string]*isb.ReadMessage)
