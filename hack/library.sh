@@ -38,19 +38,20 @@ ensure_vendor() {
   go mod vendor
 }	
 
+# TODO: Install it in Makefile
 ensure_pandoc() {
   if [ "`command -v pandoc`" = "" ]; then
     warning "Please install pandoc with - brew install pandoc"
     exit 1
   fi
 
-  # TODO: Switch to install it in Makefile
   if [ "`pandoc -v | head -1 | awk '{print $2}'`" != "3.2.1" ]; then
     warning "Please upgrade pandoc to version 3.2.1 with - brew upgrade pandoc"
     exit 1
   fi
 }
 
+# TODO: Install it in Makefile
 ensure_protobuf() {
   if [ "`command -v protoc`" = "" ]; then
     warning "Please install protobuf with - brew install protobuf"

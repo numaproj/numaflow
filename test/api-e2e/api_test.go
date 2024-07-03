@@ -43,7 +43,7 @@ func (s *APISuite) TestISBSVC() {
 	createISBSVCBody := HTTPExpect(s.T(), "https://localhost:8143").POST(fmt.Sprintf("/api/v1/namespaces/%s/isb-services", Namespace)).WithJSON(testISBSVC).
 		Expect().
 		Status(200).Body().Raw()
-	var createISBSVCSuccessExpect = `{"data":null}`
+	var createISBSVCSuccessExpect = `"data":null`
 	assert.Contains(s.T(), createISBSVCBody, createISBSVCSuccessExpect)
 
 	listISBSVCBody := HTTPExpect(s.T(), "https://localhost:8143").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services", Namespace)).
@@ -74,7 +74,7 @@ func (s *APISuite) TestISBSVC() {
 	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8143").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCName)).
 		Expect().
 		Status(200).Body().Raw()
-	var deleteISBSVCSuccessExpect = `{"data":null}`
+	var deleteISBSVCSuccessExpect = `"data":null`
 	assert.Contains(s.T(), deleteISBSVC, deleteISBSVCSuccessExpect)
 }
 
@@ -87,7 +87,7 @@ func (s *APISuite) TestISBSVCReplica1() {
 	createISBSVCBody := HTTPExpect(s.T(), "https://localhost:8144").POST(fmt.Sprintf("/api/v1/namespaces/%s/isb-services", Namespace)).WithJSON(testISBSVC).
 		Expect().
 		Status(200).Body().Raw()
-	var createISBSVCSuccessExpect = `{"data":null}`
+	var createISBSVCSuccessExpect = `"data":null`
 	assert.Contains(s.T(), createISBSVCBody, createISBSVCSuccessExpect)
 
 	listISBSVCBody := HTTPExpect(s.T(), "https://localhost:8144").GET(fmt.Sprintf("/api/v1/namespaces/%s/isb-services", Namespace)).
@@ -118,7 +118,7 @@ func (s *APISuite) TestISBSVCReplica1() {
 	deleteISBSVC := HTTPExpect(s.T(), "https://localhost:8144").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/isb-services/%s", Namespace, testISBSVCReplica1Name)).
 		Expect().
 		Status(200).Body().Raw()
-	var deleteISBSVCSuccessExpect = `{"data":null}`
+	var deleteISBSVCSuccessExpect = `"data":null`
 	assert.Contains(s.T(), deleteISBSVC, deleteISBSVCSuccessExpect)
 }
 
@@ -143,11 +143,11 @@ func (s *APISuite) TestPipeline0() {
 	createPipeline2 := HTTPExpect(s.T(), "https://localhost:8145").POST(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).WithJSON(pl2).
 		Expect().
 		Status(200).Body().Raw()
-	var createPipelineSuccessExpect = `{"data":null}`
+	var createPipelineSuccessExpect = `"data":null`
 	assert.Contains(s.T(), createPipeline1, createPipelineSuccessExpect)
 	assert.Contains(s.T(), createPipeline2, createPipelineSuccessExpect)
 
-	var patchPipelineSuccessExpect = `{"data":null}`
+	var patchPipelineSuccessExpect = `"data":null`
 	pausePipeline1 := HTTPExpect(s.T(), "https://localhost:8145").PATCH(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).WithBytes(testPipeline1Pause).
 		Expect().
 		Status(200).Body().Raw()
@@ -176,7 +176,7 @@ func (s *APISuite) TestPipeline0() {
 	deletePipeline2 := HTTPExpect(s.T(), "https://localhost:8145").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline2Name)).
 		Expect().
 		Status(200).Body().Raw()
-	var deletePipelineSuccessExpect = `{"data":null}`
+	var deletePipelineSuccessExpect = `"data":null`
 	assert.Contains(s.T(), deletePipeline1, deletePipelineSuccessExpect)
 	assert.Contains(s.T(), deletePipeline2, deletePipelineSuccessExpect)
 }

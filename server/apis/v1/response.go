@@ -39,6 +39,8 @@ func NewNumaflowAPIResponse(errMsg *string, data any) NumaflowAPIResponse {
 	}
 }
 
+// MarshalJSON implements json.Marshaler.
+// It will marshal the response into a JSON object without having nested "value" field in the JSON for google.protobuf.* types.
 func (r NumaflowAPIResponse) MarshalJSON() ([]byte, error) {
 	m := map[string]any{
 		"errMsg": r.ErrMsg,
