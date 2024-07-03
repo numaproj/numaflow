@@ -419,8 +419,9 @@ func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, data
 	if err != nil {
 		// In case of an error received while processing the UDF call, we would do not handle partial failures,
 		// and hence would want to replay the whole batch currently.
-		// For achieving this, no-ack all the messages in the batch to force a re-read from the ISB
-		// And then restart the numa container.
+		// For achieving this, no-ack all the messages in the batch to force an early re-read from the ISB
+		// And then restart the numa container. Though we cannot enforce from the ISB that the same set of messages
+		// will be sent back everytime there is a replay.
 		//TODO(map-batch) - We do not have any retry mechanism currently in place. Do we want to add any before
 		// restarting?
 		// Also check why we do not have a retry mechanism in no-ack similar to ackFromBuffer
