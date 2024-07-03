@@ -115,6 +115,7 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.Batc
 		// want to close the channel and stop forwarding any more responses from the UDF
 		// as we would be replaying the current ones.
 		defer close(responseCh)
+
 		var resp *batchmappb.BatchMapResponse
 		var recvErr error
 		index := 0
@@ -152,9 +153,7 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.Batc
 		for inputMsg := range inputCh {
 			err = stream.Send(inputMsg)
 			if err != nil {
-				go func(sErr error) {
-					errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", sErr)
-				}(err)
+				errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", err)
 				// TODO(map-batch): Check if we should still do a CloseSend on the stream even if we have
 				// received an error. Ideally on an error we would be stopping any
 				// further processing and go for a replay so this should not be required.
@@ -168,9 +167,7 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.Batc
 		// stop listening on the stream
 		sendErr := stream.CloseSend()
 		if sendErr != nil && !errors.Is(sendErr, io.EOF) {
-			go func(sErr error) {
-				errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn stream.CloseSend()", sErr)
-			}(sendErr)
+			errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn stream.CloseSend()", sendErr)
 		}
 	}()
 	return responseCh, errCh
