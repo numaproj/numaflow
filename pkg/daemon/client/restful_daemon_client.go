@@ -19,14 +19,19 @@ package client
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
+)
+
+var (
+	jsonMarshaller = new(runtime.JSONPb)
 )
 
 type restfulDaemonClient struct {
@@ -65,7 +70,7 @@ func unmarshalResponse[T any](r *http.Response) (*T, error) {
 		return nil, fmt.Errorf("failed to read data from response body, %w", err)
 	}
 	var t T
-	if err := json.Unmarshal(data, &t); err != nil {
+	if err := jsonMarshaller.Unmarshal(data, &t); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response body to %T, %w", t, err)
 	}
 	return &t, nil
