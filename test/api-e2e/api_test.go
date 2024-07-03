@@ -204,7 +204,7 @@ func (s *APISuite) TestPipeline1() {
 	getPipelineISBsBody := HTTPExpect(s.T(), "https://localhost:8146").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/isbs", Namespace, pipelineName)).
 		Expect().
 		Status(200).Body().Raw()
-	for strings.Contains(getPipelineISBsBody, "errMsg") {
+	for !strings.Contains(getPipelineISBsBody, `"errMsg":null`) {
 		select {
 		case <-ctx.Done():
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
