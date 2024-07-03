@@ -7,9 +7,10 @@ use crate::{Condition, Operation};
 use pin_project::pin_project;
 use tokio::time::{sleep_until, Instant, Sleep};
 
-/// To retry a Future with backoff, we will have to maintain 2 states. These states track whether
-/// the [`Operation`] is [`RetryState::Running`] or it is sleeping as prescribed by the [`crate::strategy`].
-/// The state-machine for retry flips between two states, (Operation or Sleeping):
+/// To retry a Future with backoff, we will have to maintain 2 states (which are Futures themselves).
+/// These states track whether the [`Operation`] is [`RetryState::Running`] or cooling off via
+/// [`RetryState::Sleeping`] as prescribed by the [`crate::strategy`]. The state-machine for retry
+/// flips between these two states:
 /// ```no_rust
 ///      (Pending)
 ///     /

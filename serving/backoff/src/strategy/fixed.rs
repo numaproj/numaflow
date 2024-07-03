@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+/// A Fixed Interval strategy which repeats itself every X duration.
 pub struct Interval {
     interval: Duration,
 }

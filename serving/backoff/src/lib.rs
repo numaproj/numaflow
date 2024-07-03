@@ -81,17 +81,18 @@ where
 }
 
 // A NOTE on the [`Operation`] trait!
-// I tried without do without this Operation trait, but my generic exploded, something like the below:
+// I tried without do this Operation trait, but my generic exploded, something like the below:
 //
-// struct Retry<I, C, F, R, T, E>
-// where
-//     R: Future<Output = Result<T, E>>,
-//     F: FnMut() -> R
+//   struct Retry<I, C, F, R, T, E>
+//   where
+//       R: Future<Output = Result<T, E>>,
+//       F: FnMut() -> R
 //
 // I tried type alias, but then I ran into language issues https://github.com/rust-lang/rust/issues/21903
 // (NB: even to get the compiler to work, I had to do PhantomData.)
 //
 // An ideal type alias would be as follows:
-// type Operation<T, E, R: Future<Output = Result<T, E>>, F: FnMut() -> R> = F;
+//   type Operation<T, E, R: Future<Output = Result<T, E>>, F: FnMut() -> R> = F;
 // as of today, the above type alias is read by the compiler as follows
-// type Operation<T, E, R, F> = F; which is quite pointless.
+//   type Operation<T, E, R, F> = F;
+// which is quite pointless.
