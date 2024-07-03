@@ -43,6 +43,12 @@ ensure_pandoc() {
     warning "Please install pandoc with - brew install pandoc"
     exit 1
   fi
+
+  # TODO: Switch to install it in Makefile
+  if [ "`pandoc -v | head -1 | awk '{print $2}'`" != "3.2.1" ]; then
+    warning "Please upgrade pandoc to version 3.2.1 with - brew upgrade pandoc"
+    exit 1
+  fi
 }
 
 ensure_protobuf() {
