@@ -511,7 +511,8 @@ Authorization
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.HTTPSource">HTTPSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.HTTPSource">HTTPSource</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
 </p>
 <p>
 </p>
@@ -655,6 +656,39 @@ Description
 JetStreamConfig </a> </em>
 </td>
 <td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="numaflow.numaproj.io/v1alpha1.CallbackStorage">
+CallbackStorage
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>url</code></br> <em> string </em>
+</td>
+<td>
+<p>
+URL of the persistent store to write the callbacks
+</p>
 </td>
 </tr>
 </tbody>
@@ -4427,6 +4461,74 @@ CooldownSeconds if not set.
 </tr>
 </tbody>
 </table>
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingSource">
+ServingSource
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>
+Field
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Authorization"> Authorization
+</a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>service</code></br> <em> bool </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Whether to create a ClusterIP Service
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>msgIDHeaderKey</code></br> <em> string </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+The header key from which the message id will be extracted Default
+</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>callbackStorage</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.CallbackStorage">
+CallbackStorage </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>
+Persistent store for the callbacks
+</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="numaflow.numaproj.io/v1alpha1.SessionWindow">
 SessionWindow
 </h3>
@@ -4829,6 +4931,16 @@ GeneratorSource </a> </em>
 <code>jetstream</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamSource">
 JetStreamSource </a> </em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>servingSource</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource"> ServingSource
+</a> </em>
 </td>
 <td>
 <em>(Optional)</em>

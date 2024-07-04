@@ -222,6 +222,11 @@ message BufferServiceConfig {
   optional JetStreamConfig jetstream = 2;
 }
 
+message CallbackStorage {
+  // URL of the persistent store to write the callbacks
+  optional string url = 1;
+}
+
 // CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.
 // It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod,
 // it knows the properties of the connected vertices, for example, how many partitioned buffers I should write
@@ -1162,6 +1167,24 @@ message Scale {
   optional uint32 scaleDownCooldownSeconds = 11;
 }
 
+message ServingSource {
+  // +optional
+  optional Authorization auth = 1;
+
+  // Whether to create a ClusterIP Service
+  // +optional
+  optional bool service = 2;
+
+  // The header key from which the message id will be extracted
+  // Default
+  // +optional
+  optional string msgIDHeaderKey = 3;
+
+  // Persistent store for the callbacks
+  // +optional
+  optional CallbackStorage callbackStorage = 4;
+}
+
 // SessionWindow describes a session window
 message SessionWindow {
   // Timeout is the duration of inactivity after which a session window closes.
@@ -1248,6 +1271,9 @@ message Source {
 
   // +optional
   optional JetStreamSource jetstream = 7;
+
+  // +optional
+  optional ServingSource servingSource = 8;
 }
 
 // Status is a common structure which can be used for Status field.

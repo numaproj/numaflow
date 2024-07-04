@@ -82,6 +82,7 @@ const (
 	UDContainerTransformer  = "transformer"
 	UDContainerSource       = "udsource"
 	UDContainerSideInputs   = "udsi"
+	ServingSourceContainer  = "serving-source"
 
 	// components
 	ComponentISBSvc           = "isbsvc"

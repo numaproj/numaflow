@@ -17811,6 +17811,18 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.CallbackStorage": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "description": "URL of the persistent store to write the callbacks",
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.CombinedEdge": {
       "description": "CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits. It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod, it knows the properties of the connected vertices, for example, how many partitioned buffers I should write to, what is the write buffer length, etc.",
       "type": "object",
@@ -19465,6 +19477,26 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.ServingSource": {
+      "type": "object",
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
+        },
+        "callbackStorage": {
+          "description": "Persistent store for the callbacks",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.CallbackStorage"
+        },
+        "msgIDHeaderKey": {
+          "description": "The header key from which the message id will be extracted Default",
+          "type": "string"
+        },
+        "service": {
+          "description": "Whether to create a ClusterIP Service",
+          "type": "boolean"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.SessionWindow": {
       "description": "SessionWindow describes a session window",
       "type": "object",
@@ -19655,6 +19687,9 @@
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
+        },
+        "servingSource": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"

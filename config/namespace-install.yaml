@@ -10757,6 +10757,34 @@ spec:
                           - subject
                           - url
                           type: object
+                        servingSource:
+                          properties:
+                            auth:
+                              properties:
+                                token:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                              type: object
+                            callbackStorage:
+                              properties:
+                                url:
+                                  type: string
+                              required:
+                              - url
+                              type: object
+                            msgIDHeaderKey:
+                              type: string
+                            service:
+                              type: boolean
+                          type: object
                         transformer:
                           properties:
                             builtin:
@@ -16134,6 +16162,34 @@ spec:
                     - queue
                     - subject
                     - url
+                    type: object
+                  servingSource:
+                    properties:
+                      auth:
+                        properties:
+                          token:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                        type: object
+                      callbackStorage:
+                        properties:
+                          url:
+                            type: string
+                        required:
+                        - url
+                        type: object
+                      msgIDHeaderKey:
+                        type: string
+                      service:
+                        type: boolean
                     type: object
                   transformer:
                     properties:
