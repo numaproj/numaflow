@@ -29,7 +29,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	
 )
 
 // BuildUXEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,
