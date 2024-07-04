@@ -116,10 +116,11 @@ jobs:
         run: make test-coverage-with-isb
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.0.1
+        uses: codecov/codecov-action@v4
         with:
           files: ./test/profile.cov
-          token: ${{ secrets.CODECOV_TOKEN }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   rust-unit-tests:
    name: Unit Tests Rust
@@ -164,10 +165,11 @@ jobs:
          find . -name "*.profraw" -type f -delete
 
      - name: Upload Rust coverage reports to Codecov
-       uses: codecov/codecov-action@v4.0.1
+       uses: codecov/codecov-action@v4
        with:
          files: ./serving/lcov.info
-         token: ${{ secrets.CODECOV_TOKEN }}
+       env:
+         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   lint:
     name: Lint
