@@ -170,8 +170,8 @@ jobs:
        uses: codecov/codecov-action@v4
        with:
          files: ./serving/lcov.info
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+       env:
+         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   lint:
     name: Lint
