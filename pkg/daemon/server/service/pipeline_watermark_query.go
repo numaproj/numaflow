@@ -22,12 +22,14 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"google.golang.org/protobuf/types/known/wrapperspb"
+	
 )
 
 // BuildUXEdgeWatermarkFetchers returns a map of the watermark fetchers, where key is the buffer name,

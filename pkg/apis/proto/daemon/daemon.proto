@@ -32,6 +32,7 @@ message BufferInfo {
   google.protobuf.Int64Value pendingCount = 3;
   google.protobuf.Int64Value ackPendingCount = 4;
   // Total messages existing in the buffer, including pending, ackPending and acked.
+  // Using Int64Value to solve the problem of int64 in proto3 being serialized to string when converting to JSON.
   google.protobuf.Int64Value totalMessages = 5;
   google.protobuf.Int64Value bufferLength = 6;
   google.protobuf.DoubleValue bufferUsageLimit = 7;

@@ -50,6 +50,7 @@ type BufferInfo struct {
 	PendingCount    *wrapperspb.Int64Value `protobuf:"bytes,3,opt,name=pendingCount,proto3" json:"pendingCount,omitempty"`
 	AckPendingCount *wrapperspb.Int64Value `protobuf:"bytes,4,opt,name=ackPendingCount,proto3" json:"ackPendingCount,omitempty"`
 	// Total messages existing in the buffer, including pending, ackPending and acked.
+	// Using Int64Value to solve the problem of int64 in proto3 being serialized to string when converting to JSON.
 	TotalMessages    *wrapperspb.Int64Value  `protobuf:"bytes,5,opt,name=totalMessages,proto3" json:"totalMessages,omitempty"`
 	BufferLength     *wrapperspb.Int64Value  `protobuf:"bytes,6,opt,name=bufferLength,proto3" json:"bufferLength,omitempty"`
 	BufferUsageLimit *wrapperspb.DoubleValue `protobuf:"bytes,7,opt,name=bufferUsageLimit,proto3" json:"bufferUsageLimit,omitempty"`

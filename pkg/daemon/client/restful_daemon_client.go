@@ -31,6 +31,7 @@ import (
 )
 
 var (
+	// Use JSONPb to unmarshal the response, it is needed to unmarshal the response with google.protobuf.* data types.
 	jsonMarshaller = new(runtime.JSONPb)
 )
 
