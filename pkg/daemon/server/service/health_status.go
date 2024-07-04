@@ -279,7 +279,7 @@ func (hc *HealthChecker) updateUsageTimeline(bufferList []*daemon.BufferInfo) {
 			hc.timelineData[bufferName] = sharedqueue.New[*timelineEntry](int(healthWindowSize))
 		}
 		// extract the current buffer usage and update the average buffer usage
-		bufferUsage := buffer.GetBufferUsage() * 100
+		bufferUsage := buffer.GetBufferUsage().GetValue() * 100
 		newAverage := updateAverageBufferUsage(hc.timelineData[bufferName].Items(), bufferUsage)
 		// add the new entry to the timeline
 		hc.timelineData[bufferName].Append(&timelineEntry{

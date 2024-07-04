@@ -16,17 +16,35 @@ limitations under the License.
 
 package v1
 
+import (
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+)
+
+var (
+	jsonMarshaller = new(runtime.JSONPb)
+)
+
 type NumaflowAPIResponse struct {
 	// ErrMsg provides more detailed error information. If API call succeeds, the ErrMsg is nil.
 	ErrMsg *string `json:"errMsg,omitempty"`
 	// Data is the response body.
-	Data interface{} `json:"data"`
+	Data any `json:"data"`
 }
 
 // NewNumaflowAPIResponse creates a new NumaflowAPIResponse.
-func NewNumaflowAPIResponse(errMsg *string, data interface{}) NumaflowAPIResponse {
+func NewNumaflowAPIResponse(errMsg *string, data any) NumaflowAPIResponse {
 	return NumaflowAPIResponse{
 		ErrMsg: errMsg,
 		Data:   data,
 	}
+}
+
+// MarshalJSON implements json.Marshaler.
+// It will marshal the response into a JSON object without having nested "value" field in the JSON for google.protobuf.* types.
+func (r NumaflowAPIResponse) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"errMsg": r.ErrMsg,
+		"data":   r.Data,
+	}
+	return jsonMarshaller.Marshal(m)
 }
