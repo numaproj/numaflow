@@ -35,10 +35,11 @@ import (
 func NewISBSvcCreateCommand() *cobra.Command {
 
 	var (
-		isbSvcType      string
-		buffers         []string
-		buckets         []string
-		sideInputsStore string
+		isbSvcType          string
+		buffers             []string
+		buckets             []string
+		sideInputsStore     string
+		servingSourceStream string
 	)
 
 	command := &cobra.Command{
@@ -80,7 +81,7 @@ func NewISBSvcCreateCommand() *cobra.Command {
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
 
-			if err = isbsClient.CreateBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, opts...); err != nil {
+			if err = isbsClient.CreateBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, servingSourceStream, opts...); err != nil {
 				logger.Errorw("Failed to create buffers, buckets and side inputs store.", zap.Error(err))
 				return err
 			}
@@ -92,5 +93,6 @@ func NewISBSvcCreateCommand() *cobra.Command {
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to create") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to create") // --buckets=xxa,xxb --buckets=xxc
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
+	command.Flags().StringVar(&servingSourceStream, "serving-source-stream", "", "Name of the serving source stream")
 	return command
 }

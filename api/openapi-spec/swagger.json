@@ -18454,6 +18454,7 @@
         "PullPolicy",
         "Env",
         "SideInputsStoreName",
+        "ServingSourceStreamName",
         "DefaultResources"
       ],
       "properties": {
@@ -18473,6 +18474,9 @@
           "type": "string"
         },
         "PullPolicy": {
+          "type": "string"
+        },
+        "ServingSourceStreamName": {
           "type": "string"
         },
         "SideInputsStoreName": {

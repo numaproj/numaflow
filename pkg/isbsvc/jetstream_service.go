@@ -57,7 +57,7 @@ func WithJetStreamClient(jsClient *jsclient.Client) JSServiceOption {
 	}
 }
 
-func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, opts ...CreateOption) error {
+func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStream string, opts ...CreateOption) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}
@@ -103,6 +103,42 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			log.Infow("Succeeded to create a side inputs KV", zap.String("kvName", kvName))
 		}
 	}
+
+	if servingSourceStream != "" {
+		_, err := js.StreamInfo(servingSourceStream)
+		if err != nil {
+			if !errors.Is(err, nats.ErrStreamNotFound) {
+				return fmt.Errorf("failed to query information of stream %q during buffer creating, %w", servingSourceStream, err)
+			}
+			if _, err := js.AddStream(&nats.StreamConfig{
+				Name:       servingSourceStream,
+				Subjects:   []string{servingSourceStream}, // Use the stream name as the only subject
+				Retention:  nats.RetentionPolicy(v.GetInt("stream.retention")),
+				Discard:    nats.DiscardOld,
+				MaxMsgs:    v.GetInt64("stream.maxMsgs"),
+				MaxAge:     v.GetDuration("stream.maxAge"),
+				MaxBytes:   v.GetInt64("stream.maxBytes"),
+				Storage:    nats.StorageType(v.GetInt("stream.storage")),
+				Replicas:   v.GetInt("stream.replicas"),
+				Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period
+			}); err != nil {
+				return fmt.Errorf("failed to create serving source stream %q, %w", servingSourceStream, err)
+			}
+			log.Infow("Succeeded to create a serving source stream", zap.String("stream", servingSourceStream))
+			if _, err := js.AddConsumer(servingSourceStream, &nats.ConsumerConfig{
+				Durable:       servingSourceStream,
+				DeliverPolicy: nats.DeliverAllPolicy,
+				AckPolicy:     nats.AckExplicitPolicy,
+				AckWait:       v.GetDuration("consumer.ackWait"),
+				MaxAckPending: v.GetInt("consumer.maxAckPending"),
+				FilterSubject: servingSourceStream,
+			}); err != nil {
+				return fmt.Errorf("failed to create a consumer for serving source stream %q, %w", servingSourceStream, err)
+			}
+			log.Infow("Succeeded to create a consumer for serving source stream", zap.String("stream", servingSourceStream), zap.String("consumer", servingSourceStream))
+		}
+	}
+
 	for _, buffer := range buffers {
 		streamName := JetStreamName(buffer)
 		_, err := js.StreamInfo(streamName)
@@ -182,7 +218,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	return nil
 }
 
-func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
+func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStream string) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}
@@ -223,10 +259,17 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 		}
 		log.Infow("Succeeded to delete a side inputs KV", zap.String("kvName", sideInputsKVName))
 	}
+
+	if servingSourceStream != "" {
+		if err := js.DeleteStream(servingSourceStream); err != nil && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete serving source stream %q, %w", servingSourceStream, err)
+		}
+		log.Infow("Succeeded to delete the serving source stream", zap.String("stream", servingSourceStream))
+	}
 	return nil
 }
 
-func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
+func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStream string) error {
 	if len(buffers) == 0 && len(buckets) == 0 {
 		return nil
 	}
@@ -260,6 +303,11 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 		sideInputsKVName := JetStreamSideInputsStoreKVName(sideInputsStore)
 		if _, err := js.KeyValue(sideInputsKVName); err != nil {
 			return fmt.Errorf("failed to query side inputs store KV %q, %w", sideInputsKVName, err)
+		}
+	}
+	if servingSourceStream != "" {
+		if _, err := js.StreamInfo(servingSourceStream); err != nil {
+			return fmt.Errorf("failed to query information of stream %q, %w", servingSourceStream, err)
 		}
 	}
 	return nil

@@ -18462,6 +18462,9 @@
         "PullPolicy": {
           "type": "string"
         },
+        "ServingSourceStreamName": {
+          "type": "string"
+        },
         "SideInputsStoreName": {
           "type": "string"
         }
@@ -18472,6 +18475,7 @@
         "PullPolicy",
         "Env",
         "SideInputsStoreName",
+        "ServingSourceStreamName",
         "DefaultResources"
       ],
       "type": "object"

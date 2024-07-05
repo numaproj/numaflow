@@ -56,11 +56,11 @@ message PipelineStatus {
 }
 
 message ListBuffersRequest {
-    string pipeline = 1;
+  string pipeline = 1;
 }
 
 message ListBuffersResponse {
-    repeated BufferInfo buffers = 1;
+  repeated BufferInfo buffers = 1;
 }
 
 message GetBufferRequest {
@@ -69,15 +69,15 @@ message GetBufferRequest {
 }
 
 message GetBufferResponse {
-    BufferInfo buffer = 1;
+  BufferInfo buffer = 1;
 }
 
 message GetPipelineStatusRequest {
-    string pipeline = 1;
+  string pipeline = 1;
 }
 
 message GetPipelineStatusResponse {
-    PipelineStatus status = 1;
+  PipelineStatus status = 1;
 }
 
 message GetVertexMetricsRequest {

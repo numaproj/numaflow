@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -131,6 +132,10 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
 		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
 	}
+	// TODO For serving source can we use the same url as http?
+	if x := v.Spec.Source; x != nil && x.ServingSource != nil && x.ServingSource.Service {
+		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
+	}
 	return svcs
 }
 
@@ -236,6 +241,8 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	containers[0].Ports = append(containers[0].Ports, corev1.ContainerPort{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort})
 	containers[0].ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -300,6 +307,27 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		}
 		// Side Inputs init container
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
+	}
+
+	if v.IsASource() && v.Spec.Source.ServingSource != nil {
+		servingContainer := corev1.Container{
+			Name:            "serving-source",
+			Env:             req.Env,
+			Image:           "quay.io/numaproj/serving-source:v0.1", // TODO: use appropriate image
+			ImagePullPolicy: req.PullPolicy,
+			Resources:       req.DefaultResources,
+		}
+		servingContainer.Env = append(servingContainer.Env, v.commonEnvs()...)
+		servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingSourceStream, Value: req.ServingSourceStreamName})
+		servingSourceCopy := v.Spec.Source.ServingSource.DeepCopy()
+		servingSourceBytes, err := json.Marshal(servingSourceCopy)
+		if err != nil {
+			return nil, errors.New("failed to marshal serving source spec")
+		}
+		encodedServingSourceSpec := base64.StdEncoding.EncodeToString(servingSourceBytes)
+		servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingSourceObject, Value: encodedServingSourceSpec})
+		servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingSourcePort, Value: strconv.Itoa(VertexHTTPSPort)})
+		containers = append(containers, servingContainer)
 	}
 
 	spec := &corev1.PodSpec{

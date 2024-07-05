@@ -548,7 +548,9 @@ message GetVertexPodSpecReq {
 
   optional string sideInputsStoreName = 5;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 6;
+  optional string servingSourceStreamName = 6;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 7;
 }
 
 // GroupBy indicates it is a reducer UDF

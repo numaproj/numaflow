@@ -294,7 +294,9 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 			bks = append(bks, k)
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
+		// Why do we always create side input store?
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
+		args = append(args, fmt.Sprintf("--serving-source-stream=%s", pl.GetServingSourceStreamName()))
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
@@ -439,7 +441,7 @@ func (r *pipelineReconciler) findExistingVertices(ctx context.Context, pl *dfv1.
 	return result, nil
 }
 
-// Create or update Side Inputs Mapager deployments
+// Create or update Side Inputs Manager deployments
 func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig) error {
 	log := logging.FromContext(ctx)
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
@@ -542,6 +544,7 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		args = append(args, fmt.Sprintf("--buffers=%s", strings.Join(allBuffers, ",")))
 		args = append(args, fmt.Sprintf("--buckets=%s", strings.Join(allBuckets, ",")))
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
+		args = append(args, fmt.Sprintf("--serving-source-stream=%s", pl.GetServingSourceStreamName()))
 
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cln")
 		batchJob.OwnerReferences = []metav1.OwnerReference{}

@@ -137,6 +137,9 @@ const (
 	EnvMemoryRequest                    = "NUMAFLOW_MEMORY_REQUEST"
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
 	EnvGoDebug                          = "GODEBUG"
+	EnvServingSourceStream              = "NUMAFLOW_SERVING_SOURCE_STREAM"
+	EnvServingSourceObject              = "NUMAFLOW_SERVING_SOURCE_OBJECT"
+	EnvServingSourcePort                = "NUMAFLOW_SERVING_SOURCE_PORT"
 
 	PathVarRun            = "/var/run/numaflow"
 	VertexMetricsPort     = 2469

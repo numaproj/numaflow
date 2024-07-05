@@ -55,9 +55,6 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
 	if s.UDSource != nil {
 		containers = append(containers, s.getUDSourceContainer(req))
 	}
-	if s.ServingSource != nil {
-
-	}
 	return containers, nil
 }
 
@@ -155,15 +152,4 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 		TimeoutSeconds:      30,
 	}
 	return container
-}
-
-func (s Source) getServingContainer(mainContainerReq getContainerReq) corev1.Container {
-	c := containerBuilder{}.
-		name("serving-container").
-		image("quay.io/numaproj/serving-source:v0.1").    // TODO: publish a separate image for the serving source
-		imagePullPolicy(mainContainerReq.imagePullPolicy) // Use the same image pull policy as the main container
-
-	// Add any additional configuration for the serving container here
-
-	return c.build()
 }
