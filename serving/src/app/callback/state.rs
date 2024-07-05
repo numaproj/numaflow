@@ -65,7 +65,7 @@ where
     }
 
     pub(crate) async fn save_response(
-        &self,
+        &mut self,
         id: String,
         body: axum::body::Bytes,
     ) -> crate::Result<()> {

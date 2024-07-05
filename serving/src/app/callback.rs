@@ -33,7 +33,7 @@ pub fn callback_handler<T: Send + Sync + Clone + Store + 'static>(
 }
 
 async fn callback_save<T: Send + Sync + Clone + Store>(
-    State(proxy_state): State<CallbackState<T>>,
+    State(mut proxy_state): State<CallbackState<T>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<(), ApiError> {

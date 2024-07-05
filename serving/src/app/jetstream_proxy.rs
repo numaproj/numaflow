@@ -90,7 +90,7 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
         proxy_state.context,
         id.clone(),
     )
-    .await
+        .await
     {
         // Deregister the ID in the callback proxy state if writing to Jetstream fails
         let _ = proxy_state.callback.deregister(&id).await;
@@ -159,7 +159,7 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
         proxy_state.context,
         id.clone(),
     )
-    .await
+        .await
     {
         // Deregister the ID in the callback proxy state if writing to Jetstream fails
         let _ = proxy_state.callback.deregister(&id).await;
@@ -205,7 +205,7 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
         proxy_state.context,
         id.clone(),
     )
-    .await;
+        .await;
 
     match result {
         Ok(_) => Ok(Json(ServeResponse::new(
@@ -286,7 +286,7 @@ mod tests {
     struct MockStore;
 
     impl Store for MockStore {
-        async fn save(&self, _messages: Vec<PayloadToSave>) -> crate::Result<()> {
+        async fn save(&mut self, _messages: Vec<PayloadToSave>) -> crate::Result<()> {
             Ok(())
         }
         async fn retrieve_callbacks(
