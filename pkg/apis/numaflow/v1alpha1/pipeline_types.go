@@ -601,6 +601,9 @@ type PipelineStatus struct {
 	SourceCount *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
 	SinkCount   *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
 	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
+	// ObservedGeneration stores the generation value observed when setting the current Phase
+	// TODO: set default value to -1
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
 }
 
 // SetVertexCounts sets the counts of vertices.
@@ -638,43 +641,51 @@ func (pls *PipelineStatus) InitConditions() {
 }
 
 // MarkConfigured set the Pipeline has valid configuration.
+// TODO: add observedGeneration check
 func (pls *PipelineStatus) MarkConfigured() {
 	pls.MarkTrue(PipelineConditionConfigured)
 }
 
 // MarkNotConfigured the Pipeline has configuration.
+// TODO: add observedGeneration check
 func (pls *PipelineStatus) MarkNotConfigured(reason, message string) {
 	pls.MarkFalse(PipelineConditionConfigured, reason, message)
 	pls.SetPhase(PipelinePhaseFailed, message)
 }
 
 // MarkDeployed set the Pipeline has been deployed.
+// TODO: add observedGeneration check
 func (pls *PipelineStatus) MarkDeployed() {
 	pls.MarkTrue(PipelineConditionDeployed)
 }
 
 // MarkPhaseRunning set the Pipeline has been running.
+// TODO: add observedGeneration check
 func (pls *PipelineStatus) MarkPhaseRunning() {
 	pls.SetPhase(PipelinePhaseRunning, "")
 }
 
 // MarkDeployFailed set the Pipeline deployment failed
+// TODO: add observedGeneration check
 func (pls *PipelineStatus) MarkDeployFailed(reason, message string) {
 	pls.MarkFalse(PipelineConditionDeployed, reason, message)
 	pls.SetPhase(PipelinePhaseFailed, message)
 }
 
 // MarkPhasePaused set the Pipeline has been paused.
+// TODO: add observedGeneration check
 func (pls *PipelineStatus) MarkPhasePaused() {
 	pls.SetPhase(PipelinePhasePaused, "Pipeline paused")
 }
 
 // MarkPhasePausing set the Pipeline is pausing.
+// TODO: add observedGeneration check
 func (pls *PipelineStatus) MarkPhasePausing() {
 	pls.SetPhase(PipelinePhasePausing, "Pausing in progress")
 }
 
 // MarkPhaseDeleting set the Pipeline is deleting.
+// TODO: add observedGeneration check
 func (pls *PipelineStatus) MarkPhaseDeleting() {
 	pls.SetPhase(PipelinePhaseDeleting, "Deleting in progress")
 }

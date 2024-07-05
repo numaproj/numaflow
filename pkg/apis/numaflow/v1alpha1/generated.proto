@@ -1020,6 +1020,10 @@ message PipelineStatus {
   optional uint32 sinkCount = 7;
 
   optional uint32 udfCount = 8;
+
+  // ObservedGeneration stores the generation value observed when setting the current Phase
+  // TODO: set default value to -1
+  optional int64 observedGeneration = 9;
 }
 
 message RedisBufferService {
