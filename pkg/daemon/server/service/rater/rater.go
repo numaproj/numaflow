@@ -25,6 +25,7 @@ import (
 
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/metrics"
@@ -34,7 +35,7 @@ import (
 
 type Ratable interface {
 	Start(ctx context.Context) error
-	GetRates(vertexName, partitionName string) map[string]float64
+	GetRates(vertexName, partitionName string) map[string]*wrapperspb.DoubleValue
 }
 
 var _ Ratable = (*Rater)(nil)
@@ -260,14 +261,14 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 }
 
 // GetRates returns the processing rates of the vertex partition in the format of lookback second to rate mappings
-func (r *Rater) GetRates(vertexName, partitionName string) map[string]float64 {
+func (r *Rater) GetRates(vertexName, partitionName string) map[string]*wrapperspb.DoubleValue {
 	r.log.Debugf("Getting rates for vertex %s, partition %s", vertexName, partitionName)
 	r.log.Debugf("Current timestampedPodCounts for vertex %s is: %v", vertexName, r.timestampedPodCounts[vertexName])
-	var result = make(map[string]float64)
+	var result = make(map[string]*wrapperspb.DoubleValue)
 	// calculate rates for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap(vertexName) {
 		r := CalculateRate(r.timestampedPodCounts[vertexName], i, partitionName)
-		result[n] = r
+		result[n] = wrapperspb.Double(r)
 	}
 	r.log.Debugf("Got rates for vertex %s, partition %s: %v", vertexName, partitionName, result)
 	return result
