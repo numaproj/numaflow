@@ -820,7 +820,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		return updated, err
 	}
 
-	daemonClient, err := daemonclient.NewDaemonServiceClient(pl.GetDaemonServiceURL())
+	daemonClient, err := daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
 	if err != nil {
 		return true, err
 	}
@@ -912,7 +912,7 @@ func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline
 	if vertexPatched {
 		return false, nil
 	}
-	daemonClient, err := daemonclient.NewDaemonServiceClient(pl.GetDaemonServiceURL())
+	daemonClient, err := daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
 	if err != nil {
 		return false, err
 	}

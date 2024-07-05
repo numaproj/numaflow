@@ -48,7 +48,7 @@ type Scaler struct {
 	options    *options
 	// Cache to store the vertex metrics such as pending message number
 	vertexMetricsCache *lru.Cache[string, int64]
-	daemonClientsCache *lru.Cache[string, *daemonclient.DaemonClient]
+	daemonClientsCache *lru.Cache[string, daemonclient.DaemonClient]
 }
 
 // NewScaler returns a Scaler instance.
@@ -67,7 +67,7 @@ func NewScaler(client client.Client, opts ...Option) *Scaler {
 		lock:       new(sync.RWMutex),
 	}
 	// cache daemon clients
-	s.daemonClientsCache, _ = lru.NewWithEvict[string, *daemonclient.DaemonClient](s.options.clientsCacheSize, func(key string, value *daemonclient.DaemonClient) {
+	s.daemonClientsCache, _ = lru.NewWithEvict[string, daemonclient.DaemonClient](s.options.clientsCacheSize, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
 	})
 	vertexMetricsCache, _ := lru.New[string, int64](10000)
@@ -208,7 +208,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	var err error
 	daemonClient, _ := s.daemonClientsCache.Get(pl.GetDaemonServiceURL())
 	if daemonClient == nil {
-		daemonClient, err = daemonclient.NewDaemonServiceClient(pl.GetDaemonServiceURL())
+		daemonClient, err = daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
 		if err != nil {
 			return fmt.Errorf("failed to get daemon service client for pipeline %s, %w", pl.Name, err)
 		}
@@ -264,21 +264,21 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	for _, m := range vMetrics {
 		rate, existing := m.ProcessingRates["default"]
 		// If rate is not available, we skip scaling.
-		if !existing || rate < 0 { // Rate not available
+		if !existing || rate.GetValue() < 0 { // Rate not available
 			log.Debugf("Vertex %s has no rate information, skip scaling.", vertex.Name)
 			return nil
 		}
-		partitionRates = append(partitionRates, rate)
-		totalRate += rate
+		partitionRates = append(partitionRates, rate.GetValue())
+		totalRate += rate.GetValue()
 
 		pending, existing := m.Pendings["default"]
-		if !existing || pending < 0 || pending == isb.PendingNotAvailable {
+		if !existing || pending.GetValue() < 0 || pending.GetValue() == isb.PendingNotAvailable {
 			// Pending not available, we don't do anything
 			log.Debugf("Vertex %s has no pending messages information, skip scaling.", vertex.Name)
 			return nil
 		}
-		totalPending += pending
-		partitionPending = append(partitionPending, pending)
+		totalPending += pending.GetValue()
+		partitionPending = append(partitionPending, pending.GetValue())
 	}
 
 	// Add pending information to cache for back pressure calculation, if there is a backpressure it will impact all the partitions.
@@ -507,7 +507,7 @@ func KeyOfVertex(vertex dfv1.Vertex) string {
 
 func getBufferInfos(
 	ctx context.Context,
-	d *daemonclient.DaemonClient,
+	d daemonclient.DaemonClient,
 	pl *dfv1.Pipeline,
 	vertex *dfv1.Vertex,
 ) (
@@ -531,10 +531,10 @@ func getBufferInfos(
 				return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
 			}
 
-			partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength())*bInfo.GetBufferUsageLimit()))
-			partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
-			totalBufferLength += int64(float64(*bInfo.BufferLength) * *bInfo.BufferUsageLimit)
-			totalCurrentPending += *bInfo.PendingCount
+			partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength().GetValue())*bInfo.GetBufferUsageLimit().GetValue()))
+			partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength().GetValue())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
+			totalBufferLength += int64(float64(bInfo.BufferLength.GetValue()) * bInfo.BufferUsageLimit.GetValue())
+			totalCurrentPending += bInfo.PendingCount.GetValue()
 		}
 	}
 

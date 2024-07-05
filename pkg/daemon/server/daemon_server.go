@@ -28,7 +28,7 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
@@ -198,7 +198,6 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 			}
 			return key, true
 		}),
-		runtime.WithProtoErrorHandler(runtime.DefaultHTTPProtoErrorHandler),
 	)
 	if err := daemon.RegisterDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
 		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))

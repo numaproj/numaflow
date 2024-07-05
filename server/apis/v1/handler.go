@@ -62,7 +62,7 @@ type handler struct {
 	kubeClient           kubernetes.Interface
 	metricsClient        *metricsversiond.Clientset
 	numaflowClient       dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache   *lru.Cache[string, *daemonclient.DaemonClient]
+	daemonClientsCache   *lru.Cache[string, daemonclient.DaemonClient]
 	dexObj               *DexObject
 	localUsersAuthObject *LocalUsersAuthObject
 	isReadOnly           bool
@@ -85,7 +85,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	}
 	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
-	daemonClientsCache, _ := lru.NewWithEvict[string, *daemonclient.DaemonClient](500, func(key string, value *daemonclient.DaemonClient) {
+	daemonClientsCache, _ := lru.NewWithEvict[string, daemonclient.DaemonClient](500, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
 	})
 	return &handler{
@@ -388,18 +388,18 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	}
 	for _, watermark := range watermarks {
 		// find the largest source vertex watermark
-		if _, ok := source[*watermark.From]; ok {
+		if _, ok := source[watermark.From]; ok {
 			for _, wm := range watermark.Watermarks {
-				if wm > maxWM {
-					maxWM = wm
+				if wm.GetValue() > maxWM {
+					maxWM = wm.GetValue()
 				}
 			}
 		}
 		// find the smallest sink vertex watermark
-		if _, ok := sink[*watermark.To]; ok {
+		if _, ok := sink[watermark.To]; ok {
 			for _, wm := range watermark.Watermarks {
-				if wm < minWM {
-					minWM = wm
+				if wm.GetValue() < minWM {
+					minWM = wm.GetValue()
 				}
 			}
 		}
@@ -706,7 +706,6 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the watermarks for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, watermarks))
 }
 
@@ -1146,9 +1145,9 @@ func daemonSvcAddress(ns, pipeline string) string {
 	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
 }
 
-func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClient, error) {
+func (h *handler) getDaemonClient(ns, pipeline string) (daemonclient.DaemonClient, error) {
 	if dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline)); !ok {
-		c, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		c, err := daemonclient.NewGRPCDaemonServiceClient(daemonSvcAddress(ns, pipeline))
 		if err != nil {
 			return nil, err
 		}
