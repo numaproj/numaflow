@@ -60,8 +60,8 @@ impl RedisConnection {
         }
     }
 
-    async fn retry_redis_self(&mut self, key: &str, val: &Vec<u8>) -> Result<(), RedisError> {
-        self.conn_manager
+    async fn execute_redis_cmd(conn_manager: &mut ConnectionManager, key: &str, val: &Vec<u8>) -> Result<(), RedisError> {
+        conn_manager
             .send_packed_command(redis::cmd(LPUSH).arg(key).arg(val))
             .await
             .map(|_| ())
@@ -76,13 +76,12 @@ impl RedisConnection {
             interval,
             || async {
                 // https://hackmd.io/@compiler-errors/async-closures
-                let mut this = self.clone();
-                this.retry_redis_self(key, value).await
+                Self::execute_redis_cmd(&mut self.conn_manager.clone(), key, value).await
             },
             |e: &RedisError| !e.is_unrecoverable_error(),
         )
-        .await
-        .map_err(|err| Error::StoreWrite(format!("Saving to redis: {}", err).to_string()))
+            .await
+            .map_err(|err| Error::StoreWrite(format!("Saving to redis: {}", err).to_string()))
     }
 }
 
