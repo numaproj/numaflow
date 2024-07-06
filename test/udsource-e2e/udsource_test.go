@@ -99,7 +99,7 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 			TerminateAllPodPortForwards()
 
 		// verify the processing rate match between source and sink
-		client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+		client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1234")
 		assert.NoError(s.T(), err)
 		defer func() {
 			_ = client.Close()
@@ -117,9 +117,9 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 				for _, vertexName := range vertexNames {
 					m, err := client.GetVertexMetrics(context.Background(), pipelineName, vertexName)
 					assert.NoError(s.T(), err)
-					assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+					assert.Equal(s.T(), pipelineName, m[0].Pipeline)
 					oneMinRate := m[0].ProcessingRates["1m"]
-					rates = append(rates, oneMinRate)
+					rates = append(rates, oneMinRate.GetValue())
 				}
 				if !ratesMatch(rates) {
 					time.Sleep(waitInterval)

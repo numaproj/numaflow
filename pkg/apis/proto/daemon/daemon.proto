@@ -14,46 +14,49 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-syntax = "proto2";
+syntax = "proto3";
+
 option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/daemon";
 
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
 
 package daemon;
 
 // BufferInfo is used to provide information about the buffer including
 // pending messages count, if it has unprocessed data etc which helps in pipeline/buffer deletion etc
 message BufferInfo {
-  required string pipeline = 1;
-  required string bufferName = 2;
-  required int64 pendingCount = 3;
-  required int64 ackPendingCount = 4;
+  string pipeline = 1;
+  string bufferName = 2;
+  google.protobuf.Int64Value pendingCount = 3;
+  google.protobuf.Int64Value ackPendingCount = 4;
   // Total messages existing in the buffer, including pending, ackPending and acked.
-  required int64 totalMessages = 5;
-  required int64 bufferLength = 6;
-  required double bufferUsageLimit = 7;
-  required double bufferUsage = 8;
-  required bool isFull = 9;
+  // Using Int64Value to solve the problem of int64 in proto3 being serialized to string when converting to JSON.
+  google.protobuf.Int64Value totalMessages = 5;
+  google.protobuf.Int64Value bufferLength = 6;
+  google.protobuf.DoubleValue bufferUsageLimit = 7;
+  google.protobuf.DoubleValue bufferUsage = 8;
+  google.protobuf.BoolValue isFull = 9;
 }
 
 // VertexMetrics is used to provide information about the vertex including processing rate.
 message VertexMetrics {
-  required string pipeline = 1;
-  required string vertex = 2;
-  map<string, double> processingRates = 3;
-  map<string, int64> pendings = 4;
+  string pipeline = 1;
+  string vertex = 2;
+  map<string, google.protobuf.DoubleValue> processingRates = 3;
+  map<string, google.protobuf.Int64Value> pendings = 4;
 }
 
 // PipelineStatus
 message PipelineStatus {
-  required string status = 1;
-  required string message = 2;
-  required string code = 3;
+  string status = 1;
+  string message = 2;
+  string code = 3;
 }
 
 message ListBuffersRequest {
-    required string pipeline = 1;
+    string pipeline = 1;
 }
 
 message ListBuffersResponse {
@@ -61,25 +64,25 @@ message ListBuffersResponse {
 }
 
 message GetBufferRequest {
-  required string pipeline = 1;
-  required string buffer = 2;
+  string pipeline = 1;
+  string buffer = 2;
 }
 
 message GetBufferResponse {
-    required BufferInfo buffer = 1;
+    BufferInfo buffer = 1;
 }
 
 message GetPipelineStatusRequest {
-    required string pipeline = 1;
+    string pipeline = 1;
 }
 
 message GetPipelineStatusResponse {
-    required PipelineStatus status = 1;
+    PipelineStatus status = 1;
 }
 
 message GetVertexMetricsRequest {
-  required string pipeline = 2;
-  required string vertex = 3;
+  string pipeline = 2;
+  string vertex = 3;
 }
 
 message GetVertexMetricsResponse {
@@ -89,12 +92,12 @@ message GetVertexMetricsResponse {
 /* Watermark */
 // EdgeWatermark has edge to watermark mapping.
 message EdgeWatermark {
-  required string pipeline = 1;
-  required string edge = 2;
-  repeated int64 watermarks = 3;
-  required bool isWatermarkEnabled = 4;
-  required string from = 5;
-  required string to = 6;
+  string pipeline = 1;
+  string edge = 2;
+  repeated google.protobuf.Int64Value watermarks = 3;
+  google.protobuf.BoolValue isWatermarkEnabled = 4;
+  string from = 5;
+  string to = 6;
 }
 
 message GetPipelineWatermarksResponse {
@@ -103,7 +106,7 @@ message GetPipelineWatermarksResponse {
 
 // GetPipelineWatermarksRequest requests for the watermark for a pipeline.
 message GetPipelineWatermarksRequest {
-  required string pipeline = 1;
+  string pipeline = 1;
 }
 
 // DaemonService is a grpc service that is used to provide APIs for giving any pipeline information.
