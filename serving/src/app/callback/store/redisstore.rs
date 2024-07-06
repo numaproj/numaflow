@@ -38,14 +38,17 @@ impl RedisConnection {
         })
     }
 
-    async fn handle_write_requests(&mut self, msg: PayloadToSave) -> crate::Result<()> {
+    async fn handle_write_requests(
+        mut conn_manager: &mut ConnectionManager,
+        msg: PayloadToSave,
+    ) -> crate::Result<()> {
         match msg {
             PayloadToSave::Callback { key, value } => {
                 // Convert the CallbackRequest to a byte array
                 let value = serde_json::to_vec(&*value)
                     .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
 
-                self.write_to_redis(&key, &value).await
+                Self::write_to_redis(&mut conn_manager, &key, &value).await
             }
 
             // Write the byte array to Redis
@@ -55,7 +58,7 @@ impl RedisConnection {
                 let key = format!("{}_{}", key, SAVED);
                 let value: Vec<u8> = value.into();
 
-                self.write_to_redis(&key, &value).await
+                Self::write_to_redis(&mut conn_manager, &key, &value).await
             }
         }
     }
@@ -68,7 +71,7 @@ impl RedisConnection {
     }
 
     // write to Redis with retries
-    async fn write_to_redis(&mut self, key: &str, value: &Vec<u8>) -> crate::Result<()> {
+    async fn write_to_redis(conn_manager: &mut ConnectionManager, key: &str, value: &Vec<u8>) -> crate::Result<()> {
         let interval = fixed::Interval::from_millis(config().redis.retries_duration_millis.into())
             .take(config().redis.retries);
 
@@ -76,7 +79,7 @@ impl RedisConnection {
             interval,
             || async {
                 // https://hackmd.io/@compiler-errors/async-closures
-                Self::execute_redis_cmd(&mut self.conn_manager.clone(), key, value).await
+                Self::execute_redis_cmd(&mut conn_manager.clone(), key, value).await
             },
             |e: &RedisError| !e.is_unrecoverable_error(),
         )
@@ -96,10 +99,10 @@ impl super::Store for RedisConnection {
         let sem = Arc::new(Semaphore::new(self.max_tasks));
         for msg in messages {
             let permit = Arc::clone(&sem).acquire_owned().await;
-            let mut _self = self.clone();
+            let mut _conn_mgr = self.conn_manager.clone();
             let task = tokio::spawn(async move {
                 let _permit = permit;
-                _self.handle_write_requests(msg).await
+                Self::handle_write_requests(&mut _conn_mgr, msg).await
             });
             tasks.push(task);
         }
