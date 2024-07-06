@@ -50,7 +50,7 @@ net:
 	t.Run("Empty config", func(t *testing.T) {
 		conf, err := GetSaramaConfigFromYAMLString("")
 		assert.NoError(t, err)
-		assert.Equal(t, 1000000, conf.Producer.MaxMessageBytes)
+		assert.Equal(t, 1048576, conf.Producer.MaxMessageBytes)
 		assert.Equal(t, 5, conf.Admin.Retry.Max)
 		assert.Equal(t, int32(1), conf.Consumer.Fetch.Min)
 		assert.Equal(t, 5, conf.Net.MaxOpenRequests)
