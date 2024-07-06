@@ -63,7 +63,11 @@ impl RedisConnection {
         }
     }
 
-    async fn execute_redis_cmd(conn_manager: &mut ConnectionManager, key: &str, val: &Vec<u8>) -> Result<(), RedisError> {
+    async fn execute_redis_cmd(
+        conn_manager: &mut ConnectionManager,
+        key: &str,
+        val: &Vec<u8>,
+    ) -> Result<(), RedisError> {
         conn_manager
             .send_packed_command(redis::cmd(LPUSH).arg(key).arg(val))
             .await
@@ -71,7 +75,11 @@ impl RedisConnection {
     }
 
     // write to Redis with retries
-    async fn write_to_redis(conn_manager: &mut ConnectionManager, key: &str, value: &Vec<u8>) -> crate::Result<()> {
+    async fn write_to_redis(
+        conn_manager: &mut ConnectionManager,
+        key: &str,
+        value: &Vec<u8>,
+    ) -> crate::Result<()> {
         let interval = fixed::Interval::from_millis(config().redis.retries_duration_millis.into())
             .take(config().redis.retries);
 
@@ -83,8 +91,8 @@ impl RedisConnection {
             },
             |e: &RedisError| !e.is_unrecoverable_error(),
         )
-            .await
-            .map_err(|err| Error::StoreWrite(format!("Saving to redis: {}", err).to_string()))
+        .await
+        .map_err(|err| Error::StoreWrite(format!("Saving to redis: {}", err).to_string()))
     }
 }
 
