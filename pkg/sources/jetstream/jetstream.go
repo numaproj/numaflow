@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -49,7 +50,8 @@ type jsSource struct {
 	// latestErr stores the latest error that occurred when consuming messages from Jetstream
 	// This is used to return error to the caller of the `Read` method. This value is reset in the consume handler.
 	// If the last consume operation was successful, we can ignore previous errors.
-	latestErr atomic.Value
+	latestErr      atomic.Value
+	servingEnabled bool
 }
 
 var _ sourcer.SourceReader = (*jsSource)(nil)
@@ -76,7 +78,6 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 	}
 	n.messages = make(chan *isb.ReadMessage, n.bufferSize)
 
-	source := vertexInstance.Vertex.Spec.Source.JetStream
 	opt := []natslib.Option{
 		natslib.MaxReconnects(-1),
 		natslib.ReconnectWait(3 * time.Second),
@@ -87,60 +88,88 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 			n.logger.Info("Nats reconnected")
 		}),
 	}
-	if source.TLS != nil {
-		if c, err := sharedutil.GetTLSConfig(source.TLS); err != nil {
-			return nil, err
-		} else {
-			opt = append(opt, natslib.Secure(c))
-		}
-	}
 
-	if source.Auth != nil {
-		switch {
-		case source.Auth.Basic != nil && source.Auth.Basic.User != nil && source.Auth.Basic.Password != nil:
-			username, err := sharedutil.GetSecretFromVolume(source.Auth.Basic.User)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get basic auth user, %w", err)
+	// when serving source is configured we need to connect to our jetstream ISB service
+	// and consume messages from the configured stream
+	var streamName, url string
+	if n.servingEnabled {
+		var existing bool
+		url, existing = os.LookupEnv(dfv1.EnvISBSvcJetStreamURL)
+		if !existing {
+			return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvISBSvcJetStreamURL)
+		}
+		user, existing := os.LookupEnv(dfv1.EnvISBSvcJetStreamUser)
+		if !existing {
+			return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvISBSvcJetStreamUser)
+		}
+		password, existing := os.LookupEnv(dfv1.EnvISBSvcJetStreamPassword)
+		if !existing {
+			return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvISBSvcJetStreamPassword)
+		}
+		opt = append(opt, natslib.UserInfo(user, password))
+		streamName, existing = os.LookupEnv(dfv1.EnvServingSourceStream)
+		if !existing {
+			return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvServingSourceStream)
+		}
+	} else {
+		source := vertexInstance.Vertex.Spec.Source.JetStream
+		url = source.URL
+		streamName = source.Stream
+		if source.TLS != nil {
+			if c, err := sharedutil.GetTLSConfig(source.TLS); err != nil {
+				return nil, err
+			} else {
+				opt = append(opt, natslib.Secure(c))
 			}
-			password, err := sharedutil.GetSecretFromVolume(source.Auth.Basic.Password)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get basic auth password, %w", err)
+		}
+
+		if source.Auth != nil {
+			switch {
+			case source.Auth.Basic != nil && source.Auth.Basic.User != nil && source.Auth.Basic.Password != nil:
+				username, err := sharedutil.GetSecretFromVolume(source.Auth.Basic.User)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get basic auth user, %w", err)
+				}
+				password, err := sharedutil.GetSecretFromVolume(source.Auth.Basic.Password)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get basic auth password, %w", err)
+				}
+				opt = append(opt, natslib.UserInfo(username, password))
+			case source.Auth.Token != nil:
+				token, err := sharedutil.GetSecretFromVolume(source.Auth.Token)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get auth token, %w", err)
+				}
+				opt = append(opt, natslib.Token(token))
+			case source.Auth.NKey != nil:
+				nkeyFile, err := sharedutil.GetSecretVolumePath(source.Auth.NKey)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get configured nkey file, %w", err)
+				}
+				o, err := natslib.NkeyOptionFromSeed(nkeyFile)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get NKey, %w", err)
+				}
+				opt = append(opt, o)
 			}
-			opt = append(opt, natslib.UserInfo(username, password))
-		case source.Auth.Token != nil:
-			token, err := sharedutil.GetSecretFromVolume(source.Auth.Token)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get auth token, %w", err)
-			}
-			opt = append(opt, natslib.Token(token))
-		case source.Auth.NKey != nil:
-			nkeyFile, err := sharedutil.GetSecretVolumePath(source.Auth.NKey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get configured nkey file, %w", err)
-			}
-			o, err := natslib.NkeyOptionFromSeed(nkeyFile)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get NKey, %w", err)
-			}
-			opt = append(opt, o)
 		}
 	}
 
 	n.logger.Info("Connecting to nats service...")
-	conn, err := natslib.Connect(source.URL, opt...)
+	conn, err := natslib.Connect(url, opt...)
 	if err != nil {
-		return nil, fmt.Errorf("connecting to NATS server %q: %w", source.URL, err)
+		return nil, fmt.Errorf("connecting to NATS server %q: %w", url, err)
 	}
 	n.natsConn = conn
 
 	stream, err := jetstreamlib.New(conn)
 	if err != nil {
 		n.natsConn.Close()
-		return nil, fmt.Errorf("creating jetstream instance for the NATS server %q: %w", source.URL, err)
+		return nil, fmt.Errorf("creating jetstream instance for the NATS server %q: %w", url, err)
 	}
 
-	consumerName := fmt.Sprintf("numaflow-%s-%s-%s", n.pipelineName, n.vertexName, source.Stream)
-	consumer, err := stream.CreateOrUpdateConsumer(ctx, source.Stream, jetstreamlib.ConsumerConfig{
+	consumerName := fmt.Sprintf("numaflow-%s-%s-%s", n.pipelineName, n.vertexName, streamName)
+	consumer, err := stream.CreateOrUpdateConsumer(ctx, streamName, jetstreamlib.ConsumerConfig{
 		Durable:       consumerName,
 		Description:   "Numaflow JetStream consumer",
 		DeliverPolicy: jetstreamlib.DeliverAllPolicy,
@@ -148,7 +177,7 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 	})
 	if err != nil {
 		n.natsConn.Close()
-		return nil, fmt.Errorf("creating jetstream consumer for stream %q: %w", source.Stream, err)
+		return nil, fmt.Errorf("creating jetstream consumer for stream %q: %w", streamName, err)
 	}
 	n.consumer = consumer
 
@@ -260,6 +289,14 @@ func WithBufferSize(s int) Option {
 func WithReadTimeout(t time.Duration) Option {
 	return func(o *jsSource) error {
 		o.readTimeout = t
+		return nil
+	}
+}
+
+// WithServingEnabled sets the serving enabled flag
+func WithServingEnabled() Option {
+	return func(o *jsSource) error {
+		o.servingEnabled = true
 		return nil
 	}
 }

@@ -310,23 +310,48 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 
 	if v.IsASource() && v.Spec.Source.ServingSource != nil {
+		servingSource := v.Spec.Source.ServingSource
 		servingContainer := corev1.Container{
 			Name:            "serving-source",
 			Env:             req.Env,
-			Image:           "quay.io/numaproj/serving-source:v0.1", // TODO: use appropriate image
-			ImagePullPolicy: req.PullPolicy,
+			Image:           "numaserve:0.1", // TODO: use appropriate image
+			ImagePullPolicy: corev1.PullIfNotPresent,
 			Resources:       req.DefaultResources,
 		}
+
+		// set the common envs
 		servingContainer.Env = append(servingContainer.Env, v.commonEnvs()...)
+
+		// set the serving source stream name in the environment
 		servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingSourceStream, Value: req.ServingSourceStreamName})
-		servingSourceCopy := v.Spec.Source.ServingSource.DeepCopy()
+		containers[0].Env = append(containers[0].Env, corev1.EnvVar{Name: EnvServingSourceStream, Value: req.ServingSourceStreamName})
+		// set the serving source spec in the environment
+		servingSourceCopy := servingSource.DeepCopy()
 		servingSourceBytes, err := json.Marshal(servingSourceCopy)
 		if err != nil {
 			return nil, errors.New("failed to marshal serving source spec")
 		}
 		encodedServingSourceSpec := base64.StdEncoding.EncodeToString(servingSourceBytes)
 		servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingSourceObject, Value: encodedServingSourceSpec})
+
+		// set the serving source port in the environment
 		servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingSourcePort, Value: strconv.Itoa(VertexHTTPSPort)})
+
+		// if auth is configured, set the auth token in the environment
+		if servingSource.Auth != nil && servingSource.Auth.Token != nil {
+			servingContainer.Env = append(servingContainer.Env,
+				corev1.EnvVar{
+					Name: EnvServingSourceAuthToken, ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: servingSource.Auth.Token.Name,
+							},
+							Key: servingSource.Auth.Token.Key,
+						},
+					},
+				},
+			)
+		}
 		containers = append(containers, servingContainer)
 	}
 
