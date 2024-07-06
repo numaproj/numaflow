@@ -286,7 +286,7 @@ mod tests {
     struct MockStore;
 
     impl Store for MockStore {
-        async fn save(&self, _messages: Vec<PayloadToSave>) -> crate::Result<()> {
+        async fn save(&mut self, _messages: Vec<PayloadToSave>) -> crate::Result<()> {
             Ok(())
         }
         async fn retrieve_callbacks(
