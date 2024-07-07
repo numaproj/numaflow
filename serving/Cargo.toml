@@ -1,4 +1,4 @@
-workspace = { members = [ "backoff","extras/upstreams", "servesink"] }
+workspace = { members = ["backoff", "extras/upstreams", "servesink"] }
 [package]
 name = "serve"
 version = "0.1.0"
@@ -29,3 +29,5 @@ redis = { version = "0.25.3", features = ["tokio-comp", "aio", "connection-manag
 config = "0.14.0"
 trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
+# intern
+backoff = { path = "backoff" }

@@ -14,62 +14,6 @@ use super::PayloadToSave;
 const LPUSH: &str = "LPUSH";
 const LRANGE: &str = "LRANGE";
 
-async fn handle_write_requests(conn: ConnectionManager, msg: PayloadToSave) -> crate::Result<()> {
-    match msg {
-        PayloadToSave::Callback { key, value } => {
-            // Convert the CallbackRequest to a byte array
-            let value = serde_json::to_vec(&*value)
-                .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
-
-            write_to_redis(conn, &key, &value).await
-        }
-
-        // Write the byte array to Redis
-        PayloadToSave::DatumFromPipeline { key, value } => {
-            // we have to differentiate between the saved responses and the callback requests
-            // saved responses are stored in "id_SAVED", callback requests are stored in "id"
-            let key = format!("{}_{}", key, SAVED);
-            let value: Vec<u8> = value.into();
-
-            write_to_redis(conn, &key, &value).await
-        }
-    }
-}
-
-// write to Redis with retries
-async fn write_to_redis(
-    mut conn: ConnectionManager,
-    key: &str,
-    value: &Vec<u8>,
-) -> crate::Result<()> {
-    let mut retries = 0;
-    loop {
-        // Write the byte array to Redis
-        match conn
-            .send_packed_command(redis::cmd(LPUSH).arg(key).arg(value))
-            .await
-            .map(|_| ())
-        {
-            Ok(_) => return Ok(()),
-            Err(err) => {
-                // return if we are out of retries of if the error is unrecoverable
-                if retries < config().redis.retries || err.is_unrecoverable_error() {
-                    return Err(Error::StoreWrite(
-                        format!("Saving to redis: {}", err).to_string(),
-                    ));
-                } else {
-                    retries -= 1;
-                    sleep(Duration::from_millis(
-                        config().redis.retries_duration_millis.into(),
-                    ))
-                    .await;
-                    continue;
-                }
-            }
-        }
-    }
-}
-
 // Handle to the Redis actor.
 #[derive(Clone)]
 pub(crate) struct RedisConnection {
@@ -91,23 +35,82 @@ impl RedisConnection {
             max_tasks,
         })
     }
+
+    async fn handle_write_requests(
+        mut conn_manager: &mut ConnectionManager,
+        msg: PayloadToSave,
+    ) -> crate::Result<()> {
+        match msg {
+            PayloadToSave::Callback { key, value } => {
+                // Convert the CallbackRequest to a byte array
+                let value = serde_json::to_vec(&*value)
+                    .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
+
+                Self::write_to_redis(&mut conn_manager, &key, &value).await
+            }
+
+            // Write the byte array to Redis
+            PayloadToSave::DatumFromPipeline { key, value } => {
+                // we have to differentiate between the saved responses and the callback requests
+                // saved responses are stored in "id_SAVED", callback requests are stored in "id"
+                let key = format!("{}_{}", key, SAVED);
+                let value: Vec<u8> = value.into();
+
+                Self::write_to_redis(&mut conn_manager, &key, &value).await
+            }
+        }
+    }
+
+    // write to Redis with retries
+    async fn write_to_redis(
+        conn_manager: &mut ConnectionManager,
+        key: &str,
+        value: &Vec<u8>,
+    ) -> crate::Result<()> {
+        let mut retries = 0;
+        loop {
+            // Write the byte array to Redis
+            match conn_manager
+                .send_packed_command(redis::cmd(LPUSH).arg(key).arg(value))
+                .await
+                .map(|_| ())
+            {
+                Ok(_) => return Ok(()),
+                Err(err) => {
+                    // return if we are out of retries of if the error is unrecoverable
+                    if retries < config().redis.retries || err.is_unrecoverable_error() {
+                        return Err(Error::StoreWrite(
+                            format!("Saving to redis: {}", err).to_string(),
+                        ));
+                    } else {
+                        retries -= 1;
+                        sleep(Duration::from_millis(
+                            config().redis.retries_duration_millis.into(),
+                        ))
+                        .await;
+                        continue;
+                    }
+                }
+            }
+        }
+    }
 }
 
 // It is possible to move the methods defined here to be methods on the Redis actor and communicate through channels.
 // With that, all public APIs defined on RedisConnection can be on &self (immutable).
 impl super::Store for RedisConnection {
     // Attempt to save all payloads. Returns error if we fail to save at least one message.
-    async fn save(&self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
+    async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
         let mut tasks = vec![];
         // This is put in place not to overload Redis and also way some kind of
         // flow control.
         let sem = Arc::new(Semaphore::new(self.max_tasks));
         for msg in messages {
             let permit = Arc::clone(&sem).acquire_owned().await;
-            let conn = self.conn_manager.clone();
+            let mut _conn_mgr = self.conn_manager.clone();
             let task = tokio::spawn(async move {
                 let _permit = permit;
-                handle_write_requests(conn, msg).await
+                Self::handle_write_requests(&mut _conn_mgr, msg).await
             });
             tasks.push(task);
         }
