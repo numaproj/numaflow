@@ -260,6 +260,9 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		PeriodSeconds:       60,
 		TimeoutSeconds:      30,
 	}
+	containers[0].Ports = []corev1.ContainerPort{
+		{Name: "metrics", ContainerPort: VertexMetricsPort},
+	}
 
 	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
 		for i := 1; i < len(containers); i++ {
