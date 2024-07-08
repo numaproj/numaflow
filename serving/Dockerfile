@@ -10,12 +10,17 @@ RUN apt-get update \
 RUN cargo new /serve
 WORKDIR /serve
 COPY Cargo.toml .
+
 RUN cargo new extras/upstreams
 COPY extras/upstreams/Cargo.toml extras/upstreams/Cargo.toml
+
 RUN cargo new servesink
 COPY servesink/Cargo.toml servesink/Cargo.toml
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
+RUN cargo new backoff
+COPY backoff/Cargo.toml backoff/Cargo.toml
+
+RUN cargo build --release
 
 COPY ./ /serve
 # update timestamps to force a new build

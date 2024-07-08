@@ -231,12 +231,13 @@ mod tests {
     use axum::body::Bytes;
 
     use crate::app::callback::store::memstore::InMemoryStore;
+    use crate::config::pipeline_spec;
 
     use super::*;
 
     #[tokio::test]
     async fn test_state() {
-        let msg_graph = MessageGraph::from_file("config/pipeline_spec.json").unwrap();
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
         let store = InMemoryStore::new();
         let mut state = State::new(msg_graph, store).await.unwrap();
 
@@ -296,7 +297,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_retrieve_saved_no_entry() {
-        let msg_graph = MessageGraph::from_file("config/pipeline_spec.json").unwrap();
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
         let store = InMemoryStore::new();
         let mut state = State::new(msg_graph, store).await.unwrap();
 
@@ -311,7 +312,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_insert_callback_requests_invalid_id() {
-        let msg_graph = MessageGraph::from_file("config/pipeline_spec.json").unwrap();
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
         let store = InMemoryStore::new();
         let mut state = State::new(msg_graph, store).await.unwrap();
 
@@ -332,7 +333,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_retrieve_subgraph_from_storage_no_entry() {
-        let msg_graph = MessageGraph::from_file("config/pipeline_spec.json").unwrap();
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
         let store = InMemoryStore::new();
         let mut state = State::new(msg_graph, store).await.unwrap();
 

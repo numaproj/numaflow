@@ -1,8 +1,12 @@
 {
   "vertices": [
-    "in",
-    "cat",
-    "out"
+    {
+      "name": "a"
+    }, {
+      "name": "b"
+    }, {
+      "name": "c"
+    }
   ],
   "edges": [
     {

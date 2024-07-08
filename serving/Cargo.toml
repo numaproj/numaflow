@@ -31,3 +31,4 @@ trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
 # intern
 backoff = { path = "backoff" }
+base64 = "0.22.1"

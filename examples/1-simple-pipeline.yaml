@@ -3,27 +3,35 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
+  templates:
+    vertex:
+      metadata:
+        annotations:
+          numaflow.numaproj.io/callback: "true"
   vertices:
     - name: in
       scale:
         min: 1
       source:
-        # A self data generating source
-        generator:
-          rpu: 1
-          duration: 1s
+        servingSource:
+          service: true
+          msgIDHeaderKey: "X-Request-ID"
+          callbackStorage:
+            url: "redis://redis:6379"
+          auth:
+            token:
+              name: http-source-token
+              key: my-token
     - name: cat
       scale:
         min: 1
       udf:
-        container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: map-cat:v0.1
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
     - name: out
       scale:
         min: 1
       sink:
-        # A simple log printing sink
         log: {}
   edges:
     - from: in

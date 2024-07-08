@@ -339,7 +339,6 @@ func (r *vertexReconciler) buildReduceVertexPVCSpec(vertex *dfv1.Vertex, replica
 
 func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig, replicaIndex int) (*corev1.PodSpec, error) {
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
-
 	podSpec, err := vertex.GetPodSpec(dfv1.GetVertexPodSpecReq{
 		ISBSvcType:              isbSvcType,
 		Image:                   r.image,
@@ -347,6 +346,7 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 		Env:                     envs,
 		SideInputsStoreName:     pl.GetSideInputsStoreName(),
 		ServingSourceStreamName: pl.GetServingSourceStreamName(),
+		PipelineSpec:            pl.Spec,
 		DefaultResources:        r.config.GetDefaults().GetDefaultContainerResources(),
 	})
 	if err != nil {

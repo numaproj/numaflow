@@ -3,6 +3,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub use config::config;
 
+use crate::config::pipeline_spec;
 use crate::{app::start_main_server, metrics::start_metrics_server};
 
 pub use self::error::{Error, Result};
@@ -25,7 +26,7 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer().with_ansi(false))
         .init();
 
-    info!(config = ?config(), "Starting server with config");
+    info!(config = ?config(), pipeline_spec = ? pipeline_spec(), "Starting server with config and pipeline spec");
 
     let metrics_server_handle = tokio::spawn(start_metrics_server((
         "0.0.0.0",

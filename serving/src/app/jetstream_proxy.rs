@@ -9,7 +9,6 @@ use axum::{
     routing::post,
     Json, Router,
 };
-
 use tracing::error;
 use uuid::Uuid;
 
@@ -38,8 +37,8 @@ use super::callback::{state::State as CallbackState, store::Store};
 const ID_HEADER_KEY: &str = "X-Numaflow-Id";
 const CALLBACK_URL_KEY: &str = "X-Numaflow-Callback-Url";
 
-const NUMAFLOW_RESP_ARRAY_LEN: &'static str = "Numaflow-Array-Len";
-const NUMAFLOW_RESP_ARRAY_IDX_LEN: &'static str = "Numaflow-Array-Index-Len";
+const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
+const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 
 #[derive(Clone)]
 struct ProxyState<T> {
@@ -278,6 +277,7 @@ mod tests {
     use crate::app::callback::store::PayloadToSave;
     use crate::app::callback::CallbackRequest;
     use crate::app::tracker::MessageGraph;
+    use crate::config::pipeline_spec;
     use crate::Error;
 
     use super::*;
@@ -302,7 +302,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_publish() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let client = async_nats::connect(&config().jetstream.addr)
+        let client = async_nats::connect(&config().jetstream.url)
             .await
             .map_err(|e| format!("Connecting to Jetstream: {:?}", e))?;
 
@@ -317,16 +317,11 @@ mod tests {
                 ..Default::default()
             })
             .await
-            .map_err(|e| format!("creating stream {}: {}", &config().jetstream.addr, e))?;
+            .map_err(|e| format!("creating stream {}: {}", &config().jetstream.url, e))?;
 
         let mock_store = MockStore {};
-        let msg_graph = MessageGraph::from_file("config/pipeline_spec.json").map_err(|e| {
-            format!(
-                "Generating message graph file config file {}: {:?}",
-                config().pipeline_spec_path,
-                e
-            )
-        })?;
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec())
+            .map_err(|e| format!("Failed to create message graph from pipeline spec: {:?}", e))?;
 
         let callback_state = CallbackState::new(msg_graph, mock_store).await?;
         let app = jetstream_proxy(context, callback_state).await?;
@@ -388,7 +383,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync_publish() {
-        let client = async_nats::connect(&config().jetstream.addr).await.unwrap();
+        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
         let context = jetstream::new(client);
         let id = "foobar";
         let stream_name = "sync_pub";
@@ -400,10 +395,10 @@ mod tests {
                 ..Default::default()
             })
             .await
-            .map_err(|e| format!("creating stream {}: {}", &config().jetstream.addr, e));
+            .map_err(|e| format!("creating stream {}: {}", &config().jetstream.url, e));
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_file("config/pipeline_spec.json").unwrap();
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
 
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
@@ -452,7 +447,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync_publish_serve() {
-        let client = async_nats::connect(&config().jetstream.addr).await.unwrap();
+        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
         let context = jetstream::new(client);
         let id = "foobar";
         let stream_name = "sync_serve_pub";
@@ -464,10 +459,10 @@ mod tests {
                 ..Default::default()
             })
             .await
-            .map_err(|e| format!("creating stream {}: {}", &config().jetstream.addr, e));
+            .map_err(|e| format!("creating stream {}: {}", &config().jetstream.url, e));
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_file("config/pipeline_spec.json").unwrap();
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
 
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 

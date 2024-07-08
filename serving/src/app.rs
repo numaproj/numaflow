@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::time::Duration;
 
 use async_nats::jetstream;
@@ -15,6 +14,7 @@ use tracing::{debug, info_span, Level};
 use uuid::Uuid;
 
 use crate::app::tracker::MessageGraph;
+use crate::config::pipeline_spec;
 use crate::{app::callback::state::State as CallbackState, config, metrics::capture_metrics};
 
 use self::{
@@ -106,14 +106,8 @@ async fn health_check() -> impl IntoResponse {
 }
 
 async fn routes() -> crate::Result<Router> {
-    let file_path = PathBuf::from(&config().pipeline_spec_path);
-    let msg_graph = MessageGraph::from_file(&file_path).map_err(|e| {
-        format!(
-            "Generating message graph file config file {}: {:?}",
-            config().pipeline_spec_path,
-            e
-        )
-    })?;
+    let msg_graph = MessageGraph::from_pipeline(pipeline_spec())
+        .map_err(|e| format!("Creating message graph from pipeline spec: {:?}", e))?;
 
     let redis_store = callback::store::redisstore::RedisConnection::new(
         &config().redis.addr,
@@ -122,15 +116,29 @@ async fn routes() -> crate::Result<Router> {
     .await?;
 
     // TODO: support authentication
-    let js_client = async_nats::connect(&config().jetstream.addr)
-        .await
-        .map_err(|e| {
-            format!(
-                "Connecting to jetstream server {}: {}",
-                &config().jetstream.addr,
-                e
+    // Check for user and password in the Jetstream configuration
+    let js_config = &config().jetstream;
+    let js_client = match (&js_config.user, &js_config.password) {
+        (Some(user), Some(password)) => {
+            // If both user and password are present, connect using them
+            async_nats::connect_with_options(
+                &js_config.url,
+                async_nats::ConnectOptions::with_user_and_password(user.clone(), password.clone()),
             )
-        })?;
+            .await
+        }
+        _ => {
+            // if no user and password are present, connect without them
+            async_nats::connect(&js_config.url).await
+        }
+    }
+    .map_err(|e| {
+        format!(
+            "Connecting to jetstream server {}: {}",
+            &config().jetstream.url,
+            e
+        )
+    })?;
 
     let js_context = jetstream::new(js_client);
 
@@ -165,10 +173,12 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use axum::http::StatusCode;
     use std::net::SocketAddr;
+
+    use axum::http::StatusCode;
     use tokio::time::{sleep, Duration};
+
+    use super::*;
 
     #[tokio::test]
     async fn test_start_main_server() {

@@ -52,7 +52,8 @@ type GetVertexPodSpecReq struct {
 	Env                     []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
 	SideInputsStoreName     string                      `protobuf:"bytes,5,opt,name=sideInputsStoreName"`
 	ServingSourceStreamName string                      `protobuf:"bytes,6,opt,name=servingSourceStreamName"`
-	DefaultResources        corev1.ResourceRequirements `protobuf:"bytes,7,opt,name=defaultResources"`
+	PipelineSpec            PipelineSpec                `protobuf:"bytes,7,opt,name=pipelineSpec"`
+	DefaultResources        corev1.ResourceRequirements `protobuf:"bytes,8,opt,name=defaultResources"`
 }
 
 type GetDaemonDeploymentReq struct {

@@ -137,17 +137,18 @@ const (
 	EnvMemoryRequest                    = "NUMAFLOW_MEMORY_REQUEST"
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
 	EnvGoDebug                          = "GODEBUG"
-	EnvServingSourceStream              = "NUMAFLOW_SERVING_SOURCE_STREAM"
+	EnvServingSourceStream              = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
 	EnvServingSourceObject              = "NUMAFLOW_SERVING_SOURCE_OBJECT"
-	EnvServingSourcePort                = "NUMAFLOW_SERVING_SOURCE_PORT"
-	EnvServingSourceAuthToken           = "NUMAFLOW_SERVING_SOURCE_AUTH_TOKEN"
-
-	PathVarRun            = "/var/run/numaflow"
-	VertexMetricsPort     = 2469
-	VertexMetricsPortName = "metrics"
-	VertexHTTPSPort       = 8443
-	VertexHTTPSPortName   = "https"
-	DaemonServicePort     = 4327
+	EnvServingSourcePort                = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
+	EnvServingSourceAuthToken           = "NUMAFLOW_SERVING_AUTH_TOKEN"
+	EnvServingSourcePipelineSpec        = "NUMAFLOW_SERVING_PIPELINE_SPEC"
+	EnvServingSourceHostIP              = "NUMAFLOW_SERVING_HOST_IP"
+	PathVarRun                          = "/var/run/numaflow"
+	VertexMetricsPort                   = 2469
+	VertexMetricsPortName               = "metrics"
+	VertexHTTPSPort                     = 8443
+	VertexHTTPSPortName                 = "https"
+	DaemonServicePort                   = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
 

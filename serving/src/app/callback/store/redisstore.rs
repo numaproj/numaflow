@@ -37,7 +37,7 @@ impl RedisConnection {
     }
 
     async fn handle_write_requests(
-        mut conn_manager: &mut ConnectionManager,
+        conn_manager: &mut ConnectionManager,
         msg: PayloadToSave,
     ) -> crate::Result<()> {
         match msg {
@@ -46,7 +46,7 @@ impl RedisConnection {
                 let value = serde_json::to_vec(&*value)
                     .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
 
-                Self::write_to_redis(&mut conn_manager, &key, &value).await
+                Self::write_to_redis(conn_manager, &key, &value).await
             }
 
             // Write the byte array to Redis
@@ -56,7 +56,7 @@ impl RedisConnection {
                 let key = format!("{}_{}", key, SAVED);
                 let value: Vec<u8> = value.into();
 
-                Self::write_to_redis(&mut conn_manager, &key, &value).await
+                Self::write_to_redis(conn_manager, &key, &value).await
             }
         }
     }

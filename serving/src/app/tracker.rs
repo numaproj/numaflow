@@ -1,36 +1,12 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
 use std::string::ToString;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
 use crate::app::callback::CallbackRequest;
+use crate::config::{Edge, OperatorType, Pipeline};
 use crate::Error;
-
-// OperatorType is an enum that contains the types of operators
-// that can be used in the conditions for the edge.
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-enum OperatorType {
-    #[serde(rename = "and")]
-    And,
-    #[serde(rename = "or")]
-    Or,
-    #[serde(rename = "not")]
-    Not,
-}
-
-#[allow(dead_code)]
-impl OperatorType {
-    fn as_str(&self) -> &'static str {
-        match self {
-            OperatorType::And => "and",
-            OperatorType::Or => "or",
-            OperatorType::Not => "not",
-        }
-    }
-}
 
 fn compare_slice(operator: &OperatorType, a: &[String], b: &[String]) -> bool {
     match operator {
@@ -38,34 +14,6 @@ fn compare_slice(operator: &OperatorType, a: &[String], b: &[String]) -> bool {
         OperatorType::Or => a.iter().any(|val| b.contains(val)),
         OperatorType::Not => !a.iter().any(|val| b.contains(val)),
     }
-}
-
-// Tag is a struct that contains the information about the tags for the edge
-#[derive(Serialize, Deserialize, Debug)]
-struct Tag {
-    operator: Option<OperatorType>,
-    values: Vec<String>,
-}
-
-// Conditions is a struct that contains the information about the conditions for the edge
-#[derive(Serialize, Deserialize, Debug)]
-struct Conditions {
-    tags: Option<Tag>,
-}
-
-// Edge is a struct that contains the information about the edge in the pipeline.
-#[derive(Serialize, Deserialize, Debug)]
-struct Edge {
-    from: String,
-    to: String,
-    conditions: Option<Conditions>,
-}
-
-// Pipeline is a struct that contains the information about the pipeline.
-#[derive(Serialize, Deserialize, Debug)]
-struct Pipeline {
-    vertices: Vec<String>,
-    edges: Vec<Edge>,
 }
 
 type Graph = HashMap<String, Vec<Edge>>;
@@ -276,19 +224,11 @@ impl MessageGraph {
         true
     }
 
-    pub(crate) fn from_file<P: AsRef<std::path::Path>>(file_path: P) -> Result<Self, Error> {
-        let mut file = File::open(file_path).map_err(|e| format!("Opening file: {:?}", e))?;
-
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .map_err(|e| format!("Reading file: {:?}", e))?;
-
-        let pipeline: Pipeline = serde_json::from_str(&contents)
-            .map_err(|e| Error::SubGraphGeneratorError(e.to_string()))?;
-
-        let mut dag = Graph::with_capacity(pipeline.edges.len());
-        for edge in pipeline.edges {
-            dag.entry(edge.from.clone()).or_default().push(edge);
+    // from_env reads the pipeline stored in the environment variable and creates a MessageGraph from it.
+    pub(crate) fn from_pipeline(pipeline_spec: &Pipeline) -> Result<Self, Error> {
+        let mut dag = Graph::with_capacity(pipeline_spec.edges.len());
+        for edge in &pipeline_spec.edges {
+            dag.entry(edge.from.clone()).or_default().push(edge.clone());
         }
 
         Ok(MessageGraph { dag })
@@ -297,9 +237,7 @@ impl MessageGraph {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-
-    use tempfile::tempdir;
+    use crate::config::{Conditions, Tag, Vertex};
 
     use super::*;
 
@@ -431,56 +369,96 @@ mod tests {
 
     #[test]
     fn test_generate_subgraph_complex() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("pipeline.json");
-        let mut file = File::create(&file_path).unwrap();
-
-        let pipeline_json = r#"{
-            "vertices": [
-                "a",
-                "b",
-                "c",
-                "d",
-                "e",
-                "f",
-                "g",
-                "h",
-                "i"
-            ],
-            "edges": [
-                {"from": "a", "to": "b"},
-                {"from": "a", "to": "c"},
-                {"from": "b", "to": "d"},
-                {"from": "c", "to": "e"},
-                {"from": "d", "to": "f"},
-                {"from": "e", "to": "f"},
-                {"from": "f", "to": "g"},
-                {
-                    "from": "g",
-                    "to": "h",
-                    "conditions": {
-                        "tags": {
-                            "operator": "and",
-                            "values": ["even"]
-                        }
-                    }
+        let pipeline = Pipeline {
+            vertices: vec![
+                Vertex {
+                    name: "a".to_string(),
                 },
-                {
-                    "from": "g",
-                    "to": "i",
-                    "conditions": {
-                        "tags": {
-                            "operator": "or",
-                            "values": ["odd"]
-                        }
-                    }
-                }
-            ]
-        }"#;
+                Vertex {
+                    name: "b".to_string(),
+                },
+                Vertex {
+                    name: "c".to_string(),
+                },
+                Vertex {
+                    name: "d".to_string(),
+                },
+                Vertex {
+                    name: "e".to_string(),
+                },
+                Vertex {
+                    name: "f".to_string(),
+                },
+                Vertex {
+                    name: "g".to_string(),
+                },
+                Vertex {
+                    name: "h".to_string(),
+                },
+                Vertex {
+                    name: "i".to_string(),
+                },
+            ],
+            edges: vec![
+                Edge {
+                    from: "a".to_string(),
+                    to: "b".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "a".to_string(),
+                    to: "c".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "b".to_string(),
+                    to: "d".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "c".to_string(),
+                    to: "e".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "d".to_string(),
+                    to: "f".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "e".to_string(),
+                    to: "f".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "f".to_string(),
+                    to: "g".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "g".to_string(),
+                    to: "h".to_string(),
+                    conditions: Some(Conditions {
+                        tags: Some(Tag {
+                            operator: Some(OperatorType::And),
+                            values: vec!["even".to_string()],
+                        }),
+                    }),
+                },
+                Edge {
+                    from: "g".to_string(),
+                    to: "i".to_string(),
+                    conditions: Some(Conditions {
+                        tags: Some(Tag {
+                            operator: Some(OperatorType::Or),
+                            values: vec!["odd".to_string()],
+                        }),
+                    }),
+                },
+            ],
+        };
 
-        writeln!(file, "{}", pipeline_json).unwrap();
-
-        let message_graph = MessageGraph::from_file(file_path).unwrap();
+        let message_graph = MessageGraph::from_pipeline(&pipeline).unwrap();
         let source_vertex = "a".to_string();
 
         let raw_callback = r#"[
@@ -579,32 +557,37 @@ mod tests {
         );
 
         assert!(result);
-        dir.close().unwrap();
     }
 
     #[test]
     fn test_simple_dropped_message() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("pipeline.json");
-        let mut file = File::create(&file_path).unwrap();
-
-        let pipeline_json = r#"
-        {
-            "vertices": [
-                "a",
-                "b",
-                "c"
+        let pipeline = Pipeline {
+            vertices: vec![
+                Vertex {
+                    name: "a".to_string(),
+                },
+                Vertex {
+                    name: "b".to_string(),
+                },
+                Vertex {
+                    name: "c".to_string(),
+                },
             ],
-            "edges": [
-                {"from": "a", "to": "b"},
-                {"from": "b", "to": "c"}
-            ]
-        }
-        "#;
+            edges: vec![
+                Edge {
+                    from: "a".to_string(),
+                    to: "b".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "b".to_string(),
+                    to: "c".to_string(),
+                    conditions: None,
+                },
+            ],
+        };
 
-        writeln!(file, "{}", pipeline_json).unwrap();
-
-        let message_graph = MessageGraph::from_file(file_path).unwrap();
+        let message_graph = MessageGraph::from_pipeline(&pipeline).unwrap();
         let source_vertex = "a".to_string();
 
         let raw_callback = r#"
@@ -649,63 +632,100 @@ mod tests {
         );
 
         assert!(result);
-        dir.close().unwrap();
     }
 
     #[test]
     fn test_complex_dropped_message() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("pipeline.json");
-        let mut file = File::create(&file_path).unwrap();
-
-        let pipeline_json = r#"
-        {
-            "vertices": [
-                "a",
-                "b",
-                "c",
-                "d",
-                "e",
-                "f",
-                "g",
-                "h",
-                "i"
-            ],
-            "edges": [
-                {"from": "a", "to": "b"},
-                {"from": "a", "to": "c"},
-                {"from": "b", "to": "d"},
-                {"from": "c", "to": "e"},
-                {"from": "d", "to": "f"},
-                {"from": "e", "to": "f"},
-                {"from": "f", "to": "g"},
-                {
-                    "from": "g",
-                    "to": "h",
-                    "conditions": {
-                        "tags": {
-                            "operator": "and",
-                            "values": ["even"]
-                        }
-                    }
+        let pipeline = Pipeline {
+            vertices: vec![
+                Vertex {
+                    name: "a".to_string(),
                 },
-                {
-                    "from": "g",
-                    "to": "i",
-                    "conditions": {
-                        "tags": {
-                            "operator": "or",
-                            "values": ["odd"]
-                        }
-                    }
-                }
-            ]
-        }
-        "#;
+                Vertex {
+                    name: "b".to_string(),
+                },
+                Vertex {
+                    name: "c".to_string(),
+                },
+                Vertex {
+                    name: "d".to_string(),
+                },
+                Vertex {
+                    name: "e".to_string(),
+                },
+                Vertex {
+                    name: "f".to_string(),
+                },
+                Vertex {
+                    name: "g".to_string(),
+                },
+                Vertex {
+                    name: "h".to_string(),
+                },
+                Vertex {
+                    name: "i".to_string(),
+                },
+            ],
+            edges: vec![
+                Edge {
+                    from: "a".to_string(),
+                    to: "b".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "a".to_string(),
+                    to: "c".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "b".to_string(),
+                    to: "d".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "c".to_string(),
+                    to: "e".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "d".to_string(),
+                    to: "f".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "e".to_string(),
+                    to: "f".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "f".to_string(),
+                    to: "g".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "g".to_string(),
+                    to: "h".to_string(),
+                    conditions: Some(Conditions {
+                        tags: Some(Tag {
+                            operator: Some(OperatorType::And),
+                            values: vec!["even".to_string()],
+                        }),
+                    }),
+                },
+                Edge {
+                    from: "g".to_string(),
+                    to: "i".to_string(),
+                    conditions: Some(Conditions {
+                        tags: Some(Tag {
+                            operator: Some(OperatorType::Or),
+                            values: vec!["odd".to_string()],
+                        }),
+                    }),
+                },
+            ],
+        };
 
-        writeln!(file, "{}", pipeline_json).unwrap();
-
-        let message_graph = MessageGraph::from_file(file_path).unwrap();
+        let message_graph = MessageGraph::from_pipeline(&pipeline).unwrap();
         let source_vertex = "a".to_string();
 
         let raw_callback = r#"
@@ -781,51 +801,42 @@ mod tests {
         );
 
         assert!(result);
-        dir.close().unwrap();
     }
 
     #[test]
     fn test_simple_cycle_pipeline() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("pipeline.json");
-        let mut file = File::create(&file_path).unwrap();
-
-        let pipeline_json = r#"
-        {
-            "vertices": [
-                "a",
-                "b",
-                "c"
-            ],
-            "edges": [
-                {"from": "a", "to": "b"},
-                {
-                    "from": "b",
-                    "to": "a",
-                    "conditions": {
-                        "tags": {
-                            "operator": "and",
-                            "values": ["failed"]
-                        }
-                    }
+        let pipeline = Pipeline {
+            vertices: vec![
+                Vertex {
+                    name: "a".to_string(),
                 },
-                {
-                    "from": "b",
-                    "to": "c",
-                    "conditions": {
-                        "tags": {
-                            "operator": "not",
-                            "values": ["failed"]
-                        }
-                    }
-                }
-            ]
-        }
-        "#;
+                Vertex {
+                    name: "b".to_string(),
+                },
+                Vertex {
+                    name: "c".to_string(),
+                },
+            ],
+            edges: vec![
+                Edge {
+                    from: "a".to_string(),
+                    to: "b".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "b".to_string(),
+                    to: "a".to_string(),
+                    conditions: Some(Conditions {
+                        tags: Some(Tag {
+                            operator: Some(OperatorType::Not),
+                            values: vec!["failed".to_string()],
+                        }),
+                    }),
+                },
+            ],
+        };
 
-        writeln!(file, "{}", pipeline_json).unwrap();
-
-        let message_graph = MessageGraph::from_file(file_path).unwrap();
+        let message_graph = MessageGraph::from_pipeline(&pipeline).unwrap();
         let source_vertex = "a".to_string();
 
         let raw_callback = r#"
@@ -888,7 +899,6 @@ mod tests {
         );
 
         assert!(result);
-        dir.close().unwrap();
     }
 
     #[test]
