@@ -79,6 +79,9 @@ spec:
             requests:
               cpu: 100m
               memory: 200Mi
+          ports:
+            - containerPort: 9090
+              name: metrics
           livenessProbe:
             httpGet:
               path: /healthz

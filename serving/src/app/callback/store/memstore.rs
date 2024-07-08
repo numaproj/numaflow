@@ -29,7 +29,7 @@ impl InMemoryStore {
 impl super::Store for InMemoryStore {
     /// Saves a vector of `PayloadToSave` into the `HashMap`.
     /// Each `PayloadToSave` is serialized into bytes and stored in the `HashMap` under its key.
-    async fn save(&self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
+    async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
         let mut data = self.data.lock().unwrap();
         for msg in messages {
             match msg {
@@ -176,7 +176,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_save_invalid_callback() {
-        let store = InMemoryStore::new();
+        let mut store = InMemoryStore::new();
         let value = Arc::new(CallbackRequest {
             id: "test_id".to_string(),
             vertex: "in".to_string(),
@@ -199,7 +199,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_save_invalid_datum() {
-        let store = InMemoryStore::new();
+        let mut store = InMemoryStore::new();
 
         // Try to save a datum with an invalid key
         let result = store

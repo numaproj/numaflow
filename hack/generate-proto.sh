@@ -22,8 +22,20 @@ if [ "`command -v gogoproto`" = "" ]; then
   go install -mod=vendor ./vendor/github.com/gogo/protobuf/gogoproto
 fi
 
+if [ "`command -v protoc-gen-go`" = "" ]; then
+  go install -mod=vendor ./vendor/google.golang.org/protobuf/cmd/protoc-gen-go
+fi
+
+if [ "`command -v protoc-gen-go-grpc`" = "" ]; then
+  go install -mod=vendor ./vendor/google.golang.org/grpc/cmd/protoc-gen-go-grpc
+fi
+
 if [ "`command -v protoc-gen-grpc-gateway`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+  go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway
+fi
+
+if [ "`command -v protoc-gen-openapiv2`" = "" ]; then
+  go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2
 fi
 
 if [ "`command -v goimports`" = "" ]; then
@@ -48,35 +60,23 @@ ${GOPATH}/bin/go-to-protobuf \
 
 # Following 2 proto files are needed
 mkdir -p ${GOPATH}/src/google/api
-curl -Ls https://raw.githubusercontent.com/grpc-ecosystem/grpc-gateway/v1.16.0/third_party/googleapis/google/api/annotations.proto -o ${GOPATH}/src/google/api/annotations.proto
-curl -Ls https://raw.githubusercontent.com/grpc-ecosystem/grpc-gateway/v1.16.0/third_party/googleapis/google/api/http.proto -o ${GOPATH}/src/google/api/http.proto
+curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/annotations.proto -o ${GOPATH}/src/google/api/annotations.proto
+curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/http.proto -o ${GOPATH}/src/google/api/http.proto
 
-gen-protoc2(){
+gen-protoc(){
     protoc \
       -I /usr/local/include \
       -I . \
-      -I ./vendor \
       -I ${GOPATH}/src \
-      -I ./vendor/github.com/gogo/protobuf/gogoproto \
-      --gogofast_out=plugins=grpc:${GOPATH}/src \
+      --go_out=paths=source_relative:. \
+      --go-grpc_out=paths=source_relative:. \
       --grpc-gateway_out=logtostderr=true:${GOPATH}/src \
       $@
 }
 
-gen-protoc3(){
-    protoc \
-      -I /usr/local/include \
-      -I . \
-      -I ./vendor \
-      -I ${GOPATH}/src \
-      --go_out=paths=source_relative:. \
-      --go-grpc_out=paths=source_relative:. \
-      --grpc-gateway_out=logtostderr=true:. \
-      $@
-}
+gen-protoc pkg/apis/proto/daemon/daemon.proto
 
-gen-protoc2 pkg/apis/proto/daemon/daemon.proto
+gen-protoc pkg/apis/proto/isb/message.proto
 
-gen-protoc3 pkg/apis/proto/isb/message.proto
+gen-protoc pkg/apis/proto/wmb/wmb.proto
 
-gen-protoc3 pkg/apis/proto/wmb/wmb.proto

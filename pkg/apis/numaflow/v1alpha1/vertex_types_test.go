@@ -271,6 +271,8 @@ func TestGetPodSpec(t *testing.T) {
 		assert.NotNil(t, s.Containers[0].LivenessProbe.HTTPGet)
 		assert.Equal(t, corev1.URISchemeHTTPS, s.Containers[0].LivenessProbe.HTTPGet.Scheme)
 		assert.Equal(t, VertexMetricsPort, s.Containers[0].LivenessProbe.HTTPGet.Port.IntValue())
+		assert.Equal(t, 1, len(s.Containers[0].Ports))
+		assert.Equal(t, VertexMetricsPort, int(s.Containers[0].Ports[0].ContainerPort))
 		var envNames []string
 		for _, e := range s.Containers[0].Env {
 			envNames = append(envNames, e.Name)
