@@ -18362,6 +18362,9 @@ spec:
           initialDelaySeconds: 3
           periodSeconds: 3
         name: controller-manager
+        ports:
+        - containerPort: 9090
+          name: metrics
         readinessProbe:
           httpGet:
             path: /readyz
