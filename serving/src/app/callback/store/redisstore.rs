@@ -1,9 +1,11 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use redis::aio::ConnectionManager;
+use redis::RedisError;
 use tokio::sync::Semaphore;
-use tokio::time::sleep;
+
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
 
 use crate::app::callback::CallbackRequest;
 use crate::consts::SAVED;
@@ -61,38 +63,36 @@ impl RedisConnection {
         }
     }
 
+    async fn execute_redis_cmd(
+        conn_manager: &mut ConnectionManager,
+        key: &str,
+        val: &Vec<u8>,
+    ) -> Result<(), RedisError> {
+        conn_manager
+            .send_packed_command(redis::cmd(LPUSH).arg(key).arg(val))
+            .await
+            .map(|_| ())
+    }
+
     // write to Redis with retries
     async fn write_to_redis(
         conn_manager: &mut ConnectionManager,
         key: &str,
         value: &Vec<u8>,
     ) -> crate::Result<()> {
-        let mut retries = 0;
-        loop {
-            // Write the byte array to Redis
-            match conn_manager
-                .send_packed_command(redis::cmd(LPUSH).arg(key).arg(value))
-                .await
-                .map(|_| ())
-            {
-                Ok(_) => return Ok(()),
-                Err(err) => {
-                    // return if we are out of retries of if the error is unrecoverable
-                    if retries < config().redis.retries || err.is_unrecoverable_error() {
-                        return Err(Error::StoreWrite(
-                            format!("Saving to redis: {}", err).to_string(),
-                        ));
-                    } else {
-                        retries -= 1;
-                        sleep(Duration::from_millis(
-                            config().redis.retries_duration_millis.into(),
-                        ))
-                        .await;
-                        continue;
-                    }
-                }
-            }
-        }
+        let interval = fixed::Interval::from_millis(config().redis.retries_duration_millis.into())
+            .take(config().redis.retries);
+
+        Retry::retry(
+            interval,
+            || async {
+                // https://hackmd.io/@compiler-errors/async-closures
+                Self::execute_redis_cmd(&mut conn_manager.clone(), key, value).await
+            },
+            |e: &RedisError| !e.is_unrecoverable_error(),
+        )
+        .await
+        .map_err(|err| Error::StoreWrite(format!("Saving to redis: {}", err).to_string()))
     }
 }
 
