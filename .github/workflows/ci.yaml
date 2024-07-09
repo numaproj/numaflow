@@ -123,6 +123,8 @@ jobs:
       
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: llvm-tools-preview
 
       - name: Install grcov
         run: cargo install grcov
@@ -132,13 +134,13 @@ jobs:
         run: |
           CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test --all-features
           mkdir -p ./target/debug/coverage/
-          grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o lcov.info
+          grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o ./target/debug/coverage/lcov.info
           find . -name "*.profraw" -type f -delete
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: ./test/profile.cov,./serving/lcov.info
+          files: ./test/profile.cov,./serving/target/debug/coverage/lcov.info
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
