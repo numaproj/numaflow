@@ -90,6 +90,12 @@ func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.R
 	// Invoke the RPC from the client
 	respCh, errCh := u.client.BatchMapFn(ctx, inputChan)
 
+	// trackerReq is used to store the read messages in a key, value manner where
+	// key is the read offset and the reference to read message as the value.
+	// Once the results are received from the UDF, we map the responses to the corresponding request
+	// using a lookup on this tracker.
+	trackerReq := NewTracker()
+
 	// Read routine: this goroutine iterates over the input messages and sends each
 	// of the read messages to the grpc client after transforming it to a BatchMapRequest.
 	// Once all messages are sent, it closes the input channel to indicate that all requests have been read.
@@ -98,7 +104,7 @@ func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.R
 	go func() {
 		defer close(inputChan)
 		for _, msg := range messages {
-			u.requestTracker.addRequest(msg)
+			trackerReq.addRequest(msg)
 			inputChan <- u.parseInputRequest(msg)
 		}
 	}()
@@ -134,7 +140,7 @@ loop:
 			// Get the unique request ID for which these responses are meant for.
 			msgId := grpcResp.GetId()
 			// Fetch the request value for the given ID from the tracker
-			parentMessage, ok := u.requestTracker.getRequest(msgId)
+			parentMessage, ok := trackerReq.getRequest(msgId)
 			if !ok {
 				// this case is when the given request ID was not present in the tracker.
 				// This means that either the UDF added an incorrect ID
@@ -153,17 +159,17 @@ loop:
 				Err:           nil,
 			}
 			udfResults = append(udfResults, responsePair)
-			u.requestTracker.removeRequest(msgId)
+			trackerReq.removeRequest(msgId)
 		}
 	}
 	// check if there are elements left in the tracker. This cannot be an acceptable case as we want the
 	// UDF to send responses for all elements.
-	leftRequest := u.requestTracker.getItems()
+	leftRequest := trackerReq.getItems()
 	if len(leftRequest) > 0 {
 		logger.Error("Response for %d requests not received from UDF ", len(leftRequest))
 		return nil, fmt.Errorf("response for %d requests not received from UDF ", len(leftRequest))
 	}
-	u.requestTracker.clear()
+	trackerReq.clear()
 	return udfResults, nil
 }
 

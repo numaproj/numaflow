@@ -8,6 +8,7 @@ spec:
       source:
         http: {}
     - name: go-split
+      partitions: 2
       metadata:
         annotations:
           numaflow.numaproj.io/batch-map: "true"

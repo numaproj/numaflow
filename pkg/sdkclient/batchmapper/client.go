@@ -90,7 +90,7 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.Batc
 	errCh := make(chan error)
 
 	// response channel for streaming back the results received from the gRPC server
-	// TODO(map-batch): Should we keep try to keep this buffered?
+	// TODO(map-batch): Check if keeping this buffered would help
 	responseCh := make(chan *batchmappb.BatchMapResponse)
 
 	// BatchMapFn is a bidirectional streaming RPC
@@ -118,57 +118,62 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.Batc
 
 		var resp *batchmappb.BatchMapResponse
 		var recvErr error
-		index := 0
 		for {
-			select {
-			// handle a context done
-			case <-ctx.Done():
-				errCh <- ctx.Err()
+			resp, recvErr = stream.Recv()
+			// check if this is EOF error, which indicates that no more responses left to process on the
+			// stream from the UDF, in such a case we return without any error to indicate this
+			if errors.Is(recvErr, io.EOF) {
+				// set the error channel to nil in case of no errors to ensure
+				// that it is not picked up
+				errCh = nil
 				return
-			default:
-				resp, recvErr = stream.Recv()
-				// check if this is EOF error, which indicates that no more responses left to process on the
-				// stream from the UDF, in such a case we return without any error to indicate this
-				if errors.Is(recvErr, io.EOF) {
-					return
-				}
-				// If this is some other error, propagate it to error channel,
-				// also close the response channel(done using the defer close) to indicate no more messages being read
-				errSDK := sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", recvErr)
-				if errSDK != nil {
-					errCh <- errSDK
-					return
-				}
-				// send the response upstream
-				responseCh <- resp
-				index += 1
 			}
+			// If this is some other error, propagate it to error channel,
+			// also close the response channel(done using the defer close) to indicate no more messages being read
+			errSDK := sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", recvErr)
+			if errSDK != nil {
+				errCh <- errSDK
+				return
+			}
+			// send the response upstream
+			responseCh <- resp
 		}
 	}()
 
 	// Read from the read messages and send them individually to the bi-di stream for processing
 	// in case there is an error in sending, send it to the error channel for handling
 	go func() {
-		// TODO(map-batch): Should we check for ctx.Done here as well?
-		for inputMsg := range inputCh {
-			err = stream.Send(inputMsg)
-			if err != nil {
-				errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", err)
-				// TODO(map-batch): Check if we should still do a CloseSend on the stream even if we have
-				// received an error. Ideally on an error we would be stopping any
-				// further processing and go for a replay so this should not be required.
-				// but would be good to verify.
-				// Otherwise this would be a break
+		for {
+			select {
+			case <-ctx.Done():
+				// If the context is done we do not want to send further on the stream,
+				// the Recv should get an error from the server as the stream uses the same ctx
 				return
+			case inputMsg, ok := <-inputCh:
+				// If there are no more messages left to read on the channel, then we can
+				// close the stream.
+				if !ok {
+					// CloseSend closes the send direction of the stream. This indicates to the
+					// UDF that we have sent all requests from the client, and it can safely
+					// stop listening on the stream
+					sendErr := stream.CloseSend()
+					if sendErr != nil && !errors.Is(sendErr, io.EOF) {
+						errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn stream.CloseSend()", sendErr)
+					}
+					// exit this routine
+					return
+				} else {
+					err = stream.Send(inputMsg)
+					if err != nil {
+						errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", err)
+						// On an error we would be stopping any further processing and go for a replay
+						// so return directly
+						return
+					}
+				}
 			}
 		}
-		// CloseSend closes the send direction of the stream. This indicates to the
-		// UDF that we have sent all requests from the client, and it can safely
-		// stop listening on the stream
-		sendErr := stream.CloseSend()
-		if sendErr != nil && !errors.Is(sendErr, io.EOF) {
-			errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn stream.CloseSend()", sendErr)
-		}
+
 	}()
 	return responseCh, errCh
 

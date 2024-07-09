@@ -110,11 +110,17 @@ func TestGRPCBasedBatchMap_BasicBatchMapFnWithMockClient(t *testing.T) {
 
 		dataMessages := make([]*isb.ReadMessage, 0)
 		for _, x := range readMessages {
-			u.requestTracker.addRequest(&x)
+			dataMessages = append(dataMessages, &x)
+			//u.requestTracker.addRequest(&x)
 		}
-		responseCh, _ := u.ApplyBatchMap(ctx, dataMessages)
+		responseCh, err := u.ApplyBatchMap(ctx, dataMessages)
+		if err != nil {
+			fmt.Println(err)
+			assert.NoError(t, err)
+		}
 		idx := 1
 		for _, response := range responseCh {
+			fmt.Println("RESP", response)
 			for _, writeMessage := range response.WriteMessages {
 				val := fmt.Sprintf("test%d", idx)
 				assert.Equal(t, writeMessage.Payload, []byte(val))
@@ -148,12 +154,10 @@ func TestGRPCBasedBatchMap_BasicBatchMapFnWithMockClient(t *testing.T) {
 		}()
 
 		u := NewMockUDSGRPCBasedBatchMap(mockClient)
-		readMessages := testutils.BuildTestReadMessages(2, time.Unix(1661169600, 0), nil)
+		//readMessages := testutils.BuildTestReadMessages(2, time.Unix(1661169600, 0), nil)
 
 		dataMessages := make([]*isb.ReadMessage, 0)
-		for _, x := range readMessages {
-			u.requestTracker.addRequest(&x)
-		}
+
 		_, err := u.ApplyBatchMap(ctx, dataMessages)
 		assert.ErrorIs(t, err, &ApplyUDFErr{
 			UserUDFErr: false,
@@ -174,16 +178,13 @@ func TestGRPCBasedBatchMap_BasicBatchMapFnWithMockClient(t *testing.T) {
 		mockBatchMapClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockBatchMapClient.EXPECT().CloseSend().Return(nil).AnyTimes()
 		mockClient.EXPECT().BatchMapFn(gomock.Any(), gomock.Any()).Return(mockBatchMapClient, nil)
+		mockBatchMapClient.EXPECT().Recv().Return(nil, errors.New("mock error for map")).Times(1)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
 		u := NewMockUDSGRPCBasedBatchMap(mockClient)
-		readMessages := testutils.BuildTestReadMessages(2, time.Unix(1661169600, 0), nil)
 
 		dataMessages := make([]*isb.ReadMessage, 0)
-		for _, x := range readMessages {
-			u.requestTracker.addRequest(&x)
-		}
 		// explicit cancel the context, we should see that error
 		cancel()
 		_, err := u.ApplyBatchMap(ctx, dataMessages)
