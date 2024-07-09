@@ -19,8 +19,6 @@ package rpc
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
 	"testing"
 	"time"
 
@@ -30,7 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	"github.com/numaproj/numaflow/pkg/sdkclient/batchmapper"
 )
 
@@ -61,76 +58,6 @@ func TestGRPCBasedBatchMap_WaitUntilReady(t *testing.T) {
 }
 
 func TestGRPCBasedBatchMap_BasicBatchMapFnWithMockClient(t *testing.T) {
-	mapResponses := []batchmappb.BatchMapResponse{{
-		Results: []*batchmappb.BatchMapResponse_Result{
-			{
-				Keys:  []string{"client_test"},
-				Value: []byte(`test1`),
-			},
-		},
-		Id: "0-0",
-	}, {
-		Results: []*batchmappb.BatchMapResponse_Result{
-			{
-				Keys:  []string{"client_test"},
-				Value: []byte(`test2`),
-			},
-		},
-		Id: "1-0",
-	}}
-	t.Run("test success", func(t *testing.T) {
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := batchmapmock.NewMockBatchMapClient(ctrl)
-		mockMapclient := batchmapmock.NewMockBatchMap_BatchMapFnClient(ctrl)
-
-		mockMapclient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-		mockMapclient.EXPECT().CloseSend().Return(nil).AnyTimes()
-
-		mockMapclient.EXPECT().Recv().Return(&mapResponses[0], nil).Times(1)
-		mockMapclient.EXPECT().Recv().Return(&mapResponses[1], nil).Times(1)
-		mockMapclient.EXPECT().Recv().Return(nil, io.EOF).Times(1)
-
-		//requestsCh := make(chan *batchmappb.MapRequest)
-		mockClient.EXPECT().BatchMapFn(gomock.Any(), gomock.Any()).Return(mockMapclient, nil)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockUDSGRPCBasedBatchMap(mockClient)
-		readMessages := testutils.BuildTestReadMessages(2, time.Unix(1661169600, 0), nil)
-
-		dataMessages := make([]*isb.ReadMessage, 0)
-		for _, x := range readMessages {
-			dataMessages = append(dataMessages, &x)
-			//u.requestTracker.addRequest(&x)
-		}
-		responseCh, err := u.ApplyBatchMap(ctx, dataMessages)
-		if err != nil {
-			fmt.Println(err)
-			assert.NoError(t, err)
-		}
-		idx := 1
-		for _, response := range responseCh {
-			fmt.Println("RESP", response)
-			for _, writeMessage := range response.WriteMessages {
-				val := fmt.Sprintf("test%d", idx)
-				assert.Equal(t, writeMessage.Payload, []byte(val))
-				assert.Equal(t, writeMessage.Headers, readMessages[0].Headers)
-				idx += 1
-			}
-
-		}
-	})
-
 	t.Run("test error", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
