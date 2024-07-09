@@ -79,7 +79,7 @@ jobs:
       - name: Ensure nothing changed
         run: git diff --exit-code
 
-  go-unit-tests:
+  unit-tests:
     name: Unit Tests Go
     runs-on: ubuntu-latest
     timeout-minutes: 10
