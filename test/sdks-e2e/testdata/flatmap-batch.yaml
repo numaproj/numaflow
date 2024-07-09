@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: flatmap
+  name: flatmap-batch
 spec:
   vertices:
     - name: in
