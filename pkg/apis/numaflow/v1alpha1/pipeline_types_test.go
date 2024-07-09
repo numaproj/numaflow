@@ -226,49 +226,57 @@ func Test_PipelineVertexCounts(t *testing.T) {
 
 func Test_PipelineSetPhase(t *testing.T) {
 	s := PipelineStatus{}
-	s.SetPhase(PipelinePhaseRunning, "message")
+	s.SetPhase(PipelinePhaseRunning, "message", 123)
 	assert.Equal(t, "message", s.Message)
 	assert.Equal(t, PipelinePhaseRunning, s.Phase)
+	assert.EqualValues(t, 123, s.ObservedGeneration)
 }
 
-func Test_PipelineInitConditions(t *testing.T) {
+func Test_PipelineInit(t *testing.T) {
 	s := PipelineStatus{}
-	s.InitConditions()
+	s.Init()
 	assert.Equal(t, 2, len(s.Conditions))
 	for _, c := range s.Conditions {
 		assert.Equal(t, metav1.ConditionUnknown, c.Status)
+		assert.EqualValues(t, -1, c.ObservedGeneration)
 	}
+	assert.Equal(t, PipelinePhaseUnknown, s.Phase)
+	assert.EqualValues(t, -1, s.ObservedGeneration)
 }
 
 func Test_PipelineMarkStatus(t *testing.T) {
 	s := PipelineStatus{}
-	s.InitConditions()
-	s.MarkNotConfigured("reason", "message")
+	s.Init()
+	s.MarkNotConfigured("reason", "message", 1)
 	for _, c := range s.Conditions {
 		if c.Type == string(PipelineConditionConfigured) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status)
 			assert.Equal(t, "reason", c.Reason)
 			assert.Equal(t, "message", c.Message)
+			assert.EqualValues(t, 1, c.ObservedGeneration)
 		}
 	}
-	s.MarkConfigured()
+	s.MarkConfigured(2)
 	for _, c := range s.Conditions {
 		if c.Type == string(PipelineConditionConfigured) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
+			assert.EqualValues(t, 2, c.ObservedGeneration)
 		}
 	}
-	s.MarkDeployFailed("reason", "message")
+	s.MarkDeployFailed("reason", "message", 3)
 	for _, c := range s.Conditions {
 		if c.Type == string(PipelineConditionDeployed) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status)
 			assert.Equal(t, "reason", c.Reason)
 			assert.Equal(t, "message", c.Message)
+			assert.EqualValues(t, 3, c.ObservedGeneration)
 		}
 	}
-	s.MarkDeployed()
+	s.MarkDeployed(4)
 	for _, c := range s.Conditions {
 		if c.Type == string(PipelineConditionDeployed) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
+			assert.EqualValues(t, 4, c.ObservedGeneration)
 		}
 	}
 	assert.True(t, s.IsReady())
@@ -276,14 +284,18 @@ func Test_PipelineMarkStatus(t *testing.T) {
 
 func Test_PipelineMarkPhases(t *testing.T) {
 	s := PipelineStatus{}
-	s.MarkPhaseDeleting()
+	s.MarkPhaseDeleting(1)
 	assert.Equal(t, PipelinePhaseDeleting, s.Phase)
-	s.MarkPhasePaused()
+	assert.EqualValues(t, 1, s.ObservedGeneration)
+	s.MarkPhasePaused(2)
 	assert.Equal(t, PipelinePhasePaused, s.Phase)
-	s.MarkPhasePausing()
+	assert.EqualValues(t, 2, s.ObservedGeneration)
+	s.MarkPhasePausing(3)
 	assert.Equal(t, PipelinePhasePausing, s.Phase)
-	s.MarkPhaseRunning()
+	assert.EqualValues(t, 3, s.ObservedGeneration)
+	s.MarkPhaseRunning(4)
 	assert.Equal(t, PipelinePhaseRunning, s.Phase)
+	assert.EqualValues(t, 4, s.ObservedGeneration)
 }
 
 func Test_GetDownstreamEdges(t *testing.T) {

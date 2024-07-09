@@ -214,7 +214,7 @@ func TestNeedsUpdate(t *testing.T) {
 		controllerutil.RemoveFinalizer(testIsbs, finalizerName)
 		assert.False(t, contains(testIsbs.Finalizers, finalizerName))
 		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
-		testIsbs.Status.MarkConfigured()
+		testIsbs.Status.MarkConfigured(testIsbs.Generation)
 		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
 	})
 
@@ -234,7 +234,7 @@ func TestNeedsUpdate(t *testing.T) {
 		controllerutil.RemoveFinalizer(testIsbs, finalizerName)
 		assert.False(t, contains(testIsbs.Finalizers, finalizerName))
 		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
-		testIsbs.Status.MarkConfigured()
+		testIsbs.Status.MarkConfigured(testIsbs.Generation)
 		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
 	})
 }

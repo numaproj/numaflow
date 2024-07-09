@@ -630,64 +630,58 @@ func (pls *PipelineStatus) SetVertexCounts(vertices []AbstractVertex) {
 	pls.UDFCount = &udfCount
 }
 
-func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string) {
+func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string, generation int64) {
 	pls.Phase = phase
 	pls.Message = msg
+	pls.ObservedGeneration = generation
 }
 
-// InitConditions sets conditions to Unknown state.
-func (pls *PipelineStatus) InitConditions() {
+// Init sets conditions and phase to Unknown state.
+func (pls *PipelineStatus) Init() {
 	pls.InitializeConditions(PipelineConditionConfigured, PipelineConditionDeployed)
+	pls.SetPhase(PipelinePhaseUnknown, "", -1)
 }
 
 // MarkConfigured set the Pipeline has valid configuration.
-// TODO: add observedGeneration check
-func (pls *PipelineStatus) MarkConfigured() {
-	pls.MarkTrue(PipelineConditionConfigured)
+func (pls *PipelineStatus) MarkConfigured(generation int64) {
+	pls.MarkTrue(PipelineConditionConfigured, generation)
 }
 
 // MarkNotConfigured the Pipeline has configuration.
-// TODO: add observedGeneration check
-func (pls *PipelineStatus) MarkNotConfigured(reason, message string) {
-	pls.MarkFalse(PipelineConditionConfigured, reason, message)
-	pls.SetPhase(PipelinePhaseFailed, message)
+func (pls *PipelineStatus) MarkNotConfigured(reason, message string, generation int64) {
+	pls.MarkFalse(PipelineConditionConfigured, reason, message, generation)
+	pls.SetPhase(PipelinePhaseFailed, message, generation)
 }
 
 // MarkDeployed set the Pipeline has been deployed.
-// TODO: add observedGeneration check
-func (pls *PipelineStatus) MarkDeployed() {
-	pls.MarkTrue(PipelineConditionDeployed)
+func (pls *PipelineStatus) MarkDeployed(generation int64) {
+	pls.MarkTrue(PipelineConditionDeployed, generation)
 }
 
 // MarkPhaseRunning set the Pipeline has been running.
-// TODO: add observedGeneration check
-func (pls *PipelineStatus) MarkPhaseRunning() {
-	pls.SetPhase(PipelinePhaseRunning, "")
+func (pls *PipelineStatus) MarkPhaseRunning(generation int64) {
+	pls.SetPhase(PipelinePhaseRunning, "", generation)
 }
 
 // MarkDeployFailed set the Pipeline deployment failed
-// TODO: add observedGeneration check
-func (pls *PipelineStatus) MarkDeployFailed(reason, message string) {
-	pls.MarkFalse(PipelineConditionDeployed, reason, message)
-	pls.SetPhase(PipelinePhaseFailed, message)
+func (pls *PipelineStatus) MarkDeployFailed(reason, message string, generation int64) {
+	pls.MarkFalse(PipelineConditionDeployed, reason, message, generation)
+	pls.SetPhase(PipelinePhaseFailed, message, generation)
 }
 
 // MarkPhasePaused set the Pipeline has been paused.
-// TODO: add observedGeneration check
-func (pls *PipelineStatus) MarkPhasePaused() {
-	pls.SetPhase(PipelinePhasePaused, "Pipeline paused")
+func (pls *PipelineStatus) MarkPhasePaused(generation int64) {
+	pls.SetPhase(PipelinePhasePaused, "Pipeline paused", generation)
 }
 
 // MarkPhasePausing set the Pipeline is pausing.
-// TODO: add observedGeneration check
-func (pls *PipelineStatus) MarkPhasePausing() {
-	pls.SetPhase(PipelinePhasePausing, "Pausing in progress")
+func (pls *PipelineStatus) MarkPhasePausing(generation int64) {
+	pls.SetPhase(PipelinePhasePausing, "Pausing in progress", generation)
 }
 
 // MarkPhaseDeleting set the Pipeline is deleting.
-// TODO: add observedGeneration check
-func (pls *PipelineStatus) MarkPhaseDeleting() {
-	pls.SetPhase(PipelinePhaseDeleting, "Deleting in progress")
+func (pls *PipelineStatus) MarkPhaseDeleting(generation int64) {
+	pls.SetPhase(PipelinePhaseDeleting, "Deleting in progress", generation)
 }
 
 // +kubebuilder:object:root=true

@@ -45,9 +45,10 @@ type Status struct {
 func (s *Status) InitializeConditions(conditionTypes ...ConditionType) {
 	for _, t := range conditionTypes {
 		c := metav1.Condition{
-			Type:   string(t),
-			Status: metav1.ConditionUnknown,
-			Reason: "Unknown",
+			Type:               string(t),
+			Status:             metav1.ConditionUnknown,
+			Reason:             "Unknown",
+			ObservedGeneration: -1,
 		}
 		s.setCondition(c)
 	}
@@ -73,33 +74,34 @@ func (s *Status) setCondition(condition metav1.Condition) {
 	s.Conditions = conditions
 }
 
-func (s *Status) markTypeStatus(t ConditionType, status metav1.ConditionStatus, reason, message string) {
+func (s *Status) markTypeStatus(t ConditionType, status metav1.ConditionStatus, reason, message string, generation int64) {
 	s.setCondition(metav1.Condition{
-		Type:    string(t),
-		Status:  status,
-		Reason:  reason,
-		Message: message,
+		Type:               string(t),
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: generation,
 	})
 }
 
 // MarkTrue sets the status of t to true
-func (s *Status) MarkTrue(t ConditionType) {
-	s.markTypeStatus(t, metav1.ConditionTrue, "Successful", "Successful")
+func (s *Status) MarkTrue(t ConditionType, generation int64) {
+	s.markTypeStatus(t, metav1.ConditionTrue, "Successful", "Successful", generation)
 }
 
 // MarkTrueWithReason sets the status of t to true with reason
-func (s *Status) MarkTrueWithReason(t ConditionType, reason, message string) {
-	s.markTypeStatus(t, metav1.ConditionTrue, reason, message)
+func (s *Status) MarkTrueWithReason(t ConditionType, reason, message string, generation int64) {
+	s.markTypeStatus(t, metav1.ConditionTrue, reason, message, generation)
 }
 
 // MarkFalse sets the status of t to fasle
-func (s *Status) MarkFalse(t ConditionType, reason, message string) {
-	s.markTypeStatus(t, metav1.ConditionFalse, reason, message)
+func (s *Status) MarkFalse(t ConditionType, reason, message string, generation int64) {
+	s.markTypeStatus(t, metav1.ConditionFalse, reason, message, generation)
 }
 
 // MarkUnknown sets the status of t to unknown
-func (s *Status) MarkUnknown(t ConditionType, reason, message string) {
-	s.markTypeStatus(t, metav1.ConditionUnknown, reason, message)
+func (s *Status) MarkUnknown(t ConditionType, reason, message string, generation int64) {
+	s.markTypeStatus(t, metav1.ConditionUnknown, reason, message, generation)
 }
 
 // GetCondition returns the condition of a condition type
@@ -113,6 +115,7 @@ func (s *Status) GetCondition(t ConditionType) *metav1.Condition {
 }
 
 // IsReady returns true when all the conditions are true
+// TODO: should we also check that all conditions ObservedGeneration match the spec generation?
 func (s *Status) IsReady() bool {
 	if len(s.Conditions) == 0 {
 		return false

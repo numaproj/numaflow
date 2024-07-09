@@ -83,46 +83,46 @@ func (r *redisInstaller) Install(ctx context.Context) (*dfv1.BufferServiceConfig
 	if err := r.createScriptsConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis scripts ConfigMap", zap.Error(err))
 		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisScriptsConfigMapFailed", "Failed to create Redis scripts ConfigMap: %v", err.Error())
-		r.isbSvc.Status.MarkDeployFailed("RedisScriptsConfigMapFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisScriptsConfigMapFailed", err.Error(), r.isbSvc.Generation)
 		return nil, err
 	}
 	if err := r.createHealthConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis health ConfigMap", zap.Error(err))
 		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisHealthConfigMapFailed", "Failed to create Redis health ConfigMap: %v", err.Error())
-		r.isbSvc.Status.MarkDeployFailed("RedisHealthConfigMapFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisHealthConfigMapFailed", err.Error(), r.isbSvc.Generation)
 		return nil, err
 	}
 	if err := r.createConfConfigMap(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis config ConfigMap", zap.Error(err))
 		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisConfConfigMapFailed", "Failed to create Redis config ConfigMap: %v", err.Error())
-		r.isbSvc.Status.MarkDeployFailed("RedisConfConfigMapFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisConfConfigMapFailed", err.Error(), r.isbSvc.Generation)
 		return nil, err
 	}
 	if err := r.createAuthCredentialSecret(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis password", zap.Error(err))
-		r.isbSvc.Status.MarkDeployFailed("RedisPasswordSecretFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisPasswordSecretFailed", err.Error(), r.isbSvc.Generation)
 		return nil, err
 	}
 	if err := r.createRedisService(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis Service", zap.Error(err))
 		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisServiceFailed", "Failed to create Redis Serivce: %v", err.Error())
-		r.isbSvc.Status.MarkDeployFailed("RedisServiceFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisServiceFailed", err.Error(), r.isbSvc.Generation)
 		return nil, err
 	}
 	if err := r.createRedisHeadlessService(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis Headless Service", zap.Error(err))
 		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisHeadlessServiceFailed", "Failed to create Redis Headless Service: %v", err.Error())
-		r.isbSvc.Status.MarkDeployFailed("RedisHeadlessServiceFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisHeadlessServiceFailed", err.Error(), r.isbSvc.Generation)
 		return nil, err
 	}
 	if err := r.createStatefulSet(ctx); err != nil {
 		r.logger.Errorw("Failed to create Redis StatefulSet", zap.Error(err))
 		r.recorder.Eventf(r.isbSvc, corev1.EventTypeWarning, "RedisStatefulSetFailed", "Failed to create Redis StatefulSet: %v", err.Error())
-		r.isbSvc.Status.MarkDeployFailed("RedisStatefulSetFailed", err.Error())
+		r.isbSvc.Status.MarkDeployFailed("RedisStatefulSetFailed", err.Error(), r.isbSvc.Generation)
 		return nil, err
 	}
 
-	r.isbSvc.Status.MarkDeployed()
+	r.isbSvc.Status.MarkDeployed(r.isbSvc.Generation)
 	return &dfv1.BufferServiceConfig{
 		Redis: &dfv1.RedisConfig{
 			SentinelURL: fmt.Sprintf("%s.%s.svc:%v", generateRedisServiceName(r.isbSvc), r.isbSvc.Namespace, sentinelPort),

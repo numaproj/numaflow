@@ -170,14 +170,14 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	if !controllerutil.ContainsFinalizer(pl, finalizerName) {
 		controllerutil.AddFinalizer(pl, finalizerName)
 	}
-	pl.Status.InitConditions()
+	pl.Status.Init()
 	if err := ValidatePipeline(pl); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
-		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
+		pl.Status.MarkNotConfigured("InvalidSpec", err.Error(), pl.Generation)
 		return ctrl.Result{}, err
 	}
 	pl.Status.SetVertexCounts(pl.Spec.Vertices)
-	pl.Status.MarkConfigured()
+	pl.Status.MarkConfigured(pl.Generation)
 
 	isbSvc := &dfv1.InterStepBufferService{}
 	isbSvcName := dfv1.DefaultISBSvcName
@@ -187,16 +187,16 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	err := r.client.Get(ctx, types.NamespacedName{Namespace: pl.Namespace, Name: isbSvcName}, isbSvc)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			pl.Status.MarkDeployFailed("ISBSvcNotFound", "ISB Service not found.")
+			pl.Status.MarkDeployFailed("ISBSvcNotFound", "ISB Service not found.", pl.Generation)
 			log.Errorw("ISB Service not found", zap.String("isbsvc", isbSvcName), zap.Error(err))
 			return ctrl.Result{}, fmt.Errorf("isbsvc %s not found", isbSvcName)
 		}
-		pl.Status.MarkDeployFailed("GetISBSvcFailed", err.Error())
+		pl.Status.MarkDeployFailed("GetISBSvcFailed", err.Error(), pl.Generation)
 		log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		return ctrl.Result{}, err
 	}
 	if !isbSvc.Status.IsReady() {
-		pl.Status.MarkDeployFailed("ISBSvcNotReady", "ISB Service not ready.")
+		pl.Status.MarkDeployFailed("ISBSvcNotReady", "ISB Service not ready.", pl.Generation)
 		log.Errorw("ISB Service is not in ready status", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
 	}
@@ -204,7 +204,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	// Create or update the Side Inputs Manager deployments
 	if err := r.createOrUpdateSIMDeployments(ctx, pl, isbSvc.Status.Config); err != nil {
 		log.Errorw("Failed to create or update Side Inputs Manager deployments", zap.Error(err))
-		pl.Status.MarkDeployFailed("CreateOrUpdateSIMDeploymentsFailed", err.Error())
+		pl.Status.MarkDeployFailed("CreateOrUpdateSIMDeploymentsFailed", err.Error(), pl.Generation)
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateOrUpdateSIMDeploymentsFailed", "Failed to create or update Side Inputs Manager deployments: %w", err.Error())
 		return ctrl.Result{}, err
 	}
@@ -212,7 +212,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	existingObjs, err := r.findExistingVertices(ctx, pl)
 	if err != nil {
 		log.Errorw("Failed to find existing vertices", zap.Error(err))
-		pl.Status.MarkDeployFailed("ListVerticesFailed", err.Error())
+		pl.Status.MarkDeployFailed("ListVerticesFailed", err.Error(), pl.Generation)
 		return ctrl.Result{}, err
 	}
 	oldBuffers := make(map[string]string)
@@ -251,7 +251,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
 					continue
 				} else {
-					pl.Status.MarkDeployFailed("CreateVertexFailed", err.Error())
+					pl.Status.MarkDeployFailed("CreateVertexFailed", err.Error(), pl.Generation)
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateVertexFailed", "Failed to create vertex: %w", err.Error())
 					return ctrl.Result{}, fmt.Errorf("failed to create vertex, err: %w", err)
 				}
@@ -263,7 +263,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 				oldObj.Spec = newObj.Spec
 				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
 				if err := r.client.Update(ctx, &oldObj); err != nil {
-					pl.Status.MarkDeployFailed("UpdateVertexFailed", err.Error())
+					pl.Status.MarkDeployFailed("UpdateVertexFailed", err.Error(), pl.Generation)
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
 					return ctrl.Result{}, fmt.Errorf("failed to update vertex, err: %w", err)
 				}
@@ -275,7 +275,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	}
 	for _, v := range existingObjs {
 		if err := r.client.Delete(ctx, &v); err != nil {
-			pl.Status.MarkDeployFailed("DeleteStaleVertexFailed", err.Error())
+			pl.Status.MarkDeployFailed("DeleteStaleVertexFailed", err.Error(), pl.Generation)
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteStaleVertexFailed", "Failed to delete vertex: %w", err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to delete vertex, err: %w", err)
 		}
@@ -297,7 +297,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
+			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error(), pl.Generation)
 			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc creating job, err: %w", err)
 		}
 		log.Infow("Created a job successfully for ISB Svc creating", zap.Any("buffers", bfs), zap.Any("buckets", bks))
@@ -315,7 +315,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "del")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			pl.Status.MarkDeployFailed("CreateISBSvcDeletingJobFailed", err.Error())
+			pl.Status.MarkDeployFailed("CreateISBSvcDeletingJobFailed", err.Error(), pl.Generation)
 			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc deleting job, err: %w", err)
 		}
 		log.Infow("Created ISB Svc deleting job successfully", zap.Any("buffers", bfs), zap.Any("buckets", bks))
@@ -330,8 +330,8 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		return ctrl.Result{}, err
 	}
 
-	pl.Status.MarkDeployed()
-	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
+	pl.Status.MarkDeployed(pl.Generation)
+	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "", pl.Generation)
 	return ctrl.Result{}, nil
 }
 
@@ -347,13 +347,13 @@ func (r *pipelineReconciler) createOrUpdateDaemonService(ctx context.Context, pl
 			needToCreatDaemonSvc = true
 		} else {
 			log.Errorw("Failed to find existing daemon service", zap.String("service", svc.Name), zap.Error(err))
-			pl.Status.MarkDeployFailed("FindDaemonSvcFailed", err.Error())
+			pl.Status.MarkDeployFailed("FindDaemonSvcFailed", err.Error(), pl.Generation)
 			return fmt.Errorf("failed to find existing daemon service, %w", err)
 		}
 	} else if existingSvc.GetAnnotations()[dfv1.KeyHash] != svcHash {
 		if err := r.client.Delete(ctx, existingSvc); err != nil && !apierrors.IsNotFound(err) {
 			log.Errorw("Failed to delete existing daemon service", zap.String("service", existingSvc.Name), zap.Error(err))
-			pl.Status.MarkDeployFailed("DelDaemonSvcFailed", err.Error())
+			pl.Status.MarkDeployFailed("DelDaemonSvcFailed", err.Error(), pl.Generation)
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DelDaemonSvcFailed", "Failed to delete existing daemon service: %w", err.Error())
 			return fmt.Errorf("failed to delete existing daemon service, %w", err)
 		}
@@ -362,7 +362,7 @@ func (r *pipelineReconciler) createOrUpdateDaemonService(ctx context.Context, pl
 	if needToCreatDaemonSvc {
 		if err := r.client.Create(ctx, svc); err != nil {
 			log.Errorw("Failed to create daemon service", zap.String("service", svc.Name), zap.Error(err))
-			pl.Status.MarkDeployFailed("CreateDaemonSvcFailed", err.Error())
+			pl.Status.MarkDeployFailed("CreateDaemonSvcFailed", err.Error(), pl.Generation)
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateDaemonSvcFailed", "Failed to create daemon service: %w", err.Error())
 			return fmt.Errorf("failed to create daemon service, %w", err)
 		}
@@ -386,7 +386,7 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 	}
 	deploy, err := pl.GetDaemonDeploymentObj(req)
 	if err != nil {
-		pl.Status.MarkDeployFailed("BuildDaemonDeployFailed", err.Error())
+		pl.Status.MarkDeployFailed("BuildDaemonDeployFailed", err.Error(), pl.Generation)
 		return fmt.Errorf("failed to build daemon deployment spec, %w", err)
 	}
 	deployHash := sharedutil.MustHash(deploy.Spec)
@@ -396,7 +396,7 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 	if err := r.client.Get(ctx, types.NamespacedName{Namespace: pl.Namespace, Name: deploy.Name}, existingDeploy); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Errorw("Failed to find existing daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
-			pl.Status.MarkDeployFailed("FindDaemonDeployFailed", err.Error())
+			pl.Status.MarkDeployFailed("FindDaemonDeployFailed", err.Error(), pl.Generation)
 			return fmt.Errorf("failed to find existing daemon deployment, %w", err)
 		} else {
 			needToCreate = true
@@ -406,7 +406,7 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 			// Delete and recreate, to avoid updating immutable fields problem.
 			if err := r.client.Delete(ctx, existingDeploy); err != nil {
 				log.Errorw("Failed to delete the outdated daemon deployment", zap.String("deployment", existingDeploy.Name), zap.Error(err))
-				pl.Status.MarkDeployFailed("DeleteOldDaemonDeployFailed", err.Error())
+				pl.Status.MarkDeployFailed("DeleteOldDaemonDeployFailed", err.Error(), pl.Generation)
 				r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteOldDaemonDeployFailed", "Failed to delete the outdated daemon deployment: %w", err.Error())
 				return fmt.Errorf("failed to delete an outdated daemon deployment, %w", err)
 			}
@@ -416,7 +416,7 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 	if needToCreate {
 		if err := r.client.Create(ctx, deploy); err != nil && !apierrors.IsAlreadyExists(err) {
 			log.Errorw("Failed to create a daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
-			pl.Status.MarkDeployFailed("CreateDaemonDeployFailed", err.Error())
+			pl.Status.MarkDeployFailed("CreateDaemonDeployFailed", err.Error(), pl.Generation)
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateDaemonDeployFailed", "Failed to create a daemon deployment: %w", err.Error())
 			return fmt.Errorf("failed to create a daemon deployment, %w", err)
 		}
@@ -455,12 +455,12 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 
 	newObjs, err := pl.GetSideInputsManagerDeployments(req)
 	if err != nil {
-		pl.Status.MarkDeployFailed("BuildSIMObjsFailed", err.Error())
+		pl.Status.MarkDeployFailed("BuildSIMObjsFailed", err.Error(), pl.Generation)
 		return fmt.Errorf("failed to build Side Inputs Manager Deployments, %w", err)
 	}
 	existingObjs, err := r.findExistingSIMDeploys(ctx, pl)
 	if err != nil {
-		pl.Status.MarkDeployFailed("FindExistingSIMFailed", err.Error())
+		pl.Status.MarkDeployFailed("FindExistingSIMFailed", err.Error(), pl.Generation)
 		return fmt.Errorf("failed to find existing Side Inputs Manager Deployments, %w", err)
 	}
 	for _, newObj := range newObjs {
@@ -474,7 +474,7 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] {
 				// Delete and recreate, to avoid updating immutable fields problem.
 				if err := r.client.Delete(ctx, &oldObj); err != nil {
-					pl.Status.MarkDeployFailed("DeleteOldSIMDeploymentFailed", err.Error())
+					pl.Status.MarkDeployFailed("DeleteOldSIMDeploymentFailed", err.Error(), pl.Generation)
 					return fmt.Errorf("failed to delete old Side Inputs Manager Deployment %q, %w", oldObj.Name, err)
 				}
 				needToCreate = true
@@ -488,7 +488,7 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
 					continue
 				} else {
-					pl.Status.MarkDeployFailed("CreateSIMDeploymentFailed", err.Error())
+					pl.Status.MarkDeployFailed("CreateSIMDeploymentFailed", err.Error(), pl.Generation)
 					return fmt.Errorf("failed to create/recreate Side Inputs Manager Deployment %q, %w", newObj.Name, err)
 				}
 			}
@@ -498,7 +498,7 @@ func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, p
 	}
 	for _, v := range existingObjs {
 		if err := r.client.Delete(ctx, &v); err != nil {
-			pl.Status.MarkDeployFailed("DeleteStaleSIMDeploymentFailed", err.Error())
+			pl.Status.MarkDeployFailed("DeleteStaleSIMDeploymentFailed", err.Error(), pl.Generation)
 			return fmt.Errorf("failed to delete stale Side Inputs Manager Deployment %q, %w", v.Name, err)
 		}
 		log.Infow("Deleted stale Side Inputs Manager Deployment successfully", zap.String("deployment", v.Name))
@@ -793,7 +793,7 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 	if err != nil {
 		return false, err
 	}
-	pl.Status.MarkPhaseRunning()
+	pl.Status.MarkPhaseRunning(pl.Generation)
 	return false, nil
 }
 
@@ -812,7 +812,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		}
 	}
 
-	pl.Status.MarkPhasePausing()
+	pl.Status.MarkPhasePausing(pl.Generation)
 	updated, err := r.scaleDownSourceVertices(ctx, pl)
 	if err != nil || updated {
 		// If there's an error, or scaling down happens, requeue the request
@@ -843,7 +843,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		if err != nil {
 			return true, err
 		}
-		pl.Status.MarkPhasePaused()
+		pl.Status.MarkPhasePaused(pl.Generation)
 		return false, nil
 	}
 	return true, nil
@@ -903,7 +903,7 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 
 func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
 	// update the phase to deleting
-	pl.Status.MarkPhaseDeleting()
+	pl.Status.MarkPhaseDeleting(pl.Generation)
 	vertexPatched, err := r.scaleDownSourceVertices(ctx, pl)
 	if err != nil {
 		return false, err

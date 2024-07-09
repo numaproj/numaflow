@@ -71,62 +71,68 @@ func Test_setCondition(t *testing.T) {
 
 func Test_markTypeStatus(t *testing.T) {
 	s := &Status{}
-	s.markTypeStatus("test-type", "status1", "reason1", "message1")
+	s.markTypeStatus("test-type", "status1", "reason1", "message1", 123)
 	assert.Equal(t, 1, len(s.Conditions))
 	assert.Equal(t, "test-type", s.Conditions[0].Type)
 	assert.Equal(t, "status1", string(s.Conditions[0].Status))
 	assert.Equal(t, "reason1", s.Conditions[0].Reason)
 	assert.Equal(t, "message1", s.Conditions[0].Message)
+	assert.EqualValues(t, 123, s.Conditions[0].ObservedGeneration)
 }
 
 func Test_MarkTrue(t *testing.T) {
 	s := &Status{}
-	s.MarkTrue("test-type")
+	s.MarkTrue("test-type", 123)
 	assert.Equal(t, 1, len(s.Conditions))
 	assert.Equal(t, "test-type", s.Conditions[0].Type)
 	assert.Equal(t, metav1.ConditionTrue, s.Conditions[0].Status)
 	assert.Equal(t, "Successful", s.Conditions[0].Reason)
 	assert.Equal(t, "Successful", s.Conditions[0].Message)
+	assert.EqualValues(t, 123, s.Conditions[0].ObservedGeneration)
 }
 
 func Test_MarkTrueWithReason(t *testing.T) {
 	s := &Status{}
-	s.MarkTrueWithReason("test-type", "reason", "message")
+	s.MarkTrueWithReason("test-type", "reason", "message", 123)
 	assert.Equal(t, 1, len(s.Conditions))
 	assert.Equal(t, "test-type", s.Conditions[0].Type)
 	assert.Equal(t, metav1.ConditionTrue, s.Conditions[0].Status)
 	assert.Equal(t, "reason", s.Conditions[0].Reason)
 	assert.Equal(t, "message", s.Conditions[0].Message)
+	assert.EqualValues(t, 123, s.Conditions[0].ObservedGeneration)
 }
 
 func Test_MarkFalse(t *testing.T) {
 	s := &Status{}
-	s.MarkFalse("test-type", "reason", "message")
+	s.MarkFalse("test-type", "reason", "message", 123)
 	assert.Equal(t, 1, len(s.Conditions))
 	assert.Equal(t, "test-type", s.Conditions[0].Type)
 	assert.Equal(t, metav1.ConditionFalse, s.Conditions[0].Status)
 	assert.Equal(t, "reason", s.Conditions[0].Reason)
 	assert.Equal(t, "message", s.Conditions[0].Message)
+	assert.EqualValues(t, 123, s.Conditions[0].ObservedGeneration)
 }
 
 func Test_MarkUnknown(t *testing.T) {
 	s := &Status{}
-	s.MarkUnknown("test-type", "reason", "message")
+	s.MarkUnknown("test-type", "reason", "message", 123)
 	assert.Equal(t, 1, len(s.Conditions))
 	assert.Equal(t, "test-type", s.Conditions[0].Type)
 	assert.Equal(t, metav1.ConditionUnknown, s.Conditions[0].Status)
 	assert.Equal(t, "reason", s.Conditions[0].Reason)
 	assert.Equal(t, "message", s.Conditions[0].Message)
+	assert.EqualValues(t, 123, s.Conditions[0].ObservedGeneration)
 }
 
 func Test_GetCondition(t *testing.T) {
 	s := &Status{}
-	s.MarkUnknown("test-type1", "reason", "message")
-	s.MarkTrue("test-type2")
+	s.MarkUnknown("test-type1", "reason", "message", 123)
+	s.MarkTrue("test-type2", 321)
 	m := s.GetCondition(ConditionType("test-type1"))
 	assert.NotNil(t, m)
 	assert.Equal(t, "reason", m.Reason)
 	assert.Equal(t, "message", m.Message)
+	assert.EqualValues(t, 123, m.ObservedGeneration)
 	m = s.GetCondition(ConditionType("not-existing"))
 	assert.Nil(t, m)
 	m = s.GetCondition(ConditionType("test-type2"))
@@ -136,12 +142,12 @@ func Test_GetCondition(t *testing.T) {
 func Test_IsReady(t *testing.T) {
 	s := &Status{}
 	s.InitializeConditions(ConditionType("type1"), ConditionType("type2"), ConditionType("type3"))
-	s.MarkTrue("type1")
+	s.MarkTrue("type1", 1)
 	assert.False(t, s.IsReady())
-	s.MarkTrue("type2")
+	s.MarkTrue("type2", 2)
 	assert.False(t, s.IsReady())
-	s.MarkTrue("type3")
+	s.MarkTrue("type3", 3)
 	assert.True(t, s.IsReady())
-	s.MarkFalse("type2", "reason", "msg")
+	s.MarkFalse("type2", "reason", "msg", 4)
 	assert.False(t, s.IsReady())
 }
