@@ -95,7 +95,7 @@ func (s *SDKsSuite) TestBatchMapUDFunctionAndSink() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "flatmap"
+	pipelineName := "flatmap-batch"
 
 	w.Expect().
 		VertexPodsRunning().
