@@ -127,24 +127,24 @@ func (isbsvc *InterStepBufferServiceStatus) Init() {
 
 // MarkConfigured set the InterStepBufferService has valid configuration.
 func (isbsvc *InterStepBufferServiceStatus) MarkConfigured(generation int64) {
-	isbsvc.MarkTrue(ISBSvcConditionConfigured, generation)
+	isbsvc.MarkTrue(ISBSvcConditionConfigured)
 	isbsvc.SetPhase(ISBSvcPhasePending, "", generation)
 }
 
 // MarkNotConfigured the InterStepBufferService has configuration.
 func (isbsvc *InterStepBufferServiceStatus) MarkNotConfigured(reason, message string, generation int64) {
-	isbsvc.MarkFalse(ISBSvcConditionConfigured, reason, message, generation)
+	isbsvc.MarkFalse(ISBSvcConditionConfigured, reason, message)
 	isbsvc.SetPhase(ISBSvcPhaseFailed, message, generation)
 }
 
 // MarkDeployed set the InterStepBufferService has been deployed.
 func (isbsvc *InterStepBufferServiceStatus) MarkDeployed(generation int64) {
-	isbsvc.MarkTrue(ISBSvcConditionDeployed, generation)
+	isbsvc.MarkTrue(ISBSvcConditionDeployed)
 	isbsvc.SetPhase(ISBSvcPhaseRunning, "", generation)
 }
 
 // MarkDeployFailed set the InterStepBufferService deployment failed
 func (isbsvc *InterStepBufferServiceStatus) MarkDeployFailed(reason, message string, generation int64) {
-	isbsvc.MarkFalse(ISBSvcConditionDeployed, reason, message, generation)
+	isbsvc.MarkFalse(ISBSvcConditionDeployed, reason, message)
 	isbsvc.SetPhase(ISBSvcPhaseFailed, message, generation)
 }

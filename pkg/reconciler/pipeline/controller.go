@@ -177,7 +177,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		return ctrl.Result{}, err
 	}
 	pl.Status.SetVertexCounts(pl.Spec.Vertices)
-	pl.Status.MarkConfigured(pl.Generation)
+	pl.Status.MarkConfigured()
 
 	isbSvc := &dfv1.InterStepBufferService{}
 	isbSvcName := dfv1.DefaultISBSvcName
@@ -330,7 +330,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		return ctrl.Result{}, err
 	}
 
-	pl.Status.MarkDeployed(pl.Generation)
+	pl.Status.MarkDeployed()
 	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "", pl.Generation)
 	return ctrl.Result{}, nil
 }

@@ -642,19 +642,19 @@ func (pls *PipelineStatus) Init() {
 }
 
 // MarkConfigured set the Pipeline has valid configuration.
-func (pls *PipelineStatus) MarkConfigured(generation int64) {
-	pls.MarkTrue(PipelineConditionConfigured, generation)
+func (pls *PipelineStatus) MarkConfigured() {
+	pls.MarkTrue(PipelineConditionConfigured)
 }
 
 // MarkNotConfigured the Pipeline has configuration.
 func (pls *PipelineStatus) MarkNotConfigured(reason, message string, generation int64) {
-	pls.MarkFalse(PipelineConditionConfigured, reason, message, generation)
+	pls.MarkFalse(PipelineConditionConfigured, reason, message)
 	pls.SetPhase(PipelinePhaseFailed, message, generation)
 }
 
 // MarkDeployed set the Pipeline has been deployed.
-func (pls *PipelineStatus) MarkDeployed(generation int64) {
-	pls.MarkTrue(PipelineConditionDeployed, generation)
+func (pls *PipelineStatus) MarkDeployed() {
+	pls.MarkTrue(PipelineConditionDeployed)
 }
 
 // MarkPhaseRunning set the Pipeline has been running.
@@ -664,7 +664,7 @@ func (pls *PipelineStatus) MarkPhaseRunning(generation int64) {
 
 // MarkDeployFailed set the Pipeline deployment failed
 func (pls *PipelineStatus) MarkDeployFailed(reason, message string, generation int64) {
-	pls.MarkFalse(PipelineConditionDeployed, reason, message, generation)
+	pls.MarkFalse(PipelineConditionDeployed, reason, message)
 	pls.SetPhase(PipelinePhaseFailed, message, generation)
 }
 

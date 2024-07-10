@@ -43,7 +43,6 @@ func Test_ISBSvcInit(t *testing.T) {
 	assert.Equal(t, 2, len(s.Conditions))
 	for _, c := range s.Conditions {
 		assert.Equal(t, metav1.ConditionUnknown, c.Status)
-		assert.EqualValues(t, -1, c.ObservedGeneration)
 	}
 	assert.Equal(t, ISBSvcPhasePending, s.Phase)
 	assert.EqualValues(t, -1, s.ObservedGeneration)
@@ -52,6 +51,7 @@ func Test_ISBSvcInit(t *testing.T) {
 func Test_ISBSvcMarkStatus(t *testing.T) {
 	s := InterStepBufferServiceStatus{}
 	s.Init()
+	assert.EqualValues(t, -1, s.ObservedGeneration)
 	s.MarkNotConfigured("reason", "message", 1)
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionConfigured) {
@@ -59,31 +59,31 @@ func Test_ISBSvcMarkStatus(t *testing.T) {
 			assert.Equal(t, "reason", c.Reason)
 			assert.Equal(t, "message", c.Message)
 			assert.Equal(t, "message", c.Message)
-			assert.EqualValues(t, 1, c.ObservedGeneration)
 		}
 	}
+	assert.EqualValues(t, 1, s.ObservedGeneration)
 	s.MarkConfigured(2)
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionConfigured) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
-			assert.EqualValues(t, 2, c.ObservedGeneration)
 		}
 	}
+	assert.EqualValues(t, 2, s.ObservedGeneration)
 	s.MarkDeployFailed("reason", "message", 3)
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionDeployed) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status)
 			assert.Equal(t, "reason", c.Reason)
 			assert.Equal(t, "message", c.Message)
-			assert.EqualValues(t, 3, c.ObservedGeneration)
 		}
 	}
+	assert.EqualValues(t, 3, s.ObservedGeneration)
 	s.MarkDeployed(4)
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionDeployed) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
-			assert.EqualValues(t, 4, c.ObservedGeneration)
 		}
 	}
+	assert.EqualValues(t, 4, s.ObservedGeneration)
 	assert.True(t, s.IsReady())
 }
