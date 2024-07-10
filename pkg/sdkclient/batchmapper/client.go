@@ -102,9 +102,11 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.Batc
 	stream, err := c.grpcClt.BatchMapFn(ctx)
 	if err != nil {
 		go func() {
-			errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn stream", err)
+			errCh <- sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", err)
 		}()
-		return responseCh, errCh
+		// passing a nil channel for responseCh to ensure that it is never selected as this is an error scenario
+		// and we should be reading on the error channel only.
+		return nil, errCh
 	}
 
 	// read the response from the server stream and send it to responseCh channel

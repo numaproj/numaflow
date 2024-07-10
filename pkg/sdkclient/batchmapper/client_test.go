@@ -180,7 +180,7 @@ func TestClientStreamError_BatchMapFn(t *testing.T) {
 readLoop:
 	for {
 		select {
-		case err := <-errCh:
+		case err = <-errCh:
 			if err != nil {
 				assert.Equal(t, err, sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", fmt.Errorf("recv error")))
 				break readLoop
@@ -191,6 +191,7 @@ readLoop:
 			}
 		}
 	}
+	assert.Equal(t, err, sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", fmt.Errorf("recv error")))
 }
 
 func TestClientRpcError_BatchMapFn(t *testing.T) {
@@ -257,7 +258,7 @@ func TestClientRpcError_BatchMapFn(t *testing.T) {
 readLoop:
 	for {
 		select {
-		case err := <-errCh:
+		case err = <-errCh:
 			if err != nil {
 				assert.Equal(t, err, sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", fmt.Errorf("error from rpc")))
 				break readLoop
@@ -268,4 +269,6 @@ readLoop:
 			}
 		}
 	}
+
+	assert.Equal(t, err, sdkerr.ToUDFErr("c.grpcClt.BatchMapFn", fmt.Errorf("error from rpc")))
 }
