@@ -1,0 +1,40 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-pipeline
+spec:
+  templates:
+    vertex:
+      metadata:
+        annotations:
+          numaflow.numaproj.io/callback: "true"
+  vertices:
+    - name: in
+      scale:
+        min: 1
+      source:
+        serving:
+          service: true
+          msgIDHeaderKey: "X-Request-ID"
+          callbackStorage:
+            url: "redis://redis:6379"
+          auth:
+            token:
+              name: http-source-token
+              key: my-token
+    - name: cat
+      scale:
+        min: 1
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
+    - name: out
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: in
+      to: cat
+    - from: cat
+      to: out

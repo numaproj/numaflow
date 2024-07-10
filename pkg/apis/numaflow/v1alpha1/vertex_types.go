@@ -362,11 +362,6 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 	// set the serving source port in the environment
 	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)})
 
-	var vertexNames []string
-	for _, vertex := range req.PipelineSpec.Vertices {
-		vertexNames = append(vertexNames, vertex.Name)
-	}
-
 	// Create a SimplifiedPipelineSpec and populate it with the vertex names and edges
 	simplifiedPipelineSpec := PipelineSpec{
 		Vertices: req.PipelineSpec.Vertices,
