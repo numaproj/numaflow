@@ -46,6 +46,8 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 
 	defer w.StreamVertexPodlogs("python-split", "udf").TerminateAllPodLogs()
 	defer w.StreamVertexPodlogs("python-udsink", "udsink").TerminateAllPodLogs()
+	w.StreamVertexPodlogs("python-split", "numa").TerminateAllPodLogs()
+	w.StreamVertexPodlogs("python-udsink", "numa").TerminateAllPodLogs()
 
 	w.Expect().
 		VertexPodsRunning().
