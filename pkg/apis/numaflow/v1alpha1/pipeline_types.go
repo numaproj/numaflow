@@ -368,7 +368,7 @@ func (p Pipeline) GetDaemonServiceObj() *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Port: DaemonServicePort, TargetPort: intstr.FromInt32(DaemonServicePort)},
+				{Name: "tcp", Port: DaemonServicePort, TargetPort: intstr.FromInt32(DaemonServicePort)},
 			},
 			Selector: labels,
 		},

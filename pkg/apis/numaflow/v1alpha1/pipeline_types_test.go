@@ -106,6 +106,8 @@ func TestGetDaemonSvcObj(t *testing.T) {
 	assert.Equal(t, s.Namespace, testPipeline.Namespace)
 	assert.Equal(t, 1, len(s.Spec.Ports))
 	assert.Equal(t, DaemonServicePort, int(s.Spec.Ports[0].Port))
+	assert.Equal(t, "tcp", s.Spec.Ports[0].Name)
+
 }
 
 func TestGetDaemonDeploy(t *testing.T) {
