@@ -18602,6 +18602,11 @@
         "message": {
           "type": "string"
         },
+        "observedGeneration": {
+          "description": "ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1",
+          "type": "integer",
+          "format": "int64"
+        },
         "phase": {
           "type": "string"
         },
@@ -19272,6 +19277,11 @@
         },
         "message": {
           "type": "string"
+        },
+        "observedGeneration": {
+          "description": "ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1",
+          "type": "integer",
+          "format": "int64"
         },
         "phase": {
           "type": "string"

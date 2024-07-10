@@ -601,8 +601,7 @@ type PipelineStatus struct {
 	SourceCount *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
 	SinkCount   *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
 	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
-	// ObservedGeneration stores the generation value observed when setting the current Phase
-	// TODO: set default value to -1
+	// ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1
 	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
 }
 

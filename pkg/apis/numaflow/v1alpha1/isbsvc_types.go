@@ -105,8 +105,7 @@ type InterStepBufferServiceStatus struct {
 	Message string              `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
 	Config  BufferServiceConfig `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
 	Type    ISBSvcType          `json:"type,omitempty" protobuf:"bytes,5,opt,name=type"`
-	// ObservedGeneration stores the generation value observed when setting the current Phase
-	// TODO: set default value to -1
+	// ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1
 	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
 }
 
