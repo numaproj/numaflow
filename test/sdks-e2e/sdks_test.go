@@ -44,6 +44,9 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 	defer w.DeletePipelineAndWait()
 	pipelineName := "flatmap"
 
+	defer w.StreamVertexPodlogs("python-split", "udf").TerminateAllPodLogs()
+	defer w.StreamVertexPodlogs("python-udsink", "udsink").TerminateAllPodLogs()
+
 	w.Expect().
 		VertexPodsRunning().
 		VertexPodLogContains("in", LogSourceVertexStarted).
