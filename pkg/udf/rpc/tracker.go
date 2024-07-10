@@ -53,10 +53,7 @@ func (t *tracker) isEmpty() bool {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	items := len(t.m)
-	if items == 0 {
-		return true
-	}
-	return false
+	return items == 0
 }
 
 func (t *tracker) clear() {
