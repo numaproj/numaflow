@@ -133,7 +133,7 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
 	}
 	// TODO For serving source can we use the same url as http?
-	if x := v.Spec.Source; x != nil && x.ServingSource != nil && x.ServingSource.Service {
+	if x := v.Spec.Source; x != nil && x.Serving != nil && x.Serving.Service {
 		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
 	}
 	return svcs
@@ -309,14 +309,14 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 	}
 
-	if v.IsASource() && v.Spec.Source.ServingSource != nil {
+	if v.IsASource() && v.Spec.Source.Serving != nil {
 		servingContainer, err := v.getServingContainer(req)
 		if err != nil {
 			return nil, err
 		}
 		containers = append(containers, servingContainer)
 		// set the serving source stream name in the environment because the numa container will be reading from it
-		containers[0].Env = append(containers[0].Env, corev1.EnvVar{Name: EnvServingSourceStream, Value: req.ServingSourceStreamName})
+		containers[0].Env = append(containers[0].Env, corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName})
 	}
 
 	spec := &corev1.PodSpec{
@@ -333,7 +333,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 }
 
 func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, error) {
-	servingSource := v.Spec.Source.ServingSource
+	servingSource := v.Spec.Source.Serving
 	servingContainer := corev1.Container{
 		Name:            ServingSourceContainer,
 		Env:             req.Env,
@@ -346,7 +346,7 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 	servingContainer.Env = append(servingContainer.Env, v.commonEnvs()...)
 
 	// set the serving source stream name in the environment
-	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingSourceStream, Value: req.ServingSourceStreamName})
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName})
 	// set the serving source spec in the environment
 	servingSourceCopy := servingSource.DeepCopy()
 	servingSourceBytes, err := json.Marshal(servingSourceCopy)
@@ -354,10 +354,10 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 		return corev1.Container{}, errors.New("failed to marshal serving source spec")
 	}
 	encodedServingSourceSpec := base64.StdEncoding.EncodeToString(servingSourceBytes)
-	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingSourceObject, Value: encodedServingSourceSpec})
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingObject, Value: encodedServingSourceSpec})
 
 	// set the serving source port in the environment
-	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingSourcePort, Value: strconv.Itoa(VertexHTTPSPort)})
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)})
 
 	var vertexNames []string
 	for _, vertex := range req.PipelineSpec.Vertices {
@@ -376,13 +376,13 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 	}
 	encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
 	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
-		Name:  EnvServingSourcePipelineSpec,
+		Name:  EnvServingPipelineSpec,
 		Value: encodedPipelineSpec,
 	})
 
 	// set the pod IP in the environment, which will be used for receiving callbacks.
 	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
-		Name: EnvServingSourceHostIP,
+		Name: EnvServingHostIP,
 		ValueFrom: &corev1.EnvVarSource{
 			FieldRef: &corev1.ObjectFieldSelector{
 				FieldPath: "status.podIP",
@@ -394,7 +394,7 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 	if servingSource.Auth != nil && servingSource.Auth.Token != nil {
 		servingContainer.Env = append(servingContainer.Env,
 			corev1.EnvVar{
-				Name: EnvServingSourceAuthToken, ValueFrom: &corev1.EnvVarSource{
+				Name: EnvServingAuthToken, ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
 							Name: servingSource.Auth.Token.Name,

@@ -829,7 +829,7 @@ Authorization
 
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.HTTPSource">HTTPSource</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Serving">Serving</a>)
 </p>
 
 <p>
@@ -1089,7 +1089,7 @@ CallbackStorage
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Serving">Serving</a>)
 </p>
 
 <p>
@@ -3454,6 +3454,21 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
+<code>PipelineSpec</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec"> PipelineSpec </a>
+</em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>DefaultResources</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
@@ -5526,7 +5541,7 @@ Description
 <em>(Optional)</em>
 <p>
 
-Basic auth which contains a user name and a password
+Basic auth which contains a username and a password
 </p>
 
 </td>
@@ -6333,6 +6348,7 @@ PipelineSpec
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">GetVertexPodSpecReq</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.Pipeline">Pipeline</a>)
 </p>
 
@@ -7566,9 +7582,9 @@ CooldownSeconds if not set.
 
 </table>
 
-<h3 id="numaflow.numaproj.io/v1alpha1.ServingSource">
+<h3 id="numaflow.numaproj.io/v1alpha1.Serving">
 
-ServingSource
+Serving
 </h3>
 
 <p>
@@ -8375,9 +8391,8 @@ JetStreamSource </a> </em>
 
 <td>
 
-<code>servingSource</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ServingSource"> ServingSource
-</a> </em>
+<code>serving</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Serving"> Serving </a> </em>
 </td>
 
 <td>

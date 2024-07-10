@@ -1,8 +1,11 @@
+use std::env;
 use std::time::Duration;
 
 use async_nats::jetstream;
 use axum::extract::MatchedPath;
 use axum::{body::Body, http::Request, middleware, response::IntoResponse, routing::get, Router};
+use axum::middleware::Next;
+use axum::response::Response;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use tokio::net::TcpListener;
@@ -33,8 +36,12 @@ mod message_path; // TODO: merge message_path and tracker
 mod response;
 mod tracker;
 
-/// Everything for numaserve starts here. The routing, middlewares, proxying, etc.
+const ENV_NUMAFLOW_SERVING_JETSTREAM_USER : &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD : &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
+const ENV_NUMAFLOW_SERVING_AUTH_TOKEN : &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
 
+
+/// Everything for numaserve starts here. The routing, middlewares, proxying, etc.
 // TODO
 // - [ ] implement an proxy and pass in UUID in the header if not present
 // - [ ] outer fallback for /v1/direct
@@ -75,7 +82,8 @@ where
             // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
             // requests don't hang forever.
             TimeoutLayer::new(Duration::from_secs(config().drain_timeout_secs)),
-        );
+        )
+        .layer(middleware::from_fn(auth_middleware));
     let router = setup_app().await?.layer(layers);
 
     axum::serve(listener, router)
@@ -83,6 +91,44 @@ where
         .await
         .map_err(|e| format!("Starting web server: {}", e))?;
     Ok(())
+}
+
+// auth middleware to do token based authentication for all user facing routes
+// if auth is enabled.
+async fn auth_middleware(request: axum::extract::Request, next: Next) -> Response {
+    let path = request.uri().path();
+
+    // we don't need to check for auth token for callback routes
+    if path == "/v1/process/callback" || path == "/v1/process/callback_save" {
+        return next.run(request).await;
+    }
+    
+    match env::var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
+        Ok(token) => {
+            // Check for the presence of the auth token in the request headers
+            let auth_token = match request.headers().get("Authorization") {
+                Some(token) => token,
+                None => {
+                    return Response::builder()
+                        .status(401)
+                        .body(Body::empty())
+                        .unwrap();
+                }
+            };
+            if auth_token.to_str().unwrap() != format!("Bearer {}", token) {
+                Response::builder()
+                    .status(401)
+                    .body(Body::empty())
+                    .unwrap()
+            } else {
+                next.run(request).await
+            }
+        }
+        Err(_) => {
+            // If the auth token is not set, we don't need to check for the presence of the auth token in the request headers
+            next.run(request).await
+        }
+    }
 }
 
 async fn setup_app() -> crate::Result<Router> {
@@ -118,17 +164,17 @@ async fn routes() -> crate::Result<Router> {
     // TODO: support authentication
     // Check for user and password in the Jetstream configuration
     let js_config = &config().jetstream;
-    let js_client = match (&js_config.user, &js_config.password) {
-        (Some(user), Some(password)) => {
-            // If both user and password are present, connect using them
+    
+    // Connect to Jetstream with user and password if they are set
+    let js_client = match (env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER), env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD)) {
+        (Ok(user), Ok(password)) => {
             async_nats::connect_with_options(
                 &js_config.url,
-                async_nats::ConnectOptions::with_user_and_password(user.clone(), password.clone()),
+                async_nats::ConnectOptions::with_user_and_password(user, password),
             )
             .await
         }
         _ => {
-            // if no user and password are present, connect without them
             async_nats::connect(&js_config.url).await
         }
     }

@@ -18459,6 +18459,9 @@
         "Image": {
           "type": "string"
         },
+        "PipelineSpec": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineSpec"
+        },
         "PullPolicy": {
           "type": "string"
         },
@@ -18476,6 +18479,7 @@
         "Env",
         "SideInputsStoreName",
         "ServingSourceStreamName",
+        "PipelineSpec",
         "DefaultResources"
       ],
       "type": "object"
@@ -19076,7 +19080,7 @@
       "properties": {
         "basic": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.BasicAuth",
-          "description": "Basic auth which contains a user name and a password"
+          "description": "Basic auth which contains a username and a password"
         },
         "nkey": {
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
@@ -19495,7 +19499,7 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.ServingSource": {
+    "io.numaproj.numaflow.v1alpha1.Serving": {
       "properties": {
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
@@ -19705,8 +19709,8 @@
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
         },
-        "servingSource": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"
+        "serving": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Serving"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"

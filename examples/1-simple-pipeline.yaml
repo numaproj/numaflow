@@ -13,7 +13,7 @@ spec:
       scale:
         min: 1
       source:
-        servingSource:
+        serving:
           service: true
           msgIDHeaderKey: "X-Request-ID"
           callbackStorage:

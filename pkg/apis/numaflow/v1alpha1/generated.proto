@@ -550,7 +550,9 @@ message GetVertexPodSpecReq {
 
   optional string servingSourceStreamName = 6;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 7;
+  optional PipelineSpec pipelineSpec = 7;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 8;
 }
 
 // GroupBy indicates it is a reducer UDF
@@ -855,7 +857,7 @@ message NativeRedis {
 
 // NatsAuth defines how to authenticate the nats access
 message NatsAuth {
-  // Basic auth which contains a user name and a password
+  // Basic auth which contains a username and a password
   // +optional
   optional BasicAuth basic = 1;
 
@@ -1169,7 +1171,7 @@ message Scale {
   optional uint32 scaleDownCooldownSeconds = 11;
 }
 
-message ServingSource {
+message Serving {
   // +optional
   optional Authorization auth = 1;
 
@@ -1275,7 +1277,7 @@ message Source {
   optional JetStreamSource jetstream = 7;
 
   // +optional
-  optional ServingSource servingSource = 8;
+  optional Serving serving = 8;
 }
 
 // Status is a common structure which can be used for Status field.

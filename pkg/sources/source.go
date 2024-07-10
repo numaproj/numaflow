@@ -356,7 +356,7 @@ func (sp *SourceProcessor) createSourceReader(ctx context.Context, udsGRPCClient
 		return nats.New(ctx, sp.VertexInstance, nats.WithReadTimeout(readTimeout))
 	} else if x := src.JetStream; x != nil {
 		return jetstreamsrc.New(ctx, sp.VertexInstance, jetstreamsrc.WithReadTimeout(readTimeout))
-	} else if x := src.ServingSource; x != nil {
+	} else if x := src.Serving; x != nil {
 		return jetstreamsrc.New(ctx, sp.VertexInstance, jetstreamsrc.WithReadTimeout(readTimeout), jetstreamsrc.WithServingEnabled())
 	}
 	return nil, fmt.Errorf("invalid source spec")

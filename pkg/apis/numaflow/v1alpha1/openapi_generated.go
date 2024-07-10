@@ -88,7 +88,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                           schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                      schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                          schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource":                  schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Serving":                        schema_pkg_apis_numaflow_v1alpha1_Serving(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SessionWindow":                  schema_pkg_apis_numaflow_v1alpha1_SessionWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput":                      schema_pkg_apis_numaflow_v1alpha1_SideInput(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputTrigger":               schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref),
@@ -1822,6 +1822,12 @@ func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceC
 							Format:  "",
 						},
 					},
+					"PipelineSpec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineSpec"),
+						},
+					},
 					"DefaultResources": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
@@ -1829,11 +1835,11 @@ func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceC
 						},
 					},
 				},
-				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "SideInputsStoreName", "ServingSourceStreamName", "DefaultResources"},
+				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "SideInputsStoreName", "ServingSourceStreamName", "PipelineSpec", "DefaultResources"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineSpec", "k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
 	}
 }
 
@@ -2943,7 +2949,7 @@ func schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"basic": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Basic auth which contains a user name and a password",
+							Description: "Basic auth which contains a username and a password",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth"),
 						},
 					},
@@ -3688,7 +3694,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 	}
 }
 
-func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_numaflow_v1alpha1_Serving(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -4090,16 +4096,16 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource"),
 						},
 					},
-					"servingSource": {
+					"serving": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource"),
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Serving"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Serving", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
 	}
 }
 

@@ -107,9 +107,9 @@ func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Optio
 			return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvISBSvcJetStreamPassword)
 		}
 		opt = append(opt, natslib.UserInfo(user, password))
-		streamName, existing = os.LookupEnv(dfv1.EnvServingSourceStream)
+		streamName, existing = os.LookupEnv(dfv1.EnvServingJetstreamStream)
 		if !existing {
-			return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvServingSourceStream)
+			return nil, fmt.Errorf("environment variable %q not found", dfv1.EnvServingJetstreamStream)
 		}
 	} else {
 		source := vertexInstance.Vertex.Spec.Source.JetStream

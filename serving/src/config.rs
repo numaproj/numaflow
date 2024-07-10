@@ -14,8 +14,6 @@ const ENV_PREFIX: &str = "NUMAFLOW_SERVING";
 const ENV_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_PIPELINE_SPEC";
 const ENV_NUMAFLOW_SERVING_SOURCE_OBJECT: &str = "NUMAFLOW_SERVING_SOURCE_OBJECT";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL : &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_USER : &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD : &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM : &str = "NUMAFLOW_SERVING_JETSTREAM_STREAM";
 
 pub fn config() -> &'static Settings {
@@ -65,9 +63,9 @@ pub struct Settings {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ServingSource {
+pub struct Serving {
     #[serde(rename = "msgIDHeaderKey")]
-    pub msg_id_header_key: String,
+    pub msg_id_header_key: Option<String>,
     #[serde(rename = "callbackStorage")]
     pub callback_storage: CallbackStorageConfig,
 }
@@ -105,12 +103,6 @@ impl Settings {
         if let Ok(url) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_URL) {
             settings.jetstream.url = url;
         }
-        if let Ok(user) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER) {
-            settings.jetstream.user = Some(user);
-        }
-        if let Ok(password) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD) {
-            settings.jetstream.password = Some(password);
-        }
         if let Ok(stream) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM) {
             settings.jetstream.stream = stream;
         }
@@ -123,10 +115,15 @@ impl Settings {
                     .decode(source_spec_encoded.as_bytes())
                     .map_err(|e| format!("decoding NUMAFLOW_SERVING_SOURCE: {e:?}"))?;
 
-                let source_spec = serde_json::from_slice::<ServingSource>(&source_spec_decoded)
+                let source_spec = serde_json::from_slice::<Serving>(&source_spec_decoded)
                     .map_err(|e| format!("parsing NUMAFLOW_SERVING_SOURCE: {e:?}"))?;
 
-                settings.tid_header = source_spec.msg_id_header_key;
+                // Update tid_header from source_spec
+                if let Some(msg_id_header_key) = source_spec.msg_id_header_key {
+                    settings.tid_header = msg_id_header_key;
+                }
+                
+                // Update redis.addr from source_spec, currently we only support redis as callback storage
                 settings.redis.addr = source_spec.callback_storage.url;
 
                 Ok(settings)

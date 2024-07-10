@@ -1,6 +1,6 @@
 package v1alpha1
 
-type ServingSource struct {
+type Serving struct {
 	// +optional
 	Auth *Authorization `json:"auth" protobuf:"bytes,1,opt,name=auth"`
 	// Whether to create a ClusterIP Service

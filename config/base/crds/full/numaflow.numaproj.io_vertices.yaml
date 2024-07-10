@@ -3800,7 +3800,7 @@ spec:
                     - subject
                     - url
                     type: object
-                  servingSource:
+                  serving:
                     properties:
                       auth:
                         properties:
