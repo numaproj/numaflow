@@ -49,14 +49,14 @@ func (t *tracker) delete(key string) {
 	delete(t.m, key)
 }
 
-func (t *tracker) getItems() []*isb.ReadMessage {
+func (t *tracker) isEmpty() bool {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	items := make([]*isb.ReadMessage, 0, len(t.m))
-	for _, vals := range t.m {
-		items = append(items, vals)
+	items := len(t.m)
+	if items == 0 {
+		return true
 	}
-	return items
+	return false
 }
 
 func (t *tracker) clear() {

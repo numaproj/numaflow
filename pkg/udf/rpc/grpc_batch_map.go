@@ -70,7 +70,7 @@ func (u *GRPCBasedBatchMap) WaitUntilReady(ctx context.Context) error {
 			if _, err := u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
 			} else {
-				log.Infof("waiting for map udf to be ready: %v", err)
+				log.Infof("Waiting for batch map udf to be ready: %v", err)
 				time.Sleep(1 * time.Second)
 			}
 		}
@@ -164,10 +164,10 @@ loop:
 	}
 	// check if there are elements left in the tracker. This cannot be an acceptable case as we want the
 	// UDF to send responses for all elements.
-	leftRequest := trackerReq.getItems()
-	if len(leftRequest) > 0 {
-		logger.Error("Response for %d requests not received from UDF ", len(leftRequest))
-		return nil, fmt.Errorf("response for %d requests not received from UDF ", len(leftRequest))
+	trackerEmpty := trackerReq.isEmpty()
+	if !trackerEmpty {
+		logger.Error("BatchMap response for all requests not received from UDF")
+		return nil, fmt.Errorf("batchMap response for all requests not received from UDF")
 	}
 	trackerReq.clear()
 	return udfResults, nil
