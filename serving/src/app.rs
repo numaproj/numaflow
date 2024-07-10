@@ -3,9 +3,9 @@ use std::time::Duration;
 
 use async_nats::jetstream;
 use axum::extract::MatchedPath;
-use axum::{body::Body, http::Request, middleware, response::IntoResponse, routing::get, Router};
 use axum::middleware::Next;
 use axum::response::Response;
+use axum::{body::Body, http::Request, middleware, response::IntoResponse, routing::get, Router};
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use tokio::net::TcpListener;
@@ -36,10 +36,9 @@ mod message_path; // TODO: merge message_path and tracker
 mod response;
 mod tracker;
 
-const ENV_NUMAFLOW_SERVING_JETSTREAM_USER : &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD : &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
-const ENV_NUMAFLOW_SERVING_AUTH_TOKEN : &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
-
+const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
+const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
 
 /// Everything for numaserve starts here. The routing, middlewares, proxying, etc.
 // TODO
@@ -102,24 +101,18 @@ async fn auth_middleware(request: axum::extract::Request, next: Next) -> Respons
     if path == "/v1/process/callback" || path == "/v1/process/callback_save" {
         return next.run(request).await;
     }
-    
+
     match env::var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
         Ok(token) => {
             // Check for the presence of the auth token in the request headers
             let auth_token = match request.headers().get("Authorization") {
                 Some(token) => token,
                 None => {
-                    return Response::builder()
-                        .status(401)
-                        .body(Body::empty())
-                        .unwrap();
+                    return Response::builder().status(401).body(Body::empty()).unwrap();
                 }
             };
             if auth_token.to_str().unwrap() != format!("Bearer {}", token) {
-                Response::builder()
-                    .status(401)
-                    .body(Body::empty())
-                    .unwrap()
+                Response::builder().status(401).body(Body::empty()).unwrap()
             } else {
                 next.run(request).await
             }
@@ -164,9 +157,12 @@ async fn routes() -> crate::Result<Router> {
     // TODO: support authentication
     // Check for user and password in the Jetstream configuration
     let js_config = &config().jetstream;
-    
+
     // Connect to Jetstream with user and password if they are set
-    let js_client = match (env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER), env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD)) {
+    let js_client = match (
+        env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER),
+        env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD),
+    ) {
         (Ok(user), Ok(password)) => {
             async_nats::connect_with_options(
                 &js_config.url,
@@ -174,9 +170,7 @@ async fn routes() -> crate::Result<Router> {
             )
             .await
         }
-        _ => {
-            async_nats::connect(&js_config.url).await
-        }
+        _ => async_nats::connect(&js_config.url).await,
     }
     .map_err(|e| {
         format!(

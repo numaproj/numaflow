@@ -13,8 +13,8 @@ use crate::{Error, Result};
 const ENV_PREFIX: &str = "NUMAFLOW_SERVING";
 const ENV_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_PIPELINE_SPEC";
 const ENV_NUMAFLOW_SERVING_SOURCE_OBJECT: &str = "NUMAFLOW_SERVING_SOURCE_OBJECT";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_URL : &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM : &str = "NUMAFLOW_SERVING_JETSTREAM_STREAM";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM: &str = "NUMAFLOW_SERVING_JETSTREAM_STREAM";
 
 pub fn config() -> &'static Settings {
     static CONF: OnceLock<Settings> = OnceLock::new();
@@ -122,7 +122,7 @@ impl Settings {
                 if let Some(msg_id_header_key) = source_spec.msg_id_header_key {
                     settings.tid_header = msg_id_header_key;
                 }
-                
+
                 // Update redis.addr from source_spec, currently we only support redis as callback storage
                 settings.redis.addr = source_spec.callback_storage.url;
 
