@@ -48,8 +48,6 @@ export GOPATH="${FAKE_GOPATH}"
 export PATH="${GOPATH}/bin:${PATH}"
 cd "${FAKE_REPOPATH}"
 
-go install -mod=vendor ./vendor/k8s.io/code-generator/cmd/go-to-protobuf
-
 install-protobuf() {
   # protobuf version
   PROTOBUF_VERSION=27.2
