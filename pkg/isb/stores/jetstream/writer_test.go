@@ -61,16 +61,29 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 		name          string
 		batchSize     int64
 		streamEnabled bool
+		unaryEnabled  bool
+		batchEnabled  bool
 	}{
 		{
 			name:          "batch",
 			batchSize:     10,
 			streamEnabled: false,
+			unaryEnabled:  true,
+			batchEnabled:  false,
 		},
 		{
 			name:          "stream",
 			batchSize:     1,
 			streamEnabled: true,
+			unaryEnabled:  false,
+			batchEnabled:  false,
+		},
+		{
+			name:          "batch",
+			batchSize:     10,
+			streamEnabled: false,
+			unaryEnabled:  false,
+			batchEnabled:  true,
 		},
 	}
 	for _, tt := range tests {
@@ -152,12 +165,17 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			idleManager, err := wmb.NewIdleManager(1, len(toSteps))
 			assert.NoError(t, err)
-			appliers := forward.MapAppliers{
-				MapUDF:       myForwardJetStreamTest{},
-				MapStreamUDF: myForwardJetStreamTest{},
-				BatchMapUDF:  myForwardJetStreamTest{},
+
+			opts := []forward.Option{forward.WithReadBatchSize(tt.batchSize)}
+			if tt.batchEnabled {
+				opts = append(opts, forward.WithUDFBatchMap(myForwardJetStreamTest{}))
+			} else if tt.streamEnabled {
+				opts = append(opts, forward.WithUDFStreamingMap(myForwardJetStreamTest{}))
+			} else if tt.unaryEnabled {
+				opts = append(opts, forward.WithUDFUnaryMap(myForwardJetStreamTest{}))
 			}
-			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, appliers, fetchWatermark, publishWatermark, idleManager, forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+
+			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 			assert.NoError(t, err)
 
 			stopped := f.Start()

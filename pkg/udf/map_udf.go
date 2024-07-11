@@ -131,6 +131,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
+	opts := []forward.Option{forward.WithLogger(log)}
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	enableMapUdfStream := sharedutil.LookupEnvBoolOr(dfv1.EnvMapStreaming, false)
 	enableBatchMapUdf := sharedutil.LookupEnvBoolOr(dfv1.EnvBatchMap, false)
@@ -164,6 +165,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
+		opts = append(opts, forward.WithUDFStreamingMap(mapStreamHandler))
 
 	} else if enableBatchMapUdf {
 		// if Batch Map mode is enabled create the client and handler for that accordingly
@@ -190,7 +192,10 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
+		opts = append(opts, forward.WithUDFBatchMap(batchMapHandler))
 	} else {
+		// Default is to enable unary map mode
+
 		// Wait for server info to be ready
 		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapServerInfoFile))
 		if err != nil {
@@ -214,7 +219,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
-
+		opts = append(opts, forward.WithUDFUnaryMap(mapHandler))
 	}
 
 	for index, bufferPartition := range fromBuffer {
@@ -264,11 +269,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 			return result, nil
 		})
-
-		// add the options to check which mode for the map UDF is enabled
-		opts := []forward.Option{forward.WithLogger(log),
-			forward.WithUDFStreaming(enableMapUdfStream),
-			forward.WithUDFBatchMap(enableBatchMapUdf)}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 			if x.ReadBatchSize != nil {
 				opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
@@ -288,14 +288,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			opts = append(opts, forward.WithCallbackUploader(cbPublisher))
 		}
 
-		mapAppliers := forward.MapAppliers{
-			MapUDF:       mapHandler,
-			MapStreamUDF: mapStreamHandler,
-			BatchMapUDF:  batchMapHandler,
-		}
-
 		// create a forwarder for each partition
-		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapAppliers, fetchWatermark, publishWatermark, idleManager, opts...)
+		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, fetchWatermark, publishWatermark, idleManager, opts...)
 		if err != nil {
 			return err
 		}

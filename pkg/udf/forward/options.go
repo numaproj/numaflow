@@ -24,6 +24,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/callback"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/udf/forward/applier"
 )
 
 // options for forwarding the message
@@ -36,23 +37,27 @@ type options struct {
 	retryInterval time.Duration
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
-	// enableMapUdfStream indicates whether the message streaming is enabled or not for map UDF processing
-	enableMapUdfStream bool
 	// cbPublisher is the callback publisher for the vertex.
 	cbPublisher *callback.Uploader
-	// enableBatchMapUdf indicates whether the batch map mode is enabled for the map UDF
-	enableBatchMapUdf bool
+	// unaryMapUdfApplier is the UDF applier for a unary map mode
+	unaryMapUdfApplier applier.MapApplier
+	// streamMapUdfApplier is the UDF applier for a server streaming map mode
+	streamMapUdfApplier applier.MapStreamApplier
+	// batchMapUdfApplier is the UDF applier for a batch map mode
+	batchMapUdfApplier applier.BatchMapApplier
 }
 
 type Option func(*options) error
 
 func DefaultOptions() *options {
 	return &options{
-		readBatchSize:      dfv1.DefaultReadBatchSize,
-		udfConcurrency:     dfv1.DefaultReadBatchSize,
-		retryInterval:      time.Millisecond,
-		logger:             logging.NewLogger(),
-		enableMapUdfStream: false,
+		readBatchSize:       dfv1.DefaultReadBatchSize,
+		udfConcurrency:      dfv1.DefaultReadBatchSize,
+		retryInterval:       time.Millisecond,
+		logger:              logging.NewLogger(),
+		unaryMapUdfApplier:  nil,
+		batchMapUdfApplier:  nil,
+		streamMapUdfApplier: nil,
 	}
 }
 
@@ -88,14 +93,6 @@ func WithLogger(l *zap.SugaredLogger) Option {
 	}
 }
 
-// WithUDFStreaming sets streaming for map UDF processing
-func WithUDFStreaming(f bool) Option {
-	return func(o *options) error {
-		o.enableMapUdfStream = f
-		return nil
-	}
-}
-
 // WithCallbackUploader sets the callback uploader for the vertex
 func WithCallbackUploader(cp *callback.Uploader) Option {
 	return func(o *options) error {
@@ -104,10 +101,41 @@ func WithCallbackUploader(cp *callback.Uploader) Option {
 	}
 }
 
-// WithUDFBatchMap enables the batch map for UDF
-func WithUDFBatchMap(f bool) Option {
+// Options to set the map mode to be used, as all of them are mutually exclusive, at one point of time
+// one of them can be enabled, and others are set to nil
+
+// WithUDFBatchMap enables the batch map for UDF if provided with a non-nil applier
+func WithUDFBatchMap(f applier.BatchMapApplier) Option {
 	return func(o *options) error {
-		o.enableBatchMapUdf = f
+		if f != nil {
+			o.batchMapUdfApplier = f
+			o.unaryMapUdfApplier = nil
+			o.streamMapUdfApplier = nil
+		}
+		return nil
+	}
+}
+
+// WithUDFUnaryMap enables the unary map for UDF if provided with a non-nil applier
+func WithUDFUnaryMap(f applier.MapApplier) Option {
+	return func(o *options) error {
+		if f != nil {
+			o.unaryMapUdfApplier = f
+			o.batchMapUdfApplier = nil
+			o.streamMapUdfApplier = nil
+		}
+		return nil
+	}
+}
+
+// WithUDFStreamingMap sets streaming for map UDF processing if provided with a non-nil applier
+func WithUDFStreamingMap(f applier.MapStreamApplier) Option {
+	return func(o *options) error {
+		if f != nil {
+			o.streamMapUdfApplier = f
+			o.unaryMapUdfApplier = nil
+			o.batchMapUdfApplier = nil
+		}
 		return nil
 	}
 }

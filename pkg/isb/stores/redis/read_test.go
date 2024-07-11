@@ -45,11 +45,6 @@ var (
 		// Addrs: []string{":7000", ":7001", ":7002", ":7003", ":7004", ":7005"}
 		Addrs: []string{":6379"},
 	}
-	readTestAppliers = forward.MapAppliers{
-		MapUDF:       forwardReadWritePerformance{},
-		MapStreamUDF: forwardReadWritePerformance{},
-		BatchMapUDF:  forwardReadWritePerformance{},
-	}
 
 	testStartTime = time.Unix(1636470000, 0).UTC()
 )
@@ -145,7 +140,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, readTestAppliers, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithReadBatchSize(10))
+	f, err := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithReadBatchSize(10), forward.WithUDFUnaryMap(forwardReadWritePerformance{}))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
