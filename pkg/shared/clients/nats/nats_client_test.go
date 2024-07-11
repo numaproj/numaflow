@@ -12,8 +12,6 @@ import (
 
 	natstestserver "github.com/nats-io/nats-server/v2/test"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-
-	// natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -111,43 +109,6 @@ func TestBindKVStore(t *testing.T) {
 	_, err = client.BindKVStore("INVALID_KV")
 	assert.Error(t, err)
 }
-
-// func TestPendingForStream(t *testing.T) {
-// 	s := RunJetStreamServer(t)
-// 	defer s.Shutdown()
-
-// 	client := NewTestClient(t, s.ClientURL())
-// 	defer client.Close()
-
-// 	// Create a stream and a consumer
-// 	js, err := client.nc.JetStream()
-// 	assert.NoError(t, err)
-// 	_, err = js.AddStream(&nats.StreamConfig{
-// 		Name:     "TEST_STREAM",
-// 		Subjects: []string{"test.subject"},
-// 	})
-// 	assert.NoError(t, err)
-
-// 	_, err = js.AddConsumer("TEST_STREAM", &nats.ConsumerConfig{
-// 		Durable:   "TEST_CONSUMER",
-// 		AckPolicy: nats.AckExplicitPolicy,
-// 	})
-// 	assert.NoError(t, err)
-
-// 	// Publish messages to the stream
-// 	for i := 0; i < 5; i++ {
-// 		js.Publish("test.subject", []byte("message"))
-// 	}
-
-// 	// Check pending messages
-// 	pending, err := client.PendingForStream("TEST_STREAM", "TEST_CONSUMER")
-// 	assert.NoError(t, err)
-// 	assert.Equal(t, int64(5), pending)
-
-// 	// Test failure case: Invalid consumer
-// 	_, err = client.PendingForStream("INVALID_CONSUMER", "TEST_STREAM")
-// 	assert.Error(t, err)
-// }
 
 func TestJetStreamContext(t *testing.T) {
 	s := RunJetStreamServer(t)
