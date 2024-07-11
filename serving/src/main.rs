@@ -3,16 +3,16 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub use config::config;
 
-use crate::config::pipeline_spec;
-use crate::{app::start_main_server, metrics::start_metrics_server};
-
 pub use self::error::{Error, Result};
+use crate::pipeline::pipeline_spec;
+use crate::{app::start_main_server, metrics::start_metrics_server};
 
 mod app;
 mod config;
 mod consts;
 mod error;
 mod metrics;
+mod pipeline;
 
 #[tokio::main]
 async fn main() {

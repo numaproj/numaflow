@@ -46,7 +46,7 @@ mod tests {
 
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::tracker::MessageGraph;
-    use crate::config::pipeline_spec;
+    use crate::pipeline::pipeline_spec;
 
     use super::*;
 

@@ -17,7 +17,7 @@ use tracing::{debug, info_span, Level};
 use uuid::Uuid;
 
 use crate::app::tracker::MessageGraph;
-use crate::config::pipeline_spec;
+use crate::pipeline::pipeline_spec;
 use crate::{app::callback::state::State as CallbackState, config, metrics::capture_metrics};
 
 use self::{
@@ -217,6 +217,7 @@ mod tests {
 
     use axum::http::StatusCode;
     use tokio::time::{sleep, Duration};
+    use tower::ServiceExt;
 
     use super::*;
 
@@ -247,5 +248,27 @@ mod tests {
         let response = health_check().await;
         let response = response.into_response();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[cfg(feature = "all-tests")]
+    #[tokio::test]
+    async fn test_auth_middleware() {
+        let app = Router::new()
+            .nest("/v1/process", routes().await.unwrap())
+            .layer(middleware::from_fn(auth_middleware));
+
+        env::set_var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN, "test_token");
+        let res = app
+            .oneshot(
+                axum::extract::Request::builder()
+                    .uri("/v1/process/sync")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        env::remove_var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN);
     }
 }

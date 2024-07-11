@@ -231,7 +231,7 @@ mod tests {
     use axum::body::Bytes;
 
     use crate::app::callback::store::memstore::InMemoryStore;
-    use crate::config::pipeline_spec;
+    use crate::pipeline::pipeline_spec;
 
     use super::*;
 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::app::callback::CallbackRequest;
-use crate::config::{Edge, OperatorType, Pipeline};
+use crate::pipeline::{Edge, OperatorType, Pipeline};
 use crate::Error;
 
 fn compare_slice(operator: &OperatorType, a: &[String], b: &[String]) -> bool {
@@ -237,7 +237,7 @@ impl MessageGraph {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{Conditions, Tag, Vertex};
+    use crate::pipeline::{Conditions, Tag, Vertex};
 
     use super::*;
 

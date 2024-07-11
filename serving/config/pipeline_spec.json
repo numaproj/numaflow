@@ -1,11 +1,11 @@
 {
   "vertices": [
     {
-      "name": "a"
+      "name": "in"
     }, {
-      "name": "b"
+      "name": "cat"
     }, {
-      "name": "c"
+      "name": "out"
     }
   ],
   "edges": [
