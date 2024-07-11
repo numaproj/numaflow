@@ -16,7 +16,7 @@ spec:
         serving:
           service: true
           msgIDHeaderKey: "X-Request-ID"
-          callbackStorage:
+          store:
             url: "redis://redis:6379"
           auth:
             token:

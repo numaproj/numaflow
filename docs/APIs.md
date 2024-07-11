@@ -1081,65 +1081,6 @@ JetStreamConfig </a> </em>
 
 </table>
 
-<h3 id="numaflow.numaproj.io/v1alpha1.CallbackStorage">
-
-CallbackStorage
-</h3>
-
-<p>
-
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Serving">Serving</a>)
-</p>
-
-<p>
-
-</p>
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>
-
-Field
-</th>
-
-<th>
-
-Description
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td>
-
-<code>url</code></br> <em> string </em>
-</td>
-
-<td>
-
-<p>
-
-URL of the persistent store to write the callbacks
-</p>
-
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
 <h3 id="numaflow.numaproj.io/v1alpha1.CombinedEdge">
 
 CombinedEdge
@@ -7595,6 +7536,11 @@ Serving
 
 <p>
 
+<p>
+
+Serving is the HTTP endpoint for Numaflow.
+</p>
+
 </p>
 
 <table>
@@ -7677,9 +7623,8 @@ The header key from which the message id will be extracted Default
 
 <td>
 
-<code>callbackStorage</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.CallbackStorage">
-CallbackStorage </a> </em>
+<code>store</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Store"> Store </a> </em>
 </td>
 
 <td>
@@ -7687,7 +7632,7 @@ CallbackStorage </a> </em>
 <em>(Optional)</em>
 <p>
 
-Persistent store for the callbacks
+Persistent store for the callbacks for serving and tracking
 </p>
 
 </td>
@@ -8465,6 +8410,70 @@ Description
 
 Conditions are the latest available observations of a resource’s current
 state.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.Store">
+
+Store
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Serving">Serving</a>)
+</p>
+
+<p>
+
+<p>
+
+Store to track and store data and metadata for tracking and serving.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>url</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+URL of the persistent store to write the callbacks
 </p>
 
 </td>

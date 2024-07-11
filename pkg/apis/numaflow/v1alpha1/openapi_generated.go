@@ -37,7 +37,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth":                      schema_pkg_apis_numaflow_v1alpha1_BasicAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole":                      schema_pkg_apis_numaflow_v1alpha1_Blackhole(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BufferServiceConfig":            schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CallbackStorage":                schema_pkg_apis_numaflow_v1alpha1_CallbackStorage(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge":                   schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                      schema_pkg_apis_numaflow_v1alpha1_Container(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":              schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
@@ -97,6 +96,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow":                  schema_pkg_apis_numaflow_v1alpha1_SlidingWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source":                         schema_pkg_apis_numaflow_v1alpha1_Source(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Status":                         schema_pkg_apis_numaflow_v1alpha1_Status(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Store":                          schema_pkg_apis_numaflow_v1alpha1_Store(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS":                            schema_pkg_apis_numaflow_v1alpha1_TLS(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions":                  schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates":                      schema_pkg_apis_numaflow_v1alpha1_Templates(ref),
@@ -620,27 +620,6 @@ func schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref common.ReferenceC
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamConfig", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig"},
-	}
-}
-
-func schema_pkg_apis_numaflow_v1alpha1_CallbackStorage(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"url": {
-						SchemaProps: spec.SchemaProps{
-							Description: "URL of the persistent store to write the callbacks",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-				Required: []string{"url"},
-			},
-		},
 	}
 }
 
@@ -3698,7 +3677,8 @@ func schema_pkg_apis_numaflow_v1alpha1_Serving(ref common.ReferenceCallback) com
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "Serving is the HTTP endpoint for Numaflow.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"auth": {
 						SchemaProps: spec.SchemaProps{
@@ -3721,17 +3701,17 @@ func schema_pkg_apis_numaflow_v1alpha1_Serving(ref common.ReferenceCallback) com
 							Format:      "",
 						},
 					},
-					"callbackStorage": {
+					"store": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Persistent store for the callbacks",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CallbackStorage"),
+							Description: "Persistent store for the callbacks for serving and tracking",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Store"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CallbackStorage"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Store"},
 	}
 }
 
@@ -4141,6 +4121,28 @@ func schema_pkg_apis_numaflow_v1alpha1_Status(ref common.ReferenceCallback) comm
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_Store(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Store to track and store data and metadata for tracking and serving.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "URL of the persistent store to write the callbacks",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"url"},
+			},
+		},
 	}
 }
 

@@ -222,11 +222,6 @@ message BufferServiceConfig {
   optional JetStreamConfig jetstream = 2;
 }
 
-message CallbackStorage {
-  // URL of the persistent store to write the callbacks
-  optional string url = 1;
-}
-
 // CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.
 // It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod,
 // it knows the properties of the connected vertices, for example, how many partitioned buffers I should write
@@ -1171,6 +1166,7 @@ message Scale {
   optional uint32 scaleDownCooldownSeconds = 11;
 }
 
+// Serving is the HTTP endpoint for Numaflow.
 message Serving {
   // +optional
   optional Authorization auth = 1;
@@ -1184,9 +1180,9 @@ message Serving {
   // +optional
   optional string msgIDHeaderKey = 3;
 
-  // Persistent store for the callbacks
+  // Persistent store for the callbacks for serving and tracking
   // +optional
-  optional CallbackStorage callbackStorage = 4;
+  optional Store store = 4;
 }
 
 // SessionWindow describes a session window
@@ -1287,6 +1283,12 @@ message Status {
   // +patchMergeKey=type
   // +patchStrategy=merge
   repeated k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1;
+}
+
+// Store to track and store data and metadata for tracking and serving.
+message Store {
+  // URL of the persistent store to write the callbacks
+  optional string url = 1;
 }
 
 message TLS {

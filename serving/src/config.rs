@@ -66,7 +66,7 @@ pub struct Settings {
 pub struct Serving {
     #[serde(rename = "msgIDHeaderKey")]
     pub msg_id_header_key: Option<String>,
-    #[serde(rename = "callbackStorage")]
+    #[serde(rename = "store")]
     pub callback_storage: CallbackStorageConfig,
 }
 

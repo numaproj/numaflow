@@ -17807,18 +17807,6 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.CallbackStorage": {
-      "properties": {
-        "url": {
-          "description": "URL of the persistent store to write the callbacks",
-          "type": "string"
-        }
-      },
-      "required": [
-        "url"
-      ],
-      "type": "object"
-    },
     "io.numaproj.numaflow.v1alpha1.CombinedEdge": {
       "description": "CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits. It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod, it knows the properties of the connected vertices, for example, how many partitioned buffers I should write to, what is the write buffer length, etc.",
       "properties": {
@@ -19500,13 +19488,10 @@
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Serving": {
+      "description": "Serving is the HTTP endpoint for Numaflow.",
       "properties": {
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
-        },
-        "callbackStorage": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.CallbackStorage",
-          "description": "Persistent store for the callbacks"
         },
         "msgIDHeaderKey": {
           "description": "The header key from which the message id will be extracted Default",
@@ -19515,6 +19500,10 @@
         "service": {
           "description": "Whether to create a ClusterIP Service",
           "type": "boolean"
+        },
+        "store": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Store",
+          "description": "Persistent store for the callbacks for serving and tracking"
         }
       },
       "type": "object"
@@ -19734,6 +19723,19 @@
           "x-kubernetes-patch-strategy": "merge"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.Store": {
+      "description": "Store to track and store data and metadata for tracking and serving.",
+      "properties": {
+        "url": {
+          "description": "URL of the persistent store to write the callbacks",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.TLS": {
