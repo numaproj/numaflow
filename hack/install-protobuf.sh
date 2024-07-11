@@ -14,7 +14,7 @@ EOF
 }
 
 parse_args() {
-  # BINDIR is ./bin unless set be ENV
+  # BINDIR is ${HOME}/bin unless set by ENV
   # overridden by flag below
 
   BINDIR=${BINDIR:-${HOME}/bin}
