@@ -10,7 +10,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-// Mock structures
+// Mock structure
 type Secret struct {
 	Name string
 }
