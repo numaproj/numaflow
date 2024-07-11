@@ -90,7 +90,6 @@ func (c *client) BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.Batc
 	errCh := make(chan error)
 
 	// response channel for streaming back the results received from the gRPC server
-	// TODO(map-batch): Check if keeping this buffered would help
 	responseCh := make(chan *batchmappb.BatchMapResponse)
 
 	// BatchMapFn is a bidirectional streaming RPC

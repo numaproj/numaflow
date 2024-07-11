@@ -164,12 +164,10 @@ loop:
 	}
 	// check if there are elements left in the tracker. This cannot be an acceptable case as we want the
 	// UDF to send responses for all elements.
-	trackerEmpty := trackerReq.isEmpty()
-	if !trackerEmpty {
+	if !trackerReq.isEmpty() {
 		logger.Error("BatchMap response for all requests not received from UDF")
 		return nil, fmt.Errorf("batchMap response for all requests not received from UDF")
 	}
-	trackerReq.clear()
 	return udfResults, nil
 }
 
