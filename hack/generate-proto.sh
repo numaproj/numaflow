@@ -50,9 +50,35 @@ cd "${FAKE_REPOPATH}"
 
 go install -mod=vendor ./vendor/k8s.io/code-generator/cmd/go-to-protobuf
 
+install-protobuf() {
+  # protobuf version
+  PROTOBUF_VERSION=27.2
+  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+  OS=$(uname_os)
+  ARCH=$(uname_arch)
+
+  echo "OS: $OS  ARCH: $ARCH"
+  BINARY_URL=$PB_REL/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-${OS}-${ARCH}.zip
+  if [[ "$OS" = "darwin" ]]; then
+    BINARY_URL=$PB_REL/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-osx-universal_binary.zip
+  fi
+  echo "Downloading $BINARY_URL"
+
+  tmp=$(mktemp -d)
+  trap 'rm -rf ${tmp}' EXIT
+
+  curl -sL -o ${tmp}/protoc-${PROTOBUF_VERSION}-${OS}-${ARCH}.zip $BINARY_URL
+  unzip ${tmp}/protoc-${PROTOBUF_VERSION}-${OS}-${ARCH}.zip -d ${GOPATH}
+}
+
+install-protobuf
+
+go install -mod=vendor ./vendor/k8s.io/code-generator/cmd/go-to-protobuf
+
 export GO111MODULE="off"
 
-${GOPATH}/bin/go-to-protobuf \
+
+go-to-protobuf \
         --go-header-file=./hack/boilerplate/boilerplate.go.txt \
         --packages=github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1 \
         --apimachinery-packages=+k8s.io/apimachinery/pkg/util/intstr,+k8s.io/apimachinery/pkg/api/resource,k8s.io/apimachinery/pkg/runtime/schema,+k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/api/core/v1,k8s.io/api/policy/v1beta1 \
@@ -63,11 +89,8 @@ mkdir -p ${GOPATH}/src/google/api
 curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/annotations.proto -o ${GOPATH}/src/google/api/annotations.proto
 curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/http.proto -o ${GOPATH}/src/google/api/http.proto
 
-PROTOBUF_VERSION=27.2
-$(dirname $0)/install-protobuf.sh -b ${GOPATH}/bin ${PROTOBUF_VERSION}
-
 gen-protoc(){
-    ${GOPATH}/bin/protoc \
+    protoc \
       -I /usr/local/include \
       -I . \
       -I ${GOPATH}/src \
