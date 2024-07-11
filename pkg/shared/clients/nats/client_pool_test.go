@@ -39,3 +39,24 @@ func TestClientPool_NextAvailableClient(t *testing.T) {
 	client3 := pool.NextAvailableClient()
 	assert.NotNil(t, client3)
 }
+
+func TestClientPool_CloseAll(t *testing.T) {
+	os.Setenv(dfv1.EnvISBSvcJetStreamURL, "nats://localhost:4222")
+	os.Setenv(dfv1.EnvISBSvcJetStreamUser, "user")
+	os.Setenv(dfv1.EnvISBSvcJetStreamPassword, "password")
+	ctx := context.Background()
+	pool, err := NewClientPool(ctx)
+	assert.NoError(t, err)
+	assert.NotNil(t, pool)
+
+	for e := pool.clients.Front(); e != nil; e = e.Next() {
+		client := e.Value.(*Client)
+		assert.False(t, client.nc.IsClosed())
+	}
+
+	pool.CloseAll()
+	for e := pool.clients.Front(); e != nil; e = e.Next() {
+		client := e.Value.(*Client)
+		assert.True(t, client.nc.IsClosed())
+	}
+}
