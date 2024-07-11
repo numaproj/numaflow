@@ -40,6 +40,8 @@ type options struct {
 	enableMapUdfStream bool
 	// cbPublisher is the callback publisher for the vertex.
 	cbPublisher *callback.Uploader
+	// enableBatchMapUdf indicates whether the batch map mode is enabled for the map UDF
+	enableBatchMapUdf bool
 }
 
 type Option func(*options) error
@@ -98,6 +100,14 @@ func WithUDFStreaming(f bool) Option {
 func WithCallbackUploader(cp *callback.Uploader) Option {
 	return func(o *options) error {
 		o.cbPublisher = cp
+		return nil
+	}
+}
+
+// WithUDFBatchMap enables the batch map for UDF
+func WithUDFBatchMap(f bool) Option {
+	return func(o *options) error {
+		o.enableBatchMapUdf = f
 		return nil
 	}
 }
