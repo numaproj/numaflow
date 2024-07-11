@@ -12,7 +12,7 @@ Check the links below to see the examples for different languages.
 
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcer/examples/simple_source/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/source/simple/)
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/source/simple-source)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/source/simple_source)
 
 After building a docker image for the written user-defined source, specify the image as below in the vertex spec.
 
