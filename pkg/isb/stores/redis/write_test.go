@@ -37,6 +37,14 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
+var (
+	appliers = forward.MapAppliers{
+		MapUDF:       myForwardRedisTest{},
+		MapStreamUDF: myForwardRedisTest{},
+		BatchMapUDF:  myForwardRedisTest{},
+	}
+)
+
 func TestRedisQWrite_Write(t *testing.T) {
 	client := redisclient.NewRedisClient(redisOptions)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
@@ -359,6 +367,10 @@ func (f myForwardRedisTest) ApplyMapStream(ctx context.Context, message *isb.Rea
 	return testutils.CopyUDFTestApplyStream(ctx, "", writeMessageCh, message)
 }
 
+func (f myForwardRedisTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApplyBatchMap(ctx, "", messages)
+}
+
 // TestNewInterStepDataForwardRedis is used to read data from one step to another using redis as the Inter-Step Buffer
 // For the purposes of testing we need to write some data to the from step
 func TestNewInterStepDataForwardRedis(t *testing.T) {
@@ -410,7 +422,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, appliers, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 
@@ -459,7 +471,7 @@ func TestReadTimeout(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, appliers, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written

@@ -241,7 +241,7 @@ func (mg *memGen) newWorker(ctx context.Context, rate int) func(chan time.Time, 
 			case <-ctx.Done():
 				return
 			case ts := <-tickChan:
-				tickgenSourceCount.With(map[string]string{metrics.LabelVertex: mg.vertexName, metrics.LabelPipeline: mg.pipelineName})
+				tickgenSourceCount.With(map[string]string{metrics.LabelVertex: mg.vertexName, metrics.LabelPipeline: mg.pipelineName}).Inc()
 				// we would generate all the keys in a round robin fashion
 				// even if there are multiple pods, all the pods will generate same keys in the same order.
 				// TODO: alternatively, we could also think about generating a subset of keys per pod.
