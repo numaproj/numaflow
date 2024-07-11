@@ -9,40 +9,6 @@ header "generating proto files"
 
 ensure_vendor
 
-if [ "`command -v protoc-gen-gogo`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogo
-fi
-
-if [ "`command -v protoc-gen-gogofast`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogofast
-fi
-
-if [ "`command -v gogoproto`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/gogo/protobuf/gogoproto
-fi
-
-if [ "`command -v protoc-gen-go`" = "" ]; then
-  go install -mod=vendor ./vendor/google.golang.org/protobuf/cmd/protoc-gen-go
-fi
-
-if [ "`command -v protoc-gen-go-grpc`" = "" ]; then
-  go install -mod=vendor ./vendor/google.golang.org/grpc/cmd/protoc-gen-go-grpc
-fi
-
-if [ "`command -v protoc-gen-grpc-gateway`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway
-fi
-
-if [ "`command -v protoc-gen-openapiv2`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2
-fi
-
-if [ "`command -v goimports`" = "" ]; then
-  go install -mod=vendor ./vendor/golang.org/x/tools/cmd/goimports
-fi
-
-export PATH="$(go env GOPATH)/bin:${PATH}"
-
 make_fake_paths
 export GOPATH="${FAKE_GOPATH}"
 export PATH="${GOPATH}/bin:${PATH}"
@@ -73,10 +39,17 @@ install-protobuf() {
 
 install-protobuf
 
+go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogo
+go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogofast
+go install -mod=vendor ./vendor/github.com/gogo/protobuf/gogoproto
+go install -mod=vendor ./vendor/google.golang.org/protobuf/cmd/protoc-gen-go
+go install -mod=vendor ./vendor/google.golang.org/grpc/cmd/protoc-gen-go-grpc
+go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway
+go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2
+go install -mod=vendor ./vendor/golang.org/x/tools/cmd/goimports
 go install -mod=vendor ./vendor/k8s.io/code-generator/cmd/go-to-protobuf
 
 export GO111MODULE="off"
-
 
 go-to-protobuf \
         --go-header-file=./hack/boilerplate/boilerplate.go.txt \
