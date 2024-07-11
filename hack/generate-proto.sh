@@ -7,7 +7,6 @@ set -o pipefail
 source $(dirname $0)/library.sh
 header "generating proto files"
 
-ensure_protobuf
 ensure_vendor
 
 if [ "`command -v protoc-gen-gogo`" = "" ]; then
@@ -63,8 +62,11 @@ mkdir -p ${GOPATH}/src/google/api
 curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/annotations.proto -o ${GOPATH}/src/google/api/annotations.proto
 curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/http.proto -o ${GOPATH}/src/google/api/http.proto
 
+PROTOBUF_VERSION=27.2
+$(dirname $0)/install-protobuf.sh -b ${GOPATH}/bin ${PROTOBUF_VERSION}
+
 gen-protoc(){
-    protoc \
+    ${GOPATH}/bin/protoc \
       -I /usr/local/include \
       -I . \
       -I ${GOPATH}/src \
