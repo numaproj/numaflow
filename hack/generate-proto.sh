@@ -45,6 +45,7 @@ export PATH="$(go env GOPATH)/bin:${PATH}"
 
 make_fake_paths
 export GOPATH="${FAKE_GOPATH}"
+export PATH="${GOPATH}/bin:${PATH}"
 cd "${FAKE_REPOPATH}"
 
 go install -mod=vendor ./vendor/k8s.io/code-generator/cmd/go-to-protobuf

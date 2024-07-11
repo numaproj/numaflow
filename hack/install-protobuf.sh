@@ -27,7 +27,7 @@ parse_args() {
   done
   shift $((OPTIND - 1))
   VERSION=$1
-  if [ "$VERSION" = "" ]; then
+  if [[ "$VERSION" = "" ]]; then
       usage "$0"
   fi
   # if version starts with 'v', remove it
@@ -44,14 +44,14 @@ parse_args "$@"
 
 echo "OS: $OS  ARCH: $ARCH"
 
-tmp=$(mktemp -d)
-trap 'rm -rf ${tmp}' EXIT
-
 BINARY_URL=$PB_REL/download/v${VERSION}/protoc-${VERSION}-${OS}-${ARCH}.zip
-if  [ "$OS" = "darwin" ]; then
+if [[ "$OS" = "darwin" ]]; then
   BINARY_URL=$PB_REL/download/v${VERSION}/protoc-${VERSION}-osx-universal_binary.zip
 fi
-echo $BINARY_URL
+echo "Downloading $BINARY_URL"
+
+tmp=$(mktemp -d)
+trap 'rm -rf ${tmp}' EXIT
 
 curl -sL -o ${tmp}/protoc-${VERSION}-${OS}-${ARCH}.zip $BINARY_URL
 unzip ${tmp}/protoc-${VERSION}-${OS}-${ARCH}.zip -d ${tmp}
