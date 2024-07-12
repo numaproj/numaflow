@@ -10,6 +10,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 )
 
 func TestNewNATSClient(t *testing.T) {
@@ -44,7 +46,7 @@ func TestNewNATSClient_Failure(t *testing.T) {
 }
 
 func TestSubscribe(t *testing.T) {
-	s := RunJetStreamServer(t)
+	s := natstest.RunJetStreamServer(t)
 	defer s.Shutdown()
 
 	client := NewTestClient(t, s.ClientURL())
@@ -70,7 +72,7 @@ func TestSubscribe(t *testing.T) {
 }
 
 func TestBindKVStore(t *testing.T) {
-	s := RunJetStreamServer(t)
+	s := natstest.RunJetStreamServer(t)
 	defer s.Shutdown()
 
 	client := NewTestClient(t, s.ClientURL())
@@ -95,7 +97,7 @@ func TestBindKVStore(t *testing.T) {
 }
 
 func TestJetStreamContext(t *testing.T) {
-	s := RunJetStreamServer(t)
+	s := natstest.RunJetStreamServer(t)
 	defer s.Shutdown()
 
 	client := NewTestClient(t, s.ClientURL())
@@ -107,7 +109,7 @@ func TestJetStreamContext(t *testing.T) {
 }
 
 func TestNewTestClient(t *testing.T) {
-	s := RunJetStreamServer(t)
+	s := natstest.RunJetStreamServer(t)
 	defer s.Shutdown()
 
 	client := NewTestClient(t, s.ClientURL())
@@ -116,7 +118,7 @@ func TestNewTestClient(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	s := RunJetStreamServer(t)
+	s := natstest.RunJetStreamServer(t)
 	defer s.Shutdown()
 
 	client := NewTestClient(t, s.ClientURL())

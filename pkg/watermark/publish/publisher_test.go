@@ -26,7 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	natsclass "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -49,7 +50,7 @@ func TestPublisherWithSharedOTBucket(t *testing.T) {
 
 	var ctx = context.Background()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclass.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)

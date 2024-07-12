@@ -27,7 +27,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 )
 
