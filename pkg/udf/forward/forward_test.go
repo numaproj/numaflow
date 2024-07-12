@@ -146,14 +146,19 @@ func TestValidMapModeInit(t *testing.T) {
 			unaryMapEnabled: false,
 			valid:           false,
 		},
-		// This case is still valid due to how our options work, that if multiple are given, it will
-		// use only one of them
 		{
 			name:            "all_enabled",
 			streamEnabled:   true,
 			batchMapEnabled: true,
 			unaryMapEnabled: true,
-			valid:           true,
+			valid:           false,
+		},
+		{
+			name:            "two_enabled",
+			streamEnabled:   true,
+			batchMapEnabled: true,
+			unaryMapEnabled: false,
+			valid:           false,
 		},
 	}
 	for _, tt := range tests {
@@ -185,9 +190,11 @@ func TestValidMapModeInit(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(myForwardTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardTest{}))
-			} else if tt.unaryMapEnabled {
+			}
+			if tt.unaryMapEnabled {
 				opts = append(opts, WithUDFUnaryMap(myForwardTest{}))
 			}
 
@@ -1791,9 +1798,11 @@ func TestWriteToBuffer(t *testing.T) {
 			opts := []Option{WithReadBatchSize(value.batchSize)}
 			if value.batchEnabled {
 				opts = append(opts, WithUDFBatchMap(myForwardApplyWhereToErrTest{}))
-			} else if value.streamEnabled {
+			}
+			if value.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardApplyWhereToErrTest{}))
-			} else if value.unaryEnabled {
+			}
+			if value.unaryEnabled {
 				opts = append(opts, WithUDFUnaryMap(myForwardApplyWhereToErrTest{}))
 			}
 
