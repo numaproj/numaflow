@@ -1794,7 +1794,7 @@ ForwardConditions </a> </em>
 <em>(Optional)</em>
 <p>
 
-Conditional forwarding, only allowed when “From” is a Sink or UDF.
+Conditional forwarding, only allowed when “From” is a Source or UDF.
 </p>
 
 </td>
