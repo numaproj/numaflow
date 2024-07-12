@@ -28,7 +28,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 )
 
 func TestMain(m *testing.M) {

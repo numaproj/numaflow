@@ -28,7 +28,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"

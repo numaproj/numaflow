@@ -27,7 +27,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 
-	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
+	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )

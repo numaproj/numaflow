@@ -10,9 +10,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-
-	"github.com/nats-io/nats-server/v2/server"
-	natstestserver "github.com/nats-io/nats-server/v2/test"
 )
 
 func TestNewNATSClient(t *testing.T) {
@@ -46,19 +43,6 @@ func TestNewNATSClient_Failure(t *testing.T) {
 	assert.Nil(t, client)
 }
 
-// RunJetStreamServer starts a jetstream server
-func RunJetStreamServer(t *testing.T) *server.Server {
-	t.Helper()
-	opts := natstestserver.DefaultTestOptions
-	opts.Port = -1 // Random port
-	opts.JetStream = true
-	storeDir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatalf("Error creating a temp dir: %v", err)
-	}
-	opts.StoreDir = storeDir
-	return natstestserver.RunServer(&opts)
-}
 func TestSubscribe(t *testing.T) {
 	s := RunJetStreamServer(t)
 	defer s.Shutdown()
