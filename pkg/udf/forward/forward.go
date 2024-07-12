@@ -78,9 +78,9 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 		}
 	}
 
-	// verify if initialized with a valid map mode
+	// we can have all modes empty if no option was enabled, this is an invalid case
 	if !isValidMapMode(options) {
-		return nil, fmt.Errorf("no valid map mode provided")
+		return nil, fmt.Errorf("no valid map mode selected")
 	}
 
 	// creating a context here which is managed by the forwarder's lifecycle
@@ -109,7 +109,6 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 	// Add logger from parent ctx to child context.
 	isdf.ctx = logging.WithLogger(ctx, options.logger)
 
-	// if map stream mode is enabled and batch size !=1
 	if (isdf.opts.streamMapUdfApplier != nil) && isdf.opts.readBatchSize != 1 {
 		return nil, fmt.Errorf("batch size is not 1 with map UDF streaming")
 	}
@@ -753,21 +752,7 @@ func errorArrayToMap(errs []error) map[string]int64 {
 
 // check if the options provided are for a valid map mode
 // exactly one of the appliers should not be nil as only one mode can be active at a time, not more not less only 1
-// the way our map mode options work is that whenever one of the applier is set, it sets the others appliers to nil.
-// There is a case where none of them is set which cannot be allowed
 func isValidMapMode(opts *options) bool {
-	// if all the appliers are set, then it is an invalid scenario
-	if (opts.batchMapUdfApplier != nil) && (opts.unaryMapUdfApplier != nil) && (opts.streamMapUdfApplier != nil) {
-		return false
-	}
-
-	// One and one only of the appliers should be set, It also verifies that all of them cannot be empty
-	// equivalent to (A xor B xor C)
-	if (opts.batchMapUdfApplier != nil) != (opts.unaryMapUdfApplier != nil) != (opts.streamMapUdfApplier != nil) {
-		return true
-	} else {
-		//  invalid case
-		return false
-	}
-
+	// if all the appliers are empty, then it is an invalid scenario
+	return !((opts.batchMapUdfApplier == nil) && (opts.unaryMapUdfApplier == nil) && (opts.streamMapUdfApplier == nil))
 }
