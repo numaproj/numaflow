@@ -348,7 +348,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	isdf, _ := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, readTestAppliers, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	isdf, _ := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFUnaryMap(forwardReadWritePerformance{}))
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -442,7 +442,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	suite.isdf, _ = forward.NewInterStepDataForward(vertexInstance, suite.rqr, toSteps, forwardReadWritePerformance{}, readTestAppliers, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	suite.isdf, _ = forward.NewInterStepDataForward(vertexInstance, suite.rqr, toSteps, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFUnaryMap(forwardReadWritePerformance{}))
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)
