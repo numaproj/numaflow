@@ -2371,7 +2371,7 @@ Side Inputs Update.</p>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">sideinputsdk</span><span class="p">.</span><span class="nx">BroadcastMessage</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">val</span><span class="p">))</span>
 <span class="p">}</span>
 </code></pre></div>
-Similarly, this can be written in <a href="https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple-sideinput/example.py">Python</a> 
+Similarly, this can be written in <a href="https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple_sideinput/example.py">Python</a> 
 and <a href="https://github.com/numaproj/numaflow-java/blob/main/examples/src/main/java/io/numaproj/numaflow/examples/sideinput/simple/SimpleSideInput.java">Java</a> as well.</p>
 <p>After performing the retrieval/update, the side input value is then broadcasted to all vertices that use the side input.</p>
 <div class="highlight"><pre><span></span><code><span class="c1">// BroadcastMessage() is used to broadcast the message with the given value.</span>
@@ -2391,8 +2391,8 @@ in order to apply the new changes into the data process.</p>
 <span class="nx">sideInputFileName</span><span class="w"> </span><span class="o">-</span><span class="p">&gt;</span><span class="w"> </span><span class="s">&quot;/var/numaflow/side-inputs/sideInputName&quot;</span>
 </code></pre></div>
 <p>Here are some examples of watching the side input filesystem for changes in 
-<a href="https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/examples/simple-sideinput/udf/main.go">Golang</a>, 
-<a href="https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple-sideinput/udf/example.py">Python</a> and 
+<a href="https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/examples/simple_sideinput/udf/main.go">Golang</a>, 
+<a href="https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple_sideinput/udf/example.py">Python</a> and 
 <a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sideinput/udf">Java</a>.</p>
 
               
