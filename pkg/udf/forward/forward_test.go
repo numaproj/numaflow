@@ -265,9 +265,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(myForwardTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardTest{}))
-			} else if tt.unaryMapEnabled {
+			}
+			if tt.unaryMapEnabled {
 				opts = append(opts, WithUDFUnaryMap(myForwardTest{}))
 			}
 
@@ -378,9 +380,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(&myForwardToAllTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(&myForwardToAllTest{}))
-			} else if tt.unaryMapEnabled {
+			}
+			if tt.unaryMapEnabled {
 				opts = append(opts, WithUDFUnaryMap(&myForwardToAllTest{}))
 			}
 			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &myForwardToAllTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
@@ -553,9 +557,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(myForwardDropTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardDropTest{}))
-			} else if tt.unaryMapEnabled {
+			}
+			if tt.unaryMapEnabled {
 				opts = append(opts, WithUDFUnaryMap(myForwardDropTest{}))
 			}
 
@@ -741,9 +747,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(myForwardTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardTest{}))
-			} else if tt.unaryMapEnabled {
+			}
+			if tt.unaryMapEnabled {
 				opts = append(opts, WithUDFUnaryMap(myForwardTest{}))
 			}
 
@@ -886,9 +894,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(myForwardApplyUDFErrTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardApplyUDFErrTest{}))
-			} else if tt.unaryMapEnabled {
+			}
+			if tt.unaryMapEnabled {
 				opts = append(opts, WithUDFUnaryMap(myForwardApplyUDFErrTest{}))
 			}
 
@@ -945,9 +955,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(myForwardApplyWhereToErrTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardApplyWhereToErrTest{}))
-			} else if tt.unaryMapEnabled {
+			}
+			if tt.unaryMapEnabled {
 				opts = append(opts, WithUDFUnaryMap(myForwardApplyWhereToErrTest{}))
 			}
 
@@ -997,9 +1009,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(myForwardInternalErrTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardInternalErrTest{}))
-			} else if tt.unaryMapEnabled {
+			}
+			if tt.unaryMapEnabled {
 				opts = append(opts, WithUDFUnaryMap(myForwardInternalErrTest{}))
 			}
 

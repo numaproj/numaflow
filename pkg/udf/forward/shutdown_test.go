@@ -77,7 +77,7 @@ func TestInterStepDataForward(t *testing.T) {
 			batchSize:       5,
 			streamEnabled:   false,
 			batchMapEnabled: true,
-			unaryEnabled:    true,
+			unaryEnabled:    false,
 		},
 	}
 	for _, tt := range tests {
@@ -111,9 +111,11 @@ func TestInterStepDataForward(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(myShutdownTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myShutdownTest{}))
-			} else if tt.unaryEnabled {
+			}
+			if tt.unaryEnabled {
 				opts = append(opts, WithUDFUnaryMap(myShutdownTest{}))
 			}
 
@@ -162,9 +164,11 @@ func TestInterStepDataForward(t *testing.T) {
 			opts := []Option{WithReadBatchSize(batchSize)}
 			if tt.batchMapEnabled {
 				opts = append(opts, WithUDFBatchMap(myShutdownTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myShutdownTest{}))
-			} else if tt.unaryEnabled {
+			}
+			if tt.unaryEnabled {
 				opts = append(opts, WithUDFUnaryMap(myShutdownTest{}))
 			}
 

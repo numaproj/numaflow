@@ -171,9 +171,11 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			opts := []forward.Option{forward.WithReadBatchSize(tt.batchSize)}
 			if tt.batchEnabled {
 				opts = append(opts, forward.WithUDFBatchMap(myForwardJetStreamTest{}))
-			} else if tt.streamEnabled {
+			}
+			if tt.streamEnabled {
 				opts = append(opts, forward.WithUDFStreamingMap(myForwardJetStreamTest{}))
-			} else if tt.unaryEnabled {
+			}
+			if tt.unaryEnabled {
 				opts = append(opts, forward.WithUDFUnaryMap(myForwardJetStreamTest{}))
 			}
 
