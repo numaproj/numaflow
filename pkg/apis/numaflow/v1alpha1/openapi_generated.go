@@ -644,7 +644,7 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 					},
 					"conditions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Conditional forwarding, only allowed when \"From\" is a Sink or UDF.",
+							Description: "Conditional forwarding, only allowed when \"From\" is a Source or UDF.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
 						},
 					},
@@ -1037,7 +1037,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common
 					},
 					"conditions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Conditional forwarding, only allowed when \"From\" is a Sink or UDF.",
+							Description: "Conditional forwarding, only allowed when \"From\" is a Source or UDF.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
 						},
 					},
