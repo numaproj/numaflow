@@ -3695,8 +3695,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Serving(ref common.ReferenceCallback) com
 					},
 					"msgIDHeaderKey": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The header key from which the message id will be extracted Default",
-							Default:     "",
+							Description: "The header key from which the message id will be extracted",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4134,7 +4133,6 @@ func schema_pkg_apis_numaflow_v1alpha1_Store(ref common.ReferenceCallback) commo
 					"url": {
 						SchemaProps: spec.SchemaProps{
 							Description: "URL of the persistent store to write the callbacks",
-							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},

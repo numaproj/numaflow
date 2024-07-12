@@ -124,18 +124,6 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}); err != nil {
 				return fmt.Errorf("failed to create serving source stream %q, %w", servingSourceStream, err)
 			}
-			log.Infow("Succeeded to create a serving source stream", zap.String("stream", servingSourceStream))
-			if _, err := js.AddConsumer(servingSourceStream, &nats.ConsumerConfig{
-				Durable:       servingSourceStream,
-				DeliverPolicy: nats.DeliverAllPolicy,
-				AckPolicy:     nats.AckExplicitPolicy,
-				AckWait:       v.GetDuration("consumer.ackWait"),
-				MaxAckPending: v.GetInt("consumer.maxAckPending"),
-				FilterSubject: servingSourceStream,
-			}); err != nil {
-				return fmt.Errorf("failed to create a consumer for serving source stream %q, %w", servingSourceStream, err)
-			}
-			log.Infow("Succeeded to create a consumer for serving source stream", zap.String("stream", servingSourceStream), zap.String("consumer", servingSourceStream))
 		}
 	}
 

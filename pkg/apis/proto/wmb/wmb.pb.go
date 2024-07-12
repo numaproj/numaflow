@@ -148,7 +148,7 @@ func file_pkg_apis_proto_wmb_wmb_proto_rawDescGZIP() []byte {
 }
 
 var file_pkg_apis_proto_wmb_wmb_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
-var file_pkg_apis_proto_wmb_wmb_proto_goTypes = []interface{}{
+var file_pkg_apis_proto_wmb_wmb_proto_goTypes = []any{
 	(*WMB)(nil), // 0: wmb.WMB
 }
 var file_pkg_apis_proto_wmb_wmb_proto_depIdxs = []int32{
@@ -165,7 +165,7 @@ func file_pkg_apis_proto_wmb_wmb_proto_init() {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_pkg_apis_proto_wmb_wmb_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_pkg_apis_proto_wmb_wmb_proto_msgTypes[0].Exporter = func(v any, i int) any {
 			switch v := v.(*WMB); i {
 			case 0:
 				return &v.state

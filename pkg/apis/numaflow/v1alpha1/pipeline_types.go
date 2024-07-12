@@ -206,7 +206,7 @@ func (p Pipeline) GetSideInputsStoreName() string {
 }
 
 func (p Pipeline) GetServingSourceStreamName() string {
-	return fmt.Sprintf("serving-source-%s", p.Name)
+	return fmt.Sprintf("%s-serving-source", p.Name)
 }
 
 func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {

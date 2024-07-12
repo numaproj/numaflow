@@ -108,11 +108,19 @@ async fn auth_middleware(request: axum::extract::Request, next: Next) -> Respons
             let auth_token = match request.headers().get("Authorization") {
                 Some(token) => token,
                 None => {
-                    return Response::builder().status(401).body(Body::empty()).unwrap();
+                    return Response::builder()
+                        .status(401)
+                        .body(Body::empty())
+                        .expect("failed to build response")
                 }
             };
-            if auth_token.to_str().unwrap() != format!("Bearer {}", token) {
-                Response::builder().status(401).body(Body::empty()).unwrap()
+            if auth_token.to_str().expect("auth token should be a string")
+                != format!("Bearer {}", token)
+            {
+                Response::builder()
+                    .status(401)
+                    .body(Body::empty())
+                    .expect("failed to build response")
             } else {
                 next.run(request).await
             }

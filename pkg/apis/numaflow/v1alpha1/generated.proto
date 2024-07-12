@@ -1176,7 +1176,6 @@ message Serving {
   optional bool service = 2;
 
   // The header key from which the message id will be extracted
-  // Default
   // +optional
   optional string msgIDHeaderKey = 3;
 

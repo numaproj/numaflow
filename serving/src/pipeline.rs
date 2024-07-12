@@ -5,7 +5,7 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
-const ENV_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
+const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 
 pub fn pipeline_spec() -> &'static Pipeline {
     static PIPELINE: OnceLock<Pipeline> = OnceLock::new();
@@ -74,7 +74,7 @@ pub struct Vertex {
 
 impl Pipeline {
     pub fn load() -> crate::Result<Self> {
-        let pipeline = match env::var(ENV_PIPELINE_SPEC) {
+        let pipeline = match env::var(ENV_MIN_PIPELINE_SPEC) {
             Ok(env_value) => {
                 // If the environment variable is set, decode and parse the pipeline
                 let decoded = BASE64_STANDARD

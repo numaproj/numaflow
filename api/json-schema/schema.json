@@ -19494,7 +19494,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
         "msgIDHeaderKey": {
-          "description": "The header key from which the message id will be extracted Default",
+          "description": "The header key from which the message id will be extracted",
           "type": "string"
         },
         "service": {

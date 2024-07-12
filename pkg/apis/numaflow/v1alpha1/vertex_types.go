@@ -243,7 +243,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		return nil, err
 	}
 
-	containers[0].Ports = append(containers[0].Ports, corev1.ContainerPort{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort})
 	containers[0].ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -269,7 +268,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		TimeoutSeconds:      30,
 	}
 	containers[0].Ports = []corev1.ContainerPort{
-		{Name: "metrics", ContainerPort: VertexMetricsPort},
+		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
 	}
 
 	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
@@ -375,7 +374,7 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 	}
 	encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
 	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
-		Name:  EnvServingPipelineSpec,
+		Name:  EnvServingMinPipelineSpec,
 		Value: encodedPipelineSpec,
 	})
 

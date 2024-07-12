@@ -7612,7 +7612,7 @@ Whether to create a ClusterIP Service
 <em>(Optional)</em>
 <p>
 
-The header key from which the message id will be extracted Default
+The header key from which the message id will be extracted
 </p>
 
 </td>

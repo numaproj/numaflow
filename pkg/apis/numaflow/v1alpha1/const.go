@@ -142,7 +142,7 @@ const (
 	EnvServingObject                    = "NUMAFLOW_SERVING_SOURCE_OBJECT"
 	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
 	EnvServingAuthToken                 = "NUMAFLOW_SERVING_AUTH_TOKEN"
-	EnvServingPipelineSpec              = "NUMAFLOW_SERVING_PIPELINE_SPEC"
+	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
 	PathVarRun                          = "/var/run/numaflow"
 	VertexMetricsPort                   = 2469
