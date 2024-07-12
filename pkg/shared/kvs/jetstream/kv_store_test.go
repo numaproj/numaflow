@@ -26,7 +26,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 
-	natsclass "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	natsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 )
@@ -40,7 +40,7 @@ func TestJetStreamKVStoreOperations(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	testClient := natsclass.NewTestClientWithServer(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -101,7 +101,7 @@ func TestJetStreamKVStoreWatch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	testClient := natsclass.NewTestClientWithServer(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -176,7 +176,7 @@ func TestJetStreamKVWithoutUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	testClient := natsclass.NewTestClientWithServer(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -254,7 +254,7 @@ func TestJetStreamKVStoreErrorBinding(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	testClient := natsclass.NewTestClientWithServer(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	// Intentionally binding to a non-existing bucket to simulate error
@@ -271,7 +271,7 @@ func TestJetStreamKVStoreGetValueError(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	testClient := natsclass.NewTestClientWithServer(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -305,7 +305,7 @@ func TestJetStreamKVStoreListKeysError(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	testClient := natsclass.NewTestClientWithServer(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -339,7 +339,7 @@ func TestJetStreamKVStorePutKVError(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	testClient := natsclass.NewTestClientWithServer(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -373,7 +373,7 @@ func TestJetStreamKVStoreWatchError(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	testClient := natsclass.NewTestClientWithServer(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -411,7 +411,7 @@ func TestJetStreamKVStoreWithContextDone(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	testClient := natsclass.NewTestClientWithServer(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	kvStore, err := NewKVJetStreamKVStore(ctx, kvName, testClient)

@@ -28,7 +28,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	natsclass "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	natsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
@@ -1015,7 +1015,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	// connect to NATS
-	nc := natsclass.NewTestClientWithServer(t, s)
+	nc := natsclient.NewTestClientWithServer(t, s)
 	defer nc.Close()
 
 	// create JetStream Context
@@ -1052,7 +1052,7 @@ func TestFetcherWithSameOTBucketWithSinglePartition(t *testing.T) {
 	defer func() { _ = js.DeleteKeyValue(keyspace + "_OT") }()
 	assert.NoError(t, err)
 
-	defaultJetStreamClient := natsclass.NewTestClientWithServer(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 
 	// create hbStore
@@ -1312,7 +1312,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	defer cancel()
 
 	// connect to NATS
-	nc := natsclass.NewTestClientWithServer(t, s)
+	nc := natsclient.NewTestClientWithServer(t, s)
 	defer nc.Close()
 
 	// create JetStream Context
@@ -1349,7 +1349,7 @@ func TestFetcherWithSameOTBucketWithMultiplePartition(t *testing.T) {
 	defer func() { _ = js.DeleteKeyValue(keyspace + "_OT") }()
 	assert.NoError(t, err)
 
-	defaultJetStreamClient := natsclass.NewTestClientWithServer(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 
 	// create hbStore

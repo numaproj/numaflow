@@ -27,7 +27,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 
-	natsclass "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	natsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
@@ -66,7 +66,7 @@ func TestSideInputsValueUpdates(t *testing.T) {
 	defer cancel()
 
 	// connect to NATS
-	nc := natsclass.NewTestClientWithServer(t, s)
+	nc := natsclient.NewTestClientWithServer(t, s)
 	defer nc.Close()
 
 	// create JetStream Context
