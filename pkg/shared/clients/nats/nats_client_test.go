@@ -5,14 +5,14 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
+	"github.com/nats-io/nats-server/v2/server"
 	natstestserver "github.com/nats-io/nats-server/v2/test"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 func TestNewNATSClient(t *testing.T) {
@@ -46,6 +46,7 @@ func TestNewNATSClient_Failure(t *testing.T) {
 	assert.Nil(t, client)
 }
 
+// RunJetStreamServer starts a jetstream server
 func RunJetStreamServer(t *testing.T) *server.Server {
 	t.Helper()
 	opts := natstestserver.DefaultTestOptions
@@ -58,7 +59,6 @@ func RunJetStreamServer(t *testing.T) *server.Server {
 	opts.StoreDir = storeDir
 	return natstestserver.RunServer(&opts)
 }
-
 func TestSubscribe(t *testing.T) {
 	s := RunJetStreamServer(t)
 	defer s.Shutdown()

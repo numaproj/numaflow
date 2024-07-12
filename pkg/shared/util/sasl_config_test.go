@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/IBM/sarama"
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -115,8 +114,6 @@ func TestSaslConfiguration(t *testing.T) {
 	})
 }
 
-type KRB5AuthType string
-
 func TestGetGSSAPIConfig_NilConfig(t *testing.T) {
 	config, err := GetGSSAPIConfig(nil)
 	assert.NoError(t, err)
@@ -125,7 +122,7 @@ func TestGetGSSAPIConfig_NilConfig(t *testing.T) {
 
 func TestGetGSSAPIConfig_InvalidAuthType(t *testing.T) {
 
-	var authType v1alpha1.KRB5AuthType = "anytpe"
+	var authType dfv1.KRB5AuthType = "anytpe"
 
 	config := &dfv1.GSSAPI{
 		ServiceName: "service",
