@@ -21,7 +21,7 @@ import "fmt"
 type Edge struct {
 	From string `json:"from" protobuf:"bytes,1,opt,name=from"`
 	To   string `json:"to" protobuf:"bytes,2,opt,name=to"`
-	// Conditional forwarding, only allowed when "From" is a Sink or UDF.
+	// Conditional forwarding, only allowed when "From" is a Source or UDF.
 	// +optional
 	Conditions *ForwardConditions `json:"conditions" protobuf:"bytes,3,opt,name=conditions"`
 	// OnFull specifies the behaviour for the write actions when the inter step buffer is full.
