@@ -103,6 +103,8 @@ func WithCallbackUploader(cp *callback.Uploader) Option {
 
 // Options to set the map mode to be used, as all of them are mutually exclusive, at one point of time
 // one of them can be enabled, and others are set to nil
+// NOTE: if multiple of these are passed with valid appliers, the last option mode to be applied will
+// be selected [this is an incorrect use case, always set only one option of these]
 
 // WithUDFBatchMap enables the batch map for UDF if provided with a non-nil applier
 func WithUDFBatchMap(f applier.BatchMapApplier) Option {

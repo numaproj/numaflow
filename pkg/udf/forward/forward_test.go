@@ -109,6 +109,99 @@ type testingOpts struct {
 	unaryMapEnabled bool
 }
 
+// Check valid initialization for map modes in forwarder
+func TestValidMapModeInit(t *testing.T) {
+	tests := []struct {
+		name            string
+		valid           bool
+		streamEnabled   bool
+		batchMapEnabled bool
+		unaryMapEnabled bool
+	}{
+		{
+			name:            "valid_stream",
+			streamEnabled:   true,
+			batchMapEnabled: false,
+			unaryMapEnabled: false,
+			valid:           true,
+		},
+		{
+			name:            "valid_batch",
+			streamEnabled:   false,
+			batchMapEnabled: false,
+			unaryMapEnabled: true,
+			valid:           true,
+		},
+		{
+			name:            "valid_unary",
+			streamEnabled:   false,
+			batchMapEnabled: true,
+			unaryMapEnabled: false,
+			valid:           true,
+		},
+		{
+			name:            "all_disabled",
+			streamEnabled:   false,
+			batchMapEnabled: false,
+			unaryMapEnabled: false,
+			valid:           false,
+		},
+		// This case is still valid due to how our options work, that if multiple are given, it will
+		// use only one of them
+		{
+			name:            "all_enabled",
+			streamEnabled:   true,
+			batchMapEnabled: true,
+			unaryMapEnabled: true,
+			valid:           true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+"_map_mode", func(t *testing.T) {
+			batchSize := int64(1)
+			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
+			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
+			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
+			toSteps := map[string][]isb.BufferWriter{
+				"to1": {to11, to12},
+			}
+
+			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
+				PipelineName: "testPipeline",
+				AbstractVertex: dfv1.AbstractVertex{
+					Name: "testVertex",
+				},
+			}}
+			vertexInstance := &dfv1.VertexInstance{
+				Vertex:  vertex,
+				Replica: 0,
+			}
+
+			_, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+
+			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
+
+			opts := []Option{WithReadBatchSize(batchSize)}
+			if tt.batchMapEnabled {
+				opts = append(opts, WithUDFBatchMap(myForwardTest{}))
+			} else if tt.streamEnabled {
+				opts = append(opts, WithUDFStreamingMap(myForwardTest{}))
+			} else if tt.unaryMapEnabled {
+				opts = append(opts, WithUDFUnaryMap(myForwardTest{}))
+			}
+
+			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
+			_, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, fetchWatermark, publishWatermark, idleManager, opts...)
+			if tt.valid {
+				assert.NoError(t, err, "expected no error")
+			} else {
+				assert.Error(t, err, "expected error")
+			}
+		})
+	}
+}
+
 func TestNewInterStepDataForward(t *testing.T) {
 	tests := []testingOpts{
 		{

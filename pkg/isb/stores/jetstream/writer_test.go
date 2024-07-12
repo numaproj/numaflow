@@ -65,7 +65,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 		batchEnabled  bool
 	}{
 		{
-			name:          "batch",
+			name:          "unary",
 			batchSize:     10,
 			streamEnabled: false,
 			unaryEnabled:  true,
@@ -79,7 +79,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			batchEnabled:  false,
 		},
 		{
-			name:          "batch",
+			name:          "batch_map",
 			batchSize:     10,
 			streamEnabled: false,
 			unaryEnabled:  false,

@@ -77,6 +77,12 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 			return nil, err
 		}
 	}
+
+	// verify if initialized with a valid map mode
+	if !isValidMapMode(options) {
+		return nil, fmt.Errorf("no valid map mode provided")
+	}
+
 	// creating a context here which is managed by the forwarder's lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -743,4 +749,25 @@ func errorArrayToMap(errs []error) map[string]int64 {
 		}
 	}
 	return result
+}
+
+// check if the options provided are for a valid map mode
+// exactly one of the appliers should not be nil as only one mode can be active at a time, not more not less only 1
+// the way our map mode options work is that whenever one of the applier is set, it sets the others appliers to nil.
+// There is a case where none of them is set which cannot be allowed
+func isValidMapMode(opts *options) bool {
+	// if all the appliers are set, then it is an invalid scenario
+	if (opts.batchMapUdfApplier != nil) && (opts.unaryMapUdfApplier != nil) && (opts.streamMapUdfApplier != nil) {
+		return false
+	}
+
+	// One and one only of the appliers should be set, It also verifies that all of them cannot be empty
+	// equivalent to (A xor B xor C)
+	if (opts.batchMapUdfApplier != nil) != (opts.unaryMapUdfApplier != nil) != (opts.streamMapUdfApplier != nil) {
+		return true
+	} else {
+		//  invalid case
+		return false
+	}
+
 }
