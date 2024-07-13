@@ -194,8 +194,8 @@ jobs:
         env:
           GOPATH: /home/runner/go
         run: |
-          KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true make start
+          KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=false make start
       - name: Run tests
         env:
           GOPATH: /home/runner/go
-        run: KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
+        run: KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=false ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
