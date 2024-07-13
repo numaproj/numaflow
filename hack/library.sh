@@ -38,28 +38,15 @@ ensure_vendor() {
   go mod vendor
 }	
 
-# TODO: Install it in Makefile
-ensure_pandoc() {
-  if [ "`command -v pandoc`" = "" ]; then
-    warning "Please install pandoc with - brew install pandoc"
-    exit 1
-  fi
-
-  if [ "`pandoc -v | head -1 | awk '{print $2}'`" != "3.2.1" ]; then
-    warning "Please upgrade pandoc to version 3.2.1 with - brew upgrade pandoc"
-    exit 1
-  fi
-}
-
 ensure_node(){
-  if [ "`command -v node`" = "" ]; then
+  if [[ "`command -v node`" = "" ]]; then
       warning "Please install node with - brew install node"
       exit 1
   fi
 }
 
 ensure_yarn(){
-  if [ "`command -v yarn`" = "" ]; then
+  if [[ "`command -v yarn`" = "" ]]; then
       warning "Please install yarn with - brew install yarn"
       exit 1
   fi
