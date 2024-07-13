@@ -184,18 +184,16 @@ jobs:
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
-      - name: Create a registry and a cluster
+      - name: Create a cluster
         run: |
-          k3d registry create e2e-registry --port 5111
-          k3d cluster create e2e --registry-use k3d-e2e-registry:5111
+          k3d cluster create e2e
           k3d kubeconfig get e2e > ~/.kube/numaflow-e2e-config
-          echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
       - name: Install Numaflow
         env:
           GOPATH: /home/runner/go
         run: |
-          KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=false make start
+          KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} make start
       - name: Run tests
         env:
           GOPATH: /home/runner/go
-        run: KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=false ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
+        run: KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
