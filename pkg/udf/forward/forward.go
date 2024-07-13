@@ -38,18 +38,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/udf/forward/applier"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 	"github.com/numaproj/numaflow/pkg/watermark/publish"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
-
-// MapAppliers consolidates the appliers for different map modes together
-type MapAppliers struct {
-	MapUDF       applier.MapApplier
-	MapStreamUDF applier.MapStreamApplier
-	BatchMapUDF  applier.BatchMapApplier
-}
 
 // InterStepDataForward forwards the data from previous step to the current step via inter-step buffer.
 type InterStepDataForward struct {
@@ -60,10 +52,9 @@ type InterStepDataForward struct {
 	cancelFn            context.CancelFunc
 	fromBufferPartition isb.BufferReader
 	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
-	toBuffers   map[string][]isb.BufferWriter
-	FSD         forwarder.ToWhichStepDecider
-	mapAppliers MapAppliers
-	wmFetcher   fetch.Fetcher
+	toBuffers map[string][]isb.BufferWriter
+	FSD       forwarder.ToWhichStepDecider
+	wmFetcher fetch.Fetcher
 	// wmPublishers stores the vertex to publisher mapping
 	wmPublishers  map[string]publish.Publisher
 	opts          options
@@ -78,7 +69,7 @@ type InterStepDataForward struct {
 }
 
 // NewInterStepDataForward creates an inter-step forwarder.
-func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.BufferReader, toSteps map[string][]isb.BufferWriter, fsd forwarder.ToWhichStepDecider, mapApplier MapAppliers, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, idleManager wmb.IdleManager, opts ...Option) (*InterStepDataForward, error) {
+func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.BufferReader, toSteps map[string][]isb.BufferWriter, fsd forwarder.ToWhichStepDecider, fetchWatermark fetch.Fetcher, publishWatermark map[string]publish.Publisher, idleManager wmb.IdleManager, opts ...Option) (*InterStepDataForward, error) {
 
 	options := DefaultOptions()
 	for _, o := range opts {
@@ -86,6 +77,12 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 			return nil, err
 		}
 	}
+
+	// we can have all modes empty if no option was enabled, this is an invalid case
+	if !isValidMapMode(options) {
+		return nil, fmt.Errorf("no valid map mode selected")
+	}
+
 	// creating a context here which is managed by the forwarder's lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -95,7 +92,6 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 		fromBufferPartition: fromStep,
 		toBuffers:           toSteps,
 		FSD:                 fsd,
-		mapAppliers:         mapApplier,
 		wmFetcher:           fetchWatermark,
 		wmPublishers:        publishWatermark,
 		// should we do a check here for the values not being null?
@@ -113,7 +109,7 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 	// Add logger from parent ctx to child context.
 	isdf.ctx = logging.WithLogger(ctx, options.logger)
 
-	if isdf.opts.enableMapUdfStream && isdf.opts.readBatchSize != 1 {
+	if (isdf.opts.streamMapUdfApplier != nil) && isdf.opts.readBatchSize != 1 {
 		return nil, fmt.Errorf("batch size is not 1 with map UDF streaming")
 	}
 
@@ -251,8 +247,8 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 	var udfResults []isb.ReadWriteMessagePair
 	var writeOffsets map[string][][]isb.Offset
-	// Check if map streaming mode is enabled
-	if isdf.opts.enableMapUdfStream {
+	// Check if map streaming mode is enabled, if the applier is not nil that means we have enabled the required mode
+	if isdf.opts.streamMapUdfApplier != nil {
 		writeOffsets, err = isdf.streamMessage(ctx, dataMessages)
 		if err != nil {
 			isdf.opts.logger.Errorw("failed to streamMessage", zap.Error(err))
@@ -270,7 +266,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// Trigger the UDF processing based on the mode enabled for map
 		// ie Batch Map or unary map
 		// This will be a blocking call until the all the UDF results for the batch are received.
-		if isdf.opts.enableBatchMapUdf {
+		if isdf.opts.batchMapUdfApplier != nil {
 			udfResults = isdf.processBatchMessages(ctx, dataMessages)
 		} else {
 			udfResults = isdf.processConcurrentMap(ctx, dataMessages)
@@ -415,7 +411,7 @@ func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, data
 // response for all of them.
 func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, dataMessages []*isb.ReadMessage) []isb.ReadWriteMessagePair {
 	concurrentUDFProcessingStart := time.Now()
-	udfResults, err := isdf.mapAppliers.BatchMapUDF.ApplyBatchMap(ctx, dataMessages)
+	udfResults, err := isdf.opts.batchMapUdfApplier.ApplyBatchMap(ctx, dataMessages)
 	if err != nil {
 		// In case of an error received while processing the UDF call, we would do not handle partial failures,
 		// and hence would want to replay the whole batch currently.
@@ -468,7 +464,7 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 		writeMessageCh := make(chan isb.WriteMessage)
 		errs, ctx := errgroup.WithContext(ctx)
 		errs.Go(func() error {
-			return isdf.mapAppliers.MapStreamUDF.ApplyMapStream(ctx, dataMessages[0], writeMessageCh)
+			return isdf.opts.streamMapUdfApplier.ApplyMapStream(ctx, dataMessages[0], writeMessageCh)
 		})
 
 		// Stream the message to the next vertex. First figure out which vertex
@@ -700,7 +696,7 @@ func (isdf *InterStepDataForward) concurrentApplyUDF(ctx context.Context, readMe
 // The UserError retry will be done on the ApplyUDF.
 func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
 	for {
-		writeMessages, err := isdf.mapAppliers.MapUDF.ApplyMap(ctx, readMessage)
+		writeMessages, err := isdf.opts.unaryMapUdfApplier.ApplyMap(ctx, readMessage)
 		if err != nil {
 			isdf.opts.logger.Errorw("mapUDF.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.
@@ -752,4 +748,11 @@ func errorArrayToMap(errs []error) map[string]int64 {
 		}
 	}
 	return result
+}
+
+// check if the options provided are for a valid map mode
+// exactly one of the appliers should not be nil as only one mode can be active at a time, not more not less only 1
+func isValidMapMode(opts *options) bool {
+	// if all the appliers are empty, then it is an invalid scenario
+	return !((opts.batchMapUdfApplier == nil) && (opts.unaryMapUdfApplier == nil) && (opts.streamMapUdfApplier == nil))
 }
