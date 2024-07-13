@@ -193,7 +193,7 @@ jobs:
           GOPATH: /home/runner/go
         run: |
           KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} make start
-          KUBECONFIG=~/.kube/numaflow-e2e-config kubectl -nnumaflow-system get po -o yaml | grep -i image
+          KUBECONFIG=~/.kube/numaflow-e2e-config kubectl -nnumaflow-system get po -o yaml | grep -i quay.io
       - name: Run tests
         env:
           GOPATH: /home/runner/go
