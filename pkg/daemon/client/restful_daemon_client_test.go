@@ -24,16 +24,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
-
-func TestNewRESTfulDaemonServiceClient(t *testing.T) {
-	client, err := NewRESTfulDaemonServiceClient("localhost:8080")
-	assert.NoError(t, err)
-	assert.NotNil(t, client)
-	assert.IsType(t, &restfulDaemonClient{}, client)
-}
 
 func TestRestfulDaemonClient_IsDrained(t *testing.T) {
 	t.Run("not drained", func(t *testing.T) {
@@ -270,4 +264,52 @@ type errReader int
 
 func (errReader) Read(p []byte) (n int, err error) {
 	return 0, fmt.Errorf("test error")
+}
+
+func TestNewRESTfulDaemonServiceClient(t *testing.T) {
+	t.Run("with https prefix", func(t *testing.T) {
+		address := "https://example.com"
+		client, err := NewRESTfulDaemonServiceClient(address)
+		assert.NoError(t, err)
+		assert.NotNil(t, client)
+
+		restfulClient, ok := client.(*restfulDaemonClient)
+		assert.True(t, ok)
+		assert.Equal(t, address, restfulClient.hostURL)
+		assert.NotNil(t, restfulClient.httpClient)
+		assert.Equal(t, time.Second*1, restfulClient.httpClient.Timeout)
+	})
+
+	t.Run("without https prefix", func(t *testing.T) {
+		address := "example.com"
+		client, err := NewRESTfulDaemonServiceClient(address)
+		assert.NoError(t, err)
+		assert.NotNil(t, client)
+
+		restfulClient, ok := client.(*restfulDaemonClient)
+		assert.True(t, ok)
+		assert.Equal(t, "https://"+address, restfulClient.hostURL)
+	})
+
+	t.Run("with empty address", func(t *testing.T) {
+		address := ""
+		client, err := NewRESTfulDaemonServiceClient(address)
+		assert.NoError(t, err)
+		assert.NotNil(t, client)
+
+		restfulClient, ok := client.(*restfulDaemonClient)
+		assert.True(t, ok)
+		assert.Equal(t, "https://", restfulClient.hostURL)
+	})
+
+	t.Run("TLS config", func(t *testing.T) {
+		address := "example.com"
+		client, _ := NewRESTfulDaemonServiceClient(address)
+		restfulClient, _ := client.(*restfulDaemonClient)
+
+		transport, ok := restfulClient.httpClient.Transport.(*http.Transport)
+		assert.True(t, ok)
+		assert.NotNil(t, transport.TLSClientConfig)
+		assert.True(t, transport.TLSClientConfig.InsecureSkipVerify)
+	})
 }
