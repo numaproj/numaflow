@@ -7,25 +7,26 @@
 [![Release Version](https://img.shields.io/github/v/release/numaproj/numaflow?label=numaflow)](https://github.com/numaproj/numaflow/releases/latest)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6078/badge)](https://bestpractices.coreinfrastructure.org/projects/6078)
 
-Welcome to Numaflow, a Kubernetes-native platform designed for developing scalable and reliable event-driven applications. Numaflow decouples event sources and sinks from the processing logic, allowing each component to independently auto-scale based on demand. With out-of-the-box sources and sinks, developers can focus solely on the processing logic without worrying about event consumption, writing boilerplate code, or operational complexities. Each step of the pipeline can be written in any programming language, offering unparalleled flexibility and ease of use.
+Welcome to Numaflow! A Kubernetes-native, serverless platform for running scalable and reliable event-driven applications. Numaflow decouples event sources and sinks from the processing logic, allowing each component to independently auto-scale based on demand. With out-of-the-box sources and sinks, and built-in observability, developers can focus on their processing logic without worrying about event consumption, writing boilerplate code, or operational complexities. Each step of the pipeline can be written in any programming language, offering unparalleled flexibility in using the best programming language for each step and ease of using the languages you are most familiar with.
 
-Numaflow is developed by the team behind Argo at Intuit.
+Numaflow, created by the Intuit Argo team to address community needs for continuous event processing, leverages their expertise to deliver a scalable and robust, serverless platform for event-driven applications.
 
 ![Numaflow Pipeline](./docs/assets/simple-pipeline.png)
 
 ## Use Cases
 
-- Event driven applications: Process events as they happen, e.g., updating inventory and sending customer notifications in e-commerce
-- Real time analytics: Analyze data instantly, e.g., social media analytics, observability data processing
-- Inference on streaming data: Perform real-time predictions, e.g., anomaly detection
-- Workflows running in a streaming manner
+- Event driven applications: Process events as they happen, e.g., updating inventory and sending customer notifications in e-commerce.
+- Real time analytics: Analyze data instantly, e.g., social media analytics, observability data processing.
+- Inference on streaming data: Perform real-time predictions, e.g., anomaly detection.
+- Workflows running in a streaming manner.
 
 ## Key Features
 
-- Kubernetes-native: If you know Kubernetes, you already know how to use Numaflow
-- Language agnostic: Use your favorite programming language
-- Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted
-- Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed
+- Kubernetes-native: If you know Kubernetes, you already know how to use Numaflow.
+- Serverless: Focus on your code and let the system scale up and down based on demand.
+- Language agnostic: Use your favorite programming language.
+- Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted.
+- Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed.
 
 ## Data Integrity Guarantees
 
