@@ -13,14 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package nats
+package test
 
 import (
 	"os"
 	"testing"
 
 	"github.com/nats-io/nats-server/v2/server"
-
 	natstestserver "github.com/nats-io/nats-server/v2/test"
 )
 
