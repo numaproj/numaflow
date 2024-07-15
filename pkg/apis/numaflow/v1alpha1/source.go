@@ -42,7 +42,7 @@ type Source struct {
 	// +optional
 	JetStream *JetStreamSource `json:"jetstream,omitempty" protobuf:"bytes,7,opt,name=jetstream"`
 	// +optional
-	Serving *Serving `json:"serving,omitempty" protobuf:"bytes,8,opt,name=serving"`
+	Serving *ServingSource `json:"serving,omitempty" protobuf:"bytes,8,opt,name=serving"`
 }
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {

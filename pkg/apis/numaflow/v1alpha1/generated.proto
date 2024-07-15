@@ -1166,8 +1166,8 @@ message Scale {
   optional uint32 scaleDownCooldownSeconds = 11;
 }
 
-// Serving is the HTTP endpoint for Numaflow.
-message Serving {
+// ServingSource is the HTTP endpoint for Numaflow.
+message ServingSource {
   // +optional
   optional Authorization auth = 1;
 
@@ -1181,7 +1181,13 @@ message Serving {
 
   // Persistent store for the callbacks for serving and tracking
   // +optional
-  optional Store store = 4;
+  optional ServingStore store = 4;
+}
+
+// ServingStore to track and store data and metadata for tracking and serving.
+message ServingStore {
+  // URL of the persistent store to write the callbacks
+  optional string url = 1;
 }
 
 // SessionWindow describes a session window
@@ -1272,7 +1278,7 @@ message Source {
   optional JetStreamSource jetstream = 7;
 
   // +optional
-  optional Serving serving = 8;
+  optional ServingSource serving = 8;
 }
 
 // Status is a common structure which can be used for Status field.
@@ -1282,12 +1288,6 @@ message Status {
   // +patchMergeKey=type
   // +patchStrategy=merge
   repeated k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1;
-}
-
-// Store to track and store data and metadata for tracking and serving.
-message Store {
-  // URL of the persistent store to write the callbacks
-  optional string url = 1;
 }
 
 message TLS {

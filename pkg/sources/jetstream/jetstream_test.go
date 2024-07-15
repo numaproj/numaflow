@@ -100,7 +100,7 @@ func TestJetstreamSourceServingEnabled(t *testing.T) {
 				AbstractVertex: dfv1.AbstractVertex{
 					Name: "testVertex",
 					Source: &dfv1.Source{
-						Serving: &dfv1.Serving{},
+						Serving: &dfv1.ServingSource{},
 					},
 				},
 			},

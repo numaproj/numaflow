@@ -19473,8 +19473,8 @@
         }
       }
     },
-    "io.numaproj.numaflow.v1alpha1.Serving": {
-      "description": "Serving is the HTTP endpoint for Numaflow.",
+    "io.numaproj.numaflow.v1alpha1.ServingSource": {
+      "description": "ServingSource is the HTTP endpoint for Numaflow.",
       "type": "object",
       "properties": {
         "auth": {
@@ -19490,7 +19490,20 @@
         },
         "store": {
           "description": "Persistent store for the callbacks for serving and tracking",
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Store"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingStore": {
+      "description": "ServingStore to track and store data and metadata for tracking and serving.",
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "description": "URL of the persistent store to write the callbacks",
+          "type": "string"
         }
       }
     },
@@ -19686,7 +19699,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
         },
         "serving": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Serving"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
@@ -19708,19 +19721,6 @@
           },
           "x-kubernetes-patch-merge-key": "type",
           "x-kubernetes-patch-strategy": "merge"
-        }
-      }
-    },
-    "io.numaproj.numaflow.v1alpha1.Store": {
-      "description": "Store to track and store data and metadata for tracking and serving.",
-      "type": "object",
-      "required": [
-        "url"
-      ],
-      "properties": {
-        "url": {
-          "description": "URL of the persistent store to write the callbacks",
-          "type": "string"
         }
       }
     },

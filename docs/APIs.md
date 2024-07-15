@@ -829,7 +829,7 @@ Authorization
 
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.HTTPSource">HTTPSource</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.Serving">Serving</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
 </p>
 
 <p>
@@ -7523,9 +7523,9 @@ CooldownSeconds if not set.
 
 </table>
 
-<h3 id="numaflow.numaproj.io/v1alpha1.Serving">
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingSource">
 
-Serving
+ServingSource
 </h3>
 
 <p>
@@ -7538,7 +7538,7 @@ Serving
 
 <p>
 
-Serving is the HTTP endpoint for Numaflow.
+ServingSource is the HTTP endpoint for Numaflow.
 </p>
 
 </p>
@@ -7624,7 +7624,8 @@ The header key from which the message id will be extracted
 <td>
 
 <code>store</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Store"> Store </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingStore"> ServingStore </a>
+</em>
 </td>
 
 <td>
@@ -7633,6 +7634,71 @@ The header key from which the message id will be extracted
 <p>
 
 Persistent store for the callbacks for serving and tracking
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingStore">
+
+ServingStore
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
+</p>
+
+<p>
+
+<p>
+
+ServingStore to track and store data and metadata for tracking and
+serving.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>url</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+URL of the persistent store to write the callbacks
 </p>
 
 </td>
@@ -8337,7 +8403,8 @@ JetStreamSource </a> </em>
 <td>
 
 <code>serving</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Serving"> Serving </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource"> ServingSource
+</a> </em>
 </td>
 
 <td>
@@ -8410,70 +8477,6 @@ Description
 
 Conditions are the latest available observations of a resource’s current
 state.
-</p>
-
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
-<h3 id="numaflow.numaproj.io/v1alpha1.Store">
-
-Store
-</h3>
-
-<p>
-
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Serving">Serving</a>)
-</p>
-
-<p>
-
-<p>
-
-Store to track and store data and metadata for tracking and serving.
-</p>
-
-</p>
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>
-
-Field
-</th>
-
-<th>
-
-Description
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td>
-
-<code>url</code></br> <em> string </em>
-</td>
-
-<td>
-
-<p>
-
-URL of the persistent store to write the callbacks
 </p>
 
 </td>

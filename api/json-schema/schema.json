@@ -19487,8 +19487,8 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.Serving": {
-      "description": "Serving is the HTTP endpoint for Numaflow.",
+    "io.numaproj.numaflow.v1alpha1.ServingSource": {
+      "description": "ServingSource is the HTTP endpoint for Numaflow.",
       "properties": {
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
@@ -19502,10 +19502,23 @@
           "type": "boolean"
         },
         "store": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Store",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore",
           "description": "Persistent store for the callbacks for serving and tracking"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingStore": {
+      "description": "ServingStore to track and store data and metadata for tracking and serving.",
+      "properties": {
+        "url": {
+          "description": "URL of the persistent store to write the callbacks",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.SessionWindow": {
@@ -19699,7 +19712,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
         },
         "serving": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Serving"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
@@ -19723,19 +19736,6 @@
           "x-kubernetes-patch-strategy": "merge"
         }
       },
-      "type": "object"
-    },
-    "io.numaproj.numaflow.v1alpha1.Store": {
-      "description": "Store to track and store data and metadata for tracking and serving.",
-      "properties": {
-        "url": {
-          "description": "URL of the persistent store to write the callbacks",
-          "type": "string"
-        }
-      },
-      "required": [
-        "url"
-      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.TLS": {
