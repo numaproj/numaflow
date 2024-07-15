@@ -11,7 +11,7 @@ Welcome to Numaflow, a Kubernetes-native platform designed for developing scalab
 
 Numaflow is developed by the team behind Argo at Intuit.
 
-![Numaflow Pipeline](./ui/src/images/simple-pipeline.png)
+![Numaflow Pipeline](./docs/assets/simple-pipeline.png)
 
 ## Use Cases
 
