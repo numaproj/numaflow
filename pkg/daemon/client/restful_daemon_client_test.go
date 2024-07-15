@@ -33,7 +33,7 @@ func TestRestfulDaemonClient_IsDrained(t *testing.T) {
 	t.Run("not drained", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"buffers":[{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-cat-0","pendingCount":"0","ackPendingCount":"5","totalMessages":"5","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0.00016666666666666666,"isFull":false},{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-out-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"0","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false}]}`))
+			_, _ = w.Write([]byte(`{"buffers":[{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-cat-0","pendingCount":"0","ackPendingCount":"5","totalMessages":"5","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0.00016666666666666666,"isFull":false},{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-out-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"0","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false}]}`))
 		}))
 		defer server.Close()
 
@@ -46,7 +46,7 @@ func TestRestfulDaemonClient_IsDrained(t *testing.T) {
 	t.Run("drained", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"buffers":[{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-cat-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"5","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false},{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-out-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"0","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false}]}`))
+			_, _ = w.Write([]byte(`{"buffers":[{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-cat-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"5","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false},{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-out-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"0","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false}]}`))
 		}))
 		defer server.Close()
 
@@ -61,7 +61,7 @@ func TestRestfulDaemonClient_ListPipelineBuffers(t *testing.T) {
 	t.Run("error case", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`invalid json`))
+			_, _ = w.Write([]byte(`invalid json`))
 		}))
 		defer server.Close()
 
@@ -73,7 +73,7 @@ func TestRestfulDaemonClient_ListPipelineBuffers(t *testing.T) {
 	t.Run("okay", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"buffers":[{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-cat-0","pendingCount":"0","ackPendingCount":"5","totalMessages":"5","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0.00016666666666666666,"isFull":false},{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-out-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"0","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false}]}`))
+			_, _ = w.Write([]byte(`{"buffers":[{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-cat-0","pendingCount":"0","ackPendingCount":"5","totalMessages":"5","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0.00016666666666666666,"isFull":false},{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-out-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"0","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false}]}`))
 		}))
 		defer server.Close()
 
@@ -90,7 +90,7 @@ func TestRestfulDaemonClient_GetPipelineBuffer(t *testing.T) {
 	t.Run("error case", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`invalid json`))
+			_, _ = w.Write([]byte(`invalid json`))
 		}))
 		defer server.Close()
 
@@ -102,7 +102,7 @@ func TestRestfulDaemonClient_GetPipelineBuffer(t *testing.T) {
 	t.Run("okay", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"buffer":{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-cat-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"0","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false}}`))
+			_, _ = w.Write([]byte(`{"buffer":{"pipeline":"simple-pipeline","bufferName":"numaflow-system-simple-pipeline-cat-0","pendingCount":"0","ackPendingCount":"0","totalMessages":"0","bufferLength":"30000","bufferUsageLimit":0.8,"bufferUsage":0,"isFull":false}}`))
 		}))
 		defer server.Close()
 
@@ -119,7 +119,7 @@ func TestRestfulDaemonClient_GetVertexMetrics(t *testing.T) {
 	t.Run("error case", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`invalid json`))
+			_, _ = w.Write([]byte(`invalid json`))
 		}))
 		defer server.Close()
 
@@ -131,7 +131,7 @@ func TestRestfulDaemonClient_GetVertexMetrics(t *testing.T) {
 	t.Run("okay", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"vertexMetrics":[{"pipeline":"simple-pipeline","vertex":"out","processingRates":{"15m":5.007407407407407,"1m":5.083333333333333,"5m":5.007407407407407,"default":5.033333333333333},"pendings":{"15m":"0","1m":"0","5m":"0","default":"0"}}]}`))
+			_, _ = w.Write([]byte(`{"vertexMetrics":[{"pipeline":"simple-pipeline","vertex":"out","processingRates":{"15m":5.007407407407407,"1m":5.083333333333333,"5m":5.007407407407407,"default":5.033333333333333},"pendings":{"15m":"0","1m":"0","5m":"0","default":"0"}}]}`))
 		}))
 		defer server.Close()
 
@@ -148,7 +148,7 @@ func TestRestfulDaemonClient_GetPipelineWatermarks(t *testing.T) {
 	t.Run("error case", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`invalid json`))
+			_, _ = w.Write([]byte(`invalid json`))
 		}))
 		defer server.Close()
 		client, _ := NewRESTfulDaemonServiceClient(server.URL)
@@ -159,7 +159,7 @@ func TestRestfulDaemonClient_GetPipelineWatermarks(t *testing.T) {
 	t.Run("okay", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"pipelineWatermarks":[{"pipeline":"simple-pipeline","edge":"in-cat","watermarks":["1720992797298"],"isWatermarkEnabled":true,"from":"in","to":"cat"},{"pipeline":"simple-pipeline","edge":"cat-out","watermarks":["1720992796298"],"isWatermarkEnabled":true,"from":"cat","to":"out"}]}`))
+			_, _ = w.Write([]byte(`{"pipelineWatermarks":[{"pipeline":"simple-pipeline","edge":"in-cat","watermarks":["1720992797298"],"isWatermarkEnabled":true,"from":"in","to":"cat"},{"pipeline":"simple-pipeline","edge":"cat-out","watermarks":["1720992796298"],"isWatermarkEnabled":true,"from":"cat","to":"out"}]}`))
 		}))
 		defer server.Close()
 
@@ -178,7 +178,7 @@ func TestRestfulDaemonClient_GetPipelineStatus(t *testing.T) {
 	t.Run("error case", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`invalid json`))
+			_, _ = w.Write([]byte(`invalid json`))
 		}))
 		defer server.Close()
 		client, _ := NewRESTfulDaemonServiceClient(server.URL)
@@ -189,7 +189,7 @@ func TestRestfulDaemonClient_GetPipelineStatus(t *testing.T) {
 	t.Run("okay", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":{"status":"healthy","message":"Pipeline data flow is healthy","code":"D1"}}`))
+			_, _ = w.Write([]byte(`{"status":{"status":"healthy","message":"Pipeline data flow is healthy","code":"D1"}}`))
 		}))
 		defer server.Close()
 
