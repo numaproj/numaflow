@@ -3,9 +3,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub use config::config;
 
-pub use self::error::{Error, Result};
 use crate::pipeline::pipeline_spec;
 use crate::{app::start_main_server, metrics::start_metrics_server};
+
+pub use self::error::{Error, Result};
 
 mod app;
 mod config;

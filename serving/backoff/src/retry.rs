@@ -3,9 +3,10 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use crate::{Condition, Operation};
 use pin_project::pin_project;
 use tokio::time::{sleep_until, Instant, Sleep};
+
+use crate::{Condition, Operation};
 
 /// To retry a Future with backoff, we will have to maintain 2 states (which are Futures themselves).
 /// These states track whether the [`Operation`] is [`RetryState::Running`] or cooling off via
@@ -142,11 +143,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::strategy::fixed;
     use std::future;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+
+    use crate::strategy::fixed;
+
+    use super::*;
 
     async fn always_successful() -> Result<u64, ()> {
         Ok(42)

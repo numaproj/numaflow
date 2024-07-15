@@ -24,7 +24,7 @@ pub(crate) struct RedisConnection {
 }
 
 impl RedisConnection {
-    /// Creates a new RedisConnection with concurrent opertions on Redis set by max_tasks.
+    /// Creates a new RedisConnection with concurrent operations on Redis set by max_tasks.
     pub(crate) async fn new(addr: &str, max_tasks: usize) -> crate::Result<Self> {
         let client =
             redis::Client::open(addr).map_err(|e| format!("Creating Redis client: {e:?}"))?;
@@ -121,7 +121,7 @@ impl super::Store for RedisConnection {
     }
 
     async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<CallbackRequest>>, Error> {
-        let result: Result<Vec<Vec<u8>>, redis::RedisError> = redis::cmd(LRANGE)
+        let result: Result<Vec<Vec<u8>>, RedisError> = redis::cmd(LRANGE)
             .arg(id)
             .arg(0)
             .arg(-1)
@@ -156,7 +156,7 @@ impl super::Store for RedisConnection {
     async fn retrieve_datum(&mut self, id: &str) -> Result<Vec<Vec<u8>>, Error> {
         // saved responses are stored in "id_SAVED"
         let key = format!("{}_{}", id, SAVED);
-        let result: Result<Vec<Vec<u8>>, redis::RedisError> = redis::cmd(LRANGE)
+        let result: Result<Vec<Vec<u8>>, RedisError> = redis::cmd(LRANGE)
             .arg(key)
             .arg(0)
             .arg(-1)
@@ -175,6 +175,15 @@ impl super::Store for RedisConnection {
                 "Failed to read from redis: {:?}",
                 e
             ))),
+        }
+    }
+
+    // Check if the Redis connection is healthy
+    async fn is_available(&mut self) -> bool {
+        let mut conn = self.conn_manager.clone();
+        match redis::cmd("PING").query_async::<_, String>(&mut conn).await {
+            Ok(response) => response == "PONG",
+            Err(_) => false,
         }
     }
 }

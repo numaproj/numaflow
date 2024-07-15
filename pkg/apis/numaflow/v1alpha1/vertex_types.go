@@ -403,6 +403,32 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 		)
 	}
 
+	servingContainer.LivenessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/readyz",
+				Port:   intstr.FromInt32(VertexHTTPSPort),
+				Scheme: corev1.URISchemeHTTP,
+			},
+		},
+		InitialDelaySeconds: 3,
+		PeriodSeconds:       3,
+		TimeoutSeconds:      1,
+	}
+
+	servingContainer.ReadinessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/livez",
+				Port:   intstr.FromInt32(VertexHTTPSPort),
+				Scheme: corev1.URISchemeHTTP,
+			},
+		},
+		InitialDelaySeconds: 20,
+		PeriodSeconds:       60,
+		TimeoutSeconds:      30,
+	}
+
 	return servingContainer, nil
 }
 
