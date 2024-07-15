@@ -18,7 +18,7 @@ data:
   # controller.leader.election.lease.duration: 15s
   #
   ### The duration that the acting controlplane will retry refreshing leadership before giving up. 
-  #   Default is 10 seconds.
+  #   Default value is 10 seconds.
   #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
   # controller.leader.election.lease.renew.deadline: 10s
   #
@@ -45,6 +45,11 @@ data:
   ### The external address of the Numaflow server. This is needed when using Dex for authentication.
   # server.address: https://localhost:8443
   #
-  ### The list of allowed origins for CORS on Numaflow server, separated by a comma, defaults to ''.
+  ### The list of allowed origins for CORS on Numaflow UX server, separated by a comma, defaults to ''.
   #   For example: server.cors.allowed.origins: "http://localhost:3000,http://localhost:3001"
   #  server.cors.allowed.origins: ""
+  #
+  ### The protocol used to connect to the Pipeline daemon service from Numaflow UX server.
+  #   Could be either 'grpc' or 'http', defaults to 'grpc'.
+  # 
+  # server.daemon.client.protocol: grpc

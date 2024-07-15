@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package forward
 
 import (
@@ -53,19 +52,32 @@ func (s myShutdownTest) ApplyMapStream(ctx context.Context, message *isb.ReadMes
 
 func TestInterStepDataForward(t *testing.T) {
 	tests := []struct {
-		name          string
-		batchSize     int64
-		streamEnabled bool
+		name            string
+		batchSize       int64
+		streamEnabled   bool
+		batchMapEnabled bool
+		unaryEnabled    bool
 	}{
 		{
-			name:          "stream_forward",
-			batchSize:     1,
-			streamEnabled: true,
+			name:            "stream_forward",
+			batchSize:       1,
+			streamEnabled:   true,
+			batchMapEnabled: false,
+			unaryEnabled:    false,
 		},
 		{
-			name:          "batch_forward",
-			batchSize:     5,
-			streamEnabled: false,
+			name:            "batch_forward",
+			batchSize:       5,
+			streamEnabled:   false,
+			batchMapEnabled: false,
+			unaryEnabled:    true,
+		},
+		{
+			name:            "batch_map_forward",
+			batchSize:       5,
+			streamEnabled:   false,
+			batchMapEnabled: true,
+			unaryEnabled:    false,
 		},
 	}
 	for _, tt := range tests {
@@ -96,14 +108,19 @@ func TestInterStepDataForward(t *testing.T) {
 
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
-			appliers := MapAppliers{
-				MapUDF:       myShutdownTest{},
-				MapStreamUDF: myShutdownTest{},
-				BatchMapUDF:  myShutdownTest{},
+			opts := []Option{WithReadBatchSize(batchSize)}
+			if tt.batchMapEnabled {
+				opts = append(opts, WithUDFBatchMap(myShutdownTest{}))
+			}
+			if tt.streamEnabled {
+				opts = append(opts, WithUDFStreamingMap(myShutdownTest{}))
+			}
+			if tt.unaryEnabled {
+				opts = append(opts, WithUDFUnaryMap(myShutdownTest{}))
 			}
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data but buffer is not full even though we are not reading
@@ -144,13 +161,18 @@ func TestInterStepDataForward(t *testing.T) {
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
-			appliers := MapAppliers{
-				MapUDF:       myShutdownTest{},
-				MapStreamUDF: myShutdownTest{},
-				BatchMapUDF:  myShutdownTest{},
+			opts := []Option{WithReadBatchSize(batchSize)}
+			if tt.batchMapEnabled {
+				opts = append(opts, WithUDFBatchMap(myShutdownTest{}))
+			}
+			if tt.streamEnabled {
+				opts = append(opts, WithUDFStreamingMap(myShutdownTest{}))
+			}
+			if tt.unaryEnabled {
+				opts = append(opts, WithUDFUnaryMap(myShutdownTest{}))
 			}
 
-			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, appliers, fetchWatermark, publishWatermark, idleManager, WithReadBatchSize(batchSize), WithUDFStreaming(tt.streamEnabled))
+			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 			assert.NoError(t, err)
 			stopped := f.Start()
 			// write some data such that the fromBufferPartition can be empty, that is toBuffer gets full

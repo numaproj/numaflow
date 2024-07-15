@@ -28,6 +28,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	natsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 )
 
@@ -44,7 +45,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
@@ -137,7 +138,7 @@ func TestGetName(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 	defer defaultJetStreamClient.Close()
@@ -162,7 +163,7 @@ func TestClose(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)

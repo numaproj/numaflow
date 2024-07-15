@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap"
 
@@ -180,4 +181,9 @@ func NewTestClient(t *testing.T, url string) *Client {
 		panic(err)
 	}
 	return &Client{nc: nc}
+}
+
+// JetStreamClient is used to get a testing JetStream client instance
+func NewTestClientWithServer(t *testing.T, s *server.Server) *Client {
+	return NewTestClient(t, s.ClientURL())
 }

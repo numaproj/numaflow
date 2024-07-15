@@ -17812,7 +17812,7 @@
       "properties": {
         "conditions": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
-          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF."
+          "description": "Conditional forwarding, only allowed when \"From\" is a Source or UDF."
         },
         "from": {
           "type": "string"
@@ -18016,7 +18016,7 @@
       "properties": {
         "conditions": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
-          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF."
+          "description": "Conditional forwarding, only allowed when \"From\" is a Source or UDF."
         },
         "from": {
           "type": "string"

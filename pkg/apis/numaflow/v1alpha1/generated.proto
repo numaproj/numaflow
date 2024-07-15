@@ -321,7 +321,7 @@ message Edge {
 
   optional string to = 2;
 
-  // Conditional forwarding, only allowed when "From" is a Sink or UDF.
+  // Conditional forwarding, only allowed when "From" is a Source or UDF.
   // +optional
   optional ForwardConditions conditions = 3;
 
