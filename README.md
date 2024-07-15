@@ -7,9 +7,9 @@
 [![Release Version](https://img.shields.io/github/v/release/numaproj/numaflow?label=numaflow)](https://github.com/numaproj/numaflow/releases/latest)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6078/badge)](https://bestpractices.coreinfrastructure.org/projects/6078)
 
-Welcome to Numaflow, a Kubernetes-native platform designed for developing scalable and reliable event-driven applications. Numaflow decouples event sources and sinks from the processing logic, allowing each component to independently auto-scale based on demand. With out-of-the-box sources and sinks, developers can focus solely on the processing logic without worrying about event consumption, boilerplate code, or operational complexities. Each step of the pipeline can be written in any programming language, offering unparalleled flexibility and ease of use
+Welcome to Numaflow, a Kubernetes-native platform designed for developing scalable and reliable event-driven applications. Numaflow decouples event sources and sinks from the processing logic, allowing each component to independently auto-scale based on demand. With out-of-the-box sources and sinks, developers can focus solely on the processing logic without worrying about event consumption, writing boilerplate code, or operational complexities. Each step of the pipeline can be written in any programming language, offering unparalleled flexibility and ease of use.
 
-Numaflow, created by the team at Intuit behind Argo, leverages their expertise to deliver a robust and scalable end-to-end platform for event-driven applications
+Numaflow is developed by the team behind Argo at Intuit.
 
 ![Numaflow Pipeline](./ui/src/images/simple-pipeline.png)
 
