@@ -460,7 +460,7 @@ func generateDataHealthResponse(state string, vertex string) *dataHealthResponse
 	case v1alpha1.PipelineStatusWarning:
 		return newDataHealthResponse(
 			v1alpha1.PipelineStatusWarning,
-			fmt.Sprintf("Pipeline data flow is in a warning state for  %s", vertex),
+			fmt.Sprintf("Pipeline data flow is in a warning state for %s", vertex),
 			"D2")
 	case v1alpha1.PipelineStatusCritical:
 		return newDataHealthResponse(

@@ -30,15 +30,16 @@ import (
 
 func NewServerCommand() *cobra.Command {
 	var (
-		insecure           bool
-		port               int
-		namespaced         bool
-		managedNamespace   string
-		baseHref           string
-		disableAuth        bool
-		serverAddr         string
-		corsAllowedOrigins string
-		readOnly           bool
+		insecure             bool
+		port                 int
+		namespaced           bool
+		managedNamespace     string
+		baseHref             string
+		disableAuth          bool
+		serverAddr           string
+		corsAllowedOrigins   string
+		readOnly             bool
+		daemonClientProtocol string
 	)
 
 	command := &cobra.Command{
@@ -52,16 +53,17 @@ func NewServerCommand() *cobra.Command {
 				baseHref = baseHref + "/"
 			}
 			opts := svrcmd.ServerOptions{
-				Insecure:           insecure,
-				Port:               port,
-				Namespaced:         namespaced,
-				ManagedNamespace:   managedNamespace,
-				BaseHref:           baseHref,
-				DisableAuth:        disableAuth,
-				DexServerAddr:      common.NumaflowDexServerAddr,
-				ServerAddr:         serverAddr,
-				CorsAllowedOrigins: corsAllowedOrigins,
-				ReadOnly:           readOnly,
+				Insecure:             insecure,
+				Port:                 port,
+				Namespaced:           namespaced,
+				ManagedNamespace:     managedNamespace,
+				BaseHref:             baseHref,
+				DisableAuth:          disableAuth,
+				DexServerAddr:        common.NumaflowDexServerAddr,
+				ServerAddr:           serverAddr,
+				CorsAllowedOrigins:   corsAllowedOrigins,
+				ReadOnly:             readOnly,
+				DaemonClientProtocol: daemonClientProtocol,
 			}
 			server := svrcmd.NewServer(opts)
 			log := logging.NewLogger().Named("server")
@@ -77,5 +79,6 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().BoolVar(&disableAuth, "disable-auth", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_AUTH", false), "Whether to disable authentication and authorization, defaults to false.")
 	command.Flags().StringVar(&serverAddr, "server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
 	command.Flags().StringVar(&corsAllowedOrigins, "cors-allowed-origins", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS", ""), "The values for allowed cors AllowOrigins header field, separated by comma.")
+	command.Flags().StringVar(&daemonClientProtocol, "daemon-client-protocol", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_DAEMON_CLIENT_PROTOCOL", "grpc"), "The protocol used to connect to the Pipeline daemon service from Numaflow UX server, defaults to 'grpc'.")
 	return command
 }

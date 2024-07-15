@@ -138,6 +138,12 @@ spec:
                 name: numaflow-cmd-params-config
                 key: server.cors.allowed.origins
                 optional: true
+          - name: NUMAFLOW_SERVER_DAEMON_CLIENT_PROTOCOL
+            valueFrom:
+              configMapKeyRef:
+                name: numaflow-cmd-params-config
+                key: server.daemon.client.protocol
+                optional: true
           resources:
             limits:
               cpu: 500m
