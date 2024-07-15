@@ -58,6 +58,36 @@ const (
 	ValidTypeUpdate = "valid-update"
 )
 
+type handlerOptions struct {
+	// readonly is used to indicate whether the server is in read-only mode
+	readonly bool
+	// daemonClientProtocol is used to indicate the protocol of the daemon client, 'grpc' or 'http'
+	daemonClientProtocol string
+}
+
+func defaultHandlerOptions() *handlerOptions {
+	return &handlerOptions{
+		readonly:             false,
+		daemonClientProtocol: "grpc",
+	}
+}
+
+type HandlerOption func(*handlerOptions)
+
+// WithDaemonClientProtocol sets the protocol of the daemon client.
+func WithDaemonClientProtocol(protocol string) HandlerOption {
+	return func(o *handlerOptions) {
+		o.daemonClientProtocol = protocol
+	}
+}
+
+// WithReadOnlyMode sets the server to read-only mode.
+func WithReadOnlyMode() HandlerOption {
+	return func(o *handlerOptions) {
+		o.readonly = true
+	}
+}
+
 type handler struct {
 	kubeClient           kubernetes.Interface
 	metricsClient        *metricsversiond.Clientset
@@ -65,12 +95,12 @@ type handler struct {
 	daemonClientsCache   *lru.Cache[string, daemonclient.DaemonClient]
 	dexObj               *DexObject
 	localUsersAuthObject *LocalUsersAuthObject
-	isReadOnly           bool
 	healthChecker        *HealthChecker
+	opts                 *handlerOptions
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, isReadOnly bool) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, opts ...HandlerOption) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -88,6 +118,12 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	daemonClientsCache, _ := lru.NewWithEvict[string, daemonclient.DaemonClient](500, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
 	})
+	o := defaultHandlerOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
 	return &handler{
 		kubeClient:           kubeClient,
 		metricsClient:        metricsClient,
@@ -95,8 +131,8 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		daemonClientsCache:   daemonClientsCache,
 		dexObj:               dexObj,
 		localUsersAuthObject: localUsersAuthObject,
-		isReadOnly:           isReadOnly,
 		healthChecker:        NewHealthChecker(ctx),
+		opts:                 o,
 	}, nil
 }
 
@@ -284,7 +320,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 
 // CreatePipeline is used to create a given pipeline
 func (h *handler) CreatePipeline(c *gin.Context) {
-	if h.isReadOnly {
+	if h.opts.readonly {
 		errMsg := "Failed to perform this operation in read only mode"
 		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -418,7 +454,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 
 // UpdatePipeline is used to update a given pipeline
 func (h *handler) UpdatePipeline(c *gin.Context) {
-	if h.isReadOnly {
+	if h.opts.readonly {
 		errMsg := "Failed to perform this operation in read only mode"
 		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -474,7 +510,7 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 
 // DeletePipeline is used to delete a given pipeline
 func (h *handler) DeletePipeline(c *gin.Context) {
-	if h.isReadOnly {
+	if h.opts.readonly {
 		errMsg := "Failed to perform this operation in read only mode"
 		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -495,7 +531,7 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 
 // PatchPipeline is used to patch the pipeline spec to achieve operations such as "pause" and "resume"
 func (h *handler) PatchPipeline(c *gin.Context) {
-	if h.isReadOnly {
+	if h.opts.readonly {
 		errMsg := "Failed to perform this operation in read only mode"
 		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -524,7 +560,7 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 }
 
 func (h *handler) CreateInterStepBufferService(c *gin.Context) {
-	if h.isReadOnly {
+	if h.opts.readonly {
 		errMsg := "Failed to perform this operation in read only mode"
 		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -599,7 +635,7 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 }
 
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
-	if h.isReadOnly {
+	if h.opts.readonly {
 		errMsg := "Failed to perform this operation in read only mode"
 		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -641,7 +677,7 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 }
 
 func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
-	if h.isReadOnly {
+	if h.opts.readonly {
 		errMsg := "Failed to perform this operation in read only mode"
 		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -715,7 +751,7 @@ func (h *handler) respondWithError(c *gin.Context, message string) {
 
 // UpdateVertex is used to update the vertex spec
 func (h *handler) UpdateVertex(c *gin.Context) {
-	if h.isReadOnly {
+	if h.opts.readonly {
 		errMsg := "Failed to perform this operation in read only mode"
 		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
 		return
@@ -1147,7 +1183,14 @@ func daemonSvcAddress(ns, pipeline string) string {
 
 func (h *handler) getDaemonClient(ns, pipeline string) (daemonclient.DaemonClient, error) {
 	if dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline)); !ok {
-		c, err := daemonclient.NewGRPCDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		var err error
+		var c daemonclient.DaemonClient
+		// Default to use gRPC client
+		if strings.EqualFold(h.opts.daemonClientProtocol, "http") {
+			c, err = daemonclient.NewRESTfulDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		} else {
+			c, err = daemonclient.NewGRPCDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		}
 		if err != nil {
 			return nil, err
 		}

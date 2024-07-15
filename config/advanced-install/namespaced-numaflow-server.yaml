@@ -258,6 +258,12 @@ spec:
               key: server.cors.allowed.origins
               name: numaflow-cmd-params-config
               optional: true
+        - name: NUMAFLOW_SERVER_DAEMON_CLIENT_PROTOCOL
+          valueFrom:
+            configMapKeyRef:
+              key: server.daemon.client.protocol
+              name: numaflow-cmd-params-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
