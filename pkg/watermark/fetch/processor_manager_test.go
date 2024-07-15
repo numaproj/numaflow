@@ -18,7 +18,9 @@ package fetch
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,13 +54,15 @@ func TestProcessorManager(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	wmStore, err := store.BuildInmemWatermarkStore(ctx, keyspace)
 	assert.NoError(t, err)
-	defer wmStore.Close()
-	defer cancel()
 
 	assert.NoError(t, err)
 	var processorManager = newProcessorManager(ctx, wmStore, 1)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 	// start p1 heartbeat for 3 loops then delete p1
 	go func() {
+		defer wg.Done()
 		var err error
 		for i := 0; i < 3; i++ {
 			err = wmStore.HeartbeatStore().PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
@@ -69,8 +73,10 @@ func TestProcessorManager(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 
+	wg.Add(1)
 	// start p2 heartbeat.
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case <-time.After(1 * time.Second):
@@ -86,7 +92,7 @@ func TestProcessorManager(t *testing.T) {
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 			}
 		default:
@@ -102,7 +108,7 @@ func TestProcessorManager(t *testing.T) {
 	for !allProcessors["p1"].IsDeleted() {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatalf("expected p1 to be deleted: %s", ctx.Err())
 			}
 		default:
@@ -119,6 +125,9 @@ func TestProcessorManager(t *testing.T) {
 	processorManager.deleteProcessor("p1")
 	processorManager.deleteProcessor("p2")
 	assert.Equal(t, 0, len(processorManager.getAllProcessors()))
+	cancel()
+	wg.Wait()
+	_ = wmStore.Close()
 }
 
 func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
@@ -132,12 +141,13 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	wmStore, _ := store.BuildInmemWatermarkStore(ctx, keyspace)
 	assert.NoError(t, err)
 
-	defer cancel()
-	defer wmStore.Close()
-
 	var processorManager = newProcessorManager(ctx, wmStore, 1)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 	// start p1 heartbeat for 3 loops
 	go func(ctx context.Context) {
+		defer wg.Done()
 		for {
 			select {
 			case <-time.After(1 * time.Second):
@@ -149,8 +159,10 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 		}
 	}(ctx)
 
+	wg.Add(1)
 	// start p2 heartbeat
 	go func(ctx context.Context) {
+		defer wg.Done()
 		for {
 			select {
 			case <-time.After(1 * time.Second):
@@ -166,7 +178,7 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 			}
 		default:
@@ -187,7 +199,7 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	for processorManager.getProcessor("p1").GetOffsetTimelines()[0].GetHeadOffset() != 115 || processorManager.getProcessor("p2").GetOffsetTimelines()[0].GetHeadOffset() != 115 {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatalf("expected offset timeline to be updated: %s", ctx.Err())
 			}
 		default:
@@ -208,6 +220,9 @@ func TestProcessorManagerWatchForMapWithOnePartition(t *testing.T) {
 	}, processorManager.getProcessor("p2").GetOffsetTimelines()[0].GetHeadWMB())
 	processorManager.deleteProcessor("p1")
 	processorManager.deleteProcessor("p2")
+	cancel()
+	wg.Wait()
+	_ = wmStore.Close()
 }
 
 func TestProcessorManagerWatchForReduce(t *testing.T) {
@@ -220,12 +235,14 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	wmStore, _ := store.BuildInmemWatermarkStore(ctx, keyspace)
 	assert.NoError(t, err)
-	defer wmStore.Close()
-	defer cancel()
 
 	var processorManager = newProcessorManager(ctx, wmStore, 1, WithIsReduce(true), WithVertexReplica(2))
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 	// start p1 heartbeat for 3 loops
 	go func(ctx context.Context) {
+		defer wg.Done()
 		for {
 			select {
 			case <-time.After(1 * time.Second):
@@ -237,8 +254,10 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 		}
 	}(ctx)
 
+	wg.Add(1)
 	// start p2 heartbeat
 	go func(ctx context.Context) {
+		defer wg.Done()
 		var err error
 		for {
 			select {
@@ -255,7 +274,7 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 			}
 		default:
@@ -287,7 +306,7 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 	for processorManager.getProcessor("p1").GetOffsetTimelines()[0].GetHeadOffset() != 115 || processorManager.getProcessor("p2").GetOffsetTimelines()[0].GetHeadOffset() != 115 {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatalf("expected offset timeline to be updated: %s", ctx.Err())
 			}
 		default:
@@ -309,6 +328,9 @@ func TestProcessorManagerWatchForReduce(t *testing.T) {
 	}, processorManager.getProcessor("p2").GetOffsetTimelines()[0].GetHeadWMB())
 	processorManager.deleteProcessor("p1")
 	processorManager.deleteProcessor("p2")
+	cancel()
+	wg.Wait()
+	_ = wmStore.Close()
 }
 
 func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
@@ -320,14 +342,16 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 		partitionCount       = 3
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 	wmStore, err := store.BuildInmemWatermarkStore(ctx, keyspace)
 	assert.NoError(t, err)
-	defer wmStore.Close()
 
 	var processorManager = newProcessorManager(ctx, wmStore, 3)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 	// start p1 heartbeat for 3 loops
 	go func(ctx context.Context) {
+		defer wg.Done()
 		var err error
 		for {
 			select {
@@ -341,7 +365,9 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 	}(ctx)
 
 	// start p2 heartbeat.
+	wg.Add(1)
 	go func(ctx context.Context) {
+		defer wg.Done()
 		var err error
 		for {
 			select {
@@ -358,7 +384,7 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 	for len(allProcessors) != 2 {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 			}
 		default:
@@ -382,7 +408,7 @@ loop:
 	for {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatalf("expected offset timeline to be updated: %s", ctx.Err())
 			}
 		default:
@@ -414,7 +440,9 @@ loop:
 			Partition: int32(i),
 		}, processorManager.getProcessor("p2").GetOffsetTimelines()[i].GetHeadWMB())
 	}
-	cancel()
 	processorManager.deleteProcessor("p1")
 	processorManager.deleteProcessor("p2")
+	cancel()
+	wg.Wait()
+	_ = wmStore.Close()
 }
