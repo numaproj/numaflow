@@ -36,7 +36,7 @@ func Test_ISBSvcSetType(t *testing.T) {
 	assert.Equal(t, ISBSvcTypeJetStream, s.Type)
 }
 
-func Test_ISBSvcInit(t *testing.T) {
+func Test_ISBSvcInitConditions(t *testing.T) {
 	s := InterStepBufferServiceStatus{}
 	s.InitConditions()
 	assert.Equal(t, 2, len(s.Conditions))
@@ -54,7 +54,6 @@ func Test_ISBSvcMarkStatus(t *testing.T) {
 		if c.Type == string(ISBSvcConditionConfigured) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status)
 			assert.Equal(t, "reason", c.Reason)
-			assert.Equal(t, "message", c.Message)
 			assert.Equal(t, "message", c.Message)
 		}
 	}

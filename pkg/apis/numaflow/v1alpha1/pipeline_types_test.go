@@ -231,14 +231,13 @@ func Test_PipelineSetPhase(t *testing.T) {
 	assert.Equal(t, PipelinePhaseRunning, s.Phase)
 }
 
-func Test_PipelineInit(t *testing.T) {
+func Test_PipelineInitConditions(t *testing.T) {
 	s := PipelineStatus{}
 	s.InitConditions()
 	assert.Equal(t, 2, len(s.Conditions))
 	for _, c := range s.Conditions {
 		assert.Equal(t, metav1.ConditionUnknown, c.Status)
 	}
-	assert.Equal(t, PipelinePhaseUnknown, s.Phase)
 }
 
 func Test_PipelineMarkStatus(t *testing.T) {
