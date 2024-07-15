@@ -132,22 +132,23 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	}
 
 	opts := []forward.Option{forward.WithLogger(log)}
+	enableMapUdfStream := false
+	enableBatchMapUdf := false
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
-	enableMapUdfStream := sharedutil.LookupEnvBoolOr(dfv1.EnvMapStreaming, false)
-	enableBatchMapUdf := sharedutil.LookupEnvBoolOr(dfv1.EnvBatchMap, false)
 
-	// We can have the vertex running only of the map modes
-	if enableMapUdfStream && enableBatchMapUdf {
-		return fmt.Errorf("vertex cannot have both map stream and batch map modes enabled")
+	// Wait for map server info to be ready, we use the same info file for all the map modes
+	serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapServerInfoFile))
+	if err != nil {
+		return err
 	}
 
-	if enableMapUdfStream {
+	// Read the server info file to read which map mode is enabled
+	// Based on the value set, we will create the corresponding handler and clients
+	mapMode, ok := serverInfo.Metadata[sdkserverinfo.MapModeMetadata]
+
+	if ok && mapMode == string(sdkserverinfo.StreamMap) {
 		// Map Stream mode
-		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapStreamServerInfoFile))
-		if err != nil {
-			return err
-		}
+		enableMapUdfStream = true
 
 		mapStreamClient, err := mapstreamer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
@@ -167,14 +168,9 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}()
 		opts = append(opts, forward.WithUDFStreamingMap(mapStreamHandler))
 
-	} else if enableBatchMapUdf {
+	} else if ok && mapMode == string(sdkserverinfo.BatchMap) {
 		// if Batch Map mode is enabled create the client and handler for that accordingly
-
-		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.BatchMapServerInfoFile))
-		if err != nil {
-			return err
-		}
+		enableBatchMapUdf = true
 
 		// create the client and handler for batch map interface
 		batchMapClient, err := batchmapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
@@ -193,14 +189,11 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}()
 		opts = append(opts, forward.WithUDFBatchMap(batchMapHandler))
-	} else {
-		// Default is to enable unary map mode
 
-		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapServerInfoFile))
-		if err != nil {
-			return err
-		}
+	} else if !ok || mapMode == string(sdkserverinfo.UnaryMap) {
+		// Default is to enable unary map mode
+		// If the MapMode metadata is not available, we will start map by default this will ensure
+		// backward compatibility in case of version mismatch for map
 
 		// create the client and handler for map interface
 		mapClient, err := mapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
@@ -220,6 +213,11 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 		}()
 		opts = append(opts, forward.WithUDFUnaryMap(mapHandler))
+	}
+
+	// We can have the vertex running only of the map modes
+	if enableMapUdfStream && enableBatchMapUdf {
+		return fmt.Errorf("vertex cannot have both map stream and batch map modes enabled")
 	}
 
 	for index, bufferPartition := range fromBuffer {

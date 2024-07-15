@@ -9,9 +9,6 @@ spec:
         http: {}
     - name: go-split
       partitions: 2
-      metadata:
-        annotations:
-          numaflow.numaproj.io/batch-map: "true"
       scale:
         min: 1
       udf:
