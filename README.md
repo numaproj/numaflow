@@ -7,29 +7,27 @@
 [![Release Version](https://img.shields.io/github/v/release/numaproj/numaflow?label=numaflow)](https://github.com/numaproj/numaflow/releases/latest)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6078/badge)](https://bestpractices.coreinfrastructure.org/projects/6078)
 
-## Summary
+Welcome to Numaflow, a Kubernetes-native platform designed for developing scalable and reliable event-driven applications. Numaflow decouples event sources and sinks from the processing logic, allowing each component to independently auto-scale based on demand. With out-of-the-box sources and sinks, developers can focus solely on the processing logic without worrying about event consumption, boilerplate code, or operational complexities. Each step of the pipeline can be written in any programming language, offering unparalleled flexibility and ease of use
 
-Numaflow is a Kubernetes-native tool for running massively parallel stream processing. A Numaflow Pipeline is implemented
-as a Kubernetes custom resource and consists of one or more source, data processing, and sink vertices.
+Numaflow, created by the team behind Argo, leverages their expertise to deliver a robust and scalable end-to-end platform for event-driven applications
 
-Numaflow installs in a few minutes and is easier and cheaper to use for simple data processing applications than a
-full-featured stream processing platforms.
+![Numaflow Pipeline](./ui/src/images/simple-pipeline.png)
 
 ## Use Cases
 
-- Real-time data analytics applications.
-- Event driven applications such as anomaly detection, monitoring, and alerting.
-- Streaming applications such as data instrumentation and data movement.
-- Workflows running in a streaming manner.
+- Event driven applications: Process events as they happen, e.g., updating inventory and sending customer notifications in e-commerce
+- Real time analytics: Analyze data instantly, e.g., social media analytics, observability data processing
+- Inference on streaming data: Perform real-time predictions, e.g., anomaly detection
+- Workflows running in a streaming manner
 
 ## Key Features
 
-- Kubernetes-native: If you know Kubernetes, you already know how to use Numaflow.
-- Language agnostic: Use your favorite programming language.
-- Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted.
-- Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed.
+- Kubernetes-native: If you know Kubernetes, you already know how to use Numaflow
+- Language agnostic: Use your favorite programming language
+- Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted
+- Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed
 
-## Data Integrity Guarantees:
+## Data Integrity Guarantees
 
 - Minimally provide at-least-once semantics
 - Provide exactly-once semantics for unbounded and near real-time data sources
