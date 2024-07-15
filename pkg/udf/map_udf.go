@@ -147,6 +147,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	mapMode, ok := serverInfo.Metadata[sdkserverinfo.MapModeMetadata]
 
 	if ok && mapMode == string(sdkserverinfo.StreamMap) {
+		log.Info("Map mode enabled: Stream Map")
 		// Map Stream mode
 		enableMapUdfStream = true
 
@@ -169,6 +170,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		opts = append(opts, forward.WithUDFStreamingMap(mapStreamHandler))
 
 	} else if ok && mapMode == string(sdkserverinfo.BatchMap) {
+		log.Info("Map mode enabled: Batch Map")
 		// if Batch Map mode is enabled create the client and handler for that accordingly
 		enableBatchMapUdf = true
 
@@ -190,7 +192,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}()
 		opts = append(opts, forward.WithUDFBatchMap(batchMapHandler))
 
-	} else if !ok || mapMode == string(sdkserverinfo.UnaryMap) {
+	} else {
+		log.Info("Map mode enabled: Unary Map")
 		// Default is to enable unary map mode
 		// If the MapMode metadata is not available, we will start map by default this will ensure
 		// backward compatibility in case of version mismatch for map
