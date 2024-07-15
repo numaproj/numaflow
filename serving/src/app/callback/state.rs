@@ -224,6 +224,11 @@ where
         };
         Ok(callbacks)
     }
+
+    // Check if the store is available
+    pub(crate) async fn is_available(&mut self) -> bool {
+        self.store.is_available().await
+    }
 }
 
 #[cfg(test)]

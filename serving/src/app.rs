@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use async_nats::jetstream;
 use async_nats::jetstream::Context;
-use axum::extract::MatchedPath;
+use axum::extract::{MatchedPath, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
@@ -18,15 +18,14 @@ use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::{debug, info_span, Level};
 use uuid::Uuid;
 
-use crate::app::callback::store::Store;
-use crate::app::tracker::MessageGraph;
-use crate::pipeline::pipeline_spec;
-use crate::{app::callback::state::State as CallbackState, config, metrics::capture_metrics};
-
 use self::{
     callback::callback_handler, direct_proxy::direct_proxy, jetstream_proxy::jetstream_proxy,
     message_path::get_message_path,
 };
+use crate::app::callback::store::Store;
+use crate::app::tracker::MessageGraph;
+use crate::pipeline::pipeline_spec;
+use crate::{app::callback::state::State as CallbackState, config, metrics::capture_metrics};
 
 /// manage callbacks
 pub(crate) mod callback;
@@ -193,7 +192,8 @@ async fn setup_app<T: Clone + Send + Sync + Store + 'static>(
     let parent = Router::new()
         .route("/health", get(health_check))
         .route("/livez", get(livez)) // Liveliness check
-        .route("/readyz", get(readyz)); // Readiness check
+        .route("/readyz", get(readyz))
+        .with_state((state.clone(), context.clone())); // Readiness check
 
     // a pool based client implementation for direct proxy, this client is cloneable.
     let client: direct_proxy::Client =
@@ -212,12 +212,24 @@ async fn health_check() -> impl IntoResponse {
     "ok"
 }
 
-async fn livez() -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+async fn livez<T: Send + Sync + Clone + Store + 'static>(
+    State((mut state, context)): State<(CallbackState<T>, Context)>,
+) -> impl IntoResponse {
+    if state.is_available().await && context.get_stream(&config().jetstream.stream).await.is_ok() {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
 }
 
-async fn readyz() -> impl IntoResponse {
-    StatusCode::NO_CONTENT
+async fn readyz<T: Send + Sync + Clone + Store + 'static>(
+    State((mut state, context)): State<(CallbackState<T>, Context)>,
+) -> impl IntoResponse {
+    if state.is_available().await && context.get_stream(&config().jetstream.stream).await.is_ok() {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
 }
 
 async fn routes<T: Clone + Send + Sync + Store + 'static>(
@@ -254,13 +266,13 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
+    use super::*;
+    use crate::app::callback::store::memstore::InMemoryStore;
     use async_nats::jetstream::stream;
     use axum::http::StatusCode;
+    use std::net::SocketAddr;
     use tokio::time::{sleep, Duration};
     use tower::ServiceExt;
-    use crate::app::callback::store::memstore::InMemoryStore;
-    use super::*;
 
     #[tokio::test]
     async fn test_start_main_server() {
@@ -301,6 +313,72 @@ mod tests {
 
         let result = setup_app(context, callback_state).await;
         assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "all-tests")]
+    #[tokio::test]
+    async fn test_livez() {
+        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
+        let context = jetstream::new(client);
+        let stream_name = &config().jetstream.stream;
+
+        let stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream_name.into(),
+                subjects: vec![stream_name.into()],
+                ..Default::default()
+            })
+            .await;
+
+        assert!(stream.is_ok());
+
+        let mem_store = InMemoryStore::new();
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+
+        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
+
+        let result = setup_app(context, callback_state).await;
+
+        let request = Request::builder()
+            .uri("/livez")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = result.unwrap().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[cfg(feature = "all-tests")]
+    #[tokio::test]
+    async fn test_readyz() {
+        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
+        let context = jetstream::new(client);
+        let stream_name = &config().jetstream.stream;
+
+        let stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream_name.into(),
+                subjects: vec![stream_name.into()],
+                ..Default::default()
+            })
+            .await;
+
+        assert!(stream.is_ok());
+
+        let mem_store = InMemoryStore::new();
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+
+        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
+
+        let result = setup_app(context, callback_state).await;
+
+        let request = Request::builder()
+            .uri("/readyz")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = result.unwrap().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 
     #[tokio::test]
