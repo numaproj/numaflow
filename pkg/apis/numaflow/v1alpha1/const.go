@@ -74,6 +74,7 @@ const (
 	CtrUdSideInput       = "udsi"
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
+	CtrServing           = "serving"
 
 	// user-defined container types
 	UDContainerFunction     = "udf"
@@ -82,7 +83,7 @@ const (
 	UDContainerTransformer  = "transformer"
 	UDContainerSource       = "udsource"
 	UDContainerSideInputs   = "udsi"
-	ServingSourceContainer  = "serving-source"
+	ServingSourceContainer  = "serving"
 
 	// components
 	ComponentISBSvc           = "isbsvc"
