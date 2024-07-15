@@ -100,13 +100,13 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 		controllerutil.AddFinalizer(isbSvc, finalizerName)
 	}
 
-	isbSvc.Status.Init()
+	isbSvc.Status.InitConditions()
 	if err := ValidateInterStepBufferService(isbSvc); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
-		isbSvc.Status.MarkNotConfigured("InvalidSpec", err.Error(), isbSvc.Generation)
+		isbSvc.Status.MarkNotConfigured("InvalidSpec", err.Error())
 		return err
 	} else {
-		isbSvc.Status.MarkConfigured(isbSvc.Generation)
+		isbSvc.Status.MarkConfigured()
 	}
 	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder)
 }

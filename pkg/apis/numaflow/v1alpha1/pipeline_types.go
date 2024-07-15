@@ -601,7 +601,7 @@ type PipelineStatus struct {
 	SourceCount *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
 	SinkCount   *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
 	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
-	// ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1
+	// ObservedGeneration stores the generation value observed by the controller.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
 }
 
@@ -629,16 +629,14 @@ func (pls *PipelineStatus) SetVertexCounts(vertices []AbstractVertex) {
 	pls.UDFCount = &udfCount
 }
 
-func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string, generation int64) {
+func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string) {
 	pls.Phase = phase
 	pls.Message = msg
-	pls.ObservedGeneration = generation
 }
 
-// Init sets conditions and phase to Unknown state.
-func (pls *PipelineStatus) Init() {
+// InitConditions sets conditions to Unknown state.
+func (pls *PipelineStatus) InitConditions() {
 	pls.InitializeConditions(PipelineConditionConfigured, PipelineConditionDeployed)
-	pls.SetPhase(PipelinePhaseUnknown, "", -1)
 }
 
 // MarkConfigured set the Pipeline has valid configuration.
@@ -647,9 +645,9 @@ func (pls *PipelineStatus) MarkConfigured() {
 }
 
 // MarkNotConfigured the Pipeline has configuration.
-func (pls *PipelineStatus) MarkNotConfigured(reason, message string, generation int64) {
+func (pls *PipelineStatus) MarkNotConfigured(reason, message string) {
 	pls.MarkFalse(PipelineConditionConfigured, reason, message)
-	pls.SetPhase(PipelinePhaseFailed, message, generation)
+	pls.SetPhase(PipelinePhaseFailed, message)
 }
 
 // MarkDeployed set the Pipeline has been deployed.
@@ -658,29 +656,34 @@ func (pls *PipelineStatus) MarkDeployed() {
 }
 
 // MarkPhaseRunning set the Pipeline has been running.
-func (pls *PipelineStatus) MarkPhaseRunning(generation int64) {
-	pls.SetPhase(PipelinePhaseRunning, "", generation)
+func (pls *PipelineStatus) MarkPhaseRunning() {
+	pls.SetPhase(PipelinePhaseRunning, "")
 }
 
 // MarkDeployFailed set the Pipeline deployment failed
-func (pls *PipelineStatus) MarkDeployFailed(reason, message string, generation int64) {
+func (pls *PipelineStatus) MarkDeployFailed(reason, message string) {
 	pls.MarkFalse(PipelineConditionDeployed, reason, message)
-	pls.SetPhase(PipelinePhaseFailed, message, generation)
+	pls.SetPhase(PipelinePhaseFailed, message)
 }
 
 // MarkPhasePaused set the Pipeline has been paused.
-func (pls *PipelineStatus) MarkPhasePaused(generation int64) {
-	pls.SetPhase(PipelinePhasePaused, "Pipeline paused", generation)
+func (pls *PipelineStatus) MarkPhasePaused() {
+	pls.SetPhase(PipelinePhasePaused, "Pipeline paused")
 }
 
 // MarkPhasePausing set the Pipeline is pausing.
-func (pls *PipelineStatus) MarkPhasePausing(generation int64) {
-	pls.SetPhase(PipelinePhasePausing, "Pausing in progress", generation)
+func (pls *PipelineStatus) MarkPhasePausing() {
+	pls.SetPhase(PipelinePhasePausing, "Pausing in progress")
 }
 
 // MarkPhaseDeleting set the Pipeline is deleting.
-func (pls *PipelineStatus) MarkPhaseDeleting(generation int64) {
-	pls.SetPhase(PipelinePhaseDeleting, "Deleting in progress", generation)
+func (pls *PipelineStatus) MarkPhaseDeleting() {
+	pls.SetPhase(PipelinePhaseDeleting, "Deleting in progress")
+}
+
+// SetObservedGeneration sets the Status ObservedGeneration
+func (pls *PipelineStatus) SetObservedGeneration(value int64) {
+	pls.ObservedGeneration = value
 }
 
 // +kubebuilder:object:root=true

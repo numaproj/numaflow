@@ -632,7 +632,7 @@ message InterStepBufferServiceStatus {
 
   optional string type = 5;
 
-  // ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1
+  // ObservedGeneration stores the generation value observed by the controller.
   optional int64 observedGeneration = 9;
 }
 
@@ -1024,7 +1024,7 @@ message PipelineStatus {
 
   optional uint32 udfCount = 8;
 
-  // ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1
+  // ObservedGeneration stores the generation value observed by the controller.
   optional int64 observedGeneration = 9;
 }
 

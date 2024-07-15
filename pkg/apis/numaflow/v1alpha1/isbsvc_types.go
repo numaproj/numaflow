@@ -105,46 +105,50 @@ type InterStepBufferServiceStatus struct {
 	Message string              `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
 	Config  BufferServiceConfig `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
 	Type    ISBSvcType          `json:"type,omitempty" protobuf:"bytes,5,opt,name=type"`
-	// ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1
+	// ObservedGeneration stores the generation value observed by the controller.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
 }
 
-func (isbsvc *InterStepBufferServiceStatus) SetPhase(phase ISBSvcPhase, msg string, generation int64) {
+func (isbsvc *InterStepBufferServiceStatus) SetPhase(phase ISBSvcPhase, msg string) {
 	isbsvc.Phase = phase
 	isbsvc.Message = msg
-	isbsvc.ObservedGeneration = generation
 }
 
 func (isbsvc *InterStepBufferServiceStatus) SetType(typ ISBSvcType) {
 	isbsvc.Type = typ
 }
 
-// Init sets conditions and phase to Unknown state.
-func (isbsvc *InterStepBufferServiceStatus) Init() {
+// InitConditions sets conditions to Unknown state.
+func (isbsvc *InterStepBufferServiceStatus) InitConditions() {
 	isbsvc.InitializeConditions(ISBSvcConditionConfigured, ISBSvcConditionDeployed)
-	isbsvc.SetPhase(ISBSvcPhasePending, "", -1)
+	isbsvc.SetPhase(ISBSvcPhasePending, "")
 }
 
 // MarkConfigured set the InterStepBufferService has valid configuration.
-func (isbsvc *InterStepBufferServiceStatus) MarkConfigured(generation int64) {
+func (isbsvc *InterStepBufferServiceStatus) MarkConfigured() {
 	isbsvc.MarkTrue(ISBSvcConditionConfigured)
-	isbsvc.SetPhase(ISBSvcPhasePending, "", generation)
+	isbsvc.SetPhase(ISBSvcPhasePending, "")
 }
 
 // MarkNotConfigured the InterStepBufferService has configuration.
-func (isbsvc *InterStepBufferServiceStatus) MarkNotConfigured(reason, message string, generation int64) {
+func (isbsvc *InterStepBufferServiceStatus) MarkNotConfigured(reason, message string) {
 	isbsvc.MarkFalse(ISBSvcConditionConfigured, reason, message)
-	isbsvc.SetPhase(ISBSvcPhaseFailed, message, generation)
+	isbsvc.SetPhase(ISBSvcPhaseFailed, message)
 }
 
 // MarkDeployed set the InterStepBufferService has been deployed.
-func (isbsvc *InterStepBufferServiceStatus) MarkDeployed(generation int64) {
+func (isbsvc *InterStepBufferServiceStatus) MarkDeployed() {
 	isbsvc.MarkTrue(ISBSvcConditionDeployed)
-	isbsvc.SetPhase(ISBSvcPhaseRunning, "", generation)
+	isbsvc.SetPhase(ISBSvcPhaseRunning, "")
 }
 
 // MarkDeployFailed set the InterStepBufferService deployment failed
-func (isbsvc *InterStepBufferServiceStatus) MarkDeployFailed(reason, message string, generation int64) {
+func (isbsvc *InterStepBufferServiceStatus) MarkDeployFailed(reason, message string) {
 	isbsvc.MarkFalse(ISBSvcConditionDeployed, reason, message)
-	isbsvc.SetPhase(ISBSvcPhaseFailed, message, generation)
+	isbsvc.SetPhase(ISBSvcPhaseFailed, message)
+}
+
+// SetObservedGeneration sets the Status ObservedGeneration
+func (isbsvc *InterStepBufferServiceStatus) SetObservedGeneration(value int64) {
+	isbsvc.ObservedGeneration = value
 }

@@ -4054,8 +4054,8 @@ BufferServiceConfig </a> </em>
 
 <p>
 
-ObservedGeneration stores the generation value observed when setting the
-current Phase. Default value is -1
+ObservedGeneration stores the generation value observed by the
+controller.
 </p>
 
 </td>
@@ -6627,8 +6627,8 @@ Kubernetes meta/v1.Time </a> </em>
 
 <p>
 
-ObservedGeneration stores the generation value observed when setting the
-current Phase. Default value is -1
+ObservedGeneration stores the generation value observed by the
+controller.
 </p>
 
 </td>

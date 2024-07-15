@@ -25,10 +25,9 @@ import (
 
 func Test_ISBSvcSetPhase(t *testing.T) {
 	s := InterStepBufferServiceStatus{}
-	s.SetPhase(ISBSvcPhasePending, "message", 123)
+	s.SetPhase(ISBSvcPhasePending, "message")
 	assert.Equal(t, "message", s.Message)
 	assert.Equal(t, ISBSvcPhasePending, s.Phase)
-	assert.EqualValues(t, 123, s.ObservedGeneration)
 }
 
 func Test_ISBSvcSetType(t *testing.T) {
@@ -39,20 +38,18 @@ func Test_ISBSvcSetType(t *testing.T) {
 
 func Test_ISBSvcInit(t *testing.T) {
 	s := InterStepBufferServiceStatus{}
-	s.Init()
+	s.InitConditions()
 	assert.Equal(t, 2, len(s.Conditions))
 	for _, c := range s.Conditions {
 		assert.Equal(t, metav1.ConditionUnknown, c.Status)
 	}
 	assert.Equal(t, ISBSvcPhasePending, s.Phase)
-	assert.EqualValues(t, -1, s.ObservedGeneration)
 }
 
 func Test_ISBSvcMarkStatus(t *testing.T) {
 	s := InterStepBufferServiceStatus{}
-	s.Init()
-	assert.EqualValues(t, -1, s.ObservedGeneration)
-	s.MarkNotConfigured("reason", "message", 1)
+	s.InitConditions()
+	s.MarkNotConfigured("reason", "message")
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionConfigured) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status)
@@ -61,15 +58,13 @@ func Test_ISBSvcMarkStatus(t *testing.T) {
 			assert.Equal(t, "message", c.Message)
 		}
 	}
-	assert.EqualValues(t, 1, s.ObservedGeneration)
-	s.MarkConfigured(2)
+	s.MarkConfigured()
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionConfigured) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
 		}
 	}
-	assert.EqualValues(t, 2, s.ObservedGeneration)
-	s.MarkDeployFailed("reason", "message", 3)
+	s.MarkDeployFailed("reason", "message")
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionDeployed) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status)
@@ -77,13 +72,11 @@ func Test_ISBSvcMarkStatus(t *testing.T) {
 			assert.Equal(t, "message", c.Message)
 		}
 	}
-	assert.EqualValues(t, 3, s.ObservedGeneration)
-	s.MarkDeployed(4)
+	s.MarkDeployed()
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionDeployed) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
 		}
 	}
-	assert.EqualValues(t, 4, s.ObservedGeneration)
 	assert.True(t, s.IsReady())
 }

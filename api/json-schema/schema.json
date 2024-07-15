@@ -18607,7 +18607,7 @@
           "type": "string"
         },
         "observedGeneration": {
-          "description": "ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1",
+          "description": "ObservedGeneration stores the generation value observed by the controller.",
           "format": "int64",
           "type": "integer"
         },
@@ -19292,7 +19292,7 @@
           "type": "string"
         },
         "observedGeneration": {
-          "description": "ObservedGeneration stores the generation value observed when setting the current Phase. Default value is -1",
+          "description": "ObservedGeneration stores the generation value observed by the controller.",
           "format": "int64",
           "type": "integer"
         },
