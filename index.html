@@ -2321,21 +2321,19 @@
 
 
 <h1 id="numaflow">Numaflow<a class="headerlink" href="#numaflow" title="Permanent link">&para;</a></h1>
-<p>Numaflow is a Kubernetes-native tool for running massively parallel stream processing. A Numaflow Pipeline is implemented
-as a Kubernetes custom resource and consists of one or more source, data processing, and sink vertices.</p>
-<p>Numaflow installs in a few minutes and is easier and cheaper to use for simple data processing applications than a full-featured
-stream processing platforms.</p>
+<p>Welcome to Numaflow! A Kubernetes-native, serverless platform for running scalable and reliable event-driven applications. Numaflow decouples event sources and sinks from the processing logic, allowing each component to independently auto-scale based on demand. With out-of-the-box sources and sinks, and built-in observability, developers can focus on their processing logic without worrying about event consumption, writing boilerplate code, or operational complexities. Each step of the pipeline can be written in any programming language, offering unparalleled flexibility in using the best programming language for each step and ease of using the languages you are most familiar with.</p>
 <h2 id="use-cases">Use Cases<a class="headerlink" href="#use-cases" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Real-time data analytics applications.</li>
-<li>Event driven applications such as anomaly detection, monitoring, and alerting.</li>
-<li>Streaming applications such as data instrumentation and data movement.</li>
+<li>Event driven applications: Process events as they happen, e.g., updating inventory and sending customer notifications in e-commerce.</li>
+<li>Real time analytics: Analyze data instantly, e.g., social media analytics, observability data processing.</li>
+<li>Inference on streaming data: Perform real-time predictions, e.g., anomaly detection.</li>
 <li>Workflows running in a streaming manner.</li>
 <li><a href="user-guide/use-cases/overview/">Learn more in our User Guide</a>.</li>
 </ul>
 <h2 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Kubernetes-native: If you know Kubernetes, you already know how to use Numaflow.</li>
+<li>Serverless: Focus on your code and let the system scale up and down based on demand.</li>
 <li>Language agnostic: Use your favorite programming language.</li>
 <li>Exactly-Once semantics: No input element is duplicated or lost even as pods are rescheduled or restarted.</li>
 <li>Auto-scaling with back-pressure: Each vertex automatically scales from zero to whatever is needed.</li>
