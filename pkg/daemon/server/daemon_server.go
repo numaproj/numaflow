@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -29,11 +30,14 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -45,6 +49,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
+)
+
+var (
+	lag = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "pipeline_lag",
+		Help: "pipeline processing lag metrics.",
+	})
 )
 
 type daemonServer struct {
@@ -180,6 +191,76 @@ func (ds *daemonServer) newGRPCServer(
 	return grpcServer, nil
 }
 
+func (ds *daemonServer) exposLagMetrics(ctx context.Context) {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// get general pipeline info
+			log := logging.FromContext(ctx)
+			pl := ds.pipeline
+
+			pl.Kind = v1alpha1.PipelineGroupVersionKind.Kind
+			pl.APIVersion = v1alpha1.SchemeGroupVersion.String()
+
+			// get pipeline source and sink vertex
+			var (
+				source = make(map[string]bool)
+				sink   = make(map[string]bool)
+			)
+			for _, vertex := range pl.Spec.Vertices {
+				if vertex.IsASource() {
+					source[vertex.Name] = true
+				} else if vertex.IsASink() {
+					sink[vertex.Name] = true
+				}
+			}
+
+			resp, err := ds.metaDataQuery.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{Pipeline: ds.pipeline.Name})
+			if err != nil {
+				log.Errorw(" failed to calculate lag for pipeline", zap.Error(err))
+			}
+
+			watermarks := resp.PipelineWatermarks
+
+			var (
+				minWM int64 = math.MaxInt64
+				maxWM int64 = math.MinInt64
+			)
+
+			for _, watermark := range watermarks {
+				// find the largest source vertex watermark
+				if _, ok := source[watermark.From]; ok {
+					for _, wm := range watermark.Watermarks {
+						if wm.GetValue() > maxWM {
+							maxWM = wm.GetValue()
+						}
+					}
+				}
+				// find the smallest sink vertex watermark
+				if _, ok := sink[watermark.To]; ok {
+					for _, wm := range watermark.Watermarks {
+						if wm.GetValue() < minWM {
+							minWM = wm.GetValue()
+						}
+					}
+				}
+			}
+			// if the data hasn't arrived the sink vertex
+			// set the lag to be -1
+			if minWM == -1 {
+				lag.Set(-1)
+			} else {
+				lag.Set(float64(maxWM - minWM))
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 // newHTTPServer returns the HTTP server to serve HTTP/HTTPS requests. This is implemented
 // using grpc-gateway as a proxy to the gRPC server.
 func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *tls.Config) *http.Server {
@@ -226,5 +307,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	} else {
 		log.Info("Not enabling pprof debug endpoints")
 	}
+
+	go ds.exposLagMetrics(ctx)
 	return &httpServer
 }
