@@ -145,6 +145,7 @@ const (
 	EnvServingAuthToken                 = "NUMAFLOW_SERVING_AUTH_TOKEN"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
+	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
 	PathVarRun                          = "/var/run/numaflow"
 	VertexMetricsPort                   = 2469
 	VertexMetricsPortName               = "metrics"
@@ -228,6 +229,9 @@ const (
 	// Callback annotation keys
 	CallbackEnabledKey = "numaflow.numaproj.io/callback"
 	CallbackURLKey     = "numaflow.numaproj.io/callback-url"
+
+	// Serving source
+	DefaultServingTTL = 24 * time.Hour
 )
 
 var (
