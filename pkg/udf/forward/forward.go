@@ -411,30 +411,35 @@ func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, data
 // response for all of them.
 func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, dataMessages []*isb.ReadMessage) []isb.ReadWriteMessagePair {
 	concurrentUDFProcessingStart := time.Now()
-	udfResults, err := isdf.opts.batchMapUdfApplier.ApplyBatchMap(ctx, dataMessages)
-	if err != nil {
-		// In case of an error received while processing the UDF call, we would do not handle partial failures,
-		// and hence would want to replay the whole batch currently.
-		// For achieving this, no-ack all the messages in the batch to force an early re-read from the ISB
-		// And then restart the numa container. Though we cannot enforce from the ISB that the same set of messages
-		// will be sent back everytime there is a replay.
-		//TODO(map-batch) - We do not have any retry mechanism currently in place. Do we want to add any before
-		// restarting?
-		// Also check why we do not have a retry mechanism in no-ack similar to ackFromBuffer
-		if ok, _ := isdf.IsShuttingDown(); ok {
-			isdf.opts.logger.Errorw("batchMapUDF.Apply, Stop called during udf processing", zap.Error(err))
-			metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
+	for {
+		udfResults, err := isdf.opts.batchMapUdfApplier.ApplyBatchMap(ctx, dataMessages)
+		if err != nil {
+			// In case of an error received while processing the UDF call, we would do not handle partial failures,
+			// and hence would want to replay the whole batch currently.
+			// For achieving this, no-ack all the messages in the batch to force an early re-read from the ISB
+			// And then restart the numa container. Though we cannot enforce from the ISB that the same set of messages
+			// will be sent back everytime there is a replay.
+			// TODO(map-batch) - We do not have any retry mechanism currently in place. Do we want to add any before
+			// restarting?
+			// Also check why we do not have a retry mechanism in no-ack similar to ackFromBuffer
+			if ok, _ := isdf.IsShuttingDown(); ok {
+				udfResultsErr := make([]isb.ReadWriteMessagePair, 0)
+				isdf.opts.logger.Errorw("batchMapUDF.Apply, Stop called during udf processing", zap.Error(err))
+				metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
+				udfResultsErr = append(udfResultsErr, isb.ReadWriteMessagePair{
+					ReadMessage:   nil,
+					WriteMessages: nil,
+					Err:           err,
+				})
+				return udfResultsErr
+			}
+			continue
 		}
-		readOffsets := make([]isb.Offset, 0)
-		for _, msg := range dataMessages {
-			readOffsets = append(readOffsets, msg.ReadOffset)
-		}
-		isdf.fromBufferPartition.NoAck(ctx, readOffsets)
-		isdf.opts.logger.Panic("Got an error while processing Batch Map UDF", zap.Error(err))
+		isdf.opts.logger.Debugw("batch map applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
+		metrics.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
+		return udfResults
 	}
-	isdf.opts.logger.Debugw("batch map applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
-	metrics.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
-	return udfResults
+
 }
 
 // streamMessage streams the data messages to the next step.
