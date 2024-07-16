@@ -298,7 +298,7 @@ mod tests {
         async fn retrieve_datum(&mut self, _id: &str) -> Result<Vec<Vec<u8>>, Error> {
             Ok(vec![])
         }
-        async fn is_available(&mut self) -> bool {
+        async fn ready(&mut self) -> bool {
             true
         }
     }

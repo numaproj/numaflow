@@ -88,7 +88,7 @@ impl super::Store for InMemoryStore {
         }
     }
 
-    async fn is_available(&mut self) -> bool {
+    async fn ready(&mut self) -> bool {
         true
     }
 }

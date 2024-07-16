@@ -111,10 +111,14 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				return fmt.Errorf("failed to query information of stream %q during buffer creating, %w", servingSourceStream, err)
 			}
 			if _, err := js.AddStream(&nats.StreamConfig{
-				Name:     servingSourceStream,
-				Subjects: []string{servingSourceStream}, // Use the stream name as the only subject
-				Storage:  nats.StorageType(v.GetInt("stream.storage")),
-				Replicas: v.GetInt("stream.replicas"),
+				Name:      servingSourceStream,
+				Subjects:  []string{servingSourceStream}, // Use the stream name as the only subject
+				Storage:   nats.StorageType(v.GetInt("stream.storage")),
+				Replicas:  v.GetInt("stream.replicas"),
+				Retention: nats.WorkQueuePolicy, // we can delete the message immediately after it's consumed and acked
+				MaxMsgs:   -1,                   // unlimited messages
+				MaxBytes:  -1,                   // unlimited bytes
+				MaxAge:    -1,                   // unlimited age
 			}); err != nil {
 				return fmt.Errorf("failed to create serving source stream %q, %w", servingSourceStream, err)
 			}

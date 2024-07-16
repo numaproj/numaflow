@@ -221,7 +221,7 @@ async fn livez<T: Send + Sync + Clone + Store + 'static>(
 async fn readyz<T: Send + Sync + Clone + Store + 'static>(
     State((mut state, context)): State<(CallbackState<T>, Context)>,
 ) -> impl IntoResponse {
-    if state.is_available().await && context.get_stream(&config().jetstream.stream).await.is_ok() {
+    if state.ready().await && context.get_stream(&config().jetstream.stream).await.is_ok() {
         StatusCode::NO_CONTENT
     } else {
         StatusCode::INTERNAL_SERVER_ERROR

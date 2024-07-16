@@ -179,7 +179,7 @@ impl super::Store for RedisConnection {
     }
 
     // Check if the Redis connection is healthy
-    async fn is_available(&mut self) -> bool {
+    async fn ready(&mut self) -> bool {
         let mut conn = self.conn_manager.clone();
         match redis::cmd("PING").query_async::<_, String>(&mut conn).await {
             Ok(response) => response == "PONG",
