@@ -191,7 +191,7 @@ func (ds *daemonServer) newGRPCServer(
 	return grpcServer, nil
 }
 
-func (ds *daemonServer) exposLagMetrics(ctx context.Context) {
+func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -308,6 +308,6 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 		log.Info("Not enabling pprof debug endpoints")
 	}
 
-	go ds.exposLagMetrics(ctx)
+	go ds.exposeLagMetrics(ctx)
 	return &httpServer
 }
