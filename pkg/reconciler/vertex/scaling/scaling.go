@@ -327,7 +327,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		// When scaling up, need to check back pressure
 		directPressure, downstreamPressure := s.hasBackPressure(*pl, *vertex)
 		if directPressure {
-			if current > min {
+			if current > min && current > 1 { // Scale down but not to 0
 				log.Infof("Vertex %s has direct back pressure from connected vertices, decreasing one replica.", key)
 				return s.patchVertexReplicas(ctx, vertex, current-1)
 			} else {
