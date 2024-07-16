@@ -31,9 +31,15 @@ import (
 	"github.com/numaproj/numaflow"
 )
 
-// MapModeMetadata field is used to indicate which map mode is enabled
-// If none is set, we consider unary map as default
-const MapModeMetadata = "MAP_MODE"
+// Metadata keys used in the server info file
+const (
+	// MultiProcMetadata is the field used to indicate that MultiProc map mode is enabled
+	// The value contains the number of servers spawned.
+	MultiProcMetadata = "MULTIPROC"
+	// MapModeMetadata field is used to indicate which map mode is enabled
+	// If none is set, we consider unary map as default
+	MapModeMetadata = "MAP_MODE"
+)
 
 type MapMode string
 

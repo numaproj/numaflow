@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc/resolver"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
@@ -99,9 +98,7 @@ func buildConnAddrs(numServers int) []string {
 
 // RegMultiProcResolver  is used to populate the connection properties based
 // on multiprocessing TCP or UDS connection
-func RegMultiProcResolver(svrInfo *info.ServerInfo) error {
-	// Extract the server ports from the server info file and convert it to a list
-	numServers, _ := strconv.Atoi(svrInfo.Metadata["MULTIPROC"])
+func RegMultiProcResolver(numServers int) error {
 	log.Println("Multiprocessing Servers :", numServers)
 	conn := buildConnAddrs(numServers)
 	res := newMultiProcResolverBuilder(conn)
