@@ -633,7 +633,7 @@ message InterStepBufferServiceStatus {
   optional string type = 5;
 
   // ObservedGeneration stores the generation value observed by the controller.
-  optional int64 observedGeneration = 9;
+  optional int64 observedGeneration = 6;
 }
 
 message JetStreamBufferService {

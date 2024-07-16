@@ -135,6 +135,9 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		if err != nil {
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
 		}
+
+		pl.Status.SetObservedGeneration(pl.Generation)
+
 		return result, err
 	}
 
