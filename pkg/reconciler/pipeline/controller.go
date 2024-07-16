@@ -161,6 +161,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	if err != nil {
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
 	}
+
 	return result, err
 }
 
@@ -332,6 +333,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 
 	pl.Status.MarkDeployed()
 	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
+	pl.Status.SetObservedGeneration(pl.Generation)
 	return ctrl.Result{}, nil
 }
 
