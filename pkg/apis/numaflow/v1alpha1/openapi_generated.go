@@ -3707,6 +3707,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallbac
 						},
 					},
 				},
+				Required: []string{"msgIDHeaderKey", "store"},
 			},
 		},
 		Dependencies: []string{

@@ -1176,11 +1176,9 @@ message ServingSource {
   optional bool service = 2;
 
   // The header key from which the message id will be extracted
-  // +optional
   optional string msgIDHeaderKey = 3;
 
   // Persistent store for the callbacks for serving and tracking
-  // +optional
   optional ServingStore store = 4;
 }
 

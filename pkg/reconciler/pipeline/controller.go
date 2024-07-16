@@ -294,7 +294,6 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 			bks = append(bks, k)
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
-		// Why do we always create side input store?
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
 		args = append(args, fmt.Sprintf("--serving-source-stream=%s", pl.GetServingSourceStreamName()))
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")

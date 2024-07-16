@@ -7609,7 +7609,6 @@ Whether to create a ClusterIP Service
 
 <td>
 
-<em>(Optional)</em>
 <p>
 
 The header key from which the message id will be extracted
@@ -7630,7 +7629,6 @@ The header key from which the message id will be extracted
 
 <td>
 
-<em>(Optional)</em>
 <p>
 
 Persistent store for the callbacks for serving and tracking

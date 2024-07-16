@@ -19476,6 +19476,10 @@
     "io.numaproj.numaflow.v1alpha1.ServingSource": {
       "description": "ServingSource is the HTTP endpoint for Numaflow.",
       "type": "object",
+      "required": [
+        "msgIDHeaderKey",
+        "store"
+      ],
       "properties": {
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"

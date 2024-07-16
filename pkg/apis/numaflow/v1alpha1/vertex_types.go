@@ -132,6 +132,7 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
 		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
 	}
+	// serving source uses the same port as the http source, because both can't be configured at the same time
 	if x := v.Spec.Source; x != nil && x.Serving != nil && x.Serving.Service {
 		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
 	}

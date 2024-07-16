@@ -19506,6 +19506,10 @@
           "description": "Persistent store for the callbacks for serving and tracking"
         }
       },
+      "required": [
+        "msgIDHeaderKey",
+        "store"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingStore": {

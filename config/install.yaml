@@ -10784,6 +10784,9 @@ spec:
                               required:
                               - url
                               type: object
+                          required:
+                          - msgIDHeaderKey
+                          - store
                           type: object
                         transformer:
                           properties:
@@ -16190,6 +16193,9 @@ spec:
                         required:
                         - url
                         type: object
+                    required:
+                    - msgIDHeaderKey
+                    - store
                     type: object
                   transformer:
                     properties:
