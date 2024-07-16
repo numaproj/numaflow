@@ -38,9 +38,6 @@ spec:
             imagePullPolicy: Always
     - name: python-split
       partitions: 3
-      metadata:
-        annotations:
-          numaflow.numaproj.io/map-stream: "true"
       limits:
         readBatchSize: 1
       scale:
@@ -67,9 +64,6 @@ spec:
             imagePullPolicy: Always
     - name: java-split
       partitions: 3
-      metadata:
-        annotations:
-          numaflow.numaproj.io/map-stream: "true"
       limits:
         readBatchSize: 1
       scale:

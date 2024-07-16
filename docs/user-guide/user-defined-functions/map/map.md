@@ -32,8 +32,7 @@ spec:
 In cases the map function generates more than one output (e.g., flat map), the UDF can be
 configured to run in a streaming mode instead of batching, which is the default mode.
 In streaming mode, the messages will be pushed to the downstream vertices once generated
-instead of in a batch at the end. The streaming mode can be enabled by setting the annotation
-`numaflow.numaproj.io/map-stream` to `true` in the vertex spec.
+instead of in a batch at the end.
 
 Note that to maintain data orderliness, we restrict the read batch size to be `1`.
 
@@ -41,9 +40,6 @@ Note that to maintain data orderliness, we restrict the read batch size to be `1
 spec:
   vertices:
     - name: my-vertex
-      metadata:
-        annotations:
-          numaflow.numaproj.io/map-stream: "true"
       limits:
         # mapstreaming won't work if readBatchSize is != 1      
         readBatchSize: 1
