@@ -69,12 +69,15 @@ func NewISBSvcCreateCommand() *cobra.Command {
 			ctx := logging.WithLogger(context.Background(), logger)
 			switch v1alpha1.ISBSvcType(isbSvcType) {
 			case v1alpha1.ISBSvcTypeRedis:
-				isbsClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
+				rsClient := redisclient.NewInClusterRedisClient()
+				defer rsClient.Close()
+				isbsClient = isbsvc.NewISBRedisSvc(rsClient)
 			case v1alpha1.ISBSvcTypeJetStream:
 				client, err := jsclient.NewNATSClient(ctx)
 				if err != nil {
 					return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 				}
+				defer client.Close()
 				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName, client)
 				if err != nil {
 					logger.Errorw("Failed to get a ISB Service client.", zap.Error(err))
@@ -91,6 +94,7 @@ func NewISBSvcCreateCommand() *cobra.Command {
 				return err
 			}
 			logger.Info("Created buffers, buckets and side inputs store successfully")
+
 			return nil
 		},
 	}

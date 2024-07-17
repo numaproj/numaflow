@@ -21,6 +21,7 @@ func TestJetstreamSvc_CreationDeletionValidation(t *testing.T) {
 	defer conn.Close()
 
 	client := nats2.NewTestClient(t, s.ClientURL())
+	defer client.Close()
 
 	isbSvc, err := NewISBJetStreamSvc("testPipeline", client)
 	assert.NoError(t, err)
@@ -50,6 +51,7 @@ func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 	defer conn.Close()
 
 	client := nats2.NewTestClient(t, s.ClientURL())
+	defer client.Close()
 
 	jsCtx, err := client.JetStreamContext()
 	assert.NoError(t, err)
@@ -88,6 +90,7 @@ func TestJetstreamSvc_CreateWatermarkStores(t *testing.T) {
 	defer conn.Close()
 
 	client := nats2.NewTestClient(t, s.ClientURL())
+	defer client.Close()
 
 	isbSvc, err := NewISBJetStreamSvc("testPipeline", client)
 	assert.NoError(t, err)
