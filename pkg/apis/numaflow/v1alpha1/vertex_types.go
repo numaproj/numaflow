@@ -139,6 +139,10 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	return svcs
 }
 
+func (v Vertex) GetServingSourceStreamName() string {
+	return fmt.Sprintf("%s-%s-serving-source", v.Spec.PipelineName, v.Spec.Name)
+}
+
 func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{

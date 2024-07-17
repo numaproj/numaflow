@@ -35,11 +35,11 @@ import (
 func NewISBSvcValidateCommand() *cobra.Command {
 
 	var (
-		isbSvcType          string
-		buffers             []string
-		buckets             []string
-		sideInputsStore     string
-		servingSourceStream string
+		isbSvcType           string
+		buffers              []string
+		buckets              []string
+		sideInputsStore      string
+		servingSourceStreams []string
 	)
 
 	command := &cobra.Command{
@@ -68,7 +68,7 @@ func NewISBSvcValidateCommand() *cobra.Command {
 				return fmt.Errorf("unsupported isb service type")
 			}
 			_ = wait.ExponentialBackoffWithContext(ctx, sharedutil.DefaultRetryBackoff, func(_ context.Context) (bool, error) {
-				if err = isbsClient.ValidateBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, servingSourceStream); err != nil {
+				if err = isbsClient.ValidateBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, servingSourceStreams); err != nil {
 					logger.Infow("Buffers, buckets and side inputs store might have not been created yet, will retry if the limit is not reached", zap.Error(err))
 					return false, nil
 				}
@@ -86,7 +86,7 @@ func NewISBSvcValidateCommand() *cobra.Command {
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to validate") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to validate") // --buckets=xxa,xxb --buckets=xxc
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
-	command.Flags().StringVar(&servingSourceStream, "serving-source-stream", "", "Name of the serving source stream")
+	command.Flags().StringSliceVar(&servingSourceStreams, "serving-source-streams", []string{}, "Serving source streams to validate") // --serving-source-streams=a,b, --serving-source-streams=c
 
 	return command
 }

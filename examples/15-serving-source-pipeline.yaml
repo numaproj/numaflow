@@ -9,7 +9,7 @@ spec:
         annotations:
           numaflow.numaproj.io/callback: "true"
   vertices:
-    - name: in
+    - name: in-one
       scale:
         min: 1
       source:
@@ -18,10 +18,15 @@ spec:
           msgIDHeaderKey: "X-Request-ID"
           store:
             url: "redis://redis:6379"
-          auth:
-            token:
-              name: http-source-token
-              key: my-token
+    - name: in-two
+      scale:
+        min: 1
+      source:
+        serving:
+          service: true
+          msgIDHeaderKey: "X-Request-ID"
+          store:
+            url: "redis://redis:6379"
     - name: cat
       scale:
         min: 1
@@ -34,7 +39,9 @@ spec:
       sink:
         log: {}
   edges:
-    - from: in
+    - from: in-one
+      to: cat
+    - from: in-two
       to: cat
     - from: cat
       to: out
