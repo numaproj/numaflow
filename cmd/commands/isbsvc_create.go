@@ -28,6 +28,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
@@ -70,7 +71,11 @@ func NewISBSvcCreateCommand() *cobra.Command {
 			case v1alpha1.ISBSvcTypeRedis:
 				isbsClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
 			case v1alpha1.ISBSvcTypeJetStream:
-				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName)
+				client, err := jsclient.NewNATSClient(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
+				}
+				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName, client)
 				if err != nil {
 					logger.Errorw("Failed to get a ISB Service client.", zap.Error(err))
 					return err
