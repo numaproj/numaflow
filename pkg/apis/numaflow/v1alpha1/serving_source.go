@@ -1,5 +1,9 @@
 package v1alpha1
 
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 // ServingSource is the HTTP endpoint for Numaflow.
 type ServingSource struct {
 	// +optional
@@ -17,5 +21,16 @@ type ServingSource struct {
 type ServingStore struct {
 	// URL of the persistent store to write the callbacks
 	URL *string `json:"url" protobuf:"bytes,1,opt,name=url"`
+	// TTL for the data in the store and tracker
+	// +optional
+	TTL *metav1.Duration `json:"ttl,omitempty" protobuf:"bytes,2,opt,name=ttl"`
 	// TODO auth
+}
+
+// GetTTL returns the TTL for the data in the store. If the TTL is not set, it returns 24 hours.
+func (ss *ServingStore) GetTTL() *metav1.Duration {
+	if ss == nil {
+		return &metav1.Duration{Duration: DefaultServingTTL}
+	}
+	return ss.TTL
 }

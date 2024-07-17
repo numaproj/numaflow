@@ -19525,6 +19525,10 @@
     "io.numaproj.numaflow.v1alpha1.ServingStore": {
       "description": "ServingStore to track and store data and metadata for tracking and serving.",
       "properties": {
+        "ttl": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "TTL for the data in the store and tracker"
+        },
         "url": {
           "description": "URL of the persistent store to write the callbacks",
           "type": "string"

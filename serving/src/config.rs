@@ -14,6 +14,7 @@ const ENV_PREFIX: &str = "NUMAFLOW_SERVING";
 const ENV_NUMAFLOW_SERVING_SOURCE_OBJECT: &str = "NUMAFLOW_SERVING_SOURCE_OBJECT";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM: &str = "NUMAFLOW_SERVING_JETSTREAM_STREAM";
+const ENV_NUMAFLOW_SERVING_STORE_TTL: &str = "NUMAFLOW_SERVING_STORE_TTL";
 
 pub fn config() -> &'static Settings {
     static CONF: OnceLock<Settings> = OnceLock::new();
@@ -46,6 +47,7 @@ pub struct RedisConfig {
     pub max_tasks: usize,
     pub retries: usize,
     pub retries_duration_millis: u16,
+    pub ttl_secs: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,6 +126,17 @@ impl Settings {
 
                 // Update redis.addr from source_spec, currently we only support redis as callback storage
                 settings.redis.addr = source_spec.callback_storage.url;
+
+                // Update redis.ttl_secs from environment variable
+                settings.redis.ttl_secs = match env::var(ENV_NUMAFLOW_SERVING_STORE_TTL) {
+                    Ok(ttl_secs) => Some(ttl_secs.parse().map_err(|e| {
+                        format!(
+                            "parsing NUMAFLOW_SERVING_STORE_TTL: expected u32, got {:?}",
+                            e
+                        )
+                    })?),
+                    Err(_) => None,
+                };
 
                 Ok(settings)
             }

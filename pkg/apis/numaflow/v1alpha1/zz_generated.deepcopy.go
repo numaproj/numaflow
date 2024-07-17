@@ -1889,6 +1889,11 @@ func (in *ServingStore) DeepCopyInto(out *ServingStore) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.TTL != nil {
+		in, out := &in.TTL, &out.TTL
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	return
 }
 

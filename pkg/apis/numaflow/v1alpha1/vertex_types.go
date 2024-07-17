@@ -392,6 +392,12 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 		},
 	})
 
+	// set the serving store TTL in the environment
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
+		Name:  EnvServingStoreTTL,
+		Value: strconv.Itoa(int(servingSource.Store.GetTTL().Seconds())),
+	})
+
 	// if auth is configured, set the auth token in the environment
 	if servingSource.Auth != nil && servingSource.Auth.Token != nil {
 		servingContainer.Env = append(servingContainer.Env,

@@ -10782,6 +10782,8 @@ spec:
                               type: boolean
                             store:
                               properties:
+                                ttl:
+                                  type: string
                                 url:
                                   type: string
                               required:
@@ -16194,6 +16196,8 @@ spec:
                         type: boolean
                       store:
                         properties:
+                          ttl:
+                            type: string
                           url:
                             type: string
                         required:

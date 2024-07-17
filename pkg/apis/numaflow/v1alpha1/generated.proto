@@ -1192,6 +1192,10 @@ message ServingSource {
 message ServingStore {
   // URL of the persistent store to write the callbacks
   optional string url = 1;
+
+  // TTL for the data in the store and tracker
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
 }
 
 // SessionWindow describes a session window

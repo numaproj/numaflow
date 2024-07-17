@@ -7741,6 +7741,27 @@ URL of the persistent store to write the callbacks
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>ttl</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TTL for the data in the store and tracker
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

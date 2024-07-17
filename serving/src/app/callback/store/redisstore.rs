@@ -15,6 +15,7 @@ use super::PayloadToSave;
 
 const LPUSH: &str = "LPUSH";
 const LRANGE: &str = "LRANGE";
+const EXPIRE: &str = "EXPIRE";
 
 // Handle to the Redis actor.
 #[derive(Clone)]
@@ -68,10 +69,16 @@ impl RedisConnection {
         key: &str,
         val: &Vec<u8>,
     ) -> Result<(), RedisError> {
-        conn_manager
-            .send_packed_command(redis::cmd(LPUSH).arg(key).arg(val))
-            .await
-            .map(|_| ())
+        let mut pipe = redis::pipe();
+        pipe.cmd(LPUSH).arg(key).arg(val);
+
+        // if the ttl is configured, add the EXPIRE command to the pipeline
+        if let Some(ttl) = config().redis.ttl_secs {
+            pipe.cmd(EXPIRE).arg(key).arg(ttl);
+        }
+
+        // Execute the pipeline
+        pipe.query_async(conn_manager).await.map(|_: ()| ())
     }
 
     // write to Redis with retries
@@ -191,9 +198,9 @@ impl super::Store for RedisConnection {
 #[cfg(feature = "redis-tests")]
 #[cfg(test)]
 mod tests {
-    use axum::body::Bytes;
-
     use crate::app::callback::store::LocalStore;
+    use axum::body::Bytes;
+    use redis::AsyncCommands;
 
     use super::*;
 
@@ -263,5 +270,42 @@ mod tests {
         // Test Redis retrieve datum error
         let result = redis_conn.retrieve_datum("non_existent_key").await;
         assert!(matches!(result, Err(Error::StoreRead(_))));
+    }
+
+    #[tokio::test]
+    async fn test_redis_ttl() {
+        let redis_connection = RedisConnection::new("redis://127.0.0.1:6379", 10)
+            .await
+            .expect("Failed to connect to Redis");
+
+        let key = uuid::Uuid::new_v4().to_string();
+        let value = Arc::new(CallbackRequest {
+            id: String::from("test-redis-ttl"),
+            vertex: String::from("vertex"),
+            cb_time: 1234,
+            from_vertex: String::from("next_vertex"),
+            tags: None,
+        });
+
+        // Save with TTL of 1 second
+        let mut conn_manager = redis_connection.conn_manager.clone();
+        RedisConnection::write_to_redis(
+            &mut conn_manager,
+            &key,
+            &serde_json::to_vec(&*value).unwrap(),
+        )
+        .await
+        .expect("Failed to write to Redis");
+
+        let exists: bool = conn_manager
+            .exists(&key)
+            .await
+            .expect("Failed to check existence immediately");
+
+        // if the key exists, the TTL should be set to 1 second
+        if exists {
+            let ttl: isize = conn_manager.ttl(&key).await.expect("Failed to check TTL");
+            assert_eq!(ttl, 1, "TTL should be set to 1 second");
+        }
     }
 }
