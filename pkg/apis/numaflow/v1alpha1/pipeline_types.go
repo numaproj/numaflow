@@ -47,6 +47,10 @@ const (
 	// PipelineConditionDeployed has the status True when the Pipeline
 	// has its Vertices and Jobs created.
 	PipelineConditionDeployed ConditionType = "Deployed"
+
+	// PipelineConditionDaemonServiceHealthy has the status True when the daemon service is healthy.
+	PipelineConditionDaemonServiceHealthy    ConditionType = "DaemonServiceHealthy"
+	PipelineConditionSideInputServiceHealthy ConditionType = "SideInputManagerHealthy"
 )
 
 // +genclient
@@ -723,6 +727,16 @@ func (pls *PipelineStatus) IsHealthy() bool {
 	default:
 		return false
 	}
+}
+
+// MarkServiceNotHealthy marks the Daemon Service as not healthy with the given reason and message.
+func (pls *PipelineStatus) MarkServiceNotHealthy(conditionType ConditionType, reason, message string) {
+	pls.MarkFalse(conditionType, reason, message)
+}
+
+// MarkServiceHealthy marks the Daemon or sideinput Service as healthy with the given reason and message.
+func (pls *PipelineStatus) MarkServiceHealthy(conditionType ConditionType, reason, message string) {
+	pls.MarkTrueWithReason(conditionType, reason, message)
 }
 
 // +kubebuilder:object:root=true

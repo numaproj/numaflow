@@ -37,6 +37,9 @@ const (
 	VertexPhaseRunning   VertexPhase = "Running"
 	VertexPhaseSucceeded VertexPhase = "Succeeded"
 	VertexPhaseFailed    VertexPhase = "Failed"
+
+	// VertexConditionPodHealthy has the status True when the child resources is healthy.
+	VertexConditionPodHealthy ConditionType = "PodHealthy"
 )
 
 type VertexType string
@@ -825,6 +828,7 @@ type VertexStatus struct {
 	Replicas     uint32      `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
 	Selector     string      `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
 	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,4,opt,name=lastScaledAt"`
+	Status       `json:",inline" protobuf:"bytes,7,opt,name=status"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
@@ -839,6 +843,16 @@ func (vs *VertexStatus) MarkPhaseFailed(reason, message string) {
 
 func (vs *VertexStatus) MarkPhaseRunning() {
 	vs.MarkPhase(VertexPhaseRunning, "", "")
+}
+
+// MarkPodNotHealthy marks the child resource as not healthy with the given reason and message.
+func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
+	vs.MarkFalse(VertexConditionPodHealthy, reason, message)
+}
+
+// MarkPodHealthy marks the child resource as healthy with the given reason and message.
+func (vs *VertexStatus) MarkPodHealthy(reason, message string) {
+	vs.MarkTrueWithReason(VertexConditionPodHealthy, reason, message)
 }
 
 // +kubebuilder:object:root=true

@@ -14,22 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package v1alpha1
 
 import (
@@ -51,6 +35,9 @@ const (
 	// ISBSvcConditionDeployed has the status True when the InterStepBufferService
 	// has its RestfulSet/Deployment as well as services created.
 	ISBSvcConditionDeployed ConditionType = "Deployed"
+
+	// ISBSvcConditionChildResourceHealthy has the status True when the child resources is healthy.
+	ISBSvcConditionChildResourceHealthy ConditionType = "ChildResourcesHealthy"
 )
 
 type ISBSvcType string
@@ -159,4 +146,14 @@ func (isbsvc *InterStepBufferServiceStatus) IsHealthy() bool {
 		return false
 	}
 	return isbsvc.IsReady()
+}
+
+// MarkChildNotHealthy marks the child resources as not healthy
+func (isbsvc *InterStepBufferServiceStatus) MarkChildNotHealthy(reason, message string) {
+	isbsvc.MarkFalse(ISBSvcConditionChildResourceHealthy, reason, message)
+}
+
+// MarkChildHealthy marks the child resources as healthy
+func (isbsvc *InterStepBufferServiceStatus) MarkChildHealthy(reason, message string) {
+	isbsvc.MarkTrueWithReason(ISBSvcConditionChildResourceHealthy, reason, message)
 }
