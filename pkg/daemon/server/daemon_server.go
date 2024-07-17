@@ -79,7 +79,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 			return err
 		}
 		defer natsClientPool.CloseAll()
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithJetStreamClient(natsClientPool.NextAvailableClient()))
+		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, natsClientPool.NextAvailableClient())
 		if err != nil {
 			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 			return err
