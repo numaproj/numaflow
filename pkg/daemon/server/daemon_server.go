@@ -52,9 +52,10 @@ import (
 )
 
 var (
-	lag = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "pipeline_lag_milliseconds",
-		Help: "pipeline processing lag metrics in milliseconds.",
+	pipelineProcessingLag = promauto.NewGauge(prometheus.GaugeOpts{
+		Name:      "pipeline_lag_milliseconds",
+		Help:      "pipeline processing lag metrics in milliseconds.",
+		Subsystem: "daemon",
 	})
 )
 
@@ -192,35 +193,31 @@ func (ds *daemonServer) newGRPCServer(
 }
 
 func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
-	ticker := time.NewTicker(50 * time.Millisecond)
+	ticker := time.NewTicker(20 * time.Second)
 	defer ticker.Stop()
+
+	log := logging.FromContext(ctx)
+
+	var (
+		source = make(map[string]bool)
+		sink   = make(map[string]bool)
+	)
+	for _, vertex := range ds.pipeline.Spec.Vertices {
+		if vertex.IsASource() {
+			source[vertex.Name] = true
+		} else if vertex.IsASink() {
+			sink[vertex.Name] = true
+		}
+	}
 
 	for {
 		select {
 		case <-ticker.C:
-			// get general pipeline info
-			log := logging.FromContext(ctx)
-			pl := ds.pipeline
-
-			pl.Kind = v1alpha1.PipelineGroupVersionKind.Kind
-			pl.APIVersion = v1alpha1.SchemeGroupVersion.String()
-
-			// get pipeline source and sink vertex
-			var (
-				source = make(map[string]bool)
-				sink   = make(map[string]bool)
-			)
-			for _, vertex := range pl.Spec.Vertices {
-				if vertex.IsASource() {
-					source[vertex.Name] = true
-				} else if vertex.IsASink() {
-					sink[vertex.Name] = true
-				}
-			}
 
 			resp, err := ds.metaDataQuery.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{Pipeline: ds.pipeline.Name})
 			if err != nil {
 				log.Errorw(" failed to calculate lag for pipeline", zap.Error(err))
+				continue
 			}
 
 			watermarks := resp.PipelineWatermarks
@@ -251,9 +248,9 @@ func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
 			// if the data hasn't arrived the sink vertex
 			// set the lag to be -1
 			if minWM == -1 {
-				lag.Set(-1)
+				pipelineProcessingLag.Set(-1)
 			} else {
-				lag.Set(float64(maxWM - minWM))
+				pipelineProcessingLag.Set(float64(maxWM - minWM))
 			}
 		case <-ctx.Done():
 			return
