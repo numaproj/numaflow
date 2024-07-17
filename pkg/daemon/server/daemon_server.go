@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"math"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -30,14 +29,11 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -49,14 +45,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-)
-
-var (
-	pipelineProcessingLag = promauto.NewGauge(prometheus.GaugeOpts{
-		Name:      "pipeline_lag_milliseconds",
-		Help:      "pipeline processing lag metrics in milliseconds.",
-		Subsystem: "daemon",
-	})
 )
 
 type daemonServer struct {
@@ -190,72 +178,6 @@ func (ds *daemonServer) newGRPCServer(
 	daemon.RegisterDaemonServiceServer(grpcServer, pipelineMetadataQuery)
 	ds.metaDataQuery = pipelineMetadataQuery
 	return grpcServer, nil
-}
-
-func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
-	ticker := time.NewTicker(20 * time.Second)
-	defer ticker.Stop()
-
-	log := logging.FromContext(ctx)
-
-	var (
-		source = make(map[string]bool)
-		sink   = make(map[string]bool)
-	)
-	for _, vertex := range ds.pipeline.Spec.Vertices {
-		if vertex.IsASource() {
-			source[vertex.Name] = true
-		} else if vertex.IsASink() {
-			sink[vertex.Name] = true
-		}
-	}
-
-	for {
-		select {
-		case <-ticker.C:
-
-			resp, err := ds.metaDataQuery.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{Pipeline: ds.pipeline.Name})
-			if err != nil {
-				log.Errorw(" failed to calculate lag for pipeline", zap.Error(err))
-				continue
-			}
-
-			watermarks := resp.PipelineWatermarks
-
-			var (
-				minWM int64 = math.MaxInt64
-				maxWM int64 = math.MinInt64
-			)
-
-			for _, watermark := range watermarks {
-				// find the largest source vertex watermark
-				if _, ok := source[watermark.From]; ok {
-					for _, wm := range watermark.Watermarks {
-						if wm.GetValue() > maxWM {
-							maxWM = wm.GetValue()
-						}
-					}
-				}
-				// find the smallest sink vertex watermark
-				if _, ok := sink[watermark.To]; ok {
-					for _, wm := range watermark.Watermarks {
-						if wm.GetValue() < minWM {
-							minWM = wm.GetValue()
-						}
-					}
-				}
-			}
-			// if the data hasn't arrived the sink vertex
-			// set the lag to be -1
-			if minWM == -1 {
-				pipelineProcessingLag.Set(-1)
-			} else {
-				pipelineProcessingLag.Set(float64(maxWM - minWM))
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
 }
 
 // newHTTPServer returns the HTTP server to serve HTTP/HTTPS requests. This is implemented
