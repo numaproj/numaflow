@@ -20,6 +20,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/metrics"
+
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/prometheus/client_golang/prometheus"
@@ -28,11 +30,11 @@ import (
 )
 
 var (
-	pipelineProcessingLag = promauto.NewGauge(prometheus.GaugeOpts{
+	pipelineProcessingLag = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name:      "pipeline_lag_milliseconds",
 		Help:      "pipeline processing lag metrics in milliseconds.",
 		Subsystem: "daemon",
-	})
+	}, []string{metrics.LabelPipeline})
 )
 
 func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
@@ -59,7 +61,7 @@ func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
 
 			resp, err := ds.metaDataQuery.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{Pipeline: ds.pipeline.Name})
 			if err != nil {
-				log.Errorw(" failed to calculate lag for pipeline", zap.Error(err))
+				log.Errorw("Failed to calculate processing lag for pipeline", zap.Error(err))
 				continue
 			}
 
@@ -90,10 +92,10 @@ func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
 			}
 			// if the data hasn't arrived the sink vertex
 			// set the lag to be -1
-			if minWM == -1 {
-				pipelineProcessingLag.Set(-1)
+			if minWM < 0 {
+				pipelineProcessingLag.WithLabelValues(metrics.LabelPipeline).Set(-1)
 			} else {
-				pipelineProcessingLag.Set(float64(maxWM - minWM))
+				pipelineProcessingLag.WithLabelValues(metrics.LabelPipeline).Set(float64(maxWM - minWM))
 			}
 		case <-ctx.Done():
 			return
