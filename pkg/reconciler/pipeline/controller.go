@@ -302,7 +302,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc creating job, err: %w", err)
 		}
-		log.Infow("Created a job successfully for ISB Svc creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("Serving streams", pl.GetServingSourceStreamNames()))
+		log.Infow("Created a job successfully for ISB Svc creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("servingStreams", pl.GetServingSourceStreamNames()))
 	}
 
 	if len(oldBuffers) > 0 || len(oldBuckets) > 0 {
