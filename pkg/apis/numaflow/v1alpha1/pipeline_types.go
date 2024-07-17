@@ -205,6 +205,10 @@ func (p Pipeline) GetSideInputsStoreName() string {
 	return fmt.Sprintf("%s-%s", p.Namespace, p.Name)
 }
 
+func (p Pipeline) GetServingSourceStreamName() string {
+	return fmt.Sprintf("%s-serving-source", p.Name)
+}
+
 func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {
 	commonEnvVars := []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},

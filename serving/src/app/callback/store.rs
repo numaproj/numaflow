@@ -31,4 +31,5 @@ pub(crate) trait LocalStore {
         id: &str,
     ) -> Result<Vec<Arc<CallbackRequest>>, crate::Error>;
     async fn retrieve_datum(&mut self, id: &str) -> Result<Vec<Vec<u8>>, crate::Error>;
+    async fn ready(&mut self) -> bool;
 }

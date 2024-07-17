@@ -87,6 +87,10 @@ impl super::Store for InMemoryStore {
             None => Err(Error::StoreRead(format!("No entry found for id: {}", id))),
         }
     }
+
+    async fn ready(&mut self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]

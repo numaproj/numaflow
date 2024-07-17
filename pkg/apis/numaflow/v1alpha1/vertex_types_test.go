@@ -417,6 +417,52 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 		assert.Equal(t, CtrInitSideInputs, s.InitContainers[1].Name)
 	})
+
+	t.Run("test serving source", func(t *testing.T) {
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.Source = &Source{
+			Serving: &ServingSource{},
+		}
+		s, err := testObj.GetPodSpec(req)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(s.Containers))
+		assert.Equal(t, CtrMain, s.Containers[0].Name)
+		assert.Equal(t, testFlowImage, s.Containers[0].Image)
+		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
+		var envNames []string
+		for _, e := range s.Containers[0].Env {
+			envNames = append(envNames, e.Name)
+		}
+		assert.Contains(t, envNames, "test-env")
+		assert.Contains(t, envNames, EnvNamespace)
+		assert.Contains(t, envNames, EnvPod)
+		assert.Contains(t, envNames, EnvPipelineName)
+		assert.Contains(t, envNames, EnvVertexName)
+		assert.Contains(t, envNames, EnvVertexObject)
+		assert.Contains(t, envNames, EnvReplica)
+		assert.Contains(t, s.Containers[0].Args, "processor")
+		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
+		assert.Equal(t, 1, len(s.InitContainers))
+		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+
+		assert.Equal(t, CtrServing, s.Containers[1].Name)
+		assert.Equal(t, "numaserve:0.1", s.Containers[1].Image)
+		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[1].ImagePullPolicy)
+		envNames = []string{}
+		for _, e := range s.Containers[1].Env {
+			envNames = append(envNames, e.Name)
+		}
+		assert.Contains(t, envNames, "test-env")
+		assert.Contains(t, envNames, EnvNamespace)
+		assert.Contains(t, envNames, EnvPod)
+		assert.Contains(t, envNames, EnvPipelineName)
+		assert.Contains(t, envNames, EnvVertexName)
+		assert.Contains(t, envNames, EnvReplica)
+		assert.Contains(t, envNames, EnvServingJetstreamStream)
+		assert.Contains(t, envNames, EnvServingHostIP)
+		assert.Contains(t, envNames, EnvServingObject)
+		assert.Contains(t, envNames, EnvServingMinPipelineSpec)
+	})
 }
 
 func Test_getType(t *testing.T) {

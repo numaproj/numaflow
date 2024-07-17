@@ -18447,7 +18447,13 @@
         "Image": {
           "type": "string"
         },
+        "PipelineSpec": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineSpec"
+        },
         "PullPolicy": {
+          "type": "string"
+        },
+        "ServingSourceStreamName": {
           "type": "string"
         },
         "SideInputsStoreName": {
@@ -18460,6 +18466,8 @@
         "PullPolicy",
         "Env",
         "SideInputsStoreName",
+        "ServingSourceStreamName",
+        "PipelineSpec",
         "DefaultResources"
       ],
       "type": "object"
@@ -19065,7 +19073,7 @@
       "properties": {
         "basic": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.BasicAuth",
-          "description": "Basic auth which contains a user name and a password"
+          "description": "Basic auth which contains a username and a password"
         },
         "nkey": {
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
@@ -19489,6 +19497,44 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.ServingSource": {
+      "description": "ServingSource is the HTTP endpoint for Numaflow.",
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
+        },
+        "msgIDHeaderKey": {
+          "description": "The header key from which the message id will be extracted",
+          "type": "string"
+        },
+        "service": {
+          "description": "Whether to create a ClusterIP Service",
+          "type": "boolean"
+        },
+        "store": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore",
+          "description": "Persistent store for the callbacks for serving and tracking"
+        }
+      },
+      "required": [
+        "msgIDHeaderKey",
+        "store"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingStore": {
+      "description": "ServingStore to track and store data and metadata for tracking and serving.",
+      "properties": {
+        "url": {
+          "description": "URL of the persistent store to write the callbacks",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.SessionWindow": {
       "description": "SessionWindow describes a session window",
       "properties": {
@@ -19678,6 +19724,9 @@
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
+        },
+        "serving": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"

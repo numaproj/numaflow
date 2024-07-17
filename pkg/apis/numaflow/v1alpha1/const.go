@@ -74,6 +74,7 @@ const (
 	CtrUdSideInput       = "udsi"
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
+	CtrServing           = "serving"
 
 	// user-defined container types
 	UDContainerFunction     = "udf"
@@ -82,6 +83,7 @@ const (
 	UDContainerTransformer  = "transformer"
 	UDContainerSource       = "udsource"
 	UDContainerSideInputs   = "udsi"
+	ServingSourceContainer  = "serving"
 
 	// components
 	ComponentISBSvc           = "isbsvc"
@@ -137,13 +139,18 @@ const (
 	EnvMemoryRequest                    = "NUMAFLOW_MEMORY_REQUEST"
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
 	EnvGoDebug                          = "GODEBUG"
-
-	PathVarRun            = "/var/run/numaflow"
-	VertexMetricsPort     = 2469
-	VertexMetricsPortName = "metrics"
-	VertexHTTPSPort       = 8443
-	VertexHTTPSPortName   = "https"
-	DaemonServicePort     = 4327
+	EnvServingJetstreamStream           = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
+	EnvServingObject                    = "NUMAFLOW_SERVING_SOURCE_OBJECT"
+	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
+	EnvServingAuthToken                 = "NUMAFLOW_SERVING_AUTH_TOKEN"
+	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
+	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
+	PathVarRun                          = "/var/run/numaflow"
+	VertexMetricsPort                   = 2469
+	VertexMetricsPortName               = "metrics"
+	VertexHTTPSPort                     = 8443
+	VertexHTTPSPortName                 = "https"
+	DaemonServicePort                   = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
 
