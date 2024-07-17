@@ -21,7 +21,7 @@ type ServingSource struct {
 type ServingStore struct {
 	// URL of the persistent store to write the callbacks
 	URL *string `json:"url" protobuf:"bytes,1,opt,name=url"`
-	// TTL for the data in the store
+	// TTL for the data in the store and tracker
 	// +optional
 	TTL *metav1.Duration `json:"ttl,omitempty" protobuf:"bytes,2,opt,name=ttl"`
 	// TODO auth

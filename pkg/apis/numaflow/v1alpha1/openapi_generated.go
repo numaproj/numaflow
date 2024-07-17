@@ -3745,7 +3745,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingStore(ref common.ReferenceCallback
 					},
 					"ttl": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TTL for the data in the store",
+							Description: "TTL for the data in the store and tracker",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},

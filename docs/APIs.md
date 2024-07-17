@@ -7755,7 +7755,7 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-TTL for the data in the store
+TTL for the data in the store and tracker
 </p>
 
 </td>

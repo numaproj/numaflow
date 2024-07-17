@@ -19516,7 +19516,7 @@
       ],
       "properties": {
         "ttl": {
-          "description": "TTL for the data in the store",
+          "description": "TTL for the data in the store and tracker",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "url": {
