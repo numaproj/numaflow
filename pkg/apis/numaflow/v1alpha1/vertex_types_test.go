@@ -752,3 +752,16 @@ func Test_GetToBuckets(t *testing.T) {
 		assert.Len(t, buckets, 0)
 	})
 }
+
+func TestGetServingSourceStreamName(t *testing.T) {
+	v := Vertex{
+		Spec: VertexSpec{
+			PipelineName: "test-pipeline",
+			AbstractVertex: AbstractVertex{
+				Name: "test-vertex",
+			},
+		},
+	}
+	expected := "test-pipeline-test-vertex-serving-source"
+	assert.Equal(t, expected, v.GetServingSourceStreamName())
+}
