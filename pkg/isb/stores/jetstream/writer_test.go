@@ -53,22 +53,39 @@ func (f myForwardJetStreamTest) ApplyMapStream(ctx context.Context, message *isb
 	return testutils.CopyUDFTestApplyStream(ctx, "", writeMessageCh, message)
 }
 
+func (f myForwardJetStreamTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApplyBatchMap(ctx, "test-vertex", messages)
+}
+
 // TestForwarderJetStreamBuffer is a test that is used to test forwarder with jetstream buffer
 func TestForwarderJetStreamBuffer(t *testing.T) {
 	tests := []struct {
 		name          string
 		batchSize     int64
 		streamEnabled bool
+		unaryEnabled  bool
+		batchEnabled  bool
 	}{
 		{
-			name:          "batch",
+			name:          "unary",
 			batchSize:     10,
 			streamEnabled: false,
+			unaryEnabled:  true,
+			batchEnabled:  false,
 		},
 		{
 			name:          "stream",
 			batchSize:     1,
 			streamEnabled: true,
+			unaryEnabled:  false,
+			batchEnabled:  false,
+		},
+		{
+			name:          "batch_map",
+			batchSize:     10,
+			streamEnabled: false,
+			unaryEnabled:  false,
+			batchEnabled:  true,
 		},
 	}
 	for _, tt := range tests {
@@ -150,7 +167,19 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			idleManager, err := wmb.NewIdleManager(1, len(toSteps))
 			assert.NoError(t, err)
-			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+
+			opts := []forward.Option{forward.WithReadBatchSize(tt.batchSize)}
+			if tt.batchEnabled {
+				opts = append(opts, forward.WithUDFBatchMap(myForwardJetStreamTest{}))
+			}
+			if tt.streamEnabled {
+				opts = append(opts, forward.WithUDFStreamingMap(myForwardJetStreamTest{}))
+			}
+			if tt.unaryEnabled {
+				opts = append(opts, forward.WithUDFUnaryMap(myForwardJetStreamTest{}))
+			}
+
+			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 			assert.NoError(t, err)
 
 			stopped := f.Start()

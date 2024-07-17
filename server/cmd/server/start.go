@@ -44,16 +44,17 @@ var (
 )
 
 type ServerOptions struct {
-	Insecure           bool
-	Port               int
-	Namespaced         bool
-	ManagedNamespace   string
-	BaseHref           string
-	DisableAuth        bool
-	DexServerAddr      string
-	ServerAddr         string
-	CorsAllowedOrigins string
-	ReadOnly           bool
+	Insecure             bool
+	Port                 int
+	Namespaced           bool
+	ManagedNamespace     string
+	BaseHref             string
+	DisableAuth          bool
+	DexServerAddr        string
+	ServerAddr           string
+	CorsAllowedOrigins   string
+	ReadOnly             bool
+	DaemonClientProtocol string
 }
 
 type server struct {
@@ -102,10 +103,12 @@ func (s *server) Start(ctx context.Context) {
 		ctx,
 		router,
 		routes.SystemInfo{
-			ManagedNamespace: s.options.ManagedNamespace,
-			Namespaced:       s.options.Namespaced,
-			IsReadOnly:       s.options.ReadOnly,
-			Version:          numaflow.GetVersion().String()},
+			ManagedNamespace:     s.options.ManagedNamespace,
+			Namespaced:           s.options.Namespaced,
+			IsReadOnly:           s.options.ReadOnly,
+			Version:              numaflow.GetVersion().String(),
+			DaemonClientProtocol: s.options.DaemonClientProtocol,
+		},
 		routes.AuthInfo{
 			DisableAuth:   s.options.DisableAuth,
 			DexServerAddr: s.options.DexServerAddr,

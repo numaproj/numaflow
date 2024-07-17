@@ -48,28 +48,6 @@ jobs:
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
           echo /usr/local/bin >> $GITHUB_PATH
-      - name: Install protoc
-        run: |
-          set -eux -o pipefail
-          PROTOC_VERSION=27.1
-          PROTOC_ZIP=protoc-$PROTOC_VERSION-linux-x86_64.zip
-          curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP
-          sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
-          sudo unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
-          sudo chmod +x /usr/local/bin/protoc
-          sudo find /usr/local/include -type f | xargs sudo chmod a+r
-          sudo find /usr/local/include -type d | xargs sudo chmod a+rx
-          rm -f $PROTOC_ZIP
-          ls /usr/local/include/google/protobuf/
-      - name: Install pandoc
-        run: |
-          set -eux -o pipefail
-          PANDOC_VERSION=3.2.1
-          PANDOC_ZIP=pandoc-$PANDOC_VERSION-linux-amd64.tar.gz
-          curl -OL https://github.com/jgm/pandoc/releases/download/$PANDOC_VERSION/$PANDOC_ZIP
-          sudo tar xvzf $PANDOC_ZIP --strip-components 1 -C /usr/local
-          rm -f $PANDOC_ZIP
-          echo /usr/local/pandoc-$PANDOC_VERSION/bin >> $GITHUB_PATH
       - name: Get dependencies
         run: go mod download
       - name: Make codegen
@@ -103,7 +81,7 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
         id: go
 
       - name: Check out code
@@ -206,18 +184,16 @@ jobs:
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
-      - name: Create a registry and a cluster
+      - name: Create a cluster
         run: |
-          k3d registry create e2e-registry --port 5111
-          k3d cluster create e2e --registry-use k3d-e2e-registry:5111
+          k3d cluster create e2e
           k3d kubeconfig get e2e > ~/.kube/numaflow-e2e-config
-          echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
       - name: Install Numaflow
         env:
           GOPATH: /home/runner/go
         run: |
-          KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true make start
+          KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} make start
       - name: Run tests
         env:
           GOPATH: /home/runner/go
-        run: KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
+        run: KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} ISBSVC=${{matrix.driver}} make test-${{matrix.case}}

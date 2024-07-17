@@ -20,7 +20,7 @@ import corev1 "k8s.io/api/core/v1"
 
 // NatsAuth defines how to authenticate the nats access
 type NatsAuth struct {
-	// Basic auth which contains a user name and a password
+	// Basic auth which contains a username and a password
 	// +optional
 	Basic *BasicAuth `json:"basic,omitempty" protobuf:"bytes,1,opt,name=basic"`
 	// Token auth

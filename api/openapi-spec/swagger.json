@@ -17822,7 +17822,7 @@
       ],
       "properties": {
         "conditions": {
-          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF.",
+          "description": "Conditional forwarding, only allowed when \"From\" is a Source or UDF.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
         },
         "from": {
@@ -18024,7 +18024,7 @@
       ],
       "properties": {
         "conditions": {
-          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF.",
+          "description": "Conditional forwarding, only allowed when \"From\" is a Source or UDF.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
         },
         "from": {
@@ -18442,6 +18442,8 @@
         "PullPolicy",
         "Env",
         "SideInputsStoreName",
+        "ServingSourceStreamName",
+        "PipelineSpec",
         "DefaultResources"
       ],
       "properties": {
@@ -18460,7 +18462,13 @@
         "Image": {
           "type": "string"
         },
+        "PipelineSpec": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineSpec"
+        },
         "PullPolicy": {
+          "type": "string"
+        },
+        "ServingSourceStreamName": {
           "type": "string"
         },
         "SideInputsStoreName": {
@@ -18601,6 +18609,11 @@
         },
         "message": {
           "type": "string"
+        },
+        "observedGeneration": {
+          "description": "ObservedGeneration stores the generation value observed by the controller.",
+          "type": "integer",
+          "format": "int64"
         },
         "phase": {
           "type": "string"
@@ -19055,7 +19068,7 @@
       "type": "object",
       "properties": {
         "basic": {
-          "description": "Basic auth which contains a user name and a password",
+          "description": "Basic auth which contains a username and a password",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.BasicAuth"
         },
         "nkey": {
@@ -19273,6 +19286,11 @@
         "message": {
           "type": "string"
         },
+        "observedGeneration": {
+          "description": "ObservedGeneration stores the generation value observed by the controller.",
+          "type": "integer",
+          "format": "int64"
+        },
         "phase": {
           "type": "string"
         },
@@ -19462,6 +19480,48 @@
           "description": "After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.",
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingSource": {
+      "description": "ServingSource is the HTTP endpoint for Numaflow.",
+      "type": "object",
+      "required": [
+        "msgIDHeaderKey",
+        "store"
+      ],
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
+        },
+        "msgIDHeaderKey": {
+          "description": "The header key from which the message id will be extracted",
+          "type": "string"
+        },
+        "service": {
+          "description": "Whether to create a ClusterIP Service",
+          "type": "boolean"
+        },
+        "store": {
+          "description": "Persistent store for the callbacks for serving and tracking",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingStore": {
+      "description": "ServingStore to track and store data and metadata for tracking and serving.",
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "ttl": {
+          "description": "TTL for the data in the store and tracker",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "url": {
+          "description": "URL of the persistent store to write the callbacks",
+          "type": "string"
         }
       }
     },
@@ -19655,6 +19715,9 @@
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
+        },
+        "serving": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"

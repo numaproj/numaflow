@@ -38,37 +38,45 @@ ensure_vendor() {
   go mod vendor
 }	
 
-# TODO: Install it in Makefile
-ensure_pandoc() {
-  if [ "`command -v pandoc`" = "" ]; then
-    warning "Please install pandoc with - brew install pandoc"
-    exit 1
-  fi
-
-  if [ "`pandoc -v | head -1 | awk '{print $2}'`" != "3.2.1" ]; then
-    warning "Please upgrade pandoc to version 3.2.1 with - brew upgrade pandoc"
-    exit 1
-  fi
-}
-
-# TODO: Install it in Makefile
-ensure_protobuf() {
-  if [ "`command -v protoc`" = "" ]; then
-    warning "Please install protobuf with - brew install protobuf"
-    exit 1
-  fi
-}
-
 ensure_node(){
-  if [ "`command -v node`" = "" ]; then
+  if [[ "`command -v node`" = "" ]]; then
       warning "Please install node with - brew install node"
       exit 1
-    fi
+  fi
 }
 
 ensure_yarn(){
-  if [ "`command -v yarn`" = "" ]; then
+  if [[ "`command -v yarn`" = "" ]]; then
       warning "Please install yarn with - brew install yarn"
       exit 1
-    fi
+  fi
+}
+
+uname_os() {
+  os=$(uname -s | tr '[:upper:]' '[:lower:]')
+  case "$os" in
+    msys*) os="windows" ;;
+    mingw*) os="windows" ;;
+    cygwin*) os="windows" ;;
+    win*) os="windows" ;;
+    sunos) [ "$(uname -o)" = "illumos" ] && os=illumos ;;
+  esac
+  echo "$os"
+}
+
+uname_arch() {
+  arch=$(uname -m)
+  case $arch in
+    x86_64) arch="amd64" ;;
+    x86) arch="386" ;;
+    i686) arch="386" ;;
+    i386) arch="386" ;;
+    i86pc) arch="amd64" ;;
+    aarch64) arch="arm64" ;;
+    armv5*) arch="armv5" ;;
+    armv6*) arch="armv6" ;;
+    armv7*) arch="armv7" ;;
+    loongarch64) arch="loong64" ;;
+  esac
+  echo "${arch}"
 }

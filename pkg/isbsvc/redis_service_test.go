@@ -43,10 +43,10 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	buffers := []string{buffer}
 	redisClient := redisclient.NewRedisClient(redisOptions)
 	isbsRedisSvc := NewISBRedisSvc(redisClient)
-	assert.NoError(t, isbsRedisSvc.CreateBuffersAndBuckets(ctx, buffers, nil, ""))
+	assert.NoError(t, isbsRedisSvc.CreateBuffersAndBuckets(ctx, buffers, nil, "", []string{}))
 
 	// validate buffer
-	assert.NoError(t, isbsRedisSvc.ValidateBuffersAndBuckets(ctx, buffers, nil, ""))
+	assert.NoError(t, isbsRedisSvc.ValidateBuffersAndBuckets(ctx, buffers, nil, "", []string{}))
 
 	// Verify
 	// Add some data
@@ -79,5 +79,5 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	}
 
 	// delete buffer
-	assert.NoError(t, isbsRedisSvc.DeleteBuffersAndBuckets(ctx, buffers, nil, ""))
+	assert.NoError(t, isbsRedisSvc.DeleteBuffersAndBuckets(ctx, buffers, nil, "", []string{}))
 }
