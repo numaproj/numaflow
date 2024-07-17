@@ -93,9 +93,13 @@ func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
 			// if the data hasn't arrived the sink vertex
 			// set the lag to be -1
 			if minWM < 0 {
-				pipelineProcessingLag.WithLabelValues(metrics.LabelPipeline).Set(-1)
+				pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
 			} else {
-				pipelineProcessingLag.WithLabelValues(metrics.LabelPipeline).Set(float64(maxWM - minWM))
+				if maxWM < minWM {
+					pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
+				} else {
+					pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(float64(maxWM - minWM))
+				}
 			}
 		case <-ctx.Done():
 			return
