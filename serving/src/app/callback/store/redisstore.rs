@@ -69,18 +69,16 @@ impl RedisConnection {
         key: &str,
         val: &Vec<u8>,
     ) -> Result<(), RedisError> {
-        conn_manager
-            .send_packed_command(redis::cmd(LPUSH).arg(key).arg(val))
-            .await?;
+        let mut pipe = redis::pipe();
+        pipe.cmd(LPUSH).arg(key).arg(val);
 
-        // if the ttl is configured, set the key to expire after the specified time
+        // if the ttl is configured, add the EXPIRE command to the pipeline
         if let Some(ttl) = config().redis.ttl_secs {
-            conn_manager
-                .send_packed_command(redis::cmd(EXPIRE).arg(key).arg(ttl))
-                .await?;
+            pipe.cmd(EXPIRE).arg(key).arg(ttl);
         }
 
-        Ok(())
+        // Execute the pipeline
+        pipe.query_async(conn_manager).await.map(|_: ()| ())
     }
 
     // write to Redis with retries
