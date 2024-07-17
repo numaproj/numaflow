@@ -53,8 +53,8 @@ import (
 
 var (
 	lag = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "pipeline_lag",
-		Help: "pipeline processing lag metrics.",
+		Name: "pipeline_lag_milliseconds",
+		Help: "pipeline processing lag metrics in milliseconds.",
 	})
 )
 
