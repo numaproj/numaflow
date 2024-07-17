@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +31,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	nats2 "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
@@ -89,6 +92,16 @@ func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionN
 }
 
 func TestGetVertexMetrics(t *testing.T) {
+	s := test.RunJetStreamServer(t)
+	defer test.ShutdownJetStreamServer(t, s)
+
+	// write some messages to the stream
+	conn, err := nats.Connect(s.ClientURL())
+	assert.NoError(t, err)
+	defer conn.Close()
+
+	jsc := nats2.NewTestClient(t, s.ClientURL())
+
 	pipelineName := "simple-pipeline"
 	vertexName := "cat"
 	vertexPartition := int32(1)
@@ -96,7 +109,7 @@ func TestGetVertexMetrics(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
 		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
 	}
-	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName)
+	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName, jsc)
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil, &mockRater_TestGetVertexMetrics{})
 	assert.NoError(t, err)
 
