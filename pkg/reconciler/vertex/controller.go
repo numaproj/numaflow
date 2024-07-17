@@ -345,7 +345,7 @@ func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, 
 		PullPolicy:              corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
 		Env:                     envs,
 		SideInputsStoreName:     pl.GetSideInputsStoreName(),
-		ServingSourceStreamName: pl.GetServingSourceStreamName(),
+		ServingSourceStreamName: vertex.GetServingSourceStreamName(),
 		PipelineSpec:            pl.Spec,
 		DefaultResources:        r.config.GetDefaults().GetDefaultContainerResources(),
 	})

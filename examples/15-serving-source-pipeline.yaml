@@ -18,10 +18,6 @@ spec:
           msgIDHeaderKey: "X-Request-ID"
           store:
             url: "redis://redis:6379"
-          auth:
-            token:
-              name: http-source-token
-              key: my-token
     - name: cat
       scale:
         min: 1
