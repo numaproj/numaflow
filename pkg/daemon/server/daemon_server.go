@@ -228,5 +228,6 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	}
 
 	go ds.exposeLagMetrics(ctx)
+	go ds.exposeCTMetrics(ctx)
 	return &httpServer
 }
