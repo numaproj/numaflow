@@ -105,6 +105,8 @@ type InterStepBufferServiceStatus struct {
 	Message string              `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
 	Config  BufferServiceConfig `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
 	Type    ISBSvcType          `json:"type,omitempty" protobuf:"bytes,5,opt,name=type"`
+	// ObservedGeneration stores the generation value observed by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,6,opt,name=observedGeneration"`
 }
 
 func (isbsvc *InterStepBufferServiceStatus) SetPhase(phase ISBSvcPhase, msg string) {
@@ -144,4 +146,9 @@ func (isbsvc *InterStepBufferServiceStatus) MarkDeployed() {
 func (isbsvc *InterStepBufferServiceStatus) MarkDeployFailed(reason, message string) {
 	isbsvc.MarkFalse(ISBSvcConditionDeployed, reason, message)
 	isbsvc.SetPhase(ISBSvcPhaseFailed, message)
+}
+
+// SetObservedGeneration sets the Status ObservedGeneration
+func (isbsvc *InterStepBufferServiceStatus) SetObservedGeneration(value int64) {
+	isbsvc.ObservedGeneration = value
 }

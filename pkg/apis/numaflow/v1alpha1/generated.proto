@@ -635,6 +635,9 @@ message InterStepBufferServiceStatus {
   optional BufferServiceConfig config = 4;
 
   optional string type = 5;
+
+  // ObservedGeneration stores the generation value observed by the controller.
+  optional int64 observedGeneration = 6;
 }
 
 message JetStreamBufferService {
@@ -1024,6 +1027,9 @@ message PipelineStatus {
   optional uint32 sinkCount = 7;
 
   optional uint32 udfCount = 8;
+
+  // ObservedGeneration stores the generation value observed by the controller.
+  optional int64 observedGeneration = 9;
 }
 
 message RedisBufferService {

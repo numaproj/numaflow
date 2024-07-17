@@ -2093,6 +2093,13 @@ func schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceStatus(ref common.R
 							Format: "",
 						},
 					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ObservedGeneration stores the generation value observed by the controller.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 				},
 			},
 		},
@@ -3373,6 +3380,13 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"integer"},
 							Format: "int64",
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ObservedGeneration stores the generation value observed by the controller.",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 				},
