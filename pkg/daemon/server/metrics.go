@@ -45,65 +45,8 @@ var (
 	}, []string{metrics.LabelPipeline})
 )
 
-func (ds *daemonServer) exposeCTMetrics(ctx context.Context) {
-	ticker := time.NewTicker(20 * time.Second)
-	defer ticker.Stop()
-
-	log := logging.FromContext(ctx)
-
-	var (
-		source = make(map[string]bool)
-		sink   = make(map[string]bool)
-	)
-	for _, vertex := range ds.pipeline.Spec.Vertices {
-		if vertex.IsASource() {
-			source[vertex.Name] = true
-		} else if vertex.IsASink() {
-			sink[vertex.Name] = true
-		}
-	}
-
-	for {
-		select {
-		case <-ticker.C:
-
-			resp, err := ds.metaDataQuery.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{Pipeline: ds.pipeline.Name})
-			if err != nil {
-				log.Errorw("Failed to calculate processing lag for pipeline", zap.Error(err))
-				continue
-			}
-
-			watermarks := resp.PipelineWatermarks
-
-			var (
-				maxWM int64 = math.MinInt64
-			)
-
-			for _, watermark := range watermarks {
-				// find the largest source vertex watermark
-				if _, ok := source[watermark.From]; ok {
-					for _, wm := range watermark.Watermarks {
-						if wm.GetValue() > maxWM {
-							maxWM = wm.GetValue()
-						}
-					}
-				}
-			}
-			// if the data hasn't arrived the sink vertex
-			// set the lag to be -1
-			if maxWM == math.MinInt64 {
-				currentTimeToWatermark.WithLabelValues(ds.pipeline.Name).Set(0)
-			} else {
-				currentTimeToWatermark.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
-
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
+// calculate processing lag and watermark_delay to current time using watermark values.
+func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 	ticker := time.NewTicker(20 * time.Second)
 	defer ticker.Stop()
 
@@ -167,6 +110,14 @@ func (ds *daemonServer) exposeLagMetrics(ctx context.Context) {
 					pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(float64(maxWM - minWM))
 				}
 			}
+
+			if maxWM == math.MinInt64 {
+				currentTimeToWatermark.WithLabelValues(ds.pipeline.Name).Set(0)
+			} else {
+				currentTimeToWatermark.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
+
+			}
+
 		case <-ctx.Done():
 			return
 		}
