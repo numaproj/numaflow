@@ -129,6 +129,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		return ctrl.Result{}, nil
 	}
 
+	pl.Status.SetObservedGeneration(pl.Generation)
 	// New, or reconciliation failed pipeline
 	if pl.Status.Phase == dfv1.PipelinePhaseUnknown || pl.Status.Phase == dfv1.PipelinePhaseFailed {
 		result, err := r.reconcileNonLifecycleChanges(ctx, pl)
@@ -334,7 +335,6 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 
 	pl.Status.MarkDeployed()
 	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
-	pl.Status.SetObservedGeneration(pl.Generation)
 	return ctrl.Result{}, nil
 }
 

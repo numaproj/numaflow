@@ -101,6 +101,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 	}
 
 	isbSvc.Status.InitConditions()
+	isbSvc.Status.SetObservedGeneration(isbSvc.Generation)
 	if err := ValidateInterStepBufferService(isbSvc); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
 		isbSvc.Status.MarkNotConfigured("InvalidSpec", err.Error())
