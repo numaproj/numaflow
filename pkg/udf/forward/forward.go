@@ -416,32 +416,38 @@ func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, data
 func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, dataMessages []*isb.ReadMessage) []isb.ReadWriteMessagePair {
 	concurrentUDFProcessingStart := time.Now()
 	var udfResults []isb.ReadWriteMessagePair
+	var err error
 	success := false
-	// begin the UDF call with the retry mechanism
-	_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
-		// retry every "duration * factor + [0, jitter]" interval for infinity
-		Duration: 1 * time.Second,
-		Factor:   1,
-		Jitter:   0.1,
-		Steps:    -1,
-	}, func(_ context.Context) (done bool, err error) {
+udfLoop:
+	for {
+		// invoke the UDF call
 		udfResults, err = isdf.opts.batchMapUdfApplier.ApplyBatchMap(ctx, dataMessages)
 		if err != nil {
 			// check if there is a shutdown, in this case we will not retry further
 			if ok, _ := isdf.IsShuttingDown(); ok {
 				isdf.opts.logger.Errorw("batchMapUDF.Apply, Stop called during udf processing", zap.Error(err))
-				metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
-				return true, nil
+				metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName,
+					metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF),
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
+				break udfLoop
 			}
 			isdf.opts.logger.Errorw("batchMapUDF.Apply got error during batch udf processing", zap.Error(err))
-			return false, nil
+			select {
+			case <-ctx.Done():
+				// no point in retrying if the context is cancelled
+				break udfLoop
+			case <-time.After(1 * time.Second):
+				// sleep for a second and keep retrying after that
+				continue
+			}
 		}
+		// if no error, let's mark this as a success and break
 		success = true
-		return true, nil
-	})
-	// if the udf call never succeeded
+		break
+	}
 	if !success {
 		udfErr := fmt.Errorf("batchMapUDF.Apply got error during batch udf processing")
+		// We need to send this to indicate an error to the forwarder
 		udfResultsErr := []isb.ReadWriteMessagePair{
 			{
 				ReadMessage:   nil,
