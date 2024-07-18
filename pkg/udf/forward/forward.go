@@ -412,7 +412,6 @@ func (isdf *InterStepDataForward) processConcurrentMap(ctx context.Context, data
 // if there is an error it will do a retry and will return when
 // - if there is a success while retrying
 // - if shutdown has been initiated.
-// - if the retry limit is exhausted
 // - if context is cancelled
 func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, dataMessages []*isb.ReadMessage) []isb.ReadWriteMessagePair {
 	concurrentUDFProcessingStart := time.Now()
@@ -420,11 +419,11 @@ func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, data
 	success := false
 	// begin the UDF call with the retry mechanism
 	_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
-		// retry every "duration * factor + [0, jitter]" interval for 100 times
+		// retry every "duration * factor + [0, jitter]" interval for infinity
 		Duration: 1 * time.Second,
 		Factor:   1,
 		Jitter:   0.1,
-		Steps:    100,
+		Steps:    -1,
 	}, func(_ context.Context) (done bool, err error) {
 		udfResults, err = isdf.opts.batchMapUdfApplier.ApplyBatchMap(ctx, dataMessages)
 		if err != nil {
