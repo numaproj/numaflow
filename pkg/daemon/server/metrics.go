@@ -38,8 +38,8 @@ var (
 )
 
 var (
-	currentTimeToWatermark = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name:      "current_time_compared_to_watermark_milliseconds",
+	watermarkCmpNow = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name:      "watermark_cmp_now_milliseconds",
 		Help:      "Watermark compared with current time in milliseconds.",
 		Subsystem: "daemon",
 	}, []string{metrics.LabelPipeline})
@@ -112,9 +112,9 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 			}
 
 			if maxWM == math.MinInt64 {
-				currentTimeToWatermark.WithLabelValues(ds.pipeline.Name).Set(0)
+				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(0)
 			} else {
-				currentTimeToWatermark.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
+				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
 
 			}
 
