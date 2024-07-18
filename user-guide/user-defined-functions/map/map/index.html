@@ -2348,15 +2348,11 @@
 <p>In cases the map function generates more than one output (e.g., flat map), the UDF can be
 configured to run in a streaming mode instead of batching, which is the default mode.
 In streaming mode, the messages will be pushed to the downstream vertices once generated
-instead of in a batch at the end. The streaming mode can be enabled by setting the annotation
-<code>numaflow.numaproj.io/map-stream</code> to <code>true</code> in the vertex spec.</p>
+instead of in a batch at the end.</p>
 <p>Note that to maintain data orderliness, we restrict the read batch size to be <code>1</code>.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
-<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">numaflow.numaproj.io/map-stream</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 <span class="w">      </span><span class="nt">limits</span><span class="p">:</span>
 <span class="w">        </span><span class="c1"># mapstreaming won&#39;t work if readBatchSize is != 1      </span>
 <span class="w">        </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
