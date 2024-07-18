@@ -18695,7 +18695,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
         },
         "replicas": {
-          "description": "Redis StatefulSet size",
+          "description": "JetStream StatefulSet size",
           "type": "integer",
           "format": "int32"
         },

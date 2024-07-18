@@ -644,7 +644,7 @@ message JetStreamBufferService {
   // JetStream version, such as "2.7.1"
   optional string version = 1;
 
-  // Redis StatefulSet size
+  // JetStream StatefulSet size
   // +kubebuilder:default=3
   optional int32 replicas = 2;
 
